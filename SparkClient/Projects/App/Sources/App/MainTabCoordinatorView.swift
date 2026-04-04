@@ -6,7 +6,9 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var medicalUploadFlowViewModel: MedicalUploadFlowViewModel
     @ObservedObject var healthViewModel: HealthTimelineViewModel
-    @ObservedObject var chatViewModel: ChatViewModel
+    @ObservedObject var chatStateStore: ChatStateStore
+    @ObservedObject var chatListViewModel: ChatListViewModel
+    @ObservedObject var chatDetailViewModel: ChatDetailViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
 
@@ -36,7 +38,11 @@ struct MainTabCoordinatorView: View {
             .tag(AppRouteStore.RootTab.health)
 
             NavigationView {
-                ChatView(viewModel: chatViewModel)
+                ChatView(
+                    stateStore: chatStateStore,
+                    listViewModel: chatListViewModel,
+                    detailViewModel: chatDetailViewModel
+                )
             }
             .tabItem {
                 Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")

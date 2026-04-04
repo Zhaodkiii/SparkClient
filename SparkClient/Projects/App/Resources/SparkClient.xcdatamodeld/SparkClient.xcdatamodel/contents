@@ -84,6 +84,34 @@
         <attribute name="status" optional="NO" attributeType="String" defaultValueString="active"/>
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="ChatThreadEntity" representedClassName="ChatThreadEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="patientID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="scenario" optional="NO" attributeType="String" defaultValueString="chat"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="isActive" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+    </entity>
+    <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="threadID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="role" optional="NO" attributeType="String" defaultValueString="user"/>
+        <attribute name="kind" optional="NO" attributeType="String" defaultValueString="text"/>
+        <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="attachmentsData" optional="YES" attributeType="Binary"/>
+        <attribute name="clientMessageID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="serverMessageID" optional="YES" attributeType="String"/>
+        <attribute name="deliveryState" optional="NO" attributeType="String" defaultValueString="pending"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="isTombstone" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+    </entity>
+    <entity name="ChatSyncCursorEntity" representedClassName="ChatSyncCursorEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="key" optional="NO" attributeType="String"/>
+        <attribute name="value" optional="NO" attributeType="String"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
     <elements>
         <element name="UserProfileEntity" positionX="-63" positionY="-18" width="128" height="134"/>
         <element name="HealthMetricEntity" positionX="220" positionY="-18" width="128" height="149"/>
@@ -92,5 +120,8 @@
         <element name="ExaminationReportEntity" positionX="60" positionY="220" width="128" height="224"/>
         <element name="MedicalReportEntity" positionX="250" positionY="220" width="128" height="209"/>
         <element name="PrescriptionEntity" positionX="440" positionY="220" width="128" height="239"/>
+        <element name="ChatThreadEntity" positionX="-260" positionY="500" width="128" height="164"/>
+        <element name="ChatMessageEntity" positionX="-80" positionY="500" width="128" height="269"/>
+        <element name="ChatSyncCursorEntity" positionX="110" positionY="500" width="128" height="104"/>
     </elements>
 </model>

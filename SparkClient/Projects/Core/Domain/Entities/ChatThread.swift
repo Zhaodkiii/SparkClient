@@ -8,7 +8,7 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
     let createdAt: Date
     let updatedAt: Date
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         patientID: UUID? = nil,
         title: String,

@@ -3,6 +3,7 @@ import Foundation
 /// 统一网络门面。
 /// 对上层隐藏具体 API 细节，仅暴露按业务域拆分的 API 客户端。
 final class Backend {
+    let baseURL: URL
     let configuration: SparkBackendConfiguration
 
     let auth: SparkAuthAPI
@@ -10,6 +11,7 @@ final class Backend {
     let device: SparkDeviceAPI
     let deactivation: SparkDeactivationAPI
     let aiConfig: SparkAIConfigAPI
+    let chat: SparkChatRemoteAPI
     let medicalSync: SparkMedicalSyncAPI
     let medicalMembers: SparkMedicalMemberAPI
     let files: SparkFileAPI
@@ -25,6 +27,7 @@ final class Backend {
         authProvider: AuthTokenProvider? = nil,
         logger: Logger = ConsoleLogger()
     ) {
+        self.baseURL = baseURL
         if let level = deviceCache.persistedLogLevel {
             SparkLogger.logLevel = level
         }
@@ -48,6 +51,7 @@ final class Backend {
         self.device = SparkDeviceAPI(configuration: configuration)
         self.deactivation = SparkDeactivationAPI(configuration: configuration)
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
+        self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.medicalSync = SparkMedicalSyncAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
@@ -57,6 +61,7 @@ final class Backend {
     }
 
     init(configuration: SparkBackendConfiguration) {
+        self.baseURL = configuration.engine.serviceBaseURL
         self.configuration = configuration
         self.deviceCache = configuration.deviceCache
         self.auth = SparkAuthAPI(configuration: configuration)
@@ -64,6 +69,7 @@ final class Backend {
         self.device = SparkDeviceAPI(configuration: configuration)
         self.deactivation = SparkDeactivationAPI(configuration: configuration)
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
+        self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.medicalSync = SparkMedicalSyncAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)

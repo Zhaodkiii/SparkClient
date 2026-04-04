@@ -3,14 +3,21 @@ import Foundation
 /// 组合根容器：负责初始化基础设施并组装跨 Feature 的依赖关系。
 @MainActor
 final class AppContainer {
+    // MARK: - 基础设施（Core Data、网络、日志、文件）
+
     let coreDataStack: CoreDataStack
     let backend: Backend
     let logger: Logger
     let fileCacheManager: FileCacheManager
     let fileTransferService: FileTransferService
 
+    // MARK: - 路由与启动
+
     let routeStore: AppRouteStore
     let appBootstrapper: AppBootstrapper
+
+    // MARK: - 通知（应用内队列、指标、收件箱、远程推送适配）
+
     let notificationStore: NotificationStore
     let notificationMetricsStore: NotificationMetricsStore
     let notificationInboxStore: NotificationInboxStore
@@ -21,10 +28,14 @@ final class AppContainer {
     let handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase
     let pushAdapter: PushAdapter
 
+    // MARK: - 数据仓库
+
     let userProfileRepository: any UserProfileRepository
     let healthMetricsRepository: any HealthMetricsRepository
     let authRepository: any AuthRepository
     let aiSettingsRepository: any AISettingsRepository
+
+    // MARK: - 用例（认证、首页、健康、患者、病历草稿、聊天）
 
     let restoreSessionUseCase: RestoreSessionUseCase
     let signInWithAppleUseCase: SignInWithAppleUseCase
@@ -39,20 +50,31 @@ final class AppContainer {
     let confirmMedicalDraftUseCase: ConfirmMedicalDraftUseCase
     let loadLatestMedicalDraftUseCase: LoadLatestMedicalDraftUseCase
     let buildPatientContextSummaryUseCase: BuildPatientContextSummaryUseCase
-    let loadChatThreadUseCase: LoadChatThreadUseCase
-    let createChatThreadUseCase: CreateChatThreadUseCase
+    let loadChatThreadsUseCase: LoadChatThreadsUseCase
+    let loadChatMessagesUseCase: LoadChatMessagesUseCase
+    let createThreadUseCase: CreateThreadUseCase
+    let retryFailedMessageUseCase: RetryFailedMessageUseCase
+    let deleteThreadUseCase: DeleteThreadUseCase
+    let syncChatUseCase: SyncChatUseCase
     let sendChatMessageUseCase: SendChatMessageUseCase
+
+    // MARK: - AI 运行时、工具编排、医疗同步、OCR
 
     let aiRuntimeStore: AIRuntimeStore
     let aiConfigCenter: AIConfigCenter
     let aiRuntimeService: AIRuntimeService
     let toolHub: ToolHub
-        let toolAuditStore: ToolAuditStore
-        let medicalSyncService: MedicalSyncService
-        let ocrOrchestrator: OCROrchestrator
+    let toolAuditStore: ToolAuditStore
+    let medicalSyncService: MedicalSyncService
+    let ocrOrchestrator: OCROrchestrator
+
+    // MARK: - 会话、患者上下文与聊天界面 ViewModel
 
     let sessionStore: AppSessionStore
     let patientContextStore: PatientContextStore
+    let chatStateStore: ChatStateStore
+    let chatListViewModel: ChatListViewModel
+    let chatDetailViewModel: ChatDetailViewModel
 
     init(
         coreDataStack: CoreDataStack,
@@ -60,13 +82,14 @@ final class AppContainer {
         ocrConfiguration: OCRConfiguration = OCRConfiguration(),
         logger: Logger = ConsoleLogger()
     ) {
+        // 基础设施
         self.coreDataStack = coreDataStack
         self.backend = backend
         self.logger = logger
         self.fileCacheManager = FileCacheManager(logger: logger)
         self.fileTransferService = FileTransferService(api: backend.files, cacheManager: fileCacheManager, logger: logger)
 
-        // Repository 统一在这里装配，ViewModel 只依赖 UseCase。
+        // 仓库在此统一装配；界面层 ViewModel 只依赖用例，不直接拿仓库。
         let profileRepository = CoreDataUserProfileRepository(coreDataStack: coreDataStack, logger: logger)
         let healthMetricsRepository = CoreDataHealthMetricsRepository(coreDataStack: coreDataStack, logger: logger)
         let authRepository = DefaultAuthRepository(
@@ -93,12 +116,16 @@ final class AppContainer {
             logger: logger
         )
         let homeHealthRepository = HealthKitHomeHealthDataRepository()
+
+        // AI 配置中心（本地设置 + 远程配置 + 运行时状态）
         let aiConfigCenter = AIConfigCenter(
             repository: aiSettingsRepository,
             remoteProvider: remoteConfigProvider,
             runtimeStore: aiRuntimeStore,
             logger: logger
         )
+
+        // OCR：按配置启用阿里云 / 本地服务引擎，再由编排器统一调度
         let aliyunEngine: OCRTextEngine? = ocrConfiguration.enableAliyunOCR
             ? AliyunOCREngine(credentialsProvider: BackendOCRCredentialsProvider(api: backend.ocr))
             : nil
@@ -115,14 +142,19 @@ final class AppContainer {
             localServerEngine: localServerEngine,
             logger: logger
         )
+
+        // 大模型调用网关与服务
         let aiRuntimeGateway = OpenAICompatibleTextGateway(logger: logger)
         let aiRuntimeService = AIRuntimeService(
             configCenter: aiConfigCenter,
             gateway: aiRuntimeGateway,
             logger: logger
         )
+
+        // 患者、病历与「从文档提取草稿」相关用例
         let patientRepository = DefaultPatientRepository(medicalDataRepository: medicalDataRepository)
         let medicalRecordRepository = DefaultMedicalRecordRepository(medicalDataRepository: medicalDataRepository)
+        let buildPatientContextSummaryUseCase = BuildPatientContextSummaryUseCase(repository: medicalRecordRepository)
         let draftRepository = InMemoryMedicalDraftRepository()
         let extractMedicalDraftFromDocumentUseCase = ExtractMedicalDraftFromDocumentUseCase(
             ocrOrchestrator: ocrOrchestrator,
@@ -135,15 +167,58 @@ final class AppContainer {
             medicalDataRepository: medicalDataRepository
         )
         let loadLatestMedicalDraftUseCase = LoadLatestMedicalDraftUseCase(draftRepository: draftRepository)
+
+        // 聊天侧可调用的工具集合（含审计）
         let toolAuditStore = ToolAuditStore()
         let toolHub = ToolHub(
             extractDraftUseCase: extractMedicalDraftFromDocumentUseCase,
             confirmDraftUseCase: confirmMedicalDraftUseCase,
             loadLatestDraftUseCase: loadLatestMedicalDraftUseCase,
             auditStore: toolAuditStore,
+            medicalDataRepository: medicalDataRepository,
+            healthMetricsRepository: healthMetricsRepository,
+            aiSettingsRepository: aiSettingsRepository,
             logger: logger
         )
-        let chatRepository = InMemoryChatRepository()
+
+        // 聊天：Core Data 仓库、离线与实时同步、编排发送
+        let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
+        let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
+        let chatRealtimeClient = ChatRealtimeSyncClient(
+            tokenProvider: backend.tokenProvider(),
+            baseURL: backend.baseURL,
+            logger: logger
+        )
+        let chatSyncEngine = ChatSyncEngine(
+            repository: chatRepository,
+            outboxStore: chatOutboxStore,
+            remoteAPI: backend.chat,
+            realtimeClient: chatRealtimeClient,
+            mergePolicy: ChatMergePolicy(),
+            logger: logger
+        )
+        let chatOrchestrator = ChatOrchestrator(
+            runtimeService: aiRuntimeService,
+            toolHub: toolHub,
+            consentGate: ConsentGate()
+        )
+        let loadChatThreadsUseCase = LoadChatThreadsUseCase(repository: chatRepository)
+        let loadChatMessagesUseCase = LoadChatMessagesUseCase(repository: chatRepository)
+        let createThreadUseCase = CreateThreadUseCase(repository: chatRepository)
+        let retryFailedMessageUseCase = RetryFailedMessageUseCase(
+            repository: chatRepository,
+            syncEngine: chatSyncEngine
+        )
+        let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository)
+        let syncChatUseCase = SyncChatUseCase(syncEngine: chatSyncEngine)
+        let sendChatMessageUseCase = SendChatMessageUseCase(
+            repository: chatRepository,
+            orchestrator: chatOrchestrator,
+            syncEngine: chatSyncEngine,
+            buildPatientContextSummaryUseCase: buildPatientContextSummaryUseCase
+        )
+
+        // 应用内通知管道与远程推送处理
         let routeStore = AppRouteStore()
         let patientContextStore = PatientContextStore()
         let notificationStore = NotificationStore()
@@ -168,6 +243,8 @@ final class AppContainer {
         let notificationClient = DefaultNotificationClient(
             publishUseCase: publishNotificationUseCase
         )
+
+        // 医疗数据后台同步（可发本地通知）
         let medicalSyncService = MedicalSyncService(
             preferenceRepository: medicalSyncPreferenceRepository,
             medicalRepository: medicalDataRepository,
@@ -182,13 +259,17 @@ final class AppContainer {
             handleRemoteNotificationUseCase: handleRemoteNotificationUseCase,
             logger: logger
         )
+
+        // 冷启动：拉 AI 配置、同步医疗与聊天等
         let appBootstrapper = AppBootstrapper(
             aiConfigCenter: aiConfigCenter,
             medicalSyncService: medicalSyncService,
+            syncChatUseCase: syncChatUseCase,
             routeStore: routeStore,
             logger: logger
         )
 
+        // 将局部变量赋给实例属性（对外暴露）
         self.userProfileRepository = profileRepository
         self.healthMetricsRepository = healthMetricsRepository
         self.authRepository = authRepository
@@ -210,16 +291,14 @@ final class AppContainer {
         self.extractMedicalDraftFromDocumentUseCase = extractMedicalDraftFromDocumentUseCase
         self.confirmMedicalDraftUseCase = confirmMedicalDraftUseCase
         self.loadLatestMedicalDraftUseCase = loadLatestMedicalDraftUseCase
-        self.buildPatientContextSummaryUseCase = BuildPatientContextSummaryUseCase(repository: medicalRecordRepository)
-        self.loadChatThreadUseCase = LoadChatThreadUseCase(repository: chatRepository)
-        self.createChatThreadUseCase = CreateChatThreadUseCase(repository: chatRepository)
-        self.sendChatMessageUseCase = SendChatMessageUseCase(
-            repository: chatRepository,
-            runtimeService: aiRuntimeService,
-            buildPatientContextSummaryUseCase: buildPatientContextSummaryUseCase,
-            toolHub: toolHub,
-            consentGate: ConsentGate()
-        )
+        self.buildPatientContextSummaryUseCase = buildPatientContextSummaryUseCase
+        self.loadChatThreadsUseCase = loadChatThreadsUseCase
+        self.loadChatMessagesUseCase = loadChatMessagesUseCase
+        self.createThreadUseCase = createThreadUseCase
+        self.retryFailedMessageUseCase = retryFailedMessageUseCase
+        self.deleteThreadUseCase = deleteThreadUseCase
+        self.syncChatUseCase = syncChatUseCase
+        self.sendChatMessageUseCase = sendChatMessageUseCase
 
         self.routeStore = routeStore
         self.aiRuntimeStore = aiRuntimeStore
@@ -240,10 +319,34 @@ final class AppContainer {
         self.handleRemoteNotificationUseCase = handleRemoteNotificationUseCase
         self.pushAdapter = pushAdapter
 
+        // 会话与聊天列表/详情共用状态与 ViewModel（单例式挂载，便于跨屏共享）
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
         self.patientContextStore = patientContextStore
+        self.chatStateStore = ChatStateStore()
+        self.chatListViewModel = ChatListViewModel(
+            stateStore: chatStateStore,
+            sessionStore: sessionStore,
+            patientContextStore: patientContextStore,
+            loadPatientsUseCase: loadPatientsUseCase,
+            selectPatientUseCase: selectPatientUseCase,
+            loadChatThreadsUseCase: loadChatThreadsUseCase,
+            createThreadUseCase: createThreadUseCase,
+            deleteThreadUseCase: deleteThreadUseCase,
+            syncChatUseCase: syncChatUseCase,
+            notificationClient: notificationClient
+        )
+        self.chatDetailViewModel = ChatDetailViewModel(
+            stateStore: chatStateStore,
+            patientContextStore: patientContextStore,
+            loadChatMessagesUseCase: loadChatMessagesUseCase,
+            sendMessageUseCase: sendChatMessageUseCase,
+            retryFailedMessageUseCase: retryFailedMessageUseCase,
+            syncChatUseCase: syncChatUseCase,
+            notificationClient: notificationClient
+        )
     }
 
+    /// 生产环境：读取当前 `AppEnvironment`，使用共享 Core Data 与真实 API 基址。
     static func live() -> AppContainer {
         let environment = AppEnvironment.current
         SparkLogger.configure(level: environment.logLevel, subsystem: environment.subsystem)
@@ -258,6 +361,7 @@ final class AppContainer {
         )
     }
 
+    /// SwiftUI 预览：独立子系统日志、预览用 Core Data、占位 API 地址。
     static let preview: AppContainer = {
         SparkLogger.configure(level: .debug, subsystem: "SparkClient.Preview")
         let logger = ConsoleLogger()
@@ -270,6 +374,8 @@ final class AppContainer {
             logger: logger
         )
     }()
+
+    // MARK: - ViewModel 工厂（按界面装配依赖）
 
     func makeLoginViewModel() -> LoginViewModel {
         LoginViewModel(
@@ -320,16 +426,15 @@ final class AppContainer {
         )
     }
 
-    func makeChatViewModel() -> ChatViewModel {
-        ChatViewModel(
-            sessionStore: sessionStore,
-            patientContextStore: patientContextStore,
-            loadPatientsUseCase: loadPatientsUseCase,
-            selectPatientUseCase: selectPatientUseCase,
-            loadThreadUseCase: loadChatThreadUseCase,
-            createThreadUseCase: createChatThreadUseCase,
-            sendMessageUseCase: sendChatMessageUseCase,
-            notificationClient: notificationClient
-        )
+    func makeChatStateStore() -> ChatStateStore {
+        chatStateStore
+    }
+
+    func makeChatListViewModel() -> ChatListViewModel {
+        chatListViewModel
+    }
+
+    func makeChatDetailViewModel() -> ChatDetailViewModel {
+        chatDetailViewModel
     }
 }

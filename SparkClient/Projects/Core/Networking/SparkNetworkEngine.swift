@@ -28,6 +28,7 @@ final class SparkNetworkEngine {
 
     /// 供上层挂接同一套日志实现。
     var networkLogger: Logger { logger }
+    var serviceBaseURL: URL { baseURL }
 
     init(
         baseURL: URL,
@@ -194,8 +195,11 @@ final class SparkNetworkEngine {
         case .json(let anyEncodable):
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = try JSONEncoder().encode(anyEncodable)
-        case .raw(let data, _):
-            // `Content-Type` 通常由 `request.headers` 传入。
+        case .raw(let data, let contentType):
+            // raw body 也必须显式声明 Content-Type，否则后端可能按 form 解析导致字段缺失。
+            if urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
+                urlRequest.setValue(contentType, forHTTPHeaderField: "Content-Type")
+            }
             urlRequest.httpBody = data
         }
 

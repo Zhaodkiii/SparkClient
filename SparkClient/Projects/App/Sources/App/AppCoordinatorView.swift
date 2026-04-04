@@ -33,7 +33,9 @@ struct AppCoordinatorView: View {
                     homeViewModel: container.makeHomeViewModel(),
                     medicalUploadFlowViewModel: container.makeMedicalUploadFlowViewModel(),
                     healthViewModel: container.makeHealthTimelineViewModel(),
-                    chatViewModel: container.makeChatViewModel(),
+                    chatStateStore: container.makeChatStateStore(),
+                    chatListViewModel: container.makeChatListViewModel(),
+                    chatDetailViewModel: container.makeChatDetailViewModel(),
                     settingsViewModel: container.makeSettingsViewModel(),
                     aiSettingsViewModel: container.makeAISettingsViewModel()
                 )
