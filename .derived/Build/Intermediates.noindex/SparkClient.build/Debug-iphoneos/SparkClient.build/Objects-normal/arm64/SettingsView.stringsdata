@@ -1,0 +1,64 @@
+{
+  "source": "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Settings/Presentation/SettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "设置",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 33
+        }
+      },
+      {
+        "comment": "",
+        "key": "操作失败",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 34
+        }
+      },
+      {
+        "comment": "",
+        "key": "当前会话",
+        "location": {
+          "startingColumn": 21,
+          "startingLine": 9
+        }
+      },
+      {
+        "comment": "",
+        "key": "架构",
+        "location": {
+          "startingColumn": 21,
+          "startingLine": 15
+        }
+      },
+      {
+        "comment": "",
+        "key": "App 通过 AppContainer 组装依赖，Feature 通过 UseCase + Repository 访问 CoreData 和网络。",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "退出登录",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 28
+        }
+      },
+      {
+        "comment": "",
+        "key": "确定",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 42
+        }
+      }
+    ]
+  },
+  "version": 1
+}

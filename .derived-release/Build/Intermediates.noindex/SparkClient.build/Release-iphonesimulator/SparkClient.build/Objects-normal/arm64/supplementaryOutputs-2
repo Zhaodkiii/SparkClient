@@ -1,0 +1,12 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppContainer.swift" : {
+    "abi-baseline-json" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient.abi.json",
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient-primary.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient-primary.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient-primary.dia",
+    "objc-header" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient-Swift.h",
+    "swiftdoc" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient.swiftdoc",
+    "swiftmodule" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient.swiftmodule",
+    "swiftsourceinfo" : "/Users/dream/Downloads/Reference/SparkClient/.derived-release/Build/Intermediates.noindex/SparkClient.build/Release-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkClient.swiftsourceinfo"
+  }
+}

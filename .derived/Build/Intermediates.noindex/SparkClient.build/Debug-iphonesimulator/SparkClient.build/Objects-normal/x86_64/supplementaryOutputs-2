@@ -1,0 +1,51 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Database/CoreDataStack.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/CoreDataStack.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/CoreDataStack.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/CoreDataStack.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/CoreDataStack.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/CoreDataStack.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Domain/Entities/HealthMetric.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetric.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetric.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetric.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetric.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetric.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Domain/Entities/UserProfile.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfile.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfile.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfile.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfile.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfile.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Domain/Entities/UserSession.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserSession.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserSession.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserSession.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserSession.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserSession.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Domain/Repositories/HealthMetricsRepository.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetricsRepository.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetricsRepository.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetricsRepository.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetricsRepository.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/HealthMetricsRepository.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Domain/Repositories/UserProfileRepository.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfileRepository.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfileRepository.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfileRepository.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfileRepository.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/UserProfileRepository.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/API/Account/DeactivationAPI.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/DeactivationAPI.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/DeactivationAPI.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/DeactivationAPI.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/DeactivationAPI.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/DeactivationAPI.swiftdeps"
+  }
+}

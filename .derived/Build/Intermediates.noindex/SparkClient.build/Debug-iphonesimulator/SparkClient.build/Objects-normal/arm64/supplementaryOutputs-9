@@ -1,0 +1,44 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/AuthTokenProvider.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthTokenProvider.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthTokenProvider.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthTokenProvider.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthTokenProvider.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthTokenProvider.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/Backend.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/Backend.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/Backend.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/Backend.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/Backend.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/Backend.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/ETagStore.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/ETagStore.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/ETagStore.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/ETagStore.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/ETagStore.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/ETagStore.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/Operations/SparkNetworkOperation.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkNetworkOperation.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkNetworkOperation.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkNetworkOperation.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkNetworkOperation.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SparkNetworkOperation.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/RetryLayer.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/RetryLayer.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/RetryLayer.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/RetryLayer.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/RetryLayer.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/RetryLayer.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/SerialRequestGate.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SerialRequestGate.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SerialRequestGate.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SerialRequestGate.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SerialRequestGate.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SerialRequestGate.swiftdeps"
+  }
+}

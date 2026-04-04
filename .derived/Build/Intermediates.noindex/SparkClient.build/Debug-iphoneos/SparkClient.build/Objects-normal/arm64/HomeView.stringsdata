@@ -1,0 +1,64 @@
+{
+  "source": "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "首页",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 35
+        }
+      },
+      {
+        "comment": "",
+        "key": "加载首页摘要…",
+        "location": {
+          "startingColumn": 34,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "加载失败",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "你好，%@",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 43
+        }
+      },
+      {
+        "comment": "",
+        "key": "当前为本地 Demo 数据，可直接验证架构与交互。",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "已连接真实账号，会逐步承接 HealthClient 的核心能力。",
+        "location": {
+          "startingColumn": 103,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "最近记录",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 68
+        }
+      }
+    ]
+  },
+  "version": 1
+}

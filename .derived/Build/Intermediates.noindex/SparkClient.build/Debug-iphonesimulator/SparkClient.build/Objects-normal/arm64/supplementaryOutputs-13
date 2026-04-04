@@ -1,0 +1,44 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Auth/Application/SignOutUseCase.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SignOutUseCase.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SignOutUseCase.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SignOutUseCase.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SignOutUseCase.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SignOutUseCase.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Auth/Domain/AuthRepository.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthRepository.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthRepository.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthRepository.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthRepository.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthRepository.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Auth/Infrastructure/DefaultAuthRepository.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/DefaultAuthRepository.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/DefaultAuthRepository.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/DefaultAuthRepository.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/DefaultAuthRepository.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/DefaultAuthRepository.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Auth/Infrastructure/SessionSnapshotStore.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SessionSnapshotStore.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SessionSnapshotStore.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SessionSnapshotStore.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SessionSnapshotStore.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/SessionSnapshotStore.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Auth/Presentation/AuthCoordinatorView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthCoordinatorView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthCoordinatorView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthCoordinatorView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthCoordinatorView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/AuthCoordinatorView.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Auth/Presentation/LoginView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/LoginView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/LoginView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/LoginView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/LoginView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/arm64/LoginView.swiftdeps"
+  }
+}

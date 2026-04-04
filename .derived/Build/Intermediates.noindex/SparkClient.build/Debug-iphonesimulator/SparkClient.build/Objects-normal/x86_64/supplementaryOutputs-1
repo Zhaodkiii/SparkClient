@@ -1,0 +1,51 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppContainer.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppContainer.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppContainer.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppContainer.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppContainer.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppContainer.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppCoordinatorView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppCoordinatorView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppCoordinatorView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppCoordinatorView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppCoordinatorView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppCoordinatorView.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppEnvironment.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppEnvironment.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppEnvironment.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppEnvironment.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppEnvironment.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppEnvironment.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppSessionStore.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppSessionStore.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppSessionStore.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppSessionStore.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppSessionStore.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/AppSessionStore.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/L10n.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/L10n.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/L10n.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/L10n.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/L10n.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/L10n.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/ContentView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/ContentView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/ContentView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/ContentView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/ContentView.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/SparkClientApp.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/SparkClientApp.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/SparkClientApp.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/SparkClientApp.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/SparkClientApp.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphonesimulator/SparkClient.build/Objects-normal/x86_64/SparkClientApp.swiftdeps"
+  }
+}

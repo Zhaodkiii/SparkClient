@@ -1,0 +1,23 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Home/Domain/HomeDashboard.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeDashboard.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeDashboard.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeDashboard.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeDashboard.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeDashboard.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Home/Infrastructure/CoreDataUserProfileRepository.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/CoreDataUserProfileRepository.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/CoreDataUserProfileRepository.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/CoreDataUserProfileRepository.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/CoreDataUserProfileRepository.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/CoreDataUserProfileRepository.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeView.swiftdeps"
+  }
+}

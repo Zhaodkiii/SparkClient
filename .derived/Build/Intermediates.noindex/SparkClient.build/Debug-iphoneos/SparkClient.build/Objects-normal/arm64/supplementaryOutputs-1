@@ -1,0 +1,23 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppConfiguration.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppConfiguration.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppConfiguration.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppConfiguration.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppConfiguration.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppConfiguration.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppContainer.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppContainer.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppContainer.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppContainer.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppContainer.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppContainer.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/App/Sources/App/AppCoordinatorView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppCoordinatorView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppCoordinatorView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppCoordinatorView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppCoordinatorView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/AppCoordinatorView.swiftdeps"
+  }
+}

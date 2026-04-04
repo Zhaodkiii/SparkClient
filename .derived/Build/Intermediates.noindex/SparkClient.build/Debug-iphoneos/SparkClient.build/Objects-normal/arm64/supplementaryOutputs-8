@@ -1,0 +1,23 @@
+{
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeViewModel.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeViewModel.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeViewModel.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeViewModel.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeViewModel.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/HomeViewModel.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Settings/Presentation/SettingsView.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsView.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsView.swiftdeps"
+  },
+  "/Users/dream/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Settings/Presentation/SettingsViewModel.swift" : {
+    "const-values" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsViewModel.swiftconstvalues",
+    "dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsViewModel.d",
+    "diagnostics" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsViewModel.dia",
+    "object" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsViewModel.o",
+    "swift-dependencies" : "/Users/dream/Downloads/Reference/SparkClient/.derived/Build/Intermediates.noindex/SparkClient.build/Debug-iphoneos/SparkClient.build/Objects-normal/arm64/SettingsViewModel.swiftdeps"
+  }
+}
