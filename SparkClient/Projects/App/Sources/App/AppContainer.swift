@@ -34,6 +34,7 @@ final class AppContainer {
     let healthMetricsRepository: any HealthMetricsRepository
     let authRepository: any AuthRepository
     let aiSettingsRepository: any AISettingsRepository
+    let localModelService: LocalModelService
 
     // MARK: - 用例（认证、首页、健康、患者、病历草稿、聊天）
 
@@ -100,6 +101,7 @@ final class AppContainer {
         )
         let aiSettingsRepository = DefaultAISettingsRepository(logger: logger)
         let aiRuntimeStore = AIRuntimeStore()
+        let localModelService = LocalModelService()
         let remoteConfigProvider = BackendAIRemoteConfigProvider(api: backend.aiConfig)
         let medicalSyncPreferenceRepository = DefaultMedicalSyncPreferenceRepository()
         let healthMetricsSyncStore = HealthMetricsSyncStore(coreDataStack: coreDataStack, logger: logger)
@@ -145,9 +147,14 @@ final class AppContainer {
 
         // 大模型调用网关与服务
         let aiRuntimeGateway = OpenAICompatibleTextGateway(logger: logger)
+        let localRuntimeGateway = LocalGGUFTextGateway(
+            localModelService: localModelService,
+            logger: logger
+        )
         let aiRuntimeService = AIRuntimeService(
             configCenter: aiConfigCenter,
             gateway: aiRuntimeGateway,
+            localGateway: localRuntimeGateway,
             logger: logger
         )
 
@@ -200,14 +207,16 @@ final class AppContainer {
         let chatOrchestrator = ChatOrchestrator(
             runtimeService: aiRuntimeService,
             toolHub: toolHub,
-            consentGate: ConsentGate()
+            consentGate: ConsentGate(),
+            logger: logger
         )
         let loadChatThreadsUseCase = LoadChatThreadsUseCase(repository: chatRepository)
         let loadChatMessagesUseCase = LoadChatMessagesUseCase(repository: chatRepository)
         let createThreadUseCase = CreateThreadUseCase(repository: chatRepository)
         let retryFailedMessageUseCase = RetryFailedMessageUseCase(
             repository: chatRepository,
-            syncEngine: chatSyncEngine
+            syncEngine: chatSyncEngine,
+            logger: logger
         )
         let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository)
         let syncChatUseCase = SyncChatUseCase(syncEngine: chatSyncEngine)
@@ -215,7 +224,8 @@ final class AppContainer {
             repository: chatRepository,
             orchestrator: chatOrchestrator,
             syncEngine: chatSyncEngine,
-            buildPatientContextSummaryUseCase: buildPatientContextSummaryUseCase
+            buildPatientContextSummaryUseCase: buildPatientContextSummaryUseCase,
+            logger: logger
         )
 
         // 应用内通知管道与远程推送处理
@@ -274,6 +284,7 @@ final class AppContainer {
         self.healthMetricsRepository = healthMetricsRepository
         self.authRepository = authRepository
         self.aiSettingsRepository = aiSettingsRepository
+        self.localModelService = localModelService
 
         self.restoreSessionUseCase = RestoreSessionUseCase(authRepository: authRepository)
         self.signInWithAppleUseCase = SignInWithAppleUseCase(authRepository: authRepository)
@@ -342,7 +353,8 @@ final class AppContainer {
             sendMessageUseCase: sendChatMessageUseCase,
             retryFailedMessageUseCase: retryFailedMessageUseCase,
             syncChatUseCase: syncChatUseCase,
-            notificationClient: notificationClient
+            notificationClient: notificationClient,
+            logger: logger
         )
     }
 
@@ -422,7 +434,9 @@ final class AppContainer {
     func makeAISettingsViewModel() -> AISettingsViewModel {
         AISettingsViewModel(
             loadUseCase: LoadAISettingsUseCase(repository: aiSettingsRepository),
-            saveUseCase: SaveAISettingsUseCase(repository: aiSettingsRepository)
+            saveUseCase: SaveAISettingsUseCase(repository: aiSettingsRepository),
+            localModelService: localModelService,
+            aiConfigAPI: backend.aiConfig
         )
     }
 

@@ -40,6 +40,10 @@ final class AIConfigCenter {
         logger.debug("AI 配置已预热", category: "ai_config")
     }
 
+    func currentSnapshot() async -> AISettingsSnapshot {
+        await repository.loadSnapshot()
+    }
+
     func refreshRemoteConfig() async {
         guard let remoteProvider else { return }
 

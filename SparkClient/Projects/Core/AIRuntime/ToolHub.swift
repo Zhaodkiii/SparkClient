@@ -38,16 +38,23 @@ final class ToolHub: @unchecked Sendable {
     func runIfNeeded(userInput: String, patientID: UUID?) async -> ToolHubResult {
         let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return .none }
+        logger.debug(
+            "工具路由检查开始，patient=\(shortID(patientID)), inputLength=\(trimmed.count)",
+            category: "tool_hub"
+        )
 
         if trimmed == "/audit_tools" {
+            logger.info("工具路由命中 /audit_tools", category: "tool_hub")
             return await handleAuditTools()
         }
 
         if let legacy = await handleLegacyCommands(trimmed: trimmed, patientID: patientID) {
+            logger.info("工具路由命中 legacy，tool=\(legacy.toolName)", category: "tool_hub")
             return .executed(legacy)
         }
 
         guard let invocation = parseToolInvocation(from: trimmed) else {
+            logger.debug("工具路由未命中，转入 AI 推理", category: "tool_hub")
             return .none
         }
 
@@ -863,6 +870,14 @@ final class ToolHub: @unchecked Sendable {
                 status: status
             )
         )
-        logger.debug("Tool executed: \(invocation.name)", category: "tool_hub")
+        logger.info(
+            "工具执行完成，tool=\(invocation.name), status=\(status.rawValue), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive)",
+            category: "tool_hub"
+        )
+    }
+
+    private func shortID(_ value: UUID?) -> String {
+        guard let value else { return "-" }
+        return String(value.uuidString.prefix(8))
     }
 }

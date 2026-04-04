@@ -2,44 +2,83 @@ import Foundation
 
 struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var chat: AIScenarioConfig
-    var medicalExtraction: AIScenarioConfig
-    var embedding: AIScenarioConfig
+    var optimizationText: AIScenarioConfig
+    var optimizationVisual: AIScenarioConfig
+    var contextFolding: AIScenarioConfig
+    var router: AIScenarioConfig
+    var modelConfig: AIScenarioConfig
+    var reportInterpretation: AIScenarioConfig
     var apiKeys: [APIKeys]
     var searchKeys: [SearchKeys]
     var toolKeys: [ToolKeys]
     var allModels: [AllModels]
     var userInfo: UserInfo
+    var trial: AITrialState
+    var trialModelPolicy: [AITrialModelPolicyItem]
     var promptRepo: [PromptRepo]
     var memoryArchive: [MemoryArchive]
     var translationDic: [TranslationDic]
 
+    private static let defaultChatEndpoint = "https://api.sparkclient.local/v1/chat/completions"
+    private static let defaultEmbedEndpoint = "https://api.sparkclient.local/v1/embeddings"
+
     static let `default` = AISettingsSnapshot(
         chat: AIScenarioConfig(
-            endpoint: "https://api.deepseek.com/v1/chat/completions",
-            model: "deepseek-chat",
-            apiKey: "sk-5ee7fe714ff54ad98d7658eb819ef982",
+            endpoint: defaultChatEndpoint,
+            model: "spark-chat-default",
+            apiKey: nil,
             temperature: 0.2,
             maxTokens: 4096
         ),
-        medicalExtraction: AIScenarioConfig(
-            endpoint: "https://api.sparkclient.local/v1/chat/completions",
-            model: "spark-medical-extraction",
+        optimizationText: AIScenarioConfig(
+            endpoint: defaultChatEndpoint,
+            model: "spark-chat-default",
             apiKey: nil,
             temperature: 0.0,
             maxTokens: 4096
         ),
-        embedding: AIScenarioConfig(
-            endpoint: "https://api.sparkclient.local/v1/embeddings",
+        optimizationVisual: AIScenarioConfig(
+            endpoint: defaultChatEndpoint,
+            model: "spark-chat-default",
+            apiKey: nil,
+            temperature: 0.2,
+            maxTokens: 4096
+        ),
+        contextFolding: AIScenarioConfig(
+            endpoint: defaultChatEndpoint,
+            model: "spark-chat-default",
+            apiKey: nil,
+            temperature: 0.2,
+            maxTokens: 4096
+        ),
+        router: AIScenarioConfig(
+            endpoint: defaultChatEndpoint,
+            model: "spark-chat-default",
+            apiKey: nil,
+            temperature: 0.2,
+            maxTokens: 4096
+        ),
+        modelConfig: AIScenarioConfig(
+            endpoint: defaultEmbedEndpoint,
             model: "spark-embedding-default",
             apiKey: nil,
             temperature: 0.0,
             maxTokens: 2048
+        ),
+        reportInterpretation: AIScenarioConfig(
+            endpoint: defaultChatEndpoint,
+            model: "spark-chat-default",
+            apiKey: nil,
+            temperature: 0.2,
+            maxTokens: 4096
         ),
         apiKeys: AISettingsDefaults.apiKeys,
         searchKeys: AISettingsDefaults.searchKeys,
         toolKeys: AISettingsDefaults.toolKeys,
         allModels: AISettingsDefaults.allModels,
         userInfo: AISettingsDefaults.userInfo,
+        trial: .inactive,
+        trialModelPolicy: [],
         promptRepo: AISettingsDefaults.promptRepo,
         memoryArchive: AISettingsDefaults.memoryArchive,
         translationDic: AISettingsDefaults.translationDic
@@ -49,11 +88,24 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         switch scenario {
         case .chat:
             return chat
-        case .medicalExtraction:
-            return medicalExtraction
-        case .embedding:
-            return embedding
+        case .optimizationText:
+            return optimizationText
+        case .optimizationVisual:
+            return optimizationVisual
+        case .contextFolding:
+            return contextFolding
+        case .router:
+            return router
+        case .modelConfig:
+            return modelConfig
+        case .reportInterpretation:
+            return reportInterpretation
         }
+    }
+
+    func trialPolicyConfig(for scenario: AIScenario) -> AIScenarioConfig? {
+        guard trial.isActive else { return nil }
+        return trialModelPolicy.first(where: { $0.scenario == scenario })?.config
     }
 }
 

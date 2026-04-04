@@ -10,6 +10,11 @@ enum AIModelIdentity: String, Codable, CaseIterable, Sendable {
     case agent
 }
 
+enum AIModelSelectionSource: String, Codable, CaseIterable, Sendable {
+    case localKey
+    case trial
+}
+
 struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var name: String
@@ -19,7 +24,85 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     var isHidden: Bool
     var help: String
     var source: AIRecordSource
+    var privacyPolicyURL: String
+    var privacyPolicyAccepted: Bool
+    var privacyPolicyAcceptedAt: Date?
     var timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        company: String,
+        key: String,
+        requestURL: String,
+        isHidden: Bool,
+        help: String,
+        source: AIRecordSource,
+        privacyPolicyURL: String = "",
+        privacyPolicyAccepted: Bool = false,
+        privacyPolicyAcceptedAt: Date? = nil,
+        timestamp: Date
+    ) {
+        self.id = id
+        self.name = name
+        self.company = company
+        self.key = key
+        self.requestURL = requestURL
+        self.isHidden = isHidden
+        self.help = help
+        self.source = source
+        self.privacyPolicyURL = privacyPolicyURL
+        self.privacyPolicyAccepted = privacyPolicyAccepted
+        self.privacyPolicyAcceptedAt = privacyPolicyAcceptedAt
+        self.timestamp = timestamp
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case company
+        case key
+        case requestURL
+        case isHidden
+        case help
+        case source
+        case privacyPolicyURL
+        case privacyPolicyAccepted
+        case privacyPolicyAcceptedAt
+        case timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        company = try container.decodeIfPresent(String.self, forKey: .company) ?? ""
+        key = try container.decodeIfPresent(String.self, forKey: .key) ?? ""
+        requestURL = try container.decodeIfPresent(String.self, forKey: .requestURL) ?? ""
+        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? true
+        help = try container.decodeIfPresent(String.self, forKey: .help) ?? ""
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
+        privacyPolicyURL = try container.decodeIfPresent(String.self, forKey: .privacyPolicyURL) ?? ""
+        privacyPolicyAccepted = try container.decodeIfPresent(Bool.self, forKey: .privacyPolicyAccepted) ?? false
+        privacyPolicyAcceptedAt = try container.decodeIfPresent(Date.self, forKey: .privacyPolicyAcceptedAt)
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(company, forKey: .company)
+        try container.encode(key, forKey: .key)
+        try container.encode(requestURL, forKey: .requestURL)
+        try container.encode(isHidden, forKey: .isHidden)
+        try container.encode(help, forKey: .help)
+        try container.encode(source, forKey: .source)
+        try container.encode(privacyPolicyURL, forKey: .privacyPolicyURL)
+        try container.encode(privacyPolicyAccepted, forKey: .privacyPolicyAccepted)
+        try container.encodeIfPresent(privacyPolicyAcceptedAt, forKey: .privacyPolicyAcceptedAt)
+        try container.encode(timestamp, forKey: .timestamp)
+    }
 }
 
 struct SearchKeys: Identifiable, Codable, Equatable, Sendable {
@@ -62,8 +145,127 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     var supportsToolUse: Bool
     var supportsVoiceGen: Bool
     var supportsImageGen: Bool
+    /// 0 免费，1 经济，2 标准，3 高级
+    var priceTier: Int
+    var supportsText: Bool
+    var reasoningControllable: Bool
+    var iconSymbol: String?
+    var baseModelName: String?
+    var localFilename: String?
+    var systemPrompt: String?
     var source: AIRecordSource
     var timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        displayName: String,
+        identity: AIModelIdentity,
+        position: Int,
+        company: String,
+        isHidden: Bool,
+        supportsSearch: Bool,
+        supportsMultimodal: Bool,
+        supportsReasoning: Bool,
+        supportsToolUse: Bool,
+        supportsVoiceGen: Bool,
+        supportsImageGen: Bool,
+        iconSymbol: String? = nil,
+        baseModelName: String? = nil,
+        localFilename: String? = nil,
+        systemPrompt: String? = nil,
+        source: AIRecordSource,
+        timestamp: Date,
+        priceTier: Int = 0,
+        supportsText: Bool = true,
+        reasoningControllable: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.displayName = displayName
+        self.identity = identity
+        self.position = position
+        self.company = company
+        self.isHidden = isHidden
+        self.supportsSearch = supportsSearch
+        self.supportsMultimodal = supportsMultimodal
+        self.supportsReasoning = supportsReasoning
+        self.supportsToolUse = supportsToolUse
+        self.supportsVoiceGen = supportsVoiceGen
+        self.supportsImageGen = supportsImageGen
+        self.priceTier = min(max(priceTier, 0), 3)
+        self.supportsText = supportsText
+        self.reasoningControllable = reasoningControllable
+        self.iconSymbol = iconSymbol
+        self.baseModelName = baseModelName
+        self.localFilename = localFilename
+        self.systemPrompt = systemPrompt
+        self.source = source
+        self.timestamp = timestamp
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case displayName
+        case identity
+        case position
+        case company
+        case isHidden
+        case supportsSearch
+        case supportsMultimodal
+        case supportsReasoning
+        case supportsToolUse
+        case supportsVoiceGen
+        case supportsImageGen
+        case priceTier
+        case supportsText
+        case reasoningControllable
+        case iconSymbol
+        case baseModelName
+        case localFilename
+        case systemPrompt
+        case source
+        case timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? name
+        identity = try container.decodeIfPresent(AIModelIdentity.self, forKey: .identity) ?? .model
+        position = try container.decodeIfPresent(Int.self, forKey: .position) ?? 0
+        company = try container.decodeIfPresent(String.self, forKey: .company) ?? ""
+        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
+        supportsSearch = try container.decodeIfPresent(Bool.self, forKey: .supportsSearch) ?? false
+        supportsMultimodal = try container.decodeIfPresent(Bool.self, forKey: .supportsMultimodal) ?? false
+        supportsReasoning = try container.decodeIfPresent(Bool.self, forKey: .supportsReasoning) ?? false
+        supportsToolUse = try container.decodeIfPresent(Bool.self, forKey: .supportsToolUse) ?? false
+        supportsVoiceGen = try container.decodeIfPresent(Bool.self, forKey: .supportsVoiceGen) ?? false
+        supportsImageGen = try container.decodeIfPresent(Bool.self, forKey: .supportsImageGen) ?? false
+        if let tier = try container.decodeIfPresent(Int.self, forKey: .priceTier) {
+            priceTier = min(max(tier, 0), 3)
+        } else {
+            priceTier = 0
+        }
+        supportsText = try container.decodeIfPresent(Bool.self, forKey: .supportsText) ?? true
+        reasoningControllable = try container.decodeIfPresent(Bool.self, forKey: .reasoningControllable) ?? false
+        iconSymbol = try container.decodeIfPresent(String.self, forKey: .iconSymbol)
+        baseModelName = try container.decodeIfPresent(String.self, forKey: .baseModelName)
+        localFilename = try container.decodeIfPresent(String.self, forKey: .localFilename)
+        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt)
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+    }
+
+    var isLocalModel: Bool {
+        company.uppercased() == LocalModelService.localCompany && identity == .model
+    }
+
+    var isLocalAgent: Bool {
+        company.uppercased() == LocalModelService.localCompany && identity == .agent
+    }
 }
 
 struct UserInfo: Codable, Equatable, Sendable {
@@ -73,6 +275,18 @@ struct UserInfo: Codable, Equatable, Sendable {
     var chooseEmbeddingModel: String
     var optimizationTextModel: String
     var optimizationVisualModel: String
+    var contextFoldingModel: String
+    var routerModel: String
+    var dataExtractionModel: String
+    var reportInterpretationModel: String
+    var optimizationTextSource: AIModelSelectionSource
+    var optimizationVisualSource: AIModelSelectionSource
+    var contextFoldingSource: AIModelSelectionSource
+    var routerSource: AIModelSelectionSource
+    var dataExtractionSource: AIModelSelectionSource
+    var reportInterpretationSource: AIModelSelectionSource
+    var useContextFolding: Bool
+    var maxToolSets: Int
     var textToSpeechModel: String
     var useMemory: Bool
     var useCrossMemory: Bool
@@ -89,6 +303,159 @@ struct UserInfo: Codable, Equatable, Sendable {
     var useCanvas: Bool
     var useCode: Bool
     var timestamp: Date
+
+    init(
+        name: String,
+        userInfo: String,
+        userRequirements: String,
+        chooseEmbeddingModel: String,
+        optimizationTextModel: String,
+        optimizationVisualModel: String,
+        contextFoldingModel: String,
+        routerModel: String,
+        dataExtractionModel: String,
+        reportInterpretationModel: String,
+        optimizationTextSource: AIModelSelectionSource,
+        optimizationVisualSource: AIModelSelectionSource,
+        contextFoldingSource: AIModelSelectionSource,
+        routerSource: AIModelSelectionSource,
+        dataExtractionSource: AIModelSelectionSource,
+        reportInterpretationSource: AIModelSelectionSource,
+        useContextFolding: Bool,
+        maxToolSets: Int,
+        textToSpeechModel: String,
+        useMemory: Bool,
+        useCrossMemory: Bool,
+        useHealth: Bool,
+        useKnowledge: Bool,
+        knowledgeCount: Int,
+        knowledgeSimilarity: Double,
+        useSearch: Bool,
+        bilingualSearch: Bool,
+        searchCount: Int,
+        useMap: Bool,
+        useCalendar: Bool,
+        useWeather: Bool,
+        useCanvas: Bool,
+        useCode: Bool,
+        timestamp: Date
+    ) {
+        self.name = name
+        self.userInfo = userInfo
+        self.userRequirements = userRequirements
+        self.chooseEmbeddingModel = chooseEmbeddingModel
+        self.optimizationTextModel = optimizationTextModel
+        self.optimizationVisualModel = optimizationVisualModel
+        self.contextFoldingModel = contextFoldingModel
+        self.routerModel = routerModel
+        self.dataExtractionModel = dataExtractionModel
+        self.reportInterpretationModel = reportInterpretationModel
+        self.optimizationTextSource = optimizationTextSource
+        self.optimizationVisualSource = optimizationVisualSource
+        self.contextFoldingSource = contextFoldingSource
+        self.routerSource = routerSource
+        self.dataExtractionSource = dataExtractionSource
+        self.reportInterpretationSource = reportInterpretationSource
+        self.useContextFolding = useContextFolding
+        self.maxToolSets = maxToolSets
+        self.textToSpeechModel = textToSpeechModel
+        self.useMemory = useMemory
+        self.useCrossMemory = useCrossMemory
+        self.useHealth = useHealth
+        self.useKnowledge = useKnowledge
+        self.knowledgeCount = knowledgeCount
+        self.knowledgeSimilarity = knowledgeSimilarity
+        self.useSearch = useSearch
+        self.bilingualSearch = bilingualSearch
+        self.searchCount = searchCount
+        self.useMap = useMap
+        self.useCalendar = useCalendar
+        self.useWeather = useWeather
+        self.useCanvas = useCanvas
+        self.useCode = useCode
+        self.timestamp = timestamp
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case userInfo
+        case userRequirements
+        case chooseEmbeddingModel
+        case optimizationTextModel
+        case optimizationVisualModel
+        case contextFoldingModel
+        case routerModel
+        case dataExtractionModel
+        case reportInterpretationModel
+        case optimizationTextSource
+        case optimizationVisualSource
+        case contextFoldingSource
+        case routerSource
+        case dataExtractionSource
+        case reportInterpretationSource
+        case useContextFolding
+        case maxToolSets
+        case textToSpeechModel
+        case useMemory
+        case useCrossMemory
+        case useHealth
+        case useKnowledge
+        case knowledgeCount
+        case knowledgeSimilarity
+        case useSearch
+        case bilingualSearch
+        case searchCount
+        case useMap
+        case useCalendar
+        case useWeather
+        case useCanvas
+        case useCode
+        case timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        userInfo = try container.decodeIfPresent(String.self, forKey: .userInfo) ?? ""
+        userRequirements = try container.decodeIfPresent(String.self, forKey: .userRequirements) ?? ""
+        chooseEmbeddingModel = try container.decodeIfPresent(String.self, forKey: .chooseEmbeddingModel) ?? "spark-embedding-default"
+        optimizationTextModel = try container.decodeIfPresent(String.self, forKey: .optimizationTextModel) ?? "spark-optimization-default"
+        optimizationVisualModel = try container.decodeIfPresent(String.self, forKey: .optimizationVisualModel) ?? "spark-optimization-default"
+        contextFoldingModel = try container.decodeIfPresent(String.self, forKey: .contextFoldingModel) ?? "spark-optimization-default"
+        routerModel = try container.decodeIfPresent(String.self, forKey: .routerModel) ?? "spark-chat-default"
+        dataExtractionModel = try container.decodeIfPresent(String.self, forKey: .dataExtractionModel) ?? "spark-medical-extraction"
+        reportInterpretationModel = try container.decodeIfPresent(String.self, forKey: .reportInterpretationModel) ?? "spark-chat-default"
+        let optimizationTextSourceRaw = try container.decodeIfPresent(String.self, forKey: .optimizationTextSource)
+        optimizationTextSource = AIModelSelectionSource(rawValue: optimizationTextSourceRaw ?? "") ?? .localKey
+        let optimizationVisualSourceRaw = try container.decodeIfPresent(String.self, forKey: .optimizationVisualSource)
+        optimizationVisualSource = AIModelSelectionSource(rawValue: optimizationVisualSourceRaw ?? "") ?? .localKey
+        let contextFoldingSourceRaw = try container.decodeIfPresent(String.self, forKey: .contextFoldingSource)
+        contextFoldingSource = AIModelSelectionSource(rawValue: contextFoldingSourceRaw ?? "") ?? .localKey
+        let routerSourceRaw = try container.decodeIfPresent(String.self, forKey: .routerSource)
+        routerSource = AIModelSelectionSource(rawValue: routerSourceRaw ?? "") ?? .localKey
+        let dataExtractionSourceRaw = try container.decodeIfPresent(String.self, forKey: .dataExtractionSource)
+        dataExtractionSource = AIModelSelectionSource(rawValue: dataExtractionSourceRaw ?? "") ?? .localKey
+        let reportInterpretationSourceRaw = try container.decodeIfPresent(String.self, forKey: .reportInterpretationSource)
+        reportInterpretationSource = AIModelSelectionSource(rawValue: reportInterpretationSourceRaw ?? "") ?? .localKey
+        useContextFolding = try container.decodeIfPresent(Bool.self, forKey: .useContextFolding) ?? true
+        maxToolSets = try container.decodeIfPresent(Int.self, forKey: .maxToolSets) ?? 3
+        textToSpeechModel = try container.decodeIfPresent(String.self, forKey: .textToSpeechModel) ?? "spark-tts-default"
+        useMemory = try container.decodeIfPresent(Bool.self, forKey: .useMemory) ?? true
+        useCrossMemory = try container.decodeIfPresent(Bool.self, forKey: .useCrossMemory) ?? true
+        useHealth = try container.decodeIfPresent(Bool.self, forKey: .useHealth) ?? true
+        useKnowledge = try container.decodeIfPresent(Bool.self, forKey: .useKnowledge) ?? true
+        knowledgeCount = try container.decodeIfPresent(Int.self, forKey: .knowledgeCount) ?? 12
+        knowledgeSimilarity = try container.decodeIfPresent(Double.self, forKey: .knowledgeSimilarity) ?? 0.55
+        useSearch = try container.decodeIfPresent(Bool.self, forKey: .useSearch) ?? true
+        bilingualSearch = try container.decodeIfPresent(Bool.self, forKey: .bilingualSearch) ?? true
+        searchCount = try container.decodeIfPresent(Int.self, forKey: .searchCount) ?? 8
+        useMap = try container.decodeIfPresent(Bool.self, forKey: .useMap) ?? true
+        useCalendar = try container.decodeIfPresent(Bool.self, forKey: .useCalendar) ?? true
+        useWeather = try container.decodeIfPresent(Bool.self, forKey: .useWeather) ?? true
+        useCanvas = try container.decodeIfPresent(Bool.self, forKey: .useCanvas) ?? true
+        useCode = try container.decodeIfPresent(Bool.self, forKey: .useCode) ?? true
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+    }
 }
 
 struct PromptRepo: Identifiable, Codable, Equatable, Sendable {
@@ -192,7 +559,7 @@ enum AISettingsDefaults {
             APIKeys(
                 name: "DeepSeek",
                 company: "DEEPSEEK",
-                key: "sk-5ee7fe714ff54ad98d7658eb819ef982",
+                key: "",
                 requestURL: "https://api.deepseek.com/v1/chat/completions",
                 isHidden: true,
                 help: "DeepSeek official endpoint",
@@ -662,6 +1029,18 @@ enum AISettingsDefaults {
             chooseEmbeddingModel: "spark-embedding-default",
             optimizationTextModel: "spark-optimization-default",
             optimizationVisualModel: "spark-optimization-default",
+            contextFoldingModel: "spark-optimization-default",
+            routerModel: "spark-chat-default",
+            dataExtractionModel: "spark-medical-extraction",
+            reportInterpretationModel: "spark-chat-default",
+            optimizationTextSource: .localKey,
+            optimizationVisualSource: .localKey,
+            contextFoldingSource: .localKey,
+            routerSource: .localKey,
+            dataExtractionSource: .localKey,
+            reportInterpretationSource: .localKey,
+            useContextFolding: true,
+            maxToolSets: 3,
             textToSpeechModel: "spark-tts-default",
             useMemory: true,
             useCrossMemory: true,

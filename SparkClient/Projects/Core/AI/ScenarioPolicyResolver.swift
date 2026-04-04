@@ -10,6 +10,10 @@ struct ScenarioPolicyResolver {
             return try runtimeConfig.toResolvedConfig(source: .runtimeOverride)
         }
 
+        if let trialConfig = snapshot.trialPolicyConfig(for: scenario) {
+            return try trialConfig.toResolvedConfig(source: .trialPolicy)
+        }
+
         let defaultConfig = snapshot.config(for: scenario)
         return try defaultConfig.toResolvedConfig(source: .localDefault)
     }

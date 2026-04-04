@@ -19,7 +19,7 @@ final class AISettingsAndResolverTests: XCTestCase {
 
         var snapshot = AISettingsSnapshot.default
         snapshot.chat.apiKey = "chat-secret"
-        snapshot.medicalExtraction.apiKey = "extract-secret"
+        snapshot.optimizationText.apiKey = "extract-secret"
         snapshot.apiKeys[0].key = "api-secret"
         snapshot.searchKeys[0].key = "search-secret"
         snapshot.toolKeys[0].key = "tool-secret"
@@ -29,14 +29,14 @@ final class AISettingsAndResolverTests: XCTestCase {
         let persistedData = try XCTUnwrap(userDefaults.data(forKey: Constants.snapshotStorageKey))
         let persistedSnapshot = try JSONDecoder().decode(AISettingsSnapshot.self, from: persistedData)
         XCTAssertNil(persistedSnapshot.chat.apiKey)
-        XCTAssertNil(persistedSnapshot.medicalExtraction.apiKey)
+        XCTAssertNil(persistedSnapshot.optimizationText.apiKey)
         XCTAssertEqual(persistedSnapshot.apiKeys[0].key, "")
         XCTAssertEqual(persistedSnapshot.searchKeys[0].key, "")
         XCTAssertEqual(persistedSnapshot.toolKeys[0].key, "")
 
         let loaded = await repository.loadSnapshot()
         XCTAssertEqual(loaded.chat.apiKey, "chat-secret")
-        XCTAssertEqual(loaded.medicalExtraction.apiKey, "extract-secret")
+        XCTAssertEqual(loaded.optimizationText.apiKey, "extract-secret")
         XCTAssertEqual(loaded.apiKeys[0].key, "api-secret")
         XCTAssertEqual(loaded.searchKeys[0].key, "search-secret")
         XCTAssertEqual(loaded.toolKeys[0].key, "tool-secret")
@@ -93,6 +93,40 @@ final class AISettingsAndResolverTests: XCTestCase {
         XCTAssertEqual(resolved.source, .runtimeOverride)
     }
 
+    func testScenarioResolverUsesTrialPolicyWhenNoRuntimeOverride() async throws {
+        let runtimeStore = AIRuntimeStore()
+        var snapshot = AISettingsSnapshot.default
+        snapshot.trial = AITrialState(
+            status: "active",
+            isActive: true,
+            grantSource: "auto",
+            startedAt: Date(),
+            expiresAt: Date().addingTimeInterval(3600),
+            remainingSeconds: 3600
+        )
+        snapshot.trialModelPolicy = [
+            AITrialModelPolicyItem(
+                scenario: .chat,
+                config: AIScenarioConfig(
+                    endpoint: "https://trial.sparkclient.local/v1/chat/completions",
+                    model: "trial-chat",
+                    apiKey: nil,
+                    temperature: 0.1,
+                    maxTokens: 1024
+                )
+            )
+        ]
+
+        let resolver = ScenarioPolicyResolver()
+        let resolved = try await resolver.resolve(
+            scenario: .chat,
+            snapshot: snapshot,
+            runtimeStore: runtimeStore
+        )
+        XCTAssertEqual(resolved.model, "trial-chat")
+        XCTAssertEqual(resolved.source, .trialPolicy)
+    }
+
     func testSnapshotMergesRemotePatchAndKeepsCustomAPIKey() {
         var snapshot = AISettingsSnapshot.default
         snapshot.chat.model = "local-chat"
@@ -128,11 +162,33 @@ final class AISettingsAndResolverTests: XCTestCase {
             userInfo: AIRemoteUserInfoPatch(
                 useSearch: false,
                 searchCount: 12
-            )
+            ),
+            trial: AITrialState(
+                status: "active",
+                isActive: true,
+                grantSource: "application",
+                startedAt: nil,
+                expiresAt: nil,
+                remainingSeconds: 100
+            ),
+            trialModelPolicy: [
+                AITrialModelPolicyItem(
+                    scenario: .chat,
+                    config: AIScenarioConfig(
+                        endpoint: "https://trial.sparkservice.local/v1/chat/completions",
+                        model: "trial-chat-model",
+                        apiKey: nil,
+                        temperature: 0.0,
+                        maxTokens: 2000
+                    )
+                )
+            ]
         )
 
         let merged = snapshot.merging(remotePatch: remotePatch)
         XCTAssertEqual(merged.chat.model, "remote-chat-model")
+        XCTAssertEqual(merged.trial.status, "active")
+        XCTAssertEqual(merged.trialModelPolicy.first?.config.model, "trial-chat-model")
         XCTAssertEqual(merged.chat.maxTokens, 8192)
         XCTAssertEqual(merged.userInfo.useSearch, false)
         XCTAssertEqual(merged.userInfo.searchCount, 12)

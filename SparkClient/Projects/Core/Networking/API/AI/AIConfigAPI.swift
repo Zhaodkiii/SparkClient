@@ -32,7 +32,7 @@ struct SparkAIConfigAPI {
                 path: "/api/v1/ai/config/bootstrap/",
                 queryItems: queryItems,
                 strategy: NetworkStrategy(
-                    requiresAuth: false,
+                    requiresAuth: true,
                     allowETag: true,
                     serialKey: "ai.config.bootstrap",
                     retryConfig: .default,
@@ -46,6 +46,90 @@ struct SparkAIConfigAPI {
         let response = try await configuration.execute(operation)
         let payload = try APIResponseDecoder.decodeWrappedData(RemoteAIBootstrapPayload.self, from: response)
         return payload.toPatch()
+    }
+
+    func fetchTrialStatus() async throws -> AITrialState {
+        let operation = CacheableSparkNetworkOperation(
+            name: "AIConfig.TrialStatus",
+            apiName: "AIConfigAPI",
+            request: SparkNetworkRequest(
+                method: .get,
+                path: "/api/v1/ai/trial/status/",
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "ai.trial.status",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .normal
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(RemoteTrialStatusPayload.self, from: response)
+        return payload.toModel()
+    }
+
+    func applyTrial(note: String = "") async throws -> AITrialState {
+        struct ApplyTrialBody: Encodable {
+            let note: String
+        }
+        let operation = CacheableSparkNetworkOperation(
+            name: "AIConfig.TrialApply",
+            apiName: "AIConfigAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/ai/trial/apply/",
+                body: .json(AnyEncodable(ApplyTrialBody(note: note))),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "ai.trial.apply",
+                    retryConfig: .default,
+                    isIdempotent: false,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(RemoteTrialStatusPayload.self, from: response)
+        return payload.toModel()
+    }
+
+    func testProviderConnection(requestURL: String, apiKey: String, model: String) async throws -> Bool {
+        struct TestProviderBody: Encodable {
+            let request_url: String
+            let api_key: String
+            let model: String
+        }
+        let operation = CacheableSparkNetworkOperation(
+            name: "AIConfig.ProviderConnectionTest",
+            apiName: "AIConfigAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/ai/providers/test-connection/",
+                body: .json(
+                    AnyEncodable(
+                        TestProviderBody(
+                            request_url: requestURL,
+                            api_key: apiKey,
+                            model: model
+                        )
+                    )
+                ),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "ai.provider.test_connection",
+                    retryConfig: .default,
+                    isIdempotent: false,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(RemoteProviderTestPayload.self, from: response)
+        return payload.reachable
     }
 }
 
@@ -77,6 +161,8 @@ private struct RemoteAIBootstrapPayload: Decodable {
     let toolKeys: [RemoteToolKeyItem]?
     let allModels: [RemoteModelItem]?
     let userInfo: RemoteUserInfoPatch?
+    let trial: RemoteTrialState?
+    let trialModelPolicy: [RemoteTrialModelPolicyItem]?
 
     enum CodingKeys: String, CodingKey {
         case revision
@@ -86,6 +172,8 @@ private struct RemoteAIBootstrapPayload: Decodable {
         case toolKeys = "tool_keys"
         case allModels = "all_models"
         case userInfo = "user_info"
+        case trial
+        case trialModelPolicy = "trial_model_policy"
     }
 
     func toPatch(now: Date = Date()) -> AIRemoteSettingsPatch {
@@ -93,26 +181,42 @@ private struct RemoteAIBootstrapPayload: Decodable {
         return AIRemoteSettingsPatch(
             revision: revision,
             chat: scenarios?.chat?.toScenarioConfig(fallback: defaults.chat),
-            medicalExtraction: scenarios?.medicalExtraction?.toScenarioConfig(fallback: defaults.medicalExtraction),
-            embedding: scenarios?.embedding?.toScenarioConfig(fallback: defaults.embedding),
+            optimizationText: scenarios?.optimizationText?.toScenarioConfig(fallback: defaults.optimizationText),
+            optimizationVisual: scenarios?.optimizationVisual?.toScenarioConfig(fallback: defaults.optimizationVisual),
+            contextFolding: scenarios?.contextFolding?.toScenarioConfig(fallback: defaults.contextFolding),
+            router: scenarios?.router?.toScenarioConfig(fallback: defaults.router),
+            modelConfig: scenarios?.modelConfig?.toScenarioConfig(fallback: defaults.modelConfig),
+            reportInterpretation: scenarios?.reportInterpretation?.toScenarioConfig(
+                fallback: defaults.reportInterpretation
+            ),
             apiKeys: apiKeys?.map { $0.toModel(now: now) },
             searchKeys: searchKeys?.map { $0.toModel(now: now) },
             toolKeys: toolKeys?.map { $0.toModel(now: now) },
             allModels: allModels?.map { $0.toModel(now: now) },
-            userInfo: userInfo?.toPatch()
+            userInfo: userInfo?.toPatch(),
+            trial: trial?.toModel(),
+            trialModelPolicy: trialModelPolicy?.compactMap { $0.toModel(fallbackSnapshot: defaults) }
         )
     }
 }
 
 private struct RemoteScenarioCollection: Decodable {
     let chat: RemoteScenarioConfig?
-    let medicalExtraction: RemoteScenarioConfig?
-    let embedding: RemoteScenarioConfig?
+    let optimizationText: RemoteScenarioConfig?
+    let optimizationVisual: RemoteScenarioConfig?
+    let contextFolding: RemoteScenarioConfig?
+    let router: RemoteScenarioConfig?
+    let modelConfig: RemoteScenarioConfig?
+    let reportInterpretation: RemoteScenarioConfig?
 
     enum CodingKeys: String, CodingKey {
         case chat
-        case medicalExtraction = "medical_extraction"
-        case embedding
+        case optimizationText = "optimization_text"
+        case optimizationVisual = "optimization_visual"
+        case contextFolding = "context_folding"
+        case router
+        case modelConfig = "model_config"
+        case reportInterpretation = "report_interpretation"
     }
 }
 
@@ -150,6 +254,7 @@ private struct RemoteAPIKeyItem: Decodable {
     let isHidden: Bool?
     let help: String?
     let source: String?
+    let privacyPolicyURL: String?
 
     enum CodingKeys: String, CodingKey {
         case name
@@ -159,6 +264,7 @@ private struct RemoteAPIKeyItem: Decodable {
         case isHidden = "is_hidden"
         case help
         case source
+        case privacyPolicyURL = "privacy_policy_url"
     }
 
     func toModel(now: Date) -> APIKeys {
@@ -170,6 +276,7 @@ private struct RemoteAPIKeyItem: Decodable {
             isHidden: isHidden ?? false,
             help: help ?? "",
             source: AIRecordSource(rawValue: source ?? "") ?? .system,
+            privacyPolicyURL: privacyPolicyURL ?? "",
             timestamp: now
         )
     }
@@ -250,7 +357,6 @@ private struct RemoteToolKeyItem: Decodable {
 private struct RemoteModelItem: Decodable {
     let name: String
     let displayName: String?
-    let identity: String?
     let position: Int?
     let company: String
     let isHidden: Bool?
@@ -260,12 +366,14 @@ private struct RemoteModelItem: Decodable {
     let supportsToolUse: Bool?
     let supportsVoiceGen: Bool?
     let supportsImageGen: Bool?
+    let priceTier: Int?
+    let supportsText: Bool?
+    let reasoningControllable: Bool?
     let source: String?
 
     enum CodingKeys: String, CodingKey {
         case name
         case displayName = "display_name"
-        case identity
         case position
         case company
         case isHidden = "is_hidden"
@@ -275,14 +383,18 @@ private struct RemoteModelItem: Decodable {
         case supportsToolUse = "supports_tool_use"
         case supportsVoiceGen = "supports_voice_gen"
         case supportsImageGen = "supports_image_gen"
+        case priceTier = "price_tier"
+        case supportsText = "supports_text"
+        case reasoningControllable = "reasoning_controllable"
         case source
     }
 
     func toModel(now: Date) -> AllModels {
-        AllModels(
+        let tier = priceTier.map { min(max($0, 0), 3) } ?? 0
+        return AllModels(
             name: name,
             displayName: displayName ?? name,
-            identity: AIModelIdentity(rawValue: identity ?? "") ?? .model,
+            identity: .model,
             position: position ?? 0,
             company: company,
             isHidden: isHidden ?? false,
@@ -293,7 +405,10 @@ private struct RemoteModelItem: Decodable {
             supportsVoiceGen: supportsVoiceGen ?? false,
             supportsImageGen: supportsImageGen ?? false,
             source: AIRecordSource(rawValue: source ?? "") ?? .system,
-            timestamp: now
+            timestamp: now,
+            priceTier: tier,
+            supportsText: supportsText ?? true,
+            reasoningControllable: reasoningControllable ?? false
         )
     }
 }
@@ -302,7 +417,13 @@ private struct RemoteUserInfoPatch: Decodable {
     let chooseEmbeddingModel: String?
     let optimizationTextModel: String?
     let optimizationVisualModel: String?
+    let contextFoldingModel: String?
+    let routerModel: String?
+    let dataExtractionModel: String?
+    let reportInterpretationModel: String?
     let textToSpeechModel: String?
+    let useContextFolding: Bool?
+    let maxToolSets: Int?
     let useKnowledge: Bool?
     let knowledgeCount: Int?
     let knowledgeSimilarity: Double?
@@ -319,7 +440,13 @@ private struct RemoteUserInfoPatch: Decodable {
         case chooseEmbeddingModel = "choose_embedding_model"
         case optimizationTextModel = "optimization_text_model"
         case optimizationVisualModel = "optimization_visual_model"
+        case contextFoldingModel = "context_folding_model"
+        case routerModel = "router_model"
+        case dataExtractionModel = "data_extraction_model"
+        case reportInterpretationModel = "report_interpretation_model"
         case textToSpeechModel = "text_to_speech_model"
+        case useContextFolding = "use_context_folding"
+        case maxToolSets = "max_tool_sets"
         case useKnowledge = "use_knowledge"
         case knowledgeCount = "knowledge_count"
         case knowledgeSimilarity = "knowledge_similarity"
@@ -338,7 +465,13 @@ private struct RemoteUserInfoPatch: Decodable {
             chooseEmbeddingModel: chooseEmbeddingModel,
             optimizationTextModel: optimizationTextModel,
             optimizationVisualModel: optimizationVisualModel,
+            contextFoldingModel: contextFoldingModel,
+            routerModel: routerModel,
+            dataExtractionModel: dataExtractionModel,
+            reportInterpretationModel: reportInterpretationModel,
             textToSpeechModel: textToSpeechModel,
+            useContextFolding: useContextFolding,
+            maxToolSets: maxToolSets,
             useKnowledge: useKnowledge,
             knowledgeCount: knowledgeCount,
             knowledgeSimilarity: knowledgeSimilarity,
@@ -351,5 +484,126 @@ private struct RemoteUserInfoPatch: Decodable {
             useCanvas: useCanvas,
             useCode: useCode
         )
+    }
+}
+
+private struct RemoteTrialState: Decodable {
+    let status: String?
+    let isActive: Bool?
+    let grantSource: String?
+    let startedAt: String?
+    let expiresAt: String?
+    let remainingSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case isActive = "is_active"
+        case grantSource = "grant_source"
+        case startedAt = "started_at"
+        case expiresAt = "expires_at"
+        case remainingSeconds = "remaining_seconds"
+    }
+
+    func toModel() -> AITrialState {
+        let formatter = ISO8601DateFormatter()
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        func parseDate(_ value: String?) -> Date? {
+            guard let value else { return nil }
+            return fractionalFormatter.date(from: value) ?? formatter.date(from: value)
+        }
+
+        return AITrialState(
+            status: status ?? AITrialState.inactive.status,
+            isActive: isActive ?? false,
+            grantSource: grantSource ?? AITrialState.inactive.grantSource,
+            startedAt: parseDate(startedAt),
+            expiresAt: parseDate(expiresAt),
+            remainingSeconds: remainingSeconds ?? 0
+        )
+    }
+}
+
+private struct RemoteTrialStatusPayload: Decodable {
+    let status: String?
+    let isActive: Bool?
+    let grantSource: String?
+    let startedAt: String?
+    let expiresAt: String?
+    let remainingSeconds: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case isActive = "is_active"
+        case grantSource = "grant_source"
+        case startedAt = "started_at"
+        case expiresAt = "expires_at"
+        case remainingSeconds = "remaining_seconds"
+    }
+
+    func toModel() -> AITrialState {
+        let formatter = ISO8601DateFormatter()
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        func parseDate(_ value: String?) -> Date? {
+            guard let value else { return nil }
+            return fractionalFormatter.date(from: value) ?? formatter.date(from: value)
+        }
+
+        return AITrialState(
+            status: status ?? AITrialState.inactive.status,
+            isActive: isActive ?? false,
+            grantSource: grantSource ?? AITrialState.inactive.grantSource,
+            startedAt: parseDate(startedAt),
+            expiresAt: parseDate(expiresAt),
+            remainingSeconds: remainingSeconds ?? 0
+        )
+    }
+}
+
+private struct RemoteProviderTestPayload: Decodable {
+    let reachable: Bool
+}
+
+private struct RemoteTrialModelPolicyItem: Decodable {
+    let scenario: String?
+    let endpoint: String?
+    let model: String?
+    let apiKey: String?
+    let temperature: Double?
+    let maxTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case scenario
+        case endpoint
+        case model
+        case apiKey = "api_key"
+        case temperature
+        case maxTokens = "max_tokens"
+    }
+
+    func toModel(fallbackSnapshot: AISettingsSnapshot) -> AITrialModelPolicyItem? {
+        guard
+            let rawScenario = scenario,
+            let typedScenario = decodeScenario(rawScenario)
+        else {
+            return nil
+        }
+
+        let fallback = fallbackSnapshot.config(for: typedScenario)
+        let scenarioConfig = AIScenarioConfig(
+            endpoint: endpoint ?? fallback.endpoint,
+            model: model ?? fallback.model,
+            apiKey: apiKey ?? fallback.apiKey,
+            temperature: temperature ?? fallback.temperature,
+            maxTokens: maxTokens ?? fallback.maxTokens
+        )
+        return AITrialModelPolicyItem(scenario: typedScenario, config: scenarioConfig)
+    }
+
+    private func decodeScenario(_ raw: String) -> AIScenario? {
+        AIScenario(rawValue: raw)
     }
 }

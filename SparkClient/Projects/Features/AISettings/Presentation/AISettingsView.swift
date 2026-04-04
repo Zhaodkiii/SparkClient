@@ -7,7 +7,7 @@ struct AISettingsView: View {
         List {
             Section(L10n.text("ai_settings.section.model")) {
                 NavigationLink {
-                    APIKeysSettingsView(apiKeys: $viewModel.snapshot.apiKeys)
+                    APIKeysSettingsView(snapshot: $viewModel.snapshot, viewModel: viewModel)
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.api_keys"),
@@ -17,7 +17,7 @@ struct AISettingsView: View {
                 }
 
                 NavigationLink {
-                    ModelsSettingsView(models: $viewModel.snapshot.allModels)
+                    ModelsSettingsView(models: $viewModel.snapshot.allModels, viewModel: viewModel)
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.models"),
@@ -28,7 +28,7 @@ struct AISettingsView: View {
 
                 NavigationLink {
                     AIModelPreferencesView(
-                        userInfo: $viewModel.snapshot.userInfo,
+                        snapshot: $viewModel.snapshot,
                         focus: .embedding
                     )
                 } label: {
@@ -41,7 +41,7 @@ struct AISettingsView: View {
 
                 NavigationLink {
                     AIModelPreferencesView(
-                        userInfo: $viewModel.snapshot.userInfo,
+                        snapshot: $viewModel.snapshot,
                         focus: .voice
                     )
                 } label: {
@@ -54,7 +54,7 @@ struct AISettingsView: View {
 
                 NavigationLink {
                     AIModelPreferencesView(
-                        userInfo: $viewModel.snapshot.userInfo,
+                        snapshot: $viewModel.snapshot,
                         focus: .optimization
                     )
                 } label: {

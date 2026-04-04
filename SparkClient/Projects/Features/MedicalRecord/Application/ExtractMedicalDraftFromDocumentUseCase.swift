@@ -69,7 +69,7 @@ struct ExtractMedicalDraftFromDocumentUseCase: Sendable {
         do {
             let response = try await runtimeService.generateText(
                 request: AIRuntimeTextRequest(
-                    scenario: .medicalExtraction,
+                    scenario: .optimizationText,
                     messages: [
                         AIRuntimeMessage(role: .user, content: prompt)
                     ]

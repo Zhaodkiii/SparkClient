@@ -27,21 +27,3 @@ enum AISettingsSeedCatalog {
         AISettingsDefaults.userInfo
     }
 }
-
-// MARK: - Compatibility with legacy preload naming
-
-func getModelList() -> [AllModels] {
-    AISettingsSeedCatalog.getModelList()
-}
-
-func getKeyList() -> [APIKeys] {
-    AISettingsSeedCatalog.getAPIKeyList()
-}
-
-func getSearchKeyList() -> [SearchKeys] {
-    AISettingsSeedCatalog.getSearchKeyList()
-}
-
-func getToolKeyList() -> [ToolKeys] {
-    AISettingsSeedCatalog.getToolKeyList()
-}

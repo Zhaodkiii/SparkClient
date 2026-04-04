@@ -139,6 +139,12 @@
 "ai_settings.scenario.chat" = "Chat Scenario";
 "ai_settings.scenario.medical_extraction" = "Medical Extraction Scenario";
 "ai_settings.scenario.embedding" = "Embedding Scenario";
+"ai_settings.scenario.optimization_text" = "Text Optimization Model";
+"ai_settings.scenario.optimization_visual" = "Visual Optimization Model";
+"ai_settings.scenario.context_folding" = "Context Folding";
+"ai_settings.scenario.router" = "Router Model";
+"ai_settings.scenario.model_config" = "Model Configuration";
+"ai_settings.scenario.report_interpretation" = "Report Interpretation Model";
 "ai_settings.endpoint" = "Endpoint";
 "ai_settings.model" = "Model";
 "ai_settings.api_key" = "API Key (optional)";
@@ -151,7 +157,7 @@
 "ai_settings.section.search_keys" = "Search Keys";
 "ai_settings.section.tool_keys" = "Tool Keys";
 "ai_settings.row.scenario" = "AI Scenario";
-"ai_settings.row.scenario.subtitle" = "Medical Extraction / Embedding";
+"ai_settings.row.scenario.subtitle" = "Chat and specialized scenarios";
 "ai_settings.row.api_keys" = "Model API Keys";
 "ai_settings.row.api_keys.subtitle" = "Provider key and endpoint";
 "ai_settings.row.models" = "Models";

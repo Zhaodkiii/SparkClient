@@ -7,11 +7,26 @@ extension AISettingsSnapshot {
         if let chat = remotePatch.chat {
             merged.chat = mergeScenarioConfig(existing: merged.chat, incoming: chat)
         }
-        if let medicalExtraction = remotePatch.medicalExtraction {
-            merged.medicalExtraction = mergeScenarioConfig(existing: merged.medicalExtraction, incoming: medicalExtraction)
+        if let optimizationText = remotePatch.optimizationText {
+            merged.optimizationText = mergeScenarioConfig(existing: merged.optimizationText, incoming: optimizationText)
         }
-        if let embedding = remotePatch.embedding {
-            merged.embedding = mergeScenarioConfig(existing: merged.embedding, incoming: embedding)
+        if let optimizationVisual = remotePatch.optimizationVisual {
+            merged.optimizationVisual = mergeScenarioConfig(existing: merged.optimizationVisual, incoming: optimizationVisual)
+        }
+        if let contextFolding = remotePatch.contextFolding {
+            merged.contextFolding = mergeScenarioConfig(existing: merged.contextFolding, incoming: contextFolding)
+        }
+        if let router = remotePatch.router {
+            merged.router = mergeScenarioConfig(existing: merged.router, incoming: router)
+        }
+        if let modelConfig = remotePatch.modelConfig {
+            merged.modelConfig = mergeScenarioConfig(existing: merged.modelConfig, incoming: modelConfig)
+        }
+        if let reportInterpretation = remotePatch.reportInterpretation {
+            merged.reportInterpretation = mergeScenarioConfig(
+                existing: merged.reportInterpretation,
+                incoming: reportInterpretation
+            )
         }
 
         if let apiKeys = remotePatch.apiKeys {
@@ -28,6 +43,12 @@ extension AISettingsSnapshot {
         }
         if let userInfoPatch = remotePatch.userInfo {
             merged.userInfo = mergeUserInfo(existing: merged.userInfo, patch: userInfoPatch)
+        }
+        if let trial = remotePatch.trial {
+            merged.trial = trial
+        }
+        if let trialModelPolicy = remotePatch.trialModelPolicy {
+            merged.trialModelPolicy = trialModelPolicy
         }
 
         return merged
@@ -112,6 +133,7 @@ private func mergeModels(existing: [AllModels], incoming: [AllModels]) -> [AllMo
         if old.source == .custom, new.source == .system {
             var preserved = old
             preserved.position = new.position
+            preserved.priceTier = new.priceTier
             return preserved
         }
         return new
@@ -130,8 +152,26 @@ private func mergeUserInfo(existing: UserInfo, patch: AIRemoteUserInfoPatch) -> 
     if let optimizationVisualModel = patch.optimizationVisualModel, optimizationVisualModel.isEmpty == false {
         merged.optimizationVisualModel = optimizationVisualModel
     }
+    if let contextFoldingModel = patch.contextFoldingModel, contextFoldingModel.isEmpty == false {
+        merged.contextFoldingModel = contextFoldingModel
+    }
+    if let routerModel = patch.routerModel, routerModel.isEmpty == false {
+        merged.routerModel = routerModel
+    }
+    if let dataExtractionModel = patch.dataExtractionModel, dataExtractionModel.isEmpty == false {
+        merged.dataExtractionModel = dataExtractionModel
+    }
+    if let reportInterpretationModel = patch.reportInterpretationModel, reportInterpretationModel.isEmpty == false {
+        merged.reportInterpretationModel = reportInterpretationModel
+    }
     if let textToSpeechModel = patch.textToSpeechModel, textToSpeechModel.isEmpty == false {
         merged.textToSpeechModel = textToSpeechModel
+    }
+    if let useContextFolding = patch.useContextFolding {
+        merged.useContextFolding = useContextFolding
+    }
+    if let maxToolSets = patch.maxToolSets, maxToolSets > 0 {
+        merged.maxToolSets = maxToolSets
     }
 
     if let useKnowledge = patch.useKnowledge {

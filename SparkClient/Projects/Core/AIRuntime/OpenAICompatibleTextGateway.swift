@@ -15,6 +15,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
     }
 
     func generateText(client: AIClient, messages: [AIRuntimeMessage]) async throws -> AIRuntimeTextResponse {
+        let start = Date()
         let payload = ChatCompletionRequest(
             model: client.model,
             messages: messages.map { .init(role: $0.role.rawValue, content: $0.content) },
@@ -30,15 +31,31 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         if let apiKey = client.apiKey, apiKey.isEmpty == false {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
-        request.httpBody = try encoder.encode(payload)
+        let requestBodyData = try encoder.encode(payload)
+        request.httpBody = requestBodyData
+        let requestBodyText = String(data: requestBodyData, encoding: .utf8) ?? "<non-utf8>"
+        logger.debug(
+            "AI 网关请求开始，model=\(client.model), endpoint=\(client.endpoint.absoluteString), messages=\(messages.count), apiKeyPresent=\(client.apiKey?.isEmpty == false)",
+            category: "ai_runtime"
+        )
+        logger.debug("AI 网关请求报文=\(truncate(requestBodyText, limit: 4000))", category: "ai_runtime")
 
         do {
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw AIRuntimeError.invalidResponse
             }
+            let responseBodyText = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            logger.debug(
+                "AI 网关响应报文，status=\(httpResponse.statusCode), body=\(truncate(responseBodyText, limit: 4000))",
+                category: "ai_runtime"
+            )
 
             if (200 ..< 300).contains(httpResponse.statusCode) == false {
+                logger.warning(
+                    "AI 网关返回非 2xx，status=\(httpResponse.statusCode), model=\(client.model)",
+                    category: "ai_runtime"
+                )
                 throw AIRuntimeError.server(
                     statusCode: httpResponse.statusCode,
                     message: parseServerErrorMessage(from: data)
@@ -52,6 +69,10 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                 "AI 推理成功，model=\(completion.model), promptTokens=\(usage?.promptTokens ?? -1), completionTokens=\(usage?.completionTokens ?? -1)",
                 category: "ai_runtime"
             )
+            logger.info(
+                "AI 网关请求完成，model=\(completion.model), cost=\(format(Date().timeIntervalSince(start)))s",
+                category: "ai_runtime"
+            )
 
             return AIRuntimeTextResponse(
                 text: content,
@@ -60,7 +81,14 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                 completionTokens: usage?.completionTokens
             )
         } catch let urlError as URLError {
+            logger.error(
+                "AI 网关网络失败，model=\(client.model), code=\(urlError.code.rawValue), error=\(urlError.localizedDescription)",
+                category: "ai_runtime"
+            )
             throw AIRuntimeError.transport(urlError)
+        } catch {
+            logger.error("AI 网关处理失败，model=\(client.model), error=\(error.localizedDescription)", category: "ai_runtime")
+            throw error
         }
     }
 
@@ -86,6 +114,15 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
             return message
         }
         return "AI 服务暂时不可用，请稍后重试。"
+    }
+
+    private func format(_ seconds: TimeInterval) -> String {
+        String(format: "%.3f", seconds)
+    }
+
+    private func truncate(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        return "\(text.prefix(limit))...(truncated)"
     }
 }
 

@@ -3,6 +3,7 @@ import Foundation
 enum AIConfigSource: String, Codable, Sendable {
     case localDefault
     case runtimeOverride
+    case trialPolicy
 }
 
 struct AIScenarioConfig: Codable, Equatable, Sendable {
@@ -62,4 +63,27 @@ enum AIConfigError: LocalizedError {
             return "Missing AI config for scenario: \(scenario.rawValue)"
         }
     }
+}
+
+struct AITrialState: Codable, Equatable, Sendable {
+    var status: String
+    var isActive: Bool
+    var grantSource: String
+    var startedAt: Date?
+    var expiresAt: Date?
+    var remainingSeconds: Int
+
+    static let inactive = AITrialState(
+        status: "none",
+        isActive: false,
+        grantSource: "auto",
+        startedAt: nil,
+        expiresAt: nil,
+        remainingSeconds: 0
+    )
+}
+
+struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
+    var scenario: AIScenario
+    var config: AIScenarioConfig
 }

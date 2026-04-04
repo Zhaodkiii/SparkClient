@@ -32,11 +32,10 @@ final class AppBootstrapper {
         do {
             await aiConfigCenter.refreshRemoteConfig()
             await aiConfigCenter.prewarm()
-            _ = try await aiConfigCenter.resolve(for: .chat)
-            _ = try await aiConfigCenter.resolve(for: .medicalExtraction)
-            _ = try await aiConfigCenter.resolve(for: .embedding)
+            for scenario in AIScenario.allCases {
+                _ = try await aiConfigCenter.resolve(for: scenario)
+            }
             try? await syncChatUseCase?.execute()
-            await syncChatUseCase?.startRealtime()
             logger.info("应用启动引导已完成", category: "bootstrap")
         } catch {
             logger.warning("应用启动引导已结束（降级）：\(error.localizedDescription)", category: "bootstrap")
@@ -52,11 +51,10 @@ final class AppBootstrapper {
             await aiConfigCenter.refreshRemoteConfig()
             await aiConfigCenter.prewarm()
             await medicalSyncService.bootstrapIfNeeded()
-            _ = try await aiConfigCenter.resolve(for: .chat)
-            _ = try await aiConfigCenter.resolve(for: .medicalExtraction)
-            _ = try await aiConfigCenter.resolve(for: .embedding)
+            for scenario in AIScenario.allCases {
+                _ = try await aiConfigCenter.resolve(for: scenario)
+            }
             try? await syncChatUseCase?.execute()
-            await syncChatUseCase?.startRealtime()
             logger.info("用户档案 \(session.profileID) 引导已完成", category: "bootstrap")
         } catch {
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", category: "bootstrap")

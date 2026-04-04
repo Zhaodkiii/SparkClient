@@ -49,6 +49,12 @@ struct ChatView: View {
                 await detailViewModel.loadMessagesIfNeeded(for: threadID)
             }
         }
+        .onAppear {
+            Task { await detailViewModel.chatPageDidAppear() }
+        }
+        .onDisappear {
+            Task { await detailViewModel.chatPageDidDisappear() }
+        }
         .refreshable {
             await detailViewModel.sync()
             await listViewModel.refreshThreads()
@@ -87,7 +93,7 @@ struct ChatView: View {
         HStack {
             if message.role == .assistant || message.role == .system {
                 bubbleContent(message)
-                Spacer(minLength: 40)
+//                Spacer(minLength: 40)
             } else {
                 Spacer(minLength: 40)
                 bubbleContent(message)
@@ -98,9 +104,8 @@ struct ChatView: View {
 
     private func bubbleContent(_ message: ChatMessage) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(message.content)
-                .font(.body)
-                .foregroundColor(message.role == .user ? .white : .primary)
+            Markdown(message.content)
+                .markdownTheme(.chatBubble(foreground: message.role == .user ? .white : .primary))
 
             if message.deliveryState == .failed {
                 Button {

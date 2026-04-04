@@ -21,15 +21,25 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     }
 
     func loadSnapshot() async -> AISettingsSnapshot {
-        // 开发阶段不做版本迁移：每次启动都直接使用最新默认种子。
-        let latestSnapshot = preloadIfNeeded(snapshot: .default)
-        do {
-            try persist(snapshot: latestSnapshot)
-            logger.info("开发模式：AI 设置已重置为最新默认值", category: "ai_settings")
-        } catch {
-            logger.warning("最新默认 AI 设置持久化失败：\(error.localizedDescription)", category: "ai_settings")
+        var loaded = loadPersistedSnapshot() ?? .default
+        var migrated = false
+
+        if migrateLegacySecretsToStore(snapshot: &loaded) {
+            migrated = true
         }
-        return latestSnapshot
+        loaded = preloadIfNeeded(snapshot: loaded)
+        hydrateSecrets(snapshot: &loaded)
+
+        if migrated || userDefaults.data(forKey: Keys.snapshot) == nil {
+            do {
+                try persist(snapshot: loaded)
+                logger.info("AI 设置已完成初始化", category: "ai_settings")
+            } catch {
+                logger.warning("AI 设置初始化持久化失败：\(error.localizedDescription)", category: "ai_settings")
+            }
+        }
+
+        return loaded
     }
 
     func save(snapshot: AISettingsSnapshot) async throws {
@@ -42,6 +52,14 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         syncSecretsToStoreAndSanitize(snapshot: &sanitized)
         let data = try encoder.encode(sanitized)
         userDefaults.set(data, forKey: Keys.snapshot)
+    }
+
+    private func loadPersistedSnapshot() -> AISettingsSnapshot? {
+        guard let data = userDefaults.data(forKey: Keys.snapshot) else {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        return try? decoder.decode(AISettingsSnapshot.self, from: data)
     }
 
     private func preloadIfNeeded(snapshot: AISettingsSnapshot) -> AISettingsSnapshot {
@@ -58,7 +76,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     // MARK: - Preload / Dedup
 
     private func preloadModelDataIfNeeded(snapshot: inout AISettingsSnapshot) {
-        let predefinedModels = getModelList()
+        let predefinedModels = AISettingsSeedCatalog.getModelList()
         let predefinedModelKeys = Set(predefinedModels.map { dedupKey(name: $0.name, fallbackID: $0.id) })
 
         var modelMap: [String: AllModels] = [:]
@@ -98,6 +116,9 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             merged.supportsToolUse = incoming.supportsToolUse || existing.supportsToolUse
             merged.supportsVoiceGen = incoming.supportsVoiceGen || existing.supportsVoiceGen
             merged.supportsImageGen = incoming.supportsImageGen || existing.supportsImageGen
+            merged.priceTier = min(max(incoming.priceTier, 0), 3)
+            merged.supportsText = incoming.supportsText || existing.supportsText
+            merged.reasoningControllable = incoming.reasoningControllable || existing.reasoningControllable
             return merged
         }
         if incoming.source == .custom {
@@ -107,7 +128,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     }
 
     private func preloadAPIKeysIfNeeded(snapshot: inout AISettingsSnapshot) {
-        let defaults = getKeyList()
+        let defaults = AISettingsSeedCatalog.getAPIKeyList()
         let knownSystemKeys = Set(defaults.map { dedupKey(name: $0.name, fallbackID: $0.id) })
 
         snapshot.apiKeys = mergeRecordCollection(
@@ -134,7 +155,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     }
 
     private func preloadSearchKeysIfNeeded(snapshot: inout AISettingsSnapshot) {
-        let defaults = getSearchKeyList()
+        let defaults = AISettingsSeedCatalog.getSearchKeyList()
         let knownSystemKeys = Set(defaults.map { dedupKey(name: $0.name, fallbackID: $0.id) })
 
         snapshot.searchKeys = mergeRecordCollection(
@@ -154,7 +175,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     }
 
     private func preloadToolKeysIfNeeded(snapshot: inout AISettingsSnapshot) {
-        let defaults = getToolKeyList()
+        let defaults = AISettingsSeedCatalog.getToolKeyList()
         let knownSystemKeys = Set(defaults.map { dedupKey(name: $0.name, fallbackID: $0.id) })
 
         snapshot.toolKeys = mergeRecordCollection(
@@ -199,6 +220,21 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         }
         if userInfo.optimizationVisualModel.isEmpty {
             userInfo.optimizationVisualModel = defaultUserInfo.optimizationVisualModel
+        }
+        if userInfo.contextFoldingModel.isEmpty {
+            userInfo.contextFoldingModel = defaultUserInfo.contextFoldingModel
+        }
+        if userInfo.routerModel.isEmpty {
+            userInfo.routerModel = defaultUserInfo.routerModel
+        }
+        if userInfo.dataExtractionModel.isEmpty {
+            userInfo.dataExtractionModel = defaultUserInfo.dataExtractionModel
+        }
+        if userInfo.reportInterpretationModel.isEmpty {
+            userInfo.reportInterpretationModel = defaultUserInfo.reportInterpretationModel
+        }
+        if userInfo.maxToolSets <= 0 {
+            userInfo.maxToolSets = defaultUserInfo.maxToolSets
         }
         if userInfo.textToSpeechModel.isEmpty {
             userInfo.textToSpeechModel = defaultUserInfo.textToSpeechModel
@@ -250,8 +286,12 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         var changed = false
 
         changed = migrateScenarioSecret(snapshot: &snapshot.chat, scenario: .chat) || changed
-        changed = migrateScenarioSecret(snapshot: &snapshot.medicalExtraction, scenario: .medicalExtraction) || changed
-        changed = migrateScenarioSecret(snapshot: &snapshot.embedding, scenario: .embedding) || changed
+        changed = migrateScenarioSecret(snapshot: &snapshot.optimizationText, scenario: .optimizationText) || changed
+        changed = migrateScenarioSecret(snapshot: &snapshot.optimizationVisual, scenario: .optimizationVisual) || changed
+        changed = migrateScenarioSecret(snapshot: &snapshot.contextFolding, scenario: .contextFolding) || changed
+        changed = migrateScenarioSecret(snapshot: &snapshot.router, scenario: .router) || changed
+        changed = migrateScenarioSecret(snapshot: &snapshot.modelConfig, scenario: .modelConfig) || changed
+        changed = migrateScenarioSecret(snapshot: &snapshot.reportInterpretation, scenario: .reportInterpretation) || changed
 
         for index in snapshot.apiKeys.indices {
             let secret = snapshot.apiKeys[index].key.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -300,8 +340,12 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
     private func hydrateSecrets(snapshot: inout AISettingsSnapshot) {
         snapshot.chat.apiKey = secretStore.read(account: scenarioSecretAccount(.chat))
-        snapshot.medicalExtraction.apiKey = secretStore.read(account: scenarioSecretAccount(.medicalExtraction))
-        snapshot.embedding.apiKey = secretStore.read(account: scenarioSecretAccount(.embedding))
+        snapshot.optimizationText.apiKey = secretStore.read(account: scenarioSecretAccount(.optimizationText))
+        snapshot.optimizationVisual.apiKey = secretStore.read(account: scenarioSecretAccount(.optimizationVisual))
+        snapshot.contextFolding.apiKey = secretStore.read(account: scenarioSecretAccount(.contextFolding))
+        snapshot.router.apiKey = secretStore.read(account: scenarioSecretAccount(.router))
+        snapshot.modelConfig.apiKey = secretStore.read(account: scenarioSecretAccount(.modelConfig))
+        snapshot.reportInterpretation.apiKey = secretStore.read(account: scenarioSecretAccount(.reportInterpretation))
 
         for index in snapshot.apiKeys.indices {
             let account = secretAccount(
@@ -336,8 +380,12 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
     private func syncSecretsToStoreAndSanitize(snapshot: inout AISettingsSnapshot) {
         syncScenarioSecret(snapshot: &snapshot.chat, scenario: .chat)
-        syncScenarioSecret(snapshot: &snapshot.medicalExtraction, scenario: .medicalExtraction)
-        syncScenarioSecret(snapshot: &snapshot.embedding, scenario: .embedding)
+        syncScenarioSecret(snapshot: &snapshot.optimizationText, scenario: .optimizationText)
+        syncScenarioSecret(snapshot: &snapshot.optimizationVisual, scenario: .optimizationVisual)
+        syncScenarioSecret(snapshot: &snapshot.contextFolding, scenario: .contextFolding)
+        syncScenarioSecret(snapshot: &snapshot.router, scenario: .router)
+        syncScenarioSecret(snapshot: &snapshot.modelConfig, scenario: .modelConfig)
+        syncScenarioSecret(snapshot: &snapshot.reportInterpretation, scenario: .reportInterpretation)
 
         for index in snapshot.apiKeys.indices {
             let account = secretAccount(

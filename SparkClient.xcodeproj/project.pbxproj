@@ -10,6 +10,7 @@
 		859450442F7FEFAE00DC419C /* CoreTelephony.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450432F7FEFAE00DC419C /* CoreTelephony.framework */; };
 		859450462F7FEFB900DC419C /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450452F7FEFB900DC419C /* SystemConfiguration.framework */; };
 		859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450472F7FEFC300DC419C /* libresolv.tbd */; };
+		85B0F7522F811A1F00153421 /* LLM in Frameworks */ = {isa = PBXBuildFile; productRef = 85B0F7512F811A1F00153421 /* LLM */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				85B0F7522F811A1F00153421 /* LLM in Frameworks */,
 				859450462F7FEFB900DC419C /* SystemConfiguration.framework in Frameworks */,
 				859450442F7FEFAE00DC419C /* CoreTelephony.framework in Frameworks */,
 				859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */,
@@ -88,6 +90,7 @@
 			);
 			name = SparkClient;
 			packageProductDependencies = (
+				85B0F7512F811A1F00153421 /* LLM */,
 			);
 			productName = SparkClient;
 			productReference = 859781EC2F7E4CD5002B7517 /* SparkClient.app */;
@@ -118,6 +121,9 @@
 			);
 			mainGroup = 859781E32F7E4CD5002B7517;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				85B0F7502F811A1F00153421 /* XCLocalSwiftPackageReference "Vendor/LLM.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 859781ED2F7E4CD5002B7517 /* Products */;
 			projectDirPath = "";
@@ -467,6 +473,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		85B0F7502F811A1F00153421 /* XCLocalSwiftPackageReference "Vendor/LLM.swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/LLM.swift;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		85B0F7512F811A1F00153421 /* LLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LLM;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 859781E42F7E4CD5002B7517 /* Project object */;
 }

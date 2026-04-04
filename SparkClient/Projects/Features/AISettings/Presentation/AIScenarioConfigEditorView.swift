@@ -5,13 +5,27 @@ struct AIScenarioConfigEditorView: View {
 
     var body: some View {
         Form {
+            scenarioSection(title: L10n.text("ai_settings.scenario.chat"), config: $snapshot.chat)
             scenarioSection(
-                title: L10n.text("ai_settings.scenario.medical_extraction"),
-                config: $snapshot.medicalExtraction
+                title: L10n.text("ai_settings.scenario.optimization_text"),
+                config: $snapshot.optimizationText
             )
             scenarioSection(
-                title: L10n.text("ai_settings.scenario.embedding"),
-                config: $snapshot.embedding
+                title: L10n.text("ai_settings.scenario.optimization_visual"),
+                config: $snapshot.optimizationVisual
+            )
+            scenarioSection(
+                title: L10n.text("ai_settings.scenario.context_folding"),
+                config: $snapshot.contextFolding
+            )
+            scenarioSection(title: L10n.text("ai_settings.scenario.router"), config: $snapshot.router)
+            scenarioSection(
+                title: L10n.text("ai_settings.scenario.model_config"),
+                config: $snapshot.modelConfig
+            )
+            scenarioSection(
+                title: L10n.text("ai_settings.scenario.report_interpretation"),
+                config: $snapshot.reportInterpretation
             )
         }
         .navigationTitle(L10n.text("ai_settings.row.scenario"))

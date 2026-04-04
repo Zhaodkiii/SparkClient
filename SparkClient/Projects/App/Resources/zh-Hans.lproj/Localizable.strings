@@ -139,6 +139,12 @@
 "ai_settings.scenario.chat" = "对话场景";
 "ai_settings.scenario.medical_extraction" = "医疗抽取场景";
 "ai_settings.scenario.embedding" = "向量场景";
+"ai_settings.scenario.optimization_text" = "文本优化模型";
+"ai_settings.scenario.optimization_visual" = "视觉优化模型";
+"ai_settings.scenario.context_folding" = "上下文折叠";
+"ai_settings.scenario.router" = "Router 模型";
+"ai_settings.scenario.model_config" = "模型配置";
+"ai_settings.scenario.report_interpretation" = "报告解读模型";
 "ai_settings.endpoint" = "端点";
 "ai_settings.model" = "模型";
 "ai_settings.api_key" = "API Key（可选）";
@@ -151,7 +157,7 @@
 "ai_settings.section.search_keys" = "检索密钥";
 "ai_settings.section.tool_keys" = "工具密钥";
 "ai_settings.row.scenario" = "AI 场景";
-"ai_settings.row.scenario.subtitle" = "医疗抽取/向量";
+"ai_settings.row.scenario.subtitle" = "对话与各类推理场景";
 "ai_settings.row.api_keys" = "模型密钥";
 "ai_settings.row.api_keys.subtitle" = "厂商密钥与端点";
 "ai_settings.row.models" = "模型";
