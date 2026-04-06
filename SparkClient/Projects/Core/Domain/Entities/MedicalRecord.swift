@@ -1,16 +1,16 @@
 import Foundation
 
 struct MedicalRecord: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    let patientID: UUID
+    let id: Int
+    let patientID: Int
     let title: String
     let summary: String
     let occurredAt: Date
     let updatedAt: Date
 
     init(
-        id: UUID = UUID(),
-        patientID: UUID,
+        id: Int,
+        patientID: Int,
         title: String,
         summary: String,
         occurredAt: Date,

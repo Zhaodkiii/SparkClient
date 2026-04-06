@@ -1,10 +1,9 @@
 import Foundation
 
 struct Prescription: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var remoteID: Int?
-    var memberID: UUID
-    var medicalCaseID: UUID?
+    let id: Int
+    var memberID: Int
+    var medicalCaseID: Int?
     var drugName: String
     var dosage: String
     var frequency: String
@@ -16,10 +15,9 @@ struct Prescription: Identifiable, Codable, Equatable, Sendable {
     var updatedAt: Date
 
     init(
-        id: UUID = UUID(),
-        remoteID: Int? = nil,
-        memberID: UUID,
-        medicalCaseID: UUID? = nil,
+        id: Int,
+        memberID: Int,
+        medicalCaseID: Int? = nil,
         drugName: String,
         dosage: String = "",
         frequency: String = "",
@@ -31,7 +29,6 @@ struct Prescription: Identifiable, Codable, Equatable, Sendable {
         updatedAt: Date = Date()
     ) {
         self.id = id
-        self.remoteID = remoteID
         self.memberID = memberID
         self.medicalCaseID = medicalCaseID
         self.drugName = drugName

@@ -5,6 +5,13 @@ struct PromptRepoSettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                // PromptRepo：轻量可复用提示片段；正式长文档请使用「知识库」Tab。
+                Text("此处用于保存可复用的短提示模板；完整知识文档请在底部「Knowledge」标签页中管理。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             ForEach($promptRepo) { $item in
                 Section(item.title.isEmpty ? L10n.text("ai_settings.prompt_item") : item.title) {
                     TextField(L10n.text("ai_settings.field.title"), text: $item.title)

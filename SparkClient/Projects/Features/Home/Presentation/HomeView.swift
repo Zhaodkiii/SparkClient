@@ -5,7 +5,7 @@ import UIKit
 
 struct HomeView: View {
     @ObservedObject var viewModel: HomeViewModel
-    @ObservedObject var medicalUploadFlowViewModel: MedicalUploadFlowViewModel
+    @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let session: UserSession
     var onOpenHealthTimeline: (() -> Void)?
 
@@ -69,7 +69,7 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showMedicalUploadFlow) {
             NavigationView {
-                MedicalUploadFlowView(viewModel: medicalUploadFlowViewModel)
+                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
@@ -184,7 +184,7 @@ struct HomeView: View {
                 }
             }
 
-            let cards = viewModel.dashboard?.medicalCards ?? []
+            let cards = viewModel.dashboard?.medical.cards ?? []
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(cards, id: \.id) { card in
                     medicalCard(card)
@@ -204,11 +204,11 @@ struct HomeView: View {
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(Color(uiColor: .systemBlue))
 
-                Text(card.title)
+                Text(medicalCardTitle(for: card.id))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
 
-                Text(card.subtitle)
+                Text(medicalCardSubtitle(for: card.id))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -262,12 +262,12 @@ struct HomeView: View {
                 infoCard(text: L10n.text("home.health_basics.only_self"), symbol: "person.crop.circle.badge.exclamationmark")
             } else {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(viewModel.dashboard?.healthBasics ?? [], id: \.id) { item in
+                    ForEach(viewModel.dashboard?.motion.healthBasics ?? [], id: \.id) { item in
                         healthBasicCard(item)
                     }
                 }
 
-                if let status = viewModel.dashboard?.healthAuthorizationStatus, status != .authorized {
+                if let status = viewModel.dashboard?.motion.healthAuthorizationStatus, status != .authorized {
                     infoCard(text: authorizationStatusText(status), symbol: "heart.slash")
                 }
             }
@@ -344,6 +344,32 @@ struct HomeView: View {
         let display = MemberRelationshipCatalog.displayTitle(for: member.relationship)
         guard let first = display.first else { return "·" }
         return String(first)
+    }
+
+    private func medicalCardTitle(for kind: HomeDashboard.MedicalCard.Kind) -> String {
+        switch kind {
+        case .medicalCases:
+            return L10n.text("home.medical.card.medical_cases.title")
+        case .healthExamReports:
+            return L10n.text("home.medical.card.examination_reports.title")
+        case .medicalReports:
+            return L10n.text("home.medical.card.medical_reports.title")
+        case .medications:
+            return L10n.text("home.medical.card.medications.title")
+        }
+    }
+
+    private func medicalCardSubtitle(for kind: HomeDashboard.MedicalCard.Kind) -> String {
+        switch kind {
+        case .medicalCases:
+            return L10n.text("home.medical.card.medical_cases.subtitle")
+        case .healthExamReports:
+            return L10n.text("home.medical.card.examination_reports.subtitle")
+        case .medicalReports:
+            return L10n.text("home.medical.card.medical_reports.subtitle")
+        case .medications:
+            return L10n.text("home.medical.card.medications.subtitle")
+        }
     }
 
     private func healthTitle(for kind: HomeDashboard.HealthBasicItem.Kind) -> String {
@@ -478,7 +504,7 @@ private struct AddFamilyMemberView: View {
             case .create:
                 return "create"
             case .edit(let member):
-                return "edit-\(member.id.uuidString)"
+                return "edit-\(member.id)"
             }
         }
     }
@@ -533,11 +559,6 @@ private struct AddFamilyMemberView: View {
 
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && birthDate != nil
-    }
-
-    private var computedAge: Int {
-        guard let birthDate else { return 0 }
-        return Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year ?? 0
     }
 
     var body: some View {
@@ -778,7 +799,6 @@ private struct AddFamilyMemberView: View {
             await viewModel.addMember(
                 name: trimmedName,
                 relationship: relationshipCode,
-                age: computedAge,
                 gender: gender,
                 birthDate: birthDate
             )
@@ -787,7 +807,6 @@ private struct AddFamilyMemberView: View {
                 member,
                 name: trimmedName,
                 relationship: relationshipCode,
-                age: computedAge,
                 gender: gender,
                 birthDate: birthDate
             )
@@ -894,13 +913,12 @@ private enum MemberRelationshipCatalog {
     NavigationView {
         HomeView(
             viewModel: .preview,
-            medicalUploadFlowViewModel: .preview(),
+            medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
                 profileID: UUID(),
                 remoteUserID: "preview-001",
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                isDemo: false,
                 signedInAt: .now
             )
         )
@@ -912,13 +930,12 @@ private enum MemberRelationshipCatalog {
     NavigationView {
         HomeView(
             viewModel: .preview,
-            medicalUploadFlowViewModel: .preview(),
+            medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
                 profileID: UUID(),
                 remoteUserID: "preview-001",
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                isDemo: false,
                 signedInAt: .now
             )
         )
@@ -930,33 +947,35 @@ private extension HomeViewModel {
     static var preview: HomeViewModel {
         let now = Date()
         let profileID = UUID()
-        let memberA = Member(name: "本人", gender: "female", relationship: "self", birthDate: now.addingTimeInterval(-86_400 * 365 * 30), isPrimary: true)
-        let memberB = Member(name: "妈妈", gender: "female", relationship: "mother", birthDate: now.addingTimeInterval(-86_400 * 365 * 56), isPrimary: false)
+        let memberA = Member(id: 1, name: "本人", gender: "female", relationship: "self", birthDate: now.addingTimeInterval(-86_400 * 365 * 30), isPrimary: true)
+        let memberB = Member(id: 2, name: "妈妈", gender: "female", relationship: "mother", birthDate: now.addingTimeInterval(-86_400 * 365 * 56), isPrimary: false)
 
         let dashboard = HomeDashboard(
             profile: UserProfile(
                 id: profileID,
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                isDemo: false,
                 createdAt: now.addingTimeInterval(-86_400 * 120),
                 lastSignedInAt: now
             ),
             members: [memberA, memberB],
             selectedMemberID: memberA.id,
-            medicalCards: [
-                HomeDashboard.MedicalCard(id: .medicalCases, title: "病例记录", subtitle: "最近就诊", count: 4, latestDate: now.addingTimeInterval(-86_400), symbol: "doc.text.fill"),
-                HomeDashboard.MedicalCard(id: .examinationReports, title: "体检报告", subtitle: "年度体检", count: 2, latestDate: now.addingTimeInterval(-172_800), symbol: "list.clipboard.fill"),
-                HomeDashboard.MedicalCard(id: .medicalReports, title: "检查报告", subtitle: "专项检查", count: 6, latestDate: now.addingTimeInterval(-259_200), symbol: "cross.case.fill"),
-                HomeDashboard.MedicalCard(id: .prescriptions, title: "用药处方", subtitle: "长期用药", count: 1, latestDate: now.addingTimeInterval(-86_400 * 3), symbol: "pills.fill")
-            ],
-            healthBasics: [
-                HomeDashboard.HealthBasicItem(id: .steps, value: 9210, unit: "steps", symbol: "figure.walk.motion", recordedAt: now),
-                HomeDashboard.HealthBasicItem(id: .weight, value: 63.6, unit: "kg", symbol: "scalemass.fill", recordedAt: now.addingTimeInterval(-4000)),
-                HomeDashboard.HealthBasicItem(id: .sleep, value: 7.2, unit: "h", symbol: "moon.stars.fill", recordedAt: now.addingTimeInterval(-8000)),
-                HomeDashboard.HealthBasicItem(id: .heartRate, value: 71, unit: "bpm", symbol: "heart.text.square.fill", recordedAt: now.addingTimeInterval(-2000))
-            ],
-            healthAuthorizationStatus: .authorized
+            medical: HomeMedicalOverview(cards: [
+                HomeDashboard.MedicalCard(id: .medicalCases, count: 4, latestDate: now.addingTimeInterval(-86_400), symbol: "doc.text.fill"),
+                HomeDashboard.MedicalCard(id: .healthExamReports, count: 2, latestDate: now.addingTimeInterval(-172_800), symbol: "heart.text.square.fill"),
+                HomeDashboard.MedicalCard(id: .medicalReports, count: 6, latestDate: now.addingTimeInterval(-259_200), symbol: "list.clipboard.fill"),
+                HomeDashboard.MedicalCard(id: .medications, count: 96, latestDate: now.addingTimeInterval(-86_400 * 3), symbol: "pills.fill")
+            ]),
+            motion: HomeMotionHealthOverview(
+                healthBasics: [
+                    HomeDashboard.HealthBasicItem(id: .steps, value: 9210, unit: "steps", symbol: "figure.walk.motion", recordedAt: now),
+                    HomeDashboard.HealthBasicItem(id: .weight, value: 63.6, unit: "kg", symbol: "scalemass.fill", recordedAt: now.addingTimeInterval(-4000)),
+                    HomeDashboard.HealthBasicItem(id: .sleep, value: 7.2, unit: "h", symbol: "moon.stars.fill", recordedAt: now.addingTimeInterval(-8000)),
+                    HomeDashboard.HealthBasicItem(id: .heartRate, value: 71, unit: "bpm", symbol: "heart.text.square.fill", recordedAt: now.addingTimeInterval(-2000))
+                ],
+                healthAuthorizationStatus: .authorized,
+                isApplicable: true
+            )
         )
 
         let sessionStore = AppSessionStore(
@@ -968,7 +987,6 @@ private extension HomeViewModel {
                 remoteUserID: "preview-001",
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                isDemo: false,
                 signedInAt: now
             )
         )
@@ -976,17 +994,23 @@ private extension HomeViewModel {
         let mockMemberRepository = PreviewHomeMemberRepository(snapshot: .empty)
         let mockHealthRepository = PreviewHomeHealthRepository()
 
+        let previewLogger = ConsoleLogger()
         let viewModel = HomeViewModel(
             sessionStore: sessionStore,
-            loadHomeDashboardUseCase: LoadHomeDashboardUseCase(
+            loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase(
                 userProfileRepository: PreviewUserProfileRepository(profile: dashboard.profile),
                 memberRepository: mockMemberRepository,
-                healthDataRepository: mockHealthRepository
+                logger: previewLogger
+            ),
+            loadHomeMotionHealthUseCase: LoadHomeMotionHealthUseCase(
+                healthDataRepository: mockHealthRepository,
+                logger: previewLogger
             ),
             manageHomeMemberUseCase: ManageHomeMemberUseCase(memberRepository: mockMemberRepository),
             requestHomeHealthAuthorizationUseCase: RequestHomeHealthAuthorizationUseCase(healthDataRepository: mockHealthRepository),
             patientContextStore: PatientContextStore(),
-            notificationClient: PreviewNotificationClient()
+            notificationClient: PreviewNotificationClient(),
+            logger: previewLogger
         )
 
         viewModel.injectPreviewDashboard(dashboard)
@@ -1017,14 +1041,12 @@ private struct PreviewUserProfileRepository: UserProfileRepository {
     func upsertProfile(
         email: String,
         displayName: String,
-        isDemo: Bool,
         signedInAt: Date
     ) async throws -> UserProfile {
         UserProfile(
             id: profile.id,
             email: email,
             displayName: displayName,
-            isDemo: isDemo,
             createdAt: profile.createdAt,
             lastSignedInAt: signedInAt
         )
@@ -1047,7 +1069,6 @@ private actor PreviewHomeMemberRepository: HomeMemberRepository {
     func createMember(
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {}
@@ -1056,7 +1077,6 @@ private actor PreviewHomeMemberRepository: HomeMemberRepository {
         _ member: Member,
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {}

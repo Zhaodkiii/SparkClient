@@ -93,6 +93,81 @@ final class AISettingsAndResolverTests: XCTestCase {
         XCTAssertEqual(resolved.source, .runtimeOverride)
     }
 
+    func testTrialPolicyFallsBackToDefaultFlagWhenNoSelection() {
+        var snapshot = AISettingsSnapshot.default
+        snapshot.trial = AITrialState(
+            status: "active",
+            isActive: true,
+            grantSource: "auto",
+            startedAt: Date(),
+            expiresAt: Date().addingTimeInterval(3600),
+            remainingSeconds: 3600
+        )
+        snapshot.trialModelPolicy = [
+            AITrialModelPolicyItem(
+                scenario: .chat,
+                config: AIScenarioConfig(
+                    endpoint: "https://a.example/v1/chat/completions",
+                    model: "trial-a",
+                    apiKey: nil,
+                    temperature: 0.1,
+                    maxTokens: 1024
+                ),
+                isDefault: false
+            ),
+            AITrialModelPolicyItem(
+                scenario: .chat,
+                config: AIScenarioConfig(
+                    endpoint: "https://b.example/v1/chat/completions",
+                    model: "trial-b",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 2048
+                ),
+                isDefault: true
+            ),
+        ]
+        XCTAssertEqual(snapshot.trialPolicyConfig(for: .chat)?.model, "trial-b")
+    }
+
+    func testTrialPolicyUsesScenarioSelectedModelWhenMultipleRows() {
+        var snapshot = AISettingsSnapshot.default
+        snapshot.trial = AITrialState(
+            status: "active",
+            isActive: true,
+            grantSource: "auto",
+            startedAt: Date(),
+            expiresAt: Date().addingTimeInterval(3600),
+            remainingSeconds: 3600
+        )
+        snapshot.scenarioSelectedModel[AIScenario.chat.rawValue] = "trial-a"
+        snapshot.trialModelPolicy = [
+            AITrialModelPolicyItem(
+                scenario: .chat,
+                config: AIScenarioConfig(
+                    endpoint: "https://a.example/v1/chat/completions",
+                    model: "trial-a",
+                    apiKey: nil,
+                    temperature: 0.1,
+                    maxTokens: 1024
+                ),
+                isDefault: false
+            ),
+            AITrialModelPolicyItem(
+                scenario: .chat,
+                config: AIScenarioConfig(
+                    endpoint: "https://b.example/v1/chat/completions",
+                    model: "trial-b",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 2048
+                ),
+                isDefault: true
+            ),
+        ]
+        XCTAssertEqual(snapshot.trialPolicyConfig(for: .chat)?.model, "trial-a")
+    }
+
     func testScenarioResolverUsesTrialPolicyWhenNoRuntimeOverride() async throws {
         let runtimeStore = AIRuntimeStore()
         var snapshot = AISettingsSnapshot.default
@@ -113,7 +188,8 @@ final class AISettingsAndResolverTests: XCTestCase {
                     apiKey: nil,
                     temperature: 0.1,
                     maxTokens: 1024
-                )
+                ),
+                isDefault: true
             )
         ]
 
@@ -180,7 +256,8 @@ final class AISettingsAndResolverTests: XCTestCase {
                         apiKey: nil,
                         temperature: 0.0,
                         maxTokens: 2000
-                    )
+                    ),
+                    isDefault: true
                 )
             ]
         )

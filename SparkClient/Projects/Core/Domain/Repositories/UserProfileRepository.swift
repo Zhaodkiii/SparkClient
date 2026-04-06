@@ -4,7 +4,6 @@ protocol UserProfileRepository: Sendable {
     func upsertProfile(
         email: String,
         displayName: String,
-        isDemo: Bool,
         signedInAt: Date
     ) async throws -> UserProfile
 

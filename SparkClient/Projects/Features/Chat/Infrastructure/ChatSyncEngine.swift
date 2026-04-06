@@ -8,6 +8,12 @@ actor ChatSyncEngine {
     private let mergePolicy: ChatMergePolicy
     private let logger: Logger
 
+    private static let syncCursorFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
     init(
         repository: any ChatRepository,
         outboxStore: ChatOutboxStore,
@@ -24,14 +30,65 @@ actor ChatSyncEngine {
         self.logger = logger
     }
 
+    /// 全量同步：上送 outbox + 按全局 cursor 拉取（如下拉刷新）。
     func syncNow() async throws {
         let start = Date()
         logger.debug("聊天同步开始", category: "chat_sync")
-        // 双通道同步：先把本地 outbox 推上去，再按 cursor 拉取增量，避免覆盖未上行数据。
         try await pushOutbox()
-        try await pullAndMerge()
+        let cursor = await repository.loadSyncCursor()?.value
+        try await pullAndMerge(cursor: cursor, threadID: nil)
         let cost = Date().timeIntervalSince(start)
         logger.info("聊天同步完成，cost=\(format(cost))s", category: "chat_sync")
+    }
+
+    /// 仅上送待同步消息，不拉取（发送成功/重试等路径使用，避免每次增量都打全量 pull）。
+    func pushOutboxOnly() async throws {
+        logger.debug("聊天仅上送 outbox", category: "chat_sync")
+        try await pushOutbox()
+    }
+
+    /// 进入具体会话时：先上送，再比对服务端与本地最近一条消息的更新时间，一致则跳过拉取。
+    func syncThreadOnOpen(threadID: UUID) async throws {
+        let start = Date()
+        logger.debug("会话打开同步开始，thread=\(shortID(threadID))", category: "chat_sync")
+        try await pushOutbox()
+
+        let localWatermark = await repository.latestServerActivity(for: threadID)
+
+        var serverHead: Date?
+        var headFetchFailed = false
+        do {
+            serverHead = try await remoteAPI.threadHead(threadID: threadID)
+        } catch {
+            headFetchFailed = true
+            logger.warning("thread head 不可用，将尝试按会话拉取：\(error.localizedDescription)", category: "chat_sync")
+        }
+
+        if headFetchFailed {
+            let cursor = localWatermark.map(Self.formatSyncCursor)
+            try await pullAndMerge(cursor: cursor, threadID: threadID)
+            let cost = Date().timeIntervalSince(start)
+            logger.info("会话打开同步完成（head 降级），cost=\(format(cost))s", category: "chat_sync")
+            return
+        }
+
+        switch (localWatermark, serverHead) {
+        case (nil, nil):
+            logger.debug("会话打开同步跳过（本地与服务端均无消息）", category: "chat_sync")
+            return
+        case let (lw?, sh?):
+            if abs(lw.timeIntervalSince(sh)) < 1.0 {
+                logger.debug("会话已与服务端对齐，跳过拉取", category: "chat_sync")
+                return
+            }
+        default:
+            break
+        }
+
+        let cursor = localWatermark.map(Self.formatSyncCursor)
+        try await pullAndMerge(cursor: cursor, threadID: threadID)
+        let cost = Date().timeIntervalSince(start)
+        logger.info("会话打开同步完成，cost=\(format(cost))s", category: "chat_sync")
     }
 
     func startRealtimeSync() async {
@@ -40,9 +97,10 @@ actor ChatSyncEngine {
             guard let self else { return }
             Task {
                 do {
-                    try await self.syncNow()
+                    // 远端增量提示：只上送本地 pending，避免每条 WS 通知都触发全量 pull。
+                    try await self.pushOutboxOnly()
                 } catch {
-                    self.logger.warning("chat realtime sync failed: \(error.localizedDescription)", category: "chat_sync")
+                    self.logger.warning("chat realtime push failed: \(error.localizedDescription)", category: "chat_sync")
                 }
             }
         }
@@ -80,7 +138,11 @@ actor ChatSyncEngine {
                     deliveryState: message.deliveryState.rawValue,
                     createdAt: message.createdAt,
                     serverUpdatedAt: message.serverUpdatedAt,
-                    isTombstone: message.isTombstone
+                    isTombstone: message.isTombstone,
+                    reasoningContent: message.reasoningContent,
+                    reasoningDurationMs: message.reasoningDurationMs,
+                    reasoningExpanded: message.reasoningExpanded,
+                    reasoningVisibility: message.reasoningVisibility.rawValue
                 )
             }
 
@@ -97,7 +159,7 @@ actor ChatSyncEngine {
             let grouped = Dictionary(grouping: pushed.compactMap(Self.toDomain), by: { $0.threadID })
             for (threadID, remoteMessages) in grouped {
                 let localMessages = await repository.loadMessages(threadID: threadID)
-                let localByClient = Dictionary(uniqueKeysWithValues: localMessages.map { ($0.clientMessageID, $0) })
+                let localByClient = Self.indexByClientMessageID(localMessages)
                 let merged = remoteMessages.map { remote in
                     mergePolicy.resolve(local: localByClient[remote.clientMessageID], remote: remote)
                 }
@@ -115,16 +177,16 @@ actor ChatSyncEngine {
         }
     }
 
-    private func pullAndMerge() async throws {
-        let cursor = await repository.loadSyncCursor()?.value
-        logger.debug("拉取对话增量开始，cursor=\(cursor ?? "-")", category: "chat_sync")
-        let result = try await remoteAPI.pull(cursor: cursor)
+    private func pullAndMerge(cursor: String?, threadID: UUID?) async throws {
+        let scope = threadID.map { "thread=\(shortID($0))" } ?? "global"
+        logger.debug("拉取对话增量开始，cursor=\(cursor ?? "-") scope=\(scope)", category: "chat_sync")
+        let result = try await remoteAPI.pull(cursor: cursor, threadID: threadID)
 
         // 拉取通道只做增量合并，不做 destructive 覆盖，保证本地可逆。
         let grouped = Dictionary(grouping: result.messages.compactMap(Self.toDomain), by: { $0.threadID })
         for (threadID, remoteMessages) in grouped {
             let localMessages = await repository.loadMessages(threadID: threadID)
-            let localByClient = Dictionary(uniqueKeysWithValues: localMessages.map { ($0.clientMessageID, $0) })
+            let localByClient = Self.indexByClientMessageID(localMessages)
             let merged = remoteMessages.map { remote in
                 mergePolicy.resolve(local: localByClient[remote.clientMessageID], remote: remote)
             }
@@ -149,12 +211,17 @@ actor ChatSyncEngine {
             return nil
         }
 
+        let visibility = ChatReasoningVisibility(rawValue: remote.reasoningVisibility ?? "") ?? .full
         return ChatMessage(
             threadID: remote.threadID,
             role: role,
             kind: kind,
             content: remote.content,
             attachments: [],
+            reasoningContent: remote.reasoningContent,
+            reasoningDurationMs: remote.reasoningDurationMs,
+            reasoningExpanded: remote.reasoningExpanded ?? false,
+            reasoningVisibility: visibility,
             clientMessageID: remote.clientMessageID,
             serverMessageID: remote.serverMessageID,
             deliveryState: deliveryState,
@@ -164,7 +231,39 @@ actor ChatSyncEngine {
         )
     }
 
+    /// 同一 `clientMessageID` 在 Core Data 中若出现重复行，保留时间更新、更完整的一条，避免 `Dictionary(uniqueKeysWithValues:)` 崩溃。
+    private static func indexByClientMessageID(_ messages: [ChatMessage]) -> [UUID: ChatMessage] {
+        var map: [UUID: ChatMessage] = [:]
+        for message in messages {
+            if let existing = map[message.clientMessageID] {
+                map[message.clientMessageID] = preferMessage(existing, message)
+            } else {
+                map[message.clientMessageID] = message
+            }
+        }
+        return map
+    }
+
+    private static func preferMessage(_ a: ChatMessage, _ b: ChatMessage) -> ChatMessage {
+        let da = a.serverUpdatedAt ?? a.createdAt
+        let db = b.serverUpdatedAt ?? b.createdAt
+        if da != db { return da >= db ? a : b }
+        switch (a.serverMessageID, b.serverMessageID) {
+        case (nil, .some): return b
+        case (.some, nil): return a
+        default: return a.id.uuidString >= b.id.uuidString ? a : b
+        }
+    }
+
+    private static func formatSyncCursor(_ date: Date) -> String {
+        syncCursorFormatter.string(from: date)
+    }
+
     private func format(_ seconds: TimeInterval) -> String {
         String(format: "%.3f", seconds)
+    }
+
+    private func shortID(_ id: UUID) -> String {
+        String(id.uuidString.prefix(8))
     }
 }

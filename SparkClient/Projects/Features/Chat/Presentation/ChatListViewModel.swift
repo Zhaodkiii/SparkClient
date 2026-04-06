@@ -9,10 +9,11 @@ final class ChatListViewModel: ObservableObject {
     private let loadPatientsUseCase: LoadPatientsUseCase
     private let selectPatientUseCase: SelectPatientUseCase
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
+    private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let createThreadUseCase: CreateThreadUseCase
     private let deleteThreadUseCase: DeleteThreadUseCase
-    private let syncChatUseCase: SyncChatUseCase
     private let notificationClient: any NotificationClient
+    private var hasLoadedForList = false
 
     init(
         stateStore: ChatStateStore,
@@ -21,9 +22,9 @@ final class ChatListViewModel: ObservableObject {
         loadPatientsUseCase: LoadPatientsUseCase,
         selectPatientUseCase: SelectPatientUseCase,
         loadChatThreadsUseCase: LoadChatThreadsUseCase,
+        loadChatMessagesUseCase: LoadChatMessagesUseCase,
         createThreadUseCase: CreateThreadUseCase,
         deleteThreadUseCase: DeleteThreadUseCase,
-        syncChatUseCase: SyncChatUseCase,
         notificationClient: any NotificationClient
     ) {
         self.stateStore = stateStore
@@ -32,10 +33,16 @@ final class ChatListViewModel: ObservableObject {
         self.loadPatientsUseCase = loadPatientsUseCase
         self.selectPatientUseCase = selectPatientUseCase
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
+        self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.createThreadUseCase = createThreadUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
-        self.syncChatUseCase = syncChatUseCase
         self.notificationClient = notificationClient
+    }
+
+    func loadForListIfNeeded() async {
+        guard hasLoadedForList == false else { return }
+        hasLoadedForList = true
+        await loadIfNeeded()
     }
 
     func loadIfNeeded() async {
@@ -45,14 +52,6 @@ final class ChatListViewModel: ObservableObject {
 
         await ensurePatientContextLoaded()
         await reloadThreads(selectFirstIfNeeded: true)
-
-        do {
-            try await syncChatUseCase.execute()
-            await reloadThreads(selectFirstIfNeeded: false)
-        } catch {
-            stateStore.setError(error.localizedDescription)
-            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.sync")
-        }
     }
 
     func refreshThreads() async {
@@ -71,6 +70,21 @@ final class ChatListViewModel: ObservableObject {
 
     func selectThread(_ threadID: UUID) {
         stateStore.setSelectedThreadID(threadID)
+    }
+
+    func selectAndPrepare(threadID: UUID) async {
+        stateStore.setSelectedThreadID(threadID)
+        let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
+        stateStore.setMessages(messages, for: threadID)
+    }
+
+    func search(text: String) -> [ChatThreadListItem] {
+        let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard query.isEmpty == false else { return stateStore.threadItems }
+        return stateStore.threadItems.filter { item in
+            item.thread.listDisplayTitle.lowercased().contains(query)
+            || item.latestMessagePreview.lowercased().contains(query)
+        }
     }
 
     func deleteThread(_ threadID: UUID) async {

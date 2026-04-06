@@ -8,6 +8,7 @@ final class ChatStateStore: ObservableObject {
         let clientMessageID: UUID
         var kind: ChatMessageKind
         var content: String
+        var reasoningContent: String?
         let createdAt: Date
     }
 
@@ -18,8 +19,10 @@ final class ChatStateStore: ObservableObject {
     @Published private(set) var isSending = false
     @Published private(set) var errorMessage: String?
 
-    @Published private var drafts: [UUID: String] = [:]
+    @Published private var composerDrafts: [UUID: ChatComposerDraft] = [:]
     @Published private var streamingAssistants: [UUID: StreamingAssistant] = [:]
+    /// Bumps on each streaming text/reasoning update so views can scroll even when message count is unchanged.
+    @Published private(set) var streamingContentGeneration: UInt64 = 0
 
     var selectedThread: ChatThread? {
         threadItems.first(where: { $0.id == selectedThreadID })?.thread
@@ -37,6 +40,10 @@ final class ChatStateStore: ObservableObject {
                     kind: streaming.kind,
                     content: streaming.content,
                     attachments: [],
+                    reasoningContent: streaming.reasoningContent,
+                    reasoningDurationMs: nil,
+                    reasoningExpanded: true,
+                    reasoningVisibility: .full,
                     clientMessageID: streaming.clientMessageID,
                     serverMessageID: nil,
                     deliveryState: .sending,
@@ -63,24 +70,99 @@ final class ChatStateStore: ObservableObject {
         selectedThreadID = threadID
     }
 
-    func setMessages(_ messages: [ChatMessage], for threadID: UUID) {
+    /// - Parameter clearStreamingAssistant: Set `false` while a reply is streaming so mid-send reloads (e.g. after user message persist) do not wipe `streamingAssistants`.
+    func setMessages(_ messages: [ChatMessage], for threadID: UUID, clearStreamingAssistant: Bool = true) {
         messagesByThread[threadID] = messages
-        streamingAssistants[threadID] = nil
+        if clearStreamingAssistant {
+            streamingAssistants[threadID] = nil
+        }
     }
 
     func setDraft(_ text: String, for threadID: UUID?) {
-        guard let threadID else { return }
-        drafts[threadID] = text
+        updateComposerDraft(for: threadID) { draft in
+            draft.text = text
+        }
     }
 
     func draft(for threadID: UUID?) -> String {
-        guard let threadID else { return "" }
-        return drafts[threadID] ?? ""
+        composerDraft(for: threadID).text
+    }
+
+    func composerDraft(for threadID: UUID?) -> ChatComposerDraft {
+        guard let threadID else { return ChatComposerDraft() }
+        return composerDrafts[threadID] ?? ChatComposerDraft()
     }
 
     func clearDraft(for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.text = ""
+            draft.attachments = []
+            draft.isShowingAttachmentMenu = false
+            draft.isShowingPhotoPicker = false
+            draft.isShowingCamera = false
+            draft.previewSelection = nil
+        }
+    }
+
+    func clearComposer(for threadID: UUID?) {
         guard let threadID else { return }
-        drafts[threadID] = ""
+        composerDrafts[threadID] = ChatComposerDraft()
+    }
+
+    func updateRuntimeFlags(
+        for threadID: UUID?,
+        update: (inout ChatComposerRuntimeFlags) -> Void
+    ) {
+        updateComposerDraft(for: threadID) { draft in
+            update(&draft.runtimeFlags)
+        }
+    }
+
+    func setSelectedChatModelName(_ name: String?, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.runtimeFlags.selectedChatModelName = name
+        }
+    }
+
+    func setAttachmentMenuPresented(_ isPresented: Bool, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.isShowingAttachmentMenu = isPresented
+        }
+    }
+
+    func setPhotoPickerPresented(_ isPresented: Bool, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.isShowingPhotoPicker = isPresented
+        }
+    }
+
+    func setCameraPresented(_ isPresented: Bool, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.isShowingCamera = isPresented
+        }
+    }
+
+    func appendComposerAttachments(_ attachments: [ChatComposerAttachmentPreview], for threadID: UUID?) {
+        guard attachments.isEmpty == false else { return }
+        updateComposerDraft(for: threadID) { draft in
+            draft.attachments.append(contentsOf: attachments)
+            draft.previewSelection = attachments.last?.id
+        }
+    }
+
+    func removeComposerAttachment(id: UUID, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.attachments.removeAll { $0.id == id }
+            if draft.previewSelection == id {
+                draft.previewSelection = draft.attachments.last?.id
+            }
+        }
+    }
+
+    func setPreviewSelection(_ attachmentID: UUID?, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.previewSelection = attachmentID
+        }
     }
 
     func setLoading(_ value: Bool) {
@@ -106,23 +188,39 @@ final class ChatStateStore: ObservableObject {
             clientMessageID: clientMessageID,
             kind: kind,
             content: "",
+            reasoningContent: nil,
             createdAt: createdAt
         )
+        streamingContentGeneration &+= 1
     }
 
     func updateStreamingAssistant(
         threadID: UUID,
         kind: ChatMessageKind,
-        content: String
+        content: String,
+        reasoningContent: String?
     ) {
         guard var state = streamingAssistants[threadID] else { return }
-        guard state.content != content || state.kind != kind else { return }
+        let reasoning = reasoningContent.flatMap { $0.isEmpty ? nil : $0 }
+        guard state.content != content || state.kind != kind || state.reasoningContent != reasoning else { return }
         state.kind = kind
         state.content = content
+        state.reasoningContent = reasoning
         streamingAssistants[threadID] = state
+        streamingContentGeneration &+= 1
     }
 
     func finishStreamingAssistant(threadID: UUID) {
         streamingAssistants[threadID] = nil
+    }
+
+    private func updateComposerDraft(
+        for threadID: UUID?,
+        update: (inout ChatComposerDraft) -> Void
+    ) {
+        guard let threadID else { return }
+        var draft = composerDrafts[threadID] ?? ChatComposerDraft()
+        update(&draft)
+        composerDrafts[threadID] = draft
     }
 }

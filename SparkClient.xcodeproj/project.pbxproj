@@ -118,6 +118,7 @@
 				en,
 				Base,
 				"zh-Hans",
+				"zh-Hant",
 			);
 			mainGroup = 859781E32F7E4CD5002B7517;
 			minimizedProjectReferenceProxies = 1;
@@ -287,8 +288,10 @@
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "用于在你主动操作时写入健康记录。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于在聊天中选择图片并生成发送前预览。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -324,8 +327,10 @@
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "用于在你主动操作时写入健康记录。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于在聊天中选择图片并生成发送前预览。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -423,8 +428,10 @@
 				DEVELOPMENT_TEAM = 4AN6PV98G7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "用于在你主动操作时写入健康记录。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于在聊天中选择图片并生成发送前预览。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

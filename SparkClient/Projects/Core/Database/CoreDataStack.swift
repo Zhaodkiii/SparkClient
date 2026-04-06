@@ -10,14 +10,7 @@ final class CoreDataStack: @unchecked Sendable {
 
     @MainActor
     static let preview: CoreDataStack = {
-        let stack = CoreDataStack(inMemory: true)
-        Task {
-            try? await CoreDataHealthMetricsRepository(
-                coreDataStack: stack,
-                logger: ConsoleLogger()
-            ).seedDefaultMetricsIfNeeded(for: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!)
-        }
-        return stack
+        CoreDataStack(inMemory: true)
     }()
 
     let container: NSPersistentContainer
@@ -33,6 +26,11 @@ final class CoreDataStack: @unchecked Sendable {
 
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
+        }
+
+        for description in container.persistentStoreDescriptions {
+            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
         }
 
         container.loadPersistentStores { _, error in

@@ -1,44 +1,74 @@
 import Foundation
 
 struct ExaminationReport: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var remoteID: Int?
-    var memberID: UUID
-    var medicalCaseID: UUID?
+    enum Source: Int, Codable, Sendable {
+        case manual = 1
+        case ocr = 2
+    }
+
+    enum Status: Int, Codable, Sendable {
+        case draft = 1
+        case completed = 2
+        case revised = 3
+        case discarded = 4
+    }
+
+    let id: Int
+    var memberID: Int
+    var medicalRecordID: Int?
     var category: String
-    var subcategory: String
-    var reportName: String
-    var checkType: String
-    var conclusion: String
-    var doctorAdvice: String
-    var date: Date
+    var subCategory: String
+    var itemName: String
+    var performedAt: Date?
+    var reportedAt: Date?
+    var organizationName: String
+    var departmentName: String
+    var doctorName: String
+    var findings: String?
+    var impression: String?
+    var source: Int
+    var rawOCR: [String: String]?
+    var status: Int
+    var extra: [String: String]?
     var updatedAt: Date
 
     init(
-        id: UUID = UUID(),
-        remoteID: Int? = nil,
-        memberID: UUID,
-        medicalCaseID: UUID? = nil,
+        id: Int,
+        memberID: Int,
+        medicalRecordID: Int? = nil,
         category: String = "",
-        subcategory: String = "",
-        reportName: String,
-        checkType: String = "",
-        conclusion: String = "",
-        doctorAdvice: String = "",
-        date: Date = Date(),
+        subCategory: String = "",
+        itemName: String,
+        performedAt: Date? = nil,
+        reportedAt: Date? = nil,
+        organizationName: String,
+        departmentName: String = "",
+        doctorName: String = "",
+        findings: String? = nil,
+        impression: String? = nil,
+        source: Int = 1,
+        rawOCR: [String: String]? = nil,
+        status: Int = 1,
+        extra: [String: String]? = nil,
         updatedAt: Date = Date()
     ) {
         self.id = id
-        self.remoteID = remoteID
         self.memberID = memberID
-        self.medicalCaseID = medicalCaseID
+        self.medicalRecordID = medicalRecordID
         self.category = category
-        self.subcategory = subcategory
-        self.reportName = reportName
-        self.checkType = checkType
-        self.conclusion = conclusion
-        self.doctorAdvice = doctorAdvice
-        self.date = date
+        self.subCategory = subCategory
+        self.itemName = itemName
+        self.performedAt = performedAt
+        self.reportedAt = reportedAt
+        self.organizationName = organizationName
+        self.departmentName = departmentName
+        self.doctorName = doctorName
+        self.findings = findings
+        self.impression = impression
+        self.source = source
+        self.rawOCR = rawOCR
+        self.status = status
+        self.extra = extra
         self.updatedAt = updatedAt
     }
 }

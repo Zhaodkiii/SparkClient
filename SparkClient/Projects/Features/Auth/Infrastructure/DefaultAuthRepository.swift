@@ -91,7 +91,6 @@ final class DefaultAuthRepository: AuthRepository {
         let profile = try await userProfileRepository.upsertProfile(
             email: normalizedEmail,
             displayName: displayName,
-            isDemo: false,
             signedInAt: signedInAt
         )
         try await healthMetricsRepository.seedDefaultMetricsIfNeeded(for: profile.id)
@@ -101,7 +100,6 @@ final class DefaultAuthRepository: AuthRepository {
             remoteUserID: backend.deviceCache.currentUserID,
             email: normalizedEmail,
             displayName: displayName,
-            isDemo: false,
             signedInAt: signedInAt
         )
 

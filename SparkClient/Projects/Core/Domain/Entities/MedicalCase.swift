@@ -1,41 +1,40 @@
 import Foundation
 
 struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var remoteID: Int?
-    var memberID: UUID
+    let id: Int
+    var memberID: Int
+    /// 病历类型：例如 outpatient/inpatient/custom。
+    var recordType: String
+    /// 状态：1 草稿，2 已提交，3 已归档。
+    var status: Int
     var title: String
-    var chiefComplaint: String
-    var diagnosis: String
-    var severity: String
-    var visitDate: Date
-    var status: String
-    var notes: String
+    var hospitalName: String
+    var ageAtVisit: Int?
+    var diagnosisSummary: String
+    var extra: [String: String]
     var updatedAt: Date
 
     init(
-        id: UUID = UUID(),
-        remoteID: Int? = nil,
-        memberID: UUID,
+        id: Int,
+        memberID: Int,
+        recordType: String = "custom",
+        status: Int = 1,
         title: String,
-        chiefComplaint: String = "",
-        diagnosis: String = "",
-        severity: String = "unknown",
-        visitDate: Date = Date(),
-        status: String = "",
-        notes: String = "",
+        hospitalName: String = "",
+        ageAtVisit: Int? = nil,
+        diagnosisSummary: String = "",
+        extra: [String: String] = [:],
         updatedAt: Date = Date()
     ) {
         self.id = id
-        self.remoteID = remoteID
         self.memberID = memberID
-        self.title = title
-        self.chiefComplaint = chiefComplaint
-        self.diagnosis = diagnosis
-        self.severity = severity
-        self.visitDate = visitDate
+        self.recordType = recordType
         self.status = status
-        self.notes = notes
+        self.title = title
+        self.hospitalName = hospitalName
+        self.ageAtVisit = ageAtVisit
+        self.diagnosisSummary = diagnosisSummary
+        self.extra = extra
         self.updatedAt = updatedAt
     }
 }

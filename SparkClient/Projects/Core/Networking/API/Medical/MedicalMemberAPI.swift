@@ -9,64 +9,74 @@ struct SparkMedicalMemberAPI {
 
     struct RemoteMember: Decodable, Sendable, Equatable {
         let id: Int
-        let clientUID: UUID
         let name: String
-        let age: Int
         let gender: String
         let relationship: String
-        let avatar: String
         let birthDate: Date?
+        let bloodType: String
+        let allergies: [String]
+        let chronicConditions: [String]
+        let notes: String
+        let avatarUrl: String
         let isPrimary: Bool
         let updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
             case id
-            case clientUID = "client_uid"
             case name
-            case age
             case gender
             case relationship
-            case avatar
             case birthDate = "birth_date"
+            case bloodType = "blood_type"
+            case allergies
+            case chronicConditions = "chronic_conditions"
+            case notes
+            case avatarUrl = "avatar_url"
             case isPrimary = "is_primary"
             case updatedAt = "updated_at"
         }
     }
 
     struct UpsertMemberPayload: Encodable, Sendable {
-        let clientUID: UUID
         let name: String
         let relationship: String
-        let age: Int
         let gender: String
-        let avatar: String
         let birthDate: Date?
+        let bloodType: String
+        let allergies: [String]
+        let chronicConditions: [String]
+        let notes: String
+        let avatarUrl: String
         let isPrimary: Bool
 
         enum CodingKeys: String, CodingKey {
-            case clientUID = "client_uid"
             case name
             case relationship
-            case age
             case gender
-            case avatar
             case birthDate = "birth_date"
+            case bloodType = "blood_type"
+            case allergies
+            case chronicConditions = "chronic_conditions"
+            case notes
+            case avatarUrl = "avatar_url"
             case isPrimary = "is_primary"
         }
 
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(clientUID, forKey: .clientUID)
             try container.encode(name, forKey: .name)
             try container.encode(relationship, forKey: .relationship)
-            try container.encode(age, forKey: .age)
             try container.encode(gender, forKey: .gender)
-            try container.encode(avatar, forKey: .avatar)
             if let birthDate {
                 try container.encode(MedicalDateCoding.encodeDateOnly(birthDate), forKey: .birthDate)
             } else {
                 try container.encodeNil(forKey: .birthDate)
             }
+            try container.encode(bloodType, forKey: .bloodType)
+            try container.encode(allergies, forKey: .allergies)
+            try container.encode(chronicConditions, forKey: .chronicConditions)
+            try container.encode(notes, forKey: .notes)
+            try container.encode(avatarUrl, forKey: .avatarUrl)
             try container.encode(isPrimary, forKey: .isPrimary)
         }
     }

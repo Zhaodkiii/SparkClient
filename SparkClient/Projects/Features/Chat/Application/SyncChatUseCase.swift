@@ -7,6 +7,10 @@ struct SyncChatUseCase: Sendable {
         try await syncEngine.syncNow()
     }
 
+    func syncThreadOnOpen(threadID: UUID) async throws {
+        try await syncEngine.syncThreadOnOpen(threadID: threadID)
+    }
+
     func startRealtime() async {
         await syncEngine.startRealtimeSync()
     }

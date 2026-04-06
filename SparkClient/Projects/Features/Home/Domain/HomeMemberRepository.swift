@@ -6,7 +6,6 @@ protocol HomeMemberRepository: Sendable {
     func createMember(
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws
@@ -14,7 +13,6 @@ protocol HomeMemberRepository: Sendable {
         _ member: Member,
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws

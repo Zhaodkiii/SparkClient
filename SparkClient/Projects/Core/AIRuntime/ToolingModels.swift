@@ -9,7 +9,7 @@ enum ToolAuditStatus: String, Codable, Sendable {
 struct ToolAuditEvent: Identifiable, Codable, Sendable {
     let id: UUID
     let toolName: String
-    let patientID: UUID?
+    let patientID: Int?
     let inputSummary: String
     let outputSummary: String
     let status: ToolAuditStatus
@@ -18,7 +18,7 @@ struct ToolAuditEvent: Identifiable, Codable, Sendable {
     init(
         id: UUID = UUID(),
         toolName: String,
-        patientID: UUID?,
+        patientID: Int?,
         inputSummary: String,
         outputSummary: String,
         status: ToolAuditStatus,
@@ -52,7 +52,7 @@ struct ToolInvocation: Sendable {
 }
 
 struct ToolExecutionContext: Sendable {
-    let patientID: UUID?
+    let patientID: Int?
     let locale: Locale
 }
 
@@ -94,6 +94,8 @@ enum SparkToolName {
     static let createCanvas = "create_canvas"
     static let editCanvas = "edit_canvas"
     static let generateStructuredHealthCard = "generate_structured_health_card"
+    static let ocrExtractDraft = "ocr_extract_draft"
+    static let confirmDraft = "confirm_draft"
 
     static let all: [String] = [
         fetchStepDetails,
@@ -126,6 +128,8 @@ enum SparkToolName {
         extractRemoteFileContent,
         createCanvas,
         editCanvas,
-        generateStructuredHealthCard
+        generateStructuredHealthCard,
+        ocrExtractDraft,
+        confirmDraft
     ]
 }

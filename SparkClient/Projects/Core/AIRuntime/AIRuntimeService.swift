@@ -30,12 +30,38 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         let start = Date()
         let resolved = try await configCenter.resolve(for: request.scenario)
         let snapshot = await configCenter.currentSnapshot()
+        let supportsToolUse = modelSupportsTools(modelName: resolved.model, snapshot: snapshot)
+        let providerFromCatalog = snapshot.allModels.first(where: { $0.name == resolved.model })?.company.uppercased()
+        let effectiveRequest: AIRuntimeTextRequest = {
+            guard supportsToolUse == false, request.tools.isEmpty == false else {
+                return AIRuntimeTextRequest(
+                    scenario: request.scenario,
+                    messages: request.messages,
+                    tools: request.tools,
+                    toolChoice: request.toolChoice,
+                    reasoning: request.reasoning,
+                    providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog
+                )
+            }
+            logger.info(
+                "当前模型不支持 tools，已按严格模式降级为纯文本回合，model=\(resolved.model)",
+                category: "ai_runtime"
+            )
+            return AIRuntimeTextRequest(
+                scenario: request.scenario,
+                messages: request.messages,
+                tools: [],
+                toolChoice: .none,
+                reasoning: request.reasoning,
+                providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog
+            )
+        }()
 
         if let localSelection = resolveLocalModelSelection(modelName: resolved.model, snapshot: snapshot) {
             guard let localGateway else {
                 throw LocalModelServiceError.modelLoadFailed
             }
-            var localMessages = request.messages
+            var localMessages = effectiveRequest.messages
             if let prompt = localSelection.model.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
                prompt.isEmpty == false {
                 localMessages.insert(AIRuntimeMessage(role: .system, content: prompt), at: 0)
@@ -70,11 +96,11 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
 
         let client = AIClientFactory.makeClient(from: resolved)
         logger.debug(
-            "准备调用 AI 推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), messages=\(request.messages.count)",
+            "准备调用 AI 推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), messages=\(effectiveRequest.messages.count), tools=\(effectiveRequest.tools.count)",
             category: "ai_runtime"
         )
         do {
-            let response = try await gateway.generateText(client: client, messages: request.messages)
+            let response = try await gateway.generateText(client: client, request: effectiveRequest)
             let cost = Date().timeIntervalSince(start)
             logger.info(
                 "AI 推理完成，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(response.model), cost=\(format(cost))s",
@@ -116,6 +142,18 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         }
 
         return nil
+    }
+
+    private func modelSupportsTools(modelName: String, snapshot: AISettingsSnapshot) -> Bool {
+        guard let selected = snapshot.allModels.first(where: { $0.name == modelName }) else {
+            return false
+        }
+        if selected.identity == .agent,
+           let baseModelName = selected.baseModelName,
+           let base = snapshot.allModels.first(where: { $0.name == baseModelName }) {
+            return selected.supportsToolUse || base.supportsToolUse
+        }
+        return selected.supportsToolUse
     }
 
     private func format(_ seconds: TimeInterval) -> String {

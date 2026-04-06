@@ -7,7 +7,7 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
         self.medicalDataRepository = medicalDataRepository
     }
 
-    func loadRecords(patientID: UUID, limit: Int) async -> [MedicalRecord] {
+    func loadRecords(patientID: Int, limit: Int) async -> [MedicalRecord] {
         let snapshot = await medicalDataRepository.loadSnapshot()
         let cases = snapshot.medicalCases
             .filter { $0.memberID == patientID }
@@ -17,7 +17,43 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                     patientID: $0.memberID,
                     title: $0.title,
                     summary: makeCaseSummary($0),
-                    occurredAt: $0.visitDate,
+                    occurredAt: $0.updatedAt,
+                    updatedAt: $0.updatedAt
+                )
+            }
+        let visits = snapshot.visits
+            .filter { $0.memberID == patientID }
+            .map {
+                MedicalRecord(
+                    id: $0.id,
+                    patientID: $0.memberID,
+                    title: $0.department.isEmpty ? "Visit" : $0.department,
+                    summary: makeVisitSummary($0),
+                    occurredAt: $0.visitedAt ?? $0.updatedAt,
+                    updatedAt: $0.updatedAt
+                )
+            }
+        let surgeries = snapshot.surgeries
+            .filter { $0.memberID == patientID }
+            .map {
+                MedicalRecord(
+                    id: $0.id,
+                    patientID: $0.memberID,
+                    title: $0.procedureName,
+                    summary: makeSurgerySummary($0),
+                    occurredAt: $0.performedAt ?? $0.updatedAt,
+                    updatedAt: $0.updatedAt
+                )
+            }
+        let followUps = snapshot.followUps
+            .filter { $0.memberID == patientID }
+            .map {
+                MedicalRecord(
+                    id: $0.id,
+                    patientID: $0.memberID,
+                    title: $0.method.isEmpty ? "FollowUp" : $0.method,
+                    summary: makeFollowUpSummary($0),
+                    occurredAt: $0.completedAt ?? $0.plannedAt ?? $0.updatedAt,
                     updatedAt: $0.updatedAt
                 )
             }
@@ -41,33 +77,33 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                 MedicalRecord(
                     id: $0.id,
                     patientID: $0.memberID,
-                    title: $0.reportName,
+                    title: $0.itemName,
                     summary: makeExaminationSummary($0),
-                    occurredAt: $0.date,
+                    occurredAt: $0.reportedAt ?? $0.performedAt ?? $0.updatedAt,
                     updatedAt: $0.updatedAt
                 )
             }
 
-        let prescriptions = snapshot.prescriptions
+        let medications = snapshot.medications
             .filter { $0.memberID == patientID }
             .map {
                 MedicalRecord(
                     id: $0.id,
                     patientID: $0.memberID,
-                    title: $0.drugName,
-                    summary: makePrescriptionSummary($0),
-                    occurredAt: $0.startDate ?? $0.endDate ?? $0.updatedAt,
+                    title: $0.drugName.isEmpty ? "Medication" : $0.drugName,
+                    summary: makeMedicationSummary($0),
+                    occurredAt: $0.updatedAt,
                     updatedAt: $0.updatedAt
                 )
             }
 
-        return (cases + reports + exams + prescriptions)
+        return (cases + visits + surgeries + followUps + reports + exams + medications)
             .sorted { lhs, rhs in lhs.occurredAt > rhs.occurredAt }
             .prefix(max(1, limit))
             .map { $0 }
     }
 
-    func buildPatientContextSummary(patientID: UUID, limit: Int) async -> String {
+    func buildPatientContextSummary(patientID: Int, limit: Int) async -> String {
         let records = await loadRecords(patientID: patientID, limit: limit)
         guard records.isEmpty == false else { return "" }
         let promptLocalizer = PromptLocalizer()
@@ -94,15 +130,40 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
 
     private func makeCaseSummary(_ medicalCase: MedicalCase) -> String {
         let isChinese = PromptLocalizer().language == .zh
-        let diagnosis = medicalCase.diagnosis.trimmingCharacters(in: .whitespacesAndNewlines)
-        let complaint = medicalCase.chiefComplaint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let diagnosis = medicalCase.diagnosisSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hospital = medicalCase.hospitalName.trimmingCharacters(in: .whitespacesAndNewlines)
         if diagnosis.isEmpty == false {
             return isChinese ? "诊断：\(diagnosis)" : "Diagnosis: \(diagnosis)"
         }
-        if complaint.isEmpty == false {
-            return isChinese ? "主诉：\(complaint)" : "Chief complaint: \(complaint)"
+        if hospital.isEmpty == false {
+            return isChinese ? "机构：\(hospital)" : "Hospital: \(hospital)"
         }
         return isChinese ? "病例记录" : "Medical case record"
+    }
+
+    private func makeVisitSummary(_ visit: Visit) -> String {
+        let isChinese = PromptLocalizer().language == .zh
+        if visit.doctorName.isEmpty == false {
+            return isChinese ? "医生：\(visit.doctorName)" : "Doctor: \(visit.doctorName)"
+        }
+        return isChinese ? "就诊记录" : "Visit record"
+    }
+
+    private func makeSurgerySummary(_ surgery: Surgery) -> String {
+        let isChinese = PromptLocalizer().language == .zh
+        if surgery.surgeon.isEmpty == false {
+            return isChinese ? "术者：\(surgery.surgeon)" : "Surgeon: \(surgery.surgeon)"
+        }
+        return isChinese ? "手术记录" : "Surgery record"
+    }
+
+    private func makeFollowUpSummary(_ followUp: FollowUp) -> String {
+        let isChinese = PromptLocalizer().language == .zh
+        let outcome = followUp.outcome.trimmingCharacters(in: .whitespacesAndNewlines)
+        if outcome.isEmpty == false {
+            return String(outcome.prefix(120))
+        }
+        return isChinese ? "随访记录" : "Follow-up record"
     }
 
     private func makeReportSummary(_ report: MedicalReport) -> String {
@@ -120,27 +181,27 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
 
     private func makeExaminationSummary(_ report: ExaminationReport) -> String {
         let isChinese = PromptLocalizer().language == .zh
-        let conclusion = report.conclusion.trimmingCharacters(in: .whitespacesAndNewlines)
-        if conclusion.isEmpty == false {
-            return String(conclusion.prefix(120))
+        let impression = (report.impression ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if impression.isEmpty == false {
+            return String(impression.prefix(120))
         }
-        let advice = report.doctorAdvice.trimmingCharacters(in: .whitespacesAndNewlines)
-        if advice.isEmpty == false {
-            return isChinese ? "建议：\(String(advice.prefix(120)))" : "Advice: \(String(advice.prefix(120)))"
+        let findings = (report.findings ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if findings.isEmpty == false {
+            return isChinese ? "所见：\(String(findings.prefix(120)))" : "Findings: \(String(findings.prefix(120)))"
         }
         return isChinese ? "检查报告" : "Examination report"
     }
 
-    private func makePrescriptionSummary(_ prescription: Prescription) -> String {
+    private func makeMedicationSummary(_ medication: Medication) -> String {
         let isChinese = PromptLocalizer().language == .zh
-        let dosage = prescription.dosage.trimmingCharacters(in: .whitespacesAndNewlines)
-        let frequency = prescription.frequency.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dosage = medication.dosePerTime.trimmingCharacters(in: .whitespacesAndNewlines)
+        let frequency = medication.frequencyText.trimmingCharacters(in: .whitespacesAndNewlines)
         if dosage.isEmpty == false || frequency.isEmpty == false {
             if isChinese {
                 return "剂量：\(dosage.isEmpty ? "-" : dosage)，频次：\(frequency.isEmpty ? "-" : frequency)"
             }
             return "Dosage: \(dosage.isEmpty ? "-" : dosage), Frequency: \(frequency.isEmpty ? "-" : frequency)"
         }
-        return isChinese ? "处方记录" : "Prescription record"
+        return isChinese ? "用药记录" : "Medication record"
     }
 }

@@ -19,7 +19,7 @@ struct ExtractMedicalDraftFromDocumentUseCase: Sendable {
         self.logger = logger
     }
 
-    func execute(patientID: UUID, filePath: String) async throws -> RecognizedMedicalDraft {
+    func execute(patientID: Int, filePath: String) async throws -> RecognizedMedicalDraft {
         let fileURL = URL(fileURLWithPath: filePath)
         let ocr = try await recognize(fileURL: fileURL)
 
@@ -43,7 +43,7 @@ struct ExtractMedicalDraftFromDocumentUseCase: Sendable {
     }
 
     private func buildDraft(
-        patientID: UUID,
+        patientID: Int,
         sourcePath: String,
         rawText: String
     ) async -> RecognizedMedicalDraft {

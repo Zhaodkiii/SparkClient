@@ -1,7 +1,7 @@
 import Foundation
 
 actor InMemoryMedicalDraftRepository: MedicalDraftRepository {
-    private var draftsByPatient: [UUID: [RecognizedMedicalDraft]] = [:]
+    private var draftsByPatient: [Int: [RecognizedMedicalDraft]] = [:]
 
     func save(_ draft: RecognizedMedicalDraft) async {
         var drafts = draftsByPatient[draft.patientID] ?? []
@@ -10,7 +10,7 @@ actor InMemoryMedicalDraftRepository: MedicalDraftRepository {
         draftsByPatient[draft.patientID] = drafts
     }
 
-    func latest(patientID: UUID) async -> RecognizedMedicalDraft? {
+    func latest(patientID: Int) async -> RecognizedMedicalDraft? {
         draftsByPatient[patientID]?.first
     }
 

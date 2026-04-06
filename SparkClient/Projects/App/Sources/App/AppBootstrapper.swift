@@ -35,7 +35,6 @@ final class AppBootstrapper {
             for scenario in AIScenario.allCases {
                 _ = try await aiConfigCenter.resolve(for: scenario)
             }
-            try? await syncChatUseCase?.execute()
             logger.info("应用启动引导已完成", category: "bootstrap")
         } catch {
             logger.warning("应用启动引导已结束（降级）：\(error.localizedDescription)", category: "bootstrap")
@@ -54,7 +53,6 @@ final class AppBootstrapper {
             for scenario in AIScenario.allCases {
                 _ = try await aiConfigCenter.resolve(for: scenario)
             }
-            try? await syncChatUseCase?.execute()
             logger.info("用户档案 \(session.profileID) 引导已完成", category: "bootstrap")
         } catch {
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", category: "bootstrap")

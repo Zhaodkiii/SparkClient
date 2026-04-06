@@ -11,6 +11,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let createdAt: Date
     let serverUpdatedAt: Date?
     let isTombstone: Bool
+    let reasoningContent: String?
+    let reasoningDurationMs: Int64?
+    let reasoningExpanded: Bool?
+    let reasoningVisibility: String?
 
     enum CodingKeys: String, CodingKey {
         case threadID = "thread_id"
@@ -23,6 +27,78 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case createdAt = "created_at"
         case serverUpdatedAt = "server_updated_at"
         case isTombstone = "tombstone"
+        case reasoningContent = "reasoning_content"
+        case reasoningDurationMs = "reasoning_duration_ms"
+        case reasoningExpanded = "reasoning_expanded"
+        case reasoningVisibility = "reasoning_visibility"
+    }
+
+    init(
+        threadID: UUID,
+        role: String,
+        kind: String,
+        content: String,
+        clientMessageID: UUID,
+        serverMessageID: String?,
+        deliveryState: String,
+        createdAt: Date,
+        serverUpdatedAt: Date?,
+        isTombstone: Bool,
+        reasoningContent: String? = nil,
+        reasoningDurationMs: Int64? = nil,
+        reasoningExpanded: Bool? = nil,
+        reasoningVisibility: String? = nil
+    ) {
+        self.threadID = threadID
+        self.role = role
+        self.kind = kind
+        self.content = content
+        self.clientMessageID = clientMessageID
+        self.serverMessageID = serverMessageID
+        self.deliveryState = deliveryState
+        self.createdAt = createdAt
+        self.serverUpdatedAt = serverUpdatedAt
+        self.isTombstone = isTombstone
+        self.reasoningContent = reasoningContent
+        self.reasoningDurationMs = reasoningDurationMs
+        self.reasoningExpanded = reasoningExpanded
+        self.reasoningVisibility = reasoningVisibility
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        threadID = try c.decode(UUID.self, forKey: .threadID)
+        role = try c.decode(String.self, forKey: .role)
+        kind = try c.decode(String.self, forKey: .kind)
+        content = try c.decode(String.self, forKey: .content)
+        clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
+        serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
+        deliveryState = try c.decode(String.self, forKey: .deliveryState)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        serverUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .serverUpdatedAt)
+        isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
+        reasoningContent = try c.decodeIfPresent(String.self, forKey: .reasoningContent)
+        reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
+        reasoningExpanded = try c.decodeIfPresent(Bool.self, forKey: .reasoningExpanded)
+        reasoningVisibility = try c.decodeIfPresent(String.self, forKey: .reasoningVisibility)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(threadID, forKey: .threadID)
+        try c.encode(role, forKey: .role)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(content, forKey: .content)
+        try c.encode(clientMessageID, forKey: .clientMessageID)
+        try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
+        try c.encode(deliveryState, forKey: .deliveryState)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
+        try c.encode(isTombstone, forKey: .isTombstone)
+        try c.encodeIfPresent(reasoningContent, forKey: .reasoningContent)
+        try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
+        try c.encodeIfPresent(reasoningExpanded, forKey: .reasoningExpanded)
+        try c.encodeIfPresent(reasoningVisibility, forKey: .reasoningVisibility)
     }
 }
 
@@ -36,6 +112,35 @@ struct SparkChatRemoteAPI {
 
     init(configuration: SparkBackendConfiguration) {
         self.configuration = configuration
+    }
+
+    /// 指定会话在服务端最新消息的 `server_updated_at`；无消息时为 `nil`。
+    func threadHead(threadID: UUID) async throws -> Date? {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Chat.Sync.ThreadHead",
+            apiName: "ChatRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .get,
+                path: "/api/v1/ai/chat/sync/thread-head/",
+                queryItems: [URLQueryItem(name: "thread_id", value: threadID.uuidString)],
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "chat.sync.threadHead.\(threadID.uuidString)",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .normal
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(
+            ChatThreadHeadPayload.self,
+            from: response,
+            decoder: ChatRemoteCoding.decoder
+        )
+        return payload.lastServerUpdatedAt
     }
 
     func push(messages: [ChatRemoteMessageDTO]) async throws -> [ChatRemoteMessageDTO] {
@@ -70,10 +175,16 @@ struct SparkChatRemoteAPI {
         return payload.messages
     }
 
-    func pull(cursor: String?) async throws -> ChatRemotePullResult {
+    /// - Parameters:
+    ///   - cursor: 通常为本地已知的最新 `server_updated_at`（ISO8601）。
+    ///   - threadID: 若指定，仅拉取该会话增量，避免进入单会话时拖回全账号历史。
+    func pull(cursor: String?, threadID: UUID? = nil) async throws -> ChatRemotePullResult {
         var queryItems: [URLQueryItem] = []
         if let cursor, cursor.isEmpty == false {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        if let threadID {
+            queryItems.append(URLQueryItem(name: "thread_id", value: threadID.uuidString))
         }
         // 增量拉取：cursor 由服务端 server_updated_at 驱动，避免全量扫描。
 
@@ -116,6 +227,14 @@ private struct ChatPushResponse: Decodable {
 private struct ChatPullResponse: Decodable {
     let cursor: String?
     let messages: [ChatRemoteMessageDTO]
+}
+
+private struct ChatThreadHeadPayload: Decodable {
+    let lastServerUpdatedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case lastServerUpdatedAt = "last_server_updated_at"
+    }
 }
 
 private enum ChatRemoteCoding {

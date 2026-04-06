@@ -1,6 +1,8 @@
 import SwiftUI
 
+/// AI 设置中「模型偏好」子页：按向量 / 语音 / 优化等分区，配置各场景使用的模型（试用策略或本地目录 + 服务端下发的多模型列表）。
 struct AIModelPreferencesView: View {
+    /// 当前展示的设置分区。
     enum Focus {
         case embedding
         case voice
@@ -10,6 +12,7 @@ struct AIModelPreferencesView: View {
     @Binding var snapshot: AISettingsSnapshot
     let focus: Focus
 
+    /// 试用策略里某一场景下可选的一条模型（用于 Picker）。
     private struct TrialModelOption: Identifiable, Hashable {
         let id: String
         let name: String
@@ -17,29 +20,74 @@ struct AIModelPreferencesView: View {
         let company: String
     }
 
+    /// 绑定到快照中的 `UserInfo`，供各分区 TextField / Picker 使用。
     private var userInfoBinding: Binding<UserInfo> {
         $snapshot.userInfo
     }
 
+    /// 当前快照中的用户信息（只读便捷访问）。
     private var userInfo: UserInfo {
         snapshot.userInfo
     }
 
-    private var trialModelNames: [String] {
+    /// 生成本地/服务端场景模型的双向绑定：同步「按场景选中的模型名」、`UserInfo` 中对应字段，并调用 `materializeAllScenariosFromBundles()`。
+    /// 读取顺序：显式选中 → `UserInfo` 存稿 → 服务端 bundle 默认行（与 bootstrap `scenarios` 一致）。
+    private func scenarioLocalModelBinding(
+        scenario: AIScenario,
+        userInfoKeyPath: WritableKeyPath<UserInfo, String>
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                let snap = snapshot
+                if let picked = snap.scenarioSelectedModel[scenario.rawValue], picked.isEmpty == false {
+                    return picked
+                }
+                let fromUserInfo = snap.userInfo[keyPath: userInfoKeyPath]
+                if fromUserInfo.isEmpty == false {
+                    return fromUserInfo
+                }
+                if let bundle = snap.scenarioRemoteBundles?.bundle(for: scenario),
+                   let row = bundle.resolveRow(preferredModelName: nil)
+                {
+                    return row.model
+                }
+                return ""
+            },
+            set: { newValue in
+                var next = snapshot
+                next.scenarioSelectedModel[scenario.rawValue] = newValue
+                next.userInfo[keyPath: userInfoKeyPath] = newValue
+                next.materializeAllScenariosFromBundles()
+                snapshot = next
+            }
+        )
+    }
+
+    /// 展示名优先用本地模型目录里的 `displayName`，否则用服务端下发的模型 id 字符串。
+    private func bundleRowDisplayName(_ row: AIScenarioRemoteModelRow) -> String {
+        if let m = snapshot.allModels.first(where: { $0.name == row.model }) {
+            return m.displayName
+        }
+        return row.model
+    }
+
+    /// 用于图标与展示：优先 bundle 行内的厂商字段，否则回退到目录中的 `company`。
+    private func companyLabelForBundleRow(_ row: AIScenarioRemoteModelRow) -> String {
+        if let c = row.providerCompany, c.isEmpty == false {
+            return c
+        }
+        return snapshot.allModels.first(where: { $0.name == row.model })?.company ?? ""
+    }
+
+    /// 当前试用激活时，该 `AIScenario` 在 `trialModelPolicy` 中的可选条目（每场景可多行）。
+    private func trialModelOptions(for scenario: AIScenario) -> [TrialModelOption] {
         guard snapshot.trial.isActive else { return [] }
-        let names = snapshot.trialModelPolicy.map { $0.config.model }.filter { $0.isEmpty == false }
-        return Array(Set(names)).sorted()
-    }
-
-    private var hasTrialModels: Bool {
-        trialModelNames.isEmpty == false
-    }
-
-    private var trialModelOptions: [TrialModelOption] {
-        trialModelNames.map { name in
+        let items = snapshot.trialModelPolicy.filter { $0.scenario == scenario }
+        return items.map { item in
+            let name = item.config.model
             let model = snapshot.allModels.first(where: { $0.name == name })
             return TrialModelOption(
-                id: name,
+                id: "\(scenario.rawValue)|\(name)",
                 name: name,
                 displayName: model?.displayName ?? name,
                 company: model?.company ?? "TRIAL"
@@ -47,6 +95,12 @@ struct AIModelPreferencesView: View {
         }
     }
 
+    /// 该场景在试用策略中是否至少有一条可选模型。
+    private func hasTrialModels(for scenario: AIScenario) -> Bool {
+        trialModelOptions(for: scenario).isEmpty == false
+    }
+
+    /// 本地 Key 路径下的「文本类优化」候选：目录模型 + 能力筛选 + 已配置非空 API Key（无 bundle 时的回退列表）。
     private var textOptimizationModels: [AllModels] {
         snapshot.allModels
             .filter {
@@ -58,6 +112,7 @@ struct AIModelPreferencesView: View {
             .sorted { $0.position < $1.position }
     }
 
+    /// 视觉优化候选：要求多模态 + 本地 Key。
     private var visualOptimizationModels: [AllModels] {
         snapshot.allModels
             .filter {
@@ -69,14 +124,17 @@ struct AIModelPreferencesView: View {
             .sorted { $0.position < $1.position }
     }
 
+    /// Router 场景：与文本优化共用同一套目录回退列表。
     private var routerModels: [AllModels] {
         textOptimizationModels
     }
 
+    /// 抽数场景：与文本优化共用同一套目录回退列表。
     private var extractionModels: [AllModels] {
         textOptimizationModels
     }
 
+    /// 报告解读场景：与文本优化共用同一套目录回退列表。
     private var reportInterpretationModels: [AllModels] {
         textOptimizationModels
     }
@@ -93,9 +151,11 @@ struct AIModelPreferencesView: View {
             }
         }
         .navigationTitle(title)
+        // `userInfo` 变更时表单控件过渡动画。
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: snapshot.userInfo)
     }
 
+    /// 向量嵌入：模型名仍为自由文本输入（不走优化场景的 bundle / 试用分流）。
     private var embeddingSection: some View {
         Section(L10n.text("ai_settings.row.embedding")) {
             TextField(
@@ -107,6 +167,7 @@ struct AIModelPreferencesView: View {
         }
     }
 
+    /// 语音合成：模型名自由文本（与优化 bundle 分流无关）。
     private var voiceSection: some View {
         Section(L10n.text("ai_settings.row.voice")) {
             TextField(
@@ -118,128 +179,154 @@ struct AIModelPreferencesView: View {
         }
     }
 
+    /// 各推理/优化场景：来源（试用 / 本地 Key）+ `modelPicker`；多模型以服务端 `scenarioRemoteBundles` 为准。
     private var optimizationSections: some View {
         Group {
-            Section(header: Text("文本优化模型")) {
+            Section(header: Text(L10n.text("ai_settings.scenario.optimization_text"))) {
                 headerExplain(
                     icon: "paintbrush.pointed",
-                    message: "文本优化模型用于提示词优化、搜索问题改写、知识检索改写与内容优化。"
+                    message: L10n.text("ai_settings.prefs.explain.optimization_text")
                 )
 
                 sourcePicker(
                     selection: userInfoBinding.optimizationTextSource,
-                    isTrialAvailable: hasTrialModels
+                    isTrialAvailable: hasTrialModels(for: .optimizationText)
                 )
 
                 modelPicker(
-                    title: "选择文本优化模型",
-                    selectedModelName: userInfoBinding.optimizationTextModel,
+                    title: L10n.text("ai_settings.prefs.picker.optimization_text"),
+                    scenario: .optimizationText,
+                    selectedModelName: scenarioLocalModelBinding(
+                        scenario: .optimizationText,
+                        userInfoKeyPath: \.optimizationTextModel
+                    ),
                     source: userInfo.optimizationTextSource,
                     localModels: textOptimizationModels
                 )
             }
 
-            Section(header: Text("视觉优化模型")) {
+            Section(header: Text(L10n.text("ai_settings.scenario.optimization_visual"))) {
                 headerExplain(
                     icon: "paintbrush",
-                    message: "视觉优化模型用于图像理解、多模态改写与 OCR 相关能力。"
+                    message: L10n.text("ai_settings.prefs.explain.optimization_visual")
                 )
 
                 sourcePicker(
                     selection: userInfoBinding.optimizationVisualSource,
-                    isTrialAvailable: hasTrialModels
+                    isTrialAvailable: hasTrialModels(for: .optimizationVisual)
                 )
 
                 modelPicker(
-                    title: "选择视觉优化模型",
-                    selectedModelName: userInfoBinding.optimizationVisualModel,
+                    title: L10n.text("ai_settings.prefs.picker.optimization_visual"),
+                    scenario: .optimizationVisual,
+                    selectedModelName: scenarioLocalModelBinding(
+                        scenario: .optimizationVisual,
+                        userInfoKeyPath: \.optimizationVisualModel
+                    ),
                     source: userInfo.optimizationVisualSource,
                     localModels: visualOptimizationModels
                 )
             }
 
-            Section(header: Text("上下文折叠")) {
+            Section(header: Text(L10n.text("ai_settings.scenario.context_folding"))) {
                 headerExplain(
                     icon: "rectangle.compress.vertical",
-                    message: "当对话过长时自动压缩旧上下文，减少 token 消耗并提升响应速度。"
+                    message: L10n.text("ai_settings.prefs.explain.context_folding")
                 )
 
-                Toggle("启用上下文折叠", isOn: userInfoBinding.useContextFolding)
+                Toggle(L10n.text("ai_settings.prefs.toggle.context_folding"), isOn: userInfoBinding.useContextFolding)
                     .tint(.accentColor)
 
                 if userInfo.useContextFolding {
                     sourcePicker(
                         selection: userInfoBinding.contextFoldingSource,
-                        isTrialAvailable: hasTrialModels
+                        isTrialAvailable: hasTrialModels(for: .contextFolding)
                     )
 
                     modelPicker(
-                        title: "上下文折叠模型",
-                        selectedModelName: userInfoBinding.contextFoldingModel,
+                        title: L10n.text("ai_settings.prefs.picker.context_folding"),
+                        scenario: .contextFolding,
+                        selectedModelName: scenarioLocalModelBinding(
+                            scenario: .contextFolding,
+                            userInfoKeyPath: \.contextFoldingModel
+                        ),
                         source: userInfo.contextFoldingSource,
                         localModels: textOptimizationModels
                     )
                 }
             }
 
-            Section(header: Text("Router 模型")) {
+            Section(header: Text(L10n.text("ai_settings.scenario.router"))) {
                 headerExplain(
                     icon: "arrow.triangle.branch",
-                    message: "Router 模型用于在对话前判断需要调用的工具组。"
+                    message: L10n.text("ai_settings.prefs.explain.router")
                 )
 
                 sourcePicker(
                     selection: userInfoBinding.routerSource,
-                    isTrialAvailable: hasTrialModels
+                    isTrialAvailable: hasTrialModels(for: .router)
                 )
 
                 modelPicker(
-                    title: "Router 模型",
-                    selectedModelName: userInfoBinding.routerModel,
+                    title: L10n.text("ai_settings.scenario.router"),
+                    scenario: .router,
+                    selectedModelName: scenarioLocalModelBinding(scenario: .router, userInfoKeyPath: \.routerModel),
                     source: userInfo.routerSource,
                     localModels: routerModels
                 )
 
                 Stepper(
-                    "最大工具组数: \(userInfo.maxToolSets)",
+                    String(
+                        format: L10n.text("ai_settings.prefs.max_tool_sets"),
+                        locale: Locale.current,
+                        userInfo.maxToolSets
+                    ),
                     value: userInfoBinding.maxToolSets,
                     in: 1 ... 5
                 )
             }
 
-            Section(header: Text("抽数模型配置")) {
+            Section(header: Text(L10n.text("ai_settings.prefs.section.extraction"))) {
                 headerExplain(
                     icon: "cross.case",
-                    message: "抽数模型用于结构化医疗信息抽取与字段规整。"
+                    message: L10n.text("ai_settings.prefs.explain.data_extraction")
                 )
 
                 sourcePicker(
                     selection: userInfoBinding.dataExtractionSource,
-                    isTrialAvailable: hasTrialModels
+                    isTrialAvailable: hasTrialModels(for: .modelConfig)
                 )
 
                 modelPicker(
-                    title: "抽数模型",
-                    selectedModelName: userInfoBinding.dataExtractionModel,
+                    title: L10n.text("ai_settings.prefs.picker.data_extraction"),
+                    scenario: .modelConfig,
+                    selectedModelName: scenarioLocalModelBinding(
+                        scenario: .modelConfig,
+                        userInfoKeyPath: \.dataExtractionModel
+                    ),
                     source: userInfo.dataExtractionSource,
                     localModels: extractionModels
                 )
             }
 
-            Section(header: Text("报告解读模型配置")) {
+            Section(header: Text(L10n.text("ai_settings.prefs.section.report_interpretation"))) {
                 headerExplain(
                     icon: "doc.text.magnifyingglass",
-                    message: "报告解读模型用于体检/检验报告分析与建议生成。"
+                    message: L10n.text("ai_settings.prefs.explain.report_interpretation")
                 )
 
                 sourcePicker(
                     selection: userInfoBinding.reportInterpretationSource,
-                    isTrialAvailable: hasTrialModels
+                    isTrialAvailable: hasTrialModels(for: .reportInterpretation)
                 )
 
                 modelPicker(
-                    title: "报告解读模型",
-                    selectedModelName: userInfoBinding.reportInterpretationModel,
+                    title: L10n.text("ai_settings.prefs.picker.report_interpretation"),
+                    scenario: .reportInterpretation,
+                    selectedModelName: scenarioLocalModelBinding(
+                        scenario: .reportInterpretation,
+                        userInfoKeyPath: \.reportInterpretationModel
+                    ),
                     source: userInfo.reportInterpretationSource,
                     localModels: reportInterpretationModels
                 )
@@ -247,36 +334,40 @@ struct AIModelPreferencesView: View {
         }
     }
 
+    /// 试用可用时展示「服务端试用 / 本地 Key」分段控件。
     private func sourcePicker(
         selection: Binding<AIModelSelectionSource>,
         isTrialAvailable: Bool
     ) -> some View {
         Group {
             if isTrialAvailable {
-                Picker("配置来源", selection: selection) {
-                    Text("服务端试用").tag(AIModelSelectionSource.trial)
-                    Text("本地 Key").tag(AIModelSelectionSource.localKey)
+                Picker(L10n.text("ai_settings.prefs.source_config"), selection: selection) {
+                    Text(L10n.text("ai_settings.prefs.source_trial")).tag(AIModelSelectionSource.trial)
+                    Text(L10n.text("ai_settings.prefs.source_local_key")).tag(AIModelSelectionSource.localKey)
                 }
                 .pickerStyle(.segmented)
             }
         }
     }
 
+    /// 按场景选择模型：试用走 `trialModelPolicy`；本地优先用 bootstrap 下发的 `models[]`，否则回退到目录 + API Key 过滤列表。
     @ViewBuilder
     private func modelPicker(
         title: String,
+        scenario: AIScenario,
         selectedModelName: Binding<String>,
         source: AIModelSelectionSource,
         localModels: [AllModels]
     ) -> some View {
-        if source == .trial, hasTrialModels {
+        if source == .trial, hasTrialModels(for: scenario) {
+            let options = trialModelOptions(for: scenario)
             Picker(title, selection: selectedModelName) {
-                ForEach(trialModelOptions) { item in
+                ForEach(options) { item in
                     Text(item.displayName).tag(item.name)
                 }
             }
 
-            if let selectedTrial = trialModelOptions.first(where: { $0.name == selectedModelName.wrappedValue }) {
+            if let selectedTrial = options.first(where: { $0.name == selectedModelName.wrappedValue }) {
                 modelSummaryRow(
                     icon: iconForCompany(selectedTrial.company),
                     displayName: selectedTrial.displayName,
@@ -284,8 +375,24 @@ struct AIModelPreferencesView: View {
                 )
             }
         } else {
-            if localModels.isEmpty {
-                Text("暂无可用模型，请先在模型密钥中配置有效 API Key。")
+            // 本地 Key：优先用服务端 bootstrap 中该场景的 `models[]`，避免仅依赖目录 + Key 过滤导致后台已配模型选不到。
+            if let bundle = snapshot.scenarioRemoteBundles?.bundle(for: scenario), bundle.models.isEmpty == false {
+                Picker(title, selection: selectedModelName) {
+                    ForEach(bundle.models, id: \.model) { row in
+                        Text(bundleRowDisplayName(row)).tag(row.model)
+                    }
+                }
+
+                let pickedName = selectedModelName.wrappedValue
+                if let row = bundle.models.first(where: { $0.model == pickedName }) {
+                    modelSummaryRow(
+                        icon: iconForCompany(companyLabelForBundleRow(row)),
+                        displayName: bundleRowDisplayName(row),
+                        subtitle: row.model
+                    )
+                }
+            } else if localModels.isEmpty {
+                Text(L10n.text("ai_settings.no_models_configure_key"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
@@ -294,18 +401,19 @@ struct AIModelPreferencesView: View {
                         Text(model.displayName).tag(model.name)
                     }
                 }
-            }
 
-            if let selectedLocal = localModels.first(where: { $0.name == selectedModelName.wrappedValue }) {
-                modelSummaryRow(
-                    icon: iconForCompany(selectedLocal.company),
-                    displayName: selectedLocal.displayName,
-                    subtitle: selectedLocal.name
-                )
+                if let selectedLocal = localModels.first(where: { $0.name == selectedModelName.wrappedValue }) {
+                    modelSummaryRow(
+                        icon: iconForCompany(selectedLocal.company),
+                        displayName: selectedLocal.displayName,
+                        subtitle: selectedLocal.name
+                    )
+                }
             }
         }
     }
 
+    /// 分区顶部说明（图标 + 灰色说明文案）。
     private func headerExplain(icon: String, message: String) -> some View {
         VStack(alignment: .center) {
             Image(systemName: icon)
@@ -324,6 +432,7 @@ struct AIModelPreferencesView: View {
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
+    /// Picker 下方展示当前选中模型的摘要行。
     private func modelSummaryRow(icon: String, displayName: String, subtitle: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
@@ -344,10 +453,12 @@ struct AIModelPreferencesView: View {
         .padding(.vertical, 4)
     }
 
+    /// 文本优化场景下，用于筛选「有能力做文本侧优化」的目录模型。
     private func supportsTextOptimization(_ model: AllModels) -> Bool {
         model.supportsReasoning || model.supportsToolUse || model.supportsSearch || model.supportsMultimodal
     }
 
+    /// 本地 Key 路径：该厂商在快照中是否已有非空、非隐藏的 API Key（用于目录回退列表）。
     private func hasValidAPIKey(for model: AllModels) -> Bool {
         let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard company.isEmpty == false else { return false }
@@ -358,6 +469,7 @@ struct AIModelPreferencesView: View {
         }
     }
 
+    /// 按厂商缩写选用 SF Symbol，用于摘要行左侧图标。
     private func iconForCompany(_ company: String) -> String {
         switch company.uppercased() {
         case "OPENAI":
@@ -375,6 +487,7 @@ struct AIModelPreferencesView: View {
         }
     }
 
+    /// 导航栏标题（本地化 key）。
     private var title: String {
         switch focus {
         case .embedding:
@@ -387,6 +500,7 @@ struct AIModelPreferencesView: View {
     }
 }
 
+/// SwiftUI 预览用容器：持有可变 `AISettingsSnapshot`，嵌入 `NavigationView`。
 @MainActor
 private struct AIModelPreferencesViewPreviewHost: View {
     @State private var snapshot = AISettingsSnapshot.default

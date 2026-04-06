@@ -34,6 +34,8 @@ final class AppContainer {
     let healthMetricsRepository: any HealthMetricsRepository
     let authRepository: any AuthRepository
     let aiSettingsRepository: any AISettingsRepository
+    /// 本地知识库持久化（Core Data：`KnowledgeDocumentEntity` / `KnowledgeChunkEntity`）。
+    let knowledgeRepository: any KnowledgeRepository
     let localModelService: LocalModelService
 
     // MARK: - 用例（认证、首页、健康、患者、病历草稿、聊天）
@@ -41,15 +43,33 @@ final class AppContainer {
     let restoreSessionUseCase: RestoreSessionUseCase
     let signInWithAppleUseCase: SignInWithAppleUseCase
     let signOutUseCase: SignOutUseCase
-    let loadHomeDashboardUseCase: LoadHomeDashboardUseCase
+    let loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase
+    let loadHomeMotionHealthUseCase: LoadHomeMotionHealthUseCase
     let manageHomeMemberUseCase: ManageHomeMemberUseCase
     let requestHomeHealthAuthorizationUseCase: RequestHomeHealthAuthorizationUseCase
     let loadHealthTimelineUseCase: LoadHealthTimelineUseCase
+    let loadKnowledgeListUseCase: LoadKnowledgeListUseCase
+    let loadKnowledgeDocumentUseCase: LoadKnowledgeDocumentUseCase
+    let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
+    let updateKnowledgeDocumentUseCase: UpdateKnowledgeDocumentUseCase
+    let deleteKnowledgeDocumentUseCase: DeleteKnowledgeDocumentUseCase
+    let searchKnowledgeUseCase: SearchKnowledgeUseCase
+    let reindexKnowledgeDocumentUseCase: ReindexKnowledgeDocumentUseCase
+    /// OpenAI 兼容嵌入 HTTP 客户端（知识切块向量化与语义检索查询向量共用）。
+    let knowledgeEmbeddingClient: any KnowledgeEmbeddingClient
+    let buildKnowledgeEmbeddingsUseCase: BuildKnowledgeEmbeddingsUseCase
+    let polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase
+    let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
+    let ocrKnowledgeImageUseCase: OCRKnowledgeImageUseCase
+    let importKnowledgeFromFileUseCase: ImportKnowledgeFromFileUseCase
+    let importKnowledgeFromWebUseCase: ImportKnowledgeFromWebUseCase
     let loadPatientsUseCase: LoadPatientsUseCase
     let selectPatientUseCase: SelectPatientUseCase
     let extractMedicalDraftFromDocumentUseCase: ExtractMedicalDraftFromDocumentUseCase
     let confirmMedicalDraftUseCase: ConfirmMedicalDraftUseCase
     let loadLatestMedicalDraftUseCase: LoadLatestMedicalDraftUseCase
+    let startMedicalDocumentRecognitionUseCase: StartMedicalDocumentRecognitionUseCase
+    let saveRecognizedMedicalDocumentUseCase: SaveRecognizedMedicalDocumentUseCase
     let buildPatientContextSummaryUseCase: BuildPatientContextSummaryUseCase
     let loadChatThreadsUseCase: LoadChatThreadsUseCase
     let loadChatMessagesUseCase: LoadChatMessagesUseCase
@@ -74,6 +94,7 @@ final class AppContainer {
     let sessionStore: AppSessionStore
     let patientContextStore: PatientContextStore
     let chatStateStore: ChatStateStore
+    let knowledgeViewModel: KnowledgeLibraryViewModel
     let chatListViewModel: ChatListViewModel
     let chatDetailViewModel: ChatDetailViewModel
 
@@ -91,8 +112,8 @@ final class AppContainer {
         self.fileTransferService = FileTransferService(api: backend.files, cacheManager: fileCacheManager, logger: logger)
 
         // 仓库在此统一装配；界面层 ViewModel 只依赖用例，不直接拿仓库。
-        let profileRepository = CoreDataUserProfileRepository(coreDataStack: coreDataStack, logger: logger)
-        let healthMetricsRepository = CoreDataHealthMetricsRepository(coreDataStack: coreDataStack, logger: logger)
+        let profileRepository = SessionBackedUserProfileRepository()
+        let healthMetricsRepository = RemoteHealthMetricsRepository(remoteAPI: backend.medicalSync)
         let authRepository = DefaultAuthRepository(
             backend: backend,
             userProfileRepository: profileRepository,
@@ -100,15 +121,14 @@ final class AppContainer {
             logger: logger
         )
         let aiSettingsRepository = DefaultAISettingsRepository(logger: logger)
+        // 知识库：独立仓库，与 AI 设置快照中的 `promptRepo` 解耦。
+        let knowledgeRepository = CoreDataKnowledgeRepository(coreDataStack: coreDataStack, logger: logger)
+        let knowledgeEmbeddingClient = OpenAICompatibleEmbeddingClient()
         let aiRuntimeStore = AIRuntimeStore()
         let localModelService = LocalModelService()
         let remoteConfigProvider = BackendAIRemoteConfigProvider(api: backend.aiConfig)
         let medicalSyncPreferenceRepository = DefaultMedicalSyncPreferenceRepository()
-        let healthMetricsSyncStore = HealthMetricsSyncStore(coreDataStack: coreDataStack, logger: logger)
-        let coreDataMedicalSnapshotStore = CoreDataMedicalSnapshotStore(coreDataStack: coreDataStack)
         let medicalDataRepository = DefaultMedicalDataRepository(
-            snapshotStore: coreDataMedicalSnapshotStore,
-            healthMetricsStore: healthMetricsSyncStore,
             remoteAPI: backend.medicalSync,
             logger: logger
         )
@@ -144,6 +164,9 @@ final class AppContainer {
             localServerEngine: localServerEngine,
             logger: logger
         )
+        let ocrKnowledgeImageUseCase = OCRKnowledgeImageUseCase(ocr: ocrOrchestrator)
+        let importKnowledgeFromFileUseCase = ImportKnowledgeFromFileUseCase()
+        let importKnowledgeFromWebUseCase = ImportKnowledgeFromWebUseCase()
 
         // 大模型调用网关与服务
         let aiRuntimeGateway = OpenAICompatibleTextGateway(logger: logger)
@@ -157,8 +180,27 @@ final class AppContainer {
             localGateway: localRuntimeGateway,
             logger: logger
         )
+        let polishKnowledgeTextUseCase = PolishKnowledgeTextUseCase(runtime: aiRuntimeService)
+        let translateKnowledgeTextUseCase = TranslateKnowledgeTextUseCase(runtime: aiRuntimeService)
 
         // 患者、病历与「从文档提取草稿」相关用例
+        let loadKnowledgeListUseCase = LoadKnowledgeListUseCase(repository: knowledgeRepository)
+        let loadKnowledgeDocumentUseCase = LoadKnowledgeDocumentUseCase(repository: knowledgeRepository)
+        let createKnowledgeDocumentUseCase = CreateKnowledgeDocumentUseCase(repository: knowledgeRepository)
+        let updateKnowledgeDocumentUseCase = UpdateKnowledgeDocumentUseCase(repository: knowledgeRepository)
+        let deleteKnowledgeDocumentUseCase = DeleteKnowledgeDocumentUseCase(repository: knowledgeRepository)
+        let searchKnowledgeUseCase = SearchKnowledgeUseCase(
+            repository: knowledgeRepository,
+            aiSettingsRepository: aiSettingsRepository,
+            embeddingClient: knowledgeEmbeddingClient
+        )
+        let reindexKnowledgeDocumentUseCase = ReindexKnowledgeDocumentUseCase(repository: knowledgeRepository)
+        let buildKnowledgeEmbeddingsUseCase = BuildKnowledgeEmbeddingsUseCase(
+            repository: knowledgeRepository,
+            aiSettingsRepository: aiSettingsRepository,
+            embeddingClient: knowledgeEmbeddingClient
+        )
+
         let patientRepository = DefaultPatientRepository(medicalDataRepository: medicalDataRepository)
         let medicalRecordRepository = DefaultMedicalRecordRepository(medicalDataRepository: medicalDataRepository)
         let buildPatientContextSummaryUseCase = BuildPatientContextSummaryUseCase(repository: medicalRecordRepository)
@@ -174,6 +216,20 @@ final class AppContainer {
             medicalDataRepository: medicalDataRepository
         )
         let loadLatestMedicalDraftUseCase = LoadLatestMedicalDraftUseCase(draftRepository: draftRepository)
+        let medicalPromptFactory = MedicalPromptFactory()
+        let medicalDocumentRecognizer = DefaultMedicalDocumentRecognizer(
+            ocrOrchestrator: ocrOrchestrator,
+            runtimeService: aiRuntimeService,
+            promptBuilder: medicalPromptFactory,
+            logger: logger
+        )
+        let medicalDocumentSaver = DefaultMedicalDocumentSaver(medicalDataRepository: medicalDataRepository)
+        let startMedicalDocumentRecognitionUseCase = StartMedicalDocumentRecognitionUseCase(
+            recognizer: medicalDocumentRecognizer
+        )
+        let saveRecognizedMedicalDocumentUseCase = SaveRecognizedMedicalDocumentUseCase(
+            saver: medicalDocumentSaver
+        )
 
         // 聊天侧可调用的工具集合（含审计）
         let toolAuditStore = ToolAuditStore()
@@ -185,6 +241,8 @@ final class AppContainer {
             medicalDataRepository: medicalDataRepository,
             healthMetricsRepository: healthMetricsRepository,
             aiSettingsRepository: aiSettingsRepository,
+            searchKnowledgeUseCase: searchKnowledgeUseCase,
+            createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
             logger: logger
         )
 
@@ -284,24 +342,45 @@ final class AppContainer {
         self.healthMetricsRepository = healthMetricsRepository
         self.authRepository = authRepository
         self.aiSettingsRepository = aiSettingsRepository
+        self.knowledgeRepository = knowledgeRepository
         self.localModelService = localModelService
 
         self.restoreSessionUseCase = RestoreSessionUseCase(authRepository: authRepository)
         self.signInWithAppleUseCase = SignInWithAppleUseCase(authRepository: authRepository)
         self.signOutUseCase = SignOutUseCase(authRepository: authRepository)
-        self.loadHomeDashboardUseCase = LoadHomeDashboardUseCase(
+        self.loadHomeMedicalOverviewUseCase = LoadHomeMedicalOverviewUseCase(
             userProfileRepository: profileRepository,
             memberRepository: homeMemberRepository,
-            healthDataRepository: homeHealthRepository
+            logger: logger
+        )
+        self.loadHomeMotionHealthUseCase = LoadHomeMotionHealthUseCase(
+            healthDataRepository: homeHealthRepository,
+            logger: logger
         )
         self.manageHomeMemberUseCase = ManageHomeMemberUseCase(memberRepository: homeMemberRepository)
         self.requestHomeHealthAuthorizationUseCase = RequestHomeHealthAuthorizationUseCase(healthDataRepository: homeHealthRepository)
         self.loadHealthTimelineUseCase = LoadHealthTimelineUseCase(healthMetricsRepository: healthMetricsRepository)
+        self.loadKnowledgeListUseCase = loadKnowledgeListUseCase
+        self.loadKnowledgeDocumentUseCase = loadKnowledgeDocumentUseCase
+        self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
+        self.updateKnowledgeDocumentUseCase = updateKnowledgeDocumentUseCase
+        self.deleteKnowledgeDocumentUseCase = deleteKnowledgeDocumentUseCase
+        self.searchKnowledgeUseCase = searchKnowledgeUseCase
+        self.reindexKnowledgeDocumentUseCase = reindexKnowledgeDocumentUseCase
+        self.knowledgeEmbeddingClient = knowledgeEmbeddingClient
+        self.buildKnowledgeEmbeddingsUseCase = buildKnowledgeEmbeddingsUseCase
+        self.polishKnowledgeTextUseCase = polishKnowledgeTextUseCase
+        self.translateKnowledgeTextUseCase = translateKnowledgeTextUseCase
+        self.ocrKnowledgeImageUseCase = ocrKnowledgeImageUseCase
+        self.importKnowledgeFromFileUseCase = importKnowledgeFromFileUseCase
+        self.importKnowledgeFromWebUseCase = importKnowledgeFromWebUseCase
         self.loadPatientsUseCase = LoadPatientsUseCase(repository: patientRepository)
         self.selectPatientUseCase = SelectPatientUseCase()
         self.extractMedicalDraftFromDocumentUseCase = extractMedicalDraftFromDocumentUseCase
         self.confirmMedicalDraftUseCase = confirmMedicalDraftUseCase
         self.loadLatestMedicalDraftUseCase = loadLatestMedicalDraftUseCase
+        self.startMedicalDocumentRecognitionUseCase = startMedicalDocumentRecognitionUseCase
+        self.saveRecognizedMedicalDocumentUseCase = saveRecognizedMedicalDocumentUseCase
         self.buildPatientContextSummaryUseCase = buildPatientContextSummaryUseCase
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
@@ -334,6 +413,15 @@ final class AppContainer {
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
         self.patientContextStore = patientContextStore
         self.chatStateStore = ChatStateStore()
+        self.knowledgeViewModel = KnowledgeLibraryViewModel(
+            loadListUseCase: loadKnowledgeListUseCase,
+            loadDocumentUseCase: loadKnowledgeDocumentUseCase,
+            createUseCase: createKnowledgeDocumentUseCase,
+            updateUseCase: updateKnowledgeDocumentUseCase,
+            deleteUseCase: deleteKnowledgeDocumentUseCase,
+            searchUseCase: searchKnowledgeUseCase,
+            reindexUseCase: reindexKnowledgeDocumentUseCase
+        )
         self.chatListViewModel = ChatListViewModel(
             stateStore: chatStateStore,
             sessionStore: sessionStore,
@@ -341,19 +429,22 @@ final class AppContainer {
             loadPatientsUseCase: loadPatientsUseCase,
             selectPatientUseCase: selectPatientUseCase,
             loadChatThreadsUseCase: loadChatThreadsUseCase,
+            loadChatMessagesUseCase: loadChatMessagesUseCase,
             createThreadUseCase: createThreadUseCase,
             deleteThreadUseCase: deleteThreadUseCase,
-            syncChatUseCase: syncChatUseCase,
             notificationClient: notificationClient
         )
         self.chatDetailViewModel = ChatDetailViewModel(
             stateStore: chatStateStore,
             patientContextStore: patientContextStore,
+            loadChatThreadsUseCase: loadChatThreadsUseCase,
             loadChatMessagesUseCase: loadChatMessagesUseCase,
             sendMessageUseCase: sendChatMessageUseCase,
             retryFailedMessageUseCase: retryFailedMessageUseCase,
             syncChatUseCase: syncChatUseCase,
             notificationClient: notificationClient,
+            aiConfigCenter: aiConfigCenter,
+            aiSettingsRepository: aiSettingsRepository,
             logger: logger
         )
     }
@@ -399,11 +490,13 @@ final class AppContainer {
     func makeHomeViewModel() -> HomeViewModel {
         HomeViewModel(
             sessionStore: sessionStore,
-            loadHomeDashboardUseCase: loadHomeDashboardUseCase,
+            loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
+            loadHomeMotionHealthUseCase: loadHomeMotionHealthUseCase,
             manageHomeMemberUseCase: manageHomeMemberUseCase,
             requestHomeHealthAuthorizationUseCase: requestHomeHealthAuthorizationUseCase,
             patientContextStore: patientContextStore,
-            notificationClient: notificationClient
+            notificationClient: notificationClient,
+            logger: logger
         )
     }
 
@@ -413,6 +506,14 @@ final class AppContainer {
             extractMedicalDraftFromDocumentUseCase: extractMedicalDraftFromDocumentUseCase,
             confirmMedicalDraftUseCase: confirmMedicalDraftUseCase,
             logger: logger
+        )
+    }
+
+    func makeMedicalDocumentUploadViewModel() -> MedicalDocumentUploadViewModel {
+        MedicalDocumentUploadViewModel(
+            patientContextStore: patientContextStore,
+            startUseCase: startMedicalDocumentRecognitionUseCase,
+            saveUseCase: saveRecognizedMedicalDocumentUseCase
         )
     }
 
@@ -442,6 +543,29 @@ final class AppContainer {
 
     func makeChatStateStore() -> ChatStateStore {
         chatStateStore
+    }
+
+    func makeKnowledgeLibraryViewModel() -> KnowledgeLibraryViewModel {
+        knowledgeViewModel
+    }
+
+    /// 知识文档「写作页」专用 ViewModel（按文档 ID 注入用例）。
+    func makeKnowledgeDocumentEditorViewModel(documentID: UUID) -> KnowledgeDocumentEditorViewModel {
+        KnowledgeDocumentEditorViewModel(
+            documentID: documentID,
+            loadListUseCase: loadKnowledgeListUseCase,
+            loadDocumentUseCase: loadKnowledgeDocumentUseCase,
+            updateDocumentUseCase: updateKnowledgeDocumentUseCase,
+            deleteDocumentUseCase: deleteKnowledgeDocumentUseCase,
+            buildEmbeddingsUseCase: buildKnowledgeEmbeddingsUseCase,
+            polishUseCase: polishKnowledgeTextUseCase,
+            translateUseCase: translateKnowledgeTextUseCase,
+            ocrUseCase: ocrKnowledgeImageUseCase,
+            importFileUseCase: importKnowledgeFromFileUseCase,
+            importWebUseCase: importKnowledgeFromWebUseCase,
+            aiSettingsRepository: aiSettingsRepository,
+            logger: logger
+        )
     }
 
     func makeChatListViewModel() -> ChatListViewModel {

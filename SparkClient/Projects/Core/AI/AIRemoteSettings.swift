@@ -6,6 +6,8 @@ protocol AIRemoteConfigProvider: Sendable {
 
 struct AIRemoteSettingsPatch: Equatable, Sendable {
     var revision: String?
+    /// When set, merged first; flat scenario fields below remain for backward-compatible merges.
+    var scenarioRemoteBundles: AIScenarioRemoteBundlesCollection?
     var chat: AIScenarioConfig?
     var optimizationText: AIScenarioConfig?
     var optimizationVisual: AIScenarioConfig?
@@ -23,6 +25,7 @@ struct AIRemoteSettingsPatch: Equatable, Sendable {
 
     init(
         revision: String? = nil,
+        scenarioRemoteBundles: AIScenarioRemoteBundlesCollection? = nil,
         chat: AIScenarioConfig? = nil,
         optimizationText: AIScenarioConfig? = nil,
         optimizationVisual: AIScenarioConfig? = nil,
@@ -39,6 +42,7 @@ struct AIRemoteSettingsPatch: Equatable, Sendable {
         trialModelPolicy: [AITrialModelPolicyItem]? = nil
     ) {
         self.revision = revision
+        self.scenarioRemoteBundles = scenarioRemoteBundles
         self.chat = chat
         self.optimizationText = optimizationText
         self.optimizationVisual = optimizationVisual

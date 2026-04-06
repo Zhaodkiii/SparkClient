@@ -43,7 +43,7 @@ actor CoreDataChatStore {
         }) ?? []
     }
 
-    func createThread(patientID: UUID?, title: String) async -> ChatThread {
+    func createThread(patientID: Int?, title: String) async -> ChatThread {
         let now = Date()
         let thread = ChatThread(
             patientID: patientID,
@@ -62,7 +62,7 @@ actor CoreDataChatStore {
 
             let object = NSEntityDescription.insertNewObject(forEntityName: EntityName.thread, into: context)
             object.setValue(thread.id, forKey: "id")
-            object.setValue(thread.patientID, forKey: "patientID")
+            object.setValue(thread.patientID.map { Int64($0) }, forKey: "patientID")
             object.setValue(thread.title, forKey: "title")
             object.setValue(thread.scenario.rawValue, forKey: "scenario")
             object.setValue(thread.createdAt, forKey: "createdAt")
@@ -100,6 +100,10 @@ actor CoreDataChatStore {
         kind: ChatMessageKind,
         content: String,
         attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?,
+        reasoningExpanded: Bool,
+        reasoningVisibility: ChatReasoningVisibility,
         clientMessageID: UUID,
         serverMessageID: String?,
         deliveryState: ChatDeliveryState
@@ -110,6 +114,10 @@ actor CoreDataChatStore {
             kind: kind,
             content: content,
             attachments: attachments,
+            reasoningContent: reasoningContent,
+            reasoningDurationMs: reasoningDurationMs,
+            reasoningExpanded: reasoningExpanded,
+            reasoningVisibility: reasoningVisibility,
             clientMessageID: clientMessageID,
             serverMessageID: serverMessageID,
             deliveryState: deliveryState,
@@ -282,6 +290,10 @@ actor CoreDataChatStore {
         object.setValue(message.role.rawValue, forKey: "role")
         object.setValue(message.kind.rawValue, forKey: "kind")
         object.setValue(message.content, forKey: "content")
+        object.setValue(message.reasoningContent, forKey: "reasoningContent")
+        object.setValue(message.reasoningDurationMs.map { NSNumber(value: $0) }, forKey: "reasoningDurationMs")
+        object.setValue(message.reasoningExpanded, forKey: "reasoningExpanded")
+        object.setValue(message.reasoningVisibility.rawValue, forKey: "reasoningVisibility")
         object.setValue(message.clientMessageID, forKey: "clientMessageID")
         object.setValue(message.serverMessageID, forKey: "serverMessageID")
         object.setValue(message.deliveryState.rawValue, forKey: "deliveryState")
@@ -305,7 +317,7 @@ actor CoreDataChatStore {
 
         return ChatThread(
             id: id,
-            patientID: object.value(forKey: "patientID") as? UUID,
+            patientID: (object.value(forKey: "patientID") as? Int64).map(Int.init),
             title: title,
             scenario: scenario,
             createdAt: createdAt,
@@ -333,6 +345,17 @@ actor CoreDataChatStore {
         let attachmentsData = object.value(forKey: "attachmentsData") as? Data
         let attachments = (try? attachmentsData.flatMap { try decoder.decode([ChatAttachment].self, from: $0) }) ?? []
 
+        let reasoningContent = object.value(forKey: "reasoningContent") as? String
+        let reasoningDurationMs: Int64? = {
+            if let n = object.value(forKey: "reasoningDurationMs") as? NSNumber {
+                return n.int64Value
+            }
+            return nil
+        }()
+        let reasoningExpanded = object.value(forKey: "reasoningExpanded") as? Bool ?? false
+        let visibilityRaw = object.value(forKey: "reasoningVisibility") as? String
+        let reasoningVisibility = ChatReasoningVisibility(rawValue: visibilityRaw ?? "") ?? .full
+
         return ChatMessage(
             id: id,
             threadID: threadID,
@@ -340,6 +363,10 @@ actor CoreDataChatStore {
             kind: kind,
             content: content,
             attachments: attachments,
+            reasoningContent: reasoningContent,
+            reasoningDurationMs: reasoningDurationMs,
+            reasoningExpanded: reasoningExpanded,
+            reasoningVisibility: reasoningVisibility,
             clientMessageID: clientMessageID,
             serverMessageID: object.value(forKey: "serverMessageID") as? String,
             deliveryState: deliveryState,

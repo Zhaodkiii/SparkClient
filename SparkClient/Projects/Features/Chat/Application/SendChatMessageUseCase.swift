@@ -23,9 +23,12 @@ struct SendChatMessageUseCase: Sendable {
 
     func execute(
         threadID: UUID?,
-        patientID: UUID? = nil,
+        patientID: Int? = nil,
         userInput: String,
-        onAssistantPartial: (@Sendable (_ partial: String, _ kind: ChatMessageKind) async -> Void)? = nil
+        inference: ChatOrchestratorInferenceOptions = .default,
+        modelReasoning: ChatModelReasoningContext = .unknown,
+        onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
+        onAssistantPartial: (@Sendable (_ answer: String, _ reasoning: String?, _ kind: ChatMessageKind) async -> Void)? = nil
     ) async throws -> ChatThreadSnapshot {
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard sanitizedInput.isEmpty == false else {
@@ -49,6 +52,10 @@ struct SendChatMessageUseCase: Sendable {
                 kind: .text,
                 content: sanitizedInput,
                 attachments: [],
+                reasoningContent: nil,
+                reasoningDurationMs: nil,
+                reasoningExpanded: false,
+                reasoningVisibility: .full,
                 clientMessageID: clientMessageID,
                 serverMessageID: nil,
                 deliveryState: .pending
@@ -59,6 +66,11 @@ struct SendChatMessageUseCase: Sendable {
             )
 
             let history = await repository.loadMessages(threadID: thread.id)
+            if let onUserMessagePersisted {
+                await onUserMessagePersisted(
+                    ChatThreadSnapshot(thread: thread, messages: history)
+                )
+            }
             let contextPatientID = thread.patientID ?? patientID
             let patientContextSummary: String
             if let contextPatientID {
@@ -75,7 +87,9 @@ struct SendChatMessageUseCase: Sendable {
                 userInput: sanitizedInput,
                 history: history,
                 patientContextSummary: patientContextSummary,
-                patientID: contextPatientID
+                patientID: contextPatientID,
+                inference: inference,
+                modelReasoning: modelReasoning
             )
             logger.info(
                 "AI 编排完成，thread=\(shortID(thread.id)), kind=\(output.kind.rawValue), outputLength=\(output.text.count)",
@@ -84,25 +98,29 @@ struct SendChatMessageUseCase: Sendable {
 
             if let onAssistantPartial {
                 await streamAssistantReply(
-                    output.text,
-                    kind: output.kind,
+                    output: output,
                     onPartial: onAssistantPartial
                 )
             }
 
+            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .assistant,
                 kind: output.kind,
                 content: output.text,
                 attachments: [],
+                reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
+                reasoningDurationMs: nil,
+                reasoningExpanded: false,
+                reasoningVisibility: .full,
                 clientMessageID: UUID(),
                 serverMessageID: nil,
                 deliveryState: .pending
             )
 
             do {
-                try await syncEngine.syncNow()
+                try await syncEngine.pushOutboxOnly()
             } catch {
                 // 本地消息已经持久化，后台可重试，主流程不阻断。
                 logger.warning("消息上送失败，将由后台重试：\(error.localizedDescription)", category: "chat_flow")
@@ -127,7 +145,7 @@ struct SendChatMessageUseCase: Sendable {
 
     private func resolveThread(
         existingThreadID: UUID?,
-        patientID: UUID?,
+        patientID: Int?,
         firstUserInput: String
     ) async throws -> ChatThread {
         let promptLocalizer = PromptLocalizer()
@@ -161,6 +179,11 @@ struct SendChatMessageUseCase: Sendable {
         return created
     }
 
+    private func shortID(_ value: Int?) -> String {
+        guard let value else { return "-" }
+        return String(value)
+    }
+
     private func shortID(_ value: UUID?) -> String {
         guard let value else { return "-" }
         return String(value.uuidString.prefix(8))
@@ -171,34 +194,56 @@ struct SendChatMessageUseCase: Sendable {
     }
 
     private func streamAssistantReply(
-        _ text: String,
-        kind: ChatMessageKind,
-        onPartial: @Sendable (_ partial: String, _ kind: ChatMessageKind) async -> Void
+        output: ChatOrchestratorOutput,
+        onPartial: @Sendable (_ answer: String, _ reasoning: String?, _ kind: ChatMessageKind) async -> Void
     ) async {
-        // 即使上游当前是非流式返回，也在客户端按节流节奏增量落 UI，避免一次性大块刷新。
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kind = output.kind
+        let reasoningFull = output.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if reasoningFull.isEmpty == false {
+            await emitStreamingChunks(reasoningFull) { partial in
+                await onPartial("", partial.isEmpty ? nil : partial, kind)
+            }
+        }
+        let trimmed = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
-            await onPartial("", kind)
+            await onPartial("", reasoningFull.isEmpty ? nil : reasoningFull, kind)
             return
         }
+        await emitStreamingChunks(trimmed) { partial in
+            await onPartial(partial, reasoningFull.isEmpty ? nil : reasoningFull, kind)
+        }
+    }
 
-        let scalars = Array(trimmed)
+    /// 即使上游当前是非流式返回，也在客户端按节流节奏增量落 UI，避免一次性大块刷新。
+    private func emitStreamingChunks(
+        _ text: String,
+        onChunk: @Sendable (_ cumulative: String) async -> Void
+    ) async {
+        let scalars = Array(text)
+        guard scalars.isEmpty == false else {
+            await onChunk("")
+            return
+        }
         var built = ""
         var index = 0
-        var lastEmit = Date()
-        let minEmitIntervalSeconds: TimeInterval = 0.07
-        let minChunkSize = 14
+        // 源头节流：把更新次数控制在合理上限，避免高频主线程刷新导致卡顿。
+        let total = scalars.count
+        let targetUpdateCount = min(90, max(18, Int(ceil(Double(total) / 22.0))))
+        let minChunkSize = max(6, Int(ceil(Double(total) / Double(targetUpdateCount))))
+        let emitDelayNanoseconds: UInt64 = 45_000_000
 
         while index < scalars.count {
+            if Task.isCancelled { break }
             built.append(scalars[index])
             index += 1
 
-            let reachedChunk = (index % minChunkSize == 0) || index == scalars.count
-            let reachedTime = Date().timeIntervalSince(lastEmit) >= minEmitIntervalSeconds
-            if reachedChunk || reachedTime {
-                await onPartial(built, kind)
-                lastEmit = Date()
-                try? await Task.sleep(nanoseconds: 28_000_000)
+            let reachedChunk = (index % minChunkSize == 0)
+            let reachedTail = (index == scalars.count)
+            if reachedChunk || reachedTail {
+                await onChunk(built)
+                if reachedTail == false {
+                    try? await Task.sleep(nanoseconds: emitDelayNanoseconds)
+                }
             }
         }
     }

@@ -30,9 +30,11 @@ struct AppCoordinatorView: View {
                 MainTabCoordinatorView(
                     session: session,
                     routeStore: container.routeStore,
+                    appContainer: container,
                     homeViewModel: container.makeHomeViewModel(),
-                    medicalUploadFlowViewModel: container.makeMedicalUploadFlowViewModel(),
+                    medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
                     healthViewModel: container.makeHealthTimelineViewModel(),
+                    knowledgeViewModel: container.makeKnowledgeLibraryViewModel(),
                     chatStateStore: container.makeChatStateStore(),
                     chatListViewModel: container.makeChatListViewModel(),
                     chatDetailViewModel: container.makeChatDetailViewModel(),

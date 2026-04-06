@@ -1,63 +1,82 @@
 import SwiftUI
 
 struct ChatView: View {
+    let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
 
     @State private var hasLoaded = false
+    @State private var lastStreamingAutoScrollGeneration: UInt64 = 0
+    @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
+
+    private var reasoningRefreshId: String {
+        let name = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName ?? "-"
+        return "\(threadID.uuidString)|\(name)"
+    }
+
+    private var composerStyle: ChatComposerStyle {
+        ChatComposerStyle(rawValue: composerStyleRaw) ?? .signal
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            ConversationListView(
-                items: stateStore.threadItems,
-                selectedThreadID: stateStore.selectedThreadID,
-                onSelect: { threadID in
-                    listViewModel.selectThread(threadID)
-                    Task { await detailViewModel.loadMessagesIfNeeded(for: threadID) }
-                },
-                onCreate: {
-                    Task {
-                        await listViewModel.createThread()
-                        if let threadID = stateStore.selectedThreadID {
-                            await detailViewModel.loadMessagesIfNeeded(for: threadID)
-                        }
-                    }
-                },
-                onDelete: { threadID in
-                    Task {
-                        await listViewModel.deleteThread(threadID)
-                        if let selected = stateStore.selectedThreadID {
-                            await detailViewModel.loadMessagesIfNeeded(for: selected)
-                        }
-                    }
-                }
-            )
-
-            Divider()
             messageList
-            Divider()
-            inputBar
+            
+            Group {
+                switch composerStyle {
+                case .signal:
+                    ChatComposerView(
+                        threadID: threadID,
+                        stateStore: stateStore,
+                        onSend: {
+                            Task { await detailViewModel.sendCurrentDraft() }
+                        }
+                    )
+                case .hanlin:
+                    HanlinChatComposerView(
+                        threadID: threadID,
+                        modelReasoning: detailViewModel.reasoningToolbarContext,
+                        stateStore: stateStore,
+                        modelRows: detailViewModel.chatScenarioModels,
+                        onSend: {
+                            Task { await detailViewModel.sendCurrentDraft() }
+                        }
+                    )
+                }
+            }
         }
-        .navigationTitle(L10n.text("chat.title"))
+        .navigationTitle(stateStore.selectedThread?.listDisplayTitle ?? L10n.text("chat.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(L10n.text("chat.composer.style.title"), selection: $composerStyleRaw) {
+                        Text(L10n.text("chat.composer.style.signal")).tag(ChatComposerStyle.signal.rawValue)
+                        Text(L10n.text("chat.composer.style.hanlin")).tag(ChatComposerStyle.hanlin.rawValue)
+                    }
+                } label: {
+                    Label(L10n.text("chat.composer.style.title"), systemImage: "rectangle.split.2x1")
+                }
+            }
+        }
         .task {
             guard hasLoaded == false else { return }
             hasLoaded = true
-            await listViewModel.loadIfNeeded()
-            if let threadID = stateStore.selectedThreadID {
-                await detailViewModel.loadMessagesIfNeeded(for: threadID)
-            }
+            listViewModel.selectThread(threadID)
+            await detailViewModel.loadMessagesIfNeeded(for: threadID)
+        }
+        .task(id: threadID) {
+            await detailViewModel.refreshChatModelPicker()
+        }
+        .task(id: reasoningRefreshId) {
+            await detailViewModel.refreshReasoningToolbarContext(for: threadID)
         }
         .onAppear {
             Task { await detailViewModel.chatPageDidAppear() }
         }
         .onDisappear {
             Task { await detailViewModel.chatPageDidDisappear() }
-        }
-        .refreshable {
-            await detailViewModel.sync()
-            await listViewModel.refreshThreads()
         }
     }
 
@@ -78,13 +97,33 @@ struct ChatView: View {
                 }
                 .padding(.vertical, 16)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+//            .background(Color(uiColor: .systemGroupedBackground))
             .onChange(of: stateStore.selectedMessages.count) { _ in
-                if let lastID = stateStore.selectedMessages.last?.id {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(lastID, anchor: .bottom)
-                    }
+                scrollToLastMessage(proxy: proxy, animated: true)
+            }
+            .onChange(of: stateStore.streamingContentGeneration) { generation in
+                // 流式阶段降频滚动，避免每个 chunk 触发动画导致卡顿。
+                let minGenerationStep: UInt64 = 4
+                guard generation >= lastStreamingAutoScrollGeneration + minGenerationStep else { return }
+                lastStreamingAutoScrollGeneration = generation
+                scrollToLastMessage(proxy: proxy, animated: false)
+            }
+            .refreshable {
+                await detailViewModel.sync()
+                await detailViewModel.loadMessagesIfNeeded(for: threadID)
+                await listViewModel.refreshThreads()
+            }
+        }
+    }
+
+    private func scrollToLastMessage(proxy: ScrollViewProxy, animated: Bool) {
+        if let lastID = stateStore.selectedMessages.last?.id {
+            if animated {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    proxy.scrollTo(lastID, anchor: .bottom)
                 }
+            } else {
+                proxy.scrollTo(lastID, anchor: .bottom)
             }
         }
     }
@@ -99,11 +138,17 @@ struct ChatView: View {
                 bubbleContent(message)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.trailing, 16)
     }
 
     private func bubbleContent(_ message: ChatMessage) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            if message.role == .assistant,
+               let reasoning = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
+               reasoning.isEmpty == false {
+                ChatReasoningBlockView(text: reasoning)
+            }
+
             Markdown(message.content)
                 .markdownTheme(.chatBubble(foreground: message.role == .user ? .white : .primary))
 
@@ -126,35 +171,4 @@ struct ChatView: View {
         )
     }
 
-    private var inputBar: some View {
-        HStack(spacing: 12) {
-            TextField(
-                L10n.text("chat.input.placeholder"),
-                text: Binding(
-                    get: { stateStore.draft(for: stateStore.selectedThreadID) },
-                    set: { stateStore.setDraft($0, for: stateStore.selectedThreadID) }
-                )
-            )
-            .textFieldStyle(.roundedBorder)
-
-            Button {
-                Task { await detailViewModel.sendCurrentDraft() }
-            } label: {
-                Image(systemName: "paperplane.fill")
-                    .font(.headline)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(stateStore.draft(for: stateStore.selectedThreadID).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || stateStore.isSending)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
-        .overlay(alignment: .topLeading) {
-            Text("工具命令：/ocr <文件路径>  或  /confirm_draft")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 16)
-                .offset(y: -16)
-        }
-    }
 }

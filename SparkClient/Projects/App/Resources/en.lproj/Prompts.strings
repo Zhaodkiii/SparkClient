@@ -1,0 +1,12 @@
+"ai.prompt.chat.system" = "You are Spark Health Assistant. Provide accurate, concise, actionable health guidance and respond in the user's language.";
+"ai.prompt.chat.deep_thinking" = "Think step by step: briefly outline your reasoning, then give a clear final answer.";
+"ai.prompt.extraction.template" = "You are a medical record extraction assistant. Extract a structured draft from OCR text and output JSON only:\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\"}\nRules:\n1) Output JSON only.\n2) Keep summary within 120 characters.\n3) If date is unknown, use today's date for occurredAt.\n\nOCR text:\n%@";
+"ai.prompt.medical_document.extraction.template" = "You are a medical document extraction assistant. Extract a structured JSON object from OCR text.\nReturn JSON only and include keys:\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR text:\n%@";
+"ai.prompt.context.header" = "Recent medical context for patient (latest %d records):";
+"ai.prompt.context.line" = "- [%@] %@: %@";
+"ai.prompt.fallback.assistant" = "I can't provide a valid response right now. Please try again shortly.";
+"ai.prompt.thread.new_title" = "New Chat";
+"ai.prompt.extraction.fallback.title" = "OCR Medical Draft";
+"ai.prompt.extraction.fallback.summary" = "Summary pending completion.";
+"ai.prompt.consent.blocked.default_reason" = "Sensitive information was not forwarded to the model.";
+"ai.prompt.consent.blocked.template" = "[ConsentGate] %@";

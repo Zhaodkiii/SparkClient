@@ -2,7 +2,7 @@ import Foundation
 
 struct PatientContext: Equatable, Sendable {
     let members: [Member]
-    let selectedMemberID: UUID?
+    let selectedMemberID: Int?
 
     var selectedMember: Member? {
         guard let selectedMemberID else { return members.first }

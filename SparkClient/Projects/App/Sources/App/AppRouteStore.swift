@@ -6,6 +6,7 @@ final class AppRouteStore: ObservableObject {
     enum RootTab: Int, Hashable {
         case home
         case health
+        case knowledge
         case chat
         case settings
     }

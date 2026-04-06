@@ -5,6 +5,5 @@ struct UserSession: Codable, Equatable, Sendable {
     let remoteUserID: String?
     let email: String
     let displayName: String
-    let isDemo: Bool
     let signedInAt: Date
 }

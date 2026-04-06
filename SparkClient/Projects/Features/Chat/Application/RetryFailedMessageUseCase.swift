@@ -19,7 +19,7 @@ struct RetryFailedMessageUseCase: Sendable {
         logger.info("retry 开始，clientMessageID=\(String(clientMessageID.uuidString.prefix(8)))", category: "chat_flow")
         do {
             await repository.updateMessageDeliveryState(clientMessageID: clientMessageID, state: .pending)
-            try await syncEngine.syncNow()
+            try await syncEngine.pushOutboxOnly()
             logger.info("retry 完成，clientMessageID=\(String(clientMessageID.uuidString.prefix(8)))", category: "chat_flow")
         } catch {
             logger.error("retry 失败：\(error.localizedDescription)", category: "chat_flow")

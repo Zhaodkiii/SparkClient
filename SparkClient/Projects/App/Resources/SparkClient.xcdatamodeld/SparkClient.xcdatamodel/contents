@@ -1,92 +1,28 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
-    <entity name="UserProfileEntity" representedClassName="UserProfileEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="email" optional="NO" attributeType="String"/>
-        <attribute name="displayName" optional="NO" attributeType="String"/>
-        <attribute name="isDemo" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="lastSignedInAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
-    <entity name="HealthMetricEntity" representedClassName="HealthMetricEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="profileID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="type" optional="NO" attributeType="String"/>
-        <attribute name="value" optional="NO" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
-        <attribute name="unit" optional="NO" attributeType="String"/>
-        <attribute name="recordedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="note" optional="YES" attributeType="String"/>
-    </entity>
-    <entity name="MemberEntity" representedClassName="MemberEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="remoteID" optional="NO" attributeType="Integer 64" defaultValueString="-1" usesScalarValueType="YES"/>
-        <attribute name="name" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="age" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="gender" optional="NO" attributeType="String" defaultValueString="unknown"/>
-        <attribute name="relationship" optional="NO" attributeType="String" defaultValueString="self"/>
-        <attribute name="avatar" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="birthDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="isPrimary" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
-        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
-    <entity name="MedicalCaseEntity" representedClassName="MedicalCaseEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="remoteID" optional="NO" attributeType="Integer 64" defaultValueString="-1" usesScalarValueType="YES"/>
-        <attribute name="memberID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="chiefComplaint" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="diagnosis" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="severity" optional="NO" attributeType="String" defaultValueString="unknown"/>
-        <attribute name="visitDate" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="status" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="notes" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
     <entity name="ExaminationReportEntity" representedClassName="ExaminationReportEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="remoteID" optional="NO" attributeType="Integer 64" defaultValueString="-1" usesScalarValueType="YES"/>
-        <attribute name="memberID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="medicalCaseID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="id" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="memberID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="medicalRecordID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="category" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="subcategory" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="reportName" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="checkType" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="conclusion" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="doctorAdvice" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="date" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
-    <entity name="MedicalReportEntity" representedClassName="MedicalReportEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="remoteID" optional="NO" attributeType="Integer 64" defaultValueString="-1" usesScalarValueType="YES"/>
-        <attribute name="memberID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="medicalCaseID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="reportType" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="hospital" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="doctor" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="date" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
-    <entity name="PrescriptionEntity" representedClassName="PrescriptionEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="remoteID" optional="NO" attributeType="Integer 64" defaultValueString="-1" usesScalarValueType="YES"/>
-        <attribute name="memberID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="medicalCaseID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="drugName" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="dosage" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="frequency" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="durationDays" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="instructions" optional="NO" attributeType="String" defaultValueString=""/>
-        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="endDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="status" optional="NO" attributeType="String" defaultValueString="active"/>
+        <attribute name="subCategory" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="itemName" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="performedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="reportedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="organizationName" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="departmentName" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="doctorName" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="findings" optional="YES" attributeType="String"/>
+        <attribute name="impression" optional="YES" attributeType="String"/>
+        <attribute name="source" optional="NO" attributeType="Integer 32" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="rawOCR" optional="YES" attributeType="Transformable"/>
+        <attribute name="status" optional="NO" attributeType="Integer 32" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="extra" optional="YES" attributeType="Transformable"/>
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ChatThreadEntity" representedClassName="ChatThreadEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="patientID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="patientID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="scenario" optional="NO" attributeType="String" defaultValueString="chat"/>
         <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
@@ -99,6 +35,10 @@
         <attribute name="role" optional="NO" attributeType="String" defaultValueString="user"/>
         <attribute name="kind" optional="NO" attributeType="String" defaultValueString="text"/>
         <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="reasoningContent" optional="YES" attributeType="String"/>
+        <attribute name="reasoningDurationMs" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="reasoningExpanded" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="reasoningVisibility" optional="NO" attributeType="String" defaultValueString="full"/>
         <attribute name="attachmentsData" optional="YES" attributeType="Binary"/>
         <attribute name="clientMessageID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="serverMessageID" optional="YES" attributeType="String"/>
@@ -112,16 +52,35 @@
         <attribute name="value" optional="NO" attributeType="String"/>
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="KnowledgeDocumentEntity" representedClassName="KnowledgeDocumentEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="excerpt" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="scopeRaw" optional="NO" attributeType="String" defaultValueString="personal"/>
+        <attribute name="boundModelID" optional="YES" attributeType="String"/>
+        <attribute name="sourceRaw" optional="NO" attributeType="String" defaultValueString="user"/>
+        <attribute name="chunkCount" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="isEmbeddingIndexed" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastEmbeddingModelName" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="KnowledgeChunkEntity" representedClassName="KnowledgeChunkEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="documentID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="sequence" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="vectorData" optional="YES" attributeType="Binary"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
     <elements>
-        <element name="UserProfileEntity" positionX="-63" positionY="-18" width="128" height="134"/>
-        <element name="HealthMetricEntity" positionX="220" positionY="-18" width="128" height="149"/>
-        <element name="MemberEntity" positionX="-300" positionY="220" width="128" height="194"/>
-        <element name="MedicalCaseEntity" positionX="-120" positionY="220" width="128" height="209"/>
-        <element name="ExaminationReportEntity" positionX="60" positionY="220" width="128" height="224"/>
-        <element name="MedicalReportEntity" positionX="250" positionY="220" width="128" height="209"/>
-        <element name="PrescriptionEntity" positionX="440" positionY="220" width="128" height="239"/>
+        <element name="ExaminationReportEntity" positionX="250" positionY="220" width="128" height="314"/>
         <element name="ChatThreadEntity" positionX="-260" positionY="500" width="128" height="164"/>
         <element name="ChatMessageEntity" positionX="-80" positionY="500" width="128" height="269"/>
         <element name="ChatSyncCursorEntity" positionX="110" positionY="500" width="128" height="104"/>
+        <element name="KnowledgeDocumentEntity" positionX="300" positionY="500" width="128" height="209"/>
+        <element name="KnowledgeChunkEntity" positionX="490" positionY="500" width="128" height="149"/>
     </elements>
 </model>

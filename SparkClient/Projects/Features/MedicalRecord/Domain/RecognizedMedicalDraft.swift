@@ -2,7 +2,7 @@ import Foundation
 
 struct RecognizedMedicalDraft: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
-    let patientID: UUID
+    let patientID: Int
     let sourcePath: String
     let rawText: String
     let title: String
@@ -14,7 +14,7 @@ struct RecognizedMedicalDraft: Identifiable, Codable, Equatable, Sendable {
 
     init(
         id: UUID = UUID(),
-        patientID: UUID,
+        patientID: Int,
         sourcePath: String,
         rawText: String,
         title: String,
@@ -39,7 +39,7 @@ struct RecognizedMedicalDraft: Identifiable, Codable, Equatable, Sendable {
 
 protocol MedicalDraftRepository: Sendable {
     func save(_ draft: RecognizedMedicalDraft) async
-    func latest(patientID: UUID) async -> RecognizedMedicalDraft?
+    func latest(patientID: Int) async -> RecognizedMedicalDraft?
     func markConfirmed(draftID: UUID) async
 }
 

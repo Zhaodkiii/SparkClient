@@ -1,5 +1,5 @@
 import Foundation
 
 protocol AIRuntimeGateway: Sendable {
-    func generateText(client: AIClient, messages: [AIRuntimeMessage]) async throws -> AIRuntimeTextResponse
+    func generateText(client: AIClient, request: AIRuntimeTextRequest) async throws -> AIRuntimeTextResponse
 }

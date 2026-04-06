@@ -121,6 +121,91 @@ final class AISettingsViewModel: ObservableObject {
         upsertLocalBaseModel(installed)
     }
 
+    /// 与 Health「添加在线模型」一致：写入唯一 `name` 后追加到目录。
+    func appendOnlineModel(
+        name: String,
+        displayName: String,
+        company: String,
+        priceTier: Int,
+        isHidden: Bool,
+        supportsText: Bool,
+        supportsMultimodal: Bool,
+        supportsReasoning: Bool,
+        reasoningControllable: Bool,
+        supportsToolUse: Bool,
+        supportsImageGen: Bool
+    ) {
+        let baseName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseDisplay = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let co = company.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard baseName.isEmpty == false, baseDisplay.isEmpty == false, co.isEmpty == false else { return }
+        var uniqueName = baseName
+        if snapshot.allModels.contains(where: { $0.name == uniqueName }) {
+            uniqueName = baseName + "_" + UUID().uuidString.prefix(8).lowercased()
+        }
+        var uniqueDisplay = baseDisplay
+        if snapshot.allModels.contains(where: { $0.displayName == uniqueDisplay && $0.company == co }) {
+            uniqueDisplay = baseDisplay + " (\(UUID().uuidString.prefix(4)))"
+        }
+        let position = (snapshot.allModels.map(\.position).max() ?? 0) + 1
+        let tier = min(max(priceTier, 0), 3)
+        let model = AllModels(
+            name: uniqueName,
+            displayName: uniqueDisplay,
+            identity: .model,
+            position: position,
+            company: co,
+            isHidden: isHidden,
+            supportsSearch: true,
+            supportsMultimodal: supportsMultimodal,
+            supportsReasoning: supportsReasoning,
+            supportsToolUse: supportsToolUse,
+            supportsVoiceGen: false,
+            supportsImageGen: supportsImageGen,
+            source: .custom,
+            timestamp: Date(),
+            priceTier: tier,
+            supportsText: supportsText,
+            reasoningControllable: reasoningControllable
+        )
+        snapshot.allModels.append(model)
+    }
+
+    /// 替换目录中一条模型（触发 `snapshot` 更新）。
+    func replaceModel(_ model: AllModels) {
+        guard let idx = snapshot.allModels.firstIndex(where: { $0.id == model.id }) else { return }
+        snapshot.allModels[idx] = model
+    }
+
+    /// 更新本地智能体（编辑 Sheet 保存）。
+    func updateLocalAgent(
+        id: UUID,
+        displayName: String,
+        iconSymbol: String,
+        baseModelName: String,
+        systemPrompt: String
+    ) {
+        guard let index = snapshot.allModels.firstIndex(where: { $0.id == id }) else { return }
+        var m = snapshot.allModels[index]
+        guard m.isLocalAgent else { return }
+        m.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        m.iconSymbol = iconSymbol
+        m.baseModelName = baseModelName
+        m.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let base = snapshot.allModels.first(where: { $0.name == baseModelName && $0.isLocalModel }) {
+            m.supportsSearch = base.supportsSearch
+            m.supportsMultimodal = base.supportsMultimodal
+            m.supportsReasoning = base.supportsReasoning
+            m.supportsToolUse = base.supportsToolUse
+            m.supportsVoiceGen = base.supportsVoiceGen
+            m.supportsImageGen = base.supportsImageGen
+            m.supportsText = base.supportsText
+            m.reasoningControllable = base.reasoningControllable
+            m.priceTier = base.priceTier
+        }
+        snapshot.allModels[index] = m
+    }
+
     func removeLocalModel(_ model: AllModels) async throws {
         guard let filename = model.localFilename, filename.isEmpty == false else {
             snapshot.allModels.removeAll { $0.id == model.id }
@@ -131,20 +216,40 @@ final class AISettingsViewModel: ObservableObject {
             candidate.id == model.id || candidate.baseModelName == model.name
         }
         if snapshot.chat.model == model.name {
+            snapshot.scenarioSelectedModel[AIScenario.chat.rawValue] = nil
             snapshot.chat.model = AISettingsSnapshot.default.chat.model
             snapshot.chat.endpoint = AISettingsSnapshot.default.chat.endpoint
             snapshot.chat.apiKey = nil
+            snapshot.materializeAllScenariosFromBundles()
         }
     }
 
+    /// 试用对话模型：是否在输入栏候选中隐藏（持久化 `trialChatPickerDisabledModelNames`）。
+    func setTrialChatPickerDisabled(modelName: String, disabled: Bool) {
+        var set = Set(snapshot.trialChatPickerDisabledModelNames)
+        if disabled {
+            set.insert(modelName)
+        } else {
+            set.remove(modelName)
+        }
+        snapshot.trialChatPickerDisabledModelNames = Array(set).sorted()
+    }
+
     func setChatModel(_ model: AllModels) {
-        snapshot.chat.model = model.name
+        snapshot.scenarioSelectedModel[AIScenario.chat.rawValue] = model.name
         if model.company.uppercased() == LocalModelService.localCompany {
             snapshot.chat.endpoint = "local://chat/completions"
             snapshot.chat.apiKey = nil
+            snapshot.chat.model = model.name
             return
         }
 
+        if let row = snapshot.scenarioRemoteBundles?.chat.models.first(where: { $0.model == model.name }) {
+            snapshot.chat = row.asScenarioConfig()
+            return
+        }
+
+        snapshot.chat.model = model.name
         if let provider = snapshot.apiKeys.first(where: { $0.company.uppercased() == model.company.uppercased() }) {
             snapshot.chat.endpoint = provider.requestURL
             snapshot.chat.apiKey = provider.key.isEmpty ? nil : provider.key
@@ -161,7 +266,8 @@ final class AISettingsViewModel: ObservableObject {
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedName.isEmpty == false else { return }
 
-        let position = (snapshot.allModels.map(\.position).max() ?? 0) + 1
+        let agentPositions = snapshot.allModels.filter { $0.identity == .agent }.map(\.position)
+        let position = (agentPositions.max() ?? 999) + 1
         let agent = AllModels(
             name: "local-agent-\(UUID().uuidString.lowercased())",
             displayName: trimmedName,

@@ -178,17 +178,40 @@ private struct RemoteAIBootstrapPayload: Decodable {
 
     func toPatch(now: Date = Date()) -> AIRemoteSettingsPatch {
         let defaults = AISettingsSnapshot.default
+        if let scenarios {
+            let bundles = scenarios.asCollection(fallback: defaults)
+            func materialize(_ bundle: AIScenarioRemoteBundle) -> AIScenarioConfig? {
+                bundle.resolveRow(preferredModelName: nil)?.asScenarioConfig()
+            }
+            return AIRemoteSettingsPatch(
+                revision: revision,
+                scenarioRemoteBundles: bundles,
+                chat: materialize(bundles.chat),
+                optimizationText: materialize(bundles.optimizationText),
+                optimizationVisual: materialize(bundles.optimizationVisual),
+                contextFolding: materialize(bundles.contextFolding),
+                router: materialize(bundles.router),
+                modelConfig: materialize(bundles.modelConfig),
+                reportInterpretation: materialize(bundles.reportInterpretation),
+                apiKeys: apiKeys?.map { $0.toModel(now: now) },
+                searchKeys: searchKeys?.map { $0.toModel(now: now) },
+                toolKeys: toolKeys?.map { $0.toModel(now: now) },
+                allModels: allModels?.map { $0.toModel(now: now) },
+                userInfo: userInfo?.toPatch(),
+                trial: trial?.toModel(),
+                trialModelPolicy: trialModelPolicy?.compactMap { $0.toModel(fallbackSnapshot: defaults) }
+            )
+        }
         return AIRemoteSettingsPatch(
             revision: revision,
-            chat: scenarios?.chat?.toScenarioConfig(fallback: defaults.chat),
-            optimizationText: scenarios?.optimizationText?.toScenarioConfig(fallback: defaults.optimizationText),
-            optimizationVisual: scenarios?.optimizationVisual?.toScenarioConfig(fallback: defaults.optimizationVisual),
-            contextFolding: scenarios?.contextFolding?.toScenarioConfig(fallback: defaults.contextFolding),
-            router: scenarios?.router?.toScenarioConfig(fallback: defaults.router),
-            modelConfig: scenarios?.modelConfig?.toScenarioConfig(fallback: defaults.modelConfig),
-            reportInterpretation: scenarios?.reportInterpretation?.toScenarioConfig(
-                fallback: defaults.reportInterpretation
-            ),
+            scenarioRemoteBundles: nil,
+            chat: nil,
+            optimizationText: nil,
+            optimizationVisual: nil,
+            contextFolding: nil,
+            router: nil,
+            modelConfig: nil,
+            reportInterpretation: nil,
             apiKeys: apiKeys?.map { $0.toModel(now: now) },
             searchKeys: searchKeys?.map { $0.toModel(now: now) },
             toolKeys: toolKeys?.map { $0.toModel(now: now) },
@@ -201,13 +224,13 @@ private struct RemoteAIBootstrapPayload: Decodable {
 }
 
 private struct RemoteScenarioCollection: Decodable {
-    let chat: RemoteScenarioConfig?
-    let optimizationText: RemoteScenarioConfig?
-    let optimizationVisual: RemoteScenarioConfig?
-    let contextFolding: RemoteScenarioConfig?
-    let router: RemoteScenarioConfig?
-    let modelConfig: RemoteScenarioConfig?
-    let reportInterpretation: RemoteScenarioConfig?
+    let chat: AIScenarioRemoteBundle?
+    let optimizationText: AIScenarioRemoteBundle?
+    let optimizationVisual: AIScenarioRemoteBundle?
+    let contextFolding: AIScenarioRemoteBundle?
+    let router: AIScenarioRemoteBundle?
+    let modelConfig: AIScenarioRemoteBundle?
+    let reportInterpretation: AIScenarioRemoteBundle?
 
     enum CodingKeys: String, CodingKey {
         case chat
@@ -218,30 +241,16 @@ private struct RemoteScenarioCollection: Decodable {
         case modelConfig = "model_config"
         case reportInterpretation = "report_interpretation"
     }
-}
 
-private struct RemoteScenarioConfig: Decodable {
-    let endpoint: String?
-    let model: String?
-    let apiKey: String?
-    let temperature: Double?
-    let maxTokens: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case endpoint
-        case model
-        case apiKey = "api_key"
-        case temperature
-        case maxTokens = "max_tokens"
-    }
-
-    func toScenarioConfig(fallback: AIScenarioConfig) -> AIScenarioConfig {
-        AIScenarioConfig(
-            endpoint: endpoint ?? fallback.endpoint,
-            model: model ?? fallback.model,
-            apiKey: apiKey ?? fallback.apiKey,
-            temperature: temperature ?? fallback.temperature,
-            maxTokens: maxTokens ?? fallback.maxTokens
+    func asCollection(fallback: AISettingsSnapshot) -> AIScenarioRemoteBundlesCollection {
+        AIScenarioRemoteBundlesCollection(
+            chat: chat ?? .singleModelFallback(fallback.chat),
+            optimizationText: optimizationText ?? .singleModelFallback(fallback.optimizationText),
+            optimizationVisual: optimizationVisual ?? .singleModelFallback(fallback.optimizationVisual),
+            contextFolding: contextFolding ?? .singleModelFallback(fallback.contextFolding),
+            router: router ?? .singleModelFallback(fallback.router),
+            modelConfig: modelConfig ?? .singleModelFallback(fallback.modelConfig),
+            reportInterpretation: reportInterpretation ?? .singleModelFallback(fallback.reportInterpretation)
         )
     }
 }
@@ -574,6 +583,7 @@ private struct RemoteTrialModelPolicyItem: Decodable {
     let apiKey: String?
     let temperature: Double?
     let maxTokens: Int?
+    let isDefault: Bool?
 
     enum CodingKeys: String, CodingKey {
         case scenario
@@ -582,6 +592,7 @@ private struct RemoteTrialModelPolicyItem: Decodable {
         case apiKey = "api_key"
         case temperature
         case maxTokens = "max_tokens"
+        case isDefault = "is_default"
     }
 
     func toModel(fallbackSnapshot: AISettingsSnapshot) -> AITrialModelPolicyItem? {
@@ -600,7 +611,11 @@ private struct RemoteTrialModelPolicyItem: Decodable {
             temperature: temperature ?? fallback.temperature,
             maxTokens: maxTokens ?? fallback.maxTokens
         )
-        return AITrialModelPolicyItem(scenario: typedScenario, config: scenarioConfig)
+        return AITrialModelPolicyItem(
+            scenario: typedScenario,
+            config: scenarioConfig,
+            isDefault: isDefault ?? false
+        )
     }
 
     private func decodeScenario(_ raw: String) -> AIScenario? {

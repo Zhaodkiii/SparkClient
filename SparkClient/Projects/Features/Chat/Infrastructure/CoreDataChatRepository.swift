@@ -19,7 +19,7 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadThreads()
     }
 
-    func createThread(patientID: UUID?, title: String) async -> ChatThread {
+    func createThread(patientID: Int?, title: String) async -> ChatThread {
         await store.createThread(patientID: patientID, title: title)
     }
 
@@ -31,12 +31,21 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadMessages(threadID: threadID)
     }
 
+    func latestServerActivity(for threadID: UUID) async -> Date? {
+        let messages = await store.loadMessages(threadID: threadID)
+        return messages.map { $0.serverUpdatedAt ?? $0.createdAt }.max()
+    }
+
     func appendMessage(
         threadID: UUID,
         role: ChatMessageRole,
         kind: ChatMessageKind,
         content: String,
         attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?,
+        reasoningExpanded: Bool,
+        reasoningVisibility: ChatReasoningVisibility,
         clientMessageID: UUID,
         serverMessageID: String?,
         deliveryState: ChatDeliveryState
@@ -47,6 +56,10 @@ actor CoreDataChatRepository: ChatRepository {
             kind: kind,
             content: content,
             attachments: attachments,
+            reasoningContent: reasoningContent,
+            reasoningDurationMs: reasoningDurationMs,
+            reasoningExpanded: reasoningExpanded,
+            reasoningVisibility: reasoningVisibility,
             clientMessageID: clientMessageID,
             serverMessageID: serverMessageID,
             deliveryState: deliveryState

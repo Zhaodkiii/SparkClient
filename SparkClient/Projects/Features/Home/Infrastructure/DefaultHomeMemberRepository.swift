@@ -26,18 +26,19 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
     func createMember(
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {
         let payload = SparkMedicalMemberAPI.UpsertMemberPayload(
-            clientUID: UUID(),
             name: name,
             relationship: relationship,
-            age: age,
             gender: gender,
-            avatar: "",
             birthDate: birthDate,
+            bloodType: "",
+            allergies: [],
+            chronicConditions: [],
+            notes: "",
+            avatarUrl: "",
             isPrimary: false
         )
 
@@ -49,7 +50,6 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
             try await fallbackCreateMember(
                 name: name,
                 relationship: relationship,
-                age: age,
                 gender: gender,
                 birthDate: birthDate
             )
@@ -60,50 +60,46 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
         _ member: Member,
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {
         let payload = SparkMedicalMemberAPI.UpsertMemberPayload(
-            clientUID: member.id,
             name: name,
             relationship: relationship,
-            age: age,
             gender: gender,
-            avatar: member.avatar,
             birthDate: birthDate,
+            bloodType: member.bloodType,
+            allergies: member.allergies,
+            chronicConditions: member.chronicConditions,
+            notes: member.notes,
+            avatarUrl: member.avatarUrl,
             isPrimary: member.isPrimary
         )
 
-        if let remoteID = member.remoteID {
-            do {
-                _ = try await memberAPI.updateMember(remoteID: remoteID, payload: payload)
-                try await refreshRemoteSnapshot()
-                return
-            } catch {
-                logger.warning("远端更新成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
-            }
+        do {
+            _ = try await memberAPI.updateMember(remoteID: member.id, payload: payload)
+            try await refreshRemoteSnapshot()
+            return
+        } catch {
+            logger.warning("远端更新成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
         }
 
         try await fallbackUpdateMember(
             member,
             name: name,
             relationship: relationship,
-            age: age,
             gender: gender,
             birthDate: birthDate
         )
     }
 
     func deleteMember(_ member: Member) async throws {
-        if let remoteID = member.remoteID {
-            do {
-                try await memberAPI.deleteMember(remoteID: remoteID)
-                try await refreshRemoteSnapshot()
-                return
-            } catch {
-                logger.warning("远端删除成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
-            }
+        do {
+            try await memberAPI.deleteMember(remoteID: member.id)
+            try await refreshRemoteSnapshot()
+            return
+        } catch {
+            logger.warning("远端删除成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
         }
 
         try await fallbackDeleteMember(member)
@@ -112,15 +108,14 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
     private func fallbackCreateMember(
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {
         var snapshot = await medicalDataRepository.loadSnapshot()
         snapshot.members.append(
             Member(
+                id: (snapshot.members.map(\.id).max() ?? 0) + 1,
                 name: name,
-                age: age,
                 gender: gender,
                 relationship: relationship,
                 birthDate: birthDate,
@@ -137,7 +132,6 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
         _ member: Member,
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {
@@ -146,13 +140,15 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
             guard current.id == member.id else { return current }
             return Member(
                 id: current.id,
-                remoteID: current.remoteID,
                 name: name,
-                age: age,
                 gender: gender,
                 relationship: relationship,
-                avatar: current.avatar,
                 birthDate: birthDate,
+                bloodType: current.bloodType,
+                allergies: current.allergies,
+                chronicConditions: current.chronicConditions,
+                notes: current.notes,
+                avatarUrl: current.avatarUrl,
                 isPrimary: current.isPrimary,
                 updatedAt: Date()
             )
@@ -166,9 +162,15 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
         var snapshot = await medicalDataRepository.loadSnapshot()
         snapshot.members.removeAll { $0.id == member.id }
         snapshot.medicalCases.removeAll { $0.memberID == member.id }
+        snapshot.symptoms.removeAll { $0.memberID == member.id }
+        snapshot.visits.removeAll { $0.memberID == member.id }
+        snapshot.surgeries.removeAll { $0.memberID == member.id }
+        snapshot.followUps.removeAll { $0.memberID == member.id }
         snapshot.examinationReports.removeAll { $0.memberID == member.id }
         snapshot.medicalReports.removeAll { $0.memberID == member.id }
-        snapshot.prescriptions.removeAll { $0.memberID == member.id }
+        snapshot.prescriptionBatches.removeAll { $0.memberID == member.id }
+        snapshot.medications.removeAll { $0.memberID == member.id }
+        snapshot.medicationTakenRecords.removeAll { $0.memberID == member.id }
         try await medicalDataRepository.saveSnapshot(snapshot)
         try await medicalDataRepository.uploadSnapshotToServer(priority: .balanced)
         try await medicalDataRepository.pullSnapshotFromServer(priority: .balanced)

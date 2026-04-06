@@ -6,14 +6,12 @@ struct ManageHomeMemberUseCase: Sendable {
     func create(
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {
         try await memberRepository.createMember(
             name: name,
             relationship: relationship,
-            age: age,
             gender: gender,
             birthDate: birthDate
         )
@@ -23,7 +21,6 @@ struct ManageHomeMemberUseCase: Sendable {
         member: Member,
         name: String,
         relationship: String,
-        age: Int,
         gender: String,
         birthDate: Date?
     ) async throws {
@@ -31,7 +28,6 @@ struct ManageHomeMemberUseCase: Sendable {
             member,
             name: name,
             relationship: relationship,
-            age: age,
             gender: gender,
             birthDate: birthDate
         )

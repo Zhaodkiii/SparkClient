@@ -15,21 +15,22 @@ struct ConfirmMedicalDraftUseCase: Sendable {
     let draftRepository: any MedicalDraftRepository
     let medicalDataRepository: any MedicalDataRepository
 
-    func execute(patientID: UUID) async throws -> MedicalRecord {
+    func execute(patientID: Int) async throws -> MedicalRecord {
         guard let draft = await draftRepository.latest(patientID: patientID) else {
             throw ConfirmMedicalDraftError.draftNotFound
         }
 
         var snapshot = await medicalDataRepository.loadSnapshot()
         let newCase = MedicalCase(
+            id: (snapshot.medicalCases.map(\.id).max() ?? 0) + 1,
             memberID: patientID,
+            recordType: "custom",
+            status: 2,
             title: draft.title,
-            chiefComplaint: "",
-            diagnosis: draft.diagnosis ?? "",
-            severity: "unknown",
-            visitDate: draft.occurredAt,
-            status: "active",
-            notes: draft.summary,
+            hospitalName: "",
+            ageAtVisit: nil,
+            diagnosisSummary: draft.diagnosis ?? "",
+            extra: ["draft_summary": draft.summary],
             updatedAt: Date()
         )
         snapshot.medicalCases.append(newCase)

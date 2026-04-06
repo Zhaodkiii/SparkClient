@@ -67,29 +67,34 @@ final class LocalGGUFTextGateway: @unchecked Sendable {
 
         return AIRuntimeTextResponse(
             text: output,
+            reasoningText: nil,
             model: modelName,
             promptTokens: nil,
-            completionTokens: nil
+            completionTokens: nil,
+            toolCalls: [],
+            finishReason: "stop"
         )
     }
 
     private func makePromptData(from messages: [AIRuntimeMessage]) -> (systemPrompt: String, history: [Chat], input: String) {
-        let systemMessages = messages.filter { $0.role == .system }.map(\.content)
+        let systemMessages = messages.filter { $0.role == .system }.compactMap(\.content)
         let conversation = messages.filter { $0.role != .system }
         var input = ""
         if let lastUser = conversation.last(where: { $0.role == .user }) {
-            input = lastUser.content
+            input = lastUser.content ?? ""
         } else if let last = conversation.last {
-            input = last.content
+            input = last.content ?? ""
         }
 
         let historyCandidates = conversation.dropLast()
         let history: [Chat] = historyCandidates.compactMap { message in
             switch message.role {
             case .user:
-                return (.user, message.content)
+                return (.user, message.content ?? "")
             case .assistant:
-                return (.bot, message.content)
+                return (.bot, message.content ?? "")
+            case .tool:
+                return nil
             case .system:
                 return nil
             }

@@ -4,28 +4,43 @@ extension AISettingsSnapshot {
     func merging(remotePatch: AIRemoteSettingsPatch) -> AISettingsSnapshot {
         var merged = self
 
-        if let chat = remotePatch.chat {
-            merged.chat = mergeScenarioConfig(existing: merged.chat, incoming: chat)
-        }
-        if let optimizationText = remotePatch.optimizationText {
-            merged.optimizationText = mergeScenarioConfig(existing: merged.optimizationText, incoming: optimizationText)
-        }
-        if let optimizationVisual = remotePatch.optimizationVisual {
-            merged.optimizationVisual = mergeScenarioConfig(existing: merged.optimizationVisual, incoming: optimizationVisual)
-        }
-        if let contextFolding = remotePatch.contextFolding {
-            merged.contextFolding = mergeScenarioConfig(existing: merged.contextFolding, incoming: contextFolding)
-        }
-        if let router = remotePatch.router {
-            merged.router = mergeScenarioConfig(existing: merged.router, incoming: router)
-        }
-        if let modelConfig = remotePatch.modelConfig {
-            merged.modelConfig = mergeScenarioConfig(existing: merged.modelConfig, incoming: modelConfig)
-        }
-        if let reportInterpretation = remotePatch.reportInterpretation {
-            merged.reportInterpretation = mergeScenarioConfig(
-                existing: merged.reportInterpretation,
-                incoming: reportInterpretation
+        if let bundles = remotePatch.scenarioRemoteBundles {
+            merged.scenarioRemoteBundles = bundles
+            merged.pruneInvalidScenarioSelections()
+            merged.materializeAllScenariosFromBundles()
+        } else {
+            if let chat = remotePatch.chat {
+                merged.chat = mergeScenarioConfig(existing: merged.chat, incoming: chat)
+            }
+            if let optimizationText = remotePatch.optimizationText {
+                merged.optimizationText = mergeScenarioConfig(existing: merged.optimizationText, incoming: optimizationText)
+            }
+            if let optimizationVisual = remotePatch.optimizationVisual {
+                merged.optimizationVisual = mergeScenarioConfig(existing: merged.optimizationVisual, incoming: optimizationVisual)
+            }
+            if let contextFolding = remotePatch.contextFolding {
+                merged.contextFolding = mergeScenarioConfig(existing: merged.contextFolding, incoming: contextFolding)
+            }
+            if let router = remotePatch.router {
+                merged.router = mergeScenarioConfig(existing: merged.router, incoming: router)
+            }
+            if let modelConfig = remotePatch.modelConfig {
+                merged.modelConfig = mergeScenarioConfig(existing: merged.modelConfig, incoming: modelConfig)
+            }
+            if let reportInterpretation = remotePatch.reportInterpretation {
+                merged.reportInterpretation = mergeScenarioConfig(
+                    existing: merged.reportInterpretation,
+                    incoming: reportInterpretation
+                )
+            }
+            merged.scenarioRemoteBundles = AIScenarioRemoteBundlesCollection.seededFromFlatSnapshots(
+                chat: merged.chat,
+                optimizationText: merged.optimizationText,
+                optimizationVisual: merged.optimizationVisual,
+                contextFolding: merged.contextFolding,
+                router: merged.router,
+                modelConfig: merged.modelConfig,
+                reportInterpretation: merged.reportInterpretation
             )
         }
 
@@ -49,6 +64,7 @@ extension AISettingsSnapshot {
         }
         if let trialModelPolicy = remotePatch.trialModelPolicy {
             merged.trialModelPolicy = trialModelPolicy
+            merged.pruneTrialChatPickerDisabledNames()
         }
 
         return merged

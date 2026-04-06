@@ -141,9 +141,12 @@ private struct PreviewMedicalRuntimeService: AIRuntimeServing {
             text: """
             {"title":"门诊复查记录","summary":"患者主诉咽痛三天，体温正常。","diagnosis":"上呼吸道感染","occurredAt":"2026-04-01"}
             """,
+            reasoningText: nil,
             model: "preview",
             promptTokens: nil,
-            completionTokens: nil
+            completionTokens: nil,
+            toolCalls: [],
+            finishReason: "stop"
         )
     }
 }
@@ -152,9 +155,17 @@ private actor PreviewMedicalDataRepository: MedicalDataRepository {
     private var snapshot = MedicalDataSnapshot(
         members: [],
         medicalCases: [],
+        symptoms: [],
+        visits: [],
+        surgeries: [],
+        followUps: [],
+        healthExamReports: [],
         examinationReports: [],
+        medExamDetails: [],
         medicalReports: [],
-        prescriptions: [],
+        prescriptionBatches: [],
+        medications: [],
+        medicationTakenRecords: [],
         healthMetrics: [],
         updatedAt: Date()
     )
@@ -175,7 +186,7 @@ private actor PreviewMedicalDataRepository: MedicalDataRepository {
 extension MedicalUploadFlowViewModel {
     static func preview() -> MedicalUploadFlowViewModel {
         let patientStore = PatientContextStore()
-        let member = Member(name: "本人", relationship: "self", isPrimary: true)
+        let member = Member(id: 1, name: "本人", relationship: "self", isPrimary: true)
         patientStore.update(members: [member], selectedMemberID: member.id)
 
         return MedicalUploadFlowViewModel(

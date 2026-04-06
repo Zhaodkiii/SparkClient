@@ -1,5 +1,7 @@
 import Foundation
 
+/// Resolves effective AI config per scenario.
+/// Priority: runtime override → **active trial** policy row (`scenarioSelectedModel` + `is_default`) → materialized scenario snapshot (`config(for:)`).
 struct ScenarioPolicyResolver {
     func resolve(
         scenario: AIScenario,
