@@ -6,6 +6,18 @@ enum AIScenario: String, Codable, CaseIterable, Sendable {
     case chat
     /// 医疗文档结构化抽取场景（如从报告中提取字段化信息）。
     case medicalStructuredExtraction = "medical_structured_extraction"
+    /// 医疗文档类型识别场景（自动识别：病例/体检/医疗报告/处方/用药）。
+    case medicalDocumentTypeRecognition = "medical_document_type_recognition"
+    /// 病例结构化抽取场景。
+    case medicalCaseExtraction = "medical_case_extraction"
+    /// 体检报告结构化抽取场景。
+    case healthExamExtraction = "health_exam_extraction"
+    /// 医疗报告结构化抽取场景。
+    case medicalReportExtraction = "medical_report_extraction"
+    /// 处方结构化抽取场景。
+    case prescriptionExtraction = "prescription_extraction"
+    /// 用药结构化抽取场景。
+    case medicationExtraction = "medication_extraction"
     /// 文本优化场景（润色、改写、纠错、摘要等）。
     case optimizationText = "optimization_text"
     /// 视觉内容优化场景（图像相关理解/优化链路）。

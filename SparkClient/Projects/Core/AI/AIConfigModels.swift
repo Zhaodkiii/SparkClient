@@ -300,6 +300,18 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         case .medicalStructuredExtraction:
             // 兼容新增场景：当前服务端尚未单独下发时，先复用文本抽取链路配置。
             return optimizationText
+        case .medicalDocumentTypeRecognition:
+            return optimizationText
+        case .medicalCaseExtraction:
+            return optimizationText
+        case .healthExamExtraction:
+            return optimizationText
+        case .medicalReportExtraction:
+            return optimizationText
+        case .prescriptionExtraction:
+            return optimizationText
+        case .medicationExtraction:
+            return optimizationText
         case .optimizationText:
             return optimizationText
         case .optimizationVisual:

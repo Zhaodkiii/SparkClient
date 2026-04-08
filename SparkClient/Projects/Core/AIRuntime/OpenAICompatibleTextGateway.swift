@@ -14,7 +14,10 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         self.logger = logger
     }
 
-    func generateText(client: AIClient, request runtimeRequest: AIRuntimeTextRequest) async throws -> AIRuntimeTextResponse {
+    func generateTextStream(
+        client: AIClient,
+        request runtimeRequest: AIRuntimeTextRequest
+    ) async throws -> AsyncThrowingStream<AIRuntimeStreamEvent, Error> {
         let start = Date()
         let (reasoningExtras, useSuffix, thinkOn) = OpenAIReasoningPayload.build(
             providerUppercased: runtimeRequest.providerCompanyUppercased,
@@ -24,7 +27,6 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         if useSuffix {
             runtimeMessages = OpenAIReasoningPayload.patchMessagesThinkSuffix(runtimeMessages, thinkSuffixEnabled: thinkOn)
         }
-
         let payload = ChatCompletionRequest(
             model: client.model,
             messages: runtimeMessages.map {
@@ -61,7 +63,6 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
             }.nilIfEmpty,
             toolChoice: runtimeRequest.tools.isEmpty ? nil : runtimeRequest.toolChoice.rawValue
         )
-
         var request = URLRequest(url: client.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -73,73 +74,67 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         request.httpBody = requestBodyData
         let requestBodyText = String(data: requestBodyData, encoding: .utf8) ?? "<non-utf8>"
         logger.debug(
-            "AI 网关请求开始，model=\(client.model), endpoint=\(client.endpoint.absoluteString), messages=\(runtimeRequest.messages.count), tools=\(runtimeRequest.tools.count), apiKeyPresent=\(client.apiKey?.isEmpty == false)",
+            "AI 流式网关请求开始，model=\(client.model), endpoint=\(client.endpoint.absoluteString), messages=\(runtimeRequest.messages.count), tools=\(runtimeRequest.tools.count), apiKeyPresent=\(client.apiKey?.isEmpty == false)",
             category: "ai_runtime"
         )
-        logger.debug("AI 网关请求报文=\(truncate(requestBodyText, limit: 4000))", category: "ai_runtime")
+        logger.debug("AI 流式网关请求报文=\(truncate(requestBodyText, limit: 4000))", category: "ai_runtime")
 
-        do {
-            let (bytes, response) = try await session.bytes(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AIRuntimeError.invalidResponse
-            }
-            if (200 ..< 300).contains(httpResponse.statusCode) == false {
-                let errorData = try await bytes.reduce(into: Data()) { partialResult, byte in
-                    partialResult.append(byte)
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let (bytes, response) = try await session.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw AIRuntimeError.invalidResponse
+                    }
+                    if (200 ..< 300).contains(httpResponse.statusCode) == false {
+                        let errorData = try await bytes.reduce(into: Data()) { partialResult, byte in
+                            partialResult.append(byte)
+                        }
+                        let responseBodyText = String(data: errorData, encoding: .utf8) ?? "<non-utf8>"
+                        logger.debug(
+                            "AI 流式网关响应报文，status=\(httpResponse.statusCode), body=\(truncate(responseBodyText, limit: 4000))",
+                            category: "ai_runtime"
+                        )
+                        throw AIRuntimeError.server(
+                            statusCode: httpResponse.statusCode,
+                            message: parseServerErrorMessage(from: errorData)
+                        )
+                    }
+
+                    let completion = try await parseStreamingOrSingleResponse(bytes: bytes) { event in
+                        continuation.yield(event)
+                    }
+                    let usage = completion.usage
+                    let content = completion.message.normalizedContent
+                    let toolCalls = completion.message.toolCalls?.map {
+                        AIRuntimeToolCall(
+                            id: $0.id ?? UUID().uuidString,
+                            name: $0.function?.name ?? "",
+                            arguments: $0.function?.arguments ?? "{}"
+                        )
+                    } ?? []
+                    let reasoningTrimmed = completion.reasoningText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let finalResponse = AIRuntimeTextResponse(
+                        text: content,
+                        reasoningText: reasoningTrimmed.isEmpty ? nil : reasoningTrimmed,
+                        model: completion.model,
+                        promptTokens: usage?.promptTokens,
+                        completionTokens: usage?.completionTokens,
+                        toolCalls: toolCalls,
+                        finishReason: completion.finishReason
+                    )
+                    continuation.yield(.completed(finalResponse))
+                    logger.info(
+                        "AI 流式网关请求完成，model=\(completion.model), cost=\(format(Date().timeIntervalSince(start)))s",
+                        category: "ai_runtime"
+                    )
+                    continuation.finish()
+                } catch let urlError as URLError {
+                    continuation.finish(throwing: AIRuntimeError.transport(urlError))
+                } catch {
+                    continuation.finish(throwing: error)
                 }
-                let responseBodyText = String(data: errorData, encoding: .utf8) ?? "<non-utf8>"
-                logger.debug(
-                    "AI 网关响应报文，status=\(httpResponse.statusCode), body=\(truncate(responseBodyText, limit: 4000))",
-                    category: "ai_runtime"
-                )
-                logger.warning(
-                    "AI 网关返回非 2xx，status=\(httpResponse.statusCode), model=\(client.model)",
-                    category: "ai_runtime"
-                )
-                throw AIRuntimeError.server(
-                    statusCode: httpResponse.statusCode,
-                    message: parseServerErrorMessage(from: errorData)
-                )
             }
-
-            let completion = try await parseStreamingOrSingleResponse(bytes: bytes)
-            let usage = completion.usage
-            let content = completion.message.normalizedContent
-            let toolCalls = completion.message.toolCalls?.map {
-                AIRuntimeToolCall(
-                    id: $0.id ?? UUID().uuidString,
-                    name: $0.function?.name ?? "",
-                    arguments: $0.function?.arguments ?? "{}"
-                )
-            } ?? []
-            logger.debug(
-                "AI 推理成功，model=\(completion.model), promptTokens=\(usage?.promptTokens ?? -1), completionTokens=\(usage?.completionTokens ?? -1)",
-                category: "ai_runtime"
-            )
-            logger.info(
-                "AI 网关请求完成，model=\(completion.model), cost=\(format(Date().timeIntervalSince(start)))s",
-                category: "ai_runtime"
-            )
-
-            let reasoningTrimmed = completion.reasoningText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return AIRuntimeTextResponse(
-                text: content,
-                reasoningText: reasoningTrimmed.isEmpty ? nil : reasoningTrimmed,
-                model: completion.model,
-                promptTokens: usage?.promptTokens,
-                completionTokens: usage?.completionTokens,
-                toolCalls: toolCalls,
-                finishReason: completion.finishReason
-            )
-        } catch let urlError as URLError {
-            logger.error(
-                "AI 网关网络失败，model=\(client.model), code=\(urlError.code.rawValue), error=\(urlError.localizedDescription)",
-                category: "ai_runtime"
-            )
-            throw AIRuntimeError.transport(urlError)
-        } catch {
-            logger.error("AI 网关处理失败，model=\(client.model), error=\(error.localizedDescription)", category: "ai_runtime")
-            throw error
         }
     }
 
@@ -163,7 +158,10 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         return try JSONSerialization.data(withJSONObject: baseObj)
     }
 
-    private func parseStreamingOrSingleResponse(bytes: URLSession.AsyncBytes) async throws -> ParsedCompletion {
+    private func parseStreamingOrSingleResponse(
+        bytes: URLSession.AsyncBytes,
+        onEvent: ((AIRuntimeStreamEvent) -> Void)? = nil
+    ) async throws -> ParsedCompletion {
         var sawStreamFrame = false
         var bufferedLines: [String] = []
         var content = ""
@@ -186,7 +184,8 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     reasoning: &reasoningText,
                     toolCalls: &toolCalls,
                     model: &model,
-                    finishReason: &finishReason
+                    finishReason: &finishReason,
+                    onEvent: onEvent
                 )
                 continue
             }
@@ -197,7 +196,8 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     reasoning: &reasoningText,
                     toolCalls: &toolCalls,
                     model: &model,
-                    finishReason: &finishReason
+                    finishReason: &finishReason,
+                    onEvent: onEvent
                 )
             }
         }
@@ -235,6 +235,10 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         guard let choice = response.choices.first else {
             throw AIRuntimeError.invalidResponse
         }
+        let fallbackContent = choice.message.normalizedContent
+        if fallbackContent.isEmpty == false {
+            onEvent?(.textDelta(fallbackContent))
+        }
         return ParsedCompletion(
             model: response.model,
             usage: response.usage,
@@ -250,7 +254,8 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         reasoning: inout String,
         toolCalls: inout [Int: PartialToolCall],
         model: inout String,
-        finishReason: inout String?
+        finishReason: inout String?,
+        onEvent: ((AIRuntimeStreamEvent) -> Void)?
     ) {
         if streamChunk.model.isEmpty == false {
             model = streamChunk.model
@@ -258,9 +263,11 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         guard let choice = streamChunk.choices.first else { return }
         if let deltaContent = choice.delta.contentString, deltaContent.isEmpty == false {
             content.append(deltaContent)
+            onEvent?(.textDelta(deltaContent))
         }
         if let deltaReason = choice.delta.reasoningString, deltaReason.isEmpty == false {
             reasoning.append(deltaReason)
+            onEvent?(.reasoningDelta(deltaReason))
         }
         if let deltaToolCalls = choice.delta.toolCalls {
             for item in deltaToolCalls {
@@ -276,6 +283,16 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     accumulated.arguments.append(arguments)
                 }
                 toolCalls[index] = accumulated
+                onEvent?(
+                    .toolCallDelta(
+                        AIRuntimeToolCallDelta(
+                            index: index,
+                            id: item.id,
+                            name: item.function?.name,
+                            argumentsDelta: item.function?.arguments
+                        )
+                    )
+                )
             }
         }
         if let reason = choice.finishReason, reason.isEmpty == false {

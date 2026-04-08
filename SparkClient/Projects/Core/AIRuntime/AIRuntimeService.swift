@@ -1,7 +1,9 @@
 import Foundation
 
 protocol AIRuntimeServing: Sendable {
-    func generateText(request: AIRuntimeTextRequest) async throws -> AIRuntimeTextResponse
+    func generateTextStream(
+        request: AIRuntimeTextRequest
+    ) async throws -> AsyncThrowingStream<AIRuntimeStreamEvent, Error>
 }
 
 final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
@@ -22,7 +24,9 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         self.logger = logger
     }
 
-    func generateText(request: AIRuntimeTextRequest) async throws -> AIRuntimeTextResponse {
+    func generateTextStream(
+        request: AIRuntimeTextRequest
+    ) async throws -> AsyncThrowingStream<AIRuntimeStreamEvent, Error> {
         guard request.messages.isEmpty == false else {
             throw AIRuntimeError.emptyMessages
         }
@@ -67,53 +71,78 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 localMessages.insert(AIRuntimeMessage(role: .system, content: prompt), at: 0)
             }
             logger.debug(
-                "准备调用本地模型推理，scenario=\(request.scenario.rawValue), model=\(resolved.model), messages=\(localMessages.count), file=\(localSelection.fileName)",
+                "准备调用本地模型流式推理，scenario=\(request.scenario.rawValue), model=\(resolved.model), messages=\(localMessages.count), file=\(localSelection.fileName)",
                 category: "ai_runtime"
             )
-            do {
-                let response = try await localGateway.generateText(
-                    fileName: localSelection.fileName,
-                    modelName: resolved.model,
-                    messages: localMessages,
-                    maxTokens: resolved.maxTokens,
-                    temperature: resolved.temperature
-                )
-                let cost = Date().timeIntervalSince(start)
-                logger.info(
-                    "本地模型推理完成，scenario=\(request.scenario.rawValue), model=\(response.model), cost=\(format(cost))s",
-                    category: "ai_runtime"
-                )
-                return response
-            } catch {
-                let cost = Date().timeIntervalSince(start)
-                logger.error(
-                    "本地模型推理失败，scenario=\(request.scenario.rawValue), model=\(resolved.model), cost=\(format(cost))s error=\(error.localizedDescription)",
-                    category: "ai_runtime"
-                )
-                throw error
+            let response = try await localGateway.generateText(
+                fileName: localSelection.fileName,
+                modelName: resolved.model,
+                messages: localMessages,
+                maxTokens: resolved.maxTokens,
+                temperature: resolved.temperature
+            )
+            let cost = Date().timeIntervalSince(start)
+            logger.info(
+                "本地模型推理完成（流式封装），scenario=\(request.scenario.rawValue), model=\(response.model), cost=\(format(cost))s",
+                category: "ai_runtime"
+            )
+            AIRuntimeOutputLog.recordFinalModelOutput(
+                scenario: request.scenario,
+                inferenceSource: resolved.source.rawValue,
+                response: response,
+                logger: logger
+            )
+            return AsyncThrowingStream { continuation in
+                continuation.yield(.textDelta(response.text))
+                continuation.yield(.completed(response))
+                continuation.finish()
             }
         }
 
         let client = AIClientFactory.makeClient(from: resolved)
         logger.debug(
-            "准备调用 AI 推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), messages=\(effectiveRequest.messages.count), tools=\(effectiveRequest.tools.count)",
+            "准备调用 AI 流式推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), messages=\(effectiveRequest.messages.count), tools=\(effectiveRequest.tools.count)",
             category: "ai_runtime"
         )
-        do {
-            let response = try await gateway.generateText(client: client, request: effectiveRequest)
-            let cost = Date().timeIntervalSince(start)
-            logger.info(
-                "AI 推理完成，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(response.model), cost=\(format(cost))s",
-                category: "ai_runtime"
-            )
-            return response
-        } catch {
-            let cost = Date().timeIntervalSince(start)
-            logger.error(
-                "AI 推理失败，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), cost=\(format(cost))s error=\(error.localizedDescription)",
-                category: "ai_runtime"
-            )
-            throw error
+        let upstream = try await gateway.generateTextStream(client: client, request: effectiveRequest)
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    var finalResponse: AIRuntimeTextResponse?
+                    for try await event in upstream {
+                        if case .completed(let response) = event {
+                            finalResponse = response
+                        }
+                        continuation.yield(event)
+                    }
+                    let cost = Date().timeIntervalSince(start)
+                    if let finalResponse {
+                        logger.info(
+                            "AI 流式推理完成，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(finalResponse.model), cost=\(format(cost))s",
+                            category: "ai_runtime"
+                        )
+                        AIRuntimeOutputLog.recordFinalModelOutput(
+                            scenario: request.scenario,
+                            inferenceSource: resolved.source.rawValue,
+                            response: finalResponse,
+                            logger: logger
+                        )
+                    } else {
+                        logger.warning(
+                            "AI 流式推理结束但缺少 completed 事件，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), cost=\(format(cost))s",
+                            category: "ai_runtime"
+                        )
+                    }
+                    continuation.finish()
+                } catch {
+                    let cost = Date().timeIntervalSince(start)
+                    logger.error(
+                        "AI 流式推理失败，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), cost=\(format(cost))s error=\(error.localizedDescription)",
+                        category: "ai_runtime"
+                    )
+                    continuation.finish(throwing: error)
+                }
+            }
         }
     }
 

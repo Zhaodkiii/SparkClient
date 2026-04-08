@@ -1,24 +1,45 @@
 import Foundation
 
+/// 医疗「家庭成员」REST API 封装：列表、创建、更新、删除。
+///
+/// 与 `SparkMedicalWorkflowAPI` 等业务接口一致，依赖 `SparkBackendConfiguration` 执行网络请求；
+/// 日期字段在解码时使用 `MedicalDateCoding` 灵活解析，编码出生日期时仅输出日期部分（见 `UpsertMemberPayload`）。
 struct SparkMedicalMemberAPI {
+    /// 注入的后端配置（URL、会话、错误映射等）。
     let configuration: SparkBackendConfiguration
+
+    private let resources: SparkMedicalResourceAPI
 
     init(configuration: SparkBackendConfiguration) {
         self.configuration = configuration
+        self.resources = SparkMedicalResourceAPI(configuration: configuration)
     }
 
+    /// 服务端返回的成员模型，用于列表与创建/更新响应。
     struct RemoteMember: Decodable, Sendable, Equatable {
+        /// 服务端主键。
         let id: Int
+        /// 显示姓名。
         let name: String
+        /// 性别编码或展示文案（与后端约定）。
         let gender: String
+        /// 与当前用户的关系（如本人、父母、子女）。
         let relationship: String
+        /// 出生日期；缺失时为 `nil`。
         let birthDate: Date?
+        /// 血型。
         let bloodType: String
+        /// 过敏史列表。
         let allergies: [String]
+        /// 慢性病史列表。
         let chronicConditions: [String]
+        /// 备注。
         let notes: String
+        /// 头像完整 URL 字符串。
         let avatarUrl: String
+        /// 是否为当前账号下的主成员（主档案）。
         let isPrimary: Bool
+        /// 服务端最后更新时间，用于增量同步或冲突判断。
         let updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
@@ -37,6 +58,9 @@ struct SparkMedicalMemberAPI {
         }
     }
 
+    /// 创建或更新成员时的请求体（PUT/POST 共用形状）。
+    ///
+    /// 对 `birthDate` 使用自定义 `encode`：有值则按「仅日期」规则编码（与医疗模块其它日期字段一致），无值则显式编码为 JSON `null`。
     struct UpsertMemberPayload: Encodable, Sendable {
         let name: String
         let relationship: String
@@ -67,6 +91,7 @@ struct SparkMedicalMemberAPI {
             try container.encode(name, forKey: .name)
             try container.encode(relationship, forKey: .relationship)
             try container.encode(gender, forKey: .gender)
+            // 出生日期：避免默认编码成带时区的完整 DateTime，统一为日期串以匹配后端 `birth_date` 语义。
             if let birthDate {
                 try container.encode(MedicalDateCoding.encodeDateOnly(birthDate), forKey: .birthDate)
             } else {
@@ -81,98 +106,25 @@ struct SparkMedicalMemberAPI {
         }
     }
 
+    /// 拉取当前用户下全部医疗成员；支持 ETag 缓存（TTL 120 秒），适合频繁进入列表页的场景。
     func listMembers() async throws -> [RemoteMember] {
-        let operation = CacheableSparkNetworkOperation(
-            name: "Medical.Member.List",
-            apiName: "MedicalMemberAPI",
-            request: SparkNetworkRequest(
-                method: .get,
-                path: "/api/v1/medical/members/",
-                strategy: NetworkStrategy(
-                    requiresAuth: true,
-                    allowETag: true,
-                    serialKey: "medical.members.list",
-                    retryConfig: .default,
-                    isIdempotent: true,
-                    queuePriority: .normal,
-                    etagTTL: 120
-                )
-            )
-        )
-        let response = try await configuration.execute(operation)
-        return try APIResponseDecoder.decodeWrappedData([RemoteMember].self, from: response, decoder: .medicalMemberISO8601)
+        try await resources.list([RemoteMember].self, kind: .members)
     }
 
+    /// 新建成员；成功返回带服务端 `id` 的 `RemoteMember`。
     func createMember(_ payload: UpsertMemberPayload) async throws -> RemoteMember {
-        let operation = CacheableSparkNetworkOperation(
-            name: "Medical.Member.Create",
-            apiName: "MedicalMemberAPI",
-            request: SparkNetworkRequest(
-                method: .post,
-                path: "/api/v1/medical/members/",
-                body: .json(AnyEncodable(payload)),
-                strategy: NetworkStrategy(
-                    requiresAuth: true,
-                    allowETag: false,
-                    serialKey: "medical.members.create",
-                    retryConfig: .default,
-                    isIdempotent: false,
-                    queuePriority: .high
-                )
-            )
-        )
-        let response = try await configuration.execute(operation)
-        return try APIResponseDecoder.decodeWrappedData(RemoteMember.self, from: response, decoder: .medicalMemberISO8601)
+        try await resources.create(RemoteMember.self, kind: .members, body: payload)
     }
 
+    /// 按服务端 ID 全量更新成员信息；成功返回最新 `RemoteMember`。
+    ///
+    /// - Parameter remoteID: 路径中的成员主键，与 `RemoteMember.id` 一致。
     func updateMember(remoteID: Int, payload: UpsertMemberPayload) async throws -> RemoteMember {
-        let operation = CacheableSparkNetworkOperation(
-            name: "Medical.Member.Update",
-            apiName: "MedicalMemberAPI",
-            request: SparkNetworkRequest(
-                method: .put,
-                path: "/api/v1/medical/members/\(remoteID)/",
-                body: .json(AnyEncodable(payload)),
-                strategy: NetworkStrategy(
-                    requiresAuth: true,
-                    allowETag: false,
-                    serialKey: "medical.members.update.\(remoteID)",
-                    retryConfig: .default,
-                    isIdempotent: false,
-                    queuePriority: .high
-                )
-            )
-        )
-        let response = try await configuration.execute(operation)
-        return try APIResponseDecoder.decodeWrappedData(RemoteMember.self, from: response, decoder: .medicalMemberISO8601)
+        try await resources.replace(RemoteMember.self, kind: .members, id: remoteID, body: payload)
     }
 
+    /// 删除指定成员；仅校验响应包装结构可解码，不依赖具体业务负载。
     func deleteMember(remoteID: Int) async throws {
-        let operation = CacheableSparkNetworkOperation(
-            name: "Medical.Member.Delete",
-            apiName: "MedicalMemberAPI",
-            request: SparkNetworkRequest(
-                method: .delete,
-                path: "/api/v1/medical/members/\(remoteID)/",
-                strategy: NetworkStrategy(
-                    requiresAuth: true,
-                    allowETag: false,
-                    serialKey: "medical.members.delete.\(remoteID)",
-                    retryConfig: .default,
-                    isIdempotent: false,
-                    queuePriority: .high
-                )
-            )
-        )
-        let response = try await configuration.execute(operation)
-        _ = try APIResponseDecoder.decodeWrappedData(JSONValue?.self, from: response, decoder: .medicalMemberISO8601)
+        try await resources.delete(kind: .members, id: remoteID)
     }
-}
-
-private extension JSONDecoder {
-    static let medicalMemberISO8601: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom(MedicalDateCoding.decodeFlexibleDate(from:))
-        return decoder
-    }()
 }

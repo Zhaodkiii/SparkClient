@@ -73,6 +73,7 @@
 "medical.upload.step.extract" = "AI 抽取病历草稿";
 "medical.upload.error.no_member" = "请先在首页选择成员后再识别。";
 "medical.upload.error.member_invalid" = "成员已失效，请重新选择。";
+"medical.upload.submit_failed_with_server_error" = "提交失败，服务返回错误内容：%@";
 "home.health_basics.title" = "健康基础信息";
 "home.health_basics.authorize" = "授权健康";
 "home.health_basics.only_self" = "仅“本人”成员可展示 Apple 健康数据。";

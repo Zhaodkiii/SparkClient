@@ -13,7 +13,7 @@ struct HomeView: View {
     @State private var memberActionTarget: Member?
     @State private var showDeleteConfirmation = false
     @State private var addMemberMode: AddFamilyMemberView.Mode?
-    @State private var showMedicalUploadFlow = false
+    @State private var showMedicalDocumentUpload = false
 
     var body: some View {
         ScrollView {
@@ -67,7 +67,7 @@ struct HomeView: View {
             hasLoaded = true
             await viewModel.load()
         }
-        .fullScreenCover(isPresented: $showMedicalUploadFlow) {
+        .fullScreenCover(isPresented: $showMedicalDocumentUpload) {
             NavigationView {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
@@ -170,7 +170,7 @@ struct HomeView: View {
                     .font(.headline)
                 Spacer()
                 Button {
-                    showMedicalUploadFlow = true
+                    showMedicalDocumentUpload = true
                     triggerHaptic(style: .medium)
                 } label: {
                     Label(L10n.text("home.medical.upload"), systemImage: "sparkles.rectangle.stack")
@@ -1062,8 +1062,18 @@ private actor PreviewHomeMemberRepository: HomeMemberRepository {
 
     func refreshRemoteSnapshot() async throws {}
 
-    func loadSnapshot() async -> MedicalDataSnapshot {
-        snapshot
+    func loadMembers() async -> [Member] {
+        snapshot.members
+    }
+
+    func loadSnapshot(memberID: Int) async -> MedicalDataSnapshot {
+        var copy = snapshot
+        copy.medicalCases = snapshot.medicalCases.filter { $0.memberID == memberID }
+        copy.healthExamReports = snapshot.healthExamReports.filter { $0.memberID == memberID }
+        copy.examinationReports = snapshot.examinationReports.filter { $0.memberID == memberID }
+        copy.medications = snapshot.medications.filter { $0.memberID == memberID }
+        copy.medicationTakenRecords = snapshot.medicationTakenRecords.filter { $0.memberID == memberID }
+        return copy
     }
 
     func createMember(

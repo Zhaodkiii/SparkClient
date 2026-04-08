@@ -12,9 +12,12 @@ final class Backend {
     let deactivation: SparkDeactivationAPI
     let aiConfig: SparkAIConfigAPI
     let chat: SparkChatRemoteAPI
-    let medicalSync: SparkMedicalSyncAPI
     let medicalMembers: SparkMedicalMemberAPI
+    let medicalQuery: SparkMedicalQueryAPI
+    let medicalResources: SparkMedicalResourceAPI
+    let medicalWorkflow: SparkMedicalWorkflowAPI
     let files: SparkFileAPI
+    let oss: SparkOSSAPI
     let ocr: SparkOCRAPI
     let deviceCache: DeviceCache
 
@@ -52,9 +55,12 @@ final class Backend {
         self.deactivation = SparkDeactivationAPI(configuration: configuration)
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
         self.chat = SparkChatRemoteAPI(configuration: configuration)
-        self.medicalSync = SparkMedicalSyncAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
+        self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
+        self.medicalResources = SparkMedicalResourceAPI(configuration: configuration)
+        self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
+        self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
 
         logger.info(SparkNetworkingStrings.Backend.initialized)
@@ -70,9 +76,12 @@ final class Backend {
         self.deactivation = SparkDeactivationAPI(configuration: configuration)
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
         self.chat = SparkChatRemoteAPI(configuration: configuration)
-        self.medicalSync = SparkMedicalSyncAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
+        self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
+        self.medicalResources = SparkMedicalResourceAPI(configuration: configuration)
+        self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
+        self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
 
         configuration.logger.info(SparkNetworkingStrings.Backend.initialized)

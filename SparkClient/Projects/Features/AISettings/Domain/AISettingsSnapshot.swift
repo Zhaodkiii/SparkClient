@@ -276,6 +276,18 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         case .medicalStructuredExtraction:
             // 新增医疗结构化抽取场景：当前快照未单独持有字段，先复用文本抽取配置。
             return optimizationText
+        case .medicalDocumentTypeRecognition:
+            return optimizationText
+        case .medicalCaseExtraction:
+            return optimizationText
+        case .healthExamExtraction:
+            return optimizationText
+        case .medicalReportExtraction:
+            return optimizationText
+        case .prescriptionExtraction:
+            return optimizationText
+        case .medicationExtraction:
+            return optimizationText
         case .optimizationText:
             return optimizationText
         case .optimizationVisual:
@@ -318,6 +330,18 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
                 chat = config
             case .medicalStructuredExtraction:
                 // 新增场景兼容写回：先落到文本抽取配置，避免旧快照结构破坏兼容性。
+                optimizationText = config
+            case .medicalDocumentTypeRecognition:
+                optimizationText = config
+            case .medicalCaseExtraction:
+                optimizationText = config
+            case .healthExamExtraction:
+                optimizationText = config
+            case .medicalReportExtraction:
+                optimizationText = config
+            case .prescriptionExtraction:
+                optimizationText = config
+            case .medicationExtraction:
                 optimizationText = config
             case .optimizationText:
                 optimizationText = config

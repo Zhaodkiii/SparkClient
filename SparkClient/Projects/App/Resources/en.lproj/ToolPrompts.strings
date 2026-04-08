@@ -34,8 +34,6 @@
 "tool.summary.extract_remote_file_content" = "Purpose: extract text from remote files. url: full HTTP(S) file link.";
 "tool.summary.create_canvas" = "Usage: Create canvas for long text/code/HTML. Requires title, content, type (text|python|html).";
 "tool.summary.edit_canvas" = "Usage: Edit canvas via regex patterns/replacements pairs. For large rewrites prefer create_canvas.";
-"tool.summary.ocr_extract_draft" = "Purpose (Spark): OCR from local file_path into medical draft; member must be selected.";
-"tool.summary.confirm_draft" = "Purpose (Spark): Confirm latest draft into formal medical record.";
 "tool.summary.generic" = "Execute tool %@.";
 /* ========== 参数与嵌套字段说明 ========== */
 "tool.coord.wgs84_description" = "Latitude/longitude (WGS‑84 decimal).";

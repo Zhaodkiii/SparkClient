@@ -97,6 +97,42 @@ struct PromptLocalizer: Sendable {
         )
     }
 
+    func medicalDocumentTypeRecognitionPrompt(ocrText: String) -> String {
+        l10n.promptFormat(
+            "ai.prompt.medical_document.type_recognition.template",
+            fallback: """
+            You are a medical document classifier.
+            Classify OCR text into one type only: case_document, health_exam_report, medical_report, prescription, medication.
+            Return JSON only:
+            {"kind":"case_document|health_exam_report|medical_report|prescription|medication","confidence":0.0-1.0,"reason":"..."}
+
+            OCR text:
+            %@
+            """,
+            ocrText
+        )
+    }
+
+    func medicalCaseExtractionPrompt(ocrText: String) -> String {
+        l10n.promptFormat("ai.prompt.medical_case.extraction.template", fallback: extractionPrompt(ocrText: "%@"), ocrText)
+    }
+
+    func healthExamExtractionPrompt(ocrText: String) -> String {
+        l10n.promptFormat("ai.prompt.health_exam.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
+    }
+
+    func medicalReportExtractionPrompt(ocrText: String) -> String {
+        l10n.promptFormat("ai.prompt.medical_report.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
+    }
+
+    func prescriptionExtractionPrompt(ocrText: String) -> String {
+        l10n.promptFormat("ai.prompt.prescription.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
+    }
+
+    func medicationExtractionPrompt(ocrText: String) -> String {
+        l10n.promptFormat("ai.prompt.medication.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
+    }
+
     func contextSummaryHeader(recordCount: Int) -> String {
         l10n.promptFormat(
             "ai.prompt.context.header",

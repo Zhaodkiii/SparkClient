@@ -2,9 +2,6 @@ import Foundation
 
 /// 聊天侧工具中枢：解析用户输入中的斜杠命令与 `SparkToolName`，执行后写审计；部分为占位或与配置中的外部 endpoint 路由说明。
 final class ToolHub: @unchecked Sendable {
-    private let extractDraftUseCase: ExtractMedicalDraftFromDocumentUseCase
-    private let confirmDraftUseCase: ConfirmMedicalDraftUseCase
-    private let loadLatestDraftUseCase: LoadLatestMedicalDraftUseCase
     private let auditStore: ToolAuditStore
     private let medicalDataRepository: any MedicalDataRepository
     private let healthMetricsRepository: any HealthMetricsRepository
@@ -18,9 +15,6 @@ final class ToolHub: @unchecked Sendable {
     private var canvasStore: [String: String] = [:]
 
     init(
-        extractDraftUseCase: ExtractMedicalDraftFromDocumentUseCase,
-        confirmDraftUseCase: ConfirmMedicalDraftUseCase,
-        loadLatestDraftUseCase: LoadLatestMedicalDraftUseCase,
         auditStore: ToolAuditStore,
         medicalDataRepository: any MedicalDataRepository,
         healthMetricsRepository: any HealthMetricsRepository,
@@ -29,9 +23,6 @@ final class ToolHub: @unchecked Sendable {
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         logger: Logger = ConsoleLogger()
     ) {
-        self.extractDraftUseCase = extractDraftUseCase
-        self.confirmDraftUseCase = confirmDraftUseCase
-        self.loadLatestDraftUseCase = loadLatestDraftUseCase
         self.auditStore = auditStore
         self.medicalDataRepository = medicalDataRepository
         self.healthMetricsRepository = healthMetricsRepository
@@ -229,10 +220,6 @@ final class ToolHub: @unchecked Sendable {
             return td("tool.summary.create_canvas")
         case SparkToolName.editCanvas:
             return td("tool.summary.edit_canvas")
-        case SparkToolName.ocrExtractDraft:
-            return td("tool.summary.ocr_extract_draft")
-        case SparkToolName.confirmDraft:
-            return td("tool.summary.confirm_draft")
         default:
             return toolFormat("tool.summary.generic", toolName)
         }
@@ -410,12 +397,6 @@ final class ToolHub: @unchecked Sendable {
                     arrayItems: AIRuntimeToolProperty(type: "string", description: td("tool.param.replacement_item"))
                 )
             ]
-        case SparkToolName.ocrExtractDraft:
-            return [
-                "file_path": AIRuntimeToolProperty(type: "string", description: td("tool.param.file_path_local"))
-            ]
-        case SparkToolName.confirmDraft:
-            return [:]
         default:
             return [
                 "query": AIRuntimeToolProperty(type: "string", description: td("tool.param.tool_query_generic"))
@@ -467,8 +448,6 @@ final class ToolHub: @unchecked Sendable {
             return ["title", "content", "type"]
         case SparkToolName.editCanvas:
             return ["patterns", "replacements"]
-        case SparkToolName.ocrExtractDraft:
-            return ["file_path"]
         case SparkToolName.searchCalendarAndReminders,
              SparkToolName.writeSystemEvent:
             return []
@@ -586,11 +565,6 @@ final class ToolHub: @unchecked Sendable {
             return await runGenerateStructuredHealthCard(invocation: invocation, context: context)
         case SparkToolName.generateChatTitle:
             return runGenerateChatTitle(invocation: invocation)
-        case SparkToolName.ocrExtractDraft:
-            return await runExtractDraft(invocation: invocation, context: context)
-        case SparkToolName.confirmDraft:
-            return await runConfirmDraft(context: context)
-
         case SparkToolName.createCanvas:
             return runCreateCanvas(invocation: invocation)
         case SparkToolName.editCanvas:
@@ -1037,95 +1011,6 @@ final class ToolHub: @unchecked Sendable {
             sensitive: false,
             shouldBypassModel: true
         )
-    }
-
-    /// 从用户提供的文件路径抽取 OCR 文本并生成病历草稿。
-    private func runExtractDraft(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let patientID = context.patientID else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.ocrExtractDraft,
-                outputText: "当前未选择成员，无法生成病历草稿。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-
-        let path = (
-            invocation.arguments["file_path"]
-                ?? invocation.arguments["path"]
-                ?? invocation.arguments["query"]
-                ?? invocation.arguments["content"]
-                ?? ""
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard path.isEmpty == false else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.ocrExtractDraft,
-                outputText: "病历草稿抽取失败：请提供 file_path。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-
-        do {
-            let draft = try await extractDraftUseCase.execute(patientID: patientID, filePath: path)
-            let output = """
-            已生成病历草稿：
-            标题：\(draft.title)
-            摘要：\(draft.summary)
-            诊断：\(draft.diagnosis ?? "待补充")
-            """
-            return ToolExecutionResult(
-                toolName: SparkToolName.ocrExtractDraft,
-                outputText: output,
-                sensitive: true,
-                shouldBypassModel: true
-            )
-        } catch {
-            return ToolExecutionResult(
-                toolName: SparkToolName.ocrExtractDraft,
-                outputText: "病历草稿抽取失败：\(error.localizedDescription)",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-    }
-
-    /// 将最近一条病历草稿确认写入正式病历。
-    private func runConfirmDraft(context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let patientID = context.patientID else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.confirmDraft,
-                outputText: "当前未选择成员，无法确认草稿。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-
-        guard let latestDraft = await loadLatestDraftUseCase.execute(patientID: patientID) else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.confirmDraft,
-                outputText: "未找到可确认的草稿，请先调用 ocr_extract_draft。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-
-        do {
-            let record = try await confirmDraftUseCase.execute(patientID: patientID)
-            return ToolExecutionResult(
-                toolName: SparkToolName.confirmDraft,
-                outputText: "草稿确认成功，已写入病历：\(record.title)（\(record.occurredAt.formatted(date: .abbreviated, time: .omitted))）",
-                sensitive: true,
-                shouldBypassModel: true
-            )
-        } catch {
-            return ToolExecutionResult(
-                toolName: SparkToolName.confirmDraft,
-                outputText: "草稿确认失败：\(error.localizedDescription)。草稿标题：\(latestDraft.title)",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
     }
 
     /// 在内存 `canvasStore` 中新建画布条目（`type` 与 HealthClient 一致，仅存进程内正文）。

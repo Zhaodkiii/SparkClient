@@ -54,7 +54,7 @@ enum AppEnvironment: String, CaseIterable, Sendable {
                 language: .codes(["zh-Hans", "en-US"]),
                 useLanguageCorrection: true,
                 enableAliyunOCR: false,
-                enableLocalServerOCR: true,
+                enableLocalServerOCR: false,
                 localServerBaseURL: apiBaseURL.absoluteString,
                 localServerTimeoutMs: 15_000
             )
@@ -63,7 +63,7 @@ enum AppEnvironment: String, CaseIterable, Sendable {
                 language: .codes(["zh-Hans", "en-US"]),
                 useLanguageCorrection: true,
                 enableAliyunOCR: true,
-                enableLocalServerOCR: true,
+                enableLocalServerOCR: false,
                 localServerBaseURL: apiBaseURL.absoluteString,
                 localServerTimeoutMs: 12_000
             )

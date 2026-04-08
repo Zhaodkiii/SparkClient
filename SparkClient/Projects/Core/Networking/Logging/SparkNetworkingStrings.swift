@@ -71,6 +71,16 @@ enum SparkNetworkingStrings {
         ) -> String {
             "接收响应：\(method) \(path) rid=\(requestId) status=\(statusCode) cost=\(String(format: "%.3f", cost))s headers=\(headers) body=\(body)"
         }
+
+        /// 与「发送请求」同一脱敏规则下的 body；在 HTTP 非 2xx 时再记一条，避免只复制往返分隔块时丢失原报文。
+        nonisolated static func requestBodyReplayForNonSuccess(
+            method: String,
+            path: String,
+            requestId: String,
+            body: String
+        ) -> String {
+            "非 2xx，重复记录请求体：\(method) \(path) rid=\(requestId) body=\(body)"
+        }
     }
 
     enum ETag {

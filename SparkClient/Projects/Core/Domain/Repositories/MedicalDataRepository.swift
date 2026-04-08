@@ -68,8 +68,6 @@ protocol MedicalDataRepository: Sendable {
     func loadSnapshot() async -> MedicalDataSnapshot
     /// 保存完整快照（实现侧通常映射为服务端 upsert）。
     func saveSnapshot(_ snapshot: MedicalDataSnapshot) async throws
-    /// 将当前快照推送到服务端（upsert）。
-    func uploadSnapshotToServer(priority: CloudSyncPriority) async throws
     /// 从服务端拉取最新快照（是否缓存由实现决定）。
     func pullSnapshotFromServer(priority: CloudSyncPriority) async throws
 }

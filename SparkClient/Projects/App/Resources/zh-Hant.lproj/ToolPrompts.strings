@@ -34,8 +34,6 @@
 "tool.summary.extract_remote_file_content" = "用途：從線上 PDF/Office/文字等檔案提取純文字。url 為完整 HTTP(S) 檔案連結。";
 "tool.summary.create_canvas" = "用途：長文字、大段程式碼或 HTML 等不適合氣泡展示時建立畫布；支援 Markdown/程式碼/HTML。需 title、content、type (text|python|html)。";
 "tool.summary.edit_canvas" = "用途：用正則 patterns 與 replacements 一一對應修改已有畫布正文；標題與內容在客戶端分開儲存時需分別處理。改動多時可新建畫布覆蓋。";
-"tool.summary.ocr_extract_draft" = "用途（Spark）：從本機 file_path 抽取 OCR 並生成病歷草稿，需已選擇成員。";
-"tool.summary.confirm_draft" = "用途（Spark）：將最近一條病歷草稿確認寫入正式病歷。";
 "tool.summary.generic" = "執行 %@ 工具。";
 /* ========== 参数与嵌套字段说明 ========== */
 "tool.coord.wgs84_description" = "經緯度（WGS‑84 十進位制度）。";

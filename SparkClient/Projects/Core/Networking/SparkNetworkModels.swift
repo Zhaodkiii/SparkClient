@@ -329,7 +329,52 @@ private extension ISO8601DateFormatter {
 nonisolated struct BackendError: Decodable, Sendable {
     let code: Int
     let msg: String
+    let msgValue: JSONValue
     let data: JSONValue?
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case msg
+        case data
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try container.decode(Int.self, forKey: .code)
+        msgValue = (try? container.decode(JSONValue.self, forKey: .msg)) ?? .string("")
+        data = try? container.decodeIfPresent(JSONValue.self, forKey: .data)
+        msg = Self.stringify(value: msgValue)
+    }
+
+    init(code: Int, msg: String, data: JSONValue?) {
+        self.code = code
+        self.msg = msg
+        self.msgValue = .string(msg)
+        self.data = data
+    }
+
+    private static func stringify(value: JSONValue) -> String {
+        switch value {
+        case .string(let text):
+            return text
+        case .number(let number):
+            return String(number)
+        case .bool(let flag):
+            return flag ? "true" : "false"
+        case .null:
+            return ""
+        case .array(let rows):
+            return rows.map { stringify(value: $0) }.filter { $0.isEmpty == false }.joined(separator: ", ")
+        case .object(let object):
+            let pairs = object
+                .sorted { $0.key < $1.key }
+                .map { key, value in
+                    let rendered = stringify(value: value)
+                    return rendered.isEmpty ? key : "\(key): \(rendered)"
+                }
+            return pairs.joined(separator: "; ")
+        }
+    }
 }
 
 /// 网络栈对上层暴露的统一错误。

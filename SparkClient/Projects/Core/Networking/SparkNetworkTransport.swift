@@ -42,14 +42,14 @@ struct URLSessionNetworkTransport: SparkNetworkTransport {
             ),
             category: "network.io"
         )
+        let roundTripStart = Date()
         do {
-            let start = Date()
             let (data, response) = try await session.data(for: request, delegate: nil)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw SparkNetworkError.invalidResponse
             }
             // 往返耗时，写入入站日志。
-            let cost = Date().timeIntervalSince(start)
+            let cost = Date().timeIntervalSince(roundTripStart)
             let responseBody = NetworkLogSanitizer.bodyPreview(
                 data: data,
                 contentType: httpResponse.value(forHTTPHeaderField: "Content-Type")
@@ -64,19 +64,42 @@ struct URLSessionNetworkTransport: SparkNetworkTransport {
             )
             logger.info(
                 SparkNetworkingStrings.HTTPClient.inbound(
+                    method: method,
+                    path: path,
+                    requestId: requestId,
+                    statusCode: httpResponse.statusCode,
+                    cost: cost,
+                    headers: responseHeaders,
+                    body: responseBody
+                ),
+                category: "network.io"
+            )
+            let statusCode = httpResponse.statusCode
+            let roundTripOutcome = httpRoundTripOutcomeLabel(statusCode: statusCode)
+            if !(200...299).contains(statusCode), requestBody.isEmpty == false {
+                logger.info(
+                    SparkNetworkingStrings.HTTPClient.requestBodyReplayForNonSuccess(
+                        method: method,
+                        path: path,
+                        requestId: requestId,
+                        body: requestBody
+                    ),
+                    category: "network.io"
+                )
+            }
+            logHTTPRoundTripSeparator(
+                logger: logger,
                 method: method,
                 path: path,
                 requestId: requestId,
-                statusCode: httpResponse.statusCode,
+                httpStatus: statusCode,
                 cost: cost,
-                headers: responseHeaders,
-                body: responseBody
-            ),
-                category: "network.io"
+                outcome: roundTripOutcome
             )
             return SparkTransportResponse(data: data, httpResponse: httpResponse)
         } catch let urlError as URLError {
             // 映射为 `SparkNetworkError.transport`，由引擎统一重试策略处理。
+            let cost = Date().timeIntervalSince(roundTripStart)
             logger.warning(
                 SparkNetworkingStrings.HTTPClient.failedRequest(
                     method: method,
@@ -84,9 +107,19 @@ struct URLSessionNetworkTransport: SparkNetworkTransport {
                     reason: "URLError(\(urlError.code.rawValue))"
                 )
             )
+            logHTTPRoundTripSeparator(
+                logger: logger,
+                method: method,
+                path: path,
+                requestId: requestId,
+                httpStatus: nil,
+                cost: cost,
+                outcome: "失败 URLError(\(urlError.code.rawValue))"
+            )
             throw SparkNetworkError.transport(urlError)
         } catch {
             // 非 URLError（如解码、编程错误）：记录后原样上抛。
+            let cost = Date().timeIntervalSince(roundTripStart)
             logger.error(
                 SparkNetworkingStrings.HTTPClient.failedRequest(
                     method: method,
@@ -94,9 +127,64 @@ struct URLSessionNetworkTransport: SparkNetworkTransport {
                     reason: error.localizedDescription
                 )
             )
+            logHTTPRoundTripSeparator(
+                logger: logger,
+                method: method,
+                path: path,
+                requestId: requestId,
+                httpStatus: nil,
+                cost: cost,
+                outcome: "失败 \(error.localizedDescription)"
+            )
             throw error
         }
     }
+}
+
+/// 传输层「往返结束」分隔块上的 outcome 文案：2xx 为成功，其余标明 HTTP 状态类别（仍视为一次完成的 `URLSession` 往返）。
+private func httpRoundTripOutcomeLabel(statusCode: Int) -> String {
+    switch statusCode {
+    case 100...199:
+        return "完成 HTTP \(statusCode)（信息响应）"
+    case 200...299:
+        return "成功"
+    case 300...399:
+        return "完成 HTTP \(statusCode)（重定向）"
+    case 400...499:
+        return "完成 HTTP \(statusCode)（客户端或业务错误）"
+    default:
+        return "完成 HTTP \(statusCode)（服务端错误）"
+    }
+}
+
+/// 标记一次 `URLSession.data` 往返在传输层已结束（含成功、非 HTTP 响应、传输错误），与上层 ETag/重试日志区分，便于按「单趟 HTTP」切分控制台。
+///
+/// 使用多行 + 长分隔线，避免单行过长；键名左对齐，便于检索与对比。
+private func logHTTPRoundTripSeparator(
+    logger: Logger,
+    method: String,
+    path: String,
+    requestId: String,
+    httpStatus: Int?,
+    cost: TimeInterval,
+    outcome: String
+) {
+    let statusText = httpStatus.map(String.init) ?? "—"
+    let costText = String(format: "%.3fs", cost)
+    let bar = String(repeating: "=", count: 80)
+    // 单条 log 内嵌换行：首行带 Logger 标准前缀，续行仅为消息体（多行字符串无行首缩进，避免日志里出现大块空白）。
+    let message = """
+\(bar)
+HTTP round-trip complete | HTTP 往返结束
+  method       \(method)
+  path         \(path)
+  request_id   \(requestId)
+  http_status  \(statusText)
+  cost         \(costText)
+  outcome      \(outcome)
+\(bar)
+"""
+    logger.info(message, category: "network.io")
 }
 
 /// 网络日志里的头与 body 预览：脱敏、转义，避免泄露 token。

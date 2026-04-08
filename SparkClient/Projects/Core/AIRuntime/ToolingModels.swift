@@ -94,8 +94,6 @@ enum SparkToolName {
     static let createCanvas = "create_canvas"
     static let editCanvas = "edit_canvas"
     static let generateStructuredHealthCard = "generate_structured_health_card"
-    static let ocrExtractDraft = "ocr_extract_draft"
-    static let confirmDraft = "confirm_draft"
 
     static let all: [String] = [
         fetchStepDetails,
@@ -128,8 +126,6 @@ enum SparkToolName {
         extractRemoteFileContent,
         createCanvas,
         editCanvas,
-        generateStructuredHealthCard,
-        ocrExtractDraft,
-        confirmDraft
+        generateStructuredHealthCard
     ]
 }

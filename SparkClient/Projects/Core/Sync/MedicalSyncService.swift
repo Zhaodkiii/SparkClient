@@ -40,7 +40,6 @@ final class MedicalSyncService {
 
         do {
             if preference.hasCompletedInitialUpload == false {
-                try await medicalRepository.uploadSnapshotToServer(priority: preference.syncPriority)
                 preference.hasCompletedInitialUpload = true
             }
             try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
@@ -74,7 +73,6 @@ final class MedicalSyncService {
         preference.isSyncEnabled = enabled
         if enabled {
             do {
-                try await medicalRepository.uploadSnapshotToServer(priority: preference.syncPriority)
                 try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
                 preference.hasCompletedInitialUpload = true
                 preference.lastSyncAt = Date()
@@ -93,7 +91,6 @@ final class MedicalSyncService {
         guard preference.isSyncEnabled else { return }
 
         do {
-            try await medicalRepository.uploadSnapshotToServer(priority: preference.syncPriority)
             try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
         } catch let authError as AuthTokenProviderError {
             if authError == .missingTokens || authError == .refreshFailed {

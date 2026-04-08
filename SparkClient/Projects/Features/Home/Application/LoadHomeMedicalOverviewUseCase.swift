@@ -2,8 +2,8 @@ import Foundation
 
 /// 首页医疗摘要加载用例。
 ///
-/// 当前医疗数据以服务端为准：通过 `HomeMemberRepository.loadSnapshot()` 直接获取快照，
-/// 并按当前所选成员汇总四类记录数量与最近日期（病例、体检报告、医疗检查、处方；不访问 HealthKit）。
+/// 当前医疗数据以服务端为准：先加载成员，再按“选中成员”维度加载医疗数据，
+/// 避免一次性查询用户下全部医疗资源。
 struct LoadHomeMedicalOverviewUseCase: Sendable {
     let userProfileRepository: any UserProfileRepository
     let memberRepository: any HomeMemberRepository
@@ -21,13 +21,10 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
             throw NSError(domain: "SparkClient.Home", code: 404, userInfo: [NSLocalizedDescriptionKey: "未找到当前档案"])
         }
 
-        // 远端唯一路径下，refreshRemoteSnapshot 与 loadSnapshot 会触发重复网络请求；
-        // 这里统一走一次 loadSnapshot，避免冗余请求。
         if refreshRemoteSnapshot {
-            logger.debug("refreshRemoteSnapshot 已忽略：当前统一通过 loadSnapshot 拉取远端数据", category: logCategory)
+            try? await memberRepository.refreshRemoteSnapshot()
         }
-        let snapshot = await memberRepository.loadSnapshot()
-        let members = snapshot.members.sorted { lhs, rhs in
+        let members = await memberRepository.loadMembers().sorted { lhs, rhs in
             if lhs.isPrimary == rhs.isPrimary {
                 return lhs.updatedAt > rhs.updatedAt
             }
@@ -40,6 +37,13 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
             }
             return members.first?.id
         }()
+
+        let snapshot: MedicalDataSnapshot
+        if let resolvedSelectedID {
+            snapshot = await memberRepository.loadSnapshot(memberID: resolvedSelectedID)
+        } else {
+            snapshot = .empty
+        }
 
         let medical = HomeMedicalOverview(cards: makeMedicalCards(from: snapshot, selectedMemberID: resolvedSelectedID))
         let cost = Date().timeIntervalSince(startedAt)

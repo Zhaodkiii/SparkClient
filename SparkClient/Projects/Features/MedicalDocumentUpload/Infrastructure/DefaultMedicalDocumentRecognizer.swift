@@ -45,15 +45,21 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
 
         let rawText = try await buildMergedOCRText(files: files)
         let prompt = promptBuilder.extractionPrompt(
-            for: MedicalPromptInput(mode: mode, mergedOCRText: rawText)
-        )
-        let response = try await runtimeService.generateText(
-            request: AIRuntimeTextRequest(
-                scenario: .medicalStructuredExtraction,
-                messages: [AIRuntimeMessage(role: .user, content: prompt)]
+            for: MedicalPromptInput(
+                kind: mapModeToKind(mode),
+                mergedOCRText: rawText
             )
         )
-        let extractedJSON = normalizeJSONEnvelope(response.text)
+        let responseText = try await collectResponseText(
+            from: try await runtimeService.generateTextStream(
+                request: AIRuntimeTextRequest(
+                    scenario: .medicalStructuredExtraction,
+                    messages: [AIRuntimeMessage(role: .user, content: prompt)],
+                    reasoning: .disabled
+                )
+            )
+        )
+        let extractedJSON = normalizeJSONEnvelope(responseText)
         let summary = extractedJSON.count > 300 ? String(extractedJSON.prefix(300)) + "..." : extractedJSON
 
         let result = MedicalDocumentRecognitionResult(
@@ -110,6 +116,21 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func mapModeToKind(_ mode: MedicalDocumentUploadMode?) -> MedicalDocumentKind {
+        switch mode {
+        case .medicalCase:
+            return .caseDocument
+        case .healthExam:
+            return .healthExamReport
+        case .medicalExam:
+            return .medicalReport
+        case .medication:
+            return .medication
+        case .general, .none:
+            return .auto
+        }
+    }
+
     private func buildPayloadPreview(memberID: Int, json: String, rawText: String) -> String {
         let payload: [String: String] = [
             "memberID": "\(memberID)",
@@ -122,5 +143,23 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
             return "{\"memberID\":\(memberID),\"extractedJSON\":\(json)}"
         }
         return pretty
+    }
+
+    private func collectResponseText(
+        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
+    ) async throws -> String {
+        var bufferedText = ""
+        var completedText: String?
+        for try await event in stream {
+            switch event {
+            case .textDelta(let delta):
+                bufferedText.append(delta)
+            case .completed(let response):
+                completedText = response.text
+            case .reasoningDelta, .toolCallDelta:
+                continue
+            }
+        }
+        return completedText ?? bufferedText
     }
 }

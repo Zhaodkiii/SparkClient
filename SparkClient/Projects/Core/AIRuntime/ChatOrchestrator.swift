@@ -81,14 +81,16 @@ struct ChatOrchestrator: Sendable {
             round += 1
             let response: AIRuntimeTextResponse
             do {
-                response = try await runtimeService.generateText(
-                    request: AIRuntimeTextRequest(
-                        scenario: .chat,
-                        messages: loopMessages,
-                        tools: toolDefinitions,
-                        toolChoice: toolChoice,
-                        reasoning: reasoningOpts,
-                        providerCompanyUppercased: nil
+                response = try await collectRuntimeResponse(
+                    from: try await runtimeService.generateTextStream(
+                        request: AIRuntimeTextRequest(
+                            scenario: .chat,
+                            messages: loopMessages,
+                            tools: toolDefinitions,
+                            toolChoice: toolChoice,
+                            reasoning: reasoningOpts,
+                            providerCompanyUppercased: nil
+                        )
                     )
                 )
             } catch {
@@ -231,5 +233,56 @@ struct ChatOrchestrator: Sendable {
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
+    }
+
+    private func collectRuntimeResponse(
+        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
+    ) async throws -> AIRuntimeTextResponse {
+        var bufferedText = ""
+        var bufferedReasoning = ""
+        var toolCallsByIndex: [Int: AIRuntimeToolCall] = [:]
+        var completedResponse: AIRuntimeTextResponse?
+
+        for try await event in stream {
+            switch event {
+            case .textDelta(let delta):
+                bufferedText.append(delta)
+            case .reasoningDelta(let delta):
+                bufferedReasoning.append(delta)
+            case .toolCallDelta(let delta):
+                var call = toolCallsByIndex[delta.index] ?? AIRuntimeToolCall(
+                    id: delta.id ?? UUID().uuidString,
+                    name: delta.name ?? "",
+                    arguments: ""
+                )
+                if let id = delta.id, id.isEmpty == false {
+                    call = AIRuntimeToolCall(id: id, name: call.name, arguments: call.arguments)
+                }
+                if let name = delta.name, name.isEmpty == false {
+                    call = AIRuntimeToolCall(id: call.id, name: name, arguments: call.arguments)
+                }
+                if let argumentsDelta = delta.argumentsDelta, argumentsDelta.isEmpty == false {
+                    call = AIRuntimeToolCall(id: call.id, name: call.name, arguments: call.arguments + argumentsDelta)
+                }
+                toolCallsByIndex[delta.index] = call
+            case .completed(let response):
+                completedResponse = response
+            }
+        }
+
+        if let completedResponse {
+            return completedResponse
+        }
+
+        let reasoningText = bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AIRuntimeTextResponse(
+            text: bufferedText,
+            reasoningText: reasoningText.isEmpty ? nil : reasoningText,
+            model: "unknown",
+            promptTokens: nil,
+            completionTokens: nil,
+            toolCalls: toolCallsByIndex.keys.sorted().compactMap { toolCallsByIndex[$0] },
+            finishReason: nil
+        )
     }
 }

@@ -1,588 +1,236 @@
 import Foundation
 
 final class DefaultMedicalDataRepository: MedicalDataRepository, @unchecked Sendable {
-    private let remoteAPI: SparkMedicalSyncAPI
+    private let queryAPI: SparkMedicalQueryAPI
     private let logger: Logger
 
     init(
-        remoteAPI: SparkMedicalSyncAPI,
+        queryAPI: SparkMedicalQueryAPI,
         logger: Logger = ConsoleLogger()
     ) {
-        self.remoteAPI = remoteAPI
+        self.queryAPI = queryAPI
         self.logger = logger
     }
 
     func loadSnapshot() async -> MedicalDataSnapshot {
         do {
-            let remote = try await remoteAPI.fetchSnapshot(priority: .balanced)
-            return makeLocalSnapshot(from: remote)
+            async let members = queryAPI.listMembers()
+            async let medicalCases = queryAPI.listMedicalCases()
+            async let visits = queryAPI.listVisits()
+            async let surgeries = queryAPI.listSurgeries()
+            async let followUps = queryAPI.listFollowUps()
+            async let healthExamReports = queryAPI.listHealthExamReports()
+            async let examinationReports = queryAPI.listExaminationReports()
+            async let medExamDetails = queryAPI.listMedExamDetails()
+            async let medications = queryAPI.listMedications()
+            async let medicationTakenRecords = queryAPI.listMedicationTakenRecords()
+
+            return MedicalDataSnapshot(
+                members: try await members.map {
+                    Member(
+                        id: $0.id,
+                        name: $0.name,
+                        gender: $0.gender,
+                        relationship: $0.relationship,
+                        birthDate: $0.birthDate,
+                        bloodType: $0.bloodType,
+                        allergies: $0.allergies,
+                        chronicConditions: $0.chronicConditions,
+                        notes: $0.notes,
+                        avatarUrl: $0.avatarUrl,
+                        isPrimary: $0.isPrimary,
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                medicalCases: try await medicalCases.map {
+                    MedicalCase(
+                        id: $0.id,
+                        memberID: $0.member,
+                        recordType: $0.recordType,
+                        status: $0.status,
+                        title: $0.title,
+                        hospitalName: $0.hospitalName,
+                        ageAtVisit: $0.ageAtVisit,
+                        diagnosisSummary: $0.diagnosisSummary,
+                        extra: $0.extra ?? [:],
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                symptoms: [],
+                visits: try await visits.map {
+                    Visit(
+                        id: $0.id,
+                        memberID: $0.member,
+                        medicalCaseID: $0.medicalCase,
+                        visitType: $0.visitType,
+                        visitedAt: $0.visitedAt,
+                        department: $0.department,
+                        doctorName: $0.doctorName,
+                        visitNo: $0.visitNo,
+                        sourceSystemID: $0.sourceSystemID,
+                        notes: $0.notes,
+                        extra: $0.extra ?? [:],
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                surgeries: try await surgeries.map {
+                    Surgery(
+                        id: $0.id,
+                        memberID: $0.member,
+                        medicalCaseID: $0.medicalCase,
+                        procedureName: $0.procedureName,
+                        procedureCode: $0.procedureCode,
+                        site: $0.site,
+                        performedAt: $0.performedAt,
+                        surgeon: $0.surgeon,
+                        anesthesiaType: $0.anesthesiaType,
+                        incisionLevel: $0.incisionLevel,
+                        asaClass: $0.asaClass,
+                        sourceSystemID: $0.sourceSystemID,
+                        notes: $0.notes,
+                        extra: $0.extra ?? [:],
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                followUps: try await followUps.map {
+                    FollowUp(
+                        id: $0.id,
+                        memberID: $0.member,
+                        medicalCaseID: $0.medicalCase,
+                        plannedAt: $0.plannedAt,
+                        completedAt: $0.completedAt,
+                        status: $0.status,
+                        method: $0.method,
+                        outcome: $0.outcome,
+                        nextAction: $0.nextAction,
+                        extra: $0.extra ?? [:],
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                healthExamReports: try await healthExamReports.map {
+                    HealthExamReport(
+                        id: $0.id,
+                        memberID: $0.member,
+                        institutionName: $0.institutionName,
+                        reportNo: $0.reportNo,
+                        examDate: $0.examDate,
+                        examType: $0.examType,
+                        summary: $0.summary,
+                        source: $0.source,
+                        rawOCR: $0.rawOCR,
+                        status: $0.status,
+                        extra: $0.extra,
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                examinationReports: try await examinationReports.map {
+                    ExaminationReport(
+                        id: $0.id,
+                        memberID: $0.member,
+                        medicalRecordID: $0.medicalRecord,
+                        category: $0.category,
+                        subCategory: $0.subCategory,
+                        itemName: $0.itemName,
+                        performedAt: $0.performedAt,
+                        reportedAt: $0.reportedAt,
+                        organizationName: $0.organizationName,
+                        departmentName: $0.departmentName,
+                        doctorName: $0.doctorName,
+                        findings: $0.findings,
+                        impression: $0.impression,
+                        source: $0.source,
+                        rawOCR: $0.rawOCR,
+                        status: $0.status,
+                        extra: $0.extra,
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                medExamDetails: try await medExamDetails.map {
+                    MedExamDetail(
+                        id: $0.id,
+                        businessType: $0.businessType,
+                        businessID: $0.businessID,
+                        memberID: $0.member,
+                        category: $0.category,
+                        subCategory: $0.subCategory,
+                        itemName: $0.itemName,
+                        itemCode: $0.itemCode,
+                        resultValue: $0.resultValue,
+                        unit: $0.unit,
+                        referenceRange: $0.referenceRange,
+                        flag: $0.flag,
+                        resultAt: $0.resultAt,
+                        modality: $0.modality,
+                        bodyPart: $0.bodyPart,
+                        diagnosis: $0.diagnosis,
+                        extra: $0.extra,
+                        sortOrder: $0.sortOrder,
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                medicalReports: [],
+                prescriptionBatches: [],
+                medications: try await medications.map {
+                    Medication(
+                        id: $0.id,
+                        memberID: $0.member,
+                        batchID: $0.batch,
+                        genericName: $0.genericName,
+                        brandName: $0.brandName,
+                        drugName: $0.drugName,
+                        dosageForm: $0.dosageForm,
+                        strength: $0.strength,
+                        route: $0.route,
+                        dosePerTime: $0.dosePerTime,
+                        doseValue: $0.doseValue,
+                        doseUnit: $0.doseUnit,
+                        frequencyCode: $0.frequencyCode,
+                        period: $0.period,
+                        timesPerPeriod: $0.timesPerPeriod,
+                        frequencyText: $0.frequencyText,
+                        durationDays: $0.durationDays,
+                        instructions: $0.instructions,
+                        reminderEnabled: $0.reminderEnabled,
+                        reminderTimes: $0.reminderTimes,
+                        sortOrder: $0.sortOrder,
+                        extra: $0.extra ?? [:],
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                medicationTakenRecords: try await medicationTakenRecords.map {
+                    MedicationTakenRecord(
+                        id: $0.id,
+                        memberID: $0.member,
+                        medicationID: $0.medication,
+                        scheduledAt: $0.scheduledAt,
+                        takenAt: $0.takenAt,
+                        status: $0.status,
+                        doseSequence: $0.doseSequence,
+                        actualDose: $0.actualDose,
+                        timezone: $0.timezone,
+                        notes: $0.notes,
+                        extra: $0.extra ?? [:],
+                        updatedAt: $0.updatedAt
+                    )
+                },
+                healthMetrics: [],
+                updatedAt: Date()
+            )
         } catch {
-            logger.warning("远程健康快照拉取失败，回退空快照：\(error.localizedDescription)", category: "medical_sync")
+            logger.warning("按需医疗数据拉取失败，回退空快照：\(error.localizedDescription)", category: "medical_sync")
             return .empty
         }
     }
 
     func saveSnapshot(_ snapshot: MedicalDataSnapshot) async throws {
-        let payload = makeUploadPayload(from: snapshot)
-        try await remoteAPI.uploadSnapshot(payload, priority: .balanced)
-    }
-
-    func uploadSnapshotToServer(priority: CloudSyncPriority) async throws {
-        let snapshot = await loadSnapshot()
-        let payload = makeUploadPayload(from: snapshot)
-        try await remoteAPI.uploadSnapshot(payload, priority: priority)
-        logger.info("远端健康快照已重新上传", category: "medical_sync")
+        logger.warning("saveSnapshot 已弃用：不再走全量快照上传。", category: "medical_sync")
+        _ = snapshot
     }
 
     func pullSnapshotFromServer(priority: CloudSyncPriority) async throws {
-        _ = try await remoteAPI.fetchSnapshot(priority: priority)
-        logger.info("远程健康快照已拉取", category: "medical_sync")
+        _ = try await loadSnapshot()
+        _ = priority
+        logger.info("按需资源已刷新", category: "medical_sync")
     }
 
-    private func makeUploadPayload(from snapshot: MedicalDataSnapshot) -> SparkMedicalSyncAPI.UploadSnapshotPayload {
-        let members = snapshot.members.map { member in
-            SparkMedicalSyncAPI.UploadMember(
-                id: member.id,
-                name: member.name,
-                gender: member.gender,
-                relationship: member.relationship,
-                birthDate: member.birthDate,
-                bloodType: member.bloodType,
-                allergies: member.allergies,
-                chronicConditions: member.chronicConditions,
-                notes: member.notes,
-                avatarUrl: member.avatarUrl,
-                isPrimary: member.isPrimary
-            )
-        }
-
-        let cases = snapshot.medicalCases.map { medicalCase in
-            SparkMedicalSyncAPI.UploadMedicalCase(
-                id: medicalCase.id,
-                member: medicalCase.memberID,
-                recordType: medicalCase.recordType,
-                status: medicalCase.status,
-                title: medicalCase.title,
-                hospitalName: medicalCase.hospitalName,
-                ageAtVisit: medicalCase.ageAtVisit,
-                diagnosisSummary: medicalCase.diagnosisSummary,
-                extra: medicalCase.extra
-            )
-        }
-        let symptoms = snapshot.symptoms.map { row in
-            SparkMedicalSyncAPI.UploadSymptom(
-                id: row.id,
-                member: row.memberID,
-                medicalCase: row.medicalCaseID,
-                name: row.name,
-                code: row.code,
-                severity: row.severity,
-                startedAt: row.startedAt,
-                durationValue: row.durationValue,
-                durationUnit: row.durationUnit,
-                bodyPart: row.bodyPart,
-                notes: row.notes,
-                extra: row.extra
-            )
-        }
-        let visits = snapshot.visits.map { row in
-            SparkMedicalSyncAPI.UploadVisit(
-                id: row.id,
-                member: row.memberID,
-                medicalCase: row.medicalCaseID,
-                visitType: row.visitType,
-                visitedAt: row.visitedAt,
-                department: row.department,
-                doctorName: row.doctorName,
-                visitNo: row.visitNo,
-                sourceSystemID: row.sourceSystemID,
-                notes: row.notes,
-                extra: row.extra
-            )
-        }
-        let surgeries = snapshot.surgeries.map { row in
-            SparkMedicalSyncAPI.UploadSurgery(
-                id: row.id,
-                member: row.memberID,
-                medicalCase: row.medicalCaseID,
-                procedureName: row.procedureName,
-                procedureCode: row.procedureCode,
-                site: row.site,
-                performedAt: row.performedAt,
-                surgeon: row.surgeon,
-                anesthesiaType: row.anesthesiaType,
-                incisionLevel: row.incisionLevel,
-                asaClass: row.asaClass,
-                sourceSystemID: row.sourceSystemID,
-                notes: row.notes,
-                extra: row.extra
-            )
-        }
-        let followUps = snapshot.followUps.map { row in
-            SparkMedicalSyncAPI.UploadFollowUp(
-                id: row.id,
-                member: row.memberID,
-                medicalCase: row.medicalCaseID,
-                plannedAt: row.plannedAt,
-                completedAt: row.completedAt,
-                status: row.status,
-                method: row.method,
-                outcome: row.outcome,
-                nextAction: row.nextAction,
-                extra: row.extra
-            )
-        }
-
-        let examReports = snapshot.examinationReports.map { report in
-            SparkMedicalSyncAPI.UploadExaminationReport(
-                id: report.id,
-                member: report.memberID,
-                medicalRecord: report.medicalRecordID,
-                category: report.category,
-                subCategory: report.subCategory,
-                itemName: report.itemName,
-                performedAt: report.performedAt,
-                reportedAt: report.reportedAt,
-                organizationName: report.organizationName,
-                departmentName: report.departmentName,
-                doctorName: report.doctorName,
-                findings: report.findings,
-                impression: report.impression,
-                source: report.source,
-                rawOCR: report.rawOCR,
-                status: report.status,
-                extra: report.extra
-            )
-        }
-        let healthExamReports = snapshot.healthExamReports.map { report in
-            SparkMedicalSyncAPI.UploadHealthExamReport(
-                id: report.id,
-                member: report.memberID,
-                institutionName: report.institutionName,
-                reportNo: report.reportNo,
-                examDate: report.examDate,
-                examType: report.examType,
-                summary: report.summary,
-                source: report.source,
-                rawOCR: report.rawOCR,
-                status: report.status,
-                extra: report.extra
-            )
-        }
-        let medExamDetails = snapshot.medExamDetails.map { row in
-            SparkMedicalSyncAPI.UploadMedExamDetail(
-                id: row.id,
-                businessType: row.businessType,
-                businessID: row.businessID,
-                member: row.memberID,
-                category: row.category,
-                subCategory: row.subCategory,
-                itemName: row.itemName,
-                itemCode: row.itemCode,
-                resultValue: row.resultValue,
-                unit: row.unit,
-                referenceRange: row.referenceRange,
-                flag: row.flag,
-                resultAt: row.resultAt,
-                modality: row.modality,
-                bodyPart: row.bodyPart,
-                diagnosis: row.diagnosis,
-                extra: row.extra,
-                sortOrder: row.sortOrder
-            )
-        }
-
-        let medicalReports = snapshot.medicalReports.map { report in
-            SparkMedicalSyncAPI.UploadMedicalReport(
-                id: report.id,
-                member: report.memberID,
-                medicalCase: report.medicalCaseID,
-                reportType: report.reportType,
-                title: report.title,
-                hospital: report.hospital,
-                doctor: report.doctor,
-                content: report.content,
-                date: report.date
-            )
-        }
-
-        let prescriptionBatches = snapshot.prescriptionBatches.map { row in
-            SparkMedicalSyncAPI.UploadPrescriptionBatch(
-                id: row.id,
-                member: row.memberID,
-                medicalCase: row.medicalCaseID,
-                prescriberName: row.prescriberName,
-                institutionName: row.institutionName,
-                prescribedAt: row.prescribedAt,
-                diagnosis: row.diagnosis,
-                batchNo: row.batchNo,
-                status: row.status,
-                auditorName: row.auditorName,
-                auditedAt: row.auditedAt,
-                extra: row.extra
-            )
-        }
-        let medications = snapshot.medications.map { row in
-            SparkMedicalSyncAPI.UploadMedication(
-                id: row.id,
-                member: row.memberID,
-                batch: row.batchID,
-                genericName: row.genericName,
-                brandName: row.brandName,
-                drugName: row.drugName,
-                dosageForm: row.dosageForm,
-                strength: row.strength,
-                route: row.route,
-                dosePerTime: row.dosePerTime,
-                doseValue: row.doseValue,
-                doseUnit: row.doseUnit,
-                frequencyCode: row.frequencyCode,
-                period: row.period,
-                timesPerPeriod: row.timesPerPeriod,
-                frequencyText: row.frequencyText,
-                durationDays: row.durationDays,
-                instructions: row.instructions,
-                reminderEnabled: row.reminderEnabled,
-                reminderTimes: row.reminderTimes,
-                sortOrder: row.sortOrder,
-                extra: row.extra
-            )
-        }
-        let medicationTakenRecords = snapshot.medicationTakenRecords.map { row in
-            SparkMedicalSyncAPI.UploadMedicationTakenRecord(
-                id: row.id,
-                member: row.memberID,
-                medication: row.medicationID,
-                scheduledAt: row.scheduledAt,
-                takenAt: row.takenAt,
-                status: row.status,
-                doseSequence: row.doseSequence,
-                actualDose: row.actualDose,
-                timezone: row.timezone,
-                notes: row.notes,
-                extra: row.extra
-            )
-        }
-        let healthMetrics = snapshot.healthMetrics.map { metric in
-            SparkMedicalSyncAPI.UploadHealthMetric(
-                id: nil,
-                profileClientUID: metric.profileID,
-                metricType: metric.type.rawValue,
-                value: metric.value,
-                unit: metric.unit,
-                recordedAt: metric.recordedAt,
-                note: metric.note,
-                updatedAt: metric.updatedAt
-            )
-        }
-
-        return SparkMedicalSyncAPI.UploadSnapshotPayload(
-            members: members,
-            medicalCases: cases,
-            symptoms: symptoms,
-            visits: visits,
-            surgeries: surgeries,
-            followUps: followUps,
-            healthExamReports: healthExamReports,
-            examinationReports: examReports,
-            medExamDetails: medExamDetails,
-            medicalReports: medicalReports,
-            prescriptionBatches: prescriptionBatches,
-            medications: medications,
-            medicationTakenRecords: medicationTakenRecords,
-            healthMetrics: healthMetrics
-        )
-    }
-
-    private func makeLocalSnapshot(from payload: SparkMedicalSyncAPI.RemoteSnapshotPayload) -> MedicalDataSnapshot {
-        let members = payload.members.map { member in
-            Member(
-                id: member.id,
-                name: member.name,
-                gender: member.gender,
-                relationship: member.relationship,
-                birthDate: member.birthDate,
-                bloodType: member.bloodType,
-                allergies: member.allergies,
-                chronicConditions: member.chronicConditions,
-                notes: member.notes,
-                avatarUrl: member.avatarUrl,
-                isPrimary: member.isPrimary,
-                updatedAt: member.updatedAt
-            )
-        }
-
-        let medicalCases = payload.medicalCases.compactMap { medicalCase -> MedicalCase? in
-            guard members.contains(where: { $0.id == medicalCase.member }) else { return nil }
-            return MedicalCase(
-                id: medicalCase.id,
-                memberID: medicalCase.member,
-                recordType: medicalCase.recordType,
-                status: medicalCase.status,
-                title: medicalCase.title,
-                hospitalName: medicalCase.hospitalName,
-                ageAtVisit: medicalCase.ageAtVisit,
-                diagnosisSummary: medicalCase.diagnosisSummary,
-                extra: medicalCase.extra ?? [:],
-                updatedAt: medicalCase.updatedAt
-            )
-        }
-        let validCaseIDs = Set(medicalCases.map(\.id))
-        let symptoms = payload.symptoms.compactMap { row -> Symptom? in
-            guard members.contains(where: { $0.id == row.member }), validCaseIDs.contains(row.medicalCase) else { return nil }
-            return Symptom(
-                id: row.id,
-                memberID: row.member,
-                medicalCaseID: row.medicalCase,
-                name: row.name,
-                code: row.code,
-                severity: row.severity,
-                startedAt: row.startedAt,
-                durationValue: row.durationValue,
-                durationUnit: row.durationUnit,
-                bodyPart: row.bodyPart,
-                notes: row.notes,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        let visits = payload.visits.compactMap { row -> Visit? in
-            guard members.contains(where: { $0.id == row.member }), validCaseIDs.contains(row.medicalCase) else { return nil }
-            return Visit(
-                id: row.id,
-                memberID: row.member,
-                medicalCaseID: row.medicalCase,
-                visitType: row.visitType,
-                visitedAt: row.visitedAt,
-                department: row.department,
-                doctorName: row.doctorName,
-                visitNo: row.visitNo,
-                sourceSystemID: row.sourceSystemID,
-                notes: row.notes,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        let surgeries = payload.surgeries.compactMap { row -> Surgery? in
-            guard members.contains(where: { $0.id == row.member }), validCaseIDs.contains(row.medicalCase) else { return nil }
-            return Surgery(
-                id: row.id,
-                memberID: row.member,
-                medicalCaseID: row.medicalCase,
-                procedureName: row.procedureName,
-                procedureCode: row.procedureCode,
-                site: row.site,
-                performedAt: row.performedAt,
-                surgeon: row.surgeon,
-                anesthesiaType: row.anesthesiaType,
-                incisionLevel: row.incisionLevel,
-                asaClass: row.asaClass,
-                sourceSystemID: row.sourceSystemID,
-                notes: row.notes,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        let followUps = payload.followUps.compactMap { row -> FollowUp? in
-            guard members.contains(where: { $0.id == row.member }), validCaseIDs.contains(row.medicalCase) else { return nil }
-            return FollowUp(
-                id: row.id,
-                memberID: row.member,
-                medicalCaseID: row.medicalCase,
-                plannedAt: row.plannedAt,
-                completedAt: row.completedAt,
-                status: row.status,
-                method: row.method,
-                outcome: row.outcome,
-                nextAction: row.nextAction,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        if symptoms.count != payload.symptoms.count
-            || visits.count != payload.visits.count
-            || surgeries.count != payload.surgeries.count
-            || followUps.count != payload.followUps.count {
-            logger.warning(
-                "病历叙事快照存在关联不完整数据，已过滤。symptoms=\(symptoms.count)/\(payload.symptoms.count), visits=\(visits.count)/\(payload.visits.count), surgeries=\(surgeries.count)/\(payload.surgeries.count), followUps=\(followUps.count)/\(payload.followUps.count)",
-                category: "medical_sync"
-            )
-        }
-        let examinationReports = payload.examinationReports.compactMap { report -> ExaminationReport? in
-            guard members.contains(where: { $0.id == report.member }) else { return nil }
-            return ExaminationReport(
-                id: report.id,
-                memberID: report.member,
-                medicalRecordID: report.medicalRecord,
-                category: report.category,
-                subCategory: report.subCategory,
-                itemName: report.itemName,
-                performedAt: report.performedAt,
-                reportedAt: report.reportedAt,
-                organizationName: report.organizationName,
-                departmentName: report.departmentName,
-                doctorName: report.doctorName,
-                findings: report.findings,
-                impression: report.impression,
-                source: report.source,
-                rawOCR: report.rawOCR,
-                status: report.status,
-                extra: report.extra,
-                updatedAt: report.updatedAt
-            )
-        }
-        let healthExamReports = payload.healthExamReports.compactMap { report -> HealthExamReport? in
-            guard members.contains(where: { $0.id == report.member }) else { return nil }
-            return HealthExamReport(
-                id: report.id,
-                memberID: report.member,
-                institutionName: report.institutionName,
-                reportNo: report.reportNo,
-                examDate: report.examDate,
-                examType: report.examType,
-                summary: report.summary,
-                source: report.source,
-                rawOCR: report.rawOCR,
-                status: report.status,
-                extra: report.extra,
-                updatedAt: report.updatedAt
-            )
-        }
-        let medExamDetails = payload.medExamDetails.compactMap { row -> MedExamDetail? in
-            guard members.contains(where: { $0.id == row.member }) else { return nil }
-            return MedExamDetail(
-                id: row.id,
-                businessType: row.businessType,
-                businessID: row.businessID,
-                memberID: row.member,
-                category: row.category,
-                subCategory: row.subCategory,
-                itemName: row.itemName,
-                itemCode: row.itemCode,
-                resultValue: row.resultValue,
-                unit: row.unit,
-                referenceRange: row.referenceRange,
-                flag: row.flag,
-                resultAt: row.resultAt,
-                modality: row.modality,
-                bodyPart: row.bodyPart,
-                diagnosis: row.diagnosis,
-                extra: row.extra,
-                sortOrder: row.sortOrder,
-                updatedAt: row.updatedAt
-            )
-        }
-
-        let medicalReports = payload.medicalReports.compactMap { report -> MedicalReport? in
-            guard members.contains(where: { $0.id == report.member }) else { return nil }
-            return MedicalReport(
-                id: report.id,
-                memberID: report.member,
-                medicalCaseID: report.medicalCase,
-                reportType: report.reportType,
-                title: report.title,
-                hospital: report.hospital,
-                doctor: report.doctor,
-                content: report.content,
-                date: report.date,
-                updatedAt: report.updatedAt
-            )
-        }
-
-        let prescriptionBatches = payload.prescriptionBatches.compactMap { row -> PrescriptionBatch? in
-            guard members.contains(where: { $0.id == row.member }) else { return nil }
-            return PrescriptionBatch(
-                id: row.id,
-                memberID: row.member,
-                medicalCaseID: row.medicalCase,
-                prescriberName: row.prescriberName,
-                institutionName: row.institutionName,
-                prescribedAt: row.prescribedAt,
-                diagnosis: row.diagnosis,
-                batchNo: row.batchNo,
-                status: row.status,
-                auditorName: row.auditorName,
-                auditedAt: row.auditedAt,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        let validBatchIDs = Set(prescriptionBatches.map(\.id))
-        let medications = payload.medications.compactMap { row -> Medication? in
-            guard members.contains(where: { $0.id == row.member }), validBatchIDs.contains(row.batch) else { return nil }
-            return Medication(
-                id: row.id,
-                memberID: row.member,
-                batchID: row.batch,
-                genericName: row.genericName,
-                brandName: row.brandName,
-                drugName: row.drugName,
-                dosageForm: row.dosageForm,
-                strength: row.strength,
-                route: row.route,
-                dosePerTime: row.dosePerTime,
-                doseValue: row.doseValue,
-                doseUnit: row.doseUnit,
-                frequencyCode: row.frequencyCode,
-                period: row.period,
-                timesPerPeriod: row.timesPerPeriod,
-                frequencyText: row.frequencyText,
-                durationDays: row.durationDays,
-                instructions: row.instructions,
-                reminderEnabled: row.reminderEnabled,
-                reminderTimes: row.reminderTimes,
-                sortOrder: row.sortOrder,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        let validMedicationIDs = Set(medications.map(\.id))
-        let medicationTakenRecords = payload.medicationTakenRecords.compactMap { row -> MedicationTakenRecord? in
-            guard members.contains(where: { $0.id == row.member }), validMedicationIDs.contains(row.medication) else { return nil }
-            return MedicationTakenRecord(
-                id: row.id,
-                memberID: row.member,
-                medicationID: row.medication,
-                scheduledAt: row.scheduledAt,
-                takenAt: row.takenAt,
-                status: row.status,
-                doseSequence: row.doseSequence,
-                actualDose: row.actualDose,
-                timezone: row.timezone,
-                notes: row.notes,
-                extra: row.extra ?? [:],
-                updatedAt: row.updatedAt
-            )
-        }
-        let healthMetrics = payload.healthMetrics.map { metric in
-            SyncedHealthMetric(
-                id: UUID(),
-                profileID: metric.profileClientUID,
-                type: HealthMetricType(rawValue: metric.metricType) ?? .steps,
-                value: metric.value,
-                unit: metric.unit,
-                recordedAt: metric.recordedAt,
-                note: metric.note,
-                updatedAt: metric.updatedAt
-            )
-        }
-
-        return MedicalDataSnapshot(
-            members: members,
-            medicalCases: medicalCases,
-            symptoms: symptoms,
-            visits: visits,
-            surgeries: surgeries,
-            followUps: followUps,
-            healthExamReports: healthExamReports,
-            examinationReports: examinationReports,
-            medExamDetails: medExamDetails,
-            medicalReports: medicalReports,
-            prescriptionBatches: prescriptionBatches,
-            medications: medications,
-            medicationTakenRecords: medicationTakenRecords,
-            healthMetrics: healthMetrics,
-            updatedAt: Date()
-        )
-    }
 }

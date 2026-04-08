@@ -13,8 +13,9 @@ struct PolishKnowledgeTextUseCase: Sendable {
             scenario: .optimizationText,
             messages: [AIRuntimeMessage(role: .user, content: trimmed)]
         )
-        let response = try await runtime.generateText(request: request)
-        return response.text
+        return try await collectResponseText(
+            from: try await runtime.generateTextStream(request: request)
+        )
     }
 }
 
@@ -34,8 +35,9 @@ struct TranslateKnowledgeTextUseCase: Sendable {
                 AIRuntimeMessage(role: .user, content: trimmed)
             ]
         )
-        let response = try await runtime.generateText(request: request)
-        return response.text
+        return try await collectResponseText(
+            from: try await runtime.generateTextStream(request: request)
+        )
     }
 }
 
@@ -47,4 +49,22 @@ struct OCRKnowledgeImageUseCase: Sendable {
         let result = try await ocr.recognize(image: image, options: .medicalDefault)
         return result.text
     }
+}
+
+private func collectResponseText(
+    from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
+) async throws -> String {
+    var bufferedText = ""
+    var completedText: String?
+    for try await event in stream {
+        switch event {
+        case .textDelta(let delta):
+            bufferedText.append(delta)
+        case .completed(let response):
+            completedText = response.text
+        case .reasoningDelta, .toolCallDelta:
+            continue
+        }
+    }
+    return completedText ?? bufferedText
 }

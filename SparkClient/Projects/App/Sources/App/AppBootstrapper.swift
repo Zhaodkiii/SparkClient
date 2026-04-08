@@ -6,6 +6,8 @@ final class AppBootstrapper {
     private let medicalSyncService: MedicalSyncService
     private let syncChatUseCase: SyncChatUseCase?
     private let routeStore: AppRouteStore
+    private let ossConfigurationStore: SparkOSSConfigurationStore
+    private let ossAPI: SparkOSSAPI
     private let logger: Logger
 
     private var didBootstrapLaunch = false
@@ -16,12 +18,16 @@ final class AppBootstrapper {
         medicalSyncService: MedicalSyncService,
         syncChatUseCase: SyncChatUseCase? = nil,
         routeStore: AppRouteStore,
+        ossConfigurationStore: SparkOSSConfigurationStore,
+        ossAPI: SparkOSSAPI,
         logger: Logger = ConsoleLogger()
     ) {
         self.aiConfigCenter = aiConfigCenter
         self.medicalSyncService = medicalSyncService
         self.syncChatUseCase = syncChatUseCase
         self.routeStore = routeStore
+        self.ossConfigurationStore = ossConfigurationStore
+        self.ossAPI = ossAPI
         self.logger = logger
     }
 
@@ -50,6 +56,7 @@ final class AppBootstrapper {
             await aiConfigCenter.refreshRemoteConfig()
             await aiConfigCenter.prewarm()
             await medicalSyncService.bootstrapIfNeeded()
+            await ossConfigurationStore.prefetchFromBackend(using: ossAPI)
             for scenario in AIScenario.allCases {
                 _ = try await aiConfigCenter.resolve(for: scenario)
             }
@@ -63,6 +70,7 @@ final class AppBootstrapper {
         didBootstrapLaunch = false
         bootstrappedProfiles.removeAll()
         routeStore.resetForNewSession()
+        ossConfigurationStore.clear()
         await syncChatUseCase?.stopRealtime()
         await aiConfigCenter.clearRuntimeOverrides()
     }

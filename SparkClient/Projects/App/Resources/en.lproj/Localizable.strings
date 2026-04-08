@@ -73,6 +73,7 @@
 "medical.upload.step.extract" = "Extracting medical draft";
 "medical.upload.error.no_member" = "Please select a member on Home before extraction.";
 "medical.upload.error.member_invalid" = "Selected member is invalid. Please reselect.";
+"medical.upload.submit_failed_with_server_error" = "Submit failed. Server returned: %@";
 "home.health_basics.title" = "Health basics";
 "home.health_basics.authorize" = "Authorize Health";
 "home.health_basics.only_self" = "Apple Health data is available for the self member only.";

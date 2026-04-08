@@ -1,18 +1,17 @@
 import Foundation
 
 final class RemoteHealthMetricsRepository: HealthMetricsRepository {
-    private let remoteAPI: SparkMedicalSyncAPI
+    private let queryAPI: SparkMedicalQueryAPI
 
-    init(remoteAPI: SparkMedicalSyncAPI) {
-        self.remoteAPI = remoteAPI
+    init(queryAPI: SparkMedicalQueryAPI) {
+        self.queryAPI = queryAPI
     }
 
     func seedDefaultMetricsIfNeeded(for profileID: UUID) async throws {}
 
     func fetchRecentMetrics(for profileID: UUID, limit: Int) async throws -> [HealthMetric] {
-        let payload = try await remoteAPI.fetchSnapshot(priority: .balanced)
-        return payload.healthMetrics
-            .filter { $0.profileClientUID == profileID }
+        let rows = try await queryAPI.listHealthMetrics(profileClientUID: profileID)
+        return rows
             .sorted { $0.recordedAt > $1.recordedAt }
             .prefix(max(1, limit))
             .map { metric in

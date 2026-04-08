@@ -212,6 +212,20 @@ struct AIRuntimeTextResponse: Equatable, Sendable {
     }
 }
 
+struct AIRuntimeToolCallDelta: Equatable, Sendable {
+    let index: Int
+    let id: String?
+    let name: String?
+    let argumentsDelta: String?
+}
+
+enum AIRuntimeStreamEvent: Equatable, Sendable {
+    case textDelta(String)
+    case reasoningDelta(String)
+    case toolCallDelta(AIRuntimeToolCallDelta)
+    case completed(AIRuntimeTextResponse)
+}
+
 enum AIRuntimeError: LocalizedError {
     case emptyMessages
     case invalidResponse

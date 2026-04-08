@@ -1,26 +1,61 @@
 import Foundation
 
 final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendable {
-    private let medicalDataRepository: any MedicalDataRepository
+    private let medicalQueryAPI: SparkMedicalQueryAPI
     private let memberAPI: SparkMedicalMemberAPI
     private let logger: Logger
 
     init(
-        medicalDataRepository: any MedicalDataRepository,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         memberAPI: SparkMedicalMemberAPI,
         logger: Logger = ConsoleLogger()
     ) {
-        self.medicalDataRepository = medicalDataRepository
+        self.medicalQueryAPI = medicalQueryAPI
         self.memberAPI = memberAPI
         self.logger = logger
     }
 
     func refreshRemoteSnapshot() async throws {
-        try await medicalDataRepository.pullSnapshotFromServer(priority: .balanced)
+        _ = try await medicalQueryAPI.listMembers()
     }
 
-    func loadSnapshot() async -> MedicalDataSnapshot {
-        await medicalDataRepository.loadSnapshot()
+    func loadMembers() async -> [Member] {
+        do {
+            let members = try await medicalQueryAPI.listMembers()
+            return members.map(\.domainModel)
+        } catch {
+            logger.error("加载成员列表失败：\(error.localizedDescription)", category: "home")
+            return []
+        }
+    }
+
+    func loadSnapshot(memberID: Int) async -> MedicalDataSnapshot {
+        do {
+            async let summary = medicalQueryAPI.fetchMemberSummary(memberID: memberID)
+            async let medExamDetails = medicalQueryAPI.listMedExamDetails(memberID: memberID)
+            let loadedSummary = try await summary
+
+            return MedicalDataSnapshot(
+                members: [loadedSummary.member.domainModel],
+                medicalCases: loadedSummary.medicalCases.map(\.domainModel),
+                symptoms: [],
+                visits: [],
+                surgeries: [],
+                followUps: [],
+                healthExamReports: loadedSummary.healthExamReports.map(\.domainModel),
+                examinationReports: loadedSummary.examinationReports.map(\.domainModel),
+                medExamDetails: try await medExamDetails.map(\.domainModel),
+                medicalReports: [],
+                prescriptionBatches: [],
+                medications: loadedSummary.medications.map(\.domainModel),
+                medicationTakenRecords: loadedSummary.medicationTakenRecords.map(\.domainModel),
+                healthMetrics: [],
+                updatedAt: Date()
+            )
+        } catch {
+            logger.error("按成员加载医疗数据失败：memberID=\(memberID), error=\(error.localizedDescription)", category: "home")
+            return .empty
+        }
     }
 
     func createMember(
@@ -44,15 +79,10 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
 
         do {
             _ = try await memberAPI.createMember(payload)
-            try await refreshRemoteSnapshot()
+            return
         } catch {
-            logger.warning("远端新增成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
-            try await fallbackCreateMember(
-                name: name,
-                relationship: relationship,
-                gender: gender,
-                birthDate: birthDate
-            )
+            logger.error("远端新增成员失败：\(error.localizedDescription)", category: "home")
+            throw error
         }
     }
 
@@ -78,101 +108,175 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
 
         do {
             _ = try await memberAPI.updateMember(remoteID: member.id, payload: payload)
-            try await refreshRemoteSnapshot()
             return
         } catch {
-            logger.warning("远端更新成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
+            logger.error("远端更新成员失败：\(error.localizedDescription)", category: "home")
+            throw error
         }
-
-        try await fallbackUpdateMember(
-            member,
-            name: name,
-            relationship: relationship,
-            gender: gender,
-            birthDate: birthDate
-        )
     }
 
     func deleteMember(_ member: Member) async throws {
         do {
             try await memberAPI.deleteMember(remoteID: member.id)
-            try await refreshRemoteSnapshot()
             return
         } catch {
-            logger.warning("远端删除成员失败，将尝试通过快照上传兜底：\(error.localizedDescription)", category: "home")
+            logger.error("远端删除成员失败：\(error.localizedDescription)", category: "home")
+            throw error
         }
-
-        try await fallbackDeleteMember(member)
     }
+}
 
-    private func fallbackCreateMember(
-        name: String,
-        relationship: String,
-        gender: String,
-        birthDate: Date?
-    ) async throws {
-        var snapshot = await medicalDataRepository.loadSnapshot()
-        snapshot.members.append(
-            Member(
-                id: (snapshot.members.map(\.id).max() ?? 0) + 1,
-                name: name,
-                gender: gender,
-                relationship: relationship,
-                birthDate: birthDate,
-                isPrimary: snapshot.members.isEmpty,
-                updatedAt: Date()
-            )
+private extension SparkMedicalSyncAPI.RemoteMember {
+    var domainModel: Member {
+        Member(
+            id: id,
+            name: name,
+            gender: gender,
+            relationship: relationship,
+            birthDate: birthDate,
+            bloodType: bloodType,
+            allergies: allergies,
+            chronicConditions: chronicConditions,
+            notes: notes,
+            avatarUrl: avatarUrl,
+            isPrimary: isPrimary,
+            updatedAt: updatedAt
         )
-        try await medicalDataRepository.saveSnapshot(snapshot)
-        try await medicalDataRepository.uploadSnapshotToServer(priority: .balanced)
-        try await medicalDataRepository.pullSnapshotFromServer(priority: .balanced)
     }
+}
 
-    private func fallbackUpdateMember(
-        _ member: Member,
-        name: String,
-        relationship: String,
-        gender: String,
-        birthDate: Date?
-    ) async throws {
-        var snapshot = await medicalDataRepository.loadSnapshot()
-        snapshot.members = snapshot.members.map { current in
-            guard current.id == member.id else { return current }
-            return Member(
-                id: current.id,
-                name: name,
-                gender: gender,
-                relationship: relationship,
-                birthDate: birthDate,
-                bloodType: current.bloodType,
-                allergies: current.allergies,
-                chronicConditions: current.chronicConditions,
-                notes: current.notes,
-                avatarUrl: current.avatarUrl,
-                isPrimary: current.isPrimary,
-                updatedAt: Date()
-            )
-        }
-        try await medicalDataRepository.saveSnapshot(snapshot)
-        try await medicalDataRepository.uploadSnapshotToServer(priority: .balanced)
-        try await medicalDataRepository.pullSnapshotFromServer(priority: .balanced)
+private extension SparkMedicalSyncAPI.RemoteMedicalCase {
+    var domainModel: MedicalCase {
+        MedicalCase(
+            id: id,
+            memberID: member,
+            recordType: recordType,
+            status: status,
+            title: title,
+            hospitalName: hospitalName,
+            ageAtVisit: ageAtVisit,
+            diagnosisSummary: diagnosisSummary,
+            extra: extra ?? [:],
+            updatedAt: updatedAt
+        )
     }
+}
 
-    private func fallbackDeleteMember(_ member: Member) async throws {
-        var snapshot = await medicalDataRepository.loadSnapshot()
-        snapshot.members.removeAll { $0.id == member.id }
-        snapshot.medicalCases.removeAll { $0.memberID == member.id }
-        snapshot.symptoms.removeAll { $0.memberID == member.id }
-        snapshot.visits.removeAll { $0.memberID == member.id }
-        snapshot.surgeries.removeAll { $0.memberID == member.id }
-        snapshot.followUps.removeAll { $0.memberID == member.id }
-        snapshot.examinationReports.removeAll { $0.memberID == member.id }
-        snapshot.medicalReports.removeAll { $0.memberID == member.id }
-        snapshot.prescriptionBatches.removeAll { $0.memberID == member.id }
-        snapshot.medications.removeAll { $0.memberID == member.id }
-        snapshot.medicationTakenRecords.removeAll { $0.memberID == member.id }
-        try await medicalDataRepository.saveSnapshot(snapshot)
-        try await medicalDataRepository.uploadSnapshotToServer(priority: .balanced)
-        try await medicalDataRepository.pullSnapshotFromServer(priority: .balanced)
+private extension SparkMedicalSyncAPI.RemoteHealthExamReport {
+    var domainModel: HealthExamReport {
+        HealthExamReport(
+            id: id,
+            memberID: member,
+            institutionName: institutionName,
+            reportNo: reportNo,
+            examDate: examDate,
+            examType: examType,
+            summary: summary,
+            source: source,
+            rawOCR: rawOCR,
+            status: status,
+            extra: extra,
+            updatedAt: updatedAt
+        )
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteExaminationReport {
+    var domainModel: ExaminationReport {
+        ExaminationReport(
+            id: id,
+            memberID: member,
+            medicalRecordID: medicalRecord,
+            category: category,
+            subCategory: subCategory,
+            itemName: itemName,
+            performedAt: performedAt,
+            reportedAt: reportedAt,
+            organizationName: organizationName,
+            departmentName: departmentName,
+            doctorName: doctorName,
+            findings: findings,
+            impression: impression,
+            source: source,
+            rawOCR: rawOCR,
+            status: status,
+            extra: extra,
+            updatedAt: updatedAt
+        )
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteMedExamDetail {
+    var domainModel: MedExamDetail {
+        MedExamDetail(
+            id: id,
+            businessType: businessType,
+            businessID: businessID,
+            memberID: member,
+            category: category,
+            subCategory: subCategory,
+            itemName: itemName,
+            itemCode: itemCode,
+            resultValue: resultValue,
+            unit: unit,
+            referenceRange: referenceRange,
+            flag: flag,
+            resultAt: resultAt,
+            modality: modality,
+            bodyPart: bodyPart,
+            diagnosis: diagnosis,
+            extra: extra,
+            sortOrder: sortOrder,
+            updatedAt: updatedAt
+        )
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteMedication {
+    var domainModel: Medication {
+        Medication(
+            id: id,
+            memberID: member,
+            batchID: batch,
+            genericName: genericName,
+            brandName: brandName,
+            drugName: drugName,
+            dosageForm: dosageForm,
+            strength: strength,
+            route: route,
+            dosePerTime: dosePerTime,
+            doseValue: doseValue,
+            doseUnit: doseUnit,
+            frequencyCode: frequencyCode,
+            period: period,
+            timesPerPeriod: timesPerPeriod,
+            frequencyText: frequencyText,
+            durationDays: durationDays,
+            instructions: instructions,
+            reminderEnabled: reminderEnabled,
+            reminderTimes: reminderTimes,
+            sortOrder: sortOrder,
+            extra: extra ?? [:],
+            updatedAt: updatedAt
+        )
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteMedicationTakenRecord {
+    var domainModel: MedicationTakenRecord {
+        MedicationTakenRecord(
+            id: id,
+            memberID: member,
+            medicationID: medication,
+            scheduledAt: scheduledAt,
+            takenAt: takenAt,
+            status: status,
+            doseSequence: doseSequence,
+            actualDose: actualDose,
+            timezone: timezone,
+            notes: notes,
+            extra: extra ?? [:],
+            updatedAt: updatedAt
+        )
     }
 }

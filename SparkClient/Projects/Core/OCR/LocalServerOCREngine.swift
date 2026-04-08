@@ -21,7 +21,7 @@ struct LocalServerOCREngine: OCRTextEngine {
 
         guard let image = UIImage(data: imageData),
               let jpegData = image.jpegData(compressionQuality: 0.9),
-              let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines) + "/api/ocr/recognize") else {
+              let url = URL(string: baseURL.trimmingCharacters(in: .whitespacesAndNewlines) + "/api/v1/ocr/recognize") else {
             throw OCRError.invalidImage
         }
 

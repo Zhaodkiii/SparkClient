@@ -20,9 +20,9 @@ struct MedicalDocumentUploadHostView: View {
                     errorMessage: viewModel.errorMessage
                 )
             case .result:
-                if let result = viewModel.recognitionResult {
-                    MedicalDocumentUploadResultView(
-                        result: result,
+                if let output = viewModel.typedOutput {
+                    MedicalDocumentResultRouterView(
+                        output: output,
                         isSaving: viewModel.isSaving,
                         saveReceipt: viewModel.saveReceipt,
                         onBack: { viewModel.reset() },
@@ -68,6 +68,7 @@ struct MedicalDocumentUploadHostView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 memberCard
+                modeSelectorCard
                 pickerCard
                 if viewModel.previewItems.isEmpty == false {
                     MedicalDocumentPreviewGrid(
@@ -142,6 +143,25 @@ struct MedicalDocumentUploadHostView: View {
                 }
             }
             .buttonStyle(.bordered)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.regularMaterial))
+    }
+
+    private var modeSelectorCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("报告类型")
+                .font(.headline)
+            Picker("报告类型", selection: $viewModel.selectedKind) {
+                Text("自动识别").tag(MedicalDocumentKind.auto)
+                Text("病例").tag(MedicalDocumentKind.caseDocument)
+                Text("体检报告").tag(MedicalDocumentKind.healthExamReport)
+                Text("医疗报告").tag(MedicalDocumentKind.medicalReport)
+                Text("处方").tag(MedicalDocumentKind.prescription)
+                Text("用药").tag(MedicalDocumentKind.medication)
+            }
+            .pickerStyle(.menu)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
