@@ -225,6 +225,13 @@ private struct RemoteAIBootstrapPayload: Decodable {
 
 private struct RemoteScenarioCollection: Decodable {
     let chat: AIScenarioRemoteBundle?
+    let medicalStructuredExtraction: AIScenarioRemoteBundle?
+    let medicalDocumentTypeRecognition: AIScenarioRemoteBundle?
+    let medicalCaseExtraction: AIScenarioRemoteBundle?
+    let healthExamExtraction: AIScenarioRemoteBundle?
+    let medicalReportExtraction: AIScenarioRemoteBundle?
+    let prescriptionExtraction: AIScenarioRemoteBundle?
+    let medicationExtraction: AIScenarioRemoteBundle?
     let optimizationText: AIScenarioRemoteBundle?
     let optimizationVisual: AIScenarioRemoteBundle?
     let contextFolding: AIScenarioRemoteBundle?
@@ -234,6 +241,13 @@ private struct RemoteScenarioCollection: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case chat
+        case medicalStructuredExtraction = "medical_structured_extraction"
+        case medicalDocumentTypeRecognition = "medical_document_type_recognition"
+        case medicalCaseExtraction = "medical_case_extraction"
+        case healthExamExtraction = "health_exam_extraction"
+        case medicalReportExtraction = "medical_report_extraction"
+        case prescriptionExtraction = "prescription_extraction"
+        case medicationExtraction = "medication_extraction"
         case optimizationText = "optimization_text"
         case optimizationVisual = "optimization_visual"
         case contextFolding = "context_folding"
@@ -245,6 +259,13 @@ private struct RemoteScenarioCollection: Decodable {
     func asCollection(fallback: AISettingsSnapshot) -> AIScenarioRemoteBundlesCollection {
         AIScenarioRemoteBundlesCollection(
             chat: chat ?? .singleModelFallback(fallback.chat),
+            medicalStructuredExtraction: medicalStructuredExtraction ?? .singleModelFallback(fallback.optimizationText),
+            medicalDocumentTypeRecognition: medicalDocumentTypeRecognition ?? .singleModelFallback(fallback.optimizationText),
+            medicalCaseExtraction: medicalCaseExtraction ?? .singleModelFallback(fallback.optimizationText),
+            healthExamExtraction: healthExamExtraction ?? .singleModelFallback(fallback.optimizationText),
+            medicalReportExtraction: medicalReportExtraction ?? .singleModelFallback(fallback.optimizationText),
+            prescriptionExtraction: prescriptionExtraction ?? .singleModelFallback(fallback.optimizationText),
+            medicationExtraction: medicationExtraction ?? .singleModelFallback(fallback.optimizationText),
             optimizationText: optimizationText ?? .singleModelFallback(fallback.optimizationText),
             optimizationVisual: optimizationVisual ?? .singleModelFallback(fallback.optimizationVisual),
             contextFolding: contextFolding ?? .singleModelFallback(fallback.contextFolding),

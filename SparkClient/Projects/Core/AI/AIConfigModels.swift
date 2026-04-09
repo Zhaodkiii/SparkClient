@@ -261,10 +261,24 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     }
 }
 
-/// bootstrap `scenarios` JSON 中的全部七个场景配置。
+/// bootstrap `scenarios` JSON 中的场景模型配置集合。
 struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     /// 对话场景模型集合。
     var chat: AIScenarioRemoteBundle
+    /// 医疗文档结构化抽取场景模型集合。
+    var medicalStructuredExtraction: AIScenarioRemoteBundle
+    /// 医疗文档类型识别场景模型集合。
+    var medicalDocumentTypeRecognition: AIScenarioRemoteBundle
+    /// 病例结构化抽取场景模型集合。
+    var medicalCaseExtraction: AIScenarioRemoteBundle
+    /// 体检报告结构化抽取场景模型集合。
+    var healthExamExtraction: AIScenarioRemoteBundle
+    /// 医疗报告结构化抽取场景模型集合。
+    var medicalReportExtraction: AIScenarioRemoteBundle
+    /// 处方结构化抽取场景模型集合。
+    var prescriptionExtraction: AIScenarioRemoteBundle
+    /// 用药结构化抽取场景模型集合。
+    var medicationExtraction: AIScenarioRemoteBundle
     /// 文本优化场景模型集合。
     var optimizationText: AIScenarioRemoteBundle
     /// 视觉优化场景模型集合。
@@ -278,9 +292,48 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     /// 报告解读场景模型集合。
     var reportInterpretation: AIScenarioRemoteBundle
 
+    init(
+        chat: AIScenarioRemoteBundle,
+        medicalStructuredExtraction: AIScenarioRemoteBundle,
+        medicalDocumentTypeRecognition: AIScenarioRemoteBundle,
+        medicalCaseExtraction: AIScenarioRemoteBundle,
+        healthExamExtraction: AIScenarioRemoteBundle,
+        medicalReportExtraction: AIScenarioRemoteBundle,
+        prescriptionExtraction: AIScenarioRemoteBundle,
+        medicationExtraction: AIScenarioRemoteBundle,
+        optimizationText: AIScenarioRemoteBundle,
+        optimizationVisual: AIScenarioRemoteBundle,
+        contextFolding: AIScenarioRemoteBundle,
+        router: AIScenarioRemoteBundle,
+        modelConfig: AIScenarioRemoteBundle,
+        reportInterpretation: AIScenarioRemoteBundle
+    ) {
+        self.chat = chat
+        self.medicalStructuredExtraction = medicalStructuredExtraction
+        self.medicalDocumentTypeRecognition = medicalDocumentTypeRecognition
+        self.medicalCaseExtraction = medicalCaseExtraction
+        self.healthExamExtraction = healthExamExtraction
+        self.medicalReportExtraction = medicalReportExtraction
+        self.prescriptionExtraction = prescriptionExtraction
+        self.medicationExtraction = medicationExtraction
+        self.optimizationText = optimizationText
+        self.optimizationVisual = optimizationVisual
+        self.contextFolding = contextFolding
+        self.router = router
+        self.modelConfig = modelConfig
+        self.reportInterpretation = reportInterpretation
+    }
+
     /// 与服务端字段命名的映射。
     enum CodingKeys: String, CodingKey {
         case chat
+        case medicalStructuredExtraction = "medical_structured_extraction"
+        case medicalDocumentTypeRecognition = "medical_document_type_recognition"
+        case medicalCaseExtraction = "medical_case_extraction"
+        case healthExamExtraction = "health_exam_extraction"
+        case medicalReportExtraction = "medical_report_extraction"
+        case prescriptionExtraction = "prescription_extraction"
+        case medicationExtraction = "medication_extraction"
         case optimizationText = "optimization_text"
         case optimizationVisual = "optimization_visual"
         case contextFolding = "context_folding"
@@ -289,29 +342,44 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         case reportInterpretation = "report_interpretation"
     }
 
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        chat = try c.decode(AIScenarioRemoteBundle.self, forKey: .chat)
+        optimizationText = try c.decode(AIScenarioRemoteBundle.self, forKey: .optimizationText)
+        optimizationVisual = try c.decode(AIScenarioRemoteBundle.self, forKey: .optimizationVisual)
+        contextFolding = try c.decode(AIScenarioRemoteBundle.self, forKey: .contextFolding)
+        router = try c.decode(AIScenarioRemoteBundle.self, forKey: .router)
+        modelConfig = try c.decode(AIScenarioRemoteBundle.self, forKey: .modelConfig)
+        reportInterpretation = try c.decode(AIScenarioRemoteBundle.self, forKey: .reportInterpretation)
+
+        medicalStructuredExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalStructuredExtraction)
+        medicalDocumentTypeRecognition = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalDocumentTypeRecognition)
+        medicalCaseExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalCaseExtraction)
+        healthExamExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .healthExamExtraction)
+        medicalReportExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalReportExtraction)
+        prescriptionExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .prescriptionExtraction)
+        medicationExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicationExtraction)
+    }
+
     /// 根据业务场景取对应 bundle。
-    /// 其中 `medicalStructuredExtraction` 目前先复用 `optimizationText`：
-    /// - 便于在服务端尚未独立下发该场景时保持可用；
-    /// - 后续服务端补齐后可平滑切换为独立配置。
     func bundle(for scenario: AIScenario) -> AIScenarioRemoteBundle {
         switch scenario {
         case .chat:
             return chat
         case .medicalStructuredExtraction:
-            // 兼容新增场景：当前服务端尚未单独下发时，先复用文本抽取链路配置。
-            return optimizationText
+            return medicalStructuredExtraction
         case .medicalDocumentTypeRecognition:
-            return optimizationText
+            return medicalDocumentTypeRecognition
         case .medicalCaseExtraction:
-            return optimizationText
+            return medicalCaseExtraction
         case .healthExamExtraction:
-            return optimizationText
+            return healthExamExtraction
         case .medicalReportExtraction:
-            return optimizationText
+            return medicalReportExtraction
         case .prescriptionExtraction:
-            return optimizationText
+            return prescriptionExtraction
         case .medicationExtraction:
-            return optimizationText
+            return medicationExtraction
         case .optimizationText:
             return optimizationText
         case .optimizationVisual:
@@ -327,25 +395,4 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         }
     }
 
-    /// 由旧版“扁平单模型配置快照”构造新版“多模型场景集合”。
-    /// 目的：在迁移阶段保持数据结构统一，避免调用方分叉处理。
-    static func seededFromFlatSnapshots(
-        chat: AIScenarioConfig,
-        optimizationText: AIScenarioConfig,
-        optimizationVisual: AIScenarioConfig,
-        contextFolding: AIScenarioConfig,
-        router: AIScenarioConfig,
-        modelConfig: AIScenarioConfig,
-        reportInterpretation: AIScenarioConfig
-    ) -> AIScenarioRemoteBundlesCollection {
-        AIScenarioRemoteBundlesCollection(
-            chat: .singleModelFallback(chat),
-            optimizationText: .singleModelFallback(optimizationText),
-            optimizationVisual: .singleModelFallback(optimizationVisual),
-            contextFolding: .singleModelFallback(contextFolding),
-            router: .singleModelFallback(router),
-            modelConfig: .singleModelFallback(modelConfig),
-            reportInterpretation: .singleModelFallback(reportInterpretation)
-        )
-    }
 }

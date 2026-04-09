@@ -3,9 +3,147 @@
 "ai.prompt.medical_document.extraction.template" = "你是医疗文档抽取助手。请从 OCR 文本中抽取结构化 JSON，只输出 JSON。\n需包含字段：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR文本：\n%@";
 "ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication。\n仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
 "ai.prompt.medical_case.extraction.template" = "你是病例抽取助手。请只输出 JSON：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\"}\nOCR文本：\n%@";
-"ai.prompt.health_exam.extraction.template" = "你是体检报告抽取助手。请严格只返回一个合法 JSON 对象，且不要输出任何其他内容。\n顶层字段：\n{\"institutionName\":\"...\",\"reportNo\":\"...\",\"examDate\":\"yyyy-MM-dd\",\"examType\":\"routine|onboarding|special|senior\",\"summary\":\"...\",\"items\":[...]}\n其中 items 每项应包含：\n{\"category\":\"...\",\"subCategory\":\"...\",\"itemName\":\"...\",\"itemCode\":\"...\",\"resultValue\":\"...\",\"unit\":\"...\",\"referenceRange\":\"...\",\"flag\":\"...\",\"resultAt\":\"yyyy-MM-dd'T'HH:mm:ssZ\",\"modality\":\"...\",\"bodyPart\":\"...\",\"diagnosis\":\"...\",\"sortOrder\":0}\n要求：\n1) 仅输出合法 JSON。\n2) 不要输出 Markdown、注释、解释文字、标签、代码块围栏或尾随逗号。\n3) 只能输出上述白名单中的顶层字段和 item 字段。\n4) 不要输出 null。顶层标量字段未知时使用空字符串；若未识别到子项目，items 返回 []。\n5) 如果 OCR 中出现了体检机构或医院名称，institutionName 不能为空。\n6) examDate 使用 yyyy-MM-dd；resultAt 存在时使用 yyyy-MM-dd'T'HH:mm:ssZ。\n7) 忽略报告导读、广告、二维码说明、免责声明、重复标题等 OCR 噪声。\nOCR文本：\n%@";
-"ai.prompt.medical_report.extraction.template" = "你是医疗检查报告抽取助手。请输出用于 ExaminationReport + MedExamDetail 保存的 JSON，且只输出 JSON。\n顶层字段：\n{\"reportType\":\"...\",\"title\":\"...\",\"hospital\":\"...\",\"doctor\":\"...\",\"content\":\"...\",\"date\":\"yyyy-MM-dd\",\"items\":[...]}\n其中 items 每项建议包含：\n{\"category\":\"...\",\"subCategory\":\"...\",\"itemName\":\"...\",\"itemCode\":\"...\",\"resultValue\":\"...\",\"unit\":\"...\",\"referenceRange\":\"...\",\"flag\":\"...\",\"resultAt\":\"yyyy-MM-dd'T'HH:mm:ssZ\",\"modality\":\"...\",\"bodyPart\":\"...\",\"diagnosis\":\"...\",\"sortOrder\":0}\nOCR文本：\n%@";
-"ai.prompt.prescription.extraction.template" = "你是处方抽取助手。请只输出 JSON：\n{\"prescriberName\":\"...\",\"institutionName\":\"...\",\"prescribedAt\":\"yyyy-MM-dd\",\"diagnosis\":\"...\",\"batchNo\":\"...\",\"medications\":[{\"name\":\"...\",\"specification\":\"...\",\"dosage\":\"...\",\"frequency\":\"...\",\"duration\":\"...\",\"instructions\":\"...\"}]}\n要求：\n1) 仅输出 JSON。\n2) medications 必须是数组。\n3) 若未识别到药品，medications 返回 []。\nOCR文本：\n%@";
+"ai.prompt.health_exam.extraction.template" = "你是专业体检报告信息抽取引擎。
+任务：从用户提供的中文体检报告/OCR文本中抽取信息，严格按照我指定的JSON结构输出恰好一个JSON对象，禁止任何解释、前后缀、Markdown、注释、代码块围栏。
+
+================================================================
+【输出结构：必须严格使用以下键名】
+{
+    'institutionName': '体检机构名称（无则省略）',
+    'reportNo': '报告单号（无则省略）',
+    'examDate': '体检日期，格式yyyy-MM-dd（无法解析则省略）',
+    'examType': '体检类型（如：年度体检、入职体检、专项体检，无则省略）',
+    'summary': '体检综述/医生建议（无则省略）',
+    'items': [
+        {
+            'category': '科目类别（必填，如：血常规、肝功能、超声检查）',
+            'subCategory': '子类别（无则省略）',
+            'itemName': '项目名称（必填，如：白细胞计数、甲状腺彩超）',
+            'itemCode': '项目缩写/代码（无则省略）',
+            'resultValue': '结果数值或描述（必填）',
+            'unit': '单位（无则省略）',
+            'referenceRange': '参考范围（无则省略）',
+            'flag': '异常标记（仅填：↑、↓、H、L、异常，无则省略）',
+            'resultAt': '采样日期（无则省略）',
+            'modality': '检测方法（如：CT、超声、MRI，无则省略）',
+            'bodyPart': '检测部位（如：甲状腺、肺部，无则省略）',
+            'diagnosis': '医生诊断意见（无则省略）',
+            'extra': {},
+            'sortOrder': 排序序号（数字，无则省略）
+        }
+    ]
+}
+================================================================
+
+【强制规则（必须遵守）】
+1. 无值字段直接省略，严禁出现null、空字符串''、空数组[]、空对象{}。
+2. 键名必须与上述结构完全一致（注意大小写：subCategory、resultValue），禁止新增未定义键。
+3. 日期统一格式为yyyy-MM-dd，无法识别则不输出。
+4. items数组中每个元素对应一条检查指标/结论，无有效指标则整段省略items。
+
+【根对象字段抽取规则】
+- institutionName：体检机构全称（如：苏州美年大健康体检中心）。
+- reportNo：报告编号/流水号。
+- examDate：体检日期，统一转换为yyyy-MM-dd。
+- examType：体检场景（如：年度体检、入职体检、公司体检、专项体检）。
+- summary：主检报告的“综述/总结/医生建议”全文。
+
+【items抽取范围与去噪】
+只从以下内容抽取：主检报告、分项报告、各科室检查、实验室检查、影像/超声/心电、小结/结论/建议。
+必须忽略：报告导读、医学科普、广告、免责声明、公众号/二维码、价格/收费、纯问卷选择题（除非明确体现疾病史）。
+
+【items字段详细规则】
+1. category（必填）：检查大类，如：血常规、肝功能、肾功能、血脂、血糖、肿瘤标志物、超声检查、影像检查、心电图、体格检查、眼科、耳鼻咽喉、口腔科、妇科检查、内科、外科。
+2. subCategory：子类细分，如：血常规属于“血液检查”子类，甲状腺彩超属于“超声检查”子类，无法归类则省略。
+3. itemName（必填）：具体项目名称（如：血清总胆红素、体重指数、胸部CT平扫）。
+4. resultValue（必填）：
+   - 数值类：仅写数值（如：'24.7'、'0.29'），不带单位。
+   - 描述类（影像/超声/心电/小结）：写核心结论（如：'正常'、'未见明显异常'、'甲状腺左叶囊肿(TI-RADS 2类)'）。
+5. unit：单位原样保留（如：'umol/L'、'kg/m²'、'mmHg'）。
+6. referenceRange：参考范围原样保留（如：'≤23'、'0.10-0.28'、'18.5~23.9'）。
+7. flag：仅根据报告原文判断，无则省略：
+   - 出现↑/增高/偏高/升高 → '↑'
+   - 出现↓/降低/偏低/减低 → '↓'
+   - 出现H/高 → 'H'
+   - 出现L/低 → 'L'
+   - 出现“异常/囊肿/结节/息肉/炎/梗塞/钙化灶”且无明确高低 → '异常'
+8. sortOrder：按异常严重程度排序，优先输出严重异常项：
+   - 重度/高危/可疑恶性 → 1
+   - 中度/多项异常 → 2
+   - 轻度/单项异常 → 3
+   - 正常 → 4
+   无法判断则省略。
+
+【健壮性与兜底】
+- 信息冲突时：主检报告/小结 > 分项小结 > 原始表格 > 叙述段落。
+- 若完全无法抽取任何有效信息，输出空结构：{}。
+
+【最终要求】
+只返回纯净JSON，不要任何其他内容。。\nOCR文本：\n%@";
+"ai.prompt.medical_report.extraction.template" = "
+你是专业医疗报告信息抽取引擎。
+任务：从用户提供的中文OCR文本中，抽取【一份或多份】检查报告信息，严格按照我指定的JSON结构输出。
+
+================================================================
+【输出模型：必须严格使用以下结构】
+{
+    'reportType': '报告分类（影像学检查/实验室检查/病理检查）',
+    'title': '报告标题（必填，如：CT检查报告单）',
+    'hospital': '医院名称',
+    'doctor': '检查医生',
+    'content': '报告全文描述/所见/结论/印象（影像学报告必须完整包含所见和结论）',
+    'date': 'yyyy-MM-dd',
+    'details': [
+        {
+            'category': '科目类别',
+            'subCategory': '子类别',
+            'itemName': '项目名称',
+            'itemCode': '项目代码',
+            'resultValue': '结果数值或描述',
+            'unit': '单位',
+            'referenceRange': '参考范围',
+            'flag': '异常标记',
+            'resultAt': 'yyyy-MM-dd',
+            'modality': '检查方式',
+            'bodyPart': '检查部位',
+            'diagnosis': '医生诊断',
+            'sortOrder': 1
+        }
+    ]
+}
+输出格式：[ {...}, {...} ]（即使只有一份报告也必须包裹在数组内）
+================================================================
+
+【抽取规则（必须严格遵守，违反将导致系统崩溃）】
+1. **日期格式硬性要求**：
+   - 所有涉及日期的字段（包括外层的 'date' 和 details 内部的 'resultAt'）**必须且只能**采用 `yyyy-MM-dd` 格式（如：2026-03-23）。
+   - **严禁**输出包含时间、T、Z、时区（如 +0800）或毫秒的任何格式。
+   - 若原件中包含时间（如 08:58:00），请丢弃时间部分，只保留日期。
+
+2. **字段精简原则**：
+   - 严格禁止出现 `null`、空字符串 `''`、空数组 `[]`、或空对象 `{}`。
+   - 如果某个字段无法从原文获取，请**直接从 JSON 中删除该 Key**，不要保留。
+
+3. **报告识别与拆分**：
+   - 影像学报告（CT/超声/MRI/X线）：将【描述/所见】与【结论/印象】合并存入 `content` 字段。
+   - 检验报告（血常规/甲功等）：将每一行指标详细拆分并填入 `details` 数组。
+
+4. **异常标记 (flag) 映射**：
+   - 升高/偏高/↑/H -> 'H'
+   - 降低/偏低/↓/L -> 'L'
+   - 阳性 -> '阳性'，阴性 -> '阴性'
+   - 正常 -> '正常'（若无明确标记则不输出 flag 字段）
+
+5. **内容清洗**：
+   - 自动忽略水印、页码、二维码信息、医院免责声明等无关文本。
+   - 修正 OCR 识别错误（如将 '1.23pmol/L' 误识别为 '1.23pmo1/L' 时，应根据医学常识纠正）。
+
+【最终输出要求】
+只输出纯净 JSON，不要任何 Markdown 引导符（如 ```json）、解释说明或多余文字。
+\n\nOCR文本：\n%@";
+
+
+"ai.prompt.prescription.extraction.template" = "你是\"处方抽取器\"。任务：从中文OCR文本中抽取处方信息，输出恰好一个JSON对象，禁止任何解释、Markdown、代码块围栏或前后缀。\n\n【总则（必须遵守）】\n- 仅输出一个JSON对象。\n- 严禁出现null；没有值就省略该key。\n- 严禁输出空字符串\"\"、空数组[]、空对象{}；为空同样省略该key。\n- 严禁输出未定义的多余key；键名必须与下述模型一致。\n- 值一律为字符串（或数组/对象），布尔与数值请保留为字符串原文。\n- 日期统一格式为yyyy-MM-dd；能解析才输出，解析不了就省略。\n- 忽略OCR噪声（页眉页脚、水印、二维码、广告、医院宣传文案）。\n\n【输出模型（全部可选，缺失即省略）】\n{\n  \"prescriberName\": \"string\",        // 开方医师姓名\n  \"institutionName\": \"string\",       // 开方医院/机构名称\n  \"prescribedAt\": \"yyyy-MM-dd\",       // 开方日期\n  \"diagnosis\": \"string\",              // 临床诊断/初步诊断\n  \"batchNo\": \"string\",                // 处方编号/处方号\n  \"medications\": [                        // 药品明细数组（必填，可为空数组[]）\n    {\n      \"name\": \"string\",                 // 药品通用名（必填）\n      \"specification\": \"string\",       // 规格（如：0.5g×12片、20mg/支）\n      \"dosage\": \"string\",                // 单次剂量（如：2片、0.5g、1支）\n      \"frequency\": \"string\",           // 用药频次（如：每日3次、bid、tid）\n      \"duration\": \"string\",            // 疗程/用药天数（如：7天、1周、14天）\n      \"instructions\": \"string\"          // 用法备注（如：餐后服用、空腹、外用）\n    }\n  ]\n}\n\n【识别与归一化规则】\n1) 日期处理：\n   - 从\"2025年6月4日\"、\"2025/06/04\"、\"2025.06.04\"等统一转为\"yyyy-MM-dd\"格式。\n   - 处方日期通常在抬头或患者信息区域。\n\n2) 药品信息识别（medications数组）：\n   - 每张处方中的每个药品独立为一个数组元素。\n   - 多药品时按处方中的顺序排列，不要随意合并。\n   - 若未识别到任何药品，medications必须返回空数组[]，不得省略该字段。\n\n3) 字段映射规则：\n   - 处方医师/开方医生/医师→prescriberName\n   - 医疗机构/医院/药房→institutionName\n   - 处方号/No./处方编号→batchNo\n   - 临床诊断/诊断/西医诊断→diagnosis\n   - 药品名称/药品/药名→medications[].name\n   - 规格/剂型规格→medications[].specification\n   - 用法用量/每次用量→medications[].dosage\n   - 频次/用法/每日几次→medications[].frequency\n   - 天数/疗程/用药天数→medications[].duration\n   - 备注/注意事项/医嘱→medications[].instructions\n\n4) 频次标准化（可选，尽量保留原文）：\n   - \"每日2次\"、\"一日二次\"、\"bid\" → 保留原文或统一为\"每日2次\"\n   - \"每日3次\"、\"一日三次\"、\"tid\" → 保留原文或统一为\"每日3次\"\n   - \"每日1次\"、\"一日一次\"、\"qd\" → 保留原文或统一为\"每日1次\"\n   - \"必要时\"、\"prn\" → 保留原文\n\n5) 噪声过滤：\n   - 忽略：挂号费、诊疗费、检查费、材料费等非药品条目。\n   - 忽略：患者姓名、性别、年龄、病历号、医保卡号等个人信息。\n   - 忽略：医院地址、电话、网址等宣传信息。\n   - 忽略：\"遵医嘱\"、\"如有不适随诊\"等通用建议。\n\n6) 中药处方特殊处理：\n   - 中药饮片处方：name为具体中药名（如：黄芪、当归），specification为剂量（如：10g、15克）。\n   - 中成药：按西药方式处理，name为中成药名，specification为包装规格。\n\n【输出前自检（仅在思考中执行，不输出）】\n1. 是否只输出了一个JSON对象，无前后缀、无Markdown、无解释。\n2. medications是否为数组（即使为空也是[]）。\n3. 每个药品的name是否已填写（必填字段不得为空或省略）。\n4. 所有键是否在白名单内；无多余键；无重复键；无尾随逗号。\n5. 日期格式是否正确（yyyy-MM-dd）。\n6. 是否过滤了非药品项目（如诊疗费、检查费）。\n\nOCR文本：\n%@";
 "ai.prompt.medication.extraction.template" = "你是用药抽取助手。请只输出 JSON：\n{\"drugName\":\"...\",\"dosage\":\"...\",\"frequencyText\":\"...\",\"durationDays\":0,\"instructions\":\"...\"}\nOCR文本：\n%@";
 "ai.prompt.context.header" = "患者近期病历摘要（最近%d条）：";
 "ai.prompt.context.line" = "- [%@] %@：%@";

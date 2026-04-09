@@ -279,6 +279,56 @@ final class AISettingsAndResolverTests: XCTestCase {
         XCTAssertEqual(mergedAPI.requestURL, "https://remote.sparkservice.local/v1/chat/completions")
     }
 
+    func testMedicalScenarioUsesDedicatedBundleConfig() {
+        var snapshot = AISettingsSnapshot.default
+        let medicalBundle = AIScenarioRemoteBundle(
+            defaultModelName: "med-case-model",
+            models: [
+                AIScenarioRemoteModelRow(
+                    model: "med-case-model",
+                    isDefault: true,
+                    identity: "model",
+                    temperature: 0.05,
+                    maxTokens: 1500,
+                    endpoint: "https://medical.example/v1/chat/completions",
+                    apiKey: nil,
+                    providerCompany: "SPARK",
+                    providerName: "Spark"
+                )
+            ]
+        )
+        snapshot.scenarioRemoteBundles?.medicalCaseExtraction = medicalBundle
+
+        let resolved = snapshot.config(for: .medicalCaseExtraction)
+        XCTAssertEqual(resolved.model, "med-case-model")
+        XCTAssertEqual(resolved.endpoint, "https://medical.example/v1/chat/completions")
+        XCTAssertEqual(resolved.maxTokens, 1500)
+    }
+
+    func testMaterializeDoesNotOverwriteOptimizationTextFromMedicalScenarios() {
+        var snapshot = AISettingsSnapshot.default
+        let originalTextModel = snapshot.optimizationText.model
+        snapshot.scenarioRemoteBundles?.medicalCaseExtraction = AIScenarioRemoteBundle(
+            defaultModelName: "med-only",
+            models: [
+                AIScenarioRemoteModelRow(
+                    model: "med-only",
+                    isDefault: true,
+                    identity: "model",
+                    temperature: 0.0,
+                    maxTokens: 1024,
+                    endpoint: "https://medical.example/v1/chat/completions",
+                    apiKey: nil,
+                    providerCompany: nil,
+                    providerName: nil
+                )
+            ]
+        )
+
+        snapshot.materializeAllScenariosFromBundles()
+        XCTAssertEqual(snapshot.optimizationText.model, originalTextModel)
+    }
+
     private func makeUserDefaults(suiteName: String) throws -> UserDefaults {
         guard let userDefaults = UserDefaults(suiteName: suiteName) else {
             throw NSError(domain: "AISettingsTests", code: -1)

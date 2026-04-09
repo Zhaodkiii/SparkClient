@@ -18,7 +18,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var promptRepo: [PromptRepo]
     var memoryArchive: [MemoryArchive]
     var translationDic: [TranslationDic]
-    /// Server `scenarios` multi-model catalog; `nil` for legacy persisted snapshots until the next remote merge.
+    /// Server `scenarios` multi-model catalog.
     var scenarioRemoteBundles: AIScenarioRemoteBundlesCollection?
     /// Per-scenario chosen model name (`AIScenario.rawValue` → model id); empty uses bundle default.
     var scenarioSelectedModel: [String: String]
@@ -132,55 +132,132 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         promptRepo: AISettingsDefaults.promptRepo,
         memoryArchive: AISettingsDefaults.memoryArchive,
         translationDic: AISettingsDefaults.translationDic,
-        scenarioRemoteBundles: AIScenarioRemoteBundlesCollection.seededFromFlatSnapshots(
-            chat: AIScenarioConfig(
-                endpoint: defaultChatEndpoint,
-                model: "spark-chat-default",
-                apiKey: nil,
-                temperature: 0.2,
-                maxTokens: 4096
+        scenarioRemoteBundles: AIScenarioRemoteBundlesCollection(
+            chat: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 4096
+                )
             ),
-            optimizationText: AIScenarioConfig(
-                endpoint: defaultChatEndpoint,
-                model: "spark-chat-default",
-                apiKey: nil,
-                temperature: 0.0,
-                maxTokens: 4096
+            medicalStructuredExtraction: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
             ),
-            optimizationVisual: AIScenarioConfig(
-                endpoint: defaultChatEndpoint,
-                model: "spark-chat-default",
-                apiKey: nil,
-                temperature: 0.2,
-                maxTokens: 4096
+            medicalDocumentTypeRecognition: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
             ),
-            contextFolding: AIScenarioConfig(
-                endpoint: defaultChatEndpoint,
-                model: "spark-chat-default",
-                apiKey: nil,
-                temperature: 0.2,
-                maxTokens: 4096
+            medicalCaseExtraction: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
             ),
-            router: AIScenarioConfig(
-                endpoint: defaultChatEndpoint,
-                model: "spark-chat-default",
-                apiKey: nil,
-                temperature: 0.2,
-                maxTokens: 4096
+            healthExamExtraction: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
             ),
-            modelConfig: AIScenarioConfig(
-                endpoint: defaultEmbedEndpoint,
-                model: "spark-embedding-default",
-                apiKey: nil,
-                temperature: 0.0,
-                maxTokens: 2048
+            medicalReportExtraction: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
             ),
-            reportInterpretation: AIScenarioConfig(
-                endpoint: defaultChatEndpoint,
-                model: "spark-chat-default",
-                apiKey: nil,
-                temperature: 0.2,
-                maxTokens: 4096
+            prescriptionExtraction: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
+            ),
+            medicationExtraction: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
+            ),
+            optimizationText: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 4096
+                )
+            ),
+            optimizationVisual: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 4096
+                )
+            ),
+            contextFolding: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 4096
+                )
+            ),
+            router: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 4096
+                )
+            ),
+            modelConfig: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultEmbedEndpoint,
+                    model: "spark-embedding-default",
+                    apiKey: nil,
+                    temperature: 0.0,
+                    maxTokens: 2048
+                )
+            ),
+            reportInterpretation: .singleModelFallback(
+                AIScenarioConfig(
+                    endpoint: defaultChatEndpoint,
+                    model: "spark-chat-default",
+                    apiKey: nil,
+                    temperature: 0.2,
+                    maxTokens: 4096
+                )
             )
         ),
         scenarioSelectedModel: [:],
@@ -229,20 +306,9 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         promptRepo = try c.decode([PromptRepo].self, forKey: .promptRepo)
         memoryArchive = try c.decode([MemoryArchive].self, forKey: .memoryArchive)
         translationDic = try c.decode([TranslationDic].self, forKey: .translationDic)
-        scenarioRemoteBundles = try c.decodeIfPresent(AIScenarioRemoteBundlesCollection.self, forKey: .scenarioRemoteBundles)
+        scenarioRemoteBundles = try c.decode(AIScenarioRemoteBundlesCollection.self, forKey: .scenarioRemoteBundles)
         scenarioSelectedModel = try c.decodeIfPresent([String: String].self, forKey: .scenarioSelectedModel) ?? [:]
         trialChatPickerDisabledModelNames = try c.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
-        if scenarioRemoteBundles == nil {
-            scenarioRemoteBundles = AIScenarioRemoteBundlesCollection.seededFromFlatSnapshots(
-                chat: chat,
-                optimizationText: optimizationText,
-                optimizationVisual: optimizationVisual,
-                contextFolding: contextFolding,
-                router: router,
-                modelConfig: modelConfig,
-                reportInterpretation: reportInterpretation
-            )
-        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -264,17 +330,23 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         try c.encode(promptRepo, forKey: .promptRepo)
         try c.encode(memoryArchive, forKey: .memoryArchive)
         try c.encode(translationDic, forKey: .translationDic)
-        try c.encodeIfPresent(scenarioRemoteBundles, forKey: .scenarioRemoteBundles)
+        try c.encode(scenarioRemoteBundles, forKey: .scenarioRemoteBundles)
         try c.encode(scenarioSelectedModel, forKey: .scenarioSelectedModel)
         try c.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
     }
 
     func config(for scenario: AIScenario) -> AIScenarioConfig {
+        if let bundles = scenarioRemoteBundles {
+            let preferred = scenarioSelectedModel[scenario.rawValue]
+            if let row = bundles.bundle(for: scenario).resolveRow(preferredModelName: preferred) {
+                return row.asScenarioConfig()
+            }
+        }
+
         switch scenario {
         case .chat:
             return chat
         case .medicalStructuredExtraction:
-            // 新增医疗结构化抽取场景：当前快照未单独持有字段，先复用文本抽取配置。
             return optimizationText
         case .medicalDocumentTypeRecognition:
             return optimizationText
@@ -329,20 +401,19 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
             case .chat:
                 chat = config
             case .medicalStructuredExtraction:
-                // 新增场景兼容写回：先落到文本抽取配置，避免旧快照结构破坏兼容性。
-                optimizationText = config
+                break
             case .medicalDocumentTypeRecognition:
-                optimizationText = config
+                break
             case .medicalCaseExtraction:
-                optimizationText = config
+                break
             case .healthExamExtraction:
-                optimizationText = config
+                break
             case .medicalReportExtraction:
-                optimizationText = config
+                break
             case .prescriptionExtraction:
-                optimizationText = config
+                break
             case .medicationExtraction:
-                optimizationText = config
+                break
             case .optimizationText:
                 optimizationText = config
             case .optimizationVisual:

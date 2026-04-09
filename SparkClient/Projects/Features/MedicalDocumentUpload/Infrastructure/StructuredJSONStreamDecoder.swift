@@ -62,10 +62,8 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            logger.debug(
-                "流式结构化解码进行中，kind=\(kindLabel), error=\(error.localizedDescription)",
-                category: "medical_upload"
-            )
+            logger.error("流式结构化解码进行中，kind=\(error)",category: "medical_upload")
+            
             return nil
         }
     }

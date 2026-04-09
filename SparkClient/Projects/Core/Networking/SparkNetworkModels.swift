@@ -283,6 +283,11 @@ enum MedicalDateCoding {
         ISO8601DateFormatter.medicalWithFractionalSeconds.string(from: date)
     }
 
+    /// 将 `yyyy-MM-dd` 字符串解析为 `Date`；传 `nil` 或非法值时返回默认日期（默认当前时间）。
+    static func decodeDateOnlyOrDefaultNow(_ value: String?, defaultDate: Date = Date()) -> Date {
+        Date.parseOrNow(value, defaultDate: defaultDate)
+    }
+
     private static func decodeDateOnly(_ value: String) -> Date? {
         // 与 encodeDateOnly 对称。
         let formatter = DateFormatter()
@@ -305,6 +310,59 @@ enum MedicalDateCoding {
     private static func decodeLegacyReferenceTimestamp(_ value: Double) -> Date {
         let seconds = abs(value) > 100_000_000_000 ? value / 1000 : value
         return Date(timeIntervalSinceReferenceDate: seconds)
+    }
+}
+
+extension Date {
+    /// 将可选字符串自动按多种格式解析为 `Date`；为空或解析失败时返回默认日期（默认当前时间）。
+    static func parseOrNow(
+        _ value: String?,
+        defaultDate: Date = Date()
+    ) -> Date {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), value.isEmpty == false else {
+            return defaultDate
+        }
+
+        // 优先尝试 ISO8601（含/不含小数秒）
+        if let date = ISO8601DateFormatter.medicalWithFractionalSeconds.date(from: value) {
+            return date
+        }
+        if let date = ISO8601DateFormatter.medicalBasic.date(from: value) {
+            return date
+        }
+
+        // 再尝试常见日期/时间格式
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+
+        let supportedFormats = [
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+            "yyyy.MM.dd",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy.MM.dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy/MM/dd HH:mm",
+            "yyyy.MM.dd HH:mm"
+        ]
+
+        for format in supportedFormats {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) {
+                return date
+            }
+        }
+
+        // 兼容纯数字时间戳（秒/毫秒）
+        if let numeric = Double(value) {
+            let seconds = abs(numeric) > 100_000_000_000 ? numeric / 1000 : numeric
+            return Date(timeIntervalSinceReferenceDate: seconds)
+        }
+
+        return defaultDate
     }
 }
 

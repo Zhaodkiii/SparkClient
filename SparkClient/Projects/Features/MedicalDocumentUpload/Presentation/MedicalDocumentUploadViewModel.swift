@@ -97,52 +97,88 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     // MARK: - Recognition pipeline
 
     /// 执行上传 + Typed 抽取；成功则进入 `.result`，失败时标记当前步骤为 `.failed` 并写入 `errorMessage`。
+    /// 开始【医疗文档上传 + OCR + AI 抽取】全流程
+    /// 作用：触发整个上传识别流水线（上传文件 → OCR → 类型判定 → AI 抽取 → 展示结果）
     func startRecognition() async {
+        // MARK: 1. 前置校验：必须选择就诊成员（患者）
+        // 从全局状态中获取当前选中的患者，没有则直接报错返回
         guard let member = patientContextStore.context.selectedMember else {
+            // 给 UI 展示错误文案（国际化 L10n）
             errorMessage = L10n.text("medical.upload.error.no_member")
+            // 打印警告日志
             logger.warning("开始识别失败：未选择就诊成员", category: "medical_upload")
             return
         }
+
+        // 保存患者姓名，用于 UI 展示
         selectedMemberName = member.name
+        // 清空之前的错误信息
         errorMessage = nil
+        // 清空上一次的识别结果
         typedOutput = nil
+        // 清空上一次的保存回执
         saveReceipt = nil
+        // 将页面状态设置为：处理中（展示加载动画）
         stage = .processing
-        
-        // 创建新的进度模型
+
+        // MARK: 2. 初始化进度条模型（用于 UI 展示进度）
         progress = createProgress()
+        // 关闭“手动选择模式”标记
         needsManualModeSelection = false
 
+        // MARK: 3. 打印关键日志：开始流程
         logger.info(
             "开始识别流程 memberID=\(member.id) 文件数=\(selectedFiles.count) selectedKind=\(selectedKind.rawValue)",
             category: "medical_upload"
         )
+
+        // MARK: 4. 执行核心流程（try 捕获所有异常）
         do {
-            uploadedFiles = try await uploadFilesUseCase.execute(memberID: member.id, files: selectedFiles)
+            // ------------------------------
+            // 步骤1：调用用例，上传本地文件到服务器
+            // ------------------------------
+            uploadedFiles = try await uploadFilesUseCase.execute(
+                memberID: member.id,
+                files: selectedFiles
+            )
             logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", category: "medical_upload")
-            
+
+            // 标记：上传步骤完成 → 成功
             complete(.upload, outcome: .success)
+            // 标记：开始执行 OCR 步骤，并根据文档类型展示对应图标/样式
             start(.ocr, variant: kindToVariant(selectedKind))
 
+            // ------------------------------
+            // 步骤2：调用核心用例 → 执行 OCR + 类型判定 + AI 结构化抽取
+            // ------------------------------
             let output = try await extractUseCase.execute(
                 memberID: member.id,
                 files: selectedFiles,
                 selectedKind: selectedKind
             )
 
-            complete(.ocr, outcome: .success)
-            complete(.typeRecognition, outcome: .success)
-            complete(.extract, outcome: .success)
+            // ------------------------------
+            // 步骤3：标记所有子流程完成
+            // ------------------------------
+            complete(.ocr, outcome: .success)            // OCR 完成
+            complete(.typeRecognition, outcome: .success) // 文档类型判定完成
+            complete(.extract, outcome: .success)         // AI 抽取完成
 
-            typedOutput = output
-            stage = .result
+            // ------------------------------
+            // 步骤4：流程全部成功 → 保存结果并切换到结果页面
+            // ------------------------------
+            typedOutput = output // 保存结构化结果给 UI
+            stage = .result      // 切换页面状态：展示结果页
             logger.info(
                 "Typed 识别流程完成，resolvedKind=\(output.envelope.typeResolution.kind.rawValue)",
                 category: "medical_upload"
             )
         } catch {
-            fail(.extract)
-            errorMessage = error.localizedDescription
+            // ------------------------------
+            // 任意步骤失败 → 进入失败处理
+            // ------------------------------
+            fail(.extract) // 标记抽取流程失败
+            errorMessage = error.localizedDescription // 给 UI 展示错误信息
             logger.error("Typed 识别流程失败：\(error.localizedDescription)", category: "medical_upload")
         }
     }
@@ -233,41 +269,41 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         
         // 创建初始步骤（upload 为 running，其余为 idle）
         let initialSteps: [MedicalDocumentUploadStep] = [
-            .init(
-                id: MedicalDocumentUploadFlowStep.upload.rawValue,
-                title: MedicalDocumentUploadFlowStep.upload.runningPresentation(variant: variant).title,
-                subtitle: MedicalDocumentUploadFlowStep.upload.runningPresentation(variant: variant).subtitle,
-                state: .running,
-                estimatedSeconds: nil
-            ),
-            .init(
-                id: MedicalDocumentUploadFlowStep.ocr.rawValue,
-                title: MedicalDocumentUploadFlowStep.ocr.runningPresentation(variant: variant).title,
-                subtitle: MedicalDocumentUploadFlowStep.ocr.runningPresentation(variant: variant).subtitle,
-                state: .idle,
-                estimatedSeconds: nil
-            ),
-            .init(
-                id: MedicalDocumentUploadFlowStep.typeRecognition.rawValue,
-                title: MedicalDocumentUploadFlowStep.typeRecognition.runningPresentation(variant: variant).title,
-                subtitle: MedicalDocumentUploadFlowStep.typeRecognition.runningPresentation(variant: variant).subtitle,
-                state: .idle,
-                estimatedSeconds: nil
-            ),
-            .init(
-                id: MedicalDocumentUploadFlowStep.extract.rawValue,
-                title: MedicalDocumentUploadFlowStep.extract.runningPresentation(variant: variant).title,
-                subtitle: MedicalDocumentUploadFlowStep.extract.runningPresentation(variant: variant).subtitle,
-                state: .idle,
-                estimatedSeconds: nil
-            ),
-            .init(
-                id: MedicalDocumentUploadFlowStep.save.rawValue,
-                title: MedicalDocumentUploadFlowStep.save.runningPresentation(variant: variant).title,
-                subtitle: MedicalDocumentUploadFlowStep.save.runningPresentation(variant: variant).subtitle,
-                state: .idle,
-                estimatedSeconds: nil
-            )
+//            .init(
+//                id: MedicalDocumentUploadFlowStep.upload.rawValue,
+//                title: MedicalDocumentUploadFlowStep.upload.runningPresentation(variant: variant).title,
+//                subtitle: MedicalDocumentUploadFlowStep.upload.runningPresentation(variant: variant).subtitle,
+//                state: .running,
+//                estimatedSeconds: nil
+//            ),
+//            .init(
+//                id: MedicalDocumentUploadFlowStep.ocr.rawValue,
+//                title: MedicalDocumentUploadFlowStep.ocr.runningPresentation(variant: variant).title,
+//                subtitle: MedicalDocumentUploadFlowStep.ocr.runningPresentation(variant: variant).subtitle,
+//                state: .idle,
+//                estimatedSeconds: nil
+//            ),
+//            .init(
+//                id: MedicalDocumentUploadFlowStep.typeRecognition.rawValue,
+//                title: MedicalDocumentUploadFlowStep.typeRecognition.runningPresentation(variant: variant).title,
+//                subtitle: MedicalDocumentUploadFlowStep.typeRecognition.runningPresentation(variant: variant).subtitle,
+//                state: .idle,
+//                estimatedSeconds: nil
+//            ),
+//            .init(
+//                id: MedicalDocumentUploadFlowStep.extract.rawValue,
+//                title: MedicalDocumentUploadFlowStep.extract.runningPresentation(variant: variant).title,
+//                subtitle: MedicalDocumentUploadFlowStep.extract.runningPresentation(variant: variant).subtitle,
+//                state: .idle,
+//                estimatedSeconds: nil
+//            ),
+//            .init(
+//                id: MedicalDocumentUploadFlowStep.save.rawValue,
+//                title: MedicalDocumentUploadFlowStep.save.runningPresentation(variant: variant).title,
+//                subtitle: MedicalDocumentUploadFlowStep.save.runningPresentation(variant: variant).subtitle,
+//                state: .idle,
+//                estimatedSeconds: nil
+//            )
         ]
         
         return MedicalDocumentUploadProgress(

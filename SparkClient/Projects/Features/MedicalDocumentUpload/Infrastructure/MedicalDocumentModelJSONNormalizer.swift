@@ -6,8 +6,16 @@ struct MedicalDocumentModelJSONNormalizer: Sendable {
     }
 
     func jsonCandidateString(from json: String) -> String? {
-        let sanitized = sanitizeModelJSONText(json)
-        return extractFirstJSONObject(from: sanitized)
+        let extracted = extractJSONFromMarkdownOrRaw(json)
+        let sanitized = sanitizeModelJSONText(extracted)
+
+        if let first = extractFirstCompleteJSON(from: sanitized),
+           isValidJSON(first) {
+            return first
+        }
+
+        // Fallback: some responses are plain JSON without extra wrappers.
+        return isValidJSON(sanitized) ? sanitized : nil
     }
 
     private func sanitizeModelJSONText(_ text: String) -> String {
@@ -23,6 +31,31 @@ struct MedicalDocumentModelJSONNormalizer: Sendable {
             .joined(separator: "\n")
 
         return removeTrailingCommas(in: withoutCommentLines)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func extractJSONFromMarkdownOrRaw(_ text: String) -> String {
+        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard result.contains("```") else { return result }
+
+        guard let startRange = result.range(of: "```") else { return result }
+        var startIndex = startRange.upperBound
+
+        // Skip optional language label line (e.g. ```json).
+        while startIndex < result.endIndex {
+            if result[startIndex] == "\n" {
+                startIndex = result.index(after: startIndex)
+                break
+            }
+            startIndex = result.index(after: startIndex)
+        }
+
+        guard let endRange = result.range(of: "```", options: .backwards),
+              endRange.lowerBound >= startIndex else {
+            return String(result[startIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return String(result[startIndex..<endRange.lowerBound])
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -79,40 +112,99 @@ struct MedicalDocumentModelJSONNormalizer: Sendable {
         return result
     }
 
-    private func extractFirstJSONObject(from text: String) -> String? {
-        let characters = Array(text)
-        guard let startIndex = characters.firstIndex(of: "{") else { return nil }
+    private func extractFirstCompleteJSON(from text: String) -> String? {
+        guard let range = firstCompleteJSONRange(in: text) else { return nil }
+        return String(text[range])
+    }
 
-        var depth = 0
+    private func firstCompleteJSONRange(in text: String) -> Range<String.Index>? {
+        var index = text.startIndex
+        var started = false
+        var startIndex: String.Index?
         var inString = false
-        var isEscaped = false
+        var escapeNext = false
+        var braceCount = 0
+        var bracketCount = 0
 
-        for index in startIndex..<characters.count {
-            let char = characters[index]
-            if inString {
-                if isEscaped {
-                    isEscaped = false
-                } else if char == "\\" {
-                    isEscaped = true
-                } else if char == "\"" {
-                    inString = false
+        while index < text.endIndex {
+            let char = text[index]
+
+            if !started {
+                if char.isWhitespace {
+                    index = text.index(after: index)
+                    continue
                 }
+                startIndex = index
+                started = true
+            }
+
+            if escapeNext {
+                escapeNext = false
+                index = text.index(after: index)
+                continue
+            }
+
+            if char == "\\" && inString {
+                escapeNext = true
+                index = text.index(after: index)
                 continue
             }
 
             if char == "\"" {
-                inString = true
+                inString.toggle()
+                if !inString && braceCount == 0 && bracketCount == 0, let start = startIndex {
+                    let end = text.index(after: index)
+                    let candidate = String(text[start..<end])
+                    if isValidJSON(candidate) { return start..<end }
+                }
+                index = text.index(after: index)
                 continue
             }
-            if char == "{" {
-                depth += 1
-            } else if char == "}" {
-                depth -= 1
-                if depth == 0 {
-                    return String(characters[startIndex...index])
+
+            if inString {
+                index = text.index(after: index)
+                continue
+            }
+
+            switch char {
+            case "{":
+                braceCount += 1
+            case "}":
+                braceCount -= 1
+            case "[":
+                bracketCount += 1
+            case "]":
+                bracketCount -= 1
+            default:
+                break
+            }
+
+            if braceCount < 0 || bracketCount < 0 {
+                return nil
+            }
+
+            if braceCount == 0 && bracketCount == 0, let start = startIndex {
+                let end = text.index(after: index)
+                let candidate = String(text[start..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if isValidJSON(candidate) {
+                    // Recalculate precise range against original text.
+                    let segment = String(text[start..<end])
+                    let leadingCount = segment.prefix(while: { $0.isWhitespace }).count
+                    let trailingCount = segment.reversed().prefix(while: { $0.isWhitespace }).count
+                    let adjustedStart = text.index(start, offsetBy: leadingCount)
+                    let adjustedEnd = text.index(end, offsetBy: -trailingCount)
+                    return adjustedStart..<adjustedEnd
                 }
             }
+
+            index = text.index(after: index)
         }
+
         return nil
+    }
+
+    private func isValidJSON(_ text: String) -> Bool {
+        guard let data = text.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) != nil
     }
 }
