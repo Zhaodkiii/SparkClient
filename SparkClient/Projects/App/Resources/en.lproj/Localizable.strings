@@ -74,6 +74,21 @@
 "medical.upload.error.no_member" = "Please select a member on Home before extraction.";
 "medical.upload.error.member_invalid" = "Selected member is invalid. Please reselect.";
 "medical.upload.submit_failed_with_server_error" = "Submit failed. Server returned: %@";
+"medical.upload.picking.summary.title" = "Selected files";
+"medical.upload.picking.image_count" = "%d image(s)";
+"medical.upload.picking.document_count" = "%d file(s)";
+"medical.upload.picking.add_files" = "Add more files";
+"medical.upload.picking.tip.auto_type" = "✨ Recognition: document type is detected automatically.";
+"medical.upload.picking.tip.formats" = "📋 Formats: images (JPG/PNG/HEIC) and PDF.";
+"medical.upload.picking.clear" = "Clear";
+"medical.upload.picking.report_type" = "Report type";
+"medical.upload.picking.a11y.report_type" = "Report type, currently %@";
+"medical.upload.kind.auto" = "Auto-detect";
+"medical.upload.kind.case" = "Case record";
+"medical.upload.kind.health_exam" = "Health checkup";
+"medical.upload.kind.medical_report" = "Medical report";
+"medical.upload.kind.prescription" = "Prescription";
+"medical.upload.kind.medication" = "Medication";
 "home.health_basics.title" = "Health basics";
 "home.health_basics.authorize" = "Authorize Health";
 "home.health_basics.only_self" = "Apple Health data is available for the self member only.";
@@ -452,3 +467,70 @@
 "medical.examination.status.2" = "Completed";
 "medical.examination.status.3" = "Revised";
 "medical.examination.status.4" = "Discarded";
+
+// MARK: - Upload Progress Step Localization
+"medical.upload.step.upload.running" = "Processing document";
+"medical.upload.step.upload.subtitle" = "For this recognition only";
+"medical.upload.step.upload.completed" = "Document ready";
+"medical.upload.step.upload.failed" = "Document processing failed";
+"medical.upload.step.ocr.running" = "Recognizing text";
+"medical.upload.step.ocr.subtitle" = "OCR extracting document content";
+"medical.upload.step.ocr.completed" = "Text recognition completed";
+"medical.upload.step.ocr.failed" = "Text recognition failed";
+"medical.upload.step.type.running" = "AI recognizing document type";
+"medical.upload.step.type.subtitle" = "Using AI to detect type";
+"medical.upload.step.type.completed" = "AI recognition completed";
+"medical.upload.step.type.failed" = "AI recognition failed";
+"medical.upload.step.extract.running" = "Smart analysis";
+"medical.upload.step.extract.subtitle.default" = "AI extracting medical information";
+"medical.upload.step.extract.subtitle.case" = "AI extracting case information";
+"medical.upload.step.extract.subtitle.health_exam" = "AI extracting checkup items";
+"medical.upload.step.extract.subtitle.medical_report" = "AI extracting test information";
+"medical.upload.step.extract.subtitle.prescription" = "AI extracting prescription information";
+"medical.upload.step.extract.subtitle.medication" = "AI extracting medication information";
+"medical.upload.step.extract.completed" = "Smart analysis completed";
+"medical.upload.step.extract.failed" = "Smart analysis failed";
+"medical.upload.step.save.running" = "Saving";
+"medical.upload.step.save.completed" = "Save completed";
+"medical.upload.step.save.failed" = "Save failed";
+
+// MARK: - Type Selection Failure
+"medical.upload.type_selection.title" = "Cannot automatically recognize document type";
+"medical.upload.type_selection.subtitle" = "Please select a document type to continue";
+"medical.upload.type_selection.case" = "Upload medical case/report";
+"medical.upload.type_selection.case.subtitle" = "Supports photo, gallery, PDF";
+"medical.upload.type_selection.health_exam" = "Upload health checkup";
+"medical.upload.type_selection.health_exam.subtitle" = "Supports JPG/PNG/PDF formats";
+"medical.upload.type_selection.medical_report" = "Upload test report";
+"medical.upload.type_selection.medical_report.subtitle" = "Lab tests, imaging, etc.";
+"medical.upload.type_selection.prescription" = "Upload prescription/medication";
+"medical.upload.type_selection.prescription.subtitle" = "Drug name, dosage, timing";
+"medical.upload.type_selection.medication" = "Upload medication record";
+"medical.upload.type_selection.medication.subtitle" = "Long-term medication tracking";
+
+// MARK: - Action Buttons
+"medical.upload.action.cancel" = "Cancel";
+"medical.upload.action.return_to_picker" = "Back to selection";
+"medical.upload.action.restart" = "Retry recognition";
+"medical.upload.action.retry" = "Retry";
+
+// MARK: - Time Display
+"medical.upload.time.elapsed.seconds" = "Elapsed: %d seconds";
+"medical.upload.time.elapsed.minutes" = "Elapsed: %d min %d sec";
+"medical.upload.time.estimated.seconds" = "%@ (estimated %d seconds)";
+"medical.upload.time.estimated.minutes" = "%@ (estimated %d minutes)";
+
+// MARK: - Status Labels
+"medical.upload.status.processing" = "Processing";
+"medical.upload.status.completed" = "Completed";
+"medical.upload.status.failed" = "Failed";
+"medical.upload.processing.title" = "Recognizing";
+"medical.upload.processing.default_title" = "Processing...";
+
+// MARK: - Accessibility
+"medical.upload.a11y.step" = "Step %d: %@";
+
+// MARK: - Error Messages
+"medical.upload.error.title" = "Error";
+"medical.upload.error.confirm" = "OK";
+"medical.upload.error.no_result" = "No recognition result to save.";

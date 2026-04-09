@@ -215,8 +215,29 @@ final class AppContainer {
         self.backend = backend
         self.logger = logger
         self.fileCacheManager = FileCacheManager(logger: logger)
-        self.fileTransferService = FileTransferService(api: backend.files, cacheManager: fileCacheManager, logger: logger)
         let ossConfigurationStore = SparkOSSConfigurationStore(logger: logger)
+        let ossManager = OSSManager.shared
+        let ossClient = OSSClientWrapper(manager: ossManager)
+        ossManager.credentialsProvider = { [weak ossConfigurationStore, backend] in
+            guard let store = ossConfigurationStore else {
+                throw SparkOSSConfigurationError.incompleteSTSResponse
+            }
+            let config = try await store.configurationForUpload(using: backend.oss)
+            return OSSCredentials(
+                accessKeyId: config.accessKeyId,
+                accessKeySecret: config.accessKeySecret,
+                securityToken: config.securityToken,
+                expiration: config.credentialExpiresAt
+            )
+        }
+        self.fileTransferService = FileTransferService(
+            api: backend.files,
+            ossAPI: backend.oss,
+            ossClient: ossClient,
+            ossConfigurationStore: ossConfigurationStore,
+            cacheManager: fileCacheManager,
+            logger: logger
+        )
 
         // MARK: 仓库层（数据访问抽象）
         // 会话资料与远程健康指标：登录流程中可能触发健康时间轴预拉。

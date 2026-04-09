@@ -1,6 +1,5 @@
 "ai.prompt.chat.system" = "你是 Spark 健康助手，请优先提供准确、简洁、可执行的健康建议，并使用用户语言回复。";
 "ai.prompt.chat.deep_thinking" = "请逐步深入推理：先简要展开推理过程，再给出明确结论。";
-"ai.prompt.extraction.template" = "你是医疗病历抽取助手。请从 OCR 文本中抽取结构化病历草稿，输出 JSON：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\"}\n要求：\n1) 只输出 JSON，不要额外解释。\n2) summary 不超过120字。\n3) 若日期无法确定，occurredAt 使用今天日期。\n\nOCR文本：\n%@";
 "ai.prompt.medical_document.extraction.template" = "你是医疗文档抽取助手。请从 OCR 文本中抽取结构化 JSON，只输出 JSON。\n需包含字段：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR文本：\n%@";
 "ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication。\n仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
 "ai.prompt.medical_case.extraction.template" = "你是病例抽取助手。请只输出 JSON：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\"}\nOCR文本：\n%@";
@@ -12,7 +11,5 @@
 "ai.prompt.context.line" = "- [%@] %@：%@";
 "ai.prompt.fallback.assistant" = "我现在无法给出有效回复，请稍后重试。";
 "ai.prompt.thread.new_title" = "新对话";
-"ai.prompt.extraction.fallback.title" = "OCR病历草稿";
-"ai.prompt.extraction.fallback.summary" = "待补充摘要";
 "ai.prompt.consent.blocked.default_reason" = "敏感信息未发送到模型。";
 "ai.prompt.consent.blocked.template" = "[ConsentGate] %@";

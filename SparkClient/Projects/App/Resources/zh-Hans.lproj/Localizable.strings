@@ -74,6 +74,21 @@
 "medical.upload.error.no_member" = "请先在首页选择成员后再识别。";
 "medical.upload.error.member_invalid" = "成员已失效，请重新选择。";
 "medical.upload.submit_failed_with_server_error" = "提交失败，服务返回错误内容：%@";
+"medical.upload.picking.summary.title" = "已选择文件";
+"medical.upload.picking.image_count" = "%d 张图片";
+"medical.upload.picking.document_count" = "%d 个文件";
+"medical.upload.picking.add_files" = "继续添加文件";
+"medical.upload.picking.tip.auto_type" = "✨ 支持识别：自动识别文档类型";
+"medical.upload.picking.tip.formats" = "📋 支持格式：图片 (JPG/PNG/HEIC)、PDF 文档";
+"medical.upload.picking.clear" = "清空";
+"medical.upload.picking.report_type" = "报告类型";
+"medical.upload.picking.a11y.report_type" = "报告类型，当前为 %@";
+"medical.upload.kind.auto" = "自动识别";
+"medical.upload.kind.case" = "病例";
+"medical.upload.kind.health_exam" = "体检报告";
+"medical.upload.kind.medical_report" = "医疗报告";
+"medical.upload.kind.prescription" = "处方";
+"medical.upload.kind.medication" = "用药";
 "home.health_basics.title" = "健康基础信息";
 "home.health_basics.authorize" = "授权健康";
 "home.health_basics.only_self" = "仅“本人”成员可展示 Apple 健康数据。";
@@ -452,3 +467,70 @@
 "medical.examination.status.2" = "完成";
 "medical.examination.status.3" = "修订";
 "medical.examination.status.4" = "废弃";
+
+// MARK: - 上传进度步骤文案
+"medical.upload.step.upload.running" = "正在处理文档";
+"medical.upload.step.upload.subtitle" = "仅用于本次智能识别";
+"medical.upload.step.upload.completed" = "文档已就绪";
+"medical.upload.step.upload.failed" = "文档处理失败";
+"medical.upload.step.ocr.running" = "正在识别文字";
+"medical.upload.step.ocr.subtitle" = "OCR 识别文档内容";
+"medical.upload.step.ocr.completed" = "文字识别完成";
+"medical.upload.step.ocr.failed" = "文字识别失败";
+"medical.upload.step.type.running" = "AI 识别文档类型";
+"medical.upload.step.type.subtitle" = "使用 AI 智能识别";
+"medical.upload.step.type.completed" = "AI 识别完成";
+"medical.upload.step.type.failed" = "AI 识别失败";
+"medical.upload.step.extract.running" = "智能分析";
+"medical.upload.step.extract.subtitle.default" = "AI 提取医疗信息";
+"medical.upload.step.extract.subtitle.case" = "AI 提取病例信息";
+"medical.upload.step.extract.subtitle.health_exam" = "AI 提取体检项目";
+"medical.upload.step.extract.subtitle.medical_report" = "AI 提取检查信息";
+"medical.upload.step.extract.subtitle.prescription" = "AI 提取处方信息";
+"medical.upload.step.extract.subtitle.medication" = "AI 提取用药信息";
+"medical.upload.step.extract.completed" = "智能分析完成";
+"medical.upload.step.extract.failed" = "智能分析失败";
+"medical.upload.step.save.running" = "正在保存";
+"medical.upload.step.save.completed" = "保存完成";
+"medical.upload.step.save.failed" = "保存失败";
+
+// MARK: - 类型选择失败界面
+"medical.upload.type_selection.title" = "无法自动识别文档类型";
+"medical.upload.type_selection.subtitle" = "请选择文档类型以继续处理";
+"medical.upload.type_selection.case" = "上传医院病例/检查单";
+"medical.upload.type_selection.case.subtitle" = "支持拍照上传、相册选择、PDF 文件";
+"medical.upload.type_selection.health_exam" = "上传体检报告";
+"medical.upload.type_selection.health_exam.subtitle" = "支持 JPG/PNG/PDF 格式";
+"medical.upload.type_selection.medical_report" = "上传检查报告";
+"medical.upload.type_selection.medical_report.subtitle" = "实验室检查、影像检查等";
+"medical.upload.type_selection.prescription" = "上传用药/处方单";
+"medical.upload.type_selection.prescription.subtitle" = "药品名称、用法用量、用药时间";
+"medical.upload.type_selection.medication" = "上传用药记录";
+"medical.upload.type_selection.medication.subtitle" = "长期用药、用药依从性";
+
+// MARK: - 操作按钮
+"medical.upload.action.cancel" = "取消";
+"medical.upload.action.return_to_picker" = "返回选择";
+"medical.upload.action.restart" = "重新识别";
+"medical.upload.action.retry" = "重试";
+
+// MARK: - 时间显示
+"medical.upload.time.elapsed.seconds" = "当前已用时 %d 秒";
+"medical.upload.time.elapsed.minutes" = "当前已用时 %d 分%d 秒";
+"medical.upload.time.estimated.seconds" = "%@（预计约 %d 秒）";
+"medical.upload.time.estimated.minutes" = "%@（预计约 %d 分钟）";
+
+// MARK: - 状态标签
+"medical.upload.status.processing" = "进行中";
+"medical.upload.status.completed" = "已完成";
+"medical.upload.status.failed" = "识别失败";
+"medical.upload.processing.title" = "正在识别";
+"medical.upload.processing.default_title" = "处理中...";
+
+// MARK: - 无障碍
+"medical.upload.a11y.step" = "步骤 %d: %@";
+
+// MARK: - 错误提示
+"medical.upload.error.title" = "错误";
+"medical.upload.error.confirm" = "好";
+"medical.upload.error.no_result" = "暂无可保存的识别结果。";

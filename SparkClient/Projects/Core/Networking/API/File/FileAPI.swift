@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 struct SparkFileAPI {
@@ -14,52 +13,6 @@ struct SparkFileAPI {
             deviceCache: engine.cache(),
             logger: engine.networkLogger
         )
-    }
-
-    func upload(
-        data: Data,
-        fileName: String,
-        businessType: String,
-        businessID: String,
-        isPublic: Bool,
-        mimeType: String
-    ) async throws -> ManagedFileRecord {
-        let md5 = Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        let body = MultipartFormDataBuilder.build(
-            boundary: MultipartFormDataBuilder.defaultBoundary,
-            fields: [
-                "business_type": businessType,
-                "business_id": businessID,
-                "is_public": isPublic ? "1" : "0",
-                "file_md5": md5,
-            ],
-            fileFieldName: "file",
-            fileName: fileName,
-            mimeType: mimeType,
-            fileData: data
-        )
-
-        let operation = CacheableSparkNetworkOperation(
-            name: "File.Upload",
-            apiName: "FileAPI",
-            request: SparkNetworkRequest(
-                method: .post,
-                path: "/api/v1/files/upload/",
-                headers: ["Content-Type": "multipart/form-data; boundary=\(MultipartFormDataBuilder.defaultBoundary)"],
-                body: .raw(body, contentType: "multipart/form-data; boundary=\(MultipartFormDataBuilder.defaultBoundary)"),
-                strategy: NetworkStrategy(
-                    requiresAuth: true,
-                    allowETag: false,
-                    serialKey: "file.upload",
-                    retryConfig: .default,
-                    isIdempotent: false,
-                    queuePriority: .high
-                )
-            )
-        )
-
-        let response = try await configuration.execute(operation)
-        return try APIResponseDecoder.decodeWrappedData(ManagedFileRecord.self, from: response)
     }
 
     func list(
@@ -124,17 +77,41 @@ struct SparkFileAPI {
         return try APIResponseDecoder.decodeWrappedData(ManagedFileRecord.self, from: response)
     }
 
-    func downloadData(fileID: Int) async throws -> Data {
+    func registerFile(_ requestBody: FileRegistrationRequest) async throws -> ManagedFileRecord {
         let operation = CacheableSparkNetworkOperation(
-            name: "File.Download",
+            name: "File.Register",
             apiName: "FileAPI",
             request: SparkNetworkRequest(
-                method: .get,
-                path: "/api/v1/files/\(fileID)/download/",
+                method: .post,
+                path: "/api/v1/files/register/",
+                body: .json(AnyEncodable(requestBody)),
                 strategy: NetworkStrategy(
                     requiresAuth: true,
                     allowETag: false,
-                    serialKey: "file.download.\(fileID)",
+                    serialKey: "file.register",
+                    retryConfig: .default,
+                    isIdempotent: false,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        return try APIResponseDecoder.decodeWrappedData(ManagedFileRecord.self, from: response)
+    }
+
+    func getPresignedDownloadURL(fileID: Int, expires: TimeInterval = 3600) async throws -> URL {
+        let operation = CacheableSparkNetworkOperation(
+            name: "File.DownloadURL",
+            apiName: "FileAPI",
+            request: SparkNetworkRequest(
+                method: .get,
+                path: "/api/v1/files/\(fileID)/download-url/",
+                queryItems: [URLQueryItem(name: "expires", value: String(Int(expires)))],
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "file.download.url.\(fileID)",
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .high
@@ -143,46 +120,16 @@ struct SparkFileAPI {
         )
 
         let response = try await configuration.execute(operation)
-        guard (200...299).contains(response.httpResponse.statusCode) else {
-            throw SparkNetworkError.httpError(statusCode: response.httpResponse.statusCode, backend: nil, rawBody: response.data)
+        let payload = try APIResponseDecoder.decodeWrappedData(PresignedDownloadResponse.self, from: response)
+        guard let url = URL(string: payload.url) else {
+            throw SparkNetworkError.decoding(
+                NSError(domain: "SparkFileAPI", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid presigned URL"])
+            )
         }
-        return response.data
+        return url
     }
 }
 
-enum MultipartFormDataBuilder {
-    static let defaultBoundary = "SparkBoundary-\(UUID().uuidString)"
-
-    static func build(
-        boundary: String,
-        fields: [String: String],
-        fileFieldName: String,
-        fileName: String,
-        mimeType: String,
-        fileData: Data
-    ) -> Data {
-        var body = Data()
-        let lineBreak = "\r\n"
-
-        for (name, value) in fields {
-            body.append("--\(boundary)\(lineBreak)")
-            body.append("Content-Disposition: form-data; name=\"\(name)\"\(lineBreak)\(lineBreak)")
-            body.append("\(value)\(lineBreak)")
-        }
-
-        body.append("--\(boundary)\(lineBreak)")
-        body.append("Content-Disposition: form-data; name=\"\(fileFieldName)\"; filename=\"\(fileName)\"\(lineBreak)")
-        body.append("Content-Type: \(mimeType)\(lineBreak)\(lineBreak)")
-        body.append(fileData)
-        body.append(lineBreak)
-        body.append("--\(boundary)--\(lineBreak)")
-        return body
-    }
-}
-
-private extension Data {
-    mutating func append(_ string: String) {
-        guard let data = string.data(using: .utf8) else { return }
-        append(data)
-    }
+private struct PresignedDownloadResponse: Codable {
+    let url: String
 }

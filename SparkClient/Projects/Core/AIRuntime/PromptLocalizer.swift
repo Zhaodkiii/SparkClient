@@ -64,24 +64,6 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func extractionPrompt(ocrText: String) -> String {
-        l10n.promptFormat(
-            "ai.prompt.extraction.template",
-            fallback: """
-            You are a medical record extraction assistant. Extract a structured draft from OCR text and output JSON only:
-            {\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\"}
-            Rules:
-            1) Output JSON only.
-            2) Keep summary within 120 characters.
-            3) If date is unknown, use today's date for occurredAt.
-
-            OCR text:
-            %@
-            """,
-            ocrText
-        )
-    }
-
     func medicalDocumentExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medical_document.extraction.template",
@@ -114,7 +96,16 @@ struct PromptLocalizer: Sendable {
     }
 
     func medicalCaseExtractionPrompt(ocrText: String) -> String {
-        l10n.promptFormat("ai.prompt.medical_case.extraction.template", fallback: extractionPrompt(ocrText: "%@"), ocrText)
+        l10n.promptFormat(
+            "ai.prompt.medical_case.extraction.template",
+            fallback: """
+            You are a medical case extraction assistant. Extract JSON only:
+            {"title":"...","summary":"...","diagnosis":"...","occurredAt":"yyyy-MM-dd"}
+            OCR text:
+            %@
+            """,
+            ocrText
+        )
     }
 
     func healthExamExtractionPrompt(ocrText: String) -> String {
@@ -160,14 +151,6 @@ struct PromptLocalizer: Sendable {
 
     func newThreadTitle() -> String {
         l10n.prompt("ai.prompt.thread.new_title", fallback: "New Chat")
-    }
-
-    func extractionFallbackTitle() -> String {
-        l10n.prompt("ai.prompt.extraction.fallback.title", fallback: "OCR Medical Draft")
-    }
-
-    func extractionFallbackSummary() -> String {
-        l10n.prompt("ai.prompt.extraction.fallback.summary", fallback: "Summary pending completion.")
     }
 
     func consentBlockedHint(reason: String?) -> String {
