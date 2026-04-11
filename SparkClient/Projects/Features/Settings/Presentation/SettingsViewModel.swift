@@ -12,17 +12,20 @@ final class SettingsViewModel: ObservableObject {
 
     private let sessionStore: AppSessionStore
     private let signOutUseCase: SignOutUseCase
+    private let memberContextStore: MemberContextStore
     private let medicalSyncService: MedicalSyncService
     private let deviceCache: DeviceCache
 
     init(
         sessionStore: AppSessionStore,
         signOutUseCase: SignOutUseCase,
+        memberContextStore: MemberContextStore,
         medicalSyncService: MedicalSyncService,
         deviceCache: DeviceCache
     ) {
         self.sessionStore = sessionStore
         self.signOutUseCase = signOutUseCase
+        self.memberContextStore = memberContextStore
         self.medicalSyncService = medicalSyncService
         self.deviceCache = deviceCache
     }
@@ -76,6 +79,7 @@ final class SettingsViewModel: ObservableObject {
 
         do {
             try await signOutUseCase.execute()
+            memberContextStore.clearSessionPersistenceAndReset()
             sessionStore.setSignedOut()
         } catch {
             errorMessage = error.localizedDescription

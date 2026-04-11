@@ -19,11 +19,9 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
             throw NSError(domain: "SparkClient.Home", code: 404, userInfo: [NSLocalizedDescriptionKey: "未找到当前档案"])
         }
 
-        if refreshRemoteSnapshot {
-            _ = try? await medicalQueryAPI.listMembers()
-        }
-
-        let remotes = (try? await medicalQueryAPI.listMembers()) ?? []
+        // 成员列表是首页的关键数据，失败时不应静默降级为空数组（会导致 UI 被“清空”）。
+        // 这里改为显式抛错，让上层保留已有 dashboard 并展示错误提示。
+        let remotes = try await medicalQueryAPI.listMembers()
         let members = remotes.map(\.domainModel).sorted { lhs, rhs in
             if lhs.isPrimary == rhs.isPrimary {
                 return lhs.updatedAt > rhs.updatedAt
@@ -43,12 +41,14 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
 
         let medical: HomeMedicalOverview
         if let resolvedSelectedID {
+            // 直接读取成员 complete-data，首页卡片与后续列表页共用同一份快照，避免重复请求。
             let complete = (try? await medicalQueryAPI.fetchMemberCompleteData(memberID: resolvedSelectedID)) ?? nil
             medical = HomeMedicalOverview(
-                cards: makeMedicalCards(complete: complete)
+                cards: makeMedicalCards(complete: complete),
+                completeData: complete
             )
         } else {
-            medical = HomeMedicalOverview(cards: emptyMedicalCards())
+            medical = HomeMedicalOverview(cards: emptyMedicalCards(), completeData: nil)
         }
 
         let cost = Date().timeIntervalSince(startedAt)

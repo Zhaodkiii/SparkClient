@@ -538,6 +538,8 @@ enum SparkMedicalSyncAPI {
         var createdAt: Date?
         var updatedAt: Date?
         var attachments: [RemoteManagedFile]?
+        /// 首页 `/complete-data/` 默认不返回；列表页进入后按需懒加载。
+        var medExamDetails: [RemoteMedExamDetail]?
 
         enum CodingKeys: String, CodingKey {
             case id, member, summary, source, status, extra, attachments
@@ -547,6 +549,7 @@ enum SparkMedicalSyncAPI {
             case examType = "exam_type"
             case createdAt = "created_at"
             case updatedAt = "updated_at"
+            case medExamDetails = "med_exam_details"
         }
     }
 
@@ -571,6 +574,8 @@ enum SparkMedicalSyncAPI {
         var createdAt: Date?
         var updatedAt: Date?
         var attachments: [RemoteManagedFile]?
+        /// 首页 `/complete-data/` 默认不返回；列表页进入后按需懒加载。
+        var medExamDetails: [RemoteMedExamDetail]?
 
         enum CodingKeys: String, CodingKey {
             case id, member, category, findings, impression, source, status, extra, attachments
@@ -584,6 +589,7 @@ enum SparkMedicalSyncAPI {
             case doctorName = "doctor_name"
             case createdAt = "created_at"
             case updatedAt = "updated_at"
+            case medExamDetails = "med_exam_details"
         }
     }
 

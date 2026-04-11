@@ -284,7 +284,7 @@
     'date': 'yyyy-MM-dd',
     'details': [
         {
-            'category': '科目类别',
+            'category': '科目类别，仅允许英文枚举三选一：laboratory（实验室/检验/化验）/imaging（影像/超声/放射）/pathology（病理）',
             'subCategory': '子类别',
             'itemName': '项目名称',
             'itemCode': '项目代码',
@@ -326,6 +326,11 @@
 5. **内容清洗**：
    - 自动忽略水印、页码、二维码信息、医院免责声明等无关文本。
    - 修正 OCR 识别错误（如将 '1.23pmol/L' 误识别为 '1.23pmo1/L' 时，应根据医学常识纠正）。
+
+6. **details.category（科目类别）取值限定**：
+   - 每条 detail 的 `'category'` **必须且只能**为以下三个英文小写字符串之一：`'laboratory'`、`'imaging'`、`'pathology'`。
+   - 与报告类型对应：检验/化验/血常规等 → `laboratory`；CT/MRI/超声/X线/心电等影像相关 → `imaging`；病理/活检/冰冻等 → `pathology`。
+   - **禁止**输出中文科目名、其他英文词或自定义字符串。
 
 【最终输出要求】
 只输出纯净 JSON，不要任何 Markdown 引导符（如 ```json）、解释说明或多余文字。

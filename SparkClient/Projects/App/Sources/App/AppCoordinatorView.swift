@@ -41,7 +41,7 @@ struct AppCoordinatorView: View {
                 AuthCoordinatorView(viewModel: container.makeLoginViewModel())
                     .task {
                         await container.appBootstrapper.reset()
-                        container.memberContextStore.clearSessionPersistenceAndReset()
+                        container.memberContextStore.resetInMemoryContext()
                     }
 
             case .signedIn(let session):

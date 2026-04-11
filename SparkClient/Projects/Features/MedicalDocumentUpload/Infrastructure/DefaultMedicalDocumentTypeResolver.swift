@@ -294,8 +294,15 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
 
         // 如果没有达到阈值的匹配，但存在低置信度候选，记录日志后返回nil
         let fallback = results.max(by: { $0.confidence < $1.confidence })!
-        if fallback.confidence >= 20 {
+        if fallback.confidence >= 10 {
             logger.debug("本地规则检测到低置信度候选: kind=\(fallback.kind.rawValue), confidence=\(fallback.confidence)", module: .medical)
+            // 构造规则匹配的结果
+            return MedicalDocumentTypeResolution(
+                kind: fallback.kind,
+                confidence: normalizeConfidence(fallback.confidence) ,
+                source: .localRules,       // 来源：本地规则
+                reason: "advanced_keyword_rules" // 原因：增强关键词匹配
+            )
         }
 
         return nil // 无匹配项/得分不足，返回空

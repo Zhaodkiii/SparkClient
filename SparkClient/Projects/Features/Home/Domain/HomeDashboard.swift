@@ -17,6 +17,8 @@ struct HomeDashboard: Equatable, Sendable {
 /// 医疗信息区块：卡片仅含业务标识与统计，文案由界面层通过 `MedicalCard.Kind` 做本地化。
 struct HomeMedicalOverview: Equatable, Sendable {
     let cards: [HomeDashboard.MedicalCard]
+    /// 当前成员完整医疗快照（直接来自 `/complete-data/`，用于列表页直出，避免重复加载）。
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
 }
 
 extension HomeDashboard {

@@ -18,6 +18,7 @@ struct MainTabCoordinatorView: View {
         TabView(selection: $routeStore.selectedTab) {
             NavigationView {
                 HomeView(
+                    appContainer: appContainer,
                     viewModel: homeViewModel,
                     medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                     session: session

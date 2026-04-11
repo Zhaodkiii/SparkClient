@@ -36,10 +36,15 @@ final class MemberContextStore: ObservableObject {
         context = MemberContext(members: [], selectedMemberID: nil)
     }
 
+    /// 会话暂时回落到未登录态时，仅重置内存上下文，避免误删持久化选择。
+    func resetInMemoryContext() {
+        activeProfileID = nil
+        context = MemberContext(members: [], selectedMemberID: nil)
+    }
+
     private func persistSelection(_ memberID: Int?) {
         guard let activeProfileID else { return }
         persistence.save(memberID, for: activeProfileID)
     }
 }
-
 

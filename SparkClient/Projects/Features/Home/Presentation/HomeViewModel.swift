@@ -101,6 +101,14 @@ final class HomeViewModel: ObservableObject {
         Task { await load(syncRemote: false) }
     }
 
+    /// 记录首页医疗卡片跳转行为，便于后续分析用户使用路径。
+    func logMedicalListNavigation(kind: HomeDashboard.MedicalCard.Kind) {
+        logger.info(
+            "首页医疗卡片跳转 kind=\(kind) selectedMemberID=\(selectedMemberID.map(String.init) ?? "nil")",
+            module: logModule
+        )
+    }
+
     // MARK: - Member CRUD
 
     func addMember(

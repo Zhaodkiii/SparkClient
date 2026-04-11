@@ -654,6 +654,7 @@ final class AppContainer {
         SettingsViewModel(
             sessionStore: sessionStore,
             signOutUseCase: signOutUseCase,
+            memberContextStore: memberContextStore,
             medicalSyncService: medicalSyncService,
             deviceCache: backend.deviceCache
         )

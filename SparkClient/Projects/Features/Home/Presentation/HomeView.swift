@@ -4,6 +4,7 @@ import UIKit
 #endif
 
 struct HomeView: View {
+    let appContainer: AppContainer
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let session: UserSession
@@ -172,7 +173,22 @@ struct HomeView: View {
             let cards = viewModel.dashboard?.medical.cards ?? []
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(cards, id: \.id) { card in
-                    medicalCard(card)
+                    NavigationLink {
+                        HomeMedicalListView(
+                            route: medicalRoute(for: card.id),
+                            completeData: viewModel.dashboard?.medical.completeData,
+                            appContainer: appContainer
+                        )
+                    } label: {
+                        medicalCard(card)
+                    }
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            viewModel.logMedicalListNavigation(kind: card.id)
+                            triggerHaptic(style: .light)
+                        }
+                    )
                 }
             }
         }
@@ -248,6 +264,19 @@ struct HomeView: View {
             return L10n.text("home.medical.card.medical_reports.subtitle")
         case .medications:
             return L10n.text("home.medical.card.medications.subtitle")
+        }
+    }
+
+    private func medicalRoute(for kind: HomeDashboard.MedicalCard.Kind) -> HomeMedicalListRoute {
+        switch kind {
+        case .medicalCases:
+            return .medicalCases
+        case .healthExamReports:
+            return .healthExamReports
+        case .medicalReports:
+            return .examinationReports
+        case .medications:
+            return .medications
         }
     }
 
@@ -340,6 +369,7 @@ private struct MemberSelectorChip: View {
 #Preview("Light") {
     NavigationView {
         HomeView(
+            appContainer: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
@@ -357,6 +387,7 @@ private struct MemberSelectorChip: View {
 #Preview("Dark") {
     NavigationView {
         HomeView(
+            appContainer: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
@@ -393,7 +424,7 @@ extension HomeViewModel {
                 HomeDashboard.MedicalCard(id: .healthExamReports, count: 2, latestDate: now.addingTimeInterval(-172_800), symbol: "heart.text.square.fill"),
                 HomeDashboard.MedicalCard(id: .medicalReports, count: 6, latestDate: now.addingTimeInterval(-259_200), symbol: "list.clipboard.fill"),
                 HomeDashboard.MedicalCard(id: .medications, count: 8, latestDate: now.addingTimeInterval(-86_400 * 3), symbol: "pills.fill")
-            ])
+            ], completeData: nil)
         )
 
         let sessionStore = AppSessionStore(
