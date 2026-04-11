@@ -10,14 +10,16 @@ struct HealthExamReportsListPage: View {
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         medicalQueryAPI: SparkMedicalQueryAPI,
-        logger: Logger
+        logger: Logger,
+        onReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)? = nil
     ) {
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
                 reports: completeData?.healthExamReports ?? [],
                 medicalQueryAPI: medicalQueryAPI,
                 logger: logger,
-                scene: "health_exam_reports"
+                scene: "health_exam_reports",
+                onReportsUpdated: onReportsUpdated
             )
         )
     }
