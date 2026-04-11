@@ -1,7 +1,8 @@
 import Foundation
 
+/// 家庭成员增删改：直接调用 ``SparkMedicalMemberAPI``。
 struct ManageHomeMemberUseCase: Sendable {
-    let memberRepository: any HomeMemberRepository
+    let memberAPI: SparkMedicalMemberAPI
 
     func create(
         name: String,
@@ -9,12 +10,19 @@ struct ManageHomeMemberUseCase: Sendable {
         gender: String,
         birthDate: Date?
     ) async throws {
-        try await memberRepository.createMember(
+        let payload = SparkMedicalMemberAPI.UpsertMemberPayload(
             name: name,
             relationship: relationship,
             gender: gender,
-            birthDate: birthDate
+            birthDate: birthDate,
+            bloodType: "",
+            allergies: [],
+            chronicConditions: [],
+            notes: "",
+            avatarUrl: "",
+            isPrimary: false
         )
+        _ = try await memberAPI.createMember(payload)
     }
 
     func update(
@@ -24,16 +32,22 @@ struct ManageHomeMemberUseCase: Sendable {
         gender: String,
         birthDate: Date?
     ) async throws {
-        try await memberRepository.updateMember(
-            member,
+        let payload = SparkMedicalMemberAPI.UpsertMemberPayload(
             name: name,
             relationship: relationship,
             gender: gender,
-            birthDate: birthDate
+            birthDate: birthDate,
+            bloodType: member.bloodType,
+            allergies: member.allergies,
+            chronicConditions: member.chronicConditions,
+            notes: member.notes,
+            avatarUrl: member.avatarUrl,
+            isPrimary: member.isPrimary
         )
+        _ = try await memberAPI.updateMember(remoteID: member.id, payload: payload)
     }
 
     func delete(member: Member) async throws {
-        try await memberRepository.deleteMember(member)
+        try await memberAPI.deleteMember(remoteID: member.id)
     }
 }

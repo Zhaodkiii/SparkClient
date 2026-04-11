@@ -49,8 +49,8 @@
 "home.medical.card.medical_reports.subtitle" = "专项检查";
 "home.medical.card.prescriptions.title" = "用药处方";
 "home.medical.card.prescriptions.subtitle" = "长期用药";
-"home.medical.card.medications.title" = "用药依从性";
-"home.medical.card.medications.subtitle" = "今日完成率";
+"home.medical.card.medications.title" = "用药";
+"home.medical.card.medications.subtitle" = "药品数量";
 "medical.upload.title" = "AI 病历抽取";
 "medical.upload.current_member" = "当前成员";
 "medical.upload.member.not_selected" = "未选择";

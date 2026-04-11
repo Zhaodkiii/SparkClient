@@ -61,8 +61,8 @@ enum NetworkOperationBusinessPurpose: Sendable {
     // MARK: - Medical.Query.*
 
     private static func medicalQueryPurpose(path: String) -> String {
-        if path.contains("/members/"), path.hasSuffix("/summary/") {
-            return "加载指定成员的医疗摘要（首页卡片与档案入口聚合数据）"
+        if path.contains("/members/"), path.hasSuffix("/complete-data/") {
+            return "加载指定成员的医疗数据汇总（单接口：病例/报告/处方与附件）"
         }
         if path.contains("/members/") {
             return "医疗查询：\(path)"
@@ -125,8 +125,7 @@ enum NetworkOperationBusinessPurpose: Sendable {
         "med-exam-details": "体检/检查明细项",
         "prescription-batches": "处方批次",
         "medications": "用药信息",
-        "medication-taken-records": "服药打卡记录",
-        "health-metrics": "健康指标时间序列"
+        "medication-taken-records": "服药打卡记录"
     ]
 
     // MARK: - Chat

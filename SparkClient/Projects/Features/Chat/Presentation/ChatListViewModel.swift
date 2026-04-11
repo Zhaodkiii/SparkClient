@@ -5,9 +5,10 @@ import Foundation
 final class ChatListViewModel: ObservableObject {
     private let stateStore: ChatStateStore
     private let sessionStore: AppSessionStore
-    private let patientContextStore: PatientContextStore
-    private let loadPatientsUseCase: LoadPatientsUseCase
-    private let selectPatientUseCase: SelectPatientUseCase
+    private let memberContextStore: MemberContextStore
+    private let loadMembersUseCase: LoadMembersUseCase
+    private let selectMemberUseCase: SelectMemberUseCase
+    private let selectedMemberIDPersistence: any SelectedMemberIDPersisting
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
     private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let createThreadUseCase: CreateThreadUseCase
@@ -18,9 +19,10 @@ final class ChatListViewModel: ObservableObject {
     init(
         stateStore: ChatStateStore,
         sessionStore: AppSessionStore,
-        patientContextStore: PatientContextStore,
-        loadPatientsUseCase: LoadPatientsUseCase,
-        selectPatientUseCase: SelectPatientUseCase,
+        memberContextStore: MemberContextStore,
+        loadMembersUseCase: LoadMembersUseCase,
+        selectMemberUseCase: SelectMemberUseCase,
+        selectedMemberIDPersistence: any SelectedMemberIDPersisting,
         loadChatThreadsUseCase: LoadChatThreadsUseCase,
         loadChatMessagesUseCase: LoadChatMessagesUseCase,
         createThreadUseCase: CreateThreadUseCase,
@@ -29,9 +31,10 @@ final class ChatListViewModel: ObservableObject {
     ) {
         self.stateStore = stateStore
         self.sessionStore = sessionStore
-        self.patientContextStore = patientContextStore
-        self.loadPatientsUseCase = loadPatientsUseCase
-        self.selectPatientUseCase = selectPatientUseCase
+        self.memberContextStore = memberContextStore
+        self.loadMembersUseCase = loadMembersUseCase
+        self.selectMemberUseCase = selectMemberUseCase
+        self.selectedMemberIDPersistence = selectedMemberIDPersistence
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.createThreadUseCase = createThreadUseCase
@@ -50,7 +53,7 @@ final class ChatListViewModel: ObservableObject {
         stateStore.setLoading(true)
         defer { stateStore.setLoading(false) }
 
-        await ensurePatientContextLoaded()
+        await ensureMemberContextLoaded()
         await reloadThreads(selectFirstIfNeeded: true)
     }
 
@@ -61,7 +64,7 @@ final class ChatListViewModel: ObservableObject {
     func createThread() async {
         let title = L10n.text("chat.default_thread_title")
         let thread = await createThreadUseCase.execute(
-            patientID: patientContextStore.context.selectedMemberID,
+            memberID: memberContextStore.context.selectedMemberID,
             title: title
         )
         await reloadThreads(selectFirstIfNeeded: false)
@@ -102,13 +105,16 @@ final class ChatListViewModel: ObservableObject {
         }
     }
 
-    private func ensurePatientContextLoaded() async {
-        if patientContextStore.context.members.isEmpty == false { return }
-        let members = await loadPatientsUseCase.execute()
-        let selectedID = selectPatientUseCase.execute(
+    private func ensureMemberContextLoaded() async {
+        if memberContextStore.context.members.isEmpty == false { return }
+        guard case .signedIn(let session) = sessionStore.state else { return }
+        let members = await loadMembersUseCase.execute()
+        let persisted = selectedMemberIDPersistence.load(for: session.profileID)
+        let preferred = memberContextStore.context.selectedMemberID ?? persisted
+        let selectedID = selectMemberUseCase.execute(
             members: members,
-            selectedID: patientContextStore.context.selectedMemberID
+            selectedID: preferred
         )
-        patientContextStore.update(members: members, selectedMemberID: selectedID)
+        memberContextStore.update(members: members, selectedMemberID: selectedID)
     }
 }

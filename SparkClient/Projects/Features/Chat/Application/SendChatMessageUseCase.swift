@@ -4,26 +4,26 @@ struct SendChatMessageUseCase: Sendable {
     let repository: any ChatRepository
     let orchestrator: ChatOrchestrator
     let syncEngine: ChatSyncEngine
-    let buildPatientContextSummaryUseCase: BuildPatientContextSummaryUseCase
+    let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
     let logger: Logger
 
     init(
         repository: any ChatRepository,
         orchestrator: ChatOrchestrator,
         syncEngine: ChatSyncEngine,
-        buildPatientContextSummaryUseCase: BuildPatientContextSummaryUseCase,
+        buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
         self.orchestrator = orchestrator
         self.syncEngine = syncEngine
-        self.buildPatientContextSummaryUseCase = buildPatientContextSummaryUseCase
+        self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
         self.logger = logger
     }
 
     func execute(
         threadID: UUID?,
-        patientID: Int? = nil,
+        memberID: Int? = nil,
         userInput: String,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
@@ -37,13 +37,13 @@ struct SendChatMessageUseCase: Sendable {
 
         let start = Date()
         logger.info(
-            "sendMessage 开始，thread=\(shortID(threadID)), patient=\(shortID(patientID)), inputLength=\(sanitizedInput.count)",
+            "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count)",
             module: .general
         )
 
         do {
             // 发送链路：用户消息落库 -> AI 编排 -> 助手消息落库 -> 尝试上送（失败不阻断主流程）。
-            let thread = try await resolveThread(existingThreadID: threadID, patientID: patientID, firstUserInput: sanitizedInput)
+            let thread = try await resolveThread(existingThreadID: threadID, memberID: memberID, firstUserInput: sanitizedInput)
 
             let clientMessageID = UUID()
             _ = try await repository.appendMessage(
@@ -71,23 +71,23 @@ struct SendChatMessageUseCase: Sendable {
                     ChatThreadSnapshot(thread: thread, messages: history)
                 )
             }
-            let contextPatientID = thread.patientID ?? patientID
-            let patientContextSummary: String
-            if let contextPatientID {
-                patientContextSummary = await buildPatientContextSummaryUseCase.execute(patientID: contextPatientID, limit: 6)
+            let contextMemberID = thread.memberID ?? memberID
+            let memberContextSummary: String
+            if let contextMemberID {
+                memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
             } else {
-                patientContextSummary = ""
+                memberContextSummary = ""
             }
             logger.debug(
-                "准备 AI 编排，thread=\(shortID(thread.id)), history=\(history.count), patientContextLength=\(patientContextSummary.count)",
+                "准备 AI 编排，thread=\(shortID(thread.id)), history=\(history.count), memberContextLength=\(memberContextSummary.count)",
                 module: .general
             )
 
             let output = try await orchestrator.generateReply(
                 userInput: sanitizedInput,
                 history: history,
-                patientContextSummary: patientContextSummary,
-                patientID: contextPatientID,
+                memberContextSummary: memberContextSummary,
+                memberID: contextMemberID,
                 inference: inference,
                 modelReasoning: modelReasoning
             )
@@ -145,7 +145,7 @@ struct SendChatMessageUseCase: Sendable {
 
     private func resolveThread(
         existingThreadID: UUID?,
-        patientID: Int?,
+        memberID: Int?,
         firstUserInput: String
     ) async throws -> ChatThread {
         let promptLocalizer = PromptLocalizer()
@@ -158,10 +158,10 @@ struct SendChatMessageUseCase: Sendable {
         }
 
         if let active = await repository.loadActiveThread() {
-            if let patientID, active.patientID != patientID {
+            if let memberID, active.memberID != memberID {
                 let title = String(firstUserInput.prefix(18))
                 let created = await repository.createThread(
-                    patientID: patientID,
+                    memberID: memberID,
                     title: title.isEmpty ? promptLocalizer.newThreadTitle() : title
                 )
                 await repository.setActiveThread(id: created.id)
@@ -172,7 +172,7 @@ struct SendChatMessageUseCase: Sendable {
 
         let title = String(firstUserInput.prefix(18))
         let created = await repository.createThread(
-            patientID: patientID,
+            memberID: memberID,
             title: title.isEmpty ? promptLocalizer.newThreadTitle() : title
         )
         await repository.setActiveThread(id: created.id)

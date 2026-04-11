@@ -3,8 +3,7 @@ import Foundation
 /// 聊天侧工具中枢：解析用户输入中的斜杠命令与 `SparkToolName`，执行后写审计；部分为占位或与配置中的外部 endpoint 路由说明。
 final class ToolHub: @unchecked Sendable {
     private let auditStore: ToolAuditStore
-    private let medicalDataRepository: any MedicalDataRepository
-    private let healthMetricsRepository: any HealthMetricsRepository
+    private let medicalQueryAPI: SparkMedicalQueryAPI
     private let aiSettingsRepository: any AISettingsRepository
     /// 知识库检索/创建：经用例访问 `CoreDataKnowledgeRepository`，避免在此直接操作持久化。
     private let searchKnowledgeUseCase: SearchKnowledgeUseCase
@@ -16,16 +15,14 @@ final class ToolHub: @unchecked Sendable {
 
     init(
         auditStore: ToolAuditStore,
-        medicalDataRepository: any MedicalDataRepository,
-        healthMetricsRepository: any HealthMetricsRepository,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         aiSettingsRepository: any AISettingsRepository,
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         logger: Logger = ConsoleLogger()
     ) {
         self.auditStore = auditStore
-        self.medicalDataRepository = medicalDataRepository
-        self.healthMetricsRepository = healthMetricsRepository
+        self.medicalQueryAPI = medicalQueryAPI
         self.aiSettingsRepository = aiSettingsRepository
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
@@ -33,11 +30,11 @@ final class ToolHub: @unchecked Sendable {
     }
 
     /// 显式调试命令路由：`/audit_tools` 与 `/tool ...`。
-    func runIfNeeded(userInput: String, patientID: Int?) async -> ToolHubResult {
+    func runIfNeeded(userInput: String, memberID: Int?) async -> ToolHubResult {
         let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return .none }
         logger.debug(
-            "工具路由检查开始，patient=\(shortID(patientID)), inputLength=\(trimmed.count)",
+            "工具路由检查开始，member=\(shortID(memberID)), inputLength=\(trimmed.count)",
             module: .aiConfig
         )
 
@@ -52,7 +49,7 @@ final class ToolHub: @unchecked Sendable {
             return .none
         }
 
-        let context = ToolExecutionContext(patientID: patientID, locale: .current)
+        let context = ToolExecutionContext(memberID: memberID, locale: .current)
         let result = await execute(invocation: invocation, context: context)
         await appendAudit(invocation: invocation, context: context, result: result)
         return .executed(result)
@@ -71,9 +68,9 @@ final class ToolHub: @unchecked Sendable {
     }
 
     /// 执行模型返回的 tool_call，并写入统一审计。
-    func executeToolCall(name: String, arguments: String, patientID: Int?) async -> ToolExecutionResult {
+    func executeToolCall(name: String, arguments: String, memberID: Int?) async -> ToolExecutionResult {
         let invocation = ToolInvocation(name: name, arguments: parseArguments(arguments))
-        let context = ToolExecutionContext(patientID: patientID, locale: .current)
+        let context = ToolExecutionContext(memberID: memberID, locale: .current)
         let result = await execute(invocation: invocation, context: context)
         await appendAudit(invocation: invocation, context: context, result: result)
         return result
@@ -365,7 +362,6 @@ final class ToolHub: @unchecked Sendable {
                     enumValues: ["summary", "medications", "hospital_exams", "medical_records", "health_exams"]
                 ),
                 "member_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.member_id_optional")),
-                "patient_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.patient_id_optional")),
                 "days": AIRuntimeToolProperty(type: "integer", description: td("tool.param.days_optional")),
                 "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.limit_optional"))
             ]
@@ -605,7 +601,7 @@ final class ToolHub: @unchecked Sendable {
 
     /// 从健康指标仓库汇总最近步数记录。
     private func runFetchSteps(context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let patientID = context.patientID else {
+        guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchStepDetails,
                 outputText: "未选择成员，无法查询步数。",
@@ -616,7 +612,7 @@ final class ToolHub: @unchecked Sendable {
 
         return ToolExecutionResult(
             toolName: SparkToolName.fetchStepDetails,
-            outputText: "成员ID=\(patientID)；当前版本步数数据按档案维度存储，成员维度查询暂未启用。",
+            outputText: "成员ID=\(memberID)；当前版本步数数据按档案维度存储，成员维度查询暂未启用。",
             sensitive: false,
             shouldBypassModel: true
         )
@@ -624,7 +620,7 @@ final class ToolHub: @unchecked Sendable {
 
     /// 从健康指标仓库汇总最近睡眠时长记录。
     private func runFetchSleep(context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let patientID = context.patientID else {
+        guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchSleepDetails,
                 outputText: "未选择成员，无法查询睡眠。",
@@ -635,7 +631,7 @@ final class ToolHub: @unchecked Sendable {
 
         return ToolExecutionResult(
             toolName: SparkToolName.fetchSleepDetails,
-            outputText: "成员ID=\(patientID)；当前版本睡眠数据按档案维度存储，成员维度查询暂未启用。",
+            outputText: "成员ID=\(memberID)；当前版本睡眠数据按档案维度存储，成员维度查询暂未启用。",
             sensitive: false,
             shouldBypassModel: true
         )
@@ -834,9 +830,9 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 根据上下文 `patientID` 在医疗数据中解析当前成员简介。
+    /// 根据上下文 `memberID` 在医疗数据中解析当前成员简介。
     private func runGetCurrentMember(context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let patientID = context.patientID else {
+        guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.getCurrentMember,
                 outputText: "当前未选择成员。",
@@ -845,16 +841,18 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let snapshot = await medicalDataRepository.loadSnapshot()
-        guard let member = snapshot.members.first(where: { $0.id == patientID }) else {
+        let data: SparkMedicalSyncAPI.RemoteMemberCompleteData
+        do {
+            data = try await medicalQueryAPI.fetchMemberCompleteData(memberID: memberID)
+        } catch {
             return ToolExecutionResult(
                 toolName: SparkToolName.getCurrentMember,
-                outputText: "当前成员不存在或未同步。",
+                outputText: "当前成员数据加载失败。",
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-
+        let member = data.member
         let output = "当前成员：\(member.name)，关系：\(member.relationship)。"
         return ToolExecutionResult(
             toolName: SparkToolName.getCurrentMember,
@@ -868,12 +866,13 @@ final class ToolHub: @unchecked Sendable {
     private func runFindMember(invocation: ToolInvocation) async -> ToolExecutionResult {
         let nameQuery = (invocation.arguments["query"] ?? invocation.arguments["name"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let relationshipQuery = (invocation.arguments["relationship"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let snapshot = await medicalDataRepository.loadSnapshot()
-        let members: [Member]
+        let remotes = (try? await medicalQueryAPI.listMembers()) ?? []
+        let members: [Member] = remotes.map(\.domainModel)
+        let filtered: [Member]
         if nameQuery.isEmpty && relationshipQuery.isEmpty {
-            members = snapshot.members
+            filtered = members
         } else {
-            members = snapshot.members.filter { member in
+            filtered = members.filter { member in
                 let nameHit = nameQuery.isEmpty ? false : member.name.localizedCaseInsensitiveContains(nameQuery)
                 let relHit = relationshipQuery.isEmpty ? false : member.relationship.localizedCaseInsensitiveContains(relationshipQuery)
                 if nameQuery.isEmpty == false && relationshipQuery.isEmpty == false {
@@ -886,7 +885,7 @@ final class ToolHub: @unchecked Sendable {
             }
         }
 
-        if members.isEmpty {
+        if filtered.isEmpty {
             return ToolExecutionResult(
                 toolName: SparkToolName.findMember,
                 outputText: "未找到匹配成员。",
@@ -895,7 +894,7 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let lines = members.prefix(8).map { "- \($0.name)（关系：\($0.relationship)）" }
+        let lines = filtered.prefix(8).map { "- \($0.name)（关系：\($0.relationship)）" }
         return ToolExecutionResult(
             toolName: invocation.name,
             outputText: lines.joined(separator: "\n"),
@@ -904,10 +903,9 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// 汇总指定或当前成员的病例/报告/处方等数量统计（`query_type` / `patient_id` 与 HealthClient 语义对齐；Spark 用整型字符串）。
+    /// 汇总指定或当前成员的病例/报告/处方等数量统计（`query_type` / `member_id`；兼容旧参数名 `patient_id`。Spark 用整型字符串）。
     private func runQueryMemberProfile(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let queryType = (invocation.arguments["query_type"] ?? "summary").trimmingCharacters(in: .whitespacesAndNewlines)
-        let snapshot = await medicalDataRepository.loadSnapshot()
         let targetMemberID: Int? = {
             if let value = invocation.arguments["member_id"], let id = Int(value) {
                 return id
@@ -915,11 +913,10 @@ final class ToolHub: @unchecked Sendable {
             if let value = invocation.arguments["patient_id"], let id = Int(value) {
                 return id
             }
-            return context.patientID
+            return context.memberID
         }()
 
-        guard let memberID = targetMemberID,
-              let member = snapshot.members.first(where: { $0.id == memberID }) else {
+        guard let memberID = targetMemberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.queryMemberProfile,
                 outputText: "未找到成员档案。",
@@ -928,16 +925,31 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let caseCount = snapshot.medicalCases.filter { $0.memberID == memberID }.count
-        let symptomCount = snapshot.symptoms.filter { $0.memberID == memberID }.count
-        let visitCount = snapshot.visits.filter { $0.memberID == memberID }.count
-        let surgeryCount = snapshot.surgeries.filter { $0.memberID == memberID }.count
-        let followUpCount = snapshot.followUps.filter { $0.memberID == memberID }.count
-        let healthExamCount = snapshot.healthExamReports.filter { $0.memberID == memberID }.count
-        let examCount = snapshot.examinationReports.filter { $0.memberID == memberID }.count
-        let examDetailCount = snapshot.medExamDetails.filter { $0.memberID == memberID }.count
-        let reportCount = snapshot.medicalReports.filter { $0.memberID == memberID }.count
-        let medicationCount = snapshot.medications.filter { $0.memberID == memberID }.count
+        let data: SparkMedicalSyncAPI.RemoteMemberCompleteData
+        do {
+            data = try await medicalQueryAPI.fetchMemberCompleteData(memberID: memberID)
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.queryMemberProfile,
+                outputText: "成员医疗数据加载失败。",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        let member = data.member
+        let cases = data.medicalCases ?? []
+        let caseCount = cases.count
+        let symptomCount = cases.reduce(0) { $0 + ($1.symptoms ?? []).count }
+        let visitCount = 0
+        let surgeryCount = 0
+        let followUpCount = 0
+        let healthExamCount = (data.healthExamReports ?? []).count
+        let examCount = (data.examinationReports ?? []).count
+        let examDetailCount = 0
+        let reportCount = 0
+        let batches = data.prescriptionBatches ?? []
+        let medicationCount = batches.flatMap { $0.medications ?? [] }.count + (data.standaloneMedications ?? []).count
         let daysNote = invocation.arguments["days"] ?? "3"
         let limitNote = invocation.arguments["limit"] ?? "3"
 
@@ -968,7 +980,7 @@ final class ToolHub: @unchecked Sendable {
 
     /// 占位：根据 `raw_text` 等参数生成结构化健康卡片描述（未接真实结构化管线）。
     private func runGenerateStructuredHealthCard(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let patientID = context.patientID else {
+        guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
                 outputText: "未选择成员，无法生成结构化健康卡片。",
@@ -991,7 +1003,7 @@ final class ToolHub: @unchecked Sendable {
         let title = "\(reportType)_\(Date().formatted(date: .abbreviated, time: .omitted))"
         let summary = String(rawText.prefix(120))
         let oss = invocation.arguments["oss_file_id"].map { ", oss_file_id=\($0)" } ?? ""
-        let output = "已生成结构化卡片：type=\(reportType), title=\(title), member=\(patientID)\(oss), summary=\(summary)"
+        let output = "已生成结构化卡片：type=\(reportType), title=\(title), member=\(memberID)\(oss), summary=\(summary)"
 
         return ToolExecutionResult(
             toolName: SparkToolName.generateStructuredHealthCard,
@@ -1149,7 +1161,7 @@ final class ToolHub: @unchecked Sendable {
         await auditStore.append(
             ToolAuditEvent(
                 toolName: invocation.name,
-                patientID: context.patientID,
+                memberID: context.memberID,
                 inputSummary: String(invocation.arguments.description.prefix(200)),
                 outputSummary: String(result.outputText.prefix(200)),
                 status: status

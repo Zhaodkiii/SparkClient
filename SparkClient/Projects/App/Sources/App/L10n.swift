@@ -6,19 +6,6 @@ enum L10n {
         String(localized: String.LocalizationValue(key), bundle: .main)
     }
 
-    static func metricTitle(_ type: HealthMetricType) -> String {
-        switch type {
-        case .steps:
-            return text("metric.steps")
-        case .sleep:
-            return text("metric.sleep")
-        case .heartRate:
-            return text("metric.heart_rate")
-        case .weight:
-            return text("metric.weight")
-        }
-    }
-
     static func homeGreeting(_ name: String) -> String {
         String(
             format: text("home.greeting"),

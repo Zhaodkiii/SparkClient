@@ -115,22 +115,12 @@ struct SparkMedicalQueryAPI {
         return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationTakenRecord].self, kind: .medicationTakenRecords, query: q)
     }
 
-    /// 查询健康指标时间序列（可选按档案 `profile_client_uid` 过滤）。
-    func listHealthMetrics(profileClientUID: UUID? = nil) async throws -> [SparkMedicalSyncAPI.RemoteHealthMetric] {
-        let query: [URLQueryItem]
-        if let profileClientUID {
-            query = [URLQueryItem(name: "profile_client_uid", value: profileClientUID.uuidString)]
-        } else {
-            query = []
-        }
-        return try await resources.list([SparkMedicalSyncAPI.RemoteHealthMetric].self, kind: .healthMetrics, query: query)
-    }
-
-    /// 按成员聚合查询首页所需的医疗摘要。
-    func fetchMemberSummary(memberID: Int) async throws -> SparkMedicalSyncAPI.RemoteMemberSummary {
+    /// 按成员单接口拉取医疗数据汇总（病例汇总 / 报告头 / 处方与附件）。
+    func fetchMemberCompleteData(memberID: Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData {
         try await request(
-            path: "/api/v1/medical/members/\(memberID)/summary/",
-            responseType: SparkMedicalSyncAPI.RemoteMemberSummary.self
+            path: "/api/v1/medical/members/\(memberID)/complete-data/",
+            responseType: SparkMedicalSyncAPI.RemoteMemberCompleteData.self,
+            etagTTL: 86400
         )
     }
 
@@ -150,7 +140,8 @@ struct SparkMedicalQueryAPI {
     private func request<T: Decodable>(
         path: String,
         query: [URLQueryItem] = [],
-        responseType: T.Type
+        responseType: T.Type,
+        etagTTL: TimeInterval = 120
     ) async throws -> T {
         let operation = CacheableSparkNetworkOperation(
             name: "Medical.Query.\(path)",
@@ -166,7 +157,7 @@ struct SparkMedicalQueryAPI {
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .normal,
-                    etagTTL: 120
+                    etagTTL: etagTTL
                 )
             )
         )

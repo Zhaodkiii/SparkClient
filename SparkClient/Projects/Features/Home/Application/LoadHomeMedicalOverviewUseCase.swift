@@ -1,12 +1,10 @@
 import Foundation
 
-/// 首页医疗摘要加载用例。
-///
-/// 当前医疗数据以服务端为准：先加载成员，再按“选中成员”维度加载医疗数据，
-/// 避免一次性查询用户下全部医疗资源。
+/// 首页医疗摘要加载用例（直接走 ``SparkMedicalQueryAPI``，无本地聚合快照）。
 struct LoadHomeMedicalOverviewUseCase: Sendable {
     let userProfileRepository: any UserProfileRepository
-    let memberRepository: any HomeMemberRepository
+    let medicalQueryAPI: SparkMedicalQueryAPI
+    let selectedMemberIDPersistence: any SelectedMemberIDPersisting
     let logger: Logger
 
     private let logModule = LogModule.home
@@ -22,9 +20,11 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
         }
 
         if refreshRemoteSnapshot {
-            try? await memberRepository.refreshRemoteSnapshot()
+            _ = try? await medicalQueryAPI.listMembers()
         }
-        let members = await memberRepository.loadMembers().sorted { lhs, rhs in
+
+        let remotes = (try? await medicalQueryAPI.listMembers()) ?? []
+        let members = remotes.map(\.domainModel).sorted { lhs, rhs in
             if lhs.isPrimary == rhs.isPrimary {
                 return lhs.updatedAt > rhs.updatedAt
             }
@@ -32,20 +32,25 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
         }
 
         let resolvedSelectedID: Int? = {
-            if let selectedMemberID, members.contains(where: { $0.id == selectedMemberID }) {
-                return selectedMemberID
+            guard members.isEmpty == false else { return nil }
+            let persisted = selectedMemberIDPersistence.load(for: profileID)
+            let preferred = selectedMemberID ?? persisted
+            if let preferred, members.contains(where: { $0.id == preferred }) {
+                return preferred
             }
             return members.first?.id
         }()
 
-        let snapshot: MedicalDataSnapshot
+        let medical: HomeMedicalOverview
         if let resolvedSelectedID {
-            snapshot = await memberRepository.loadSnapshot(memberID: resolvedSelectedID)
+            let complete = (try? await medicalQueryAPI.fetchMemberCompleteData(memberID: resolvedSelectedID)) ?? nil
+            medical = HomeMedicalOverview(
+                cards: makeMedicalCards(complete: complete)
+            )
         } else {
-            snapshot = .empty
+            medical = HomeMedicalOverview(cards: emptyMedicalCards())
         }
 
-        let medical = HomeMedicalOverview(cards: makeMedicalCards(from: snapshot, selectedMemberID: resolvedSelectedID))
         let cost = Date().timeIntervalSince(startedAt)
         logger.info(
             "医疗摘要完成 cost=\(String(format: "%.3f", cost))s refreshRemote=\(refreshRemoteSnapshot) memberID=\(resolvedSelectedID.map(String.init) ?? "nil") cards=\(medical.cards.count)",
@@ -60,25 +65,29 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
         )
     }
 
-    private func makeMedicalCards(from snapshot: MedicalDataSnapshot, selectedMemberID: Int?) -> [HomeDashboard.MedicalCard] {
-        guard let selectedMemberID else {
-            return [
-                HomeDashboard.MedicalCard(id: .medicalCases, count: 0, latestDate: nil, symbol: "doc.text.fill"),
-                HomeDashboard.MedicalCard(id: .healthExamReports, count: 0, latestDate: nil, symbol: "heart.text.square.fill"),
-                HomeDashboard.MedicalCard(id: .medicalReports, count: 0, latestDate: nil, symbol: "list.clipboard.fill"),
-                HomeDashboard.MedicalCard(id: .medications, count: 0, latestDate: nil, symbol: "pills.fill")
-            ]
+    private func emptyMedicalCards() -> [HomeDashboard.MedicalCard] {
+        [
+            HomeDashboard.MedicalCard(id: .medicalCases, count: 0, latestDate: nil, symbol: "doc.text.fill"),
+            HomeDashboard.MedicalCard(id: .healthExamReports, count: 0, latestDate: nil, symbol: "heart.text.square.fill"),
+            HomeDashboard.MedicalCard(id: .medicalReports, count: 0, latestDate: nil, symbol: "list.clipboard.fill"),
+            HomeDashboard.MedicalCard(id: .medications, count: 0, latestDate: nil, symbol: "pills.fill")
+        ]
+    }
+
+    private func makeMedicalCards(
+        complete: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    ) -> [HomeDashboard.MedicalCard] {
+        guard let complete else {
+            return emptyMedicalCards()
         }
 
-        let medicalCases = snapshot.medicalCases.filter { $0.memberID == selectedMemberID }
-        let healthExamReports = snapshot.healthExamReports.filter { $0.memberID == selectedMemberID }
-        let examinationReports = snapshot.examinationReports.filter { $0.memberID == selectedMemberID }
-        let medications = snapshot.medications.filter { $0.memberID == selectedMemberID }
-        let todayRecords = snapshot.medicationTakenRecords.filter {
-            $0.memberID == selectedMemberID && Calendar.current.isDateInToday($0.scheduledAt)
-        }
-        let takenToday = todayRecords.filter { $0.status == "taken" }.count
-        let adherenceRate = todayRecords.isEmpty ? 0 : Int((Double(takenToday) / Double(todayRecords.count)) * 100)
+        let medicalCases = (complete.medicalCases ?? []).map(\.domainModel)
+        let healthExamReports = (complete.healthExamReports ?? []).map(\.domainModel)
+        let examinationReports = (complete.examinationReports ?? []).map(\.domainModel)
+        let batches = complete.prescriptionBatches ?? []
+        let standalone = complete.standaloneMedications ?? []
+        let medications = batches.flatMap { $0.medications ?? [] }.map(\.domainModel)
+            + standalone.map(\.domainModel)
 
         return [
             HomeDashboard.MedicalCard(
@@ -101,7 +110,7 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
             ),
             HomeDashboard.MedicalCard(
                 id: .medications,
-                count: adherenceRate,
+                count: medications.count,
                 latestDate: medications.map(\.updatedAt).max(),
                 symbol: "pills.fill"
             )

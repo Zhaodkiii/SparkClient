@@ -2,7 +2,7 @@ import Foundation
 
 struct ChatThread: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
-    let patientID: Int?
+    let memberID: Int?
     let title: String
     let scenario: AIScenario
     let createdAt: Date
@@ -10,14 +10,14 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
 
     nonisolated init(
         id: UUID = UUID(),
-        patientID: Int? = nil,
+        memberID: Int? = nil,
         title: String,
         scenario: AIScenario = .chat,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
         self.id = id
-        self.patientID = patientID
+        self.memberID = memberID
         self.title = title
         self.scenario = scenario
         self.createdAt = createdAt

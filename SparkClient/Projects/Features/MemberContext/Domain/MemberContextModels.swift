@@ -1,6 +1,6 @@
 import Foundation
 
-struct PatientContext: Equatable, Sendable {
+struct MemberContext: Equatable, Sendable {
     let members: [Member]
     let selectedMemberID: Int?
 
@@ -10,6 +10,6 @@ struct PatientContext: Equatable, Sendable {
     }
 }
 
-protocol PatientRepository: Sendable {
-    func loadPatients() async -> [Member]
+protocol MembersRepository: Sendable {
+    func loadMembers() async -> [Member]
 }

@@ -9,7 +9,7 @@ enum ToolAuditStatus: String, Codable, Sendable {
 struct ToolAuditEvent: Identifiable, Codable, Sendable {
     let id: UUID
     let toolName: String
-    let patientID: Int?
+    let memberID: Int?
     let inputSummary: String
     let outputSummary: String
     let status: ToolAuditStatus
@@ -18,7 +18,7 @@ struct ToolAuditEvent: Identifiable, Codable, Sendable {
     init(
         id: UUID = UUID(),
         toolName: String,
-        patientID: Int?,
+        memberID: Int?,
         inputSummary: String,
         outputSummary: String,
         status: ToolAuditStatus,
@@ -26,7 +26,7 @@ struct ToolAuditEvent: Identifiable, Codable, Sendable {
     ) {
         self.id = id
         self.toolName = toolName
-        self.patientID = patientID
+        self.memberID = memberID
         self.inputSummary = inputSummary
         self.outputSummary = outputSummary
         self.status = status
@@ -52,7 +52,7 @@ struct ToolInvocation: Sendable {
 }
 
 struct ToolExecutionContext: Sendable {
-    let patientID: Int?
+    let memberID: Int?
     let locale: Locale
 }
 

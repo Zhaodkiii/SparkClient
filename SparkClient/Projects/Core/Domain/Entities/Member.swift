@@ -2,7 +2,7 @@ import Foundation
 
 /// 家庭档案中的成员（就诊人/家属）：病例、检查、处方等医疗实体通过 `memberID` 与之关联。
 ///
-/// `relationship` 约定包含「本人」（如 `self` / `本人`），用于产品层判断是否可展示本机 Apple 健康等能力；与 `SyncedHealthMetric` 的档案维度无关。
+/// `relationship` 描述与账号关系（如 `self` / `本人`），供 UI 展示与排序等使用。
 struct Member: Identifiable, Codable, Equatable, Sendable {
     /// 服务端自增主键。
     let id: Int

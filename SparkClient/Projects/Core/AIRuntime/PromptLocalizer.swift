@@ -130,7 +130,7 @@ struct PromptLocalizer: Sendable {
     func contextSummaryHeader(recordCount: Int) -> String {
         l10n.promptFormat(
             "ai.prompt.context.header",
-            fallback: "Recent medical context for patient (latest %d records):",
+            fallback: "Recent medical context for member (latest %d records):",
             recordCount
         )
     }

@@ -17,20 +17,17 @@ enum AuthFeatureError: LocalizedError {
 final class DefaultAuthRepository: AuthRepository {
     private let backend: Backend
     private let userProfileRepository: any UserProfileRepository
-    private let healthMetricsRepository: any HealthMetricsRepository
     private let snapshotStore: SessionSnapshotStore
     private let logger: Logger
 
     init(
         backend: Backend,
         userProfileRepository: any UserProfileRepository,
-        healthMetricsRepository: any HealthMetricsRepository,
         snapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
         logger: Logger = ConsoleLogger()
     ) {
         self.backend = backend
         self.userProfileRepository = userProfileRepository
-        self.healthMetricsRepository = healthMetricsRepository
         self.snapshotStore = snapshotStore
         self.logger = logger
     }
@@ -93,7 +90,6 @@ final class DefaultAuthRepository: AuthRepository {
             displayName: displayName,
             signedInAt: signedInAt
         )
-        try await healthMetricsRepository.seedDefaultMetricsIfNeeded(for: profile.id)
 
         let session = UserSession(
             profileID: profile.id,

@@ -7,7 +7,6 @@ struct MainTabCoordinatorView: View {
     let appContainer: AppContainer
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
-    @ObservedObject var healthViewModel: HealthTimelineViewModel
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var chatStateStore: ChatStateStore
     @ObservedObject var chatListViewModel: ChatListViewModel
@@ -21,24 +20,13 @@ struct MainTabCoordinatorView: View {
                 HomeView(
                     viewModel: homeViewModel,
                     medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
-                    session: session,
-                    onOpenHealthTimeline: {
-                        routeStore.selectedTab = .health
-                    }
+                    session: session
                 )
             }
             .tabItem {
                 Label(L10n.text("tab.home"), systemImage: "house.fill")
             }
             .tag(AppRouteStore.RootTab.home)
-
-            NavigationView {
-                HealthTimelineView(viewModel: healthViewModel, session: session)
-            }
-            .tabItem {
-                Label(L10n.text("tab.health"), systemImage: "waveform.path.ecg")
-            }
-            .tag(AppRouteStore.RootTab.health)
 
             NavigationView {
                 KnowledgeLibraryView(appContainer: appContainer, viewModel: knowledgeViewModel)

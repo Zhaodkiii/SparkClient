@@ -79,8 +79,6 @@ final class AppContainer {
 
     /// 当前登录用户资料（会话态，如 Apple 用户标识展示名）。
     let userProfileRepository: any UserProfileRepository
-    /// 健康指标时间轴等（远程医疗查询 API）。
-    let healthMetricsRepository: any HealthMetricsRepository
     /// 登录、刷新 token、登出。
     let authRepository: any AuthRepository
     /// 本地 AI 偏好（模型、温度等）；与知识库仓库解耦。
@@ -102,14 +100,8 @@ final class AppContainer {
     let signOutUseCase: SignOutUseCase
     /// 首页医疗卡片：成员、病例、体检、用药等摘要（可带远程刷新策略）。
     let loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase
-    /// 首页运动与健康（HealthKit）数据。
-    let loadHomeMotionHealthUseCase: LoadHomeMotionHealthUseCase
     /// 首页家庭成员增删改选。
     let manageHomeMemberUseCase: ManageHomeMemberUseCase
-    /// 请求 HealthKit 读权限（运动健康模块）。
-    let requestHomeHealthAuthorizationUseCase: RequestHomeHealthAuthorizationUseCase
-    /// 健康 Tab 时间轴。
-    let loadHealthTimelineUseCase: LoadHealthTimelineUseCase
     /// 知识库文档列表（本地 Core Data）。
     let loadKnowledgeListUseCase: LoadKnowledgeListUseCase
     /// 按 ID 加载单篇知识文档正文与元数据。
@@ -138,10 +130,10 @@ final class AppContainer {
     let importKnowledgeFromFileUseCase: ImportKnowledgeFromFileUseCase
     /// 从 URL/网页抓取并导入为知识文档。
     let importKnowledgeFromWebUseCase: ImportKnowledgeFromWebUseCase
-    /// 聊天侧患者列表（医疗域）。
-    let loadPatientsUseCase: LoadPatientsUseCase
-    /// 当前选中医患上下文切换。
-    let selectPatientUseCase: SelectPatientUseCase
+    /// 聊天侧成员列表（医疗域）。
+    let loadMembersUseCase: LoadMembersUseCase
+    /// 当前选中成员切换。
+    let selectMemberUseCase: SelectMemberUseCase
     /// 病历附件先上传文件服务。
     let uploadMedicalDocumentFilesUseCase: UploadMedicalDocumentFilesUseCase
     /// 按类型（检验/处方等）结构化抽取。
@@ -150,8 +142,8 @@ final class AppContainer {
     let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
     /// 将已上传文件 ID 绑定到医疗业务实体。
     let bindUploadedFilesToMedicalBusinessUseCase: BindUploadedFilesToMedicalBusinessUseCase
-    /// 拼接患者病历摘要注入聊天 system 上下文。
-    let buildPatientContextSummaryUseCase: BuildPatientContextSummaryUseCase
+    /// 拼接成员病历摘要注入聊天 system 上下文。
+    let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
     /// 分页/刷新会话线程列表。
     let loadChatThreadsUseCase: LoadChatThreadsUseCase
     /// 加载某线程下的消息历史（含本地未同步）。
@@ -170,7 +162,7 @@ final class AppContainer {
     // MARK: - AI 运行时、工具编排、医疗同步、OCR
     //
     // `AIRuntimeStore` 存当前模型、流式状态等；`AIConfigCenter` 合并本地设置与远程配置。
-    // `ToolHub` 把草稿确认、知识检索等暴露给聊天工具调用链；`MedicalSyncService` 后台增量同步医疗数据。
+    // `ToolHub` 把草稿确认、知识检索等暴露给聊天工具调用链；`MedicalSyncService` 管理同步偏好并预热成员列表缓存。
 
     /// 运行时 UI/状态用的大模型选择、生成中等快照。
     let aiRuntimeStore: AIRuntimeStore
@@ -187,15 +179,15 @@ final class AppContainer {
     /// 阿里云 / 本地 OCR 引擎选择与降级。
     let ocrOrchestrator: OCROrchestrator
 
-    // MARK: - 会话、患者上下文与聊天界面 ViewModel
+    // MARK: - 会话、成员上下文与聊天界面 ViewModel
     //
-    // 与 SwiftUI `Scene` 同级常驻：`sessionStore` 管登录态；`patientContextStore` 管当前患者；
+    // 与 SwiftUI `Scene` 同级常驻：`sessionStore` 管登录态；`memberContextStore` 管当前成员；
     // `chatStateStore` 管线程选中态；三个 ViewModel 供多窗口/多界面共享同一份状态。
 
     /// 登录态与恢复会话的 Observable 封装。
     let sessionStore: AppSessionStore
-    /// 当前选中的医疗成员/患者上下文（首页与聊天共用）。
-    let patientContextStore: PatientContextStore
+    /// 当前选中的医疗成员上下文（首页与聊天共用）。
+    let memberContextStore: MemberContextStore
     /// 聊天列表与详情共享的选中线程、输入态等。
     let chatStateStore: ChatStateStore
     /// 知识库列表/搜索/增删改 UI 状态（单例）。
@@ -242,14 +234,11 @@ final class AppContainer {
         )
 
         // MARK: 仓库层（数据访问抽象）
-        // 会话资料与远程健康指标：登录流程中可能触发健康时间轴预拉。
         let profileRepository = SessionBackedUserProfileRepository()
-        let healthMetricsRepository = RemoteHealthMetricsRepository(queryAPI: backend.medicalQuery)
-        // 认证仓库聚合 Backend + 上述两仓库，负责 token 与登出清理。
+        let selectedMemberIDPersistence = UserDefaultsSelectedMemberIDStore()
         let authRepository = DefaultAuthRepository(
             backend: backend,
             userProfileRepository: profileRepository,
-            healthMetricsRepository: healthMetricsRepository,
             logger: logger
         )
         let aiSettingsRepository = DefaultAISettingsRepository(logger: logger)
@@ -260,18 +249,6 @@ final class AppContainer {
         let localModelService = LocalModelService()
         let remoteConfigProvider = BackendAIRemoteConfigProvider(api: backend.aiConfig)
         let medicalSyncPreferenceRepository = DefaultMedicalSyncPreferenceRepository()
-        // 医疗查询：病例、报告、用药等列表/详情（与 workflow 写入 API 分离）。
-        let medicalDataRepository = DefaultMedicalDataRepository(
-            queryAPI: backend.medicalQuery,
-            logger: logger
-        )
-        // 首页成员：读 medical query + member CRUD API。
-        let homeMemberRepository = DefaultHomeMemberRepository(
-            medicalQueryAPI: backend.medicalQuery,
-            memberAPI: backend.medicalMembers,
-            logger: logger
-        )
-        let homeHealthRepository = HealthKitHomeHealthDataRepository()
 
         // MARK: AI 配置与运行时网关
         let aiConfigCenter = AIConfigCenter(
@@ -335,10 +312,10 @@ final class AppContainer {
             embeddingClient: knowledgeEmbeddingClient
         )
 
-        // MARK: 患者、病历记录、草稿与「结构化病历上传」流水线
-        let patientRepository = DefaultPatientRepository(medicalQueryAPI: backend.medicalQuery)
+        // MARK: 成员、病历记录、草稿与「结构化病历上传」流水线
+        let membersRepository = DefaultMembersRepository(medicalQueryAPI: backend.medicalQuery)
         let medicalRecordRepository = DefaultMedicalRecordRepository(medicalQueryAPI: backend.medicalQuery)
-        let buildPatientContextSummaryUseCase = BuildPatientContextSummaryUseCase(repository: medicalRecordRepository)
+        let buildMemberContextSummaryUseCase = BuildMemberContextSummaryUseCase(repository: medicalRecordRepository)
         let medicalPromptFactory = MedicalPromptFactory()
         let medicalDocumentTypeResolver = DefaultMedicalDocumentTypeResolver(
             runtimeService: aiRuntimeService,
@@ -379,8 +356,7 @@ final class AppContainer {
         let toolAuditStore = ToolAuditStore()
         let toolHub = ToolHub(
             auditStore: toolAuditStore,
-            medicalDataRepository: medicalDataRepository,
-            healthMetricsRepository: healthMetricsRepository,
+            medicalQueryAPI: backend.medicalQuery,
             aiSettingsRepository: aiSettingsRepository,
             searchKnowledgeUseCase: searchKnowledgeUseCase,
             createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
@@ -423,13 +399,13 @@ final class AppContainer {
             repository: chatRepository,
             orchestrator: chatOrchestrator,
             syncEngine: chatSyncEngine,
-            buildPatientContextSummaryUseCase: buildPatientContextSummaryUseCase,
+            buildMemberContextSummaryUseCase: buildMemberContextSummaryUseCase,
             logger: logger
         )
 
         // MARK: 应用内通知 + 远程推送
         let routeStore = AppRouteStore()
-        let patientContextStore = PatientContextStore()
+        let memberContextStore = MemberContextStore(persistence: selectedMemberIDPersistence)
         let notificationStore = NotificationStore()
         let notificationMetricsStore = NotificationMetricsStore()
         let notificationInboxStore = NotificationInboxStore()
@@ -456,7 +432,7 @@ final class AppContainer {
         // MARK: 医疗后台同步（可触发本地通知）与 Push 适配
         let medicalSyncService = MedicalSyncService(
             preferenceRepository: medicalSyncPreferenceRepository,
-            medicalRepository: medicalDataRepository,
+            medicalQueryAPI: backend.medicalQuery,
             notificationClient: notificationClient,
             logger: logger
         )
@@ -496,7 +472,6 @@ final class AppContainer {
 
         // MARK: 写回 `self`：仓库与用例（供工厂方法与外部测试/调试访问）
         self.userProfileRepository = profileRepository
-        self.healthMetricsRepository = healthMetricsRepository
         self.authRepository = authRepository
         self.aiSettingsRepository = aiSettingsRepository
         self.knowledgeRepository = knowledgeRepository
@@ -507,16 +482,11 @@ final class AppContainer {
         self.signOutUseCase = SignOutUseCase(authRepository: authRepository)
         self.loadHomeMedicalOverviewUseCase = LoadHomeMedicalOverviewUseCase(
             userProfileRepository: profileRepository,
-            memberRepository: homeMemberRepository,
+            medicalQueryAPI: backend.medicalQuery,
+            selectedMemberIDPersistence: selectedMemberIDPersistence,
             logger: logger
         )
-        self.loadHomeMotionHealthUseCase = LoadHomeMotionHealthUseCase(
-            healthDataRepository: homeHealthRepository,
-            logger: logger
-        )
-        self.manageHomeMemberUseCase = ManageHomeMemberUseCase(memberRepository: homeMemberRepository)
-        self.requestHomeHealthAuthorizationUseCase = RequestHomeHealthAuthorizationUseCase(healthDataRepository: homeHealthRepository)
-        self.loadHealthTimelineUseCase = LoadHealthTimelineUseCase(healthMetricsRepository: healthMetricsRepository)
+        self.manageHomeMemberUseCase = ManageHomeMemberUseCase(memberAPI: backend.medicalMembers)
         self.loadKnowledgeListUseCase = loadKnowledgeListUseCase
         self.loadKnowledgeDocumentUseCase = loadKnowledgeDocumentUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
@@ -531,13 +501,13 @@ final class AppContainer {
         self.ocrKnowledgeImageUseCase = ocrKnowledgeImageUseCase
         self.importKnowledgeFromFileUseCase = importKnowledgeFromFileUseCase
         self.importKnowledgeFromWebUseCase = importKnowledgeFromWebUseCase
-        self.loadPatientsUseCase = LoadPatientsUseCase(repository: patientRepository)
-        self.selectPatientUseCase = SelectPatientUseCase()
+        self.loadMembersUseCase = LoadMembersUseCase(repository: membersRepository)
+        self.selectMemberUseCase = SelectMemberUseCase()
         self.uploadMedicalDocumentFilesUseCase = uploadMedicalDocumentFilesUseCase
         self.extractTypedMedicalDocumentUseCase = extractTypedMedicalDocumentUseCase
         self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
         self.bindUploadedFilesToMedicalBusinessUseCase = bindUploadedFilesToMedicalBusinessUseCase
-        self.buildPatientContextSummaryUseCase = buildPatientContextSummaryUseCase
+        self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.createThreadUseCase = createThreadUseCase
@@ -570,7 +540,7 @@ final class AppContainer {
         // MARK: 会话 Store 与跨界面共享 ViewModel
         // 注意：`sessionStore` 使用刚赋值的 `restoreSessionUseCase`，`chatListViewModel` 依赖 `sessionStore`，顺序不可颠倒。
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
-        self.patientContextStore = patientContextStore
+        self.memberContextStore = memberContextStore
         self.chatStateStore = ChatStateStore()
         self.knowledgeViewModel = KnowledgeLibraryViewModel(
             loadListUseCase: loadKnowledgeListUseCase,
@@ -584,9 +554,10 @@ final class AppContainer {
         self.chatListViewModel = ChatListViewModel(
             stateStore: chatStateStore,
             sessionStore: sessionStore,
-            patientContextStore: patientContextStore,
-            loadPatientsUseCase: loadPatientsUseCase,
-            selectPatientUseCase: selectPatientUseCase,
+            memberContextStore: memberContextStore,
+            loadMembersUseCase: loadMembersUseCase,
+            selectMemberUseCase: selectMemberUseCase,
+            selectedMemberIDPersistence: selectedMemberIDPersistence,
             loadChatThreadsUseCase: loadChatThreadsUseCase,
             loadChatMessagesUseCase: loadChatMessagesUseCase,
             createThreadUseCase: createThreadUseCase,
@@ -595,7 +566,7 @@ final class AppContainer {
         )
         self.chatDetailViewModel = ChatDetailViewModel(
             stateStore: chatStateStore,
-            patientContextStore: patientContextStore,
+            memberContextStore: memberContextStore,
             loadChatThreadsUseCase: loadChatThreadsUseCase,
             loadChatMessagesUseCase: loadChatMessagesUseCase,
             sendMessageUseCase: sendChatMessageUseCase,
@@ -654,15 +625,13 @@ final class AppContainer {
         )
     }
 
-    /// 首页：医疗摘要、运动健康、成员管理、HealthKit 授权、患者上下文与通知。
+    /// 首页：医疗摘要、成员管理与成员上下文、通知。
     func makeHomeViewModel() -> HomeViewModel {
         HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
-            loadHomeMotionHealthUseCase: loadHomeMotionHealthUseCase,
             manageHomeMemberUseCase: manageHomeMemberUseCase,
-            requestHomeHealthAuthorizationUseCase: requestHomeHealthAuthorizationUseCase,
-            patientContextStore: patientContextStore,
+            memberContextStore: memberContextStore,
             notificationClient: notificationClient,
             logger: logger
         )
@@ -671,20 +640,12 @@ final class AppContainer {
     /// 结构化病历上传：先文件上传 → 类型化抽取 → workflow 保存 → 附件绑定。
     func makeMedicalDocumentUploadViewModel() -> MedicalDocumentUploadViewModel {
         MedicalDocumentUploadViewModel(
-            patientContextStore: patientContextStore,
+            memberContextStore: memberContextStore,
             uploadFilesUseCase: uploadMedicalDocumentFilesUseCase,
             extractUseCase: extractTypedMedicalDocumentUseCase,
             saveUseCase: saveTypedMedicalDocumentUseCase,
             bindUseCase: bindUploadedFilesToMedicalBusinessUseCase,
             logger: logger
-        )
-    }
-
-    /// 健康时间轴 Tab。
-    func makeHealthTimelineViewModel() -> HealthTimelineViewModel {
-        HealthTimelineViewModel(
-            sessionStore: sessionStore,
-            loadHealthTimelineUseCase: loadHealthTimelineUseCase
         )
     }
 

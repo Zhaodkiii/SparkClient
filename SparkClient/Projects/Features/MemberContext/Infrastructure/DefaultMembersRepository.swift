@@ -1,13 +1,13 @@
 import Foundation
 
-final class DefaultPatientRepository: PatientRepository, @unchecked Sendable {
+final class DefaultMembersRepository: MembersRepository, @unchecked Sendable {
     private let medicalQueryAPI: SparkMedicalQueryAPI
 
     init(medicalQueryAPI: SparkMedicalQueryAPI) {
         self.medicalQueryAPI = medicalQueryAPI
     }
 
-    func loadPatients() async -> [Member] {
+    func loadMembers() async -> [Member] {
         let members = (try? await medicalQueryAPI.listMembers()) ?? []
         return members.map {
             Member(

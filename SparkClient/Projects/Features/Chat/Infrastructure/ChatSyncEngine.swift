@@ -60,13 +60,21 @@ actor ChatSyncEngine {
         do {
             serverHead = try await remoteAPI.threadHead(threadID: threadID)
         } catch {
+            // 服务端仅在首条消息 push 时 `get_or_create` 线程；仅本地存在时尚无远程记录，head/pull 会 404。
+            if isRemoteThreadMissing(error) {
+                logger.debug(
+                    "服务端尚无该会话，跳过打开时同步（首条消息上送后将创建），thread=\(shortID(threadID))",
+                    module: .general
+                )
+                return
+            }
             headFetchFailed = true
             logger.warning("thread head 不可用，将尝试按会话拉取：\(error.localizedDescription)", module: .general)
         }
 
         if headFetchFailed {
             let cursor = localWatermark.map(Self.formatSyncCursor)
-            try await pullAndMerge(cursor: cursor, threadID: threadID)
+            try await pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
             let cost = Date().timeIntervalSince(start)
             logger.info("会话打开同步完成（head 降级），cost=\(format(cost))s", module: .general)
             return
@@ -86,7 +94,7 @@ actor ChatSyncEngine {
         }
 
         let cursor = localWatermark.map(Self.formatSyncCursor)
-        try await pullAndMerge(cursor: cursor, threadID: threadID)
+        try await pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
         let cost = Date().timeIntervalSince(start)
         logger.info("会话打开同步完成，cost=\(format(cost))s", module: .general)
     }
@@ -173,6 +181,22 @@ actor ChatSyncEngine {
                 "上送对话失败，count=\(pending.count), toolMessages=\(toolCount), error=\(error.localizedDescription)",
                 module: .general
             )
+            throw error
+        }
+    }
+
+    /// 带 `thread_id` 的 pull 在服务端尚无该线程时会返回 404 `thread_not_found`，与「仅本地新建会话」兼容。
+    private func pullAndMergeAllowingMissingRemoteThread(cursor: String?, threadID: UUID) async throws {
+        do {
+            try await pullAndMerge(cursor: cursor, threadID: threadID)
+        } catch {
+            if isRemoteThreadMissing(error) {
+                logger.debug(
+                    "拉取跳过：服务端尚无该会话，thread=\(shortID(threadID))",
+                    module: .general
+                )
+                return
+            }
             throw error
         }
     }
@@ -265,5 +289,12 @@ actor ChatSyncEngine {
 
     private func shortID(_ id: UUID) -> String {
         String(id.uuidString.prefix(8))
+    }
+
+    private func isRemoteThreadMissing(_ error: Error) -> Bool {
+        guard let network = error as? SparkNetworkError else { return false }
+        guard case .httpError(let status, let backend, _) = network else { return false }
+        guard status == 404, let backend else { return false }
+        return backend.code == 40401 || backend.msg == "thread_not_found"
     }
 }

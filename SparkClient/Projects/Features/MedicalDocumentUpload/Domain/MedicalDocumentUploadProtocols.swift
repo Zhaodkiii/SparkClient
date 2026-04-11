@@ -8,14 +8,6 @@ protocol MedicalDocumentRecognizer: Sendable {
     ) async throws -> MedicalDocumentRecognitionResult
 }
 
-protocol MedicalDocumentSaver: Sendable {
-    func save(
-        memberID: Int,
-        result: MedicalDocumentRecognitionResult,
-        sourceFiles: [MedicalUploadLocalFile]
-    ) async throws -> MedicalDocumentSaveReceipt
-}
-
 protocol MedicalDocumentTypeResolving: Sendable {
     func resolve(
         selectedKind: MedicalDocumentKind,

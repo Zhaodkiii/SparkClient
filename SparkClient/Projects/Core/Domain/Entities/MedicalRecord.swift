@@ -2,7 +2,7 @@ import Foundation
 
 struct MedicalRecord: Identifiable, Codable, Equatable, Sendable {
     let id: Int
-    let patientID: Int
+    let memberID: Int
     let title: String
     let summary: String
     let occurredAt: Date
@@ -10,14 +10,14 @@ struct MedicalRecord: Identifiable, Codable, Equatable, Sendable {
 
     init(
         id: Int,
-        patientID: Int,
+        memberID: Int,
         title: String,
         summary: String,
         occurredAt: Date,
         updatedAt: Date = Date()
     ) {
         self.id = id
-        self.patientID = patientID
+        self.memberID = memberID
         self.title = title
         self.summary = summary
         self.occurredAt = occurredAt

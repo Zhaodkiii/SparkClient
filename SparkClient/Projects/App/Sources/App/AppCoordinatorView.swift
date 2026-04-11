@@ -41,7 +41,7 @@ struct AppCoordinatorView: View {
                 AuthCoordinatorView(viewModel: container.makeLoginViewModel())
                     .task {
                         await container.appBootstrapper.reset()
-                        container.patientContextStore.update(members: [], selectedMemberID: nil)
+                        container.memberContextStore.clearSessionPersistenceAndReset()
                     }
 
             case .signedIn(let session):
@@ -51,7 +51,6 @@ struct AppCoordinatorView: View {
                     appContainer: container,
                     homeViewModel: container.makeHomeViewModel(),
                     medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
-                    healthViewModel: container.makeHealthTimelineViewModel(),
                     knowledgeViewModel: container.makeKnowledgeLibraryViewModel(),
                     chatStateStore: container.makeChatStateStore(),
                     chatListViewModel: container.makeChatListViewModel(),
@@ -59,7 +58,9 @@ struct AppCoordinatorView: View {
                     settingsViewModel: container.makeSettingsViewModel(),
                     aiSettingsViewModel: container.makeAISettingsViewModel()
                 )
+                .environmentObject(container.memberContextStore)
                 .task(id: session.profileID) {
+                    container.memberContextStore.setActiveProfile(session.profileID)
                     await container.appBootstrapper.bootstrapIfNeeded(for: session)
                     // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
                     container.pushAdapter.requestAuthorizationIfNeeded()

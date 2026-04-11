@@ -597,7 +597,7 @@
 【最终要求】
 只返回纯净JSON，不要任何其他内容。'\nOCR文本：\n%@";
 
-"ai.prompt.context.header" = "患者近期病历摘要（最近%d条）：";
+"ai.prompt.context.header" = "成员近期病历摘要（最近%d条）：";
 "ai.prompt.context.line" = "- [%@] %@：%@";
 "ai.prompt.fallback.assistant" = "我现在无法给出有效回复，请稍后重试。";
 "ai.prompt.thread.new_title" = "新对话";

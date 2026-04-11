@@ -7,7 +7,6 @@ struct HomeView: View {
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let session: UserSession
-    var onOpenHealthTimeline: (() -> Void)?
 
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
@@ -20,7 +19,6 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 headerCard
                 medicalInfoSection
-                healthBasicsSection
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -131,25 +129,12 @@ struct HomeView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 12) {
-                Label(
-                    session.signedInAt.formatted(date: .abbreviated, time: .shortened),
-                    systemImage: "checkmark.seal.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    onOpenHealthTimeline?()
-                    triggerHaptic(style: .light)
-                } label: {
-                    Label(L10n.text("home.action.timeline"), systemImage: "waveform.path.ecg")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-            }
+            Label(
+                session.signedInAt.formatted(date: .abbreviated, time: .shortened),
+                systemImage: "checkmark.seal.fill"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(20)
         .background(
@@ -194,149 +179,43 @@ struct HomeView: View {
     }
 
     private func medicalCard(_ card: HomeDashboard.MedicalCard) -> some View {
-        Button {
-            onOpenHealthTimeline?()
-            triggerHaptic(style: .light)
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: card.symbol)
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Color(uiColor: .systemBlue))
-
-                Text(medicalCardTitle(for: card.id))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                Text(medicalCardSubtitle(for: card.id))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 0)
-
-                HStack {
-                    Text("\(card.count)")
-                        .font(.title3.weight(.bold))
-                        .monospacedDigit()
-                    Spacer()
-                    if let latestDate = card.latestDate {
-                        Text(latestDate.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.regularMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(.quaternary, lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var healthBasicsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(L10n.text("home.health_basics.title"), systemImage: "heart.text.square")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    Task {
-                        await viewModel.requestHealthAuthorization()
-                    }
-                    triggerHaptic(style: .light)
-                } label: {
-                    Label(L10n.text("home.health_basics.authorize"), systemImage: "hand.raised")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-            }
-
-            if viewModel.dashboard?.canShowHealthBasics == false {
-                infoCard(text: L10n.text("home.health_basics.only_self"), symbol: "person.crop.circle.badge.exclamationmark")
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(viewModel.dashboard?.motion.healthBasics ?? [], id: \.id) { item in
-                        healthBasicCard(item)
-                    }
-                }
-
-                if let status = viewModel.dashboard?.motion.healthAuthorizationStatus, status != .authorized {
-                    infoCard(text: authorizationStatusText(status), symbol: "heart.slash")
-                }
-            }
-        }
-    }
-
-    private func healthBasicCard(_ item: HomeDashboard.HealthBasicItem) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: item.symbol)
+            Image(systemName: card.symbol)
                 .font(.title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color(uiColor: .systemIndigo))
+                .foregroundStyle(Color(uiColor: .systemBlue))
 
-            Text(healthTitle(for: item.id))
+            Text(medicalCardTitle(for: card.id))
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Text(healthValue(for: item))
-                .font(.title3.weight(.bold))
-                .monospacedDigit()
                 .foregroundStyle(.primary)
 
-            if let recordedAt = item.recordedAt {
-                Text(recordedAt.formatted(date: .omitted, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Text(medicalCardSubtitle(for: card.id))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Text("\(card.count)")
+                    .font(.title3.weight(.bold))
+                    .monospacedDigit()
+                Spacer()
+                if let latestDate = card.latestDate {
+                    Text(latestDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 124, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(.regularMaterial)
         )
-    }
-
-    private func infoCard(text: String, symbol: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.secondary)
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
+        .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
-    }
-
-    private func errorBanner(message: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color(uiColor: .systemOrange))
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .strokeBorder(.quaternary, lineWidth: 1)
         )
     }
 
@@ -372,45 +251,6 @@ struct HomeView: View {
         }
     }
 
-    private func healthTitle(for kind: HomeDashboard.HealthBasicItem.Kind) -> String {
-        switch kind {
-        case .steps:
-            return L10n.text("metric.steps")
-        case .weight:
-            return L10n.text("metric.weight")
-        case .sleep:
-            return L10n.text("metric.sleep")
-        case .heartRate:
-            return L10n.text("metric.heart_rate")
-        }
-    }
-
-    private func healthValue(for item: HomeDashboard.HealthBasicItem) -> String {
-        guard let value = item.value else { return L10n.text("common.placeholder") }
-
-        switch item.id {
-        case .steps:
-            return "\(Int(value)) \(item.unit)"
-        case .heartRate:
-            return "\(Int(value)) \(item.unit)"
-        case .weight, .sleep:
-            return String(format: "%.1f %@", locale: Locale.current, value, item.unit)
-        }
-    }
-
-    private func authorizationStatusText(_ status: HomeDashboard.HealthAuthorizationStatus) -> String {
-        switch status {
-        case .authorized:
-            return L10n.text("home.health_basics.authorized")
-        case .notDetermined:
-            return L10n.text("home.health_basics.not_determined")
-        case .denied:
-            return L10n.text("home.health_basics.denied")
-        case .unavailable:
-            return L10n.text("home.health_basics.unavailable")
-        }
-    }
-
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
 #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: style).impactOccurred()
@@ -424,7 +264,7 @@ struct HomeView: View {
     }
 }
 
-/// Member chip with a per-instance action menu (matches Health `PatientButton` + `confirmationDialog` pattern).
+/// Member chip with a per-instance action menu (matches Health member button + `confirmationDialog` pattern).
 private struct MemberSelectorChip: View {
     let member: Member
     let badgeText: String
@@ -552,18 +392,8 @@ extension HomeViewModel {
                 HomeDashboard.MedicalCard(id: .medicalCases, count: 4, latestDate: now.addingTimeInterval(-86_400), symbol: "doc.text.fill"),
                 HomeDashboard.MedicalCard(id: .healthExamReports, count: 2, latestDate: now.addingTimeInterval(-172_800), symbol: "heart.text.square.fill"),
                 HomeDashboard.MedicalCard(id: .medicalReports, count: 6, latestDate: now.addingTimeInterval(-259_200), symbol: "list.clipboard.fill"),
-                HomeDashboard.MedicalCard(id: .medications, count: 96, latestDate: now.addingTimeInterval(-86_400 * 3), symbol: "pills.fill")
-            ]),
-            motion: HomeMotionHealthOverview(
-                healthBasics: [
-                    HomeDashboard.HealthBasicItem(id: .steps, value: 9210, unit: "steps", symbol: "figure.walk.motion", recordedAt: now),
-                    HomeDashboard.HealthBasicItem(id: .weight, value: 63.6, unit: "kg", symbol: "scalemass.fill", recordedAt: now.addingTimeInterval(-4000)),
-                    HomeDashboard.HealthBasicItem(id: .sleep, value: 7.2, unit: "h", symbol: "moon.stars.fill", recordedAt: now.addingTimeInterval(-8000)),
-                    HomeDashboard.HealthBasicItem(id: .heartRate, value: 71, unit: "bpm", symbol: "heart.text.square.fill", recordedAt: now.addingTimeInterval(-2000))
-                ],
-                healthAuthorizationStatus: .authorized,
-                isApplicable: true
-            )
+                HomeDashboard.MedicalCard(id: .medications, count: 8, latestDate: now.addingTimeInterval(-86_400 * 3), symbol: "pills.fill")
+            ])
         )
 
         let sessionStore = AppSessionStore(
@@ -579,24 +409,22 @@ extension HomeViewModel {
             )
         )
 
-        let mockMemberRepository = PreviewHomeMemberRepository(snapshot: .empty)
-        let mockHealthRepository = PreviewHomeHealthRepository()
+        let previewPersistence = UserDefaultsSelectedMemberIDStore(
+            defaults: UserDefaults(suiteName: "SparkClient.Preview.MemberContext") ?? .standard
+        )
 
         let previewLogger = ConsoleLogger()
+        let previewBackend = Backend(baseURL: URL(string: "。.local")!, logger: previewLogger)
         let viewModel = HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase(
                 userProfileRepository: PreviewUserProfileRepository(profile: dashboard.profile),
-                memberRepository: mockMemberRepository,
+                medicalQueryAPI: SparkMedicalQueryAPI(configuration: previewBackend.configuration),
+                selectedMemberIDPersistence: previewPersistence,
                 logger: previewLogger
             ),
-            loadHomeMotionHealthUseCase: LoadHomeMotionHealthUseCase(
-                healthDataRepository: mockHealthRepository,
-                logger: previewLogger
-            ),
-            manageHomeMemberUseCase: ManageHomeMemberUseCase(memberRepository: mockMemberRepository),
-            requestHomeHealthAuthorizationUseCase: RequestHomeHealthAuthorizationUseCase(healthDataRepository: mockHealthRepository),
-            patientContextStore: PatientContextStore(),
+            manageHomeMemberUseCase: ManageHomeMemberUseCase(memberAPI: previewBackend.medicalMembers),
+            memberContextStore: MemberContextStore(persistence: previewPersistence),
             notificationClient: PreviewNotificationClient(),
             logger: previewLogger
         )
@@ -639,55 +467,6 @@ private struct PreviewUserProfileRepository: UserProfileRepository {
             lastSignedInAt: signedInAt
         )
     }
-}
-
-private actor PreviewHomeMemberRepository: HomeMemberRepository {
-    private var snapshot: MedicalDataSnapshot
-
-    init(snapshot: MedicalDataSnapshot) {
-        self.snapshot = snapshot
-    }
-
-    func refreshRemoteSnapshot() async throws {}
-
-    func loadMembers() async -> [Member] {
-        snapshot.members
-    }
-
-    func loadSnapshot(memberID: Int) async -> MedicalDataSnapshot {
-        var copy = snapshot
-        copy.medicalCases = snapshot.medicalCases.filter { $0.memberID == memberID }
-        copy.healthExamReports = snapshot.healthExamReports.filter { $0.memberID == memberID }
-        copy.examinationReports = snapshot.examinationReports.filter { $0.memberID == memberID }
-        copy.medications = snapshot.medications.filter { $0.memberID == memberID }
-        copy.medicationTakenRecords = snapshot.medicationTakenRecords.filter { $0.memberID == memberID }
-        return copy
-    }
-
-    func createMember(
-        name: String,
-        relationship: String,
-        gender: String,
-        birthDate: Date?
-    ) async throws {}
-
-    func updateMember(
-        _ member: Member,
-        name: String,
-        relationship: String,
-        gender: String,
-        birthDate: Date?
-    ) async throws {}
-
-    func deleteMember(_ member: Member) async throws {}
-}
-
-private struct PreviewHomeHealthRepository: HomeHealthDataRepository {
-    func currentAuthorizationStatus() async -> HomeDashboard.HealthAuthorizationStatus { .authorized }
-
-    func requestAuthorizationIfNeeded() async throws -> HomeDashboard.HealthAuthorizationStatus { .authorized }
-
-    func fetchHealthBasics() async throws -> [HomeDashboard.HealthBasicItem] { [] }
 }
 
 private struct PreviewAuthRepository: AuthRepository {

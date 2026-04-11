@@ -39,7 +39,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     // MARK: - Dependencies
 
-    private let patientContextStore: PatientContextStore
+    private let memberContextStore: MemberContextStore
     private let uploadFilesUseCase: UploadMedicalDocumentFilesUseCase
     private let extractUseCase: ExtractTypedMedicalDocumentUseCase
     private let saveUseCase: SaveTypedMedicalDocumentUseCase
@@ -52,7 +52,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     // MARK: - Initialization
 
     init(
-        patientContextStore: PatientContextStore,
+        memberContextStore: MemberContextStore,
         uploadFilesUseCase: UploadMedicalDocumentFilesUseCase,
         extractUseCase: ExtractTypedMedicalDocumentUseCase,
         saveUseCase: SaveTypedMedicalDocumentUseCase,
@@ -60,21 +60,21 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         buildPreviewUseCase: BuildMedicalDocumentPreviewItemsUseCase = BuildMedicalDocumentPreviewItemsUseCase(),
         logger: Logger = ConsoleLogger()
     ) {
-        self.patientContextStore = patientContextStore
+        self.memberContextStore = memberContextStore
         self.uploadFilesUseCase = uploadFilesUseCase
         self.extractUseCase = extractUseCase
         self.saveUseCase = saveUseCase
         self.bindUseCase = bindUseCase
         self.buildPreviewUseCase = buildPreviewUseCase
         self.logger = logger
-        self.selectedMemberName = patientContextStore.context.selectedMember?.name
+        self.selectedMemberName = memberContextStore.context.selectedMember?.name
     }
 
     // MARK: - Derived state
 
-    /// 是否允许开始识别：已选文件且就诊人上下文中有当前选中成员。
+    /// 是否允许开始识别：已选文件且成员上下文中有当前选中成员。
     var canStartRecognition: Bool {
-        selectedFiles.isEmpty == false && patientContextStore.context.selectedMember != nil
+        selectedFiles.isEmpty == false && memberContextStore.context.selectedMember != nil
     }
 
     // MARK: - File selection
@@ -102,7 +102,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     func startRecognition() async {
         // MARK: 1. 前置校验：必须选择就诊成员（患者）
         // 从全局状态中获取当前选中的患者，没有则直接报错返回
-        guard let member = patientContextStore.context.selectedMember else {
+        guard let member = memberContextStore.context.selectedMember else {
             // 给 UI 展示错误文案（国际化 L10n）
             errorMessage = L10n.text("medical.upload.error.no_member")
             // 打印警告日志
@@ -264,7 +264,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         errorMessage = nil
         selectedKind = .auto
         uploadedFiles = []
-        selectedMemberName = patientContextStore.context.selectedMember?.name
+        selectedMemberName = memberContextStore.context.selectedMember?.name
         logger.info("已重置医疗上传流程", module: .medical)
     }
     
@@ -514,9 +514,9 @@ private struct PreviewMedicalRuntimeService: AIRuntimeServing {
 extension MedicalDocumentUploadViewModel {
     /// 构造可用于 Canvas 预览的 ViewModel（假网络、假 Runtime）。
     static func preview() -> MedicalDocumentUploadViewModel {
-        let patientStore = PatientContextStore()
+        let previewMemberContextStore = MemberContextStore()
         let member = Member(id: 1, name: "本人", relationship: "self", isPrimary: true)
-        patientStore.update(members: [member], selectedMemberID: member.id)
+        previewMemberContextStore.update(members: [member], selectedMemberID: member.id)
 
         let promptFactory = MedicalPromptFactory()
         let typeResolver = DefaultMedicalDocumentTypeResolver(
@@ -547,7 +547,7 @@ extension MedicalDocumentUploadViewModel {
             cacheManager: FileCacheManager()
         )
         return MedicalDocumentUploadViewModel(
-            patientContextStore: patientStore,
+            memberContextStore: previewMemberContextStore,
             uploadFilesUseCase: UploadMedicalDocumentFilesUseCase(fileTransferService: dummyFileTransfer),
             extractUseCase: ExtractTypedMedicalDocumentUseCase(extractor: extractor),
             saveUseCase: SaveTypedMedicalDocumentUseCase(saver: saver),

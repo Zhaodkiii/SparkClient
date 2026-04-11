@@ -30,7 +30,7 @@ struct RemoteNotificationPayload: Sendable {
         case "home":
             return .home
         case "health":
-            return .health
+            return .home
         case "chat":
             return .chat
         case "settings":

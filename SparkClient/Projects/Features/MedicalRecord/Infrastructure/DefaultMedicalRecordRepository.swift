@@ -16,16 +16,16 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
     /// 加载指定成员的医疗记录列表，并按时间倒序返回。
     ///
     /// - Parameters:
-    ///   - patientID: 当前成员 ID。
+    ///   - memberID: 当前成员 ID。
     ///   - limit: 最多返回条数，最小为 1。
     /// - Returns: 合并后的统一医疗记录时间线。
-    func loadRecords(patientID: Int, limit: Int) async -> [MedicalRecord] {
+    func loadRecords(memberID: Int, limit: Int) async -> [MedicalRecord] {
         // 病例
-        let caseRows: [SparkMedicalSyncAPI.RemoteMedicalCase] = (try? await medicalQueryAPI.listMedicalCases(memberID: patientID)) ?? []
+        let caseRows: [SparkMedicalSyncAPI.RemoteMedicalCase] = (try? await medicalQueryAPI.listMedicalCases(memberID: memberID)) ?? []
         let cases = caseRows.map {
                 MedicalRecord(
                     id: $0.id,
-                    patientID: $0.member,
+                    memberID: $0.member,
                     title: $0.title,
                     summary: makeCaseSummary($0.diagnosisSummary, hospital: $0.hospitalName),
                     occurredAt: $0.updatedAt,
@@ -33,11 +33,11 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                 )
             }
         // 就诊
-        let visitRows: [SparkMedicalSyncAPI.RemoteVisit] = (try? await medicalQueryAPI.listVisits(memberID: patientID)) ?? []
+        let visitRows: [SparkMedicalSyncAPI.RemoteVisit] = (try? await medicalQueryAPI.listVisits(memberID: memberID)) ?? []
         let visits = visitRows.map {
                 MedicalRecord(
                     id: $0.id,
-                    patientID: $0.member,
+                    memberID: $0.member,
                     title: $0.department.isEmpty ? "Visit" : $0.department,
                     summary: makeVisitSummary($0.doctorName),
                     occurredAt: $0.visitedAt ?? $0.updatedAt,
@@ -45,11 +45,11 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                 )
             }
         // 手术
-        let surgeryRows: [SparkMedicalSyncAPI.RemoteSurgery] = (try? await medicalQueryAPI.listSurgeries(memberID: patientID)) ?? []
+        let surgeryRows: [SparkMedicalSyncAPI.RemoteSurgery] = (try? await medicalQueryAPI.listSurgeries(memberID: memberID)) ?? []
         let surgeries = surgeryRows.map {
                 MedicalRecord(
                     id: $0.id,
-                    patientID: $0.member,
+                    memberID: $0.member,
                     title: $0.procedureName,
                     summary: makeSurgerySummary($0.surgeon),
                     occurredAt: $0.performedAt ?? $0.updatedAt,
@@ -57,11 +57,11 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                 )
             }
         // 随访
-        let followUpRows: [SparkMedicalSyncAPI.RemoteFollowUp] = (try? await medicalQueryAPI.listFollowUps(memberID: patientID)) ?? []
+        let followUpRows: [SparkMedicalSyncAPI.RemoteFollowUp] = (try? await medicalQueryAPI.listFollowUps(memberID: memberID)) ?? []
         let followUps = followUpRows.map {
                 MedicalRecord(
                     id: $0.id,
-                    patientID: $0.member,
+                    memberID: $0.member,
                     title: $0.method.isEmpty ? "FollowUp" : $0.method,
                     summary: makeFollowUpSummary($0.outcome),
                     occurredAt: $0.completedAt ?? $0.plannedAt ?? $0.updatedAt,
@@ -70,11 +70,11 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
             }
 
         // 检查报告
-        let examRows: [SparkMedicalSyncAPI.RemoteExaminationReport] = (try? await medicalQueryAPI.listExaminationReports(memberID: patientID)) ?? []
+        let examRows: [SparkMedicalSyncAPI.RemoteExaminationReport] = (try? await medicalQueryAPI.listExaminationReports(memberID: memberID)) ?? []
         let exams = examRows.map {
                 MedicalRecord(
                     id: $0.id,
-                    patientID: $0.member,
+                    memberID: $0.member,
                     title: $0.itemName,
                     summary: makeExaminationSummary(impression: $0.impression, findings: $0.findings),
                     occurredAt: $0.reportedAt ?? $0.performedAt ?? $0.updatedAt,
@@ -83,11 +83,11 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
             }
 
         // 用药
-        let medicationRows: [SparkMedicalSyncAPI.RemoteMedication] = (try? await medicalQueryAPI.listMedications(memberID: patientID)) ?? []
+        let medicationRows: [SparkMedicalSyncAPI.RemoteMedication] = (try? await medicalQueryAPI.listMedications(memberID: memberID)) ?? []
         let medications = medicationRows.map {
                 MedicalRecord(
                     id: $0.id,
-                    patientID: $0.member,
+                    memberID: $0.member,
                     title: $0.drugName.isEmpty ? "Medication" : $0.drugName,
                     summary: makeMedicationSummary(dosage: $0.dosePerTime, frequency: $0.frequencyText),
                     occurredAt: $0.updatedAt,
@@ -102,9 +102,9 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
             .map { $0 }
     }
 
-    /// 生成患者上下文摘要，供 AI prompt 注入最近病历语境。
-    func buildPatientContextSummary(patientID: Int, limit: Int) async -> String {
-        let records = await loadRecords(patientID: patientID, limit: limit)
+    /// 生成成员病历上下文摘要，供 AI prompt 注入最近病历语境。
+    func buildMemberContextSummary(memberID: Int, limit: Int) async -> String {
+        let records = await loadRecords(memberID: memberID, limit: limit)
         guard records.isEmpty == false else { return "" }
         let promptLocalizer = PromptLocalizer()
 

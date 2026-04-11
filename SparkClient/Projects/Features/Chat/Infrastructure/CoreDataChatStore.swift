@@ -43,10 +43,10 @@ actor CoreDataChatStore {
         }) ?? []
     }
 
-    func createThread(patientID: Int?, title: String) async -> ChatThread {
+    func createThread(memberID: Int?, title: String) async -> ChatThread {
         let now = Date()
         let thread = ChatThread(
-            patientID: patientID,
+            memberID: memberID,
             title: title,
             scenario: .chat,
             createdAt: now,
@@ -62,7 +62,7 @@ actor CoreDataChatStore {
 
             let object = NSEntityDescription.insertNewObject(forEntityName: EntityName.thread, into: context)
             object.setValue(thread.id, forKey: "id")
-            object.setValue(thread.patientID.map { Int64($0) }, forKey: "patientID")
+            object.setValue(thread.memberID.map { Int64($0) }, forKey: "memberID")
             object.setValue(thread.title, forKey: "title")
             object.setValue(thread.scenario.rawValue, forKey: "scenario")
             object.setValue(thread.createdAt, forKey: "createdAt")
@@ -168,7 +168,7 @@ actor CoreDataChatStore {
                 let threadObject = NSEntityDescription.insertNewObject(forEntityName: EntityName.thread, into: context)
                 let now = Date()
                 threadObject.setValue(threadID, forKey: "id")
-                threadObject.setValue(nil, forKey: "patientID")
+                threadObject.setValue(nil, forKey: "memberID")
                 threadObject.setValue(PromptLocalizer().newThreadTitle(), forKey: "title")
                 threadObject.setValue(AIScenario.chat.rawValue, forKey: "scenario")
                 threadObject.setValue(now, forKey: "createdAt")
@@ -317,7 +317,7 @@ actor CoreDataChatStore {
 
         return ChatThread(
             id: id,
-            patientID: (object.value(forKey: "patientID") as? Int64).map(Int.init),
+            memberID: (object.value(forKey: "memberID") as? Int64).map(Int.init),
             title: title,
             scenario: scenario,
             createdAt: createdAt,

@@ -4,7 +4,7 @@ import Foundation
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
     private let stateStore: ChatStateStore
-    private let patientContextStore: PatientContextStore
+    private let memberContextStore: MemberContextStore
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
     private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let sendMessageUseCase: SendChatMessageUseCase
@@ -23,7 +23,7 @@ final class ChatDetailViewModel: ObservableObject {
 
     init(
         stateStore: ChatStateStore,
-        patientContextStore: PatientContextStore,
+        memberContextStore: MemberContextStore,
         loadChatThreadsUseCase: LoadChatThreadsUseCase,
         loadChatMessagesUseCase: LoadChatMessagesUseCase,
         sendMessageUseCase: SendChatMessageUseCase,
@@ -35,7 +35,7 @@ final class ChatDetailViewModel: ObservableObject {
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
-        self.patientContextStore = patientContextStore
+        self.memberContextStore = memberContextStore
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.sendMessageUseCase = sendMessageUseCase
@@ -107,7 +107,7 @@ final class ChatDetailViewModel: ObservableObject {
         )
 
         logger.info(
-            "发送对话开始，thread=\(shortID(threadID)), patient=\(shortID(patientContextStore.context.selectedMemberID)), length=\(draft.count)",
+            "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), length=\(draft.count)",
             module: .general
         )
         stateStore.setSending(true)
@@ -127,7 +127,7 @@ final class ChatDetailViewModel: ObservableObject {
             let loadChatThreadsUseCase = self.loadChatThreadsUseCase
             let snapshot = try await sendMessageUseCase.execute(
                 threadID: threadID,
-                patientID: patientContextStore.context.selectedMemberID,
+                memberID: memberContextStore.context.selectedMemberID,
                 userInput: draft,
                 inference: inference,
                 modelReasoning: modelReasoning,

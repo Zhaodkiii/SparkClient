@@ -11,21 +11,22 @@ enum MedicalSyncServiceError: Error, LocalizedError, Sendable {
     }
 }
 
+/// 医疗同步偏好与轻量远端预热（成员列表 ETag），不再拉取本地聚合快照。
 @MainActor
 final class MedicalSyncService {
     private let preferenceRepository: any MedicalSyncPreferenceRepository
-    private let medicalRepository: any MedicalDataRepository
+    private let medicalQueryAPI: SparkMedicalQueryAPI
     private let notificationClient: any NotificationClient
     private let logger: Logger
 
     init(
         preferenceRepository: any MedicalSyncPreferenceRepository,
-        medicalRepository: any MedicalDataRepository,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         notificationClient: any NotificationClient,
         logger: Logger = ConsoleLogger()
     ) {
         self.preferenceRepository = preferenceRepository
-        self.medicalRepository = medicalRepository
+        self.medicalQueryAPI = medicalQueryAPI
         self.notificationClient = notificationClient
         self.logger = logger
     }
@@ -42,10 +43,10 @@ final class MedicalSyncService {
             if preference.hasCompletedInitialUpload == false {
                 preference.hasCompletedInitialUpload = true
             }
-            try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
+            _ = try await medicalQueryAPI.listMembers()
             preference.lastSyncAt = Date()
             await preferenceRepository.savePreference(preference)
-            logger.info("健康数据同步引导已完成", module: .medical)
+            logger.info("健康数据同步引导已完成（成员列表预热）", module: .medical)
         } catch let authError as AuthTokenProviderError {
             if authError == .missingTokens || authError == .refreshFailed {
                 logger.info("未登录态，已跳过启动同步。", module: .medical)
@@ -73,7 +74,7 @@ final class MedicalSyncService {
         preference.isSyncEnabled = enabled
         if enabled {
             do {
-                try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
+                _ = try await medicalQueryAPI.listMembers()
                 preference.hasCompletedInitialUpload = true
                 preference.lastSyncAt = Date()
             } catch let authError as AuthTokenProviderError {
@@ -91,7 +92,7 @@ final class MedicalSyncService {
         guard preference.isSyncEnabled else { return }
 
         do {
-            try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
+            _ = try await medicalQueryAPI.listMembers()
         } catch let authError as AuthTokenProviderError {
             if authError == .missingTokens || authError == .refreshFailed {
                 throw MedicalSyncServiceError.notAuthenticated

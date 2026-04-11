@@ -27,21 +27,21 @@ struct ChatOrchestrator: Sendable {
     func generateReply(
         userInput: String,
         history: [ChatMessage],
-        patientContextSummary: String,
-        patientID: Int?,
+        memberContextSummary: String,
+        memberID: Int?,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown
     ) async throws -> ChatOrchestratorOutput {
         let promptLocalizer = PromptLocalizer()
         let reasoningOpts = buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
         logger.debug(
-            "对话编排开始，history=\(history.count), patient=\(shortID(patientID)), inputLength=\(userInput.count), tools=\(inference.useTools), knowledge=\(inference.useKnowledgeBag), web=\(inference.useWebSearch), reasoning=\(reasoningOpts.isEnabled), promptFallback=\(reasoningOpts.usePromptFallback)",
+            "对话编排开始，history=\(history.count), member=\(shortID(memberID)), inputLength=\(userInput.count), tools=\(inference.useTools), knowledge=\(inference.useKnowledgeBag), web=\(inference.useWebSearch), reasoning=\(reasoningOpts.isEnabled), promptFallback=\(reasoningOpts.usePromptFallback)",
             module: .aiConfig
         )
 
         let toolResult: ToolHubResult
         if inference.useTools {
-            toolResult = await toolHub.runIfNeeded(userInput: userInput, patientID: patientID)
+            toolResult = await toolHub.runIfNeeded(userInput: userInput, memberID: memberID)
         } else {
             toolResult = .none
         }
@@ -64,13 +64,13 @@ struct ChatOrchestrator: Sendable {
         // 无工具命中时转入模型推理路径，显式记录入参规模，便于排查上下文膨胀问题。
         let runtimeMessages = makeRuntimeMessages(
             from: history,
-            patientContextSummary: patientContextSummary,
+            memberContextSummary: memberContextSummary,
             reasoning: reasoningOpts
         )
         let toolDefinitions = filteredToolDefinitions(inference: inference)
         let toolChoice: AIRuntimeToolChoice = inference.useTools && toolDefinitions.isEmpty == false ? .auto : .none
         logger.debug(
-            "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), patientContextLength=\(patientContextSummary.count), tools=\(toolDefinitions.count), toolChoice=\(String(describing: toolChoice))",
+            "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), memberContextLength=\(memberContextSummary.count), tools=\(toolDefinitions.count), toolChoice=\(String(describing: toolChoice))",
             module: .aiConfig
         )
         var loopMessages = runtimeMessages
@@ -132,7 +132,7 @@ struct ChatOrchestrator: Sendable {
                 let toolResult = await toolHub.executeToolCall(
                     name: call.name,
                     arguments: call.arguments,
-                    patientID: patientID
+                    memberID: memberID
                 )
                 let modelConsent = consentGate.evaluate(result: toolResult, destination: .model)
                 let content = modelConsent.allowed
@@ -182,7 +182,7 @@ struct ChatOrchestrator: Sendable {
 
     private func makeRuntimeMessages(
         from history: [ChatMessage],
-        patientContextSummary: String,
+        memberContextSummary: String,
         reasoning: AIRuntimeReasoningOptions
     ) -> [AIRuntimeMessage] {
         let promptLocalizer = PromptLocalizer()
@@ -190,9 +190,9 @@ struct ChatOrchestrator: Sendable {
             AIRuntimeMessage(role: .system, content: promptLocalizer.chatSystemPrompt())
         ]
 
-        if patientContextSummary.isEmpty == false {
+        if memberContextSummary.isEmpty == false {
             runtimeMessages.append(
-                AIRuntimeMessage(role: .system, content: patientContextSummary)
+                AIRuntimeMessage(role: .system, content: memberContextSummary)
             )
         }
 

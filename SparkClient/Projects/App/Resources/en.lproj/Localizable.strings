@@ -49,8 +49,8 @@
 "home.medical.card.medical_reports.subtitle" = "Specialty tests";
 "home.medical.card.prescriptions.title" = "Prescriptions";
 "home.medical.card.prescriptions.subtitle" = "Long-term meds";
-"home.medical.card.medications.title" = "Medication adherence";
-"home.medical.card.medications.subtitle" = "Today's completion rate";
+"home.medical.card.medications.title" = "Medications";
+"home.medical.card.medications.subtitle" = "Medication count";
 "medical.upload.title" = "AI Medical Extraction";
 "medical.upload.current_member" = "Current member";
 "medical.upload.member.not_selected" = "Not selected";

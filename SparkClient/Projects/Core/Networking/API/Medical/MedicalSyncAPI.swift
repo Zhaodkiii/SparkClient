@@ -10,36 +10,6 @@ enum SparkMedicalSyncAPI {
 
     // MARK: - Remote 实体（服务端 → 客户端解码）
 
-    /// 健康指标一条记录；`profileClientUID` 可与本地档案 UUID 对齐，用于多设备/多档案合并。
-    struct RemoteHealthMetric: Codable, Sendable, Equatable {
-        /// 服务端主键。
-        var id: Int
-        /// 所属档案在客户端的稳定标识（UUID）。
-        var profileClientUID: UUID
-        /// 指标类型枚举或编码字符串（如心率、体重），与产品约定一致即可。
-        var metricType: String
-        var value: Double
-        /// 物理单位字符串（如 `mmHg`、`kg`）。
-        var unit: String
-        /// 测量发生时刻。
-        var recordedAt: Date
-        /// 用户备注，可选。
-        var note: String?
-        /// 服务端最后更新时间，用于增量同步与冲突判断。
-        var updatedAt: Date
-
-        enum CodingKeys: String, CodingKey {
-            case id
-            case profileClientUID = "profile_client_uid"
-            case metricType = "metric_type"
-            case value
-            case unit
-            case recordedAt = "recorded_at"
-            case note
-            case updatedAt = "updated_at"
-        }
-    }
-
     /// 家庭成员或健康档案成员；是多数医疗实体的外键 `member` 所指对象。
     struct RemoteMember: Codable, Sendable, Equatable {
         var id: Int
@@ -392,7 +362,7 @@ enum SparkMedicalSyncAPI {
         var institutionName: String
         var prescribedAt: Date?
         var diagnosis: String
-        var batchNo: String
+        var batchNo: String?
         var status: String
         var auditorName: String
         var auditedAt: Date?
@@ -492,22 +462,182 @@ enum SparkMedicalSyncAPI {
         }
     }
 
-    /// 按成员聚合的医疗摘要，用于首页等成员切换场景，避免客户端并发请求多个资源列表。
-    struct RemoteMemberSummary: Codable, Sendable, Equatable {
-        var member: RemoteMember
-        var medicalCases: [RemoteMedicalCase]
-        var healthExamReports: [RemoteHealthExamReport]
-        var examinationReports: [RemoteExaminationReport]
-        var medications: [RemoteMedication]
-        var medicationTakenRecords: [RemoteMedicationTakenRecord]
+    /// 附件元数据（`ManagedFile`），与 ``/complete-data/`` 内嵌附件一致。
+    /// 除 `id` 外字段均为可选，以匹配合成 `Decodable` 与后端缺省键。
+    struct RemoteManagedFile: Codable, Sendable, Equatable {
+        var id: Int
+        var fileUuid: String?
+        var originalName: String?
+        var fileSize: Int?
+        var mimeType: String?
+        var fileMd5: String?
+        var businessType: String?
+        var businessId: String?
+        var objectKey: String?
+        var storageType: String?
+        var createdAt: Date?
+        /// 服务端构造的 OSS 直链或空串。
+        var fileUrl: String?
 
         enum CodingKeys: String, CodingKey {
+            case id
+            case fileUuid = "file_uuid"
+            case originalName = "original_name"
+            case fileSize = "file_size"
+            case mimeType = "mime_type"
+            case fileMd5 = "file_md5"
+            case businessType = "business_type"
+            case businessId = "business_id"
+            case objectKey = "object_key"
+            case storageType = "storage_type"
+            case createdAt = "created_at"
+            case fileUrl = "file_url"
+        }
+    }
+
+    /// 病例汇总：基本信息 + 症状/药品展示名 + 附件（无检验明细）。
+    struct RemoteMedicalCaseSummary: Codable, Sendable, Equatable {
+        var id: Int
+        var member: Int
+        var recordType: String?
+        var status: Int?
+        var title: String?
+        var hospitalName: String?
+        var ageAtVisit: Int?
+        var diagnosisSummary: String?
+        var extra: [String: String]?
+        var createdAt: Date?
+        var updatedAt: Date?
+        var symptoms: [String]?
+        var medications: [String]?
+        var attachments: [RemoteManagedFile]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, member, status, title, extra, symptoms, medications, attachments
+            case recordType = "record_type"
+            case hospitalName = "hospital_name"
+            case ageAtVisit = "age_at_visit"
+            case diagnosisSummary = "diagnosis_summary"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    /// 体检报告 + 附件（首页不含明细行）。
+    struct RemoteHealthExamReportWithAttachments: Codable, Sendable, Equatable {
+        var id: Int
+        var member: Int
+        var institutionName: String?
+        var reportNo: String?
+        var examDate: Date?
+        var examType: Int?
+        var summary: String?
+        var source: Int?
+        var status: Int?
+        var extra: [String: String]?
+        var createdAt: Date?
+        var updatedAt: Date?
+        var attachments: [RemoteManagedFile]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, member, summary, source, status, extra, attachments
+            case institutionName = "institution_name"
+            case reportNo = "report_no"
+            case examDate = "exam_date"
+            case examType = "exam_type"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    /// 检查报告 + 附件（首页不含明细行）。
+    struct RemoteExaminationReportWithAttachments: Codable, Sendable, Equatable {
+        var id: Int
+        var member: Int
+        var medicalRecord: Int?
+        var category: String?
+        var subCategory: String?
+        var itemName: String?
+        var performedAt: Date?
+        var reportedAt: Date?
+        var organizationName: String?
+        var departmentName: String?
+        var doctorName: String?
+        var findings: String?
+        var impression: String?
+        var source: Int?
+        var status: Int?
+        var extra: [String: String]?
+        var createdAt: Date?
+        var updatedAt: Date?
+        var attachments: [RemoteManagedFile]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, member, category, findings, impression, source, status, extra, attachments
+            case medicalRecord = "medical_record"
+            case subCategory = "sub_category"
+            case itemName = "item_name"
+            case performedAt = "performed_at"
+            case reportedAt = "reported_at"
+            case organizationName = "organization_name"
+            case departmentName = "department_name"
+            case doctorName = "doctor_name"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    /// 处方批次 + 嵌套药品行 + 附件。
+    struct RemotePrescriptionBatchComplete: Codable, Sendable, Equatable {
+        var id: Int
+        var member: Int
+        var medicalCase: Int?
+        var prescriberName: String?
+        var institutionName: String?
+        var prescribedAt: Date?
+        var diagnosis: String?
+        var batchNo: String?
+        var status: String?
+        var auditorName: String?
+        var auditedAt: Date?
+        var extra: [String: String]?
+        var createdAt: Date?
+        var updatedAt: Date?
+        var medications: [RemoteMedication]?
+        var attachments: [RemoteManagedFile]?
+
+        enum CodingKeys: String, CodingKey {
+            case id, member, diagnosis, status, extra, medications, attachments
+            case medicalCase = "medical_case"
+            case prescriberName = "prescriber_name"
+            case institutionName = "institution_name"
+            case prescribedAt = "prescribed_at"
+            case batchNo = "batch_no"
+            case auditorName = "auditor_name"
+            case auditedAt = "audited_at"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    /// 单接口成员医疗数据汇总（``GET …/complete-data/``）。
+    struct RemoteMemberCompleteData: Codable, Sendable, Equatable {
+        var memberId: Int
+        var member: RemoteMember
+        var medicalCases: [RemoteMedicalCaseSummary]?
+        var healthExamReports: [RemoteHealthExamReportWithAttachments]?
+        var examinationReports: [RemoteExaminationReportWithAttachments]?
+        var prescriptionBatches: [RemotePrescriptionBatchComplete]?
+        var standaloneMedications: [RemoteMedication]?
+
+        enum CodingKeys: String, CodingKey {
+            case memberId = "member_id"
             case member
             case medicalCases = "medical_cases"
             case healthExamReports = "health_exam_reports"
             case examinationReports = "examination_reports"
-            case medications
-            case medicationTakenRecords = "medication_taken_records"
+            case prescriptionBatches = "prescription_batches"
+            case standaloneMedications = "standalone_medications"
         }
     }
 }

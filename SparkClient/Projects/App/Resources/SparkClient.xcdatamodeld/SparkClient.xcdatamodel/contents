@@ -22,7 +22,7 @@
     </entity>
     <entity name="ChatThreadEntity" representedClassName="ChatThreadEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="patientID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="memberID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES" renamingIdentifier="patientID"/>
         <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="scenario" optional="NO" attributeType="String" defaultValueString="chat"/>
         <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
