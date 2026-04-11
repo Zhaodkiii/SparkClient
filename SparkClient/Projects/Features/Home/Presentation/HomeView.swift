@@ -177,7 +177,17 @@ struct HomeView: View {
                         HomeMedicalListView(
                             route: medicalRoute(for: card.id),
                             completeData: viewModel.dashboard?.medical.completeData,
-                            appContainer: appContainer
+                            appContainer: appContainer,
+                            onHealthExamReportsUpdated: { reports in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.healthExamReports = reports
+                                }
+                            },
+                            onExaminationReportsUpdated: { reports in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.examinationReports = reports
+                                }
+                            }
                         )
                     } label: {
                         medicalCard(card)

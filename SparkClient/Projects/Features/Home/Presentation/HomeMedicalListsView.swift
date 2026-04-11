@@ -13,6 +13,8 @@ struct HomeMedicalListView: View {
     let route: HomeMedicalListRoute
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let appContainer: AppContainer
+    let onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?
+    let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
 
     var body: some View {
         switch route {
@@ -22,13 +24,15 @@ struct HomeMedicalListView: View {
             HealthExamReportsListPage(
                 completeData: completeData,
                 medicalQueryAPI: appContainer.backend.medicalQuery,
-                logger: appContainer.logger
+                logger: appContainer.logger,
+                onReportsUpdated: onHealthExamReportsUpdated
             )
         case .examinationReports:
             ExaminationReportsListPage(
                 completeData: completeData,
                 medicalQueryAPI: appContainer.backend.medicalQuery,
-                logger: appContainer.logger
+                logger: appContainer.logger,
+                onReportsUpdated: onExaminationReportsUpdated
             )
         case .medications:
             MedicationsListPage(completeData: completeData)
@@ -38,14 +42,14 @@ struct HomeMedicalListView: View {
 
 #Preview("Medical Lists Light") {
     NavigationView {
-        HomeMedicalListView(route: .medicalCases, completeData: nil, appContainer: .preview)
+        HomeMedicalListView(route: .medicalCases, completeData: nil, appContainer: .preview, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medical Lists Dark") {
     NavigationView {
-        HomeMedicalListView(route: .medications, completeData: nil, appContainer: .preview)
+        HomeMedicalListView(route: .medications, completeData: nil, appContainer: .preview, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
     }
     .preferredColorScheme(.dark)
 }

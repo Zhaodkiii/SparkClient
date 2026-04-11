@@ -109,6 +109,18 @@ final class HomeViewModel: ObservableObject {
         )
     }
 
+    /// 列表页按需懒加载明细后，回写首页持有的 `completeData`，避免再次进入列表重复请求。
+    func updateMedicalCompleteData(
+        _ transform: (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void
+    ) {
+        guard var dashboard else { return }
+        guard var completeData = dashboard.medical.completeData else { return }
+
+        transform(&completeData)
+        dashboard.medical.completeData = completeData
+        self.dashboard = dashboard
+    }
+
     // MARK: - Member CRUD
 
     func addMember(

@@ -29,18 +29,21 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let logger: Logger
     private let scene: String
+    private let onReportsUpdated: (([Report]) -> Void)?
     private let logModule = LogModule.home
 
     init(
         reports: [Report],
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger,
-        scene: String
+        scene: String,
+        onReportsUpdated: (([Report]) -> Void)? = nil
     ) {
         self.reports = reports
         self.medicalQueryAPI = medicalQueryAPI
         self.logger = logger
         self.scene = scene
+        self.onReportsUpdated = onReportsUpdated
     }
 
     func loadDetailsIfNeeded(for reportID: Int) async {
@@ -70,6 +73,7 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
                 }
 
             reports[index].medExamDetails = filtered
+            onReportsUpdated?(reports)
             logger.info(
                 "明细加载完成 scene=\(scene) reportID=\(reportID) count=\(filtered.count)",
                 module: logModule
