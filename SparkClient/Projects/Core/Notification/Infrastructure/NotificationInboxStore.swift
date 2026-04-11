@@ -85,11 +85,8 @@ actor NotificationInboxStore {
         } catch {
             SparkLogger.log(
                 level: .warning,
-                category: "notification",
-                message: "Inbox persistence failed: \(error.localizedDescription)",
-                file: nil,
-                function: nil,
-                line: #line
+                module: .push,
+                message: "Inbox persistence failed: \(error.localizedDescription)"
             )
         }
     }

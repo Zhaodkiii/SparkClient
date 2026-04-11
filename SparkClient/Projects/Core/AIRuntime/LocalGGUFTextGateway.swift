@@ -63,7 +63,7 @@ final class LocalGGUFTextGateway: @unchecked Sendable {
         let prompt = llm.preprocess(promptData.input, promptData.history)
         let text = await llm.getCompletion(from: prompt)
         let output = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        logger.debug("本地模型推理完成：\(modelName)", category: "ai_runtime_local")
+        logger.debug("本地模型推理完成：\(modelName)", module: .aiConfig)
 
         return AIRuntimeTextResponse(
             text: output,

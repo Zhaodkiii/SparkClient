@@ -89,8 +89,8 @@ actor OCROrchestrator {
         )
 
         logger.info(
-            "OCR 完成：选定引擎=\(best.selectedEngine)，全部引擎=\(outputs.map { $0.engine }.joined(separator: ","))，文本长度=\(best.text.count)",
-            category: "ocr"
+            "OCR完成 selectedEngine=\(best.selectedEngine) engines=\(outputs.map { $0.engine }.joined(separator: ",")) textLen=\(best.text.count)",
+            module: .aiConfig
         )
 
         return best

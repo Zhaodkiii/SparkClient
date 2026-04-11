@@ -54,7 +54,7 @@ actor ChatRealtimeSyncClient {
                 }
             }
         } catch {
-            logger.warning("chat realtime connect failed: \(error.localizedDescription)", category: "chat_sync")
+            logger.warning("chat realtime connect failed: \(error.localizedDescription)", module: .general)
             scheduleReconnect()
         }
     }
@@ -99,7 +99,7 @@ actor ChatRealtimeSyncClient {
             }
 
         case .disconnected(let reason):
-            logger.warning("chat realtime disconnected: \(reason ?? "-")", category: "chat_sync")
+            logger.warning("chat realtime disconnected: \(reason ?? "-")", module: .general)
             scheduleReconnect()
         }
     }

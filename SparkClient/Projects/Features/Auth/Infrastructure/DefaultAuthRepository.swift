@@ -42,16 +42,16 @@ final class DefaultAuthRepository: AuthRepository {
             // 冷启动先预热 token：若 access 近过期会在这里静默 refresh，
             // 后续业务同步请求可直接拿到最新 Authorization。
             _ = try await backend.tokenProvider().authorizationHeaderValue()
-            logger.info("会话恢复成功，认证令牌已就绪", category: "auth")
+            logger.info("会话恢复成功，认证令牌已就绪", module: .auth)
             return session
         } catch let authError as AuthTokenProviderError {
             // 约束：只有用户主动退出登录时才清理会话。
             // 因此这里不自动回退登录页，保留本地会话并交由后续请求继续自愈。
-            logger.warning("会话恢复鉴权异常（保留会话）：\(authError.localizedDescription)", category: "auth")
+            logger.warning("会话恢复鉴权异常（保留会话）：\(authError.localizedDescription)", module: .auth)
             return session
         } catch {
             // 网络波动等非认证错误：保留本地会话，允许用户先离线使用。
-            logger.warning("会话恢复时 token 预热失败（降级保留会话）：\(error.localizedDescription)", category: "auth")
+            logger.warning("会话恢复时 token 预热失败（降级保留会话）：\(error.localizedDescription)", module: .auth)
             return session
         }
     }
@@ -63,7 +63,7 @@ final class DefaultAuthRepository: AuthRepository {
         }
 
         let bundleID = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let deviceID = SparkKeychain.getOrCreateDeviceID()
 
         let context = try await backend.auth.loginWithApple(
             identityToken: payload.identityToken,
@@ -104,7 +104,7 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         try await snapshotStore.save(session)
-        logger.info("用户已通过 Apple 登录，令牌类型=\(context.tokens.tokenType)", category: "auth")
+        logger.info("用户已通过 Apple 登录，令牌类型=\(context.tokens.tokenType)", module: .auth)
         return session
     }
 
@@ -112,6 +112,6 @@ final class DefaultAuthRepository: AuthRepository {
         await backend.tokenProvider().clearTokens()
         backend.deviceCache.clearDeviceMetadata()
         await snapshotStore.clear()
-        logger.info("用户已登出", category: "auth")
+        logger.info("用户已登出", module: .auth)
     }
 }

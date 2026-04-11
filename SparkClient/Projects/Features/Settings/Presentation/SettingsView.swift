@@ -83,6 +83,19 @@ struct SettingsView: View {
                 .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
             }
 
+            Section(L10n.text("settings.section.cache")) {
+                Button {
+                    viewModel.clearETagCache()
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.text("settings.cache.clear_etag"))
+                        Text(L10n.text("settings.cache.clear_etag.subtitle"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             Section {
                 Button(role: .destructive) {
                     Task { await viewModel.signOut() }

@@ -36,7 +36,7 @@ struct ChatOrchestrator: Sendable {
         let reasoningOpts = buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
         logger.debug(
             "对话编排开始，history=\(history.count), patient=\(shortID(patientID)), inputLength=\(userInput.count), tools=\(inference.useTools), knowledge=\(inference.useKnowledgeBag), web=\(inference.useWebSearch), reasoning=\(reasoningOpts.isEnabled), promptFallback=\(reasoningOpts.usePromptFallback)",
-            category: "chat_orchestrator"
+            module: .aiConfig
         )
 
         let toolResult: ToolHubResult
@@ -49,7 +49,7 @@ struct ChatOrchestrator: Sendable {
             let modelConsent = consentGate.evaluate(result: result, destination: .model)
             logger.info(
                 "工具调用已命中，tool=\(result.toolName), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive), consentAllowed=\(modelConsent.allowed)",
-                category: "chat_orchestrator"
+                module: .aiConfig
             )
             let output = modelConsent.allowed
                 ? result.outputText
@@ -71,7 +71,7 @@ struct ChatOrchestrator: Sendable {
         let toolChoice: AIRuntimeToolChoice = inference.useTools && toolDefinitions.isEmpty == false ? .auto : .none
         logger.debug(
             "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), patientContextLength=\(patientContextSummary.count), tools=\(toolDefinitions.count), toolChoice=\(String(describing: toolChoice))",
-            category: "chat_orchestrator"
+            module: .aiConfig
         )
         var loopMessages = runtimeMessages
         let maxToolRounds = 3
@@ -94,14 +94,14 @@ struct ChatOrchestrator: Sendable {
                     )
                 )
             } catch {
-                logger.error("AI 推理路径失败：\(error.localizedDescription)", category: "chat_orchestrator")
+                logger.error("AI 推理路径失败：\(error.localizedDescription)", module: .aiConfig)
                 throw error
             }
 
             if response.hasToolCalls == false {
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
-                    logger.warning("AI 返回空文本，已回退到默认兜底文案", category: "chat_orchestrator")
+                    logger.warning("AI 返回空文本，已回退到默认兜底文案", module: .aiConfig)
                 }
                 let reasoning = response.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
                 return ChatOrchestratorOutput(
@@ -123,7 +123,7 @@ struct ChatOrchestrator: Sendable {
 
             logger.info(
                 "模型返回 tool_calls，round=\(round), count=\(response.toolCalls.count)",
-                category: "chat_orchestrator"
+                module: .aiConfig
             )
             loopMessages.append(
                 AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls)
@@ -149,7 +149,7 @@ struct ChatOrchestrator: Sendable {
             }
         }
 
-        logger.warning("工具调用超过最大轮次，回退兜底文案", category: "chat_orchestrator")
+        logger.warning("工具调用超过最大轮次，回退兜底文案", module: .aiConfig)
         return ChatOrchestratorOutput(text: promptLocalizer.fallbackAssistantText(), reasoningText: nil, kind: .text)
     }
 

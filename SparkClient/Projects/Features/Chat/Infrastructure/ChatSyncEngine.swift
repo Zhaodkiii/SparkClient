@@ -33,24 +33,24 @@ actor ChatSyncEngine {
     /// 全量同步：上送 outbox + 按全局 cursor 拉取（如下拉刷新）。
     func syncNow() async throws {
         let start = Date()
-        logger.debug("聊天同步开始", category: "chat_sync")
+        logger.debug("聊天同步开始", module: .general)
         try await pushOutbox()
         let cursor = await repository.loadSyncCursor()?.value
         try await pullAndMerge(cursor: cursor, threadID: nil)
         let cost = Date().timeIntervalSince(start)
-        logger.info("聊天同步完成，cost=\(format(cost))s", category: "chat_sync")
+        logger.info("聊天同步完成，cost=\(format(cost))s", module: .general)
     }
 
     /// 仅上送待同步消息，不拉取（发送成功/重试等路径使用，避免每次增量都打全量 pull）。
     func pushOutboxOnly() async throws {
-        logger.debug("聊天仅上送 outbox", category: "chat_sync")
+        logger.debug("聊天仅上送 outbox", module: .general)
         try await pushOutbox()
     }
 
     /// 进入具体会话时：先上送，再比对服务端与本地最近一条消息的更新时间，一致则跳过拉取。
     func syncThreadOnOpen(threadID: UUID) async throws {
         let start = Date()
-        logger.debug("会话打开同步开始，thread=\(shortID(threadID))", category: "chat_sync")
+        logger.debug("会话打开同步开始，thread=\(shortID(threadID))", module: .general)
         try await pushOutbox()
 
         let localWatermark = await repository.latestServerActivity(for: threadID)
@@ -61,24 +61,24 @@ actor ChatSyncEngine {
             serverHead = try await remoteAPI.threadHead(threadID: threadID)
         } catch {
             headFetchFailed = true
-            logger.warning("thread head 不可用，将尝试按会话拉取：\(error.localizedDescription)", category: "chat_sync")
+            logger.warning("thread head 不可用，将尝试按会话拉取：\(error.localizedDescription)", module: .general)
         }
 
         if headFetchFailed {
             let cursor = localWatermark.map(Self.formatSyncCursor)
             try await pullAndMerge(cursor: cursor, threadID: threadID)
             let cost = Date().timeIntervalSince(start)
-            logger.info("会话打开同步完成（head 降级），cost=\(format(cost))s", category: "chat_sync")
+            logger.info("会话打开同步完成（head 降级），cost=\(format(cost))s", module: .general)
             return
         }
 
         switch (localWatermark, serverHead) {
         case (nil, nil):
-            logger.debug("会话打开同步跳过（本地与服务端均无消息）", category: "chat_sync")
+            logger.debug("会话打开同步跳过（本地与服务端均无消息）", module: .general)
             return
         case let (lw?, sh?):
             if abs(lw.timeIntervalSince(sh)) < 1.0 {
-                logger.debug("会话已与服务端对齐，跳过拉取", category: "chat_sync")
+                logger.debug("会话已与服务端对齐，跳过拉取", module: .general)
                 return
             }
         default:
@@ -88,7 +88,7 @@ actor ChatSyncEngine {
         let cursor = localWatermark.map(Self.formatSyncCursor)
         try await pullAndMerge(cursor: cursor, threadID: threadID)
         let cost = Date().timeIntervalSince(start)
-        logger.info("会话打开同步完成，cost=\(format(cost))s", category: "chat_sync")
+        logger.info("会话打开同步完成，cost=\(format(cost))s", module: .general)
     }
 
     func startRealtimeSync() async {
@@ -100,7 +100,7 @@ actor ChatSyncEngine {
                     // 远端增量提示：只上送本地 pending，避免每条 WS 通知都触发全量 pull。
                     try await self.pushOutboxOnly()
                 } catch {
-                    self.logger.warning("chat realtime push failed: \(error.localizedDescription)", category: "chat_sync")
+                    self.logger.warning("chat realtime push failed: \(error.localizedDescription)", module: .general)
                 }
             }
         }
@@ -119,7 +119,7 @@ actor ChatSyncEngine {
         let threads = Set(pending.map(\.threadID)).count
         logger.info(
             "准备上送对话，count=\(pending.count), threads=\(threads), toolMessages=\(toolCount)",
-            category: "chat_sync"
+            module: .general
         )
 
         for message in pending {
@@ -152,7 +152,7 @@ actor ChatSyncEngine {
             }
             logger.info(
                 "上送对话完成，requested=\(pending.count), accepted=\(pushed.count)",
-                category: "chat_sync"
+                module: .general
             )
 
             // 服务端回包是“权威状态”，用 mergePolicy 回写本地，统一修正状态与时间戳。
@@ -171,7 +171,7 @@ actor ChatSyncEngine {
             }
             logger.error(
                 "上送对话失败，count=\(pending.count), toolMessages=\(toolCount), error=\(error.localizedDescription)",
-                category: "chat_sync"
+                module: .general
             )
             throw error
         }
@@ -179,7 +179,7 @@ actor ChatSyncEngine {
 
     private func pullAndMerge(cursor: String?, threadID: UUID?) async throws {
         let scope = threadID.map { "thread=\(shortID($0))" } ?? "global"
-        logger.debug("拉取对话增量开始，cursor=\(cursor ?? "-") scope=\(scope)", category: "chat_sync")
+        logger.debug("拉取对话增量开始，cursor=\(cursor ?? "-") scope=\(scope)", module: .general)
         let result = try await remoteAPI.pull(cursor: cursor, threadID: threadID)
 
         // 拉取通道只做增量合并，不做 destructive 覆盖，保证本地可逆。
@@ -198,7 +198,7 @@ actor ChatSyncEngine {
         }
         logger.debug(
             "拉取对话增量完成，messages=\(result.messages.count), threads=\(grouped.count), nextCursor=\(result.cursor ?? "-")",
-            category: "chat_sync"
+            module: .general
         )
     }
 

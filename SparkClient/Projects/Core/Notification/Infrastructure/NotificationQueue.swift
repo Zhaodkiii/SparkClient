@@ -36,14 +36,14 @@ actor NotificationQueue {
         if let previous = lastSeenByKey[message.dedupeKey], now.timeIntervalSince(previous) < dedupeWindow {
             await metricsStore.recordDropped(.duplicate)
             await inboxStore.markDropped(message, reason: .duplicate, at: now)
-            logger.debug("Notification dropped as duplicate: \(message.dedupeKey)", category: "notification")
+            logger.debug("Notification dropped as duplicate: \(message.dedupeKey)", module: .push)
             return .dropped(message, .duplicate)
         }
 
         if queue.count >= maxQueueDepth {
             await metricsStore.recordDropped(.queueOverflow)
             await inboxStore.markDropped(message, reason: .queueOverflow, at: now)
-            logger.warning("Notification dropped due to queue overflow: \(message.id)", category: "notification")
+            logger.warning("Notification dropped due to queue overflow: \(message.id)", module: .push)
             return .dropped(message, .queueOverflow)
         }
 

@@ -80,7 +80,7 @@ actor FileTransferService {
             storageType: "oss"
         ))
 
-        logger.info("文件上传完成，file_id=\(uploaded.id)，uuid=\(uploaded.fileUUID)", category: "file_transfer")
+        logger.info("文件上传完成，file_id=\(uploaded.id)，uuid=\(uploaded.fileUUID)", module: .cache)
         return uploaded
     }
 
@@ -98,14 +98,14 @@ actor FileTransferService {
             if let fileMd5 = file.fileMd5 {
                 let valid = await cacheManager.validateMD5(fileUUID: file.fileUUID, fileName: file.originalName, expectedMD5: fileMd5)
                 if valid {
-                    logger.debug("命中本地缓存并通过 MD5 校验，file_id=\(file.id)", category: "file_transfer")
+                    logger.debug("命中本地缓存并通过 MD5 校验，file_id=\(file.id)", module: .cache)
                     return cachedURL
                 }
                 // 如果 MD5 校验失败，说明本地缓存损坏，移除它
                 try? await cacheManager.remove(fileUUID: file.fileUUID)
             } else {
                 // 如果没有 MD5 记录，则直接使用缓存
-                logger.debug("命中本地缓存，file_id=\(file.id)", category: "file_transfer")
+                logger.debug("命中本地缓存，file_id=\(file.id)", module: .cache)
                 return cachedURL
             }
         }
@@ -117,7 +117,7 @@ actor FileTransferService {
         if let expectedMD5 = file.fileMd5 {
             let actualMD5 = Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
             guard actualMD5.caseInsensitiveCompare(expectedMD5) == .orderedSame else {
-                logger.error("下载文件 MD5 校验失败，file_id=\(file.id)，expected=\(expectedMD5)，actual=\(actualMD5)", category: "file_transfer")
+                logger.error("下载文件 MD5 校验失败，file_id=\(file.id)，expected=\(expectedMD5)，actual=\(actualMD5)", module: .cache)
                 throw SparkNetworkError.decoding(NSError(domain: "SparkFileTransfer", code: -1, userInfo: [NSLocalizedDescriptionKey: "下载文件校验失败"]))
             }
         }
@@ -128,7 +128,7 @@ actor FileTransferService {
             fileUUID: file.fileUUID,
             fileName: file.originalName
         )
-        logger.info("文件下载并缓存完成，file_id=\(file.id)", category: "file_transfer")
+        logger.info("文件下载并缓存完成，file_id=\(file.id)", module: .cache)
         return localURL
     }
 

@@ -38,17 +38,17 @@ final class ToolHub: @unchecked Sendable {
         guard trimmed.isEmpty == false else { return .none }
         logger.debug(
             "工具路由检查开始，patient=\(shortID(patientID)), inputLength=\(trimmed.count)",
-            category: "tool_hub"
+            module: .aiConfig
         )
 
         if trimmed == "/audit_tools" {
-            logger.info("工具路由命中 /audit_tools", category: "tool_hub")
+            logger.info("工具路由命中 /audit_tools", module: .aiConfig)
             return await handleAuditTools()
         }
 
         let invocation = parseToolInvocation(from: trimmed)
         guard let invocation else {
-            logger.debug("工具路由未命中，转入 AI 推理", category: "tool_hub")
+            logger.debug("工具路由未命中，转入 AI 推理", module: .aiConfig)
             return .none
         }
 
@@ -1157,7 +1157,7 @@ final class ToolHub: @unchecked Sendable {
         )
         logger.info(
             "工具执行完成，tool=\(invocation.name), status=\(status.rawValue), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive)",
-            category: "tool_hub"
+            module: .aiConfig
         )
     }
 

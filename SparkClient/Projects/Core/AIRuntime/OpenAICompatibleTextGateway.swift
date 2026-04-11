@@ -1,6 +1,4 @@
 import Foundation
-
-import Foundation
 import os
 
 /// 最终类：OpenAI兼容格式的文本AI网关
@@ -110,9 +108,9 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         let requestBodyText = String(data: requestBodyData, encoding: .utf8) ?? "<non-utf8>"
         logger.debug(
             "AI 流式网关请求开始，model=\(client.model), endpoint=\(client.endpoint.absoluteString), messages=\(runtimeRequest.messages.count), tools=\(runtimeRequest.tools.count), apiKeyPresent=\(client.apiKey?.isEmpty == false)",
-            category: "ai_runtime"
+            module: .aiConfig
         )
-        logger.debug("AI 流式网关请求报文=\(truncate(requestBodyText, limit: 4000))", category: "ai_runtime")
+        logger.debug("AI 流式网关请求报文=\(truncate(requestBodyText, limit: 200))", module: .aiConfig)
 
         // 返回异步抛出流，处理流式响应
         return AsyncThrowingStream { continuation in
@@ -134,8 +132,8 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                         }
                         let responseBodyText = String(data: errorData, encoding: .utf8) ?? "<non-utf8>"
                         logger.debug(
-                            "AI 流式网关响应报文，status=\(httpResponse.statusCode), body=\(truncate(responseBodyText, limit: 4000))",
-                            category: "ai_runtime"
+                            "AI 流式网关响应报文 status=\(httpResponse.statusCode) body=\(truncate(responseBodyText, limit: 200))",
+                            module: .aiConfig
                         )
                         // 抛出服务端错误
                         throw AIRuntimeError.server(
@@ -177,7 +175,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     continuation.yield(.completed(finalResponse))
                     logger.info(
                         "AI 流式网关请求完成，model=\(completion.model), cost=\(format(Date().timeIntervalSince(start)))s",
-                        category: "ai_runtime"
+                        module: .aiConfig
                     )
                     continuation.finish()
                 } catch let urlError as URLError {

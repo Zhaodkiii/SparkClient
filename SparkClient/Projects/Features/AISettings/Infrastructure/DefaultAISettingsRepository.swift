@@ -53,9 +53,9 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         if migrated || userDefaults.data(forKey: Keys.snapshot) == nil {
             do {
                 try persist(snapshot: loaded)
-                logger.info("AI 设置已完成初始化", category: "ai_settings")
+                logger.info("AI 设置已完成初始化", module: .aiConfig)
             } catch {
-                logger.warning("AI 设置初始化持久化失败：\(error.localizedDescription)", category: "ai_settings")
+                logger.warning("AI 设置初始化持久化失败：\(error.localizedDescription)", module: .aiConfig)
             }
         }
 
@@ -66,7 +66,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     /// 保存设置快照（自动脱敏密钥并同步到安全存储）
     func save(snapshot: AISettingsSnapshot) async throws {
         try persist(snapshot: snapshot)
-        logger.info("AI 设置快照已保存", category: "ai_settings")
+        logger.info("AI 设置快照已保存", module: .aiConfig)
     }
 
     // MARK: - 持久化（内部）

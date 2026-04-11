@@ -13,15 +13,22 @@ final class SettingsViewModel: ObservableObject {
     private let sessionStore: AppSessionStore
     private let signOutUseCase: SignOutUseCase
     private let medicalSyncService: MedicalSyncService
+    private let deviceCache: DeviceCache
 
     init(
         sessionStore: AppSessionStore,
         signOutUseCase: SignOutUseCase,
-        medicalSyncService: MedicalSyncService
+        medicalSyncService: MedicalSyncService,
+        deviceCache: DeviceCache
     ) {
         self.sessionStore = sessionStore
         self.signOutUseCase = signOutUseCase
         self.medicalSyncService = medicalSyncService
+        self.deviceCache = deviceCache
+    }
+
+    func clearETagCache() {
+        deviceCache.clearETagResponseCache()
     }
 
     func loadSyncPreference() async {

@@ -30,14 +30,14 @@ final class AIConfigCenter {
         )
         logger.debug(
             "已解析场景=\(scenario.rawValue)，来源=\(resolved.source.rawValue)，模型=\(resolved.model)",
-            category: "ai_config"
+            module: .aiConfig
         )
         return resolved
     }
 
     func prewarm() async {
         _ = await repository.loadSnapshot()
-        logger.debug("AI 配置已预热", category: "ai_config")
+        logger.debug("AI 配置已预热", module: .aiConfig)
     }
 
     func currentSnapshot() async -> AISettingsSnapshot {
@@ -52,17 +52,17 @@ final class AIConfigCenter {
             let patch = try await remoteProvider.fetchRemotePatch()
             let merged = localSnapshot.merging(remotePatch: patch)
             guard merged != localSnapshot else {
-                logger.debug("远程 AI 配置已拉取，与本地无差异", category: "ai_config")
+                logger.debug("远程 AI 配置已拉取，与本地无差异", module: .aiConfig)
                 return
             }
 
             try await repository.save(snapshot: merged)
             logger.info(
                 "远程 AI 配置已合并，revision=\(patch.revision ?? "unknown")",
-                category: "ai_config"
+                module: .aiConfig
             )
         } catch {
-            logger.warning("远程 AI 配置刷新失败：\(error.localizedDescription)", category: "ai_config")
+            logger.warning("远程 AI 配置刷新失败：\(error.localizedDescription)", module: .aiConfig)
         }
     }
 

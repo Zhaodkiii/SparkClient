@@ -3,6 +3,7 @@ import SwiftUI
 struct AppCoordinatorView: View {
     let container: AppContainer
     @StateObject private var sessionStore: AppSessionStore
+    @StateObject private var networkMonitor = NetworkPathMonitor()
 
     init(container: AppContainer) {
         self.container = container
@@ -10,6 +11,23 @@ struct AppCoordinatorView: View {
     }
 
     var body: some View {
+        Group {
+            if networkMonitor.hasEvaluatedPath == false {
+                ProgressView(L10n.text("app.loading.preparing"))
+            } else if networkMonitor.isSatisfied == false {
+                NetworkGateView(monitor: networkMonitor)
+            } else {
+                sessionContent
+            }
+        }
+        .animation(.easeInOut, value: sessionStore.state)
+        .onAppear {
+            networkMonitor.start()
+        }
+    }
+
+    @ViewBuilder
+    private var sessionContent: some View {
         Group {
             switch sessionStore.state {
             case .loading:
@@ -43,9 +61,10 @@ struct AppCoordinatorView: View {
                 )
                 .task(id: session.profileID) {
                     await container.appBootstrapper.bootstrapIfNeeded(for: session)
+                    // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
+                    container.pushAdapter.requestAuthorizationIfNeeded()
                 }
             }
         }
-        .animation(.easeInOut, value: sessionStore.state)
     }
 }

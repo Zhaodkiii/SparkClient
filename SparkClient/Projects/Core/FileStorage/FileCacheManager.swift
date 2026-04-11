@@ -59,7 +59,7 @@ actor FileCacheManager {
 
         // 3. 写入文件，使用 .atomic 选项确保写入的原子性（先写临时文件再重命名，防止崩溃导致数据损坏）
         try data.write(to: destination, options: [.atomic])
-        logger.debug("文件缓存写入成功，uuid=\(normalizedUUID)，name=\(fileName)", category: "file_cache")
+        logger.debug("文件缓存写入成功，uuid=\(normalizedUUID)，name=\(fileName)", module: .cache)
         return destination
     }
 
@@ -80,14 +80,14 @@ actor FileCacheManager {
         let directory = directoryURL(for: fileUUID.lowercased())
         guard fileManager.fileExists(atPath: directory.path) else { return }
         try fileManager.removeItem(at: directory)
-        logger.info("已移除文件缓存目录，uuid=\(fileUUID)", category: "file_cache")
+        logger.info("已移除文件缓存目录，uuid=\(fileUUID)", module: .cache)
     }
 
     /// 清空整个缓存根目录
     func clearAll() throws {
         guard fileManager.fileExists(atPath: baseDirectory.path) else { return }
         try fileManager.removeItem(at: baseDirectory)
-        logger.info("已清理所有文件缓存", category: "file_cache")
+        logger.info("已清理所有文件缓存", module: .cache)
     }
 
     /// 统计当前的缓存占用情况

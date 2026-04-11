@@ -38,7 +38,7 @@ struct SendChatMessageUseCase: Sendable {
         let start = Date()
         logger.info(
             "sendMessage 开始，thread=\(shortID(threadID)), patient=\(shortID(patientID)), inputLength=\(sanitizedInput.count)",
-            category: "chat_flow"
+            module: .general
         )
 
         do {
@@ -62,7 +62,7 @@ struct SendChatMessageUseCase: Sendable {
             )
             logger.debug(
                 "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID))",
-                category: "chat_flow"
+                module: .general
             )
 
             let history = await repository.loadMessages(threadID: thread.id)
@@ -80,7 +80,7 @@ struct SendChatMessageUseCase: Sendable {
             }
             logger.debug(
                 "准备 AI 编排，thread=\(shortID(thread.id)), history=\(history.count), patientContextLength=\(patientContextSummary.count)",
-                category: "chat_flow"
+                module: .general
             )
 
             let output = try await orchestrator.generateReply(
@@ -93,7 +93,7 @@ struct SendChatMessageUseCase: Sendable {
             )
             logger.info(
                 "AI 编排完成，thread=\(shortID(thread.id)), kind=\(output.kind.rawValue), outputLength=\(output.text.count)",
-                category: "chat_flow"
+                module: .general
             )
 
             if let onAssistantPartial {
@@ -123,7 +123,7 @@ struct SendChatMessageUseCase: Sendable {
                 try await syncEngine.pushOutboxOnly()
             } catch {
                 // 本地消息已经持久化，后台可重试，主流程不阻断。
-                logger.warning("消息上送失败，将由后台重试：\(error.localizedDescription)", category: "chat_flow")
+                logger.warning("消息上送失败，将由后台重试：\(error.localizedDescription)", module: .general)
             }
 
             guard let latestThread = await repository.loadThread(id: thread.id) else {
@@ -133,12 +133,12 @@ struct SendChatMessageUseCase: Sendable {
             let cost = Date().timeIntervalSince(start)
             logger.info(
                 "sendMessage 完成，thread=\(shortID(thread.id)), messages=\(latestHistory.count), cost=\(format(cost))s",
-                category: "chat_flow"
+                module: .general
             )
             return ChatThreadSnapshot(thread: latestThread, messages: latestHistory)
         } catch {
             let cost = Date().timeIntervalSince(start)
-            logger.error("sendMessage 失败，cost=\(format(cost))s error=\(error.localizedDescription)", category: "chat_flow")
+            logger.error("sendMessage 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
             throw error
         }
     }

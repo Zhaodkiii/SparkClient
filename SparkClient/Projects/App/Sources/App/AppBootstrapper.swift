@@ -9,6 +9,7 @@ final class AppBootstrapper {
     private let ossConfigurationStore: SparkOSSConfigurationStore
     private let ossAPI: SparkOSSAPI
     private let logger: Logger
+    private let registerDevice: () async -> Void
 
     private var didBootstrapLaunch = false
     private var bootstrappedProfiles: Set<UUID> = []
@@ -20,6 +21,7 @@ final class AppBootstrapper {
         routeStore: AppRouteStore,
         ossConfigurationStore: SparkOSSConfigurationStore,
         ossAPI: SparkOSSAPI,
+        registerDevice: @escaping () async -> Void = {},
         logger: Logger = ConsoleLogger()
     ) {
         self.aiConfigCenter = aiConfigCenter
@@ -28,6 +30,7 @@ final class AppBootstrapper {
         self.routeStore = routeStore
         self.ossConfigurationStore = ossConfigurationStore
         self.ossAPI = ossAPI
+        self.registerDevice = registerDevice
         self.logger = logger
     }
 
@@ -41,10 +44,11 @@ final class AppBootstrapper {
             for scenario in AIScenario.allCases {
                 _ = try await aiConfigCenter.resolve(for: scenario)
             }
-            logger.info("应用启动引导已完成", category: "bootstrap")
+            logger.info("应用启动引导已完成", module: .general)
         } catch {
-            logger.warning("应用启动引导已结束（降级）：\(error.localizedDescription)", category: "bootstrap")
+            logger.warning("应用启动引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
+        await registerDevice()
     }
 
     func bootstrapIfNeeded(for session: UserSession) async {
@@ -60,10 +64,11 @@ final class AppBootstrapper {
             for scenario in AIScenario.allCases {
                 _ = try await aiConfigCenter.resolve(for: scenario)
             }
-            logger.info("用户档案 \(session.profileID) 引导已完成", category: "bootstrap")
+            logger.info("用户档案 \(session.profileID) 引导已完成", module: .general)
         } catch {
-            logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", category: "bootstrap")
+            logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
+        await registerDevice()
     }
 
     func reset() async {

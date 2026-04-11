@@ -87,7 +87,7 @@ actor AuthTokenProvider {
             do {
                 return try await refreshTokensDeDuplicated()
             } catch let error as AuthTokenProviderError where error == .refreshTemporarilyUnavailable {
-                logger.warning("令牌刷新暂不可用，回退使用本地 access token。")
+                logger.warning("令牌刷新暂不可用，回退使用本地 access token。", module: .auth)
                 return tokens
             }
         } else if let tokens = loadFromKeychain() {
@@ -98,7 +98,7 @@ actor AuthTokenProvider {
             do {
                 return try await refreshTokensDeDuplicated()
             } catch let error as AuthTokenProviderError where error == .refreshTemporarilyUnavailable {
-                logger.warning("从 Keychain 恢复后刷新暂不可用，回退使用本地 access token。")
+                logger.warning("从 Keychain 恢复后刷新暂不可用，回退使用本地 access token。", module: .auth)
                 return tokens
             }
         }
@@ -118,7 +118,7 @@ actor AuthTokenProvider {
         }
 
         guard loadRefreshToken() != nil else {
-            logger.warning("刷新令牌不存在，无法发起 token refresh。")
+            logger.warning("刷新令牌不存在，无法发起 token refresh。", module: .auth)
             clearTokens()
             throw AuthTokenProviderError.missingTokens
         }
@@ -136,7 +136,7 @@ actor AuthTokenProvider {
 
     private func performRefresh() async throws -> AuthTokens {
         guard let refreshToken = loadRefreshToken() else {
-            logger.warning("刷新令牌读取失败，判定为未登录态。")
+            logger.warning("刷新令牌读取失败，判定为未登录态。", module: .auth)
             clearTokens()
             throw AuthTokenProviderError.missingTokens
         }
@@ -149,7 +149,7 @@ actor AuthTokenProvider {
         let payload = ["refresh": refreshToken] as [String: String]
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
 
-        logger.info(SparkNetworkingStrings.Auth.refreshing())
+        logger.info(SparkNetworkingStrings.Auth.refreshing(), module: .auth)
 
         let response = try await transport.send(urlRequest)
 
@@ -177,10 +177,10 @@ actor AuthTokenProvider {
                 )
                 cachedTokens = tokens
                 saveToKeychain(tokens)
-                logger.info(SparkNetworkingStrings.Auth.refreshSucceeded())
+                logger.info(SparkNetworkingStrings.Auth.refreshSucceeded(), module: .auth)
                 return tokens
             } catch {
-                logger.error("令牌刷新响应解析失败：\(error)")
+                logger.error("令牌刷新响应解析失败：\(error.localizedDescription)", module: .auth)
                 throw AuthTokenProviderError.invalidRefreshResponse
             }
         }
@@ -189,7 +189,7 @@ actor AuthTokenProvider {
         let statusCode = response.httpResponse.statusCode
         do {
             let backendError = try JSONDecoder().decode(BackendError.self, from: response.data)
-            logger.error("令牌刷新 HTTP 错误：code=\(backendError.code) msg=\(backendError.msg)")
+            logger.error("令牌刷新 HTTP 错误：code=\(backendError.code) msg=\(backendError.msg)", module: .auth)
         } catch {
             // Ignore; we still throw.
         }
@@ -197,10 +197,10 @@ actor AuthTokenProvider {
         // 仅在明确的认证失效状态下清理 token；服务异常时保留本地登录态。
         if statusCode == 400 || statusCode == 401 || statusCode == 403 {
             clearTokens()
-            logger.error(SparkNetworkingStrings.Auth.refreshFailed())
+            logger.error(SparkNetworkingStrings.Auth.refreshFailed(), module: .auth)
             throw AuthTokenProviderError.refreshFailed
         } else {
-            logger.warning("令牌刷新临时失败（HTTP \(statusCode)），保留本地 token。")
+            logger.warning("令牌刷新临时失败（HTTP \(statusCode)），保留本地 token。", module: .auth)
             throw AuthTokenProviderError.refreshTemporarilyUnavailable
         }
     }
@@ -264,7 +264,7 @@ actor AuthTokenProvider {
 
         let deleteStatus = SecItemDelete(query as CFDictionary)
         if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
-            logger.warning("Keychain 删除旧 token 失败，key=\(key) status=\(deleteStatus)")
+            logger.warning("Keychain 删除旧 token 失败，key=\(key) status=\(deleteStatus)", module: .auth)
         }
 
         var addQuery = query
@@ -273,9 +273,9 @@ actor AuthTokenProvider {
 
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         if addStatus != errSecSuccess {
-            logger.error("Keychain 持久化 token 失败，key=\(key) status=\(addStatus)")
+            logger.error("Keychain 持久化 token 失败，key=\(key) status=\(addStatus)", module: .auth)
         } else {
-            logger.debug("Keychain 持久化 token 成功，key=\(key)", category: "auth")
+            logger.debug("Keychain 持久化 token 成功，key=\(key)", module: .auth)
         }
     }
 

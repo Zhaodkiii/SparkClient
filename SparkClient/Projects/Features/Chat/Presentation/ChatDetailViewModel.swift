@@ -84,7 +84,7 @@ final class ChatDetailViewModel: ObservableObject {
             try await syncChatUseCase.syncThreadOnOpen(threadID: threadID)
         } catch {
             stateStore.setError(error.localizedDescription)
-            logger.warning("会话打开同步失败：\(error.localizedDescription)", category: "chat_flow")
+            logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
         }
         let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
         stateStore.setMessages(messages, for: threadID)
@@ -108,7 +108,7 @@ final class ChatDetailViewModel: ObservableObject {
 
         logger.info(
             "发送对话开始，thread=\(shortID(threadID)), patient=\(shortID(patientContextStore.context.selectedMemberID)), length=\(draft.count)",
-            category: "chat_flow"
+            module: .general
         )
         stateStore.setSending(true)
         defer { stateStore.setSending(false) }
@@ -159,44 +159,44 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.setError(nil)
             logger.info(
                 "发送对话完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
-                category: "chat_flow"
+                module: .general
             )
         } catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(error.localizedDescription)
-            logger.error("发送对话失败：\(error.localizedDescription)", category: "chat_flow")
+            logger.error("发送对话失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.send")
         }
     }
 
     func retryFailedMessage(clientMessageID: UUID) async {
-        logger.info("重试失败消息开始，clientMessageID=\(shortID(clientMessageID))", category: "chat_flow")
+        logger.info("重试失败消息开始，clientMessageID=\(shortID(clientMessageID))", module: .general)
         do {
             try await retryFailedMessageUseCase.execute(clientMessageID: clientMessageID)
             if let threadID = stateStore.selectedThreadID {
                 let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
                 stateStore.setMessages(messages, for: threadID)
             }
-            logger.info("重试失败消息完成，clientMessageID=\(shortID(clientMessageID))", category: "chat_flow")
+            logger.info("重试失败消息完成，clientMessageID=\(shortID(clientMessageID))", module: .general)
         } catch {
             stateStore.setError(error.localizedDescription)
-            logger.error("重试失败消息失败：\(error.localizedDescription)", category: "chat_flow")
+            logger.error("重试失败消息失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.retry")
         }
     }
 
     func sync() async {
-        logger.debug("手动聊天同步开始", category: "chat_flow")
+        logger.debug("手动聊天同步开始", module: .general)
         do {
             try await syncChatUseCase.execute()
             if let threadID = stateStore.selectedThreadID {
                 let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
                 stateStore.setMessages(messages, for: threadID)
             }
-            logger.debug("手动聊天同步完成", category: "chat_flow")
+            logger.debug("手动聊天同步完成", module: .general)
         } catch {
             stateStore.setError(error.localizedDescription)
-            logger.error("手动聊天同步失败：\(error.localizedDescription)", category: "chat_flow")
+            logger.error("手动聊天同步失败：\(error.localizedDescription)", module: .general)
         }
     }
 

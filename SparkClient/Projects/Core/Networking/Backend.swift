@@ -16,6 +16,7 @@ final class Backend {
     let medicalQuery: SparkMedicalQueryAPI
     let medicalResources: SparkMedicalResourceAPI
     let medicalWorkflow: SparkMedicalWorkflowAPI
+    let medicalCombinedCreate: SparkCombinedMedicalCreateAPI
     let files: SparkFileAPI
     let oss: SparkOSSAPI
     let ocr: SparkOCRAPI
@@ -59,11 +60,12 @@ final class Backend {
         self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
         self.medicalResources = SparkMedicalResourceAPI(configuration: configuration)
         self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
+        self.medicalCombinedCreate = SparkCombinedMedicalCreateAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
 
-        logger.info(SparkNetworkingStrings.Backend.initialized)
+        logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
 
     init(configuration: SparkBackendConfiguration) {
@@ -80,11 +82,12 @@ final class Backend {
         self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
         self.medicalResources = SparkMedicalResourceAPI(configuration: configuration)
         self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
+        self.medicalCombinedCreate = SparkCombinedMedicalCreateAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
 
-        configuration.logger.info(SparkNetworkingStrings.Backend.initialized)
+        configuration.logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
 
     func tokenProvider() -> AuthTokenProvider {

@@ -1,17 +1,25 @@
 import Foundation
+import UIKit
 import UserNotifications
 
 @MainActor
 final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
     private let handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase
     private let logger: Logger
+    private let onApnsTokenHex: (@Sendable (String) async -> Void)?
+    /// 系统通知权限结果（与 APNs token 解耦）：拒绝或失败时用于同步 `TrustedDevice.notifications_enabled` / 清空 `push_token`。
+    private let onRemoteNotificationAuthorizationResolved: (@Sendable (_ granted: Bool) async -> Void)?
 
     init(
         handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase,
-        logger: Logger = ConsoleLogger()
+        logger: Logger = ConsoleLogger(),
+        onApnsTokenHex: (@Sendable (String) async -> Void)? = nil,
+        onRemoteNotificationAuthorizationResolved: (@Sendable (_ granted: Bool) async -> Void)? = nil
     ) {
         self.handleRemoteNotificationUseCase = handleRemoteNotificationUseCase
         self.logger = logger
+        self.onApnsTokenHex = onApnsTokenHex
+        self.onRemoteNotificationAuthorizationResolved = onRemoteNotificationAuthorizationResolved
     }
 
     func installAsNotificationCenterDelegate() {
@@ -19,24 +27,42 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorizationIfNeeded() {
-        Task {
-            do {
-                let center = UNUserNotificationCenter.current()
-                let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-                logger.info("Push authorization result: \(granted)", category: "notification")
-            } catch {
-                logger.warning("Push authorization failed: \(error.localizedDescription)", category: "notification")
+        Task { @MainActor in
+            await requestRemoteNotificationAuthorizationAndRegister()
+        }
+    }
+
+    /// 请求系统通知权限；同意则向 APNs 注册（token 在 `handleDeviceToken` 中上送），拒绝则同步后端关闭推送并清空 token。
+    private func requestRemoteNotificationAuthorizationAndRegister() async {
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            logger.info("业务=远程推送 请求系统通知权限 granted=\(granted)", module: .push)
+            if granted {
+                UIApplication.shared.registerForRemoteNotifications()
+                logger.info("业务=远程推送 已调用 registerForRemoteNotifications，等待 APNs token 回调", module: .push)
+                await onRemoteNotificationAuthorizationResolved?(true)
+            } else {
+                logger.info("业务=远程推送 用户拒绝通知权限，同步后端关闭推送", module: .push)
+                await onRemoteNotificationAuthorizationResolved?(false)
             }
+        } catch {
+            logger.warning("业务=远程推送 请求系统通知权限失败 error=\(error.localizedDescription)", module: .push)
+            await onRemoteNotificationAuthorizationResolved?(false)
         }
     }
 
     func handleDeviceToken(_ tokenData: Data) {
-        let token = tokenData.map { String(format: "%02x", $0) }.joined()
-        logger.info("APNs token received: \(token)", category: "notification")
+        let hex = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
+        logger.info("业务=远程推送 收到 APNs device token 待上报 byteLen=\(tokenData.count)", module: .push)
+        guard let onApnsTokenHex else { return }
+        Task {
+            await onApnsTokenHex(hex)
+        }
     }
 
     func handleDeviceTokenRegistrationError(_ error: Error) {
-        logger.warning("APNs token registration failed: \(error.localizedDescription)", category: "notification")
+        logger.warning("业务=远程推送 向 APNs 注册 device token 失败（将无法收推送）error=\(error.localizedDescription)", module: .push)
     }
 
     func userNotificationCenter(

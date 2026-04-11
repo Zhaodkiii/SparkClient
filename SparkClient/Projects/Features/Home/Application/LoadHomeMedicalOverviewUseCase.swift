@@ -9,7 +9,7 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
     let memberRepository: any HomeMemberRepository
     let logger: Logger
 
-    private let logCategory = "home.medical"
+    private let logModule = LogModule.home
 
     func execute(
         profileID: UUID,
@@ -49,7 +49,7 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
         let cost = Date().timeIntervalSince(startedAt)
         logger.info(
             "医疗摘要完成 cost=\(String(format: "%.3f", cost))s refreshRemote=\(refreshRemoteSnapshot) memberID=\(resolvedSelectedID.map(String.init) ?? "nil") cards=\(medical.cards.count)",
-            category: logCategory
+            module: logModule
         )
 
         return HomeMedicalLoadResult(

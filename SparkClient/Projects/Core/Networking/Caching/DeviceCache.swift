@@ -56,19 +56,19 @@ final class DeviceCache: @unchecked Sendable {
     func cache(currentUserID: String) {
         userDefaults.set(currentUserID, forKey: Keys.currentUserID)
         cachedCurrentUserID.value = currentUserID
-        logger.debug("已缓存当前用户 ID=\(currentUserID)", category: "device_cache")
+        logger.debug("已缓存当前用户 ID=\(currentUserID)", module: .cache)
     }
 
     func cache(trustedDeviceID: String) {
         userDefaults.set(trustedDeviceID, forKey: Keys.trustedDeviceID)
         cachedTrustedDeviceID.value = trustedDeviceID
-        logger.debug("已缓存可信设备 ID=\(trustedDeviceID)", category: "device_cache")
+        logger.debug("已缓存可信设备 ID=\(trustedDeviceID)", module: .cache)
     }
 
     func cache(logLevel: LogLevel) {
         userDefaults.set(logLevel.rawValue, forKey: Keys.logLevel)
         cachedLogLevel.value = logLevel
-        logger.info("已持久化日志级别=\(logLevel.symbol)", category: "device_cache")
+        logger.info("已持久化日志级别=\(logLevel.symbol)", module: .cache)
     }
 
     func clearDeviceMetadata() {
@@ -85,6 +85,19 @@ final class DeviceCache: @unchecked Sendable {
 
         if fileManager.fileExists(atPath: baseDirectory.path) {
             try? fileManager.removeItem(at: baseDirectory)
+        }
+    }
+
+    /// 删除磁盘上的 HTTP 条件请求（ETag / 304 合并用）缓存，不影响 UserDefaults 中的设备元数据或日志级别。
+    /// 同时移除可能存在的旧版 `SparkClient.ETagCache` 目录。
+    func clearETagResponseCache() {
+        if fileManager.fileExists(atPath: baseDirectory.path) {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+        let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let legacyETagDirectory = caches.appendingPathComponent("SparkClient.ETagCache", isDirectory: true)
+        if fileManager.fileExists(atPath: legacyETagDirectory.path) {
+            try? fileManager.removeItem(at: legacyETagDirectory)
         }
     }
 

@@ -45,16 +45,16 @@ final class MedicalSyncService {
             try await medicalRepository.pullSnapshotFromServer(priority: preference.syncPriority)
             preference.lastSyncAt = Date()
             await preferenceRepository.savePreference(preference)
-            logger.info("健康数据同步引导已完成", category: "medical_sync")
+            logger.info("健康数据同步引导已完成", module: .medical)
         } catch let authError as AuthTokenProviderError {
             if authError == .missingTokens || authError == .refreshFailed {
-                logger.info("未登录态，已跳过启动同步。", category: "medical_sync")
+                logger.info("未登录态，已跳过启动同步。", module: .medical)
                 return
             }
-            logger.warning("健康数据同步引导失败：\(authError.localizedDescription)", category: "medical_sync")
+            logger.warning("健康数据同步引导失败：\(authError.localizedDescription)", module: .medical)
             presentBootstrapFailure(authError)
         } catch {
-            logger.warning("健康数据同步引导失败：\(error.localizedDescription)", category: "medical_sync")
+            logger.warning("健康数据同步引导失败：\(error.localizedDescription)", module: .medical)
             presentBootstrapFailure(error)
         }
     }

@@ -48,14 +48,6 @@ struct UploadedMedicalDocumentFile: Sendable, Equatable {
 
 // MARK: - 结构化数据草稿 (Drafts)
 
-/// 病例抽取草稿
-struct CaseRecognitionDraft: Sendable, Equatable, Codable {
-    let title: String      // 病例标题
-    let summary: String    // 病情摘要
-    let diagnosis: String? // 诊断结论
-    let occurredAt: String?  // 就诊日期
-}
-
 /// 医疗报告通用指标项
 /// 适用于体检报告和医疗报告（CT、超声等）的指标明细
 struct MedicalReportItem: Sendable, Equatable, Codable {
@@ -96,33 +88,122 @@ struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
     let details: [MedicalReportItem] // 指标明细
 }
 
-/// 处方单抽取草稿
-struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
-    /// 药品明细
-    struct MedicationItem: Sendable, Equatable, Codable {
-        let name: String            // 药品通用名
-        let specification: String?   // 规格（如：20mg * 12片）
-        let dosage: String?          // 单次剂量（如：1片/次）
-        let frequency: String?       // 频次（如：3次/日）
-        let duration: String?        // 疗程（如：7天）
-        let instructions: String?    // 用法备注（如：餐后服用）
-    }
+// MARK: - 用药：与 `Medication` ORM 对齐的抽取行（处方明细与单一药品文档共用）
 
-    let prescriberName: String?     // 开方医生
-    let institutionName: String?    // 开方医院
-    let prescribedAt: String?         // 开方日期
-    let diagnosis: String?          // 临床诊断
-    let batchNo: String?            // 处方编号
-    let medications: [MedicationItem] // 药品明细列表
+/// 与 ``Medication`` 字段一一对应；流式 JSON 解码依赖 `JSONDecoder.keyDecodingStrategy == .convertFromSnakeCase`。
+/// 注意：数值字段使用 String? 以兼容 OCR 脏数据，后续通过扩展方法转换为实际数值。
+struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
+    let genericName: String?
+    let brandName: String?
+    let drugName: String?
+    let dosageForm: String?
+    let strength: String?
+    let route: String?
+    let dosePerTime: String?
+    let doseValue: String?          // OCR 原始字符串，如 "1", "0.5", "1g"
+    let doseUnit: String?
+    let frequencyCode: String?
+    let period: String?
+    let timesPerPeriod: String?     // OCR 原始字符串，如 "2", "3次", "每日2次"
+    let frequencyText: String?
+    let durationDays: String?       // OCR 原始字符串，如 "7", "7天"
+    let instructions: String?
+    let reminderEnabled: Bool?
+    let reminderTimes: [String]?
+    let sortOrder: Int?
+    let extra: [String: String]?
 }
 
-/// 单一药品/用药提醒抽取草稿
-struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
-    let drugName: String       // 药品名称
-    let dosage: String?        // 剂量
-    let frequencyText: String? // 频率描述
-    let durationDays: Int?     // 预计服用天数
-    let instructions: String?  // 使用说明
+/// 处方批次抽取草稿（与 ``PrescriptionBatch`` / ``PrescriptionBatchSerializer`` 字段对齐；`member` 由上传信封提供）。
+struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
+    let medicalCase: Int?
+    let prescriberName: String?
+    let institutionName: String?
+    let prescribedAt: String?
+    let diagnosis: String?
+    let batchNo: String?
+    let status: String?
+    let auditorName: String?
+    let auditedAt: String?
+    let extra: [String: String]?
+    /// 批次内药品行；缺省或省略时按空数组处理。
+    let medications: [MedicationRecognitionDraft]?
+}
+
+// MARK: - 新增 Draft 模型（症状/就诊/手术/随访）
+
+/// 症状抽取草稿（与 ``Symptom`` 字段语义对齐）。
+/// 参考 SparkService 的 Symptom 模型和 HealthClient 的 SymptomDraft
+struct SymptomRecognitionDraft: Sendable, Equatable, Codable {
+    let name: String              // 症状名称
+    let code: String?             // 症状编码
+    let severity: String?         // 严重程度
+    let startedAt: String?        // 开始时间 (ISO 日期字符串)
+    let durationValue: String?       // 持续时间数值
+    let durationUnit: String?     // 持续时间单位 (天/周/月等)
+    let bodyPart: String?         // 身体部位
+    let notes: String?            // 备注说明
+}
+
+/// 就诊信息抽取草稿（与 ``Visit`` 字段语义对齐）。
+/// 参考 SparkService 的 Visit 模型
+struct VisitRecognitionDraft: Sendable, Equatable, Codable {
+    let visitType: String?        // 就诊类型 (门诊/急诊/随诊等)
+    let visitedAt: String?        // 就诊时间 (ISO 日期字符串)
+    let department: String?       // 就诊科室
+    let doctorName: String?       // 医生姓名
+    let visitNo: String?          // 就诊号/病历号
+    let notes: String?            // 备注
+}
+
+/// 手术信息抽取草稿（与 ``Surgery`` 字段语义对齐）。
+/// 参考 SparkService 的 Surgery 模型
+struct SurgeryRecognitionDraft: Sendable, Equatable, Codable {
+    let procedureName: String     // 手术名称
+    let procedureCode: String?    // 手术编码
+    let site: String?             // 手术部位
+    let performedAt: String?      // 手术时间 (ISO 日期字符串)
+    let surgeon: String?          // 主刀医生
+    let anesthesiaType: String?   // 麻醉方式
+    let incisionLevel: String?    // 切口等级
+    let asaClass: String?         // ASA 分级
+    let notes: String?            // 备注
+}
+
+/// 随访信息抽取草稿（与 ``FollowUp`` 字段语义对齐）。
+/// 参考 SparkService 的 FollowUp 模型
+struct FollowUpRecognitionDraft: Sendable, Equatable, Codable {
+    let plannedAt: String?        // 计划随访时间 (ISO 日期字符串)
+    let completedAt: String?      // 实际完成时间 (ISO 日期字符串)
+    let status: String?           // 随访状态
+    let method: String?           // 随访方式
+    let outcome: String?          // 随访结果
+    let nextAction: String?       // 下一步行动建议
+}
+
+/// 病例抽取草稿（汇总结构，与 `RecognizedMedical` 语义对齐）。
+/// 主档字段与 `MedicalCase` 摘要对齐；子项可选，供组合创建 API 一次性落库。
+struct CaseRecognitionDraft: Sendable, Equatable, Codable {
+    let title: String // 病例标题 → `title`
+    let summary: String? // 病情摘要 → 并入 `diagnosis_summary`
+    let diagnosis: String? // 诊断结论 → 并入 `diagnosis_summary`
+    let hospitalName: String? // 医院名称 → `hospital_name`
+    let ageAtVisit: String? // 就诊年龄 → `age_at_visit`
+    /// 就诊日期（原始字符串，如 ISO 日期）；主档无列时写入保存 `extra["occurred_at"]`。
+    let occurredAt: String?
+
+    /// 子项：症状（单条；与组合创建 API `symptom` 对齐）
+    let symptom: SymptomRecognitionDraft?
+    /// 子项：就诊（单条；与组合创建 API `visit` 对齐）
+    let visit: VisitRecognitionDraft?
+    /// 子项：手术（单条；与组合创建 API `surgery` 对齐）
+    let surgery: SurgeryRecognitionDraft?
+    /// 子项：随访
+    let followUps: [FollowUpRecognitionDraft]?
+    /// 子项：处方批次（含批次内药品行）
+    let prescriptionBatches: [PrescriptionRecognitionDraft]?
+    /// 子项：检查/检验报告（与独立「医疗报告」类型共用草稿模型）
+    let examinationReports: [MedicalReportRecognitionDraft]?
 }
 
 // MARK: - 最终输出封装
@@ -130,11 +211,12 @@ struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
 /// 类型化的识别结果：使用枚举关联值将不同的草稿模型归一化。
 /// 这种设计允许 UI 层通过 switch 语句，根据文档类型路由到不同的结果展示页面。
 enum MedicalDocumentTypedResult: Sendable, Equatable {
+    /// 病例文档（汇总草稿，内含症状/就诊/手术/随访/处方/检查报告等子项）
     case caseDocument(CaseRecognitionDraft)
     case healthExamReport(HealthExamRecognitionDraft)
     case medicalReport([MedicalReportRecognitionDraft])
     case prescription(PrescriptionRecognitionDraft)
-    case medication(MedicationRecognitionDraft)
+    case medication([MedicationRecognitionDraft])
 }
 
 /// 最终输出模型：抽取流程的最终产物。

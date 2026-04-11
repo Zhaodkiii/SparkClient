@@ -49,7 +49,7 @@ struct UploadMedicalDocumentFilesUseCase: Sendable {
         }
         
         // 4. 记录上传成功的统计日志
-        logger.info("医疗文档源文件上传完成，count=\(output.count)", category: "medical_upload")
+        logger.info("医疗文档源文件上传完成，count=\(output.count)", module: .medical)
         
         return output
     }

@@ -27,6 +27,61 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
 
     private static let defaultChatEndpoint = "https://api.sparkclient.local/v1/chat/completions"
     private static let defaultEmbedEndpoint = "https://api.sparkclient.local/v1/embeddings"
+    private static let defaultChatConfig = AIScenarioConfig(
+        endpoint: defaultChatEndpoint,
+        model: "spark-chat-default",
+        apiKey: nil,
+        temperature: 0.2,
+        maxTokens: 4096
+    )
+    private static let defaultTextConfig = AIScenarioConfig(
+        endpoint: defaultChatEndpoint,
+        model: "spark-chat-default",
+        apiKey: nil,
+        temperature: 0.0,
+        maxTokens: 4096
+    )
+    private static let defaultEmbedConfig = AIScenarioConfig(
+        endpoint: defaultEmbedEndpoint,
+        model: "spark-embedding-default",
+        apiKey: nil,
+        temperature: 0.0,
+        maxTokens: 2048
+    )
+    private static func defaultScenarioBundle(
+        endpoint: String,
+        model: String,
+        temperature: Double,
+        maxTokens: Int
+    ) -> AIScenarioRemoteBundle {
+        .singleModelFallback(
+            AIScenarioConfig(
+                endpoint: endpoint,
+                model: model,
+                apiKey: nil,
+                temperature: temperature,
+                maxTokens: maxTokens
+            )
+        )
+    }
+    private static let defaultChatBundle = defaultScenarioBundle(
+        endpoint: defaultChatEndpoint,
+        model: "spark-chat-default",
+        temperature: 0.2,
+        maxTokens: 4096
+    )
+    private static let defaultTextBundle = defaultScenarioBundle(
+        endpoint: defaultChatEndpoint,
+        model: "spark-chat-default",
+        temperature: 0.0,
+        maxTokens: 4096
+    )
+    private static let defaultEmbedBundle = defaultScenarioBundle(
+        endpoint: defaultEmbedEndpoint,
+        model: "spark-embedding-default",
+        temperature: 0.0,
+        maxTokens: 2048
+    )
 
     init(
         chat: AIScenarioConfig,
@@ -73,55 +128,13 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     }
 
     static let `default` = AISettingsSnapshot(
-        chat: AIScenarioConfig(
-            endpoint: defaultChatEndpoint,
-            model: "spark-chat-default",
-            apiKey: nil,
-            temperature: 0.2,
-            maxTokens: 4096
-        ),
-        optimizationText: AIScenarioConfig(
-            endpoint: defaultChatEndpoint,
-            model: "spark-chat-default",
-            apiKey: nil,
-            temperature: 0.0,
-            maxTokens: 4096
-        ),
-        optimizationVisual: AIScenarioConfig(
-            endpoint: defaultChatEndpoint,
-            model: "spark-chat-default",
-            apiKey: nil,
-            temperature: 0.2,
-            maxTokens: 4096
-        ),
-        contextFolding: AIScenarioConfig(
-            endpoint: defaultChatEndpoint,
-            model: "spark-chat-default",
-            apiKey: nil,
-            temperature: 0.2,
-            maxTokens: 4096
-        ),
-        router: AIScenarioConfig(
-            endpoint: defaultChatEndpoint,
-            model: "spark-chat-default",
-            apiKey: nil,
-            temperature: 0.2,
-            maxTokens: 4096
-        ),
-        modelConfig: AIScenarioConfig(
-            endpoint: defaultEmbedEndpoint,
-            model: "spark-embedding-default",
-            apiKey: nil,
-            temperature: 0.0,
-            maxTokens: 2048
-        ),
-        reportInterpretation: AIScenarioConfig(
-            endpoint: defaultChatEndpoint,
-            model: "spark-chat-default",
-            apiKey: nil,
-            temperature: 0.2,
-            maxTokens: 4096
-        ),
+        chat: defaultChatConfig,
+        optimizationText: defaultTextConfig,
+        optimizationVisual: defaultChatConfig,
+        contextFolding: defaultChatConfig,
+        router: defaultChatConfig,
+        modelConfig: defaultEmbedConfig,
+        reportInterpretation: defaultChatConfig,
         apiKeys: AISettingsDefaults.apiKeys,
         searchKeys: AISettingsDefaults.searchKeys,
         toolKeys: AISettingsDefaults.toolKeys,
@@ -133,132 +146,20 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         memoryArchive: AISettingsDefaults.memoryArchive,
         translationDic: AISettingsDefaults.translationDic,
         scenarioRemoteBundles: AIScenarioRemoteBundlesCollection(
-            chat: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.2,
-                    maxTokens: 4096
-                )
-            ),
-            medicalStructuredExtraction: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            medicalDocumentTypeRecognition: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            medicalCaseExtraction: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            healthExamExtraction: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            medicalReportExtraction: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            prescriptionExtraction: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            medicationExtraction: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            optimizationText: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 4096
-                )
-            ),
-            optimizationVisual: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.2,
-                    maxTokens: 4096
-                )
-            ),
-            contextFolding: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.2,
-                    maxTokens: 4096
-                )
-            ),
-            router: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.2,
-                    maxTokens: 4096
-                )
-            ),
-            modelConfig: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultEmbedEndpoint,
-                    model: "spark-embedding-default",
-                    apiKey: nil,
-                    temperature: 0.0,
-                    maxTokens: 2048
-                )
-            ),
-            reportInterpretation: .singleModelFallback(
-                AIScenarioConfig(
-                    endpoint: defaultChatEndpoint,
-                    model: "spark-chat-default",
-                    apiKey: nil,
-                    temperature: 0.2,
-                    maxTokens: 4096
-                )
-            )
+            chat: defaultChatBundle,
+            medicalStructuredExtraction: defaultTextBundle,
+            medicalDocumentTypeRecognition: defaultTextBundle,
+            medicalCaseExtraction: defaultTextBundle,
+            healthExamExtraction: defaultTextBundle,
+            medicalReportExtraction: defaultTextBundle,
+            prescriptionExtraction: defaultTextBundle,
+            medicationExtraction: defaultTextBundle,
+            optimizationText: defaultTextBundle,
+            optimizationVisual: defaultChatBundle,
+            contextFolding: defaultChatBundle,
+            router: defaultChatBundle,
+            modelConfig: defaultEmbedBundle,
+            reportInterpretation: defaultChatBundle
         ),
         scenarioSelectedModel: [:],
         trialChatPickerDisabledModelNames: []

@@ -217,20 +217,20 @@ final class DefaultMedicalDataRepository: MedicalDataRepository, @unchecked Send
                 updatedAt: Date()
             )
         } catch {
-            logger.warning("按需医疗数据拉取失败，回退空快照：\(error.localizedDescription)", category: "medical_sync")
+            logger.warning("按需医疗数据拉取失败，回退空快照：\(error.localizedDescription)", module: .medical)
             return .empty
         }
     }
 
     func saveSnapshot(_ snapshot: MedicalDataSnapshot) async throws {
-        logger.warning("saveSnapshot 已弃用：不再走全量快照上传。", category: "medical_sync")
+        logger.warning("saveSnapshot 已弃用：不再走全量快照上传。", module: .medical)
         _ = snapshot
     }
 
     func pullSnapshotFromServer(priority: CloudSyncPriority) async throws {
         _ = try await loadSnapshot()
         _ = priority
-        logger.info("按需资源已刷新", category: "medical_sync")
+        logger.info("按需资源已刷新", module: .medical)
     }
 
 }

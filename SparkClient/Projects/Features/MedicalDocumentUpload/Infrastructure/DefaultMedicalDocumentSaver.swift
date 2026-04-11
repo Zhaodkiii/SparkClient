@@ -19,7 +19,7 @@ struct DefaultMedicalDocumentSaver: MedicalDocumentSaver, Sendable {
     ) async throws -> MedicalDocumentSaveReceipt {
         logger.info(
             "开始保存医疗上传结果，memberID=\(memberID), fileCount=\(sourceFiles.count)",
-            category: "medical_upload"
+            module: .medical
         )
         var snapshot = await medicalDataRepository.loadSnapshot()
         let nextCaseID = (snapshot.medicalCases.map(\.id).max() ?? 0) + 1
@@ -57,7 +57,7 @@ struct DefaultMedicalDocumentSaver: MedicalDocumentSaver, Sendable {
         snapshot.medicalReports.append(medicalReport)
         snapshot.updatedAt = now
         try await medicalDataRepository.saveSnapshot(snapshot)
-        logger.info("医疗上传结果保存成功，recordID=\(nextCaseID)", category: "medical_upload")
+        logger.info("医疗上传结果保存成功，recordID=\(nextCaseID)", module: .medical)
 
         return MedicalDocumentSaveReceipt(recordID: nextCaseID, savedAt: now, isSuccess: true)
     }

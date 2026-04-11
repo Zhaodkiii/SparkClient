@@ -1,4 +1,12 @@
 "app.loading.preparing" = "Preparing SparkClient…";
+
+"network.gate.title" = "SparkClient needs a network connection";
+"network.gate.subtitle" = "Connect to Wi‑Fi or cellular data and try again.";
+"network.gate.detected" = "Network connected";
+"network.gate.check" = "Check connection";
+"network.gate.settings" = "Open Settings";
+"network.gate.alert_title" = "Still offline";
+"network.gate.retry_failed" = "No connection yet. Check your network settings.";
 "tab.home" = "Home";
 "tab.health" = "Health";
 "tab.chat" = "Chat";
@@ -200,6 +208,9 @@
 "settings.sync.last_time" = "Last Sync";
 "settings.sync.now" = "Sync Now";
 "settings.sync.never" = "Never";
+"settings.section.cache" = "Cache";
+"settings.cache.clear_etag" = "Clear HTTP ETag Cache";
+"settings.cache.clear_etag.subtitle" = "Removes saved conditional GET bodies and tags. The next requests fetch fresh data.";
 "settings.sign_out" = "Sign out";
 
 "ai_settings.title" = "AI Scenario Config";

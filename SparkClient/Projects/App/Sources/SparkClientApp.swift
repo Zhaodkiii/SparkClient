@@ -20,8 +20,6 @@ struct SparkClientApp: App {
                 .task {
                     appDelegate.pushAdapter = container.pushAdapter
                     container.pushAdapter.installAsNotificationCenterDelegate()
-                    container.pushAdapter.requestAuthorizationIfNeeded()
-                    UIApplication.shared.registerForRemoteNotifications()
                 }
         }
     }

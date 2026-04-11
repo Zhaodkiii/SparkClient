@@ -13,16 +13,21 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 病历类文档（case document）保存请求体，对应「病例/就诊记录」维度的摘要信息。
+    /// 字段与 `MedicalCase` / `MedicalCaseSerializer` 对齐。
     struct CaseSavePayload: Encodable, Sendable {
         /// 关联的家庭成员服务端 ID（`MedicalMember`）。
         let member: Int
         /// 记录类型编码，与后端 `record_type` 约定一致（如门诊、住院等）。
         let recordType: String
-        /// 业务状态码（草稿、已确认等，含义以后端为准）。
+        /// 业务状态码：`MedicalCase.Status` — 1 draft，2 submitted，3 archived。
         let status: Int
         /// 展示用标题。
         let title: String
-        /// 诊断摘要文本。
+        /// 就诊医院名称（`hospital_name`）。
+        let hospitalName: String?
+        /// 就诊时年龄（`age_at_visit`）。
+        let ageAtVisit: Int?
+        /// 诊断摘要文本（`diagnosis_summary`）。
         let diagnosisSummary: String
         /// 扩展键值对，供未建模字段或灰度字段透传。
         let extra: [String: String]
@@ -32,6 +37,8 @@ struct SparkMedicalWorkflowAPI {
             case recordType = "record_type"
             case status
             case title
+            case hospitalName = "hospital_name"
+            case ageAtVisit = "age_at_visit"
             case diagnosisSummary = "diagnosis_summary"
             case extra
         }
@@ -293,6 +300,83 @@ struct SparkMedicalWorkflowAPI {
         }
     }
 
+    /// 用药工作流「批量」请求体：顶层 `member` 与首条内 `member` 二选一（服务端以首条为准，缺省用顶层）。
+    /// 行内不含 `member` / `batch`，由服务端创建占位批次后写入。
+    struct MedicationWorkflowBulkPayload: Encodable, Sendable {
+        let member: Int
+        let fileIds: [Int]
+        let medications: [MedicationWorkflowBulkLinePayload]
+
+        enum CodingKeys: String, CodingKey {
+            case member
+            case fileIds = "file_ids"
+            case medications
+        }
+    }
+
+    /// 批量用药行（字段与 ``MedicationSavePayload`` 一致，但不包含 `member` / `batch`）。
+    struct MedicationWorkflowBulkLinePayload: Encodable, Sendable {
+        let genericName: String
+        let brandName: String
+        let drugName: String
+        let dosageForm: String
+        let strength: String
+        let route: String
+        let dosePerTime: String
+        let doseValue: Double?
+        let doseUnit: String
+        let frequencyCode: String
+        let period: String
+        let timesPerPeriod: Int?
+        let frequencyText: String
+        let durationDays: Int?
+        let instructions: String
+        let reminderEnabled: Bool
+        let reminderTimes: [String]
+        let sortOrder: Int
+        let extra: [String: String]
+
+        enum CodingKeys: String, CodingKey {
+            case strength, route, period, instructions, extra
+            case genericName = "generic_name"
+            case brandName = "brand_name"
+            case drugName = "drug_name"
+            case dosageForm = "dosage_form"
+            case dosePerTime = "dose_per_time"
+            case doseValue = "dose_value"
+            case doseUnit = "dose_unit"
+            case frequencyCode = "frequency_code"
+            case timesPerPeriod = "times_per_period"
+            case frequencyText = "frequency_text"
+            case durationDays = "duration_days"
+            case reminderEnabled = "reminder_enabled"
+            case reminderTimes = "reminder_times"
+            case sortOrder = "sort_order"
+        }
+
+        init(strippingMemberAndBatchFrom row: MedicationSavePayload) {
+            genericName = row.genericName
+            brandName = row.brandName
+            drugName = row.drugName
+            dosageForm = row.dosageForm
+            strength = row.strength
+            route = row.route
+            dosePerTime = row.dosePerTime
+            doseValue = row.doseValue
+            doseUnit = row.doseUnit
+            frequencyCode = row.frequencyCode
+            period = row.period
+            timesPerPeriod = row.timesPerPeriod
+            frequencyText = row.frequencyText
+            durationDays = row.durationDays
+            instructions = row.instructions
+            reminderEnabled = row.reminderEnabled
+            reminderTimes = row.reminderTimes
+            sortOrder = row.sortOrder
+            extra = row.extra
+        }
+    }
+
     /// 通用「仅返回 id」的响应解码结构。
     private struct IDResponse: Decodable { let id: Int }
 
@@ -321,8 +405,13 @@ struct SparkMedicalWorkflowAPI {
         try await post(path: "/api/v1/medical/workflows/prescriptions/save/", body: payload, decode: PrescriptionResponse.self).batch.id
     }
 
-    /// 保存单条药品记录；成功返回药品行 ID。
+    /// 保存单条药品记录；成功返回药品行 ID（兼容旧客户端）。
     func saveMedication(_ payload: MedicationSavePayload) async throws -> Int {
+        try await post(path: "/api/v1/medical/workflows/medications/save/", body: payload, decode: IDResponse.self).id
+    }
+
+    /// 批量保存用药记录（一次请求多条）；成功返回**第一条**药品行 ID（`data.id`）。
+    func saveMedicationsWorkflow(_ payload: MedicationWorkflowBulkPayload) async throws -> Int {
         try await post(path: "/api/v1/medical/workflows/medications/save/", body: payload, decode: IDResponse.self).id
     }
 

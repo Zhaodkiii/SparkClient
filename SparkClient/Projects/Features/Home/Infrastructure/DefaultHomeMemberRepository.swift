@@ -24,7 +24,7 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
             let members = try await medicalQueryAPI.listMembers()
             return members.map(\.domainModel)
         } catch {
-            logger.error("加载成员列表失败：\(error.localizedDescription)", category: "home")
+            logger.error("加载成员列表失败：\(error.localizedDescription)", module: .home)
             return []
         }
     }
@@ -53,7 +53,7 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
                 updatedAt: Date()
             )
         } catch {
-            logger.error("按成员加载医疗数据失败：memberID=\(memberID), error=\(error.localizedDescription)", category: "home")
+            logger.error("按成员加载医疗数据失败：memberID=\(memberID) error=\(error.localizedDescription)", module: .home)
             return .empty
         }
     }
@@ -81,7 +81,7 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
             _ = try await memberAPI.createMember(payload)
             return
         } catch {
-            logger.error("远端新增成员失败：\(error.localizedDescription)", category: "home")
+            logger.error("远端新增成员失败：\(error.localizedDescription)", module: .home)
             throw error
         }
     }
@@ -110,7 +110,7 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
             _ = try await memberAPI.updateMember(remoteID: member.id, payload: payload)
             return
         } catch {
-            logger.error("远端更新成员失败：\(error.localizedDescription)", category: "home")
+            logger.error("远端更新成员失败：\(error.localizedDescription)", module: .home)
             throw error
         }
     }
@@ -120,7 +120,7 @@ final class DefaultHomeMemberRepository: HomeMemberRepository, @unchecked Sendab
             try await memberAPI.deleteMember(remoteID: member.id)
             return
         } catch {
-            logger.error("远端删除成员失败：\(error.localizedDescription)", category: "home")
+            logger.error("远端删除成员失败：\(error.localizedDescription)", module: .home)
             throw error
         }
     }

@@ -40,7 +40,7 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
         }
         logger.info(
             "开始医疗文档识别，memberID=\(memberID), fileCount=\(files.count), mode=\(mode?.rawValue ?? "general")",
-            category: "medical_upload"
+            module: .medical
         )
 
         let rawText = try await buildMergedOCRText(files: files)
@@ -73,7 +73,7 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
         )
         logger.info(
             "医疗文档识别成功，ocrLength=\(rawText.count), jsonLength=\(extractedJSON.count)",
-            category: "medical_upload"
+            module: .medical
         )
         return result
     }
@@ -91,11 +91,11 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
 
     private func recognize(file: MedicalUploadLocalFile) async throws -> OCRRecognition {
         if isImage(url: file.url, mimeType: file.mimeType) {
-            logger.info("执行图片 OCR：\(file.displayName)", category: "medical_upload")
+            logger.info("执行图片 OCR", module: .medical)
             let data = try Data(contentsOf: file.url)
             return try await ocrOrchestrator.recognize(imageData: data, options: .medicalDefault)
         }
-        logger.info("执行文档 OCR：\(file.displayName)", category: "medical_upload")
+        logger.info("执行文档 OCR", module: .medical)
         return try await ocrOrchestrator.recognize(document: file.url, options: .medicalDefault)
     }
 
@@ -137,12 +137,12 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
             "extractedJSON": json,
             "rawOCRText": rawText
         ]
-        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
-              let pretty = String(data: data, encoding: .utf8) else {
-            logger.warning("构造 payload 预览失败，使用文本回退。", category: "medical_upload")
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload) else {
+            logger.warning("构造 payload 预览失败，使用文本回退。", module: .medical)
             return "{\"memberID\":\(memberID),\"extractedJSON\":\(json)}"
         }
-        return pretty
+        return JSONPayloadFormatting.prettyUTF8StringForLog(from: data)
     }
 
     private func collectResponseText(

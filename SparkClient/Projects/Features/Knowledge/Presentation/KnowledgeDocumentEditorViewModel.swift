@@ -285,7 +285,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
             if await save(silentEmpty: false) == false { return }
             let updated = try await buildEmbeddingsUseCase.execute(documentID: documentID, modelName: model)
             document = updated
-            logger.info("知识向量索引完成 document=\(documentID) model=\(model)", category: "knowledge")
+            logger.info("知识向量索引完成 document=\(documentID) model=\(model)", module: .general)
         } catch {
             errorMessage = error.localizedDescription
         }

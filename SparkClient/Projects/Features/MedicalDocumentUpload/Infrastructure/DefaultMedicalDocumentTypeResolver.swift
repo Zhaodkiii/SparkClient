@@ -217,10 +217,10 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
         selectedKind: MedicalDocumentKind,
         mergedOCRText: String
     ) async throws -> MedicalDocumentTypeResolution {
-        logger.info("开始解析医疗文档类型, 预选值: \(selectedKind.rawValue)", category: "medical_upload")
+        logger.info("开始解析医疗文档类型, 预选值: \(selectedKind.rawValue)", module: .medical)
         // 1. 优先逻辑：用户手动选择了类型，直接返回结果，置信度100%
         if selectedKind != .auto {
-            logger.info("用户手动指定类型: \(selectedKind.rawValue)", category: "medical_upload")
+            logger.info("用户手动指定类型: \(selectedKind.rawValue)", module: .medical)
             return MedicalDocumentTypeResolution(
                 kind: selectedKind,       // 使用用户手动选择的类型
                 confidence: 1,            // 置信度满分
@@ -231,12 +231,12 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
 
         // 2. 次优先逻辑：本地关键词规则匹配，匹配成功直接返回
         if let rules = resolveByRules(text: mergedOCRText) {
-            logger.info("本地规则匹配成功: kind=\(rules.kind.rawValue), confidence=\(rules.confidence)", category: "medical_upload")
+            logger.info("本地规则匹配成功: kind=\(rules.kind.rawValue), confidence=\(rules.confidence)", module: .medical)
             return rules
         }
 
         // 3. 兜底逻辑：规则匹配失败，调用AI大模型进行智能识别
-        logger.info("本地规则未命中，触发 AI 大模型识别", category: "medical_upload")
+        logger.info("本地规则未命中，触发 AI 大模型识别", module: .medical)
         // 构建AI识别文档类型的提示词
         let prompt = promptFactory.typeRecognitionPrompt(ocrText: mergedOCRText)
         // 调用AI流式接口，获取完整响应文本
@@ -259,7 +259,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
         )
         
         // 打印日志：记录AI识别结果
-        logger.info("AI 类型识别完成，kind=\(parsed.kind.rawValue), confidence=\(parsed.confidence)", category: "medical_upload")
+        logger.info("AI 类型识别完成，kind=\(parsed.kind.rawValue), confidence=\(parsed.confidence)", module: .medical)
         
         // 返回最终解析结果
         return parsed
@@ -273,7 +273,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
         let results = LocalMedicalDocumentClassifier.classify(text: text)
         // 记录所有本地规则的原始得分情况，便于后续调整权重
         let debugScores = results.map { "\($0.kind.rawValue):\($0.confidence)" }.joined(separator: ", ")
-        logger.debug("本地规则原始得分: [\(debugScores)]", category: "medical_upload")
+        logger.debug("本地规则原始得分: [\(debugScores)]", module: .medical)
 
         // 筛选出置信度>=30的结果
         let validMatches = results.filter { $0.confidence >= 30 }
@@ -295,7 +295,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
         // 如果没有达到阈值的匹配，但存在低置信度候选，记录日志后返回nil
         let fallback = results.max(by: { $0.confidence < $1.confidence })!
         if fallback.confidence >= 20 {
-            logger.debug("本地规则检测到低置信度候选: kind=\(fallback.kind.rawValue), confidence=\(fallback.confidence)", category: "medical_upload")
+            logger.debug("本地规则检测到低置信度候选: kind=\(fallback.kind.rawValue), confidence=\(fallback.confidence)", module: .medical)
         }
 
         return nil // 无匹配项/得分不足，返回空

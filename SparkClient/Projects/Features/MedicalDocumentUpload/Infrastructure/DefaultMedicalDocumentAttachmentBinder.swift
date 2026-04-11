@@ -27,10 +27,10 @@ struct DefaultMedicalDocumentAttachmentBinder: MedicalDocumentAttachmentBinding,
                     )
                 )
             } catch {
-                logger.error("附件绑定失败，fileID=\(file.remoteFile.id), error=\(error.localizedDescription)", category: "medical_upload")
+                logger.error("附件绑定失败，fileID=\(file.remoteFile.id), error=\(error.localizedDescription)", module: .medical)
             }
         }
-        logger.info("附件绑定流程结束，count=\(uploadedFiles.count)", category: "medical_upload")
+        logger.info("附件绑定流程结束，count=\(uploadedFiles.count)", module: .medical)
     }
 
     private func businessType(for kind: MedicalDocumentKind) -> String {

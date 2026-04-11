@@ -58,10 +58,10 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
             Task {
                 let files = await convertPhotoItems(items)
                 if files.isEmpty == false {
-                    logger.info("相册导入成功，数量=\(files.count)", category: "medical_upload")
+                    logger.info("相册导入成功，数量=\(files.count)", module: .medical)
                     onFilesSelected(files)
                 } else {
-                    logger.warning("相册导入完成，但未获取到可用文件。", category: "medical_upload")
+                    logger.warning("相册导入完成，但未获取到可用文件。", module: .medical)
                 }
                 photoItems = []
             }
@@ -72,15 +72,15 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
             allowsMultipleSelection: true
         ) { result in
             guard case .success(let urls) = result else {
-                logger.warning("文件选择器取消或失败。", category: "medical_upload")
+                logger.warning("文件选择器取消或失败。", module: .medical)
                 return
             }
             let files = urls.compactMap(copyToTempFile)
             if files.isEmpty == false {
-                logger.info("文档导入成功，数量=\(files.count)", category: "medical_upload")
+                logger.info("文档导入成功，数量=\(files.count)", module: .medical)
                 onFilesSelected(files)
             } else {
-                logger.warning("文档导入完成，但未生成临时文件。", category: "medical_upload")
+                logger.warning("文档导入完成，但未生成临时文件。", module: .medical)
             }
         }
         .sheet(isPresented: $showCameraPicker) {
@@ -90,10 +90,10 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                 onImagePicked: { image in
                     showCameraPicker = false
                     if let file = saveUIImageToTemp(image: image, namePrefix: "camera") {
-                        logger.info("相机拍照导入成功。", category: "medical_upload")
+                        logger.info("相机拍照导入成功。", module: .medical)
                         onFilesSelected([file])
                     } else {
-                        logger.error("相机拍照后保存临时文件失败。", category: "medical_upload")
+                        logger.error("相机拍照后保存临时文件失败。", module: .medical)
                     }
                 }
             )
@@ -107,10 +107,10 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
 
     private func presentCamera() {
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            logger.info("准备打开相机。", category: "medical_upload")
+            logger.info("准备打开相机。", module: .medical)
             showCameraPicker = true
         } else {
-            logger.warning("设备不支持相机。", category: "medical_upload")
+            logger.warning("设备不支持相机。", module: .medical)
             showCameraUnavailableAlert = true
         }
     }
@@ -137,7 +137,7 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                 mimeType: UTType(filenameExtension: ext)?.preferredMIMEType
             )
         } catch {
-            logger.error("复制文件到临时目录失败：\(error.localizedDescription)", category: "medical_upload")
+            logger.error("复制文件到临时目录失败：\(error.localizedDescription)", module: .medical)
             return nil
         }
     }
@@ -170,7 +170,7 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                 mimeType: UTType(filenameExtension: preferredExtension)?.preferredMIMEType
             )
         } catch {
-            logger.error("写入临时文件失败：\(error.localizedDescription)", category: "medical_upload")
+            logger.error("写入临时文件失败：\(error.localizedDescription)", module: .medical)
             return nil
         }
     }

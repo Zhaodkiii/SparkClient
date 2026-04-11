@@ -124,10 +124,10 @@ struct ETagHTTPInterceptor: Sendable {
         if let record = store.record(forKey: cacheKey) {
             if record.isExpired() {
                 store.removeCache(forKey: cacheKey)
-                logger.debug("ETag 缓存已过期，跳过 If-None-Match，cacheKey=\(cacheKey)", category: "etag")
+                logger.debug(SparkNetworkingStrings.ETag.skipStaleCache(key: cacheKey), module: .cache)
             } else {
                 req.setValue(record.etag, forHTTPHeaderField: "If-None-Match")
-                logger.debug(SparkNetworkingStrings.ETag.apply(tag: record.etag, key: cacheKey), category: "etag")
+                logger.debug(SparkNetworkingStrings.ETag.apply(tag: record.etag, key: cacheKey), module: .cache)
             }
         }
         return req
@@ -144,7 +144,16 @@ struct ETagHTTPInterceptor: Sendable {
 
         if httpResponse.statusCode == 304 {
             if let cached = store.cachedBody(forKey: cacheKey) {
-                logger.info(SparkNetworkingStrings.ETag.hit304(key: cacheKey), category: "etag")
+                let presentation = JSONPayloadFormatting.prettyUTF8StringForLog(from: cached)
+                logger.info(
+                    SparkNetworkingStrings.ETag.merged304FullPayload(
+                        path: request.path,
+                        cacheKey: cacheKey,
+                        byteCount: cached.count,
+                        presentationBody: presentation
+                    ),
+                    module: .cache
+                )
                 return SparkNetworkResponse(
                     data: cached,
                     httpResponse: httpResponse,
@@ -177,7 +186,7 @@ struct ETagHTTPInterceptor: Sendable {
                     body: transportResponse.data,
                     forKey: cacheKey
                 )
-                logger.debug(SparkNetworkingStrings.ETag.store(tag: etag, key: cacheKey), category: "etag")
+                logger.debug(SparkNetworkingStrings.ETag.store(tag: etag, key: cacheKey), module: .cache)
             }
         }
 

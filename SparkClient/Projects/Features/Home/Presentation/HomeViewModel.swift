@@ -31,7 +31,7 @@ final class HomeViewModel: ObservableObject {
     private let notificationClient: any NotificationClient
     private let logger: Logger
 
-    private let logCategory = "home.dashboard"
+    private let logModule = LogModule.home
 
     // MARK: - Lifecycle
 
@@ -78,7 +78,7 @@ final class HomeViewModel: ObservableObject {
         let startedAt = Date()
         logger.info(
             "首页加载开始 syncRemote=\(syncRemote) selectedMemberID=\(selectedMemberID.map(String.init) ?? "nil")",
-            category: logCategory
+            module: logModule
         )
 
         isLoadingMedical = true
@@ -93,7 +93,7 @@ final class HomeViewModel: ObservableObject {
             isLoadingMedical = false
             errorMessage = nil
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.dashboard")
-            logger.warning("首页医疗摘要失败: \(error.localizedDescription)", category: logCategory)
+            logger.warning("首页医疗摘要失败: \(error.localizedDescription)", module: logModule)
             return
         }
         isLoadingMedical = false
@@ -107,7 +107,7 @@ final class HomeViewModel: ObservableObject {
         } catch {
             logger.warning(
                 "运动健康加载失败: \(error.localizedDescription)",
-                category: logCategory
+                module: logModule
             )
             motion = HomeMotionHealthOverview(
                 healthBasics: [],
@@ -131,7 +131,7 @@ final class HomeViewModel: ObservableObject {
         let cost = Date().timeIntervalSince(startedAt)
         logger.info(
             "首页加载完成 cost=\(String(format: "%.3f", cost))s syncRemote=\(syncRemote)",
-            category: logCategory
+            module: logModule
         )
     }
 

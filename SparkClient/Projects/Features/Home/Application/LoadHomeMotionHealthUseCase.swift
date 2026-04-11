@@ -5,14 +5,14 @@ struct LoadHomeMotionHealthUseCase: Sendable {
     let healthDataRepository: any HomeHealthDataRepository
     let logger: Logger
 
-    private let logCategory = "home.motion"
+    private let logModule = LogModule.home
 
     func execute(selectedMember: Member?) async throws -> HomeMotionHealthOverview {
         let startedAt = Date()
         guard let selectedMember, selectedMember.canUseMotionHealthOnHome else {
             logger.info(
                 "运动健康跳过 HealthKit（非本人或无成员） memberID=\(selectedMember.map { String($0.id) } ?? "nil")",
-                category: logCategory
+                module: logModule
             )
             return HomeMotionHealthOverview(
                 healthBasics: [],
@@ -26,7 +26,7 @@ struct LoadHomeMotionHealthUseCase: Sendable {
         let cost = Date().timeIntervalSince(startedAt)
         logger.info(
             "运动健康完成 cost=\(String(format: "%.3f", cost))s auth=\(String(describing: status)) items=\(basics.count)",
-            category: logCategory
+            module: logModule
         )
         return HomeMotionHealthOverview(
             healthBasics: basics,

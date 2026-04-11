@@ -20,11 +20,8 @@ enum LogLevel: Int, CaseIterable, Codable, Sendable {
 
 typealias InternalLogHandler = @Sendable (
     _ level: LogLevel,
-    _ category: String,
-    _ message: String,
-    _ file: String?,
-    _ function: String?,
-    _ line: UInt
+    _ module: LogModule,
+    _ message: String
 ) -> Void
 
 nonisolated(unsafe) private let sparkLogLevelStorage = Atomic<LogLevel>(.info)
@@ -32,16 +29,13 @@ nonisolated(unsafe) private let sparkLogHandlerStorage = Atomic<InternalLogHandl
 nonisolated(unsafe) private let sparkLogSubsystemStorage = Atomic<String>("SparkClient")
 
 /// 网络与基础设施统一日志中心。
-/// 设计参考 purchases-ios 的 Logger：
-/// 1. 全局可调日志级别
-/// 2. 统一 handler
-/// 3. 运行时可配置
 enum SparkLogger {
     nonisolated static var logLevel: LogLevel {
         get { sparkLogLevelStorage.value }
         set { sparkLogLevelStorage.value = newValue }
     }
 
+    /// 保留字段（兼容旧配置）；默认输出格式不再包含 subsystem。
     nonisolated static var subsystem: String {
         get { sparkLogSubsystemStorage.value }
         set { sparkLogSubsystemStorage.value = newValue }
@@ -73,132 +67,67 @@ enum SparkLogger {
 
     nonisolated static func log(
         level: LogLevel,
-        category: String,
-        message: String,
-        file: String? = nil,
-        function: String? = nil,
-        line: UInt = #line
+        module: LogModule,
+        message: String
     ) {
         guard isEnabled(level) else { return }
-        sparkLogHandlerStorage.value(level, category, message, file, function, line)
+        sparkLogHandlerStorage.value(level, module, message)
     }
 
     nonisolated fileprivate static func defaultHandler(
         level: LogLevel,
-        category: String,
-        message: String,
-        file: String?,
-        function: String?,
-        line: UInt
+        module: LogModule,
+        message: String
     ) {
-        let formatter = ISO8601DateFormatter()
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let timestamp = formatter.string(from: Date())
-        let subsystem = SparkLogger.subsystem
-        let location: String
-        if let file {
-            let functionPart = function.map { " \($0)" } ?? ""
-            location = " (\(file):\(line)\(functionPart))"
-        } else {
-            location = ""
-        }
-
-        print("[\(timestamp)][\(subsystem)][\(level.symbol)][\(category)] \(message)\(location)")
+        print("[\(timestamp)][\(module.rawValue)][\(level.symbol)] \(message)")
     }
 }
 
-/// 兼容当前项目的轻量日志协议。
-/// 默认 category 为 `general`，也支持显式传入分类。
+/// 轻量日志协议；每条日志单行，模块使用 `LogModule`。
 nonisolated protocol Logger: Sendable {
-    nonisolated func debug(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt)
-    nonisolated func info(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt)
-    nonisolated func warning(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt)
-    nonisolated func error(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt)
+    nonisolated func debug(_ message: String, module: LogModule)
+    nonisolated func info(_ message: String, module: LogModule)
+    nonisolated func warning(_ message: String, module: LogModule)
+    nonisolated func error(_ message: String, module: LogModule)
 }
 
 nonisolated extension Logger {
-    func debug(
-        _ message: String,
-        category: String = "general",
-        file: StaticString? = #fileID,
-        function: StaticString? = #function,
-        line: UInt = #line
-    ) {
-        debug(message, category: category, file: file, function: function, line: line)
+    func debug(_ message: String) {
+        debug(message, module: .general)
     }
 
-    func info(
-        _ message: String,
-        category: String = "general",
-        file: StaticString? = #fileID,
-        function: StaticString? = #function,
-        line: UInt = #line
-    ) {
-        info(message, category: category, file: file, function: function, line: line)
+    func info(_ message: String) {
+        info(message, module: .general)
     }
 
-    func warning(
-        _ message: String,
-        category: String = "general",
-        file: StaticString? = #fileID,
-        function: StaticString? = #function,
-        line: UInt = #line
-    ) {
-        warning(message, category: category, file: file, function: function, line: line)
+    func warning(_ message: String) {
+        warning(message, module: .general)
     }
 
-    func error(
-        _ message: String,
-        category: String = "general",
-        file: StaticString? = #fileID,
-        function: StaticString? = #function,
-        line: UInt = #line
-    ) {
-        error(message, category: category, file: file, function: function, line: line)
+    func error(_ message: String) {
+        error(message, module: .general)
     }
 }
 
 nonisolated struct ConsoleLogger: Logger {
-    nonisolated func debug(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt) {
-        SparkLogger.log(
-            level: .debug,
-            category: category,
-            message: message,
-            file: file.map { "\($0)" },
-            function: function.map { "\($0)" },
-            line: line
-        )
+    nonisolated func debug(_ message: String, module: LogModule) {
+        SparkLogger.log(level: .debug, module: module, message: message)
     }
 
-    nonisolated func info(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt) {
-        SparkLogger.log(
-            level: .info,
-            category: category,
-            message: message,
-            file: file.map { "\($0)" },
-            function: function.map { "\($0)" },
-            line: line
-        )
+    nonisolated func info(_ message: String, module: LogModule) {
+        SparkLogger.log(level: .info, module: module, message: message)
     }
 
-    nonisolated func warning(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt) {
-        SparkLogger.log(
-            level: .warning,
-            category: category,
-            message: message,
-            file: file.map { "\($0)" },
-            function: function.map { "\($0)" },
-            line: line
-        )
+    nonisolated func warning(_ message: String, module: LogModule) {
+        SparkLogger.log(level: .warning, module: module, message: message)
     }
 
-    nonisolated func error(_ message: String, category: String, file: StaticString?, function: StaticString?, line: UInt) {
-        SparkLogger.log(
-            level: .error,
-            category: category,
-            message: message,
-            file: file.map { "\($0)" },
-            function: function.map { "\($0)" },
-            line: line
-        )
+    nonisolated func error(_ message: String, module: LogModule) {
+        SparkLogger.log(level: .error, module: module, message: message)
     }
 }

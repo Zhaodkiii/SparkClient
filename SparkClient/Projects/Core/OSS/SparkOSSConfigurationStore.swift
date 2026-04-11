@@ -21,18 +21,18 @@ final class SparkOSSConfigurationStore {
         do {
             let response = try await api.getSTSCredentials()
             guard let cfg = AliyunOSSRuntimeConfig(response: response) else {
-                logger.warning("OSS STS 预拉取：字段不完整，未缓存", category: "oss_config")
+                logger.warning("OSS STS 预拉取：字段不完整，未缓存", module: .oss)
                 return
             }
             snapshot = cfg
             logger.info(
                 "OSS 配置已加载 bucket=\(cfg.bucketName) region=\(cfg.region)",
-                category: "oss_config"
+                module: .oss
             )
         } catch {
             logger.warning(
                 "OSS STS 预拉取失败（后续上传前将重试）：\(error.localizedDescription)",
-                category: "oss_config"
+                module: .oss
             )
         }
     }

@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// 抽取过程中的错误类型
 enum ExtractionError: Error {
     case decodingFailed
+    case invalidDebugPayload
 }
 
 /// 默认实现的 医疗文档类型化抽取器
@@ -62,6 +63,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         files: [MedicalUploadLocalFile],
         selectedKind: MedicalDocumentKind
     ) async throws -> MedicalDocumentTypedExtractionOutput {
+//#if DEBUG
+//        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
+//        return try makeDebugPretendCaseOutput(memberID: memberID, files: files)
+//#endif
         // 1. 对所有上传文件执行OCR，并把所有文本合并成一段完整文本
         let mergedOCR = try await buildMergedOCRText(files: files)
         
@@ -97,7 +102,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         """
         
         // 7. 打印日志：标记类型抽取完成
-        logger.info("typed 抽取完成，kind=\(kind.rawValue)", category: "medical_upload")
+        logger.info("typed 抽取完成，kind=\(kind.rawValue)", module: .medical)
         
         // 8. 返回最终标准化输出对象
         return MedicalDocumentTypedExtractionOutput(
@@ -179,7 +184,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 prompt: prompt,
                 scenario: .medicationExtraction,
                 kindLabel: "medication",
-                as: MedicationRecognitionDraft.self
+                as: [MedicationRecognitionDraft].self
             )
             guard let draft = final.decoded else {
                 throw ExtractionError.decodingFailed
@@ -220,9 +225,9 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         
         // 4. 日志：记录解码成功/失败
         if final.decoded == nil {
-            logger.warning("文档 JSON 解码失败，kind=\(kindLabel)", category: "medical_upload")
+            logger.warning("文档 JSON 解码失败，kind=\(kindLabel)", module: .medical)
         } else {
-            logger.debug("文档 JSON 解码成功，kind=\(kindLabel)", category: "medical_upload")
+            logger.debug("文档 JSON 解码成功，kind=\(kindLabel)", module: .medical)
         }
         
         return final
@@ -268,3 +273,360 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     }
 
 }
+
+#if DEBUG
+private extension DefaultTypedMedicalDocumentExtractor {
+    struct DebugPretendEnvelope: Decodable {
+        let kind: MedicalDocumentKind
+        let resolutionSource: MedicalDocumentTypeResolution.Source
+        let confidence: Double
+        let payload: CaseRecognitionDraft
+    }
+
+    func makeDebugPretendCaseOutput(
+        memberID: Int,
+        files: [MedicalUploadLocalFile]
+    ) throws -> MedicalDocumentTypedExtractionOutput {
+        guard let data = Self.debugPretendCaseJSON.data(using: .utf8) else {
+            throw ExtractionError.invalidDebugPayload
+        }
+        let decoder = JSONDecoder()
+        let envelopePayload = try decoder.decode(DebugPretendEnvelope.self, from: data)
+        let payloadJSON = try prettyJSONString(from: envelopePayload.payload)
+        let preview = """
+        {
+          "memberID": \(memberID),
+          "kind": "\(envelopePayload.kind.rawValue)",
+          "resolutionSource": "\(envelopePayload.resolutionSource.rawValue)",
+          "confidence": \(String(format: "%.2f", envelopePayload.confidence)),
+          "payload": \(payloadJSON)
+        }
+        """
+        let envelope = MedicalDocumentRecognitionEnvelope(
+            memberID: memberID,
+            sourceFiles: files,
+            rawOCRText: "[DEBUG] pretend case extraction bypassed OCR",
+            typeResolution: MedicalDocumentTypeResolution(
+                kind: envelopePayload.kind,
+                confidence: envelopePayload.confidence,
+                source: envelopePayload.resolutionSource,
+                reason: "debug pretend case extraction"
+            )
+        )
+        return MedicalDocumentTypedExtractionOutput(
+            envelope: envelope,
+            typedResult: .caseDocument(envelopePayload.payload),
+            extractedJSON: payloadJSON,
+            payloadPreview: preview
+        )
+    }
+
+    func prettyJSONString<T: Encodable>(from value: T) throws -> String {
+        let text = try JSONPayloadFormatting.prettyString(from: value)
+        guard text != "<empty>", text.hasPrefix("<非 UTF-8") == false else {
+            throw ExtractionError.invalidDebugPayload
+        }
+        return text
+    }
+
+    static let debugPretendCaseJSON = """
+    {
+        "memberID": 13,
+        "kind": "caseDocument",
+        "resolutionSource": "localRules",
+        "confidence": 0.98,
+        "payload": {
+            "title": "就诊病例",
+            "summary": "患者芦超28岁于2025/06/21在苏州工业园区星塘医院妇产科就诊，诊断念珠菌性外阴阴道炎；患者赵道凯1998/10/29出生，2026-02-06在苏州大学附属第四医院口腔科门诊初诊，要求口腔检查1天，专科检查见38/48近中低位阻生，远中牙龈覆盖，龈红肿，诊断阻生牙K01.100，建议择期拔除；2025-12-28赵道凯在苏州大学附属第四医院行生化检验、肾功能检验，结果大致正常。",
+            "diagnosis": "念珠菌性外阴阴道炎；阻生牙K01.100",
+            "hospitalName": "苏州工业园区星塘医院;苏州大学附属第四医院（苏州市独墅湖医院）",
+            "ageAtVisit": "28;27岁1月",
+            "occurredAt": "2025-06-21;2026-02-06;2025-12-28",
+            "symptom": {
+                "name": "口腔检查要求"
+            },
+            "visit": {
+                "visitType": "门诊",
+                "visitedAt": "2025-06-21",
+                "department": "妇产科（普通）",
+                "visitNo": "1681884"
+            },
+            "prescriptionBatches": [
+                {
+                    "prescriberName": "未明确",
+                    "institutionName": "苏州工业园区星塘医院",
+                    "prescribedAt": "2025-06-21",
+                    "diagnosis": "念珠菌性外阴阴道炎",
+                    "batchNo": "1681884",
+                    "medications": [
+                        {
+                            "genericName": "卢立康唑乳膏",
+                            "brandName": "路利特",
+                            "drugName": "卢立康唑乳膏（路利特）",
+                            "dosageForm": "乳膏剂",
+                            "strength": "5g:50mg（1%）",
+                            "route": "外用",
+                            "dosePerTime": "1g/次",
+                            "doseValue": "1",
+                            "doseUnit": "g",
+                            "frequencyCode": "bid",
+                            "period": "日",
+                            "timesPerPeriod": "2",
+                            "frequencyText": "每天2次",
+                            "durationDays": "未明确",
+                            "instructions": "外用 每天2次1g/次"
+                        },
+                        {
+                            "genericName": "克霉唑阴道膨胀栓",
+                            "brandName": "未明确",
+                            "drugName": "克霉唑阴道膨胀栓",
+                            "dosageForm": "栓剂",
+                            "strength": "未明确",
+                            "route": "阴塞",
+                            "dosePerTime": "1粒/次",
+                            "doseValue": "1",
+                            "doseUnit": "粒",
+                            "frequencyCode": "qd",
+                            "period": "日",
+                            "timesPerPeriod": "1",
+                            "frequencyText": "每天1次",
+                            "durationDays": "未明确",
+                            "instructions": "阴塞 每天1次1粒/次"
+                        },
+                        {
+                            "genericName": "伊曲康唑分散片",
+                            "brandName": "未明确",
+                            "drugName": "伊曲康唑分散片",
+                            "dosageForm": "片剂",
+                            "strength": "0.1g*14片",
+                            "route": "口服",
+                            "dosePerTime": "2片/次",
+                            "doseValue": "2",
+                            "doseUnit": "片",
+                            "frequencyCode": "qd",
+                            "period": "日",
+                            "timesPerPeriod": "1",
+                            "frequencyText": "每天1次",
+                            "durationDays": "未明确",
+                            "instructions": "口服 每天1次2片/次"
+                        }
+                    ]
+                }
+            ],
+            "examinationReports": [
+                {
+                    "reportType": "检验报告",
+                    "title": "苏州大学附属第四医院检验报告单",
+                    "hospital": "苏州大学附属第四医院（苏州市独墅湖医院）",
+                    "doctor": "朱孝明;魏和轩;王一發;魏雨轩;王一斐",
+                    "content": "罗氏Cobas 8000检验报告，采样时间2025-12-28 09:24，核收时间2025-12-28 10:08，报告时间2025-12-28 10:48，送检项目为生化检验、肾功能检，结果显示总胆红素13.5≤26、直接胆红素4.2≤8、间接胆红素9.3、天门冬氨酸氨基转移酶13.51、丙氨酸氨基转移酶14.6、总蛋白77.0、白蛋白47.4、球蛋白29.6、白蛋白/球蛋白1.6、Y-谷氨酰转肽隊19.9、碱性磷酸酶75.9、前白蛋白287.0、尿素5.14、肌酐77.50、尿酸324.6、胱抑素C0.76、葡萄糖5.42、肌酸激酶104.3、乳酸脱氢酶168.0120--250U/L、a-羟丁酸脱氢酶140.472--182U/L、胆碱酯酶11124、甘油三酯0.70适宜：＜1.70mmol/L、总胆固醇51.07适宜：＜5.18mmol/L、高密度脂蛋白胆固醇1.51≥1.04mmol/L、低密度脂蛋白胆固醇3.511理想：≤2.60mmol/L，结果解释符合《中国血脂管理指南2023》相关标准。",
+                    "date": "2025-12-28",
+                    "details": [
+                        {
+                            "category": "生化检验",
+                            "subCategory": "胆红素代谢",
+                            "itemName": "总胆红素",
+                            "resultValue": "13.5",
+                            "unit": "未明确",
+                            "referenceRange": "≤26"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "胆红素代谢",
+                            "itemName": "直接胆红素",
+                            "resultValue": "4.2",
+                            "unit": "未明确",
+                            "referenceRange": "≤8"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "胆红素代谢",
+                            "itemName": "间接胆红素",
+                            "resultValue": "9.3",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "天门冬氨酸氨基转移酶",
+                            "resultValue": "13.51",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "丙氨酸氨基转移酶",
+                            "resultValue": "14.6",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "总蛋白",
+                            "resultValue": "77.0",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "白蛋白",
+                            "resultValue": "47.4",
+                            "unit": "未明确",
+                            "referenceRange": "40"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "球蛋白",
+                            "resultValue": "29.6",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "白蛋白/球蛋白",
+                            "resultValue": "1.6",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "Y-谷氨酰转肽隊",
+                            "resultValue": "19.9",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "碱性磷酸酶",
+                            "resultValue": "75.9",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肝功能",
+                            "itemName": "前白蛋白",
+                            "resultValue": "287.0",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肾功能",
+                            "itemName": "尿素",
+                            "resultValue": "5.14",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肾功能",
+                            "itemName": "肌酐",
+                            "resultValue": "77.50",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肾功能",
+                            "itemName": "尿酸",
+                            "resultValue": "324.6",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "肾功能",
+                            "itemName": "胱抑素C",
+                            "resultValue": "0.76",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "代谢类",
+                            "itemName": "葡萄糖",
+                            "resultValue": "5.42",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "心肌酶",
+                            "itemName": "肌酸激酶",
+                            "resultValue": "104.3",
+                            "unit": "未明确",
+                            "referenceRange": "未明确"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "心肌酶",
+                            "itemName": "乳酸脱氢酶",
+                            "resultValue": "168.0",
+                            "unit": "U/L",
+                            "referenceRange": "120--250"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "心肌酶",
+                            "itemName": "a-羟丁酸脱氢酶",
+                            "resultValue": "140.4",
+                            "unit": "U/L",
+                            "referenceRange": "72--182"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "心肌酶",
+                            "itemName": "胆碱酯酶",
+                            "resultValue": "11124",
+                            "unit": "U/L",
+                            "referenceRange": "儿童、男性"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "血脂",
+                            "itemName": "甘油三酯",
+                            "resultValue": "0.70",
+                            "unit": "mmol/L",
+                            "referenceRange": "适宜：＜1.70"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "血脂",
+                            "itemName": "总胆固醇",
+                            "resultValue": "51.07",
+                            "unit": "mmol/L",
+                            "referenceRange": "适宜：＜5.18"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "血脂",
+                            "itemName": "高密度脂蛋白胆固醇",
+                            "resultValue": "1.51",
+                            "unit": "mmol/L",
+                            "referenceRange": "≥1.04"
+                        },
+                        {
+                            "category": "生化检验",
+                            "subCategory": "血脂",
+                            "itemName": "低密度脂蛋白胆固醇",
+                            "resultValue": "3.511",
+                            "unit": "mol/L",
+                            "referenceRange": "理想：≤2.60"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    """
+}
+#endif

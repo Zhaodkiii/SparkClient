@@ -86,7 +86,7 @@ final class SparkNetworkEngine {
 
                 // 401：强制刷新 token 后重试；`AuthTokenProvider` 内会去重并发刷新。
                 if request.strategy.requiresAuth, response.httpResponse.statusCode == 401, retryCount < request.strategy.retryConfig.maxRetryCount + 1 {
-                    logger.info(SparkNetworkingStrings.HTTPClient.authRefreshTriggered(path: request.path))
+                    logger.info(SparkNetworkingStrings.HTTPClient.authRefreshTriggered(path: request.path), module: .network)
                     _ = try await authProvider.forceRefreshTokens()
                     retryCount += 1
                     continue

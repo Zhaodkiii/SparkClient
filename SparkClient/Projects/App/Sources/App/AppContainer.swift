@@ -46,6 +46,8 @@ final class AppContainer {
     let routeStore: AppRouteStore
     /// 应用启动阶段副作用（非 UI）的集中入口。
     let appBootstrapper: AppBootstrapper
+    /// 设备登记（匿名或带 JWT，与冷启动 / 登录后 / APNs token 联动）。
+    let registerDeviceUseCase: RegisterDeviceUseCase
 
     // MARK: - 通知（应用内队列、指标、收件箱、远程推送适配）
     //
@@ -352,6 +354,7 @@ final class AppContainer {
         )
         let typedMedicalDocumentSaver = DefaultTypedMedicalDocumentSaver(
             workflowAPI: backend.medicalWorkflow,
+            combinedAPI: backend.medicalCombinedCreate,
             logger: logger
         )
         let attachmentBinder = DefaultMedicalDocumentAttachmentBinder(
@@ -461,9 +464,22 @@ final class AppContainer {
             routeStore: routeStore,
             notificationClient: notificationClient
         )
+        let registerDeviceUseCase = RegisterDeviceUseCase(backend: backend, logger: logger)
         let pushAdapter = PushAdapter(
             handleRemoteNotificationUseCase: handleRemoteNotificationUseCase,
-            logger: logger
+            logger: logger,
+            onApnsTokenHex: { hex in
+                await registerDeviceUseCase.execute(pushToken: hex, notificationsEnabled: true)
+            },
+            onRemoteNotificationAuthorizationResolved: { granted in
+                if granted {
+                    // 同意权限：先标记开启；JSON 省略 push_token 以免覆盖已有行，待 token 回调再写入 hex。
+                    await registerDeviceUseCase.execute(pushToken: nil, notificationsEnabled: true)
+                } else {
+                    // 拒绝或异常：清空服务端 push_token 并标记关闭（与 TrustedDevice 字段语义一致）。
+                    await registerDeviceUseCase.execute(pushToken: "", notificationsEnabled: false)
+                }
+            }
         )
 
         // MARK: 冷启动编排（不阻塞 UI 的异步任务入口，由 App 生命周期调用）
@@ -474,6 +490,7 @@ final class AppContainer {
             routeStore: routeStore,
             ossConfigurationStore: ossConfigurationStore,
             ossAPI: backend.oss,
+            registerDevice: { await registerDeviceUseCase.execute() },
             logger: logger
         )
 
@@ -530,6 +547,7 @@ final class AppContainer {
         self.sendChatMessageUseCase = sendChatMessageUseCase
 
         self.routeStore = routeStore
+        self.registerDeviceUseCase = registerDeviceUseCase
         self.aiRuntimeStore = aiRuntimeStore
         self.aiConfigCenter = aiConfigCenter
         self.aiRuntimeService = aiRuntimeService
@@ -675,7 +693,8 @@ final class AppContainer {
         SettingsViewModel(
             sessionStore: sessionStore,
             signOutUseCase: signOutUseCase,
-            medicalSyncService: medicalSyncService
+            medicalSyncService: medicalSyncService,
+            deviceCache: backend.deviceCache
         )
     }
 

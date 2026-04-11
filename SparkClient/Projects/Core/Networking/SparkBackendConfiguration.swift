@@ -22,19 +22,28 @@ final class SparkBackendConfiguration: @unchecked Sendable {
     }
 
     func execute(_ operation: some SparkNetworkOperation) async throws -> SparkNetworkResponse {
-        logger.debug(SparkNetworkingStrings.Backend.executing(api: operation.apiName, operation: operation.name))
+        let business = NetworkOperationBusinessPurpose.describe(operation)
+        logger.debug(
+            SparkNetworkingStrings.Backend.executing(
+                api: operation.apiName,
+                operation: operation.name,
+                business: business
+            ),
+            module: .network
+        )
         let query = operation.request.queryItems?
             .map { "\($0.name)=\($0.value ?? "")" }
             .joined(separator: "&") ?? ""
         logger.debug(
-            "Operation 请求详情 method=\(operation.request.method.rawValue) path=\(operation.request.path) query=\(query) requiresAuth=\(operation.request.strategy.requiresAuth) allowETag=\(operation.request.strategy.allowETag) retryEnabled=\(operation.request.strategy.retryConfig.isEnabled) maxRetry=\(operation.request.strategy.retryConfig.maxRetryCount)",
-            category: "network.operation"
+            "业务=\(business) Operation 请求详情 method=\(operation.request.method.rawValue) path=\(operation.request.path) query=\(query) requiresAuth=\(operation.request.strategy.requiresAuth) allowETag=\(operation.request.strategy.allowETag) retryEnabled=\(operation.request.strategy.retryConfig.isEnabled) maxRetry=\(operation.request.strategy.retryConfig.maxRetryCount)",
+            module: .network
         )
 
         if let key = operation.callbackCacheKey {
             return try await callbackCache.execute(
                 key: key,
                 operationName: operation.name,
+                businessPurpose: business,
                 logger: logger
             ) {
                 try await operation.execute(with: self.engine)

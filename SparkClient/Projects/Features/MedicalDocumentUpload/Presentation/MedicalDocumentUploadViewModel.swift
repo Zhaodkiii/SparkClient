@@ -84,14 +84,14 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         selectedFiles = files
         previewItems = buildPreviewUseCase.execute(files: files)
         errorMessage = nil
-        logger.info("已更新待识别文件，数量=\(files.count)", category: "medical_upload")
+        logger.info("已更新待识别文件，数量=\(files.count)", module: .medical)
     }
 
     /// 按本地文件 ID 移除一项并同步预览。
     func removeFile(id: UUID) {
         selectedFiles.removeAll { $0.id == id }
         previewItems = buildPreviewUseCase.execute(files: selectedFiles)
-        logger.info("已移除文件，剩余数量=\(selectedFiles.count)", category: "medical_upload")
+        logger.info("已移除文件，剩余数量=\(selectedFiles.count)", module: .medical)
     }
 
     // MARK: - Recognition pipeline
@@ -106,7 +106,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             // 给 UI 展示错误文案（国际化 L10n）
             errorMessage = L10n.text("medical.upload.error.no_member")
             // 打印警告日志
-            logger.warning("开始识别失败：未选择就诊成员", category: "medical_upload")
+            logger.warning("开始识别失败：未选择就诊成员", module: .medical)
             return
         }
 
@@ -129,7 +129,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         // MARK: 3. 打印关键日志：开始流程
         logger.info(
             "开始识别流程 memberID=\(member.id) 文件数=\(selectedFiles.count) selectedKind=\(selectedKind.rawValue)",
-            category: "medical_upload"
+            module: .medical
         )
 
         // MARK: 4. 执行核心流程（try 捕获所有异常）
@@ -141,7 +141,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 memberID: member.id,
                 files: selectedFiles
             )
-            logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", category: "medical_upload")
+            logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", module: .medical)
 
             // 标记：上传步骤完成 → 成功
             complete(.upload, outcome: .success)
@@ -171,7 +171,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             stage = .result      // 切换页面状态：展示结果页
             logger.info(
                 "Typed 识别流程完成，resolvedKind=\(output.envelope.typeResolution.kind.rawValue)",
-                category: "medical_upload"
+                module: .medical
             )
         } catch {
             // ------------------------------
@@ -179,54 +179,75 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             // ------------------------------
             fail(.extract) // 标记抽取流程失败
             errorMessage = error.localizedDescription // 给 UI 展示错误信息
-            logger.error("Typed 识别流程失败：\(error.localizedDescription)", category: "medical_upload")
+            logger.error("Typed 识别流程失败：\(error.localizedDescription)", module: .medical)
         }
     }
 
-    // MARK: - Save & bind
+    // MARK: - 保存 & 绑定
 
-    /// 将当前 `typedOutput` 持久化，并在成功后把已上传附件与业务单据绑定。
-    /// - Returns: 保存且绑定流程是否全部成功。
+    /// 将当前识别结果持久化保存，成功后将已上传的附件与业务单据进行绑定
+    /// - Returns: 保存和绑定流程是否全部成功
     func saveResult() async -> Bool {
+        // 若正在保存中，直接忽略本次请求
         guard isSaving == false else {
-            logger.debug("忽略保存请求：仍在保存中", category: "medical_upload")
+            logger.debug("忽略保存请求：仍在保存中", module: .medical)
             return false
         }
+        
+        // 无识别结果时，提示错误并返回失败
         guard let typedOutput else {
             errorMessage = L10n.text("medical.upload.error.no_result")
-            logger.warning("保存失败：无识别结果 typedOutput=nil", category: "medical_upload")
+            logger.warning("保存失败：无识别结果 typedOutput=nil", module: .medical)
             return false
         }
+        
+        // 标记开始保存
         isSaving = true
+        // 触发保存状态更新
         start(.save, variant: kindToVariant(typedOutput.envelope.typeResolution.kind))
+        // 代码块执行完毕后，自动重置保存状态为false
         defer { isSaving = false }
 
         logger.info(
             "开始保存识别结果 kind=\(typedOutput.envelope.typeResolution.kind.rawValue)",
-            category: "medical_upload"
+            module: .medical
         )
+        
         do {
+            // 执行保存用例，获取保存回执
             let receipt = try await saveUseCase.execute(output: typedOutput)
+            // 缓存保存回执
             saveReceipt = receipt
+            // 标记保存流程完成（成功）
             complete(.save, outcome: .success)
+            
             logger.info(
                 "保存成功 recordID=\(receipt.recordID) success=\(receipt.isSuccess)",
-                category: "medical_upload"
+                module: .medical
             )
+            
+            // 执行附件绑定：将已上传文件与单据关联
             await bindUseCase.execute(
                 uploadedFiles: uploadedFiles,
                 kind: typedOutput.envelope.typeResolution.kind,
                 receipt: receipt
             )
+            
             logger.info(
-                "附件绑定完成 uploaded=\(uploadedFiles.count) recordID=\(receipt.recordID)",
-                category: "medical_upload"
+                "附件绑定完成 已上传文件数=\(uploadedFiles.count) recordID=\(receipt.recordID)",
+                module: .medical
             )
+            
+            // 保存+绑定全部成功
             return true
         } catch {
+            // 标记保存流程失败
             fail(.save)
+            // 设置错误提示信息
             errorMessage = localizedSaveErrorMessage(from: error)
-            logger.error("保存或绑定失败：\(error.localizedDescription)", category: "medical_upload")
+            logger.error("保存或绑定失败：\(error.localizedDescription)", module: .medical)
+            
+            // 流程异常，返回失败
             return false
         }
     }
@@ -244,7 +265,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         selectedKind = .auto
         uploadedFiles = []
         selectedMemberName = patientContextStore.context.selectedMember?.name
-        logger.info("已重置医疗上传流程", category: "medical_upload")
+        logger.info("已重置医疗上传流程", module: .medical)
     }
     
     /// 仅重置识别状态，保留已选择的文件
@@ -256,7 +277,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         needsManualModeSelection = false
         errorMessage = nil
         // 注意：不重置 selectedFiles、previewItems 和 uploadedFiles，保留用户选择的文件
-        logger.info("已重置识别状态（保留已选文件）", category: "medical_upload")
+        logger.info("已重置识别状态（保留已选文件）", module: .medical)
     }
 
     // MARK: - Progress management
@@ -414,7 +435,7 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
         }
         
         progress = currentProgress
-        logger.debug("开始步骤: \(step.rawValue)", category: "medical_upload")
+        logger.debug("开始步骤: \(step.rawValue)", module: .medical)
     }
     
     func complete(_ step: MedicalDocumentUploadFlowStep, outcome: MedicalDocumentUploadFlowStep.CompletionOutcome) {
@@ -439,7 +460,7 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
         }
         
         progress = currentProgress
-        logger.debug("完成步骤: \(step.rawValue), 结果: \(outcome)", category: "medical_upload")
+        logger.debug("完成步骤 step=\(step.rawValue)", module: .medical)
     }
     
     func fail(_ step: MedicalDocumentUploadFlowStep) {
@@ -461,7 +482,7 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
         }
         
         progress = currentProgress
-        logger.debug("步骤失败: \(step.rawValue)", category: "medical_upload")
+        logger.debug("步骤失败: \(step.rawValue)", module: .medical)
     }
 }
 
@@ -509,8 +530,10 @@ extension MedicalDocumentUploadViewModel {
             runtimeService: PreviewMedicalRuntimeService()
         )
         let previewEngine = SparkNetworkEngine(baseURL: URL(string: "https://preview.sparkclient.local")!)
-        let previewWorkflowAPI = SparkMedicalWorkflowAPI(configuration: SparkBackendConfiguration(engine: previewEngine))
-        let saver = DefaultTypedMedicalDocumentSaver(workflowAPI: previewWorkflowAPI)
+        let previewBackendConfig = SparkBackendConfiguration(engine: previewEngine)
+        let previewWorkflowAPI = SparkMedicalWorkflowAPI(configuration: previewBackendConfig)
+        let previewCombinedAPI = SparkCombinedMedicalCreateAPI(configuration: previewBackendConfig)
+        let saver = DefaultTypedMedicalDocumentSaver(workflowAPI: previewWorkflowAPI, combinedAPI: previewCombinedAPI)
         let dummyFileAPI = SparkFileAPI(engine: previewEngine)
         let dummyOSSAPI = SparkOSSAPI(configuration: SparkBackendConfiguration(engine: previewEngine))
         let dummyOSSStore = SparkOSSConfigurationStore()

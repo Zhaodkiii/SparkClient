@@ -1,4 +1,12 @@
 "app.loading.preparing" = "正在准备 SparkClient…";
+
+"network.gate.title" = "SparkClient 需要网络连接";
+"network.gate.subtitle" = "请连接到 Wi‑Fi 或移动数据后再试。";
+"network.gate.detected" = "检测到网络连接";
+"network.gate.check" = "检查网络连接";
+"network.gate.settings" = "打开系统设置";
+"network.gate.alert_title" = "仍无网络";
+"network.gate.retry_failed" = "当前仍无法联网，请检查网络设置。";
 "tab.home" = "首页";
 "tab.health" = "健康";
 "tab.chat" = "AI 对话";
@@ -200,6 +208,9 @@
 "settings.sync.last_time" = "上次同步";
 "settings.sync.now" = "立即同步";
 "settings.sync.never" = "从未同步";
+"settings.section.cache" = "缓存";
+"settings.cache.clear_etag" = "清理 ETag 缓存";
+"settings.cache.clear_etag.subtitle" = "删除本地条件请求缓存与响应体，下次请求将重新从网络拉取。";
 "settings.sign_out" = "退出登录";
 
 "ai_settings.title" = "AI 场景配置";

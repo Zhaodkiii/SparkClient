@@ -9,15 +9,30 @@ actor SparkCallbackCache {
     func execute(
         key: String,
         operationName: String,
+        businessPurpose: String,
         logger: Logger,
         taskFactory: @escaping @Sendable () async throws -> SparkNetworkResponse
     ) async throws -> SparkNetworkResponse {
         if let existing = inFlight[key] {
-            logger.debug(SparkNetworkingStrings.Backend.callbackCacheHit(key: key, operation: operationName))
+            logger.debug(
+                SparkNetworkingStrings.Backend.callbackCacheHit(
+                    key: key,
+                    operation: operationName,
+                    business: businessPurpose
+                ),
+                module: .network
+            )
             return try await existing.value
         }
 
-        logger.debug(SparkNetworkingStrings.Backend.callbackCacheMiss(key: key, operation: operationName))
+        logger.debug(
+            SparkNetworkingStrings.Backend.callbackCacheMiss(
+                key: key,
+                operation: operationName,
+                business: businessPurpose
+            ),
+            module: .network
+        )
 
         let task = Task<SparkNetworkResponse, Error> {
             try await taskFactory()

@@ -61,7 +61,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         let mergedProvider = providerFromRequest ?? providerFromCatalog
         logger.debug(
             "AI provider 解析，scenario=\(request.scenario.rawValue), model=\(resolved.model), requestProvider=\(providerFromRequest ?? "<nil>"), catalogProvider=\(providerFromCatalog ?? "<nil>"), mergedProvider=\(mergedProvider ?? "<nil>"), modelInCatalog=\(providerFromCatalog != nil)",
-            category: "ai_runtime"
+            module: .aiConfig
         )
         
         // 构建最终请求：不支持工具的模型自动清空工具，降级为纯文本对话
@@ -78,7 +78,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             }
             logger.info(
                 "当前模型不支持 tools，已按严格模式降级为纯文本回合，model=\(resolved.model)",
-                category: "ai_runtime"
+                module: .aiConfig
             )
             return AIRuntimeTextRequest(
                 scenario: request.scenario,
@@ -105,7 +105,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             
             logger.debug(
                 "准备调用本地模型流式推理，scenario=\(request.scenario.rawValue), model=\(resolved.model), messages=\(localMessages.count), file=\(localSelection.fileName)",
-                category: "ai_runtime"
+                module: .aiConfig
             )
             
             // 调用本地模型
@@ -120,7 +120,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             let cost = Date().timeIntervalSince(start)
             logger.info(
                 "本地模型推理完成（流式封装），scenario=\(request.scenario.rawValue), model=\(response.model), cost=\(format(cost))s",
-                category: "ai_runtime"
+                module: .aiConfig
             )
             
             // 记录输出日志
@@ -143,7 +143,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         let client = AIClientFactory.makeClient(from: resolved)
         logger.debug(
             "准备调用 AI 流式推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), provider=\(effectiveRequest.providerCompanyUppercased ?? "<nil>"), messages=\(effectiveRequest.messages.count), tools=\(effectiveRequest.tools.count)",
-            category: "ai_runtime"
+            module: .aiConfig
         )
         
         // 网关发起请求
@@ -166,7 +166,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     if let finalResponse {
                         logger.info(
                             "AI 流式推理完成，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(finalResponse.model), cost=\(format(cost))s",
-                            category: "ai_runtime"
+                            module: .aiConfig
                         )
                         // 记录最终输出
                         AIRuntimeOutputLog.recordFinalModelOutput(
@@ -178,7 +178,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     } else {
                         logger.warning(
                             "AI 流式推理结束但缺少 completed 事件，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), cost=\(format(cost))s",
-                            category: "ai_runtime"
+                            module: .aiConfig
                         )
                     }
                     continuation.finish()
@@ -186,7 +186,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     let cost = Date().timeIntervalSince(start)
                     logger.error(
                         "AI 流式推理失败，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), cost=\(format(cost))s error=\(error.localizedDescription)",
-                        category: "ai_runtime"
+                        module: .aiConfig
                     )
                     continuation.finish(throwing: error)
                 }

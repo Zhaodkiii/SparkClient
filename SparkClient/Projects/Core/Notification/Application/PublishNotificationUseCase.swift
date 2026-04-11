@@ -19,12 +19,12 @@ struct PublishNotificationUseCase {
         let result = await queue.enqueue(intent)
         switch result {
         case .enqueued(let message):
-            logger.debug("Notification enqueued: \(message.id)", category: "notification")
+            logger.debug("Notification enqueued: \(message.id)", module: .push)
             await MainActor.run {
                 deliveryCoordinator.startIfNeeded()
             }
         case .dropped(let message, let reason):
-            logger.info("Notification dropped: \(reason.rawValue) id=\(message.id)", category: "notification")
+            logger.info("Notification dropped: \(reason.rawValue) id=\(message.id)", module: .push)
             await deliveryCoordinator.refreshDashboard()
         }
     }
