@@ -173,6 +173,17 @@
 "home.medical.list.medical_case.status.cured" = "已痊愈";
 "home.medical.list.medical_case.status.pending_diagnosis" = "待诊断";
 "home.medical.list.medical_case.status.unknown" = "未知";
+"home.medical.case_detail.edit" = "编辑";
+"home.medical.case_detail.timeline" = "时间线";
+"home.medical.case_detail.timeline.empty" = "暂无额外时间轴条目。";
+"home.medical.case_detail.add_record" = "新增记录";
+"home.medical.case_detail.meta.title" = "就诊信息";
+"home.medical.case_detail.meta.hospital" = "医院";
+"home.medical.case_detail.meta.record_type" = "类型";
+"home.medical.case_detail.meta.age" = "就诊年龄";
+"home.medical.timeline.delete.confirm_title" = "确认删除？";
+"home.medical.timeline.delete.confirm_message" = "删除后无法恢复，确定要删除吗？";
+"home.medical.timeline.prescription.medication_count" = "%d 种药品";
 "home.medical.list.empty" = "暂无数据";
 "home.medical.list.fallback.medical_case_title" = "就诊病例";
 "home.medical.list.fallback.exam_institution" = "体检机构";
@@ -544,6 +555,7 @@
 "common.operation_failed" = "操作失败";
 "common.ok" = "确定";
 "common.cancel" = "取消";
+"common.delete" = "删除";
 "common.placeholder" = "--";
 
 "knowledge.library.title" = "知识库";
@@ -674,3 +686,120 @@
 "medical.upload.error.title" = "错误";
 "medical.upload.error.confirm" = "好";
 "medical.upload.error.no_result" = "暂无可保存的识别结果。";
+
+// MARK: - 病历草稿表单（新建/编辑）
+"medical_record.forms.error.submit_failed" = "提交失败";
+"medical_record.forms.action.save" = "保存";
+"medical_record.forms.action.update" = "更新";
+"medical_record.forms.action.complete" = "完成";
+
+"medical_record.forms.lab_item.card_title" = "检验子项";
+"medical_record.forms.lab_item.nav_title" = "新增检验项";
+
+"medical_record.forms.field.category" = "分类";
+"medical_record.forms.field.subcategory" = "子分类";
+"medical_record.forms.field.item_name" = "项目";
+"medical_record.forms.field.result" = "结果";
+"medical_record.forms.field.unit" = "单位";
+"medical_record.forms.field.reference_range" = "参考范围";
+"medical_record.forms.field.flag" = "标记";
+"medical_record.forms.field.report_title" = "报告标题";
+"medical_record.forms.field.report_content" = "报告内容";
+"medical_record.forms.field.hospital" = "医院";
+"medical_record.forms.field.doctor" = "医生";
+"medical_record.forms.field.date" = "日期";
+"medical_record.forms.field.date_placeholder" = "yyyy-MM-dd";
+"medical_record.forms.field.notes" = "备注";
+"medical_record.forms.field.planned_time" = "计划时间";
+"medical_record.forms.field.completed_time" = "完成时间";
+"medical_record.forms.field.status" = "状态";
+"medical_record.forms.field.method" = "方式";
+"medical_record.forms.field.outcome" = "结果";
+"medical_record.forms.field.next_plan" = "下一步计划";
+"medical_record.forms.field.drug_name" = "药名";
+"medical_record.forms.field.generic_name" = "通用名";
+"medical_record.forms.field.brand_name" = "商品名";
+"medical_record.forms.field.dosage_form" = "剂型";
+"medical_record.forms.field.strength" = "规格";
+"medical_record.forms.field.route" = "给药途径";
+"medical_record.forms.field.dose_per_time" = "每次剂量";
+"medical_record.forms.field.dose_value" = "剂量值";
+"medical_record.forms.field.dose_unit" = "剂量单位";
+"medical_record.forms.field.frequency_code" = "频次编码";
+"medical_record.forms.field.period" = "周期";
+"medical_record.forms.field.times_per_period" = "周期次数";
+"medical_record.forms.field.frequency_text" = "频次文案";
+"medical_record.forms.field.duration_days" = "疗程天数";
+"medical_record.forms.field.instructions" = "说明";
+"medical_record.forms.field.prescriber" = "开方医生";
+"medical_record.forms.field.institution" = "机构";
+"medical_record.forms.field.prescribed_at" = "开方时间";
+"medical_record.forms.field.diagnosis" = "诊断";
+"medical_record.forms.field.batch_no" = "批次号";
+"medical_record.forms.field.batch_status" = "状态";
+"medical_record.forms.field.procedure_name" = "手术名称";
+"medical_record.forms.field.procedure_code" = "手术编码";
+"medical_record.forms.field.site" = "部位";
+"medical_record.forms.field.performed_at" = "手术时间";
+"medical_record.forms.field.surgeon" = "主刀医生";
+"medical_record.forms.field.anesthesia_type" = "麻醉方式";
+"medical_record.forms.field.incision_level" = "切口等级";
+"medical_record.forms.field.asa_class" = "ASA 分级";
+"medical_record.forms.field.symptom_name" = "症状名称";
+"medical_record.forms.field.symptom_code" = "编码";
+"medical_record.forms.field.severity" = "严重程度";
+"medical_record.forms.field.started_at" = "开始时间";
+"medical_record.forms.field.duration_value" = "持续值";
+"medical_record.forms.field.duration_unit" = "持续单位";
+"medical_record.forms.field.body_part" = "部位";
+"medical_record.forms.field.visit_type" = "就诊类型";
+"medical_record.forms.field.visited_at" = "就诊时间";
+"medical_record.forms.field.department" = "科室";
+"medical_record.forms.field.doctor_name" = "医生";
+"medical_record.forms.field.visit_no" = "就诊号";
+
+"medical_record.forms.exam_report.title.create" = "新增医疗检查报告";
+"medical_record.forms.exam_report.title.edit" = "编辑医疗检查报告";
+"medical_record.forms.exam_report.title.edit_local" = "编辑医疗检查报告（本地）";
+"medical_record.forms.exam_report.picker.subpage" = "子页面";
+"medical_record.forms.exam_report.segment.laboratory" = "实验室";
+"medical_record.forms.exam_report.segment.imaging" = "影像";
+"medical_record.forms.exam_report.segment.pathology" = "病理";
+"medical_record.forms.exam_report.label.lab" = "检验项目";
+"medical_record.forms.exam_report.label.imaging" = "影像项目";
+"medical_record.forms.exam_report.label.pathology" = "病理项目";
+"medical_record.forms.exam_report.section_items_format" = "%@子项";
+"medical_record.forms.exam_report.add_item" = "新增子项";
+"medical_record.forms.exam_report.unnamed_item" = "未命名子项";
+"medical_record.forms.exam_report.result_line" = "结果：%@";
+
+"medical_record.forms.follow_up.title.create" = "新增随访";
+"medical_record.forms.follow_up.title.edit" = "编辑随访";
+"medical_record.forms.follow_up.title.edit_local" = "编辑随访（本地）";
+
+"medical_record.forms.medication.title.create" = "新增用药";
+"medical_record.forms.medication.title.edit" = "编辑用药";
+"medical_record.forms.medication.title.edit_local" = "编辑用药（本地）";
+
+"medical_record.forms.medication_multi.title.create" = "批量新增用药";
+"medical_record.forms.medication_multi.title.edit" = "编辑批次用药";
+"medical_record.forms.medication_multi.title.edit_local" = "编辑批次用药（本地）";
+"medical_record.forms.prescription_batch.card" = "处方批次";
+"medical_record.forms.medication_list.card" = "用药列表";
+"medical_record.forms.medication_list.add_row" = "新增一条";
+
+"medical_record.forms.prescription_batch.title.create" = "新增处方批次";
+"medical_record.forms.prescription_batch.title.edit" = "编辑处方批次";
+"medical_record.forms.prescription_batch.title.edit_local" = "编辑处方批次（本地）";
+
+"medical_record.forms.surgery.title.create" = "新增手术";
+"medical_record.forms.surgery.title.edit" = "编辑手术";
+"medical_record.forms.surgery.title.edit_local" = "编辑手术（本地）";
+
+"medical_record.forms.symptom.title.create" = "新增症状";
+"medical_record.forms.symptom.title.edit" = "编辑症状";
+"medical_record.forms.symptom.title.edit_local" = "编辑症状（本地）";
+
+"medical_record.forms.visit.title.create" = "新增就诊";
+"medical_record.forms.visit.title.edit" = "编辑就诊";
+"medical_record.forms.visit.title.edit_local" = "编辑就诊（本地）";

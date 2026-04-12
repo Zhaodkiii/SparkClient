@@ -3,7 +3,7 @@ import SwiftUI
 /// 实验室检查明细页：参考 `LabPanelView` 的表格式阅读体验。
 struct LaboratoryReportDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
-    let resources: SparkMedicalResourceAPI
+    let resources: SparkMedicalWorkflowAPI
     var onDeleted: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss

@@ -3,6 +3,7 @@ import SwiftUI
 /// 病例记录列表页。
 struct MedicalCasesListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
 
     var body: some View {
@@ -12,7 +13,12 @@ struct MedicalCasesListPage: View {
                 MedicalListEmptyRow()
             } else {
                 ForEach(rows, id: \.id) { item in
-                    MedicalRecordCard(item: item, fileTransferService: fileTransferService)
+                    MedicalRecordCard(
+                        item: item,
+                        completeData: completeData,
+                        workflowAPI: workflowAPI,
+                        fileTransferService: fileTransferService
+                    )
                         .medicalListCardRowStyle()
                 }
             }

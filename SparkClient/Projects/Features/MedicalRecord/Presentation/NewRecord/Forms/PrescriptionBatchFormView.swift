@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 处方批次（无明细药品列表）识别草稿。
 struct PrescriptionBatchFormView: View {
     enum Mode {
         case create
@@ -21,6 +22,9 @@ struct PrescriptionBatchFormView: View {
     @State private var status = "active"
     @State private var isSaving = false
     @State private var errorMessage: String?
+
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
 
     init(mode: Mode, onCreateSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
@@ -45,39 +49,113 @@ struct PrescriptionBatchFormView: View {
     var body: some View {
         ScrollView {
             SparkFormCard(title: navTitle) {
-                SparkFormTextRow(title: "开方医生", text: $prescriberName)
-                SparkFormTextRow(title: "机构", text: $institutionName)
-                SparkFormTextRow(title: "开方时间", text: $prescribedAt)
-                SparkFormTextRow(title: "诊断", text: $diagnosis)
-                SparkFormTextRow(title: "批次号", text: $batchNo)
-                SparkFormTextRow(title: "状态", text: $status)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescriber"), text: $prescriberName)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.institution"), text: $institutionName)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescribed_at"), text: $prescribedAt)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.diagnosis"), text: $diagnosis)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $batchNo)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_status"), text: $status)
             }
             .padding(16)
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(saveTitle) { saveNow() }.disabled(isSaving) } }
-        .alert("提交失败", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("好", role: .cancel) {} } message: { Text(errorMessage ?? "") }
+        .sparkFormBottomBar(
+            canSubmit: !isSaving,
+            saveTitle: saveTitle,
+            onCancel: {
+                formLog.info("PrescriptionBatchFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
+                dismiss()
+            },
+            onSave: { saveNow() }
+        )
+        .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
-    private var navTitle: String { switch mode { case .create: return "新增处方批次"; case .serverEdit: return "编辑处方批次"; case .localEdit: return "编辑处方批次（本地）" } }
-    private var saveTitle: String { switch mode { case .create: return "保存"; case .serverEdit: return "更新"; case .localEdit: return "完成" } }
+    private var modeLogLabel: String {
+        switch mode {
+        case .create: return "create"
+        case .serverEdit: return "serverEdit"
+        case .localEdit: return "localEdit"
+        }
+    }
+
+    private var navTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.prescription_batch.title.create")
+        case .serverEdit: return L10n.text("medical_record.forms.prescription_batch.title.edit")
+        case .localEdit: return L10n.text("medical_record.forms.prescription_batch.title.edit_local")
+        }
+    }
+
+    private var saveTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.action.save")
+        case .serverEdit: return L10n.text("medical_record.forms.action.update")
+        case .localEdit: return L10n.text("medical_record.forms.action.complete")
+        }
+    }
+
     private var outputDraft: PrescriptionRecognitionDraft {
         .init(medicalCase: nil, prescriberName: prescriberName.nilIfBlank, institutionName: institutionName.nilIfBlank, prescribedAt: prescribedAt.nilIfBlank, diagnosis: diagnosis.nilIfBlank, batchNo: batchNo.nilIfBlank, status: status.nilIfBlank, auditorName: nil, auditedAt: nil, extra: nil, medications: [])
     }
 
     private func saveNow() {
+        formLog.info("PrescriptionBatchFormView: save started mode=\(modeLogLabel)", module: formLogModule)
         let draft = outputDraft
         switch mode {
-        case .localEdit(_, let onSubmit): onSubmit(draft); dismiss()
+        case .localEdit(_, let onSubmit):
+            onSubmit(draft)
+            formLog.info("PrescriptionBatchFormView: local submit finished", module: formLogModule)
+            dismiss()
         case .create:
-            guard let onCreateSubmit else { dismiss(); return }
+            guard let onCreateSubmit else {
+                formLog.warning("PrescriptionBatchFormView: create handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onCreateSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onCreateSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("PrescriptionBatchFormView: create save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("PrescriptionBatchFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         case .serverEdit:
-            guard let onServerSubmit else { dismiss(); return }
+            guard let onServerSubmit else {
+                formLog.warning("PrescriptionBatchFormView: server handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onServerSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onServerSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("PrescriptionBatchFormView: server save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("PrescriptionBatchFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         }
     }
 }

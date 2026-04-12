@@ -4,7 +4,7 @@ import SwiftUI
 struct ExaminationReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments>
     private let fileTransferService: FileTransferService
-    private let medicalResourceAPI: SparkMedicalResourceAPI
+    private let medicalResourceAPI: SparkMedicalWorkflowAPI
 
     @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
@@ -17,7 +17,7 @@ struct ExaminationReportsListPage: View {
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     ) {
         self.fileTransferService = fileTransferService
-        self.medicalResourceAPI = SparkMedicalResourceAPI(configuration: medicalQueryAPI.configuration)
+        self.medicalResourceAPI = SparkMedicalWorkflowAPI(configuration: medicalQueryAPI.configuration)
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
                 reports: completeData?.examinationReports ?? [],
@@ -225,7 +225,7 @@ private struct ExaminationReportCategorySection: View {
     let category: ExaminationReportCategory
     let reports: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]
     let fileTransferService: FileTransferService
-    let medicalResourceAPI: SparkMedicalResourceAPI
+    let medicalResourceAPI: SparkMedicalWorkflowAPI
     let isLoading: (Int) -> Bool
     let onLoadDetails: (Int) async -> Void
     let onDeleted: (Int) -> Void

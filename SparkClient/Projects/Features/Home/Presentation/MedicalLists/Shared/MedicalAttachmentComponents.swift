@@ -150,7 +150,7 @@ struct MedicalAttachmentListView: View {
     }
 }
 
-private extension SparkMedicalSyncAPI.RemoteManagedFile {
+extension SparkMedicalSyncAPI.RemoteManagedFile {
     var managedFileRecord: ManagedFileRecord? {
         guard let fileUUID = fileUuid?.nonEmpty else { return nil }
         return ManagedFileRecord(

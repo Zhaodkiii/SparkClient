@@ -14,7 +14,7 @@ final class Backend {
     let chat: SparkChatRemoteAPI
     let medicalMembers: SparkMedicalMemberAPI
     let medicalQuery: SparkMedicalQueryAPI
-    let medicalResources: SparkMedicalResourceAPI
+    let medicalResources: SparkMedicalWorkflowAPI
     let medicalWorkflow: SparkMedicalWorkflowAPI
     let medicalCombinedCreate: SparkCombinedMedicalCreateAPI
     let files: SparkFileAPI
@@ -58,7 +58,7 @@ final class Backend {
         self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
         self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
-        self.medicalResources = SparkMedicalResourceAPI(configuration: configuration)
+        self.medicalResources = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalCombinedCreate = SparkCombinedMedicalCreateAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
@@ -80,7 +80,7 @@ final class Backend {
         self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
         self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
-        self.medicalResources = SparkMedicalResourceAPI(configuration: configuration)
+        self.medicalResources = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalCombinedCreate = SparkCombinedMedicalCreateAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)

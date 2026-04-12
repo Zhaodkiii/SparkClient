@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 症状识别草稿。
 struct SymptomFormView: View {
     enum Mode {
         case create
@@ -24,6 +25,9 @@ struct SymptomFormView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
+
     init(mode: Mode, onCreateSubmit: ((SymptomRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((SymptomRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
@@ -47,41 +51,119 @@ struct SymptomFormView: View {
     var body: some View {
         ScrollView {
             SparkFormCard(title: navTitle) {
-                SparkFormTextRow(title: "症状名称", text: $name)
-                SparkFormTextRow(title: "编码", text: $code)
-                SparkFormTextRow(title: "严重程度", text: $severity)
-                SparkFormTextRow(title: "开始时间", text: $startedAt, placeholder: "yyyy-MM-dd")
-                SparkFormTextRow(title: "持续值", text: $durationValue)
-                SparkFormTextRow(title: "持续单位", text: $durationUnit)
-                SparkFormTextRow(title: "部位", text: $bodyPart)
-                SparkFormTextAreaRow(title: "备注", text: $notes)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.symptom_name"), text: $name)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.symptom_code"), text: $code)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.severity"), text: $severity)
+                SparkFormTextRow(
+                    title: L10n.text("medical_record.forms.field.started_at"),
+                    text: $startedAt,
+                    placeholder: L10n.text("medical_record.forms.field.date_placeholder")
+                )
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.duration_value"), text: $durationValue)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.duration_unit"), text: $durationUnit)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.body_part"), text: $bodyPart)
+                SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.notes"), text: $notes)
             }
             .padding(16)
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(saveTitle) { saveNow() }.disabled(isSaving) } }
-        .alert("提交失败", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("好", role: .cancel) {} } message: { Text(errorMessage ?? "") }
+        .sparkFormBottomBar(
+            canSubmit: !isSaving,
+            saveTitle: saveTitle,
+            onCancel: {
+                formLog.info("SymptomFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
+                dismiss()
+            },
+            onSave: { saveNow() }
+        )
+        .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
-    private var navTitle: String { switch mode { case .create: return "新增症状"; case .serverEdit: return "编辑症状"; case .localEdit: return "编辑症状（本地）" } }
-    private var saveTitle: String { switch mode { case .create: return "保存"; case .serverEdit: return "更新"; case .localEdit: return "完成" } }
+    private var modeLogLabel: String {
+        switch mode {
+        case .create: return "create"
+        case .serverEdit: return "serverEdit"
+        case .localEdit: return "localEdit"
+        }
+    }
+
+    private var navTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.symptom.title.create")
+        case .serverEdit: return L10n.text("medical_record.forms.symptom.title.edit")
+        case .localEdit: return L10n.text("medical_record.forms.symptom.title.edit_local")
+        }
+    }
+
+    private var saveTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.action.save")
+        case .serverEdit: return L10n.text("medical_record.forms.action.update")
+        case .localEdit: return L10n.text("medical_record.forms.action.complete")
+        }
+    }
+
     private var outputDraft: SymptomRecognitionDraft {
         .init(name: name, code: code.nilIfBlank, severity: severity.nilIfBlank, startedAt: startedAt.nilIfBlank, durationValue: durationValue.nilIfBlank, durationUnit: durationUnit.nilIfBlank, bodyPart: bodyPart.nilIfBlank, notes: notes.nilIfBlank)
     }
 
     private func saveNow() {
+        formLog.info("SymptomFormView: save started mode=\(modeLogLabel)", module: formLogModule)
         let draft = outputDraft
         switch mode {
-        case .localEdit(_, let onSubmit): onSubmit(draft); dismiss()
+        case .localEdit(_, let onSubmit):
+            onSubmit(draft)
+            formLog.info("SymptomFormView: local submit finished", module: formLogModule)
+            dismiss()
         case .create:
-            guard let onCreateSubmit else { dismiss(); return }
+            guard let onCreateSubmit else {
+                formLog.warning("SymptomFormView: create handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onCreateSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onCreateSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("SymptomFormView: create save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("SymptomFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         case .serverEdit:
-            guard let onServerSubmit else { dismiss(); return }
+            guard let onServerSubmit else {
+                formLog.warning("SymptomFormView: server handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onServerSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onServerSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("SymptomFormView: server save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("SymptomFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         }
     }
 }

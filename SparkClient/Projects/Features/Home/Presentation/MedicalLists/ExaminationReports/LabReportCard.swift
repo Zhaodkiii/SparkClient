@@ -6,7 +6,7 @@ struct LabReportCard: View {
     let category: ExaminationReportCategory
     var isLoadingDetails = false
     let fileTransferService: FileTransferService
-    let medicalResourceAPI: SparkMedicalResourceAPI
+    let medicalResourceAPI: SparkMedicalWorkflowAPI
     var onDeleted: ((Int) -> Void)? = nil
 
     @State private var isExpanded = false

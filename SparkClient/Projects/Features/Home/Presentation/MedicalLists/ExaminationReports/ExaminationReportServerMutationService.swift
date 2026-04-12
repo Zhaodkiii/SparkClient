@@ -1,7 +1,7 @@
 import Foundation
 
 struct ExaminationReportServerMutationService: Sendable {
-    let resources: SparkMedicalResourceAPI
+    let resources: SparkMedicalWorkflowAPI
 
     func updateReport(
         report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
@@ -10,7 +10,7 @@ struct ExaminationReportServerMutationService: Sendable {
         let updatePayload = ExaminationReportUpdatePayload(
             member: report.member,
             medicalRecord: report.medicalRecord,
-            category: draft.category ?? report.category ?? "medical_report",
+            category: draft.category ?? "medical_report",
             subCategory: "",
             itemName: draft.title,
             performedAt: draft.date,

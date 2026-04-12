@@ -173,6 +173,17 @@
 "home.medical.list.medical_case.status.cured" = "Recovered";
 "home.medical.list.medical_case.status.pending_diagnosis" = "Pending diagnosis";
 "home.medical.list.medical_case.status.unknown" = "Unknown";
+"home.medical.case_detail.edit" = "Edit";
+"home.medical.case_detail.timeline" = "Timeline";
+"home.medical.case_detail.timeline.empty" = "No additional timeline items yet.";
+"home.medical.case_detail.add_record" = "Add record";
+"home.medical.case_detail.meta.title" = "Visit information";
+"home.medical.case_detail.meta.hospital" = "Hospital";
+"home.medical.case_detail.meta.record_type" = "Record type";
+"home.medical.case_detail.meta.age" = "Age at visit";
+"home.medical.timeline.delete.confirm_title" = "Delete this record?";
+"home.medical.timeline.delete.confirm_message" = "This action cannot be undone.";
+"home.medical.timeline.prescription.medication_count" = "%d medications";
 "home.medical.list.empty" = "No records yet";
 "home.medical.list.fallback.medical_case_title" = "Medical case";
 "home.medical.list.fallback.exam_institution" = "Exam institution";
@@ -544,6 +555,7 @@
 "common.operation_failed" = "Operation failed";
 "common.ok" = "OK";
 "common.cancel" = "Cancel";
+"common.delete" = "Delete";
 "common.placeholder" = "--";
 
 "knowledge.library.title" = "Knowledge";
@@ -674,3 +686,120 @@
 "medical.upload.error.title" = "Error";
 "medical.upload.error.confirm" = "OK";
 "medical.upload.error.no_result" = "No recognition result to save.";
+
+// MARK: - Medical record draft forms
+"medical_record.forms.error.submit_failed" = "Submit failed";
+"medical_record.forms.action.save" = "Save";
+"medical_record.forms.action.update" = "Update";
+"medical_record.forms.action.complete" = "Done";
+
+"medical_record.forms.lab_item.card_title" = "Lab item";
+"medical_record.forms.lab_item.nav_title" = "New lab item";
+
+"medical_record.forms.field.category" = "Category";
+"medical_record.forms.field.subcategory" = "Subcategory";
+"medical_record.forms.field.item_name" = "Item";
+"medical_record.forms.field.result" = "Result";
+"medical_record.forms.field.unit" = "Unit";
+"medical_record.forms.field.reference_range" = "Reference range";
+"medical_record.forms.field.flag" = "Flag";
+"medical_record.forms.field.report_title" = "Report title";
+"medical_record.forms.field.report_content" = "Report content";
+"medical_record.forms.field.hospital" = "Hospital";
+"medical_record.forms.field.doctor" = "Doctor";
+"medical_record.forms.field.date" = "Date";
+"medical_record.forms.field.date_placeholder" = "yyyy-MM-dd";
+"medical_record.forms.field.notes" = "Notes";
+"medical_record.forms.field.planned_time" = "Planned time";
+"medical_record.forms.field.completed_time" = "Completed time";
+"medical_record.forms.field.status" = "Status";
+"medical_record.forms.field.method" = "Method";
+"medical_record.forms.field.outcome" = "Outcome";
+"medical_record.forms.field.next_plan" = "Next plan";
+"medical_record.forms.field.drug_name" = "Drug name";
+"medical_record.forms.field.generic_name" = "Generic name";
+"medical_record.forms.field.brand_name" = "Brand name";
+"medical_record.forms.field.dosage_form" = "Dosage form";
+"medical_record.forms.field.strength" = "Strength";
+"medical_record.forms.field.route" = "Route";
+"medical_record.forms.field.dose_per_time" = "Dose per use";
+"medical_record.forms.field.dose_value" = "Dose value";
+"medical_record.forms.field.dose_unit" = "Dose unit";
+"medical_record.forms.field.frequency_code" = "Frequency code";
+"medical_record.forms.field.period" = "Period";
+"medical_record.forms.field.times_per_period" = "Times per period";
+"medical_record.forms.field.frequency_text" = "Frequency text";
+"medical_record.forms.field.duration_days" = "Duration (days)";
+"medical_record.forms.field.instructions" = "Instructions";
+"medical_record.forms.field.prescriber" = "Prescriber";
+"medical_record.forms.field.institution" = "Institution";
+"medical_record.forms.field.prescribed_at" = "Prescribed at";
+"medical_record.forms.field.diagnosis" = "Diagnosis";
+"medical_record.forms.field.batch_no" = "Batch number";
+"medical_record.forms.field.batch_status" = "Status";
+"medical_record.forms.field.procedure_name" = "Procedure";
+"medical_record.forms.field.procedure_code" = "Procedure code";
+"medical_record.forms.field.site" = "Site";
+"medical_record.forms.field.performed_at" = "Performed at";
+"medical_record.forms.field.surgeon" = "Surgeon";
+"medical_record.forms.field.anesthesia_type" = "Anesthesia";
+"medical_record.forms.field.incision_level" = "Incision class";
+"medical_record.forms.field.asa_class" = "ASA class";
+"medical_record.forms.field.symptom_name" = "Symptom";
+"medical_record.forms.field.symptom_code" = "Code";
+"medical_record.forms.field.severity" = "Severity";
+"medical_record.forms.field.started_at" = "Started at";
+"medical_record.forms.field.duration_value" = "Duration value";
+"medical_record.forms.field.duration_unit" = "Duration unit";
+"medical_record.forms.field.body_part" = "Body part";
+"medical_record.forms.field.visit_type" = "Visit type";
+"medical_record.forms.field.visited_at" = "Visit time";
+"medical_record.forms.field.department" = "Department";
+"medical_record.forms.field.doctor_name" = "Doctor";
+"medical_record.forms.field.visit_no" = "Visit number";
+
+"medical_record.forms.exam_report.title.create" = "New exam report";
+"medical_record.forms.exam_report.title.edit" = "Edit exam report";
+"medical_record.forms.exam_report.title.edit_local" = "Edit exam report (local)";
+"medical_record.forms.exam_report.picker.subpage" = "Section";
+"medical_record.forms.exam_report.segment.laboratory" = "Lab";
+"medical_record.forms.exam_report.segment.imaging" = "Imaging";
+"medical_record.forms.exam_report.segment.pathology" = "Pathology";
+"medical_record.forms.exam_report.label.lab" = "Lab items";
+"medical_record.forms.exam_report.label.imaging" = "Imaging items";
+"medical_record.forms.exam_report.label.pathology" = "Pathology items";
+"medical_record.forms.exam_report.section_items_format" = "%@ — items";
+"medical_record.forms.exam_report.add_item" = "Add item";
+"medical_record.forms.exam_report.unnamed_item" = "Untitled item";
+"medical_record.forms.exam_report.result_line" = "Result: %@";
+
+"medical_record.forms.follow_up.title.create" = "New follow-up";
+"medical_record.forms.follow_up.title.edit" = "Edit follow-up";
+"medical_record.forms.follow_up.title.edit_local" = "Edit follow-up (local)";
+
+"medical_record.forms.medication.title.create" = "New medication";
+"medical_record.forms.medication.title.edit" = "Edit medication";
+"medical_record.forms.medication.title.edit_local" = "Edit medication (local)";
+
+"medical_record.forms.medication_multi.title.create" = "Batch add medications";
+"medical_record.forms.medication_multi.title.edit" = "Edit batch medications";
+"medical_record.forms.medication_multi.title.edit_local" = "Edit batch medications (local)";
+"medical_record.forms.prescription_batch.card" = "Prescription batch";
+"medical_record.forms.medication_list.card" = "Medications";
+"medical_record.forms.medication_list.add_row" = "Add row";
+
+"medical_record.forms.prescription_batch.title.create" = "New prescription batch";
+"medical_record.forms.prescription_batch.title.edit" = "Edit prescription batch";
+"medical_record.forms.prescription_batch.title.edit_local" = "Edit prescription batch (local)";
+
+"medical_record.forms.surgery.title.create" = "New surgery";
+"medical_record.forms.surgery.title.edit" = "Edit surgery";
+"medical_record.forms.surgery.title.edit_local" = "Edit surgery (local)";
+
+"medical_record.forms.symptom.title.create" = "New symptom";
+"medical_record.forms.symptom.title.edit" = "Edit symptom";
+"medical_record.forms.symptom.title.edit_local" = "Edit symptom (local)";
+
+"medical_record.forms.visit.title.create" = "New visit";
+"medical_record.forms.visit.title.edit" = "Edit visit";
+"medical_record.forms.visit.title.edit_local" = "Edit visit (local)";

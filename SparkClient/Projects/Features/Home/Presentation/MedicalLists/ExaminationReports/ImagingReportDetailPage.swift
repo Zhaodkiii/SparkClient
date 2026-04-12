@@ -3,7 +3,7 @@ import SwiftUI
 /// 影像检查明细页：聚合部位、模态、结果与诊断。
 struct ImagingReportDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
-    let resources: SparkMedicalResourceAPI
+    let resources: SparkMedicalWorkflowAPI
     var onDeleted: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss

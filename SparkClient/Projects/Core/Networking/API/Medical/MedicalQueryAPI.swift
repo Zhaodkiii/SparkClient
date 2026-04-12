@@ -5,12 +5,12 @@ struct SparkMedicalQueryAPI {
     /// 统一后端配置（网络引擎、鉴权、ETag 存储与日志）。
     let configuration: SparkBackendConfiguration
 
-    private let resources: SparkMedicalResourceAPI
+    private let resources: SparkMedicalWorkflowAPI
 
     /// 通过应用层注入网络配置。
     init(configuration: SparkBackendConfiguration) {
         self.configuration = configuration
-        self.resources = SparkMedicalResourceAPI(configuration: configuration)
+        self.resources = SparkMedicalWorkflowAPI(configuration: configuration)
     }
 
     /// 查询成员列表。

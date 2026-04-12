@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 病历草稿表单通用容器：标题 + 圆角材质背景，供各 `*FormView` 复用。
 struct SparkFormCard<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
@@ -15,6 +16,7 @@ struct SparkFormCard<Content: View>: View {
     }
 }
 
+/// 单行 `TextField`，标签在上、输入在下。
 struct SparkFormTextRow: View {
     let title: String
     @Binding var text: String
@@ -37,6 +39,7 @@ struct SparkFormTextRow: View {
     }
 }
 
+/// 多行 `TextEditor`，用于长文本字段。
 struct SparkFormTextAreaRow: View {
     let title: String
     @Binding var text: String
@@ -61,6 +64,7 @@ struct SparkFormTextAreaRow: View {
 }
 
 extension String {
+    /// 空白字符串视为 `nil`，用于草稿字段映射到可选 API 字段。
     var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed

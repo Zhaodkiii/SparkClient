@@ -21,6 +21,7 @@ struct HomeMedicalListView: View {
         case .medicalCases:
             MedicalCasesListPage(
                 completeData: completeData,
+                workflowAPI: appContainer.backend.medicalWorkflow,
                 fileTransferService: appContainer.fileTransferService
             )
         case .healthExamReports:

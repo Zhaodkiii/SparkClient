@@ -186,4 +186,35 @@ struct MedicalRecordFormSubmissionService: Sendable {
             medications: medications
         ))
     }
+
+    /// 更新已存在的药品行（同一 `batch`），用于时间轴/列表进入编辑。
+    func submitMedicationUpdate(
+        memberID: Int,
+        existing: SparkMedicalSyncAPI.RemoteMedication,
+        draft: MedicationRecognitionDraft
+    ) async throws -> Int {
+        try await workflowAPI.saveMedication(.init(
+            member: memberID,
+            batch: existing.batch,
+            genericName: draft.genericName ?? "",
+            brandName: draft.brandName ?? "",
+            drugName: draft.drugName ?? draft.genericName ?? "",
+            dosageForm: draft.dosageForm ?? "",
+            strength: draft.strength ?? "",
+            route: draft.route ?? "",
+            dosePerTime: draft.dosePerTime ?? "",
+            doseValue: draft.doseValue.parsedAsDoseValue(),
+            doseUnit: draft.doseUnit ?? "",
+            frequencyCode: draft.frequencyCode ?? "",
+            period: draft.period ?? "",
+            timesPerPeriod: draft.timesPerPeriod.parsedAsTimesPerPeriod(),
+            frequencyText: draft.frequencyText ?? "",
+            durationDays: draft.durationDays.parsedAsDurationDays(),
+            instructions: draft.instructions ?? "",
+            reminderEnabled: draft.reminderEnabled ?? existing.reminderEnabled,
+            reminderTimes: draft.reminderTimes ?? existing.reminderTimes,
+            sortOrder: draft.sortOrder.parsedAsSortOrderInt() ?? existing.sortOrder,
+            extra: draft.extra ?? existing.extra ?? [:]
+        ))
+    }
 }

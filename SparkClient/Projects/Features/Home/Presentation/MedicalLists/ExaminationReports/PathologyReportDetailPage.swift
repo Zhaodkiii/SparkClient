@@ -3,7 +3,7 @@ import SwiftUI
 /// 病理检查明细页：强调结果与病理诊断。
 struct PathologyReportDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
-    let resources: SparkMedicalResourceAPI
+    let resources: SparkMedicalWorkflowAPI
     var onDeleted: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss

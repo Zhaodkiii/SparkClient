@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 随访识别草稿表单：新建、服务端更新或仅本地回写。
 struct FollowUpFormView: View {
     enum Mode {
         case create
@@ -22,6 +23,9 @@ struct FollowUpFormView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
+
     init(mode: Mode, onCreateSubmit: ((FollowUpRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((FollowUpRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
@@ -43,39 +47,113 @@ struct FollowUpFormView: View {
     var body: some View {
         ScrollView {
             SparkFormCard(title: navTitle) {
-                SparkFormTextRow(title: "计划时间", text: $plannedAt)
-                SparkFormTextRow(title: "完成时间", text: $completedAt)
-                SparkFormTextRow(title: "状态", text: $status)
-                SparkFormTextRow(title: "方式", text: $method)
-                SparkFormTextAreaRow(title: "结果", text: $outcome)
-                SparkFormTextAreaRow(title: "下一步计划", text: $nextAction)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.planned_time"), text: $plannedAt)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.completed_time"), text: $completedAt)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.status"), text: $status)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.method"), text: $method)
+                SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.outcome"), text: $outcome)
+                SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.next_plan"), text: $nextAction)
             }
             .padding(16)
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(saveTitle) { saveNow() }.disabled(isSaving) } }
-        .alert("提交失败", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("好", role: .cancel) {} } message: { Text(errorMessage ?? "") }
+        .sparkFormBottomBar(
+            canSubmit: !isSaving,
+            saveTitle: saveTitle,
+            onCancel: {
+                formLog.info("FollowUpFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
+                dismiss()
+            },
+            onSave: { saveNow() }
+        )
+        .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
-    private var navTitle: String { switch mode { case .create: return "新增随访"; case .serverEdit: return "编辑随访"; case .localEdit: return "编辑随访（本地）" } }
-    private var saveTitle: String { switch mode { case .create: return "保存"; case .serverEdit: return "更新"; case .localEdit: return "完成" } }
+    private var modeLogLabel: String {
+        switch mode {
+        case .create: return "create"
+        case .serverEdit: return "serverEdit"
+        case .localEdit: return "localEdit"
+        }
+    }
+
+    private var navTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.follow_up.title.create")
+        case .serverEdit: return L10n.text("medical_record.forms.follow_up.title.edit")
+        case .localEdit: return L10n.text("medical_record.forms.follow_up.title.edit_local")
+        }
+    }
+
+    private var saveTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.action.save")
+        case .serverEdit: return L10n.text("medical_record.forms.action.update")
+        case .localEdit: return L10n.text("medical_record.forms.action.complete")
+        }
+    }
+
     private var outputDraft: FollowUpRecognitionDraft {
         .init(plannedAt: plannedAt.nilIfBlank, completedAt: completedAt.nilIfBlank, status: status.nilIfBlank, method: method.nilIfBlank, outcome: outcome.nilIfBlank, nextAction: nextAction.nilIfBlank)
     }
 
     private func saveNow() {
+        formLog.info("FollowUpFormView: save started mode=\(modeLogLabel)", module: formLogModule)
         let draft = outputDraft
         switch mode {
-        case .localEdit(_, let onSubmit): onSubmit(draft); dismiss()
+        case .localEdit(_, let onSubmit):
+            onSubmit(draft)
+            formLog.info("FollowUpFormView: local submit finished", module: formLogModule)
+            dismiss()
         case .create:
-            guard let onCreateSubmit else { dismiss(); return }
+            guard let onCreateSubmit else {
+                formLog.warning("FollowUpFormView: create handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onCreateSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onCreateSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("FollowUpFormView: create save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("FollowUpFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         case .serverEdit:
-            guard let onServerSubmit else { dismiss(); return }
+            guard let onServerSubmit else {
+                formLog.warning("FollowUpFormView: server handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onServerSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onServerSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("FollowUpFormView: server save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("FollowUpFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         }
     }
 }

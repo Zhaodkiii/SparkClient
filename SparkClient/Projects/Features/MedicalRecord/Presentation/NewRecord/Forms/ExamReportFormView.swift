@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 医疗检查报告草稿：支持新建、服务端编辑与本地编辑；子项通过 `AddLabItemSheet` 维护。
 struct ExamReportFormView: View {
     enum Mode {
         case create
@@ -12,12 +13,19 @@ struct ExamReportFormView: View {
         case imaging
         case pathology
 
-        var title: String { rawValue }
+        var segmentTitle: String {
+            switch self {
+            case .laboratory: return L10n.text("medical_record.forms.exam_report.segment.laboratory")
+            case .imaging: return L10n.text("medical_record.forms.exam_report.segment.imaging")
+            case .pathology: return L10n.text("medical_record.forms.exam_report.segment.pathology")
+            }
+        }
+
         var itemLabel: String {
             switch self {
-            case .laboratory: return "检验项目"
-            case .imaging: return "影像项目"
-            case .pathology: return "病理项目"
+            case .laboratory: return L10n.text("medical_record.forms.exam_report.label.lab")
+            case .imaging: return L10n.text("medical_record.forms.exam_report.label.imaging")
+            case .pathology: return L10n.text("medical_record.forms.exam_report.label.pathology")
             }
         }
     }
@@ -50,6 +58,9 @@ struct ExamReportFormView: View {
     @State private var editingItem: ItemDraft?
     @State private var isSaving = false
     @State private var errorMessage: String?
+
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
 
     init(
         mode: Mode,
@@ -93,9 +104,9 @@ struct ExamReportFormView: View {
         ScrollView {
             VStack(spacing: 14) {
                 SparkFormCard(title: navTitle) {
-                    Picker("子页面", selection: $pageType) {
+                    Picker(L10n.text("medical_record.forms.exam_report.picker.subpage"), selection: $pageType) {
                         ForEach(PageType.allCases, id: \.self) { type in
-                            Text(type.title).tag(type)
+                            Text(type.segmentTitle).tag(type)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -103,25 +114,29 @@ struct ExamReportFormView: View {
                         category = newValue.rawValue
                     }
 
-                    SparkFormTextRow(title: "分类", text: $category)
-                    SparkFormTextRow(title: "报告标题", text: $title)
-                    SparkFormTextRow(title: "医院", text: $hospital)
-                    SparkFormTextRow(title: "医生", text: $doctor)
-                    SparkFormTextRow(title: "日期", text: $date, placeholder: "yyyy-MM-dd")
-                    SparkFormTextAreaRow(title: "报告内容", text: $content)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.category"), text: $category)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.report_title"), text: $title)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.hospital"), text: $hospital)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.doctor"), text: $doctor)
+                    SparkFormTextRow(
+                        title: L10n.text("medical_record.forms.field.date"),
+                        text: $date,
+                        placeholder: L10n.text("medical_record.forms.field.date_placeholder")
+                    )
+                    SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.report_content"), text: $content)
                 }
 
-                SparkFormCard(title: "\(pageType.itemLabel)子项") {
-                    Button("新增子项") {
+                SparkFormCard(title: String(format: L10n.text("medical_record.forms.exam_report.section_items_format"), pageType.itemLabel)) {
+                    Button(L10n.text("medical_record.forms.exam_report.add_item")) {
                         editingItem = .init()
                     }
                     .buttonStyle(.bordered)
 
                     ForEach(items) { item in
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(item.itemName.isEmpty ? "未命名子项" : item.itemName)
+                            Text(item.itemName.isEmpty ? L10n.text("medical_record.forms.exam_report.unnamed_item") : item.itemName)
                                 .font(.subheadline.weight(.semibold))
-                            Text("结果：\(item.resultValue)")
+                            Text(String(format: L10n.text("medical_record.forms.exam_report.result_line"), item.resultValue))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -136,12 +151,15 @@ struct ExamReportFormView: View {
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(saveTitle) { saveNow() }
-                    .disabled(isSaving)
-            }
-        }
+        .sparkFormBottomBar(
+            canSubmit: !isSaving,
+            saveTitle: saveTitle,
+            onCancel: {
+                formLog.info("ExamReportFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
+                dismiss()
+            },
+            onSave: { saveNow() }
+        )
         .sheet(item: $editingItem) { item in
             AddLabItemSheet(draft: .init(
                 category: item.category,
@@ -168,30 +186,40 @@ struct ExamReportFormView: View {
                 }
             }
         }
-        .alert("提交失败", isPresented: Binding(get: { errorMessage != nil }, set: { if $0 == false { errorMessage = nil } })) {
-            Button("好", role: .cancel) {}
+        .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if $0 == false { errorMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
     }
 
+    private var modeLogLabel: String {
+        switch mode {
+        case .create: return "create"
+        case .serverEdit: return "serverEdit"
+        case .localEdit: return "localEdit"
+        }
+    }
+
     private var navTitle: String {
         switch mode {
-        case .create: return "新增医疗检查报告"
-        case .serverEdit: return "编辑医疗检查报告"
-        case .localEdit: return "编辑医疗检查报告（本地）"
+        case .create: return L10n.text("medical_record.forms.exam_report.title.create")
+        case .serverEdit: return L10n.text("medical_record.forms.exam_report.title.edit")
+        case .localEdit: return L10n.text("medical_record.forms.exam_report.title.edit_local")
         }
     }
 
     private var saveTitle: String {
         switch mode {
-        case .create: return "保存"
-        case .serverEdit: return "更新"
-        case .localEdit: return "完成"
+        case .create: return L10n.text("medical_record.forms.action.save")
+        case .serverEdit: return L10n.text("medical_record.forms.action.update")
+        case .localEdit: return L10n.text("medical_record.forms.action.complete")
         }
     }
 
     private func saveNow() {
+        formLog.info("ExamReportFormView: save started mode=\(modeLogLabel) items=\(items.count)", module: formLogModule)
+
         let details = items.enumerated().map { index, row in
             MedicalReportItem(
                 category: row.category.nilIfBlank ?? category,
@@ -223,28 +251,49 @@ struct ExamReportFormView: View {
         switch mode {
         case .localEdit(_, let onSubmit):
             onSubmit(draft)
+            formLog.info("ExamReportFormView: local submit finished", module: formLogModule)
             dismiss()
         case .create:
-            guard let onCreateSubmit else { dismiss(); return }
+            guard let onCreateSubmit else {
+                formLog.warning("ExamReportFormView: create submit missing handler, dismiss", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
             Task {
                 do {
                     try await onCreateSubmit(draft)
-                    await MainActor.run { dismiss() }
+                    await MainActor.run {
+                        formLog.info("ExamReportFormView: create save succeeded", module: formLogModule)
+                        dismiss()
+                    }
                 } catch {
-                    await MainActor.run { errorMessage = error.localizedDescription }
+                    await MainActor.run {
+                        formLog.error("ExamReportFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
                 }
                 await MainActor.run { isSaving = false }
             }
         case .serverEdit:
-            guard let onServerSubmit else { dismiss(); return }
+            guard let onServerSubmit else {
+                formLog.warning("ExamReportFormView: server submit missing handler, dismiss", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
             Task {
                 do {
                     try await onServerSubmit(draft)
-                    await MainActor.run { dismiss() }
+                    await MainActor.run {
+                        formLog.info("ExamReportFormView: server save succeeded", module: formLogModule)
+                        dismiss()
+                    }
                 } catch {
-                    await MainActor.run { errorMessage = error.localizedDescription }
+                    await MainActor.run {
+                        formLog.error("ExamReportFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
                 }
                 await MainActor.run { isSaving = false }
             }

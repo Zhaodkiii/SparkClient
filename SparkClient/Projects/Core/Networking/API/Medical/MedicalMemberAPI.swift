@@ -8,11 +8,11 @@ struct SparkMedicalMemberAPI {
     /// 注入的后端配置（URL、会话、错误映射等）。
     let configuration: SparkBackendConfiguration
 
-    private let resources: SparkMedicalResourceAPI
+    private let resources: SparkMedicalWorkflowAPI
 
     init(configuration: SparkBackendConfiguration) {
         self.configuration = configuration
-        self.resources = SparkMedicalResourceAPI(configuration: configuration)
+        self.resources = SparkMedicalWorkflowAPI(configuration: configuration)
     }
 
     /// 服务端返回的成员模型，用于列表与创建/更新响应。

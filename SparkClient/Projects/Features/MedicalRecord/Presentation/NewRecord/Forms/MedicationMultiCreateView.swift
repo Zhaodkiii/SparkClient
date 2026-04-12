@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// 处方批次 + 多条药品行：用于批量录入 `PrescriptionRecognitionDraft`。
 struct MedicationMultiCreateView: View {
     enum Mode {
         case create
@@ -32,6 +33,11 @@ struct MedicationMultiCreateView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
+    /// 创建模式为 `nil`；编辑模式保留病例关联，避免保存时丢失 `medical_case`。
+    private let seedMedicalCase: Int?
+
     init(mode: Mode, onCreateSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
@@ -41,7 +47,10 @@ struct MedicationMultiCreateView: View {
         switch mode {
         case .create:
             seed = .init(medicalCase: nil, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, batchNo: nil, status: "active", auditorName: nil, auditedAt: nil, extra: nil, medications: [])
-        case .serverEdit(let existing), .localEdit(let existing, _): seed = existing
+            seedMedicalCase = nil
+        case .serverEdit(let existing), .localEdit(let existing, _):
+            seed = existing
+            seedMedicalCase = existing.medicalCase
         }
 
         _prescriberName = State(initialValue: seed.prescriberName ?? "")
@@ -58,26 +67,28 @@ struct MedicationMultiCreateView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                SparkFormCard(title: "处方批次") {
-                    SparkFormTextRow(title: "开方医生", text: $prescriberName)
-                    SparkFormTextRow(title: "机构", text: $institutionName)
-                    SparkFormTextRow(title: "开方时间", text: $prescribedAt)
-                    SparkFormTextRow(title: "诊断", text: $diagnosis)
-                    SparkFormTextRow(title: "批次号", text: $batchNo)
-                    SparkFormTextRow(title: "状态", text: $status)
+                SparkFormCard(title: L10n.text("medical_record.forms.prescription_batch.card")) {
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescriber"), text: $prescriberName)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.institution"), text: $institutionName)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescribed_at"), text: $prescribedAt)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.diagnosis"), text: $diagnosis)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $batchNo)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_status"), text: $status)
                 }
 
-                SparkFormCard(title: "用药列表") {
-                    Button("新增一条") { items.append(.init()) }
-                        .buttonStyle(.bordered)
+                SparkFormCard(title: L10n.text("medical_record.forms.medication_list.card")) {
+                    Button(L10n.text("medical_record.forms.medication_list.add_row")) {
+                        items.append(.init())
+                    }
+                    .buttonStyle(.bordered)
 
                     ForEach($items) { $item in
                         VStack(alignment: .leading, spacing: 6) {
-                            SparkFormTextRow(title: "药名", text: $item.drugName)
-                            SparkFormTextRow(title: "通用名", text: $item.genericName)
-                            SparkFormTextRow(title: "规格", text: $item.strength)
-                            SparkFormTextRow(title: "频次", text: $item.frequencyText)
-                            SparkFormTextRow(title: "每次剂量", text: $item.dosePerTime)
+                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.drug_name"), text: $item.drugName)
+                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.generic_name"), text: $item.genericName)
+                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.strength"), text: $item.strength)
+                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.frequency_text"), text: $item.frequencyText)
+                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_per_time"), text: $item.dosePerTime)
                         }
                         .padding(8)
                         .background(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
@@ -88,12 +99,45 @@ struct MedicationMultiCreateView: View {
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(saveTitle) { saveNow() }.disabled(isSaving) } }
-        .alert("提交失败", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) { Button("好", role: .cancel) {} } message: { Text(errorMessage ?? "") }
+        .sparkFormBottomBar(
+            canSubmit: !isSaving,
+            saveTitle: saveTitle,
+            onCancel: {
+                formLog.info("MedicationMultiCreateView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
+                dismiss()
+            },
+            onSave: { saveNow() }
+        )
+        .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
-    private var navTitle: String { switch mode { case .create: return "批量新增用药"; case .serverEdit: return "编辑批次用药"; case .localEdit: return "编辑批次用药（本地）" } }
-    private var saveTitle: String { switch mode { case .create: return "保存"; case .serverEdit: return "更新"; case .localEdit: return "完成" } }
+    private var modeLogLabel: String {
+        switch mode {
+        case .create: return "create"
+        case .serverEdit: return "serverEdit"
+        case .localEdit: return "localEdit"
+        }
+    }
+
+    private var navTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.medication_multi.title.create")
+        case .serverEdit: return L10n.text("medical_record.forms.medication_multi.title.edit")
+        case .localEdit: return L10n.text("medical_record.forms.medication_multi.title.edit_local")
+        }
+    }
+
+    private var saveTitle: String {
+        switch mode {
+        case .create: return L10n.text("medical_record.forms.action.save")
+        case .serverEdit: return L10n.text("medical_record.forms.action.update")
+        case .localEdit: return L10n.text("medical_record.forms.action.complete")
+        }
+    }
 
     private var outputDraft: PrescriptionRecognitionDraft {
         let meds = items.enumerated().map { index, item in
@@ -120,7 +164,7 @@ struct MedicationMultiCreateView: View {
             )
         }
         return .init(
-            medicalCase: nil,
+            medicalCase: seedMedicalCase,
             prescriberName: prescriberName.nilIfBlank,
             institutionName: institutionName.nilIfBlank,
             prescribedAt: prescribedAt.nilIfBlank,
@@ -135,17 +179,57 @@ struct MedicationMultiCreateView: View {
     }
 
     private func saveNow() {
+        formLog.info("MedicationMultiCreateView: save started mode=\(modeLogLabel) medRows=\(items.count)", module: formLogModule)
         let draft = outputDraft
         switch mode {
-        case .localEdit(_, let onSubmit): onSubmit(draft); dismiss()
+        case .localEdit(_, let onSubmit):
+            onSubmit(draft)
+            formLog.info("MedicationMultiCreateView: local submit finished", module: formLogModule)
+            dismiss()
         case .create:
-            guard let onCreateSubmit else { dismiss(); return }
+            guard let onCreateSubmit else {
+                formLog.warning("MedicationMultiCreateView: create handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onCreateSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onCreateSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("MedicationMultiCreateView: create save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("MedicationMultiCreateView: create save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         case .serverEdit:
-            guard let onServerSubmit else { dismiss(); return }
+            guard let onServerSubmit else {
+                formLog.warning("MedicationMultiCreateView: server handler missing", module: formLogModule)
+                dismiss()
+                return
+            }
             isSaving = true
-            Task { do { try await onServerSubmit(draft); await MainActor.run { dismiss() } } catch { await MainActor.run { errorMessage = error.localizedDescription } }; await MainActor.run { isSaving = false } }
+            Task {
+                do {
+                    try await onServerSubmit(draft)
+                    await MainActor.run {
+                        formLog.info("MedicationMultiCreateView: server save succeeded", module: formLogModule)
+                        dismiss()
+                    }
+                } catch {
+                    await MainActor.run {
+                        formLog.error("MedicationMultiCreateView: server save failed \(error.localizedDescription)", module: formLogModule)
+                        errorMessage = error.localizedDescription
+                    }
+                }
+                await MainActor.run { isSaving = false }
+            }
         }
     }
 }
