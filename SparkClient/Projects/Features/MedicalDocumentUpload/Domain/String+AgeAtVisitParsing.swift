@@ -78,4 +78,34 @@ extension Optional where Wrapped == String {
         }
         return firstInteger(in: raw, maxValue: maxDays)
     }
+
+    /// 将模型输出的排序序号（多为 `"4"` 字符串，也可能为纯数字文本）解析为 `sort_order` 用 Int。
+    ///
+    /// - 支持：`"4"`、`" 4 "`、`"12"`；解析失败或越界时返回 `nil`。
+    func parsedAsSortOrderInt(maxValue: Int = 1_000_000) -> Int? {
+        guard let raw = self?.trimmingCharacters(in: .whitespacesAndNewlines), raw.isEmpty == false else {
+            return nil
+        }
+        if let v = Int(raw), v >= 0, v <= maxValue {
+            return v
+        }
+        return firstInteger(in: raw, maxValue: maxValue)
+    }
+}
+
+// MARK: - KeyedDecodingContainer（sortOrder 兼容 Int / String）
+
+extension KeyedDecodingContainer {
+    /// 解码 `sortOrder`：JSON 可能是整数或字符串（LLM 常输出 `"4"`）。
+    func decodeFlexibleSortOrderIfPresent(forKey key: Key) -> String? {
+        guard contains(key) else { return nil }
+        if let s = try? decode(String.self, forKey: key) {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        if let i = try? decode(Int.self, forKey: key) {
+            return String(i)
+        }
+        return nil
+    }
 }

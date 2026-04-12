@@ -119,6 +119,19 @@ struct MedicationCard: View {
                 }
 
                 Spacer()
+
+                NavigationLink {
+                    MedicationDetailPage(item: item)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(L10n.text("home.medical.list.medications.view_detail"))
+                            .font(.caption.weight(.medium))
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
             }
 
             HStack(spacing: 12) {

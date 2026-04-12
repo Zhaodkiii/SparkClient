@@ -4,8 +4,10 @@ import SwiftUI
 struct ExamReportCard: View {
     let item: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments
     var isLoadingDetails = false
+    let fileTransferService: FileTransferService
 
     @State private var isOtherRiskExpanded = false
+    @State private var isShowingAttachments = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -22,6 +24,10 @@ struct ExamReportCard: View {
         item.medExamDetails ?? []
     }
 
+    private var attachments: [SparkMedicalSyncAPI.RemoteManagedFile] {
+        item.attachments ?? []
+    }
+
     private var abnormalDetailItems: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
         detailItems.filter { $0.flag.isPotentiallyAbnormal }
     }
@@ -32,7 +38,7 @@ struct ExamReportCard: View {
             HealthExamRiskItem(
                 title: $0.itemName,
                 category: [$0.category, $0.subCategory].filter { $0.isEmpty == false }.joined(separator: " · "),
-                result: [$0.resultValue, $0.unit].filter { $0.isEmpty == false }.joined(),
+                result: [$0.resultValue ?? "", $0.unit].filter { $0.isEmpty == false }.joined(),
                 recommendation: $0.diagnosis?.nonEmpty,
                 severity: .high
             )
@@ -48,7 +54,7 @@ struct ExamReportCard: View {
                 HealthExamRiskItem(
                     title: $0.itemName,
                     category: [$0.category, $0.subCategory].filter { $0.isEmpty == false }.joined(separator: " · "),
-                    result: [$0.resultValue, $0.unit].filter { $0.isEmpty == false }.joined(),
+                    result: [$0.resultValue ?? "", $0.unit].filter { $0.isEmpty == false }.joined(),
                     recommendation: $0.diagnosis?.nonEmpty,
                     severity: .low
                 )
@@ -68,6 +74,10 @@ struct ExamReportCard: View {
                 severity: .medium
             )
         ]
+    }
+
+    private var canNavigateToDetail: Bool {
+        detailItems.isEmpty == false
     }
 
     var body: some View {
@@ -143,13 +153,17 @@ struct ExamReportCard: View {
 
                 Spacer(minLength: 8)
 
-                HStack(spacing: 4) {
-                    Text(L10n.text("home.medical.list.health_exam.view_detail"))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color.accentColor)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.accentColor.opacity(0.9))
+                VStack(alignment: .trailing, spacing: 10) {
+                    detailAction
+
+                    MedicalAttachmentIconView(
+                        count: attachments.count,
+                        isExpanded: isShowingAttachments
+                    ) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isShowingAttachments.toggle()
+                        }
+                    }
                 }
             }
 
@@ -165,6 +179,52 @@ struct ExamReportCard: View {
                         .lineLimit(1)
                 }
             }
+
+            if isShowingAttachments && attachments.isEmpty == false {
+                MedicalAttachmentListView(
+                    attachments: attachments,
+                    fileTransferService: fileTransferService
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailAction: some View {
+        if isLoadingDetails {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(L10n.text("home.medical.list.health_exam.view_detail"))
+                    .font(.subheadline.weight(.medium))
+            }
+            .foregroundStyle(Color.accentColor)
+        } else if canNavigateToDetail {
+            NavigationLink {
+                HealthExamReportDetailPage(
+                    item: item,
+                    fileTransferService: fileTransferService
+                )
+            } label: {
+                HStack(spacing: 4) {
+                    Text(L10n.text("home.medical.list.health_exam.view_detail"))
+                        .font(.subheadline.weight(.medium))
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(Color.accentColor)
+            }
+            .buttonStyle(.plain)
+        } else {
+            HStack(spacing: 4) {
+                Text(L10n.text("home.medical.list.health_exam.view_detail"))
+                    .font(.subheadline.weight(.medium))
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(.secondary)
+            .opacity(0.5)
         }
     }
 

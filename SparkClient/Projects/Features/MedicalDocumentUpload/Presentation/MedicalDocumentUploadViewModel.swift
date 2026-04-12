@@ -252,6 +252,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         }
     }
 
+
     /// 将界面与中间态恢复为初始：清空文件、结果、进度与上传缓存，就诊人名称回读当前上下文。
     func reset() {
         stage = .picking

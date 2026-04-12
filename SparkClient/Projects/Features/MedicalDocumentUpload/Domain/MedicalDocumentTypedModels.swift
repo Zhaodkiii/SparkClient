@@ -55,7 +55,7 @@ struct MedicalReportItem: Sendable, Equatable, Codable {
     let subCategory: String?   // 子类别
     let itemName: String?       // 项目名称（如：白细胞计数）
     let itemCode: String?      // 项目代码（缩写）
-    let resultValue: String    // 结果数值
+    let resultValue: String?    // 结果数值
     let unit: String?          // 单位
     let referenceRange: String? // 参考范围
     let flag: String?          // 异常标记（↑, ↓, H, L, 异常）
@@ -64,7 +64,9 @@ struct MedicalReportItem: Sendable, Equatable, Codable {
     let bodyPart: String?      // 检测部位
     let diagnosis: String?     // 医生对该项的诊断
     let extra: [String: String]? // 其他扩展信息
-    let sortOrder: Int?        // 排序序号（保持与原件一致）
+    /// 排序序号（保持与原件一致）；流式 JSON 常为字符串 `"4"`，亦可能为数字
+    let sortOrder: String?
+
 }
 
 /// 体检报告抽取草稿
@@ -79,7 +81,7 @@ struct HealthExamRecognitionDraft: Sendable, Equatable, Codable {
 
 /// 医疗报告抽取草稿（适用于 CT、超声等影像学报告）
 struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
-    let reportType: String? // 报告分类
+    let category: String? // 报告分类
     let title: String       // 报告标题
     let hospital: String?   // 医院名称
     let doctor: String?     // 检查医生
@@ -110,8 +112,10 @@ struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
     let instructions: String?
     let reminderEnabled: Bool?
     let reminderTimes: [String]?
-    let sortOrder: Int?
+    /// 批次内排序；流式 JSON 常为字符串
+    let sortOrder: String?
     let extra: [String: String]?
+
 }
 
 /// 处方批次抽取草稿（与 ``PrescriptionBatch`` / ``PrescriptionBatchSerializer`` 字段对齐；`member` 由上传信封提供）。

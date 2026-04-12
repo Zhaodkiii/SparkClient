@@ -42,6 +42,7 @@ struct AppCoordinatorView: View {
                     .task {
                         await container.appBootstrapper.reset()
                         container.memberContextStore.resetInMemoryContext()
+                        container.resetSessionScopedViewModels()
                     }
 
             case .signedIn(let session):

@@ -104,7 +104,7 @@ extension MedicalReportItem {
             subCategory: subCategory,
             itemName: itemName,
             itemCode: itemCode,
-            resultValue: resultValue,
+            resultValue: resultValue ?? "",
             unit: unit,
             referenceRange: referenceRange,
             flag: flag,
@@ -112,7 +112,7 @@ extension MedicalReportItem {
             modality: modality,
             bodyPart: bodyPart,
             diagnosis: diagnosis,
-            sortOrder: sortOrder,
+            sortOrder: sortOrder.parsedAsSortOrderInt(),
             extra: extra
         )
     }
@@ -124,7 +124,7 @@ extension MedicalReportRecognitionDraft {
     /// 转换为检查报告创建请求
     func toExaminationReportCreateRequest() -> ExaminationReportCreateRequest {
         ExaminationReportCreateRequest(
-            category: reportType ?? "unknown",
+            category: category ?? "unknown",
             itemName: title,
             findings: content,
             impression: nil,
@@ -158,7 +158,7 @@ extension MedicationRecognitionDraft {
             frequencyText: frequencyText,
             durationDays: durationDays.parsedAsDurationDays(),
             instructions: instructions,
-            sortOrder: sortOrder,
+            sortOrder: sortOrder.parsedAsSortOrderInt(),
             extra: extra
         )
     }

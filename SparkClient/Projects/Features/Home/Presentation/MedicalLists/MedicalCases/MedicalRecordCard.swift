@@ -3,6 +3,7 @@ import SwiftUI
 /// 病例卡片：视觉结构对齐 HealthClient `MedicalRecordCard`，颜色改用系统近似色。
 struct MedicalRecordCard: View {
     let item: SparkMedicalSyncAPI.RemoteMedicalCaseSummary
+    let fileTransferService: FileTransferService
     var maxChips: Int = 8
 
     private var chiefComplaintText: String {
@@ -47,7 +48,10 @@ struct MedicalRecordCard: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        NavigationLink {
+            MedicalCaseDetailPage(item: item, fileTransferService: fileTransferService)
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "stethoscope")
                     .font(.caption)
@@ -146,6 +150,8 @@ struct MedicalRecordCard: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySummary)
+        }
+        .buttonStyle(.plain)
     }
 
     private func limitedList(_ items: [String], max: Int) -> [String] {

@@ -3,6 +3,7 @@ import SwiftUI
 /// 处方卡片：与 HealthClient 结构保持一致，优先展示头部、诊断、药品列表、附件与关联病例区。
 struct MedicationPrescriptionBatchCard: View {
     let item: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete
+    let fileTransferService: FileTransferService
 
     @State private var showMedications = true
 
@@ -100,10 +101,28 @@ struct MedicationPrescriptionBatchCard: View {
 
             Spacer()
 
-            Text(dateText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            HStack(spacing: 8) {
+                Text(dateText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                NavigationLink {
+                    PrescriptionBatchDetailPage(
+                        item: item,
+                        fileTransferService: fileTransferService
+                    )
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(L10n.text("home.medical.list.medications.view_detail"))
+                            .font(.caption.weight(.medium))
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -186,6 +205,11 @@ struct MedicationPrescriptionBatchCard: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
+
+                MedicalAttachmentListView(
+                    attachments: attachments,
+                    fileTransferService: fileTransferService
+                )
             }
         }
     }

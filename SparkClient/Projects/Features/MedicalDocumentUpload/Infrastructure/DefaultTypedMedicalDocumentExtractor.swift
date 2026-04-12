@@ -332,7 +332,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
     static let debugPretendCaseJSON = """
     [
         {
-            "reportType": "影像学检查",
+            "category": "影像学检查",
             "title": "胃镜诊断报告单",
             "hospital": "苏州大学附属第四医院 苏州市独墅湖医院",
             "doctor": "欧啡",

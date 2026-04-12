@@ -110,7 +110,14 @@ actor FileTransferService {
             }
         }
 
-        let downloadURL = try await api.getPresignedDownloadURL(fileID: file.id)
+        guard let rawPath = file.filePath?.trimmingCharacters(in: .whitespacesAndNewlines),
+              rawPath.isEmpty == false,
+              let downloadURL = URL(string: rawPath) else {
+            throw SparkNetworkError.decoding(
+                NSError(domain: "SparkFileTransfer", code: -1, userInfo: [NSLocalizedDescriptionKey: "附件直链无效，无法下载"])
+            )
+        }
+        logger.debug("使用附件直链下载，file_id=\(file.id)", module: .cache)
         let (data, _) = try await URLSession.shared.data(from: downloadURL)
         
         // 4. 下载后立即进行 MD5 校验，确保文件在传输过程中没有损坏
@@ -153,4 +160,5 @@ actor FileTransferService {
         formatter.dateFormat = "yyyyMMdd"
         return formatter
     }()
+
 }

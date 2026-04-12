@@ -250,7 +250,7 @@ final class ToolHub: @unchecked Sendable {
             ]
         case SparkToolName.generateStructuredHealthCard:
             return [
-                "report_type": AIRuntimeToolProperty(
+                "category": AIRuntimeToolProperty(
                     type: "string",
                     description: td("tool.param.report_type_enum"),
                     enumValues: ["medication", "prescription", "exam_report", "medical_case"]
@@ -411,7 +411,7 @@ final class ToolHub: @unchecked Sendable {
         case SparkToolName.makeNutritionData:
             return ["protein", "carbohydrates", "fat", "energy"]
         case SparkToolName.generateStructuredHealthCard:
-            return ["report_type", "raw_text"]
+            return ["category", "raw_text"]
         case SparkToolName.searchKnowledgeBag:
             return ["query"]
         case SparkToolName.createKnowledgeDocument:
@@ -989,7 +989,7 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let reportType = (invocation.arguments["report_type"] ?? "medical_case").lowercased()
+        let category = (invocation.arguments["category"] ?? "medical_case").lowercased()
         let rawText = (invocation.arguments["raw_text"] ?? invocation.arguments["content"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard rawText.isEmpty == false else {
             return ToolExecutionResult(
@@ -1000,10 +1000,10 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let title = "\(reportType)_\(Date().formatted(date: .abbreviated, time: .omitted))"
+        let title = "\(category)_\(Date().formatted(date: .abbreviated, time: .omitted))"
         let summary = String(rawText.prefix(120))
         let oss = invocation.arguments["oss_file_id"].map { ", oss_file_id=\($0)" } ?? ""
-        let output = "已生成结构化卡片：type=\(reportType), title=\(title), member=\(memberID)\(oss), summary=\(summary)"
+        let output = "已生成结构化卡片：category=\(category), title=\(title), member=\(memberID)\(oss), summary=\(summary)"
 
         return ToolExecutionResult(
             toolName: SparkToolName.generateStructuredHealthCard,
@@ -1178,4 +1178,3 @@ final class ToolHub: @unchecked Sendable {
         return String(value)
     }
 }
-

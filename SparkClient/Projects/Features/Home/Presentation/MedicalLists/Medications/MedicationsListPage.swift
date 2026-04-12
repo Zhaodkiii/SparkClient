@@ -55,6 +55,7 @@ private enum MedicationDisplayStatus {
 /// 用药列表页：顶部筛选 + 列表内容 + 底部操作栏。
 struct MedicationsListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let fileTransferService: FileTransferService
 
     @State private var selectedFilter: MedicationFilterType = .active
 
@@ -159,7 +160,10 @@ struct MedicationsListPage: View {
                 ForEach(filteredItems) { item in
                     switch item {
                     case .prescriptionBatch(let batch):
-                        MedicationPrescriptionBatchCard(item: batch)
+                        MedicationPrescriptionBatchCard(
+                            item: batch,
+                            fileTransferService: fileTransferService
+                        )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                     case .standaloneMedication(let medication):
@@ -251,14 +255,14 @@ struct MedicationsListPage: View {
 
 #Preview("Medication List Light") {
     NavigationView {
-        MedicationsListPage(completeData: nil)
+        MedicationsListPage(completeData: nil, fileTransferService: AppContainer.preview.fileTransferService)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medication List Dark") {
     NavigationView {
-        MedicationsListPage(completeData: nil)
+        MedicationsListPage(completeData: nil, fileTransferService: AppContainer.preview.fileTransferService)
     }
     .preferredColorScheme(.dark)
 }

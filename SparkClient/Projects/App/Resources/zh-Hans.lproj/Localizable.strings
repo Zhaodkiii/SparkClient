@@ -92,6 +92,7 @@
 "home.medical.list.medications.dose_short" = "剂量";
 "home.medical.list.medications.frequency_title" = "用法用频";
 "home.medical.list.medications.instructions_title" = "用药说明";
+"home.medical.list.medications.view_detail" = "查看详情";
 "home.medical.list.medications.detail_title" = "详细信息";
 "home.medical.list.medications.form_title" = "剂型";
 "home.medical.list.medications.route_title" = "用药途径";
@@ -138,6 +139,7 @@
 "home.medical.list.examination.detail.pathology.diagnosis" = "病理诊断";
 "home.medical.list.details.loading" = "正在加载明细…";
 "home.medical.list.details.section" = "明细项目";
+"home.medical.attachments.title" = "附件";
 "home.medical.list.health_exam.search.placeholder" = "搜索体检报告...";
 "home.medical.list.health_exam.filter.all" = "全部";
 "home.medical.list.health_exam.filter.with_summary" = "有综述";

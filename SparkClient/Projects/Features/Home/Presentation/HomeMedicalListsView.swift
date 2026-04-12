@@ -19,12 +19,16 @@ struct HomeMedicalListView: View {
     var body: some View {
         switch route {
         case .medicalCases:
-            MedicalCasesListPage(completeData: completeData)
+            MedicalCasesListPage(
+                completeData: completeData,
+                fileTransferService: appContainer.fileTransferService
+            )
         case .healthExamReports:
             HealthExamReportsListPage(
                 completeData: completeData,
                 medicalQueryAPI: appContainer.backend.medicalQuery,
                 logger: appContainer.logger,
+                fileTransferService: appContainer.fileTransferService,
                 onReportsUpdated: onHealthExamReportsUpdated
             )
         case .examinationReports:
@@ -32,10 +36,14 @@ struct HomeMedicalListView: View {
                 completeData: completeData,
                 medicalQueryAPI: appContainer.backend.medicalQuery,
                 logger: appContainer.logger,
+                fileTransferService: appContainer.fileTransferService,
                 onReportsUpdated: onExaminationReportsUpdated
             )
         case .medications:
-            MedicationsListPage(completeData: completeData)
+            MedicationsListPage(
+                completeData: completeData,
+                fileTransferService: appContainer.fileTransferService
+            )
         }
     }
 }

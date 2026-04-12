@@ -5,8 +5,12 @@ struct LabReportCard: View {
     let item: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
     let category: ExaminationReportCategory
     var isLoadingDetails = false
+    let fileTransferService: FileTransferService
+    let medicalResourceAPI: SparkMedicalResourceAPI
+    var onDeleted: ((Int) -> Void)? = nil
 
     @State private var isExpanded = false
+    @State private var isShowingAttachments = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -39,6 +43,10 @@ struct LabReportCard: View {
 
     private var detailItems: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
         item.medExamDetails ?? []
+    }
+
+    private var attachments: [SparkMedicalSyncAPI.RemoteManagedFile] {
+        item.attachments ?? []
     }
 
     private var abnormalDetailItems: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
@@ -95,7 +103,25 @@ struct LabReportCard: View {
 
                 Spacer(minLength: 8)
 
-                detailAction
+                VStack(alignment: .trailing, spacing: 10) {
+                    detailAction
+                    MedicalAttachmentIconView(
+                        count: attachments.count,
+                        isExpanded: isShowingAttachments
+                    ) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isShowingAttachments.toggle()
+                        }
+                    }
+                }
+            }
+
+            if isShowingAttachments && attachments.isEmpty == false {
+                MedicalAttachmentListView(
+                    attachments: attachments,
+                    fileTransferService: fileTransferService
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
@@ -137,11 +163,29 @@ struct LabReportCard: View {
     private var detailDestination: some View {
         switch category {
         case .laboratory:
-            LaboratoryReportDetailPage(report: item)
+            LaboratoryReportDetailPage(
+                report: item,
+                resources: medicalResourceAPI,
+                onDeleted: {
+                    onDeleted?(item.id)
+                }
+            )
         case .imaging:
-            ImagingReportDetailPage(report: item)
+            ImagingReportDetailPage(
+                report: item,
+                resources: medicalResourceAPI,
+                onDeleted: {
+                    onDeleted?(item.id)
+                }
+            )
         case .pathology:
-            PathologyReportDetailPage(report: item)
+            PathologyReportDetailPage(
+                report: item,
+                resources: medicalResourceAPI,
+                onDeleted: {
+                    onDeleted?(item.id)
+                }
+            )
         }
     }
 
@@ -242,7 +286,7 @@ struct LabReportCard: View {
                     color: Color(uiColor: .systemOrange),
                     content: abnormalDetailItems
                         .prefix(5)
-                        .map { "\($0.itemName)：\($0.resultValue)\($0.unit)" }
+                        .map { "\($0.itemName)：\($0.resultValue ?? "")\($0.unit)" }
                         .joined(separator: "\n")
                 )
             } else if hasDetailText {
@@ -292,11 +336,11 @@ struct LabReportCard: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.primary)
                             Spacer()
-                            Text(detail.flag.nonEmpty ?? detail.resultValue)
+                            Text(detail.flag.nonEmpty ?? detail.resultValue ?? "")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(detail.flag.isPotentiallyAbnormal ? Color(uiColor: .systemRed) : .secondary)
                         }
-                        Text([detail.resultValue, detail.unit].filter { $0.isEmpty == false }.joined())
+                        Text([detail.resultValue ?? "", detail.unit].filter { $0.isEmpty == false }.joined())
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -61,9 +61,9 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
             )
             return receipt
 
-        // 3. 保存医疗检查报告（使用组合创建 API）
+        // 3. 保存医疗检查报告（使用独立新增 API，不创建病例）
         case .medicalReport(let drafts):
-            let receipt = try await saveCombinedMedicalReports(
+            let receipt = try await saveStandaloneMedicalReports(
                 memberID: memberID,
                 drafts: drafts,
                 envelope: output.envelope,
@@ -148,7 +148,7 @@ private extension DefaultTypedMedicalDocumentSaver {
         fallbackIndex: Int
     ) -> SparkMedicalWorkflowAPI.MedicationSavePayload {
         let extra = mergeTypedUploadExtra(line.extra)
-        let sort = line.sortOrder ?? fallbackIndex
+        let sort = line.sortOrder.parsedAsSortOrderInt() ?? fallbackIndex
         return SparkMedicalWorkflowAPI.MedicationSavePayload(
             member: memberID,
             batch: batch,
@@ -252,9 +252,9 @@ private extension DefaultTypedMedicalDocumentSaver {
         defaultDate: String
     ) -> [SparkMedicalWorkflowAPI.MedicalReportDetailPayload] {
         draft.items.enumerated().map { index, item in
-            // 排序：优先 item.sortOrder，兜底用 index
+            // 排序：优先 item.sortOrder（字符串或数字文本），兜底用 index；解析为 0 时仍用 index
             let sortOrder: Int = {
-                guard let s = item.sortOrder else { return index }
+                guard let s = item.sortOrder.parsedAsSortOrderInt() else { return index }
                 return s == 0 ? index : s
             }()
 
@@ -265,7 +265,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 subCategory: item.subCategory ?? "",
                 itemName: item.itemName ?? "",
                 itemCode: item.itemCode ?? "",
-                resultValue: item.resultValue,
+                resultValue: item.resultValue ?? "",
                 unit: item.unit ?? "",
                 referenceRange: item.referenceRange ?? "",
                 flag: item.flag ?? "",
@@ -295,6 +295,7 @@ private extension DefaultTypedMedicalDocumentSaver {
     func buildMedicalReportPayloads(
         memberID: Int,
         drafts: [MedicalReportRecognitionDraft],
+        sourceFileIds: [Int],
         now: Date
     ) throws -> [SparkMedicalWorkflowAPI.MedicalReportSavePayload] {
         guard drafts.isEmpty == false else {
@@ -309,15 +310,15 @@ private extension DefaultTypedMedicalDocumentSaver {
             // 报告时间
             let date = MedicalDateCoding.decodeDateOnlyOrDefaultNow(draft.date, defaultDate: now)
             let dateText = date.toISO8601()
-            // 报告类型
-            let reportType = draft.reportType ?? "medical_report"
+            // 报告分类
+            let category = draft.category ?? "medical_report"
             // 报告内容（优先详情，兜底标题）
             let findingsText = draft.content.isEmpty ? draft.title : draft.content
             
             // 构建报告明细
             let detailRows: [SparkMedicalWorkflowAPI.MedicalReportDetailPayload] = draft.details.enumerated().map { index, row in
                 let sortOrder: Int = {
-                    guard let s = row.sortOrder else { return index }
+                    guard let s = row.sortOrder.parsedAsSortOrderInt() else { return index }
                     return s == 0 ? index : s
                 }()
 
@@ -328,7 +329,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                     subCategory: row.subCategory ?? "",
                     itemName: row.itemName ?? "",
                     itemCode: row.itemCode ?? "",
-                    resultValue: row.resultValue,
+                    resultValue: row.resultValue ?? "",
                     unit: row.unit ?? "",
                     referenceRange: row.referenceRange ?? "",
                     flag: row.flag ?? "",
@@ -346,8 +347,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             return SparkMedicalWorkflowAPI.MedicalReportSavePayload(
                 member: memberID,
                 medicalCase: nil,
-                reportType: reportType,
-                category: reportType,
+                category: category,
                 subCategory: "",
                 itemName: draft.title,
                 performedAt: dateText,
@@ -360,6 +360,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 modality: "",
                 bodyPart: "",
                 diagnosis: "",
+                fileIds: sourceFileIds,
                 details: detailRows
             )
         }
@@ -471,52 +472,40 @@ private extension DefaultTypedMedicalDocumentSaver {
         )
     }
 
-    /// 使用组合创建 API 保存医疗检查报告
-    func saveCombinedMedicalReports(
+    /// 使用独立新增 API 保存医疗检查报告（不创建病例）
+    func saveStandaloneMedicalReports(
         memberID: Int,
         drafts: [MedicalReportRecognitionDraft],
         envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) async throws -> MedicalDocumentSaveReceipt {
         let sourceFileIds = extractSourceFileIds(from: envelope)
-
-        // 转换报告为检查报告创建请求
-        let examReports = drafts.map { $0.toExaminationReportCreateRequest() }
-
-        // 使用第一个报告的信息创建病历
-        let firstDraft = drafts.first!
-        let request = CombinedMedicalCreateRequest(
-            member: MemberCreateRequestWithId(
-                id: memberID,
-                name: nil,
-                gender: nil,
-                birthDate: nil,
-                relationship: nil,
-                extra: nil
-            ),
-            medicalCase: MedicalCaseCreateRequest(
-                title: firstDraft.title,
-                hospitalName: firstDraft.hospital,
-                diagnosisSummary: firstDraft.content,
-                ageAtVisit: nil,
-                extra: firstDraft.date != nil ? ["occurred_at": firstDraft.date!] : nil
-            ),
-            symptom: nil,
-            visit: nil,
-            surgery: nil,
-            followUp: nil,
-            examinationReports: examReports,
-            prescriptionBatches: nil,
-            sourceFileIds: sourceFileIds
+        let payloads = try buildMedicalReportPayloads(
+            memberID: memberID,
+            drafts: drafts,
+            sourceFileIds: sourceFileIds,
+            now: now
         )
 
-        let response = try await combinedAPI.createCombinedMedical(request)
+        var lastReportID: Int?
+        for payload in payloads {
+            let reportID = try await workflowAPI.createMedicalReport(payload)
+            lastReportID = reportID
+        }
+
+        guard let recordID = lastReportID else {
+            throw NSError(
+                domain: "DefaultTypedMedicalDocumentSaver",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "medical report drafts is empty"]
+            )
+        }
         logger.info(
-            "医疗检查报告组合创建成功，memberID=\(response.memberId), caseID=\(response.medicalCaseId), reportCount=\(response.examinationReportIds?.count ?? 0)",
+            "医疗检查报告独立创建成功，memberID=\(memberID), reportCount=\(payloads.count), lastReportID=\(recordID)",
             module: .medical
         )
         return MedicalDocumentSaveReceipt(
-            recordID: response.medicalCaseId,
+            recordID: recordID,
             savedAt: now,
             isSuccess: true
         )

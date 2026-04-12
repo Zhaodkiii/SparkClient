@@ -319,7 +319,7 @@ extension SparkMedicalSyncAPI.RemoteMedExamDetail {
             subCategory: subCategory,
             itemName: itemName,
             itemCode: itemCode,
-            resultValue: resultValue,
+            resultValue: resultValue ?? "",
             unit: unit,
             referenceRange: referenceRange,
             flag: flag,

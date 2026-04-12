@@ -289,7 +289,7 @@ enum SparkMedicalSyncAPI {
         var subCategory: String
         var itemName: String
         var itemCode: String
-        var resultValue: String
+        var resultValue: String?
         var unit: String
         var referenceRange: String
         /// 高低箭头、阴阳性等标志字符串。
@@ -331,7 +331,7 @@ enum SparkMedicalSyncAPI {
         var id: Int
         var member: Int
         var medicalCase: Int?
-        var reportType: String
+        var category: String
         var title: String
         var hospital: String
         var doctor: String
@@ -343,7 +343,7 @@ enum SparkMedicalSyncAPI {
             case id
             case member
             case medicalCase = "medical_case"
-            case reportType = "report_type"
+            case category
             case title
             case hospital
             case doctor

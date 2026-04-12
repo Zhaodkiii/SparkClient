@@ -4,7 +4,7 @@ struct MedicalReport: Identifiable, Codable, Equatable, Sendable {
     let id: Int
     var memberID: Int
     var medicalCaseID: Int?
-    var reportType: String
+    var category: String
     var title: String
     var hospital: String
     var doctor: String
@@ -16,7 +16,7 @@ struct MedicalReport: Identifiable, Codable, Equatable, Sendable {
         id: Int,
         memberID: Int,
         medicalCaseID: Int? = nil,
-        reportType: String = "",
+        category: String = "",
         title: String,
         hospital: String = "",
         doctor: String = "",
@@ -27,7 +27,7 @@ struct MedicalReport: Identifiable, Codable, Equatable, Sendable {
         self.id = id
         self.memberID = memberID
         self.medicalCaseID = medicalCaseID
-        self.reportType = reportType
+        self.category = category
         self.title = title
         self.hospital = hospital
         self.doctor = doctor

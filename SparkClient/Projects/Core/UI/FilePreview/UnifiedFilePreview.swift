@@ -32,7 +32,9 @@ struct UnifiedFilePreview: View {
                 message: "The selected file is missing or cannot be accessed."
             )
         } else if input.isImage {
-            imagePreview(for: input.fileURL)
+//            imagePreview(for: input.fileURL)
+            QuickLookPreviewBridge(inputs: [input], startIndex: 0, onDismiss: onClose)
+                .ignoresSafeArea()
         } else {
             QuickLookPreviewBridge(inputs: [input], startIndex: 0, onDismiss: onClose)
                 .ignoresSafeArea()

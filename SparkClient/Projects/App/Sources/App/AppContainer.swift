@@ -197,6 +197,11 @@ final class AppContainer {
     /// 单会话消息与发送 UI（单例）。
     let chatDetailViewModel: ChatDetailViewModel
 
+    // MARK: - 会话级缓存 ViewModel（避免网络状态切换时被反复重建）
+    private var cachedHomeViewModel: HomeViewModel?
+    private var cachedMedicalDocumentUploadViewModel: MedicalDocumentUploadViewModel?
+    private var cachedSettingsViewModel: SettingsViewModel?
+
     init(
         coreDataStack: CoreDataStack,
         backend: Backend,
@@ -627,7 +632,10 @@ final class AppContainer {
 
     /// 首页：医疗摘要、成员管理与成员上下文、通知。
     func makeHomeViewModel() -> HomeViewModel {
-        HomeViewModel(
+        if let cachedHomeViewModel {
+            return cachedHomeViewModel
+        }
+        let created = HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
             manageHomeMemberUseCase: manageHomeMemberUseCase,
@@ -635,11 +643,16 @@ final class AppContainer {
             notificationClient: notificationClient,
             logger: logger
         )
+        cachedHomeViewModel = created
+        return created
     }
 
     /// 结构化病历上传：先文件上传 → 类型化抽取 → workflow 保存 → 附件绑定。
     func makeMedicalDocumentUploadViewModel() -> MedicalDocumentUploadViewModel {
-        MedicalDocumentUploadViewModel(
+        if let cachedMedicalDocumentUploadViewModel {
+            return cachedMedicalDocumentUploadViewModel
+        }
+        let created = MedicalDocumentUploadViewModel(
             memberContextStore: memberContextStore,
             uploadFilesUseCase: uploadMedicalDocumentFilesUseCase,
             extractUseCase: extractTypedMedicalDocumentUseCase,
@@ -647,17 +660,31 @@ final class AppContainer {
             bindUseCase: bindUploadedFilesToMedicalBusinessUseCase,
             logger: logger
         )
+        cachedMedicalDocumentUploadViewModel = created
+        return created
     }
 
     /// 设置页：登出、医疗后台同步开关/触发等。
     func makeSettingsViewModel() -> SettingsViewModel {
-        SettingsViewModel(
+        if let cachedSettingsViewModel {
+            return cachedSettingsViewModel
+        }
+        let created = SettingsViewModel(
             sessionStore: sessionStore,
             signOutUseCase: signOutUseCase,
             memberContextStore: memberContextStore,
             medicalSyncService: medicalSyncService,
             deviceCache: backend.deviceCache
         )
+        cachedSettingsViewModel = created
+        return created
+    }
+
+    /// 用户会话结束时，清理与会话绑定的 ViewModel，避免下次登录复用旧界面状态。
+    func resetSessionScopedViewModels() {
+        cachedHomeViewModel = nil
+        cachedMedicalDocumentUploadViewModel = nil
+        cachedSettingsViewModel = nil
     }
 
     /// AI 设置：本地偏好读写 + 可选远程模型列表（`backend.aiConfig`）。

@@ -14,7 +14,7 @@ extension SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments: MedExamDeta
 }
 
 extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments: MedExamDetailLoadableReport {
-    static var acceptedBusinessTypes: [String] { ["medical_report", "examination_report", "examination"] }
+    static var acceptedBusinessTypes: [String] { ["examination_report", "examination"] }
 }
 
 /// 通用明细懒加载 ViewModel：
@@ -88,5 +88,10 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
 
     func isLoading(reportID: Int) -> Bool {
         loadingIDs.contains(reportID)
+    }
+
+    func removeReport(reportID: Int) {
+        reports.removeAll { $0.id == reportID }
+        onReportsUpdated?(reports)
     }
 }

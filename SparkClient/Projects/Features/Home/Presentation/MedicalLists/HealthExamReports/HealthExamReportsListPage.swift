@@ -3,6 +3,7 @@ import SwiftUI
 /// 体检报告列表页：顶部搜索与筛选固定，正文展示体检卡片列表。
 struct HealthExamReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments>
+    private let fileTransferService: FileTransferService
 
     @State private var query = ""
     @State private var selectedFilter: HealthExamFilter = .all
@@ -11,8 +12,10 @@ struct HealthExamReportsListPage: View {
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger,
+        fileTransferService: FileTransferService,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)? = nil
     ) {
+        self.fileTransferService = fileTransferService
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
                 reports: completeData?.healthExamReports ?? [],
@@ -88,7 +91,8 @@ struct HealthExamReportsListPage: View {
                 ForEach(filteredReports, id: \.id) { report in
                     ExamReportCard(
                         item: report,
-                        isLoadingDetails: viewModel.isLoading(reportID: report.id)
+                        isLoadingDetails: viewModel.isLoading(reportID: report.id),
+                        fileTransferService: fileTransferService
                     )
                     .task {
                         await viewModel.loadDetailsIfNeeded(for: report.id)

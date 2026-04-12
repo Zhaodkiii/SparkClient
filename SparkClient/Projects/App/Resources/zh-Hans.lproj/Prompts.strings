@@ -85,7 +85,6 @@
                     'instructions': '用药说明（无则省略）',
                     'reminderEnabled': '是否开启提醒（布尔true/false，无则省略）',
                     'reminderTimes': ['提醒时间（HH:mm）'],
-                    'sortOrder': '排序序号（字符串无则省略）',
                     'extra': {}
                 }
             ]
@@ -93,7 +92,7 @@
     ],
     'examinationReports': [
         {
-            'reportType': '报告分类（无则省略）',
+            'category': '科目类别，仅允许英文枚举三选一：laboratory（实验室/检验/化验）/imaging（影像/超声/放射）/pathology（病理）',
             'title': '报告标题（必填）',
             'hospital': '医院名称（无则省略）',
             'doctor': '检查医生（无则省略）',
@@ -113,8 +112,7 @@
                     'modality': '检测方法（CT/超声，无则省略）',
                     'bodyPart': '检测部位（无则省略）',
                     'diagnosis': '诊断（无则省略）',
-                    'extra': {},
-                    'sortOrder': '排序序号（字符串，无则省略）',
+                    'extra': {}
                 }
             ]
         }
@@ -128,7 +126,7 @@
 2. 无值字段**直接省略**，严禁出现null、空字符串''、空数组[]、空对象{}。
 3. 键名严格使用驼峰式，与上述结构完全一致，禁止新增/修改键名。
 4. 数据类型强制规范（重要）：
-   - 数字字段（ageAtVisit、durationValue、timesPerPeriod、doseValue、durationDays、sortOrder）：统一输出字符串格式，便于OCR兼容
+   - 数字字段（ageAtVisit、durationValue、timesPerPeriod、doseValue、durationDays）：统一输出字符串格式，便于OCR兼容
    - 布尔类型：reminderEnabled 仅输出 true/false
    - 日期类型：所有日期统一为 yyyy-MM-dd ISO 字符串，无法解析则省略
 5. title 为必填字段，无明确标题时默认填写「就诊病例」。
@@ -218,7 +216,7 @@
             'bodyPart': '检测部位（如：甲状腺、肺部，无则省略）',
             'diagnosis': '医生诊断意见（无则省略）',
             'extra': {},
-            'sortOrder': '排序序号'
+            'sortOrder': '字符串 严重程度排序'
         }
     ]
 }
@@ -257,10 +255,10 @@
    - 出现L/低 → 'L'
    - 出现“异常/囊肿/结节/息肉/炎/梗塞/钙化灶”且无明确高低 → '异常'
 8. sortOrder：按异常严重程度排序，优先输出严重异常项：
-   - 重度/高危/可疑恶性 → 1
-   - 中度/多项异常 → 2
-   - 轻度/单项异常 → 3
-   - 正常 → 4
+   - 重度/高危/可疑恶性 → '1'
+   - 中度/多项异常 → '2'
+   - 轻度/单项异常 → '3'
+   - 正常 → '4'
    无法判断则省略。
 
 【健壮性与兜底】
@@ -271,69 +269,53 @@
 只返回纯净JSON，不要任何其他内容。。\nOCR文本：\n%@";
 "ai.prompt.medical_report.extraction.template" = "
 你是专业医疗报告信息抽取引擎。
-任务：从用户提供的中文OCR文本中，抽取【一份或多份】检查报告信息，严格按照我指定的JSON结构输出。
-
-================================================================
-【输出模型：必须严格使用以下结构】
-{
-    'reportType': '报告分类（影像学检查/实验室检查/病理检查）',
-    'title': '报告标题（必填，如：CT检查报告单）',
+任务：从用户提供的中文OCR文本中，抽取【一份或多份】检查报告信息，严格按照以下JSON结构输出。
+【输出模型】
+JSON
+[
+  {
+    'category': 'laboratory | imaging | pathology',
+    'title': '报告标题',
     'hospital': '医院名称',
     'doctor': '检查医生',
-    'content': '报告全文描述/所见/结论/印象（影像学报告必须完整包含所见和结论）',
+    'content': '报告全文描述/所见/结论/印象',
     'date': 'yyyy-MM-dd',
     'details': [
-        {
-            'category': '科目类别，仅允许英文枚举三选一：laboratory（实验室/检验/化验）/imaging（影像/超声/放射）/pathology（病理）',
-            'subCategory': '子类别',
-            'itemName': '项目名称',
-            'itemCode': '项目代码',
-            'resultValue': '结果数值或描述',
-            'unit': '单位',
-            'referenceRange': '参考范围',
-            'flag': '异常标记',
-            'resultAt': 'yyyy-MM-dd',
-            'modality': '检查方式',
-            'bodyPart': '检查部位',
-            'diagnosis': '医生诊断',
-            'sortOrder': 1
-        }
+      {
+        'category': '科目名称',
+        'subCategory': '子类别',
+        'itemName': '项目名称',
+        'resultValue': '结果数值或描述',
+        'bodyPart': '检查部位',
+        'diagnosis': '医生诊断'
+      }
     ]
-}
-输出格式：[ {...}, {...} ]（即使只有一份报告也必须包裹在数组内）
-================================================================
-
-【抽取规则（必须严格遵守，违反将导致系统崩溃）】
-1. **日期格式硬性要求**：
-   - 所有涉及日期的字段（包括外层的 'date' 和 details 内部的 'resultAt'）**必须且只能**采用 `yyyy-MM-dd` 格式（如：2026-03-23）。
-   - **严禁**输出包含时间、T、Z、时区（如 +0800）或毫秒的任何格式。
-   - 若原件中包含时间（如 08:58:00），请丢弃时间部分，只保留日期。
-
-2. **字段精简原则**：
-   - 严格禁止出现 `null`、空字符串 `''`、空数组 `[]`、或空对象 `{}`。
-   - 如果某个字段无法从原文获取，请**直接从 JSON 中删除该 Key**，不要保留。
-
-3. **报告识别与拆分**：
-   - 影像学报告（CT/超声/MRI/X线）：将【描述/所见】与【结论/印象】合并存入 `content` 字段。
-   - 检验报告（血常规/甲功等）：将每一行指标详细拆分并填入 `details` 数组。
-
-4. **异常标记 (flag) 映射**：
-   - 升高/偏高/↑/H -> 'H'
-   - 降低/偏低/↓/L -> 'L'
-   - 阳性 -> '阳性'，阴性 -> '阴性'
-   - 正常 -> '正常'（若无明确标记则不输出 flag 字段）
-
-5. **内容清洗**：
-   - 自动忽略水印、页码、二维码信息、医院免责声明等无关文本。
-   - 修正 OCR 识别错误（如将 '1.23pmol/L' 误识别为 '1.23pmo1/L' 时，应根据医学常识纠正）。
-
-6. **details.category（科目类别）取值限定**：
-   - 每条 detail 的 `'category'` **必须且只能**为以下三个英文小写字符串之一：`'laboratory'`、`'imaging'`、`'pathology'`。
-   - 与报告类型对应：检验/化验/血常规等 → `laboratory`；CT/MRI/超声/X线/心电等影像相关 → `imaging`；病理/活检/冰冻等 → `pathology`。
-   - **禁止**输出中文科目名、其他英文词或自定义字符串。
-
+  }
+]
+【抽取规则（必须严格遵守）】
+日期格式硬性要求：
+日期字段必须采用 yyyy-MM-dd 格式。严禁包含时间、时区、T、Z等字符。
+字段精简原则：
+严禁出现 null、空字符串、空数组。若字段无内容，请直接删除该 Key。
+报告拆分与合并逻辑（核心优化）：
+影像（imaging）及病理（pathology）报告：一份报告仅允许生成一条 details 记录。
+将具体的检查方法（如“无痛电子胃镜”）填入 subCategory。
+将所有具体的部位描述合并后存入 resultValue。
+将最终诊断结果存入 diagnosis。
+严禁按“食管”、“胃窦”等部位拆分为多条 detail。
+实验室检验（laboratory）报告：按指标行拆分，每一行对应一条 details 记录。
+异常标记 (flag) 映射：
+升高/↑/H -> 'H'；降低/↓/L -> 'L'；阳性 -> '阳性'；阴性 -> '阴性'。
+内容清洗：
+忽略水印、页码等无关文本。合并 content 字段时，应包含“内镜所见”和“诊断结果”。
 【最终输出要求】
-只输出纯净 JSON，不要任何 Markdown 引导符（如 ```json）、解释说明或多余文字。
+只输出纯净 JSON，不要任何 Markdown 引导符、解释说明或多余文字。
+优化重点说明：
+明确分类处理：在规则第 3 条中，特意区分了 imaging/pathology 和 laboratory。这是因为检验单必须拆分（否则数据没法用），而影像单（如胃镜、CT）拆分后会破坏医学描述的连贯性。
+强制“单一 Detail”：明确要求“一份报告仅允许生成一条 details 记录”，直接从规则层面上堵死了 AI 自动拆分的可能。
+指定字段归属：引导 AI 将原本分散的部位描述合并到 resultValue，将原本分散的结论合并到 diagnosis。
+使用此提示词后，AI 处理你提供的胃镜数据时，details 数组内将只会包含一个对象，而不是像你之前例子中那样出现 9 个对象。
+
 \n\nOCR文本：\n%@";
 
 
@@ -403,9 +385,7 @@
 
 'reminderEnabled': '是否开启提醒（布尔值 true/false，无则省略）',
 
-'reminderTimes': ['提醒时间（如：08:00、20:00）'],
-
-'sortOrder': '排序序号（字符串，无则省略）',
+'reminderTimes': ['提醒时间（如：08:00、20:00）']
 
 'extra': {}
 
@@ -422,7 +402,7 @@
     1    输出必须是单个合法 JSON 对象，禁止数组包裹根结构。
     2    无值字段直接省略，严禁出现 null、空字符串 ''、空数组 []、空对象 {}。
     3    键名必须与上述结构完全一致（区分大小写，驼峰式命名），禁止新增未定义键。
-    4    数值字段统一使用字符串格式：medicalCase、timesPerPeriod、durationDays、sortOrder 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
+    4    数值字段统一使用字符串格式：medicalCase、timesPerPeriod、durationDays 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
     5    medications 为药品明细数组，无有效药品则整段省略。
 
 【处方批次字段抽取规则】
@@ -456,7 +436,6 @@
     •    instructions：用药嘱托、注意事项、服用方式。
     •    reminderEnabled：仅当文本明确要求用药提醒时填 true，否则省略。
     •    reminderTimes：每日提醒时间数组，格式 HH:mm，无则省略。
-    •    sortOrder：按处方中药品排列顺序填写序号（字符串）。
 
 【抽取范围与去噪】
 
@@ -531,7 +510,6 @@
     'instructions': '用药说明/注意事项（无则省略）',
     'reminderEnabled': '是否开启提醒（布尔值true/false，无则省略）',
     'reminderTimes': ['提醒时间（如：08:00、20:00）'],
-    'sortOrder': '排序序号（字符串，无则省略）',
     'extra': {}
   }
 ]
@@ -541,7 +519,7 @@
 1. 输出必须是合法 JSON 数组，即使只有一种药品也要用 [ ] 包裹。
 2. 无值字段**直接省略**，严禁出现null、空字符串''、空数组[]、空对象{}。
 3. 键名必须与上述结构完全一致，区分大小写，禁止新增未定义键。
-4. 数值字段统一使用字符串格式：doseValue、timesPerPeriod、durationDays、sortOrder 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
+4. 数值字段统一使用字符串格式：doseValue、timesPerPeriod、durationDays 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
 5. 日期、时间、文本保持原文清洗后格式，无有效信息直接省略。
 
 【字段抽取规则】
@@ -562,7 +540,6 @@
 - instructions：用药嘱托、注意事项、服用方式。
 - reminderEnabled：仅当文本明确要求用药提醒时填true，否则省略。
 - reminderTimes：每日提醒时间数组，格式HH:mm，无则省略。
-- sortOrder：按处方药品顺序填写序号（字符串）。
 - extra：扩展信息，无则省略。
 
 【抽取范围与去噪】

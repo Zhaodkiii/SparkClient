@@ -92,6 +92,7 @@
 "home.medical.list.medications.dose_short" = "Dose";
 "home.medical.list.medications.frequency_title" = "Frequency";
 "home.medical.list.medications.instructions_title" = "Instructions";
+"home.medical.list.medications.view_detail" = "View details";
 "home.medical.list.medications.detail_title" = "Details";
 "home.medical.list.medications.form_title" = "Dosage form";
 "home.medical.list.medications.route_title" = "Route";
@@ -138,6 +139,7 @@
 "home.medical.list.examination.detail.pathology.diagnosis" = "Pathology diagnosis";
 "home.medical.list.details.loading" = "Loading details…";
 "home.medical.list.details.section" = "Detail items";
+"home.medical.attachments.title" = "Attachments";
 "home.medical.list.health_exam.search.placeholder" = "Search exam reports...";
 "home.medical.list.health_exam.filter.all" = "All";
 "home.medical.list.health_exam.filter.with_summary" = "With summary";

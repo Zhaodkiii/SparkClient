@@ -3,6 +3,8 @@ import SwiftUI
 /// 医疗检查列表页：顶部固定搜索与分类，正文按分组展示检查卡片。
 struct ExaminationReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments>
+    private let fileTransferService: FileTransferService
+    private let medicalResourceAPI: SparkMedicalResourceAPI
 
     @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
@@ -11,8 +13,11 @@ struct ExaminationReportsListPage: View {
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger,
+        fileTransferService: FileTransferService,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     ) {
+        self.fileTransferService = fileTransferService
+        self.medicalResourceAPI = SparkMedicalResourceAPI(configuration: medicalQueryAPI.configuration)
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
                 reports: completeData?.examinationReports ?? [],
@@ -97,12 +102,17 @@ struct ExaminationReportsListPage: View {
             LazyVStack(spacing: 16) {
                 ForEach(ExaminationReportCategory.allCases) { category in
                     if let reports = groupedReports[category], reports.isEmpty == false {
-                        ExaminationReportTypeSection(
+                        ExaminationReportCategorySection(
                             category: category,
                             reports: reports,
+                            fileTransferService: fileTransferService,
+                            medicalResourceAPI: medicalResourceAPI,
                             isLoading: { viewModel.isLoading(reportID: $0) },
                             onLoadDetails: { reportID in
                                 await viewModel.loadDetailsIfNeeded(for: reportID)
+                            },
+                            onDeleted: { deletedID in
+                                viewModel.removeReport(reportID: deletedID)
                             }
                         )
                     }
@@ -211,11 +221,14 @@ private struct ExaminationReportFilterChip: View {
     }
 }
 
-private struct ExaminationReportTypeSection: View {
+private struct ExaminationReportCategorySection: View {
     let category: ExaminationReportCategory
     let reports: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]
+    let fileTransferService: FileTransferService
+    let medicalResourceAPI: SparkMedicalResourceAPI
     let isLoading: (Int) -> Bool
     let onLoadDetails: (Int) async -> Void
+    let onDeleted: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -246,7 +259,12 @@ private struct ExaminationReportTypeSection: View {
                     LabReportCard(
                         item: report,
                         category: category,
-                        isLoadingDetails: isLoading(report.id)
+                        isLoadingDetails: isLoading(report.id),
+                        fileTransferService: fileTransferService,
+                        medicalResourceAPI: medicalResourceAPI,
+                        onDeleted: { deletedID in
+                            onDeleted(deletedID)
+                        }
                     )
                     .task {
                         await onLoadDetails(report.id)
