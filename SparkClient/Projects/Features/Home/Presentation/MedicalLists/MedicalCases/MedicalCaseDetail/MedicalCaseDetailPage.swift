@@ -1,6 +1,12 @@
 import SwiftUI
 import UIKit
 
+private enum MedicalCaseAddRecordKind: String, Identifiable {
+    case medication, symptom, prescription, examination, visit, followUp, surgery
+
+    var id: String { rawValue }
+}
+
 /// 病例详情页：时间轴 + 头部摘要卡片，视觉对齐 HealthClient `MedicalRecordDetailView` / `TimelineRow`。
 struct MedicalCaseDetailPage: View {
     let item: SparkMedicalSyncAPI.RemoteMedicalCaseSummary
@@ -10,6 +16,7 @@ struct MedicalCaseDetailPage: View {
 
     @State private var showingAttachments = false
     @State private var dismissedTimelineEventIDs: Set<String> = []
+    @State private var addRecordSheet: MedicalCaseAddRecordKind?
 
     private var timelineEvents: [MedicalCaseTimelineEvent] {
         MedicalCaseTimelineEventBuilder.makeEvents(from: item, completeData: completeData)
@@ -87,6 +94,11 @@ struct MedicalCaseDetailPage: View {
         .navigationTitle(item.title?.nonEmpty ?? L10n.text("home.medical.list.medical_cases.title"))
         .navigationBarTitleDisplayMode(.inline)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingAttachments)
+        .fullScreenCover(item: $addRecordSheet) { kind in
+            NavigationView {
+                medicalCaseAddRecordDestination(kind)
+            }
+        }
     }
 
     private var timelineSection: some View {
@@ -124,9 +136,49 @@ struct MedicalCaseDetailPage: View {
     }
 
     private var addRecordFloatingButton: some View {
-        Button {
-            let generator = UIImpactFeedbackGenerator(style: .medium)
-            generator.impactOccurred()
+        Menu {
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .medication
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.medication"), systemImage: "pills.fill")
+            }
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .symptom
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.symptom"), systemImage: "heart.text.square.fill")
+            }
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .prescription
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.prescription"), systemImage: "doc.text.fill")
+            }
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .examination
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.examination"), systemImage: "waveform.path.ecg")
+            }
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .visit
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.visit"), systemImage: "person.crop.circle.badge.clock")
+            }
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .followUp
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.follow_up"), systemImage: "calendar.badge.clock")
+            }
+            Button {
+                triggerAddRecordHaptic()
+                addRecordSheet = .surgery
+            } label: {
+                Label(L10n.text("home.medical.case_detail.add.menu.surgery"), systemImage: "scissors")
+            }
         } label: {
             Label {
                 Text(L10n.text("home.medical.case_detail.add_record"))
@@ -146,6 +198,48 @@ struct MedicalCaseDetailPage: View {
         .buttonStyle(.plain)
         .padding(.trailing, 20)
         .padding(.bottom, 28)
+    }
+
+    @ViewBuilder
+    private func medicalCaseAddRecordDestination(_ kind: MedicalCaseAddRecordKind) -> some View {
+        let service = MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
+        let memberID = item.member
+        let medicalCaseID = item.id
+        switch kind {
+        case .medication:
+            MedicationFormView(mode: .create, onCreateSubmit: { draft in
+                try await service.submitMedicationSingle(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
+            })
+        case .symptom:
+            SymptomFormView(mode: .create, onCreateSubmit: { draft in
+                try await service.submitSymptomCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
+            })
+        case .prescription:
+            MedicationMultiCreateView(mode: .create, createMedicalCaseID: medicalCaseID, onCreateSubmit: { draft in
+                try await service.submitPrescriptionBatch(memberID: memberID, draft: draft)
+            })
+        case .examination:
+            ExamReportFormView(mode: .create, onCreateSubmit: { draft in
+                try await service.submitMedicalReportCreate(memberID: memberID, draft: draft, medicalCaseID: medicalCaseID)
+            })
+        case .visit:
+            VisitFormView(mode: .create, onCreateSubmit: { draft in
+                try await service.submitVisitCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
+            })
+        case .followUp:
+            FollowUpFormView(mode: .create, onCreateSubmit: { draft in
+                try await service.submitFollowUpCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
+            })
+        case .surgery:
+            SurgeryFormView(mode: .create, onCreateSubmit: { draft in
+                try await service.submitSurgeryCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
+            })
+        }
+    }
+
+    private func triggerAddRecordHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
     }
 
     private func performEditFeedback() {

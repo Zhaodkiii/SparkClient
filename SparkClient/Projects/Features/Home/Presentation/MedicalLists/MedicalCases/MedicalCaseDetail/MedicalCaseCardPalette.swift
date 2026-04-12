@@ -5,30 +5,58 @@ enum MedicalCaseTimelineKind: Hashable, Sendable {
     case symptom
     case medication
     case prescription
+    case examination(ExaminationReportCategory)
+    case visit
+    case surgery
+    case followUp
     case meta
 
     var palette: MedicalCaseTimelinePalette {
         switch self {
         case .symptom:
-            MedicalCaseTimelinePalette(
+            return MedicalCaseTimelinePalette(
                 tint: Color(uiColor: .systemOrange),
                 border: Color(uiColor: .systemOrange).opacity(0.35),
                 iconName: "exclamationmark.triangle.fill"
             )
         case .medication:
-            MedicalCaseTimelinePalette(
+            return MedicalCaseTimelinePalette(
                 tint: Color(uiColor: .systemIndigo),
                 border: Color(uiColor: .systemIndigo).opacity(0.35),
                 iconName: "pills.fill"
             )
         case .prescription:
-            MedicalCaseTimelinePalette(
+            return MedicalCaseTimelinePalette(
                 tint: Color(uiColor: .systemPurple),
                 border: Color(uiColor: .systemPurple).opacity(0.35),
                 iconName: "doc.text.fill"
             )
+        case .examination(let category):
+            return MedicalCaseTimelinePalette(
+                tint: category.color,
+                border: category.color.opacity(0.35),
+                iconName: category.icon
+            )
+        case .visit:
+            return MedicalCaseTimelinePalette(
+                tint: Color(uiColor: .systemTeal),
+                border: Color(uiColor: .systemTeal).opacity(0.35),
+                iconName: "stethoscope"
+            )
+        case .surgery:
+            return MedicalCaseTimelinePalette(
+                tint: Color(uiColor: .systemRed),
+                border: Color(uiColor: .systemRed).opacity(0.35),
+                iconName: "scissors"
+            )
+        case .followUp:
+            return MedicalCaseTimelinePalette(
+                tint: Color(uiColor: .systemGreen),
+                border: Color(uiColor: .systemGreen).opacity(0.35),
+                iconName: "phone.arrow.up.right"
+            )
         case .meta:
-            MedicalCaseTimelinePalette(
+            return MedicalCaseTimelinePalette(
                 tint: Color(uiColor: .systemGray),
                 border: Color(uiColor: .systemGray).opacity(0.35),
                 iconName: "cross.case.fill"
@@ -45,7 +73,18 @@ struct MedicalCaseTimelinePalette: Sendable {
 
 #Preview("Timeline palette — Light") {
     HStack(spacing: 16) {
-        ForEach([MedicalCaseTimelineKind.symptom, .medication, .prescription, .meta], id: \.self) { kind in
+        ForEach([
+            MedicalCaseTimelineKind.symptom,
+            .medication,
+            .prescription,
+            .examination(.laboratory),
+            .examination(.imaging),
+            .examination(.pathology),
+            .visit,
+            .surgery,
+            .followUp,
+            .meta
+        ], id: \.self) { kind in
             let p = kind.palette
             VStack(spacing: 8) {
                 Image(systemName: p.iconName)
@@ -63,7 +102,18 @@ struct MedicalCaseTimelinePalette: Sendable {
 
 #Preview("Timeline palette — Dark") {
     HStack(spacing: 16) {
-        ForEach([MedicalCaseTimelineKind.symptom, .medication, .prescription, .meta], id: \.self) { kind in
+        ForEach([
+            MedicalCaseTimelineKind.symptom,
+            .medication,
+            .prescription,
+            .examination(.laboratory),
+            .examination(.imaging),
+            .examination(.pathology),
+            .visit,
+            .surgery,
+            .followUp,
+            .meta
+        ], id: \.self) { kind in
             let p = kind.palette
             VStack(spacing: 8) {
                 Image(systemName: p.iconName)

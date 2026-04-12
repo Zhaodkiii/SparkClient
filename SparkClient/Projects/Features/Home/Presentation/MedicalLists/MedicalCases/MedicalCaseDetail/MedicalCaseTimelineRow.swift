@@ -111,6 +111,16 @@ struct MedicalCaseTimelineRow: View {
 
             if event.kind == .prescription, let prescription = event.prescription {
                 prescriptionBody(prescription: prescription, medications: event.nestedMedications ?? [])
+            } else if case .examination(let category) = event.kind, let examination = event.examination {
+                examinationBody(examination: examination, category: category)
+            } else if event.kind == .visit, let visit = event.visit {
+                visitCardBody(visit: visit, detail: event.detail)
+            } else if event.kind == .surgery, let surgery = event.surgery {
+                surgeryCardBody(surgery: surgery, detail: event.detail)
+            } else if event.kind == .followUp, let followUp = event.followUp {
+                followUpCardBody(followUp: followUp, detail: event.detail)
+            } else if event.kind == .symptom, let symptom = event.symptom {
+                symptomCardBody(symptom: symptom, detail: event.detail)
             } else {
                 if event.detail.isEmpty == false {
                     Text(event.detail)
@@ -183,6 +193,120 @@ struct MedicalCaseTimelineRow: View {
                 }
             }
         }
+    }
+
+    private func examinationBody(
+        examination: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
+        category: ExaminationReportCategory
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 4) {
+                Image(systemName: category.icon)
+                    .font(.caption)
+                    .foregroundStyle(category.color)
+                Text(L10n.text(category.titleKey))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(category.color)
+            }
+
+            if let org = examination.organizationName?.nonEmpty {
+                Text(org)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if (examination.detailText).isEmpty == false {
+                Text(examination.detailText)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let attachments = examination.attachments, attachments.isEmpty == false {
+                Divider()
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(attachments, id: \.id) { attachment in
+                            MedicalCaseAttachmentPill(
+                                attachment: attachment,
+                                fileTransferService: fileTransferService
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func visitCardBody(visit: SparkMedicalSyncAPI.RemoteVisit, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if visit.visitType.nilIfBlank != nil {
+                Text(visit.visitType)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            if detail.isEmpty == false {
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func surgeryCardBody(surgery: SparkMedicalSyncAPI.RemoteSurgery, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if surgery.procedureCode.nilIfBlank != nil {
+                Text(surgery.procedureCode)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            if detail.isEmpty == false {
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func followUpCardBody(followUp: SparkMedicalSyncAPI.RemoteFollowUp, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if followUp.status.nilIfBlank != nil {
+                Text(followUp.status)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            if detail.isEmpty == false {
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func symptomCardBody(symptom: SparkMedicalSyncAPI.RemoteSymptom, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if symptom.code.nilIfBlank != nil {
+                Text(symptom.code)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            if detail.isEmpty == false {
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+    var detailText: String {
+        impression?.nonEmpty ?? findings?.nonEmpty ?? ""
     }
 }
 
@@ -384,6 +508,302 @@ private struct MedicalCaseMedicationInlineRow: View {
         prescription: batch,
         nestedMedications: batch.medications,
         editRoute: .prescription(batch)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Timeline row — examination laboratory — Light") {
+    let report = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments(
+        id: 5,
+        member: 1,
+        medicalRecord: 42,
+        category: "laboratory",
+        subCategory: "血常规",
+        itemName: "血常规检查",
+        performedAt: Date(),
+        reportedAt: Date(),
+        organizationName: "仁和医院",
+        departmentName: "检验科",
+        doctorName: "李医生",
+        findings: "白细胞计数正常，红细胞计数正常",
+        impression: "未见明显异常",
+        source: 2,
+        status: 1,
+        extra: nil,
+        createdAt: Date(),
+        updatedAt: Date(),
+        attachments: [],
+        medExamDetails: []
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "examination-5",
+        kind: .examination(.laboratory),
+        title: report.itemName ?? "",
+        detail: report.impression ?? "",
+        date: Date(),
+        statusBadgeText: nil,
+        examination: report,
+        examinationCategory: .laboratory,
+        editRoute: .examination(report, category: .laboratory)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.light)
+}
+
+#Preview("Timeline row — examination imaging — Light") {
+    let report = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments(
+        id: 6,
+        member: 1,
+        medicalRecord: 42,
+        category: "imaging",
+        subCategory: "胸部CT",
+        itemName: "胸部CT平扫",
+        performedAt: Date(),
+        reportedAt: Date(),
+        organizationName: "仁和医院",
+        departmentName: "放射科",
+        doctorName: "张医生",
+        findings: "双肺纹理清晰，未见明显异常密度影",
+        impression: "胸部CT未见明显异常",
+        source: 2,
+        status: 1,
+        extra: nil,
+        createdAt: Date(),
+        updatedAt: Date(),
+        attachments: [],
+        medExamDetails: []
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "examination-6",
+        kind: .examination(.imaging),
+        title: report.itemName ?? "",
+        detail: report.impression ?? "",
+        date: Date(),
+        statusBadgeText: nil,
+        examination: report,
+        examinationCategory: .imaging,
+        editRoute: .examination(report, category: .imaging)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.light)
+}
+
+#Preview("Timeline row — examination pathology — Dark") {
+    let report = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments(
+        id: 7,
+        member: 1,
+        medicalRecord: 42,
+        category: "pathology",
+        subCategory: "活检",
+        itemName: "胃镜活检病理",
+        performedAt: Date(),
+        reportedAt: Date(),
+        organizationName: "仁和医院",
+        departmentName: "病理科",
+        doctorName: "陈医生",
+        findings: "镜下见部分腺体轻度异型增生",
+        impression: "慢性萎缩性胃炎伴轻度异型增生",
+        source: 2,
+        status: 1,
+        extra: nil,
+        createdAt: Date(),
+        updatedAt: Date(),
+        attachments: [],
+        medExamDetails: []
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "examination-7",
+        kind: .examination(.pathology),
+        title: report.itemName ?? "",
+        detail: report.impression ?? "",
+        date: Date(),
+        statusBadgeText: nil,
+        examination: report,
+        examinationCategory: .pathology,
+        editRoute: .examination(report, category: .pathology)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Timeline row — visit — Light") {
+    let visit = SparkMedicalSyncAPI.RemoteVisit(
+        id: 11,
+        member: 1,
+        medicalCase: 42,
+        visitType: "outpatient",
+        visitedAt: Date(),
+        department: "内科",
+        doctorName: "王医生",
+        visitNo: "OP-9001",
+        sourceSystemID: "",
+        notes: "复查",
+        extra: nil,
+        updatedAt: Date()
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "visit-11",
+        kind: .visit,
+        title: visit.department,
+        detail: "王医生 · OP-9001 · 复查",
+        date: Date(),
+        statusBadgeText: nil,
+        visit: visit,
+        editRoute: .visit(visit)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.light)
+}
+
+#Preview("Timeline row — surgery — Dark") {
+    let surgery = SparkMedicalSyncAPI.RemoteSurgery(
+        id: 12,
+        member: 1,
+        medicalCase: 42,
+        procedureName: "阑尾切除术",
+        procedureCode: "APP",
+        site: "右下腹",
+        performedAt: Date(),
+        surgeon: "李医生",
+        anesthesiaType: "全麻",
+        incisionLevel: "II",
+        asaClass: "II",
+        sourceSystemID: "",
+        notes: "顺利",
+        extra: nil,
+        updatedAt: Date()
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "surgery-12",
+        kind: .surgery,
+        title: surgery.procedureName,
+        detail: "李医生 · 右下腹 · 顺利",
+        date: Date(),
+        statusBadgeText: nil,
+        surgery: surgery,
+        editRoute: .surgery(surgery)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Timeline row — follow-up — Light") {
+    let followUp = SparkMedicalSyncAPI.RemoteFollowUp(
+        id: 13,
+        member: 1,
+        medicalCase: 42,
+        plannedAt: Date(),
+        completedAt: Date(),
+        status: "done",
+        method: "phone",
+        outcome: "症状缓解",
+        nextAction: "三月后复诊",
+        extra: nil,
+        updatedAt: Date()
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "follow-up-13",
+        kind: .followUp,
+        title: followUp.method,
+        detail: "症状缓解 · 三月后复诊",
+        date: Date(),
+        statusBadgeText: nil,
+        followUp: followUp,
+        editRoute: .followUp(followUp)
+    )
+    MedicalCaseTimelineRow(
+        event: event,
+        isLast: true,
+        memberID: 1,
+        medicalCaseID: 42,
+        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+        fileTransferService: AppContainer.preview.fileTransferService,
+        onTimelineEventRemoved: nil
+    )
+    .padding()
+    .preferredColorScheme(.light)
+}
+
+#Preview("Timeline row — symptom structured — Dark") {
+    let symptom = SparkMedicalSyncAPI.RemoteSymptom(
+        id: 14,
+        member: 1,
+        medicalCase: 42,
+        name: "头痛",
+        code: "R51",
+        severity: "中度",
+        startedAt: Date(),
+        durationValue: 3,
+        durationUnit: "天",
+        bodyPart: "头部",
+        notes: "伴恶心",
+        extra: nil,
+        updatedAt: Date()
+    )
+    let event = MedicalCaseTimelineEvent(
+        id: "symptom-14",
+        kind: .symptom,
+        title: symptom.name,
+        detail: "中度 · 头部 · 伴恶心",
+        date: Date(),
+        statusBadgeText: nil,
+        symptom: symptom,
+        editRoute: .symptom(symptom)
     )
     MedicalCaseTimelineRow(
         event: event,

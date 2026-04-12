@@ -161,32 +161,12 @@ struct LabReportCard: View {
 
     @ViewBuilder
     private var detailDestination: some View {
-        switch category {
-        case .laboratory:
-            LaboratoryReportDetailPage(
-                report: item,
-                resources: medicalResourceAPI,
-                onDeleted: {
-                    onDeleted?(item.id)
-                }
-            )
-        case .imaging:
-            ImagingReportDetailPage(
-                report: item,
-                resources: medicalResourceAPI,
-                onDeleted: {
-                    onDeleted?(item.id)
-                }
-            )
-        case .pathology:
-            PathologyReportDetailPage(
-                report: item,
-                resources: medicalResourceAPI,
-                onDeleted: {
-                    onDeleted?(item.id)
-                }
-            )
-        }
+        ExaminationReportDetailHostPage(
+            report: item,
+            category: category,
+            resources: medicalResourceAPI,
+            onDeleted: onDeleted
+        )
     }
 
     private var titleCluster: some View {
@@ -456,6 +436,163 @@ struct LabReportCard: View {
     }
 }
 
+private struct ExaminationReportDetailHostPage: View {
+    let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    let category: ExaminationReportCategory
+    let resources: SparkMedicalWorkflowAPI
+    var onDeleted: ((Int) -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isShowingEditSheet = false
+    @State private var isShowingDeleteAlert = false
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
+    private var mutationService: ExaminationReportServerMutationService {
+        .init(resources: resources)
+    }
+
+    private var existingDraft: MedicalReportRecognitionDraft {
+        MedicalReportRecognitionDraft(
+            category: report.category,
+            title: report.itemName ?? "",
+            hospital: report.organizationName,
+            doctor: report.doctorName,
+            content: report.impression?.nonEmpty ?? report.findings?.nonEmpty ?? "",
+            date: MedicalDateCoding.encodeISO8601(report.reportedAt ?? report.performedAt ?? Date()),
+            details: (report.medExamDetails ?? []).map {
+                MedicalReportItem(
+                    category: $0.category,
+                    subCategory: $0.subCategory,
+                    itemName: $0.itemName,
+                    itemCode: $0.itemCode,
+                    resultValue: $0.resultValue,
+                    unit: $0.unit,
+                    referenceRange: $0.referenceRange,
+                    flag: $0.flag,
+                    resultAt: $0.resultAt.map(MedicalDateCoding.encodeISO8601),
+                    modality: $0.modality,
+                    bodyPart: $0.bodyPart,
+                    diagnosis: $0.diagnosis,
+                    extra: $0.extra,
+                    sortOrder: "\($0.sortOrder)"
+                )
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch category {
+        case .laboratory:
+            LaboratoryReportDetailPage(report: report)
+        case .imaging:
+            ImagingReportDetailPage(report: report)
+        case .pathology:
+            PathologyReportDetailPage(report: report)
+        }
+    }
+
+    var body: some View {
+        content
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("编辑") {
+                            isShowingEditSheet = true
+                        }
+                        Button("删除", role: .destructive) {
+                            isShowingDeleteAlert = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+            .sheet(isPresented: $isShowingEditSheet) {
+                NavigationView {
+                    ExamReportFormView(
+                        mode: .serverEdit(existing: existingDraft),
+                        onServerSubmit: { draft in
+                            let mergedReport = report.applying(draft: draft)
+                            try await mutationService.updateReport(report: mergedReport)
+                        }
+                    )
+                }
+                .navigationViewStyle(.stack)
+            }
+            .alert("确认删除该检查报告？", isPresented: $isShowingDeleteAlert) {
+                Button("取消", role: .cancel) {}
+                Button("确认删除", role: .destructive) {
+                    guard isDeleting == false else { return }
+                    isDeleting = true
+                    Task {
+                        do {
+                            try await mutationService.deleteReport(reportID: report.id)
+                            await MainActor.run {
+                                onDeleted?(report.id)
+                                dismiss()
+                            }
+                        } catch {
+                            await MainActor.run {
+                                errorMessage = error.localizedDescription
+                            }
+                        }
+                        await MainActor.run {
+                            isDeleting = false
+                        }
+                    }
+                }
+            } message: {
+                Text("删除后无法恢复。")
+            }
+            .alert("操作失败", isPresented: Binding(get: { errorMessage != nil }, set: { if $0 == false { errorMessage = nil } })) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+    func applying(draft: MedicalReportRecognitionDraft) -> Self {
+        var updated = self
+        updated.category = draft.category ?? updated.category
+        updated.itemName = draft.title
+        updated.organizationName = draft.hospital
+        updated.doctorName = draft.doctor
+        updated.findings = draft.content
+        updated.impression = draft.content
+        updated.reportedAt = Date.parseOrNow(draft.date, defaultDate: reportedAt ?? performedAt ?? Date())
+        updated.performedAt = updated.reportedAt
+        updated.medExamDetails = draft.details.enumerated().map { index, row in
+            SparkMedicalSyncAPI.RemoteMedExamDetail(
+                id: index + 1,
+                businessType: "examination_report",
+                businessID: id,
+                member: member,
+                category: row.category,
+                subCategory: row.subCategory ?? "",
+                itemName: row.itemName ?? "",
+                itemCode: row.itemCode ?? "",
+                resultValue: row.resultValue,
+                unit: row.unit ?? "",
+                referenceRange: row.referenceRange ?? "",
+                flag: row.flag ?? "",
+                resultAt: row.resultAt.flatMap { value in
+                    value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : Date.parseOrNow(value)
+                },
+                modality: row.modality ?? "",
+                bodyPart: row.bodyPart ?? "",
+                diagnosis: row.diagnosis,
+                extra: row.extra,
+                sortOrder: row.sortOrder.parsedAsSortOrderInt() ?? index,
+                updatedAt: Date()
+            )
+        }
+        return updated
+    }
+}
 private struct StatCardView: View {
     let value: String
     let label: String

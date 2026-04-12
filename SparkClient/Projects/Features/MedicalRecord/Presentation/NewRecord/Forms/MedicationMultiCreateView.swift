@@ -20,8 +20,8 @@ struct MedicationMultiCreateView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)?
+    let onServerSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)?
 
     @State private var prescriberName = ""
     @State private var institutionName = ""
@@ -38,7 +38,7 @@ struct MedicationMultiCreateView: View {
     /// 创建模式为 `nil`；编辑模式保留病例关联，避免保存时丢失 `medical_case`。
     private let seedMedicalCase: Int?
 
-    init(mode: Mode, onCreateSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, createMedicalCaseID: Int? = nil, onCreateSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -46,8 +46,8 @@ struct MedicationMultiCreateView: View {
         let seed: PrescriptionRecognitionDraft
         switch mode {
         case .create:
-            seed = .init(medicalCase: nil, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, batchNo: nil, status: "active", auditorName: nil, auditedAt: nil, extra: nil, medications: [])
-            seedMedicalCase = nil
+            seed = .init(medicalCase: createMedicalCaseID, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, batchNo: nil, status: "active", auditorName: nil, auditedAt: nil, extra: nil, medications: [])
+            seedMedicalCase = createMedicalCaseID
         case .serverEdit(let existing), .localEdit(let existing, _):
             seed = existing
             seedMedicalCase = existing.medicalCase
@@ -193,20 +193,16 @@ struct MedicationMultiCreateView: View {
                 return
             }
             isSaving = true
-            Task {
+            Task { @MainActor in
                 do {
                     try await onCreateSubmit(draft)
-                    await MainActor.run {
-                        formLog.info("MedicationMultiCreateView: create save succeeded", module: formLogModule)
-                        dismiss()
-                    }
+                    formLog.info("MedicationMultiCreateView: create save succeeded", module: formLogModule)
+                    dismiss()
                 } catch {
-                    await MainActor.run {
-                        formLog.error("MedicationMultiCreateView: create save failed \(error.localizedDescription)", module: formLogModule)
-                        errorMessage = error.localizedDescription
-                    }
+                    formLog.error("MedicationMultiCreateView: create save failed \(error.localizedDescription)", module: formLogModule)
+                    errorMessage = error.localizedDescription
                 }
-                await MainActor.run { isSaving = false }
+                isSaving = false
             }
         case .serverEdit:
             guard let onServerSubmit else {
@@ -215,20 +211,16 @@ struct MedicationMultiCreateView: View {
                 return
             }
             isSaving = true
-            Task {
+            Task { @MainActor in
                 do {
                     try await onServerSubmit(draft)
-                    await MainActor.run {
-                        formLog.info("MedicationMultiCreateView: server save succeeded", module: formLogModule)
-                        dismiss()
-                    }
+                    formLog.info("MedicationMultiCreateView: server save succeeded", module: formLogModule)
+                    dismiss()
                 } catch {
-                    await MainActor.run {
-                        formLog.error("MedicationMultiCreateView: server save failed \(error.localizedDescription)", module: formLogModule)
-                        errorMessage = error.localizedDescription
-                    }
+                    formLog.error("MedicationMultiCreateView: server save failed \(error.localizedDescription)", module: formLogModule)
+                    errorMessage = error.localizedDescription
                 }
-                await MainActor.run { isSaving = false }
+                isSaving = false
             }
         }
     }

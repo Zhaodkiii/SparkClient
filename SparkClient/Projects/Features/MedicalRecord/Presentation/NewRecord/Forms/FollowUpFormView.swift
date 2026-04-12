@@ -11,8 +11,8 @@ struct FollowUpFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: ((FollowUpRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: ((FollowUpRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)?
+    let onServerSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)?
 
     @State private var plannedAt = ""
     @State private var completedAt = ""
@@ -26,7 +26,7 @@ struct FollowUpFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: ((FollowUpRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((FollowUpRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -117,20 +117,16 @@ struct FollowUpFormView: View {
                 return
             }
             isSaving = true
-            Task {
+            Task { @MainActor in
                 do {
                     try await onCreateSubmit(draft)
-                    await MainActor.run {
-                        formLog.info("FollowUpFormView: create save succeeded", module: formLogModule)
-                        dismiss()
-                    }
+                    formLog.info("FollowUpFormView: create save succeeded", module: formLogModule)
+                    dismiss()
                 } catch {
-                    await MainActor.run {
-                        formLog.error("FollowUpFormView: create save failed \(error.localizedDescription)", module: formLogModule)
-                        errorMessage = error.localizedDescription
-                    }
+                    formLog.error("FollowUpFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                    errorMessage = error.localizedDescription
                 }
-                await MainActor.run { isSaving = false }
+                isSaving = false
             }
         case .serverEdit:
             guard let onServerSubmit else {
@@ -139,20 +135,16 @@ struct FollowUpFormView: View {
                 return
             }
             isSaving = true
-            Task {
+            Task { @MainActor in
                 do {
                     try await onServerSubmit(draft)
-                    await MainActor.run {
-                        formLog.info("FollowUpFormView: server save succeeded", module: formLogModule)
-                        dismiss()
-                    }
+                    formLog.info("FollowUpFormView: server save succeeded", module: formLogModule)
+                    dismiss()
                 } catch {
-                    await MainActor.run {
-                        formLog.error("FollowUpFormView: server save failed \(error.localizedDescription)", module: formLogModule)
-                        errorMessage = error.localizedDescription
-                    }
+                    formLog.error("FollowUpFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                    errorMessage = error.localizedDescription
                 }
-                await MainActor.run { isSaving = false }
+                isSaving = false
             }
         }
     }

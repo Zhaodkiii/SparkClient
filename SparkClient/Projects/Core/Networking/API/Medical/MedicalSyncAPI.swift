@@ -635,6 +635,10 @@ enum SparkMedicalSyncAPI {
         var examinationReports: [RemoteExaminationReportWithAttachments]?
         var prescriptionBatches: [RemotePrescriptionBatchComplete]?
         var standaloneMedications: [RemoteMedication]?
+        var symptoms: [RemoteSymptom]?
+        var visits: [RemoteVisit]?
+        var surgeries: [RemoteSurgery]?
+        var followUps: [RemoteFollowUp]?
 
         enum CodingKeys: String, CodingKey {
             case memberId = "member_id"
@@ -644,6 +648,10 @@ enum SparkMedicalSyncAPI {
             case examinationReports = "examination_reports"
             case prescriptionBatches = "prescription_batches"
             case standaloneMedications = "standalone_medications"
+            case symptoms
+            case visits
+            case surgeries
+            case followUps = "follow_ups"
         }
     }
 }

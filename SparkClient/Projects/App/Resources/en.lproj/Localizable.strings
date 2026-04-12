@@ -177,6 +177,13 @@
 "home.medical.case_detail.timeline" = "Timeline";
 "home.medical.case_detail.timeline.empty" = "No additional timeline items yet.";
 "home.medical.case_detail.add_record" = "Add record";
+"home.medical.case_detail.add.menu.medication" = "Medication";
+"home.medical.case_detail.add.menu.symptom" = "Symptom";
+"home.medical.case_detail.add.menu.prescription" = "Prescription";
+"home.medical.case_detail.add.menu.examination" = "Medical examination";
+"home.medical.case_detail.add.menu.visit" = "Visit";
+"home.medical.case_detail.add.menu.follow_up" = "Follow-up";
+"home.medical.case_detail.add.menu.surgery" = "Surgery";
 "home.medical.case_detail.meta.title" = "Visit information";
 "home.medical.case_detail.meta.hospital" = "Hospital";
 "home.medical.case_detail.meta.record_type" = "Record type";
@@ -184,6 +191,8 @@
 "home.medical.timeline.delete.confirm_title" = "Delete this record?";
 "home.medical.timeline.delete.confirm_message" = "This action cannot be undone.";
 "home.medical.timeline.prescription.medication_count" = "%d medications";
+"home.medical.timeline.visit.fallback_title" = "Visit";
+"home.medical.timeline.follow_up.fallback_title" = "Follow-up";
 "home.medical.list.empty" = "No records yet";
 "home.medical.list.fallback.medical_case_title" = "Medical case";
 "home.medical.list.fallback.exam_institution" = "Exam institution";

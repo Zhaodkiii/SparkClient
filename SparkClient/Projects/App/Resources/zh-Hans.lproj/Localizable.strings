@@ -177,6 +177,13 @@
 "home.medical.case_detail.timeline" = "时间线";
 "home.medical.case_detail.timeline.empty" = "暂无额外时间轴条目。";
 "home.medical.case_detail.add_record" = "新增记录";
+"home.medical.case_detail.add.menu.medication" = "用药";
+"home.medical.case_detail.add.menu.symptom" = "症状";
+"home.medical.case_detail.add.menu.prescription" = "处方";
+"home.medical.case_detail.add.menu.examination" = "医疗检查";
+"home.medical.case_detail.add.menu.visit" = "就诊";
+"home.medical.case_detail.add.menu.follow_up" = "随访";
+"home.medical.case_detail.add.menu.surgery" = "手术";
 "home.medical.case_detail.meta.title" = "就诊信息";
 "home.medical.case_detail.meta.hospital" = "医院";
 "home.medical.case_detail.meta.record_type" = "类型";
@@ -184,6 +191,8 @@
 "home.medical.timeline.delete.confirm_title" = "确认删除？";
 "home.medical.timeline.delete.confirm_message" = "删除后无法恢复，确定要删除吗？";
 "home.medical.timeline.prescription.medication_count" = "%d 种药品";
+"home.medical.timeline.visit.fallback_title" = "就诊";
+"home.medical.timeline.follow_up.fallback_title" = "随访";
 "home.medical.list.empty" = "暂无数据";
 "home.medical.list.fallback.medical_case_title" = "就诊病例";
 "home.medical.list.fallback.exam_institution" = "体检机构";

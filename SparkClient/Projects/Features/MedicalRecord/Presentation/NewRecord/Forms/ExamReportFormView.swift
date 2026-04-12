@@ -44,8 +44,8 @@ struct ExamReportFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: ((MedicalReportRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: ((MedicalReportRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)?
+    let onServerSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)?
 
     @State private var pageType: PageType
     @State private var category: String
@@ -64,8 +64,8 @@ struct ExamReportFormView: View {
 
     init(
         mode: Mode,
-        onCreateSubmit: ((MedicalReportRecognitionDraft) async throws -> Void)? = nil,
-        onServerSubmit: ((MedicalReportRecognitionDraft) async throws -> Void)? = nil
+        onCreateSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)? = nil,
+        onServerSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)? = nil
     ) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
@@ -260,20 +260,16 @@ struct ExamReportFormView: View {
                 return
             }
             isSaving = true
-            Task {
+            Task { @MainActor in
                 do {
                     try await onCreateSubmit(draft)
-                    await MainActor.run {
-                        formLog.info("ExamReportFormView: create save succeeded", module: formLogModule)
-                        dismiss()
-                    }
+                    formLog.info("ExamReportFormView: create save succeeded", module: formLogModule)
+                    dismiss()
                 } catch {
-                    await MainActor.run {
-                        formLog.error("ExamReportFormView: create save failed \(error.localizedDescription)", module: formLogModule)
-                        errorMessage = error.localizedDescription
-                    }
+                    formLog.error("ExamReportFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                    errorMessage = error.localizedDescription
                 }
-                await MainActor.run { isSaving = false }
+                isSaving = false
             }
         case .serverEdit:
             guard let onServerSubmit else {
@@ -282,20 +278,16 @@ struct ExamReportFormView: View {
                 return
             }
             isSaving = true
-            Task {
+            Task { @MainActor in
                 do {
                     try await onServerSubmit(draft)
-                    await MainActor.run {
-                        formLog.info("ExamReportFormView: server save succeeded", module: formLogModule)
-                        dismiss()
-                    }
+                    formLog.info("ExamReportFormView: server save succeeded", module: formLogModule)
+                    dismiss()
                 } catch {
-                    await MainActor.run {
-                        formLog.error("ExamReportFormView: server save failed \(error.localizedDescription)", module: formLogModule)
-                        errorMessage = error.localizedDescription
-                    }
+                    formLog.error("ExamReportFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                    errorMessage = error.localizedDescription
                 }
-                await MainActor.run { isSaving = false }
+                isSaving = false
             }
         }
     }

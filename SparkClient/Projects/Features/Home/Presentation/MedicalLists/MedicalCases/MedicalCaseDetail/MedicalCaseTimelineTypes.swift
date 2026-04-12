@@ -4,6 +4,11 @@ import Foundation
 enum MedicalCaseTimelineEditRoute: Equatable {
     case prescription(SparkMedicalSyncAPI.RemotePrescriptionBatchComplete)
     case standaloneMedication(SparkMedicalSyncAPI.RemoteMedication)
+    case examination(SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments, category: ExaminationReportCategory)
+    case symptom(SparkMedicalSyncAPI.RemoteSymptom)
+    case visit(SparkMedicalSyncAPI.RemoteVisit)
+    case surgery(SparkMedicalSyncAPI.RemoteSurgery)
+    case followUp(SparkMedicalSyncAPI.RemoteFollowUp)
 
     var deleteResource: (kind: SparkMedicalResourceKind, id: Int)? {
         switch self {
@@ -11,6 +16,16 @@ enum MedicalCaseTimelineEditRoute: Equatable {
             return (.prescriptionBatches, batch.id)
         case .standaloneMedication(let medication):
             return (.medications, medication.id)
+        case .examination(let report, _):
+            return (.examinationReports, report.id)
+        case .symptom(let row):
+            return (.symptoms, row.id)
+        case .visit(let row):
+            return (.visits, row.id)
+        case .surgery(let row):
+            return (.surgeries, row.id)
+        case .followUp(let row):
+            return (.followUps, row.id)
         }
     }
 }
@@ -28,6 +43,15 @@ struct MedicalCaseTimelineEvent: Identifiable {
     let prescription: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete?
     let nestedMedications: [SparkMedicalSyncAPI.RemoteMedication]?
 
+    /// 检查报告卡片。
+    let examination: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments?
+    let examinationCategory: ExaminationReportCategory?
+
+    let symptom: SparkMedicalSyncAPI.RemoteSymptom?
+    let visit: SparkMedicalSyncAPI.RemoteVisit?
+    let surgery: SparkMedicalSyncAPI.RemoteSurgery?
+    let followUp: SparkMedicalSyncAPI.RemoteFollowUp?
+
     /// 非空时展示编辑入口（及编辑页内删除）。
     let editRoute: MedicalCaseTimelineEditRoute?
 
@@ -40,6 +64,12 @@ struct MedicalCaseTimelineEvent: Identifiable {
         statusBadgeText: String?,
         prescription: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete? = nil,
         nestedMedications: [SparkMedicalSyncAPI.RemoteMedication]? = nil,
+        examination: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments? = nil,
+        examinationCategory: ExaminationReportCategory? = nil,
+        symptom: SparkMedicalSyncAPI.RemoteSymptom? = nil,
+        visit: SparkMedicalSyncAPI.RemoteVisit? = nil,
+        surgery: SparkMedicalSyncAPI.RemoteSurgery? = nil,
+        followUp: SparkMedicalSyncAPI.RemoteFollowUp? = nil,
         editRoute: MedicalCaseTimelineEditRoute? = nil
     ) {
         self.id = id
@@ -50,6 +80,12 @@ struct MedicalCaseTimelineEvent: Identifiable {
         self.statusBadgeText = statusBadgeText
         self.prescription = prescription
         self.nestedMedications = nestedMedications
+        self.examination = examination
+        self.examinationCategory = examinationCategory
+        self.symptom = symptom
+        self.visit = visit
+        self.surgery = surgery
+        self.followUp = followUp
         self.editRoute = editRoute
     }
 
@@ -63,6 +99,12 @@ struct MedicalCaseTimelineEvent: Identifiable {
             statusBadgeText: text,
             prescription: prescription,
             nestedMedications: nestedMedications,
+            examination: examination,
+            examinationCategory: examinationCategory,
+            symptom: symptom,
+            visit: visit,
+            surgery: surgery,
+            followUp: followUp,
             editRoute: editRoute
         )
     }
@@ -132,35 +174,101 @@ enum MedicalCaseTimelineEventBuilder {
             )
         }
 
-        let remoteMedicationNames = medicationDisplayNames(from: batchesForCase, standalone: standaloneForCase)
-        for (index, symptom) in (item.symptoms ?? []).enumerated() {
+        let examinationsForCase = (completeData?.examinationReports ?? []).filter { $0.medicalRecord == item.id }
+        for report in examinationsForCase {
+            let rowDate = report.reportedAt ?? report.performedAt ?? report.updatedAt ?? report.createdAt ?? date
+            let category = ExaminationReportCategoryMatcher.category(for: report)
+            let title = report.itemName?.nonEmpty
+                ?? report.subCategory?.nonEmpty
+                ?? report.category?.nonEmpty
+                ?? L10n.text(category.titleKey)
+            let detail = report.impression?.nonEmpty ?? report.findings?.nonEmpty ?? ""
             events.append(
                 MedicalCaseTimelineEvent(
-                    id: "symptom-\(index)-\(symptom.hashValue)",
-                    kind: .symptom,
-                    title: symptom,
-                    detail: "",
-                    date: date,
-                    statusBadgeText: nil
+                    id: "examination-\(report.id)",
+                    kind: .examination(category),
+                    title: title,
+                    detail: detail,
+                    date: rowDate,
+                    statusBadgeText: nil,
+                    examination: report,
+                    examinationCategory: category,
+                    editRoute: .examination(report, category: category)
                 )
             )
         }
 
-        if let medications = item.medications {
-            for (index, medicationTitle) in medications.enumerated() {
-                let normalized = normalizeMedicationName(medicationTitle)
-                if remoteMedicationNames.contains(normalized) { continue }
-                events.append(
-                    MedicalCaseTimelineEvent(
-                        id: "medication-str-\(index)-\(medicationTitle.hashValue)",
-                        kind: .medication,
-                        title: medicationTitle,
-                        detail: "",
-                        date: date,
-                        statusBadgeText: nil
-                    )
+        let symptomsForCase = (completeData?.symptoms ?? []).filter { $0.medicalCase == item.id }
+        for row in symptomsForCase {
+            let rowDate = row.startedAt ?? row.updatedAt
+            events.append(
+                MedicalCaseTimelineEvent(
+                    id: "symptom-\(row.id)",
+                    kind: .symptom,
+                    title: row.name,
+                    detail: symptomDetailLine(row),
+                    date: rowDate,
+                    statusBadgeText: nil,
+                    symptom: row,
+                    editRoute: .symptom(row)
                 )
-            }
+            )
+        }
+
+        let visitsForCase = (completeData?.visits ?? []).filter { $0.medicalCase == item.id }
+        for row in visitsForCase {
+            let rowDate = row.visitedAt ?? row.updatedAt
+            let title = row.department.nilIfBlank
+                ?? L10n.text("home.medical.timeline.visit.fallback_title")
+            events.append(
+                MedicalCaseTimelineEvent(
+                    id: "visit-\(row.id)",
+                    kind: .visit,
+                    title: title,
+                    detail: visitDetailLine(row),
+                    date: rowDate,
+                    statusBadgeText: nil,
+                    visit: row,
+                    editRoute: .visit(row)
+                )
+            )
+        }
+
+        let surgeriesForCase = (completeData?.surgeries ?? []).filter { $0.medicalCase == item.id }
+        for row in surgeriesForCase {
+            let rowDate = row.performedAt ?? row.updatedAt
+            events.append(
+                MedicalCaseTimelineEvent(
+                    id: "surgery-\(row.id)",
+                    kind: .surgery,
+                    title: row.procedureName,
+                    detail: surgeryDetailLine(row),
+                    date: rowDate,
+                    statusBadgeText: nil,
+                    surgery: row,
+                    editRoute: .surgery(row)
+                )
+            )
+        }
+
+        let followUpsForCase = (completeData?.followUps ?? []).filter { $0.medicalCase == item.id }
+        for row in followUpsForCase {
+            let rowDate = row.completedAt ?? row.plannedAt ?? row.updatedAt
+            let title = row.method.nilIfBlank
+                ?? row.status.nilIfBlank
+                ?? L10n.text("home.medical.timeline.follow_up.fallback_title")
+            events.append(
+                MedicalCaseTimelineEvent(
+                    id: "follow-up-\(row.id)",
+                    kind: .followUp,
+                    title: title,
+                    detail: followUpDetailLine(row),
+                    date: rowDate,
+                    statusBadgeText: nil,
+                    followUp: row,
+                    editRoute: .followUp(row)
+                )
+            )
         }
 
         if let meta = metaDetail(from: item) {
@@ -197,24 +305,20 @@ enum MedicalCaseTimelineEventBuilder {
         }
     }
 
-    private static func medicationDisplayNames(
-        from batches: [SparkMedicalSyncAPI.RemotePrescriptionBatchComplete],
-        standalone: [SparkMedicalSyncAPI.RemoteMedication]
-    ) -> Set<String> {
-        var names = Set<String>()
-        for m in batches.flatMap({ $0.medications ?? [] }) + standalone {
-            if let n = m.drugName.nilIfBlank.map(normalizeMedicationName) {
-                names.insert(n)
-            }
-            if let n = m.genericName.nilIfBlank.map(normalizeMedicationName) {
-                names.insert(n)
-            }
-        }
-        return names
+    private static func symptomDetailLine(_ s: SparkMedicalSyncAPI.RemoteSymptom) -> String {
+        [s.severity.nilIfBlank, s.bodyPart.nilIfBlank, s.notes.nilIfBlank].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private static func normalizeMedicationName(_ raw: String) -> String {
-        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    private static func visitDetailLine(_ v: SparkMedicalSyncAPI.RemoteVisit) -> String {
+        [v.doctorName.nilIfBlank, v.visitNo.nilIfBlank, v.notes.nilIfBlank].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private static func surgeryDetailLine(_ s: SparkMedicalSyncAPI.RemoteSurgery) -> String {
+        [s.surgeon.nilIfBlank, s.site.nilIfBlank, s.notes.nilIfBlank].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private static func followUpDetailLine(_ f: SparkMedicalSyncAPI.RemoteFollowUp) -> String {
+        [f.outcome.nilIfBlank, f.nextAction.nilIfBlank].compactMap { $0 }.joined(separator: " · ")
     }
 
     private static func medicationLineSummary(_ m: SparkMedicalSyncAPI.RemoteMedication) -> String {
@@ -286,5 +390,52 @@ private enum MedicalCaseCardStatus {
         case .unknown:
             return L10n.text("home.medical.list.medical_case.status.unknown")
         }
+    }
+}
+
+/// 检查报告分类匹配器：根据报告字段推断分类。
+private enum ExaminationReportCategoryMatcher {
+    static func category(for report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> ExaminationReportCategory {
+        if let direct = directCategory(from: report) {
+            return direct
+        }
+
+        let haystack = [
+            report.itemName,
+            report.category,
+            report.subCategory,
+            report.findings,
+            report.impression,
+            report.extra?["summary"]
+        ]
+        .compactMap { $0?.lowercased() }
+        .joined(separator: " ")
+
+        if ["影像", "超声", "ct", "mr", "mri", "放射", "x线", "b超", "彩超"].contains(where: { haystack.contains($0) }) {
+            return .imaging
+        }
+        if haystack.contains("病理") || haystack.contains("pathology") {
+            return .pathology
+        }
+        return .laboratory
+    }
+
+    private static func directCategory(from report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> ExaminationReportCategory? {
+        let candidates = [report.category, report.subCategory]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+
+        for candidate in candidates {
+            switch candidate {
+            case "laboratory", "lab", "实验室检查", "检验", "化验":
+                return .laboratory
+            case "imaging", "image", "影像", "影像学检查":
+                return .imaging
+            case "pathology", "病理", "病理检查":
+                return .pathology
+            default:
+                continue
+            }
+        }
+        return nil
     }
 }

@@ -3,14 +3,83 @@ import Foundation
 struct ExaminationReportServerMutationService: Sendable {
     let resources: SparkMedicalWorkflowAPI
 
-    func updateReport(
-        report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
-        draft: MedicalReportRecognitionDraft
-    ) async throws {
+    func updateReport(report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) async throws {
         let updatePayload = ExaminationReportUpdatePayload(
             member: report.member,
             medicalRecord: report.medicalRecord,
-            category: draft.category ?? "medical_report",
+            category: report.category ?? "medical_report",
+            subCategory: "",
+            itemName: report.itemName ?? "",
+            performedAt: report.performedAt.map(MedicalDateCoding.encodeISO8601),
+            reportedAt: report.reportedAt.map(MedicalDateCoding.encodeISO8601),
+            organizationName: report.organizationName,
+            departmentName: report.departmentName ?? "",
+            doctorName: report.doctorName ?? "",
+            findings: report.findings ?? "",
+            impression: report.impression ?? "",
+            source: report.source ?? 2,
+            rawOCR: ["text": report.findings ?? report.impression ?? ""],
+            status: report.status ?? 1,
+            extra: report.extra ?? [:]
+        )
+
+        _ = try await resources.update(
+            SparkMedicalSyncAPI.RemoteExaminationReport.self,
+            kind: .examinationReports,
+            id: report.id,
+            body: updatePayload
+        )
+
+        let existingDetails = try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMedExamDetail].self,
+            kind: .medExamDetails,
+            query: [
+                URLQueryItem(name: "member_id", value: "\(report.member)"),
+                URLQueryItem(name: "business_id", value: "\(report.id)")
+            ]
+        )
+
+        for row in existingDetails where row.businessType.lowercased() == "examination_report" || row.businessType.lowercased() == "examination" {
+            try await resources.delete(kind: .medExamDetails, id: row.id)
+        }
+
+        for row in report.medExamDetails ?? [] {
+            let detailPayload = MedExamDetailCreatePayload(
+                businessType: "examination_report",
+                businessID: report.id,
+                member: report.member,
+                category: row.category,
+                subCategory: row.subCategory,
+                itemName: row.itemName,
+                itemCode: row.itemCode,
+                resultValue: row.resultValue ?? "",
+                unit: row.unit,
+                referenceRange: row.referenceRange,
+                flag: row.flag,
+                resultAt: row.resultAt.map(MedicalDateCoding.encodeISO8601),
+                modality: row.modality,
+                bodyPart: row.bodyPart,
+                diagnosis: row.diagnosis ?? "",
+                extra: row.extra ?? [:],
+                sortOrder: row.sortOrder
+            )
+            _ = try await resources.create(
+                SparkMedicalSyncAPI.RemoteMedExamDetail.self,
+                kind: .medExamDetails,
+                body: detailPayload
+            )
+        }
+    }
+
+    func deleteReport(reportID: Int) async throws {
+        try await resources.delete(kind: .examinationReports, id: reportID)
+    }
+
+    func updateReport(report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments, draft: MedicalReportRecognitionDraft) async throws {
+        let updatePayload = ExaminationReportUpdatePayload(
+            member: report.member,
+            medicalRecord: report.medicalRecord,
+            category: draft.category ?? report.category ?? "medical_report",
             subCategory: "",
             itemName: draft.title,
             performedAt: draft.date,
@@ -72,10 +141,6 @@ struct ExaminationReportServerMutationService: Sendable {
                 body: detailPayload
             )
         }
-    }
-
-    func deleteReport(reportID: Int) async throws {
-        try await resources.delete(kind: .examinationReports, id: reportID)
     }
 }
 

@@ -43,6 +43,12 @@ struct MedicalRecordCard: View {
 
     private let noteText: String? = nil
 
+    private var structuredSymptomNames: [String] {
+        (completeData?.symptoms ?? [])
+            .filter { $0.medicalCase == item.id }
+            .map(\.name)
+    }
+
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -85,14 +91,14 @@ struct MedicalRecordCard: View {
                     .lineLimit(2)
             }
 
-            if let symptoms = item.symptoms, symptoms.isEmpty == false {
+            if structuredSymptomNames.isEmpty == false {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L10n.text("home.medical.list.medical_case.symptoms"))
                         .font(.subheadline)
                         .foregroundStyle(style.textSecondary)
                     MedicalFlowTagView(
-                        items: limitedList(symptoms, max: maxChips),
-                        extraCount: max(0, symptoms.count - maxChips),
+                        items: limitedList(structuredSymptomNames, max: maxChips),
+                        extraCount: max(0, structuredSymptomNames.count - maxChips),
                         tint: style.chipBG,
                         foreground: style.chipFG
                     )

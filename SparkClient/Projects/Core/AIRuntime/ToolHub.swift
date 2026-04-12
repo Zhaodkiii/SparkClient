@@ -940,10 +940,10 @@ final class ToolHub: @unchecked Sendable {
         let member = data.member
         let cases = data.medicalCases ?? []
         let caseCount = cases.count
-        let symptomCount = cases.reduce(0) { $0 + ($1.symptoms ?? []).count }
-        let visitCount = 0
-        let surgeryCount = 0
-        let followUpCount = 0
+        let symptomCount = (data.symptoms ?? []).count
+        let visitCount = (data.visits ?? []).count
+        let surgeryCount = (data.surgeries ?? []).count
+        let followUpCount = (data.followUps ?? []).count
         let healthExamCount = (data.healthExamReports ?? []).count
         let examCount = (data.examinationReports ?? []).count
         let examDetailCount = 0
