@@ -51,9 +51,9 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
             )
             return receipt
 
-        // 2. 保存体检报告（使用组合创建 API）
+        // 2. 保存体检报告（专用工作流接口 `workflows/health-exams/save/`，不经过组合创建）
         case .healthExamReport(let draft):
-            let receipt = try await saveCombinedHealthExam(
+            let receipt = try await saveHealthExamReport(
                 memberID: memberID,
                 draft: draft,
                 envelope: output.envelope,
@@ -179,7 +179,8 @@ private extension DefaultTypedMedicalDocumentSaver {
         memberID: Int,
         draft: HealthExamRecognitionDraft,
         rawOCRText: String,
-        now: Date
+        now: Date,
+        fileIds: [Int]
     ) -> SparkMedicalWorkflowAPI.HealthExamSavePayload {
         // 获取最终确定的机构名称（优先 draft，兜底从 OCR 识别）
         let institutionName = resolvedHealthExamInstitutionName(draft: draft, rawOCRText: rawOCRText) ?? ""
@@ -192,11 +193,12 @@ private extension DefaultTypedMedicalDocumentSaver {
             examDate: examDate.toDateOnly(), // 体检日期
             examType: parseHealthExamType(draft.examType), // 体检类型（常规/入职/专项…）
             summary: draft.summary,              // 体检总结
-            source: 2,                           // 来源：2=AI上传
+            source: 2,                           // 来源：2=OCR（与后端 HealthExamReport.Source）
             rawOCR: ["text": rawOCRText],        // 原始OCR文本
-            status: 1,                           // 状态：1=正常
+            status: 1,                           // 状态：1=draft
             extra: ["source": "typed_upload"],
-            details: buildHealthExamDetails(draft: draft, defaultDate: examDate.toISO8601()) // 体检明细项
+            details: buildHealthExamDetails(draft: draft, defaultDate: examDate.toISO8601()), // 体检明细项
+            fileIds: fileIds
         )
     }
 
@@ -423,50 +425,28 @@ private extension DefaultTypedMedicalDocumentSaver {
         )
     }
 
-    /// 使用组合创建 API 保存体检报告
-    func saveCombinedHealthExam(
+    /// 使用体检专用工作流保存（`POST /api/v1/medical/workflows/health-exams/save/`），不创建病历组合包。
+    func saveHealthExamReport(
         memberID: Int,
         draft: HealthExamRecognitionDraft,
         envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) async throws -> MedicalDocumentSaveReceipt {
-        let sourceFileIds = extractSourceFileIds(from: envelope)
-
-        // 将体检报告转换为检查报告列表
-        let examReports = draft.toExaminationReportCreateRequests()
-
-        let request = CombinedMedicalCreateRequest(
-            member: MemberCreateRequestWithId(
-                id: memberID,
-                name: nil,
-                gender: nil,
-                birthDate: nil,
-                relationship: nil,
-                extra: nil
-            ),
-            medicalCase: MedicalCaseCreateRequest(
-                title: "\(draft.institutionName ?? "体检")体检报告",
-                hospitalName: draft.institutionName,
-                diagnosisSummary: draft.summary,
-                ageAtVisit: nil,
-                extra: ["report_no": draft.reportNo ?? "", "exam_type": draft.examType ?? "", "occurred_at": draft.examDate ?? ""]
-            ),
-            symptom: nil,
-            visit: nil,
-            surgery: nil,
-            followUp: nil,
-            examinationReports: examReports,
-            prescriptionBatches: nil,
-            sourceFileIds: sourceFileIds
+        let fileIds = extractSourceFileIds(from: envelope)
+        let payload = buildHealthExamPayload(
+            memberID: memberID,
+            draft: draft,
+            rawOCRText: envelope.rawOCRText,
+            now: now,
+            fileIds: fileIds
         )
-
-        let response = try await combinedAPI.createCombinedMedical(request)
+        let reportId = try await workflowAPI.saveHealthExam(payload)
         logger.info(
-            "体检报告组合创建成功，memberID=\(response.memberId), caseID=\(response.medicalCaseId), reportCount=\(response.examinationReportIds?.count ?? 0)",
+            "体检报告工作流保存成功，memberID=\(memberID), healthExamReportID=\(reportId)",
             module: .medical
         )
         return MedicalDocumentSaveReceipt(
-            recordID: response.medicalCaseId,
+            recordID: reportId,
             savedAt: now,
             isSuccess: true
         )

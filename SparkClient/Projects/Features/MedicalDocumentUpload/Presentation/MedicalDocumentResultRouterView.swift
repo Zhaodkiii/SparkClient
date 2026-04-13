@@ -9,27 +9,28 @@ struct MedicalDocumentResultRouterView: View {
     let onSave: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                headerCard
-
-                NavigationLink {
-                    destinationView
-                } label: {
-                    routeCard
-                }
-                .buttonStyle(.plain)
-
-                Button("返回上传") {
-                    onBack()
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(16)
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("抽取结果")
-        .navigationBarTitleDisplayMode(.inline)
+        destinationView
+//        ScrollView {
+//            VStack(alignment: .leading, spacing: 16) {
+//                headerCard
+//
+//                NavigationLink {
+//                    destinationView
+//                } label: {
+//                    routeCard
+//                }
+//                .buttonStyle(.plain)
+//
+//                Button("返回上传") {
+//                    onBack()
+//                }
+//                .buttonStyle(.bordered)
+//            }
+//            .padding(16)
+//        }
+//        .background(Color(uiColor: .systemGroupedBackground))
+//        .navigationTitle("抽取结果")
+//        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder

@@ -812,3 +812,97 @@
 "medical_record.forms.visit.title.create" = "New visit";
 "medical_record.forms.visit.title.edit" = "Edit visit";
 "medical_record.forms.visit.title.edit_local" = "Edit visit (local)";
+
+"medical.upload.result.member.title" = "Member confirmation";
+"medical.upload.result.member.subtitle" = "Confirm this recognition result is linked to the selected member";
+"medical.upload.result.member.id" = "Member ID";
+
+"medical.upload.result.common.edit" = "Edit";
+"medical.upload.result.common.back" = "Back";
+"medical.upload.result.common.submit" = "Submit";
+"medical.upload.result.common.save_status" = "Save status";
+"medical.upload.result.common.save_success" = "Submitted to backend";
+"medical.upload.result.common.saved" = "Saved";
+"medical.upload.result.common.record_id" = "Record ID";
+
+"medical.upload.result.attachments.title" = "Attachments";
+"medical.upload.result.attachments.subtitle" = "Attachment list reuses common preview capability";
+"medical.upload.result.attachments.count" = "%d items";
+"medical.upload.result.attachments.empty" = "No attachments";
+
+"medical.upload.result.prescription.nav_title" = "Prescription";
+"medical.upload.result.prescription.batch_no" = "Batch No.";
+"medical.upload.result.prescription.hospital" = "Institution";
+"medical.upload.result.prescription.prescriber" = "Prescriber";
+"medical.upload.result.prescription.batch_section.title" = "Prescription batch";
+"medical.upload.result.prescription.batch_section.subtitle" = "Supports local maintenance for medication lines";
+"medical.upload.result.prescription.medication_count" = "%d medications";
+"medical.upload.result.prescription.edit_batch" = "Edit batch";
+"medical.upload.result.prescription.empty_medications" = "No medication items";
+
+"medical.upload.result.medication.nav_title" = "Medication";
+"medical.upload.result.medication.section.title" = "Medication list";
+"medical.upload.result.medication.section.subtitle" = "Supports single and batch local editing";
+"medical.upload.result.medication.count_format" = "%d items";
+"medical.upload.result.medication.batch_edit" = "Batch edit";
+"medical.upload.result.medication.total_count" = "Medication count";
+"medical.upload.result.medication.empty" = "No medications";
+"medical.upload.result.medication.unnamed" = "Unnamed medication";
+
+"medical.upload.result.medical_report.nav_title" = "Exam Reports";
+"medical.upload.result.medical_report.total_count" = "Report count";
+"medical.upload.result.medical_report.total_format" = "%d reports";
+"medical.upload.result.medical_report.stats.title" = "Overview";
+"medical.upload.result.medical_report.stats.subtitle" = "Distribution across laboratory / imaging / pathology";
+"medical.upload.result.medical_report.cards.title" = "Report cards";
+"medical.upload.result.medical_report.cards.subtitle" = "Browse by category and edit locally";
+"medical.upload.result.medical_report.category.laboratory" = "Laboratory";
+"medical.upload.result.medical_report.category.imaging" = "Imaging";
+"medical.upload.result.medical_report.category.pathology" = "Pathology";
+"medical.upload.result.medical_report.empty_category" = "No reports in this category";
+"medical.upload.result.medical_report.detail_count" = "%d detail items";
+
+"medical.upload.result.common.complete" = "Done";
+
+"medical.upload.result.health_exam.nav_title" = "Health Exam";
+"medical.upload.result.health_exam.total_count" = "Item count";
+"medical.upload.result.health_exam.category.other" = "Other";
+
+"medical.upload.result.health_exam.basic_info.title" = "Exam basic info";
+"medical.upload.result.health_exam.basic_info.subtitle" = "Supports local editing for header fields";
+"medical.upload.result.health_exam.basic_info.nav" = "Edit exam basic info";
+"medical.upload.result.health_exam.basic_info.edit_title" = "Exam basic info";
+"medical.upload.result.health_exam.basic_info.institution" = "Institution";
+"medical.upload.result.health_exam.basic_info.report_no" = "Report No.";
+"medical.upload.result.health_exam.basic_info.exam_date" = "Exam date";
+"medical.upload.result.health_exam.basic_info.exam_type" = "Exam type";
+"medical.upload.result.health_exam.basic_info.summary" = "Summary";
+
+"medical.upload.result.health_exam.overview.title" = "Abnormal overview";
+"medical.upload.result.health_exam.overview.subtitle" = "High / Mid / Low risk layers";
+
+"medical.upload.result.health_exam.summary.title" = "Summary Row";
+"medical.upload.result.health_exam.summary.subtitle" = "Filter items by total/normal/abnormal";
+"medical.upload.result.health_exam.summary.total" = "Total";
+"medical.upload.result.health_exam.summary.normal" = "Normal";
+"medical.upload.result.health_exam.summary.abnormal" = "Abnormal";
+
+"medical.upload.result.health_exam.groups.title" = "Category Groups";
+"medical.upload.result.health_exam.groups.subtitle" = "Inspect risk items in collapsible groups";
+
+"medical.upload.result.health_exam.risk.high" = "High";
+"medical.upload.result.health_exam.risk.mid" = "Medium";
+"medical.upload.result.health_exam.risk.low" = "Low";
+"medical.upload.result.health_exam.risk.normal" = "Normal";
+
+"medical.upload.result.health_exam.item.nav" = "Edit exam item";
+"medical.upload.result.health_exam.item.edit_title" = "Exam item";
+"medical.upload.result.health_exam.item.unnamed" = "Untitled item";
+"medical.upload.result.health_exam.item.category" = "Category";
+"medical.upload.result.health_exam.item.subcategory" = "Subcategory";
+"medical.upload.result.health_exam.item.name" = "Item name";
+"medical.upload.result.health_exam.item.result" = "Result";
+"medical.upload.result.health_exam.item.unit" = "Unit";
+"medical.upload.result.health_exam.item.reference" = "Reference range";
+"medical.upload.result.health_exam.item.flag" = "Flag";
+"medical.upload.result.health_exam.item.diagnosis" = "Diagnosis";

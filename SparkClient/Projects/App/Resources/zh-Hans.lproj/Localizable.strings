@@ -812,3 +812,97 @@
 "medical_record.forms.visit.title.create" = "新增就诊";
 "medical_record.forms.visit.title.edit" = "编辑就诊";
 "medical_record.forms.visit.title.edit_local" = "编辑就诊（本地）";
+
+"medical.upload.result.member.title" = "成员确认";
+"medical.upload.result.member.subtitle" = "确认识别结果将归档到该成员";
+"medical.upload.result.member.id" = "成员 ID";
+
+"medical.upload.result.common.edit" = "编辑";
+"medical.upload.result.common.back" = "返回";
+"medical.upload.result.common.submit" = "提交保存";
+"medical.upload.result.common.save_status" = "保存状态";
+"medical.upload.result.common.save_success" = "已提交到后端";
+"medical.upload.result.common.saved" = "已保存";
+"medical.upload.result.common.record_id" = "记录 ID";
+
+"medical.upload.result.attachments.title" = "附件管理";
+"medical.upload.result.attachments.subtitle" = "附件列表复用公共预览能力";
+"medical.upload.result.attachments.count" = "%d个";
+"medical.upload.result.attachments.empty" = "暂无附件";
+
+"medical.upload.result.prescription.nav_title" = "处方";
+"medical.upload.result.prescription.batch_no" = "处方号";
+"medical.upload.result.prescription.hospital" = "开方机构";
+"medical.upload.result.prescription.prescriber" = "开方医生";
+"medical.upload.result.prescription.batch_section.title" = "处方批次卡片列表";
+"medical.upload.result.prescription.batch_section.subtitle" = "支持本地维护药品列表";
+"medical.upload.result.prescription.medication_count" = "%d个药品";
+"medical.upload.result.prescription.edit_batch" = "编辑批次";
+"medical.upload.result.prescription.empty_medications" = "暂无药品条目";
+
+"medical.upload.result.medication.nav_title" = "用药";
+"medical.upload.result.medication.section.title" = "药品列表";
+"medical.upload.result.medication.section.subtitle" = "支持单条与批量本地编辑";
+"medical.upload.result.medication.count_format" = "%d项";
+"medical.upload.result.medication.batch_edit" = "批量编辑";
+"medical.upload.result.medication.total_count" = "药品总数";
+"medical.upload.result.medication.empty" = "暂无药品";
+"medical.upload.result.medication.unnamed" = "未命名药品";
+
+"medical.upload.result.medical_report.nav_title" = "检查报告";
+"medical.upload.result.medical_report.total_count" = "报告总数";
+"medical.upload.result.medical_report.total_format" = "%d份";
+"medical.upload.result.medical_report.stats.title" = "统计概览";
+"medical.upload.result.medical_report.stats.subtitle" = "实验室 / 影像 / 病理分布";
+"medical.upload.result.medical_report.cards.title" = "报告卡片";
+"medical.upload.result.medical_report.cards.subtitle" = "可按分类查看并本地编辑";
+"medical.upload.result.medical_report.category.laboratory" = "实验室";
+"medical.upload.result.medical_report.category.imaging" = "影像";
+"medical.upload.result.medical_report.category.pathology" = "病理";
+"medical.upload.result.medical_report.empty_category" = "暂无该分类报告";
+"medical.upload.result.medical_report.detail_count" = "明细 %d 项";
+
+"medical.upload.result.common.complete" = "完成";
+
+"medical.upload.result.health_exam.nav_title" = "体检报告";
+"medical.upload.result.health_exam.total_count" = "指标总数";
+"medical.upload.result.health_exam.category.other" = "其他";
+
+"medical.upload.result.health_exam.basic_info.title" = "体检报告基本信息";
+"medical.upload.result.health_exam.basic_info.subtitle" = "支持本地维护头部信息";
+"medical.upload.result.health_exam.basic_info.nav" = "编辑体检基本信息";
+"medical.upload.result.health_exam.basic_info.edit_title" = "体检报告基本信息";
+"medical.upload.result.health_exam.basic_info.institution" = "体检机构";
+"medical.upload.result.health_exam.basic_info.report_no" = "报告编号";
+"medical.upload.result.health_exam.basic_info.exam_date" = "体检日期";
+"medical.upload.result.health_exam.basic_info.exam_type" = "体检类型";
+"medical.upload.result.health_exam.basic_info.summary" = "体检总结";
+
+"medical.upload.result.health_exam.overview.title" = "异常概览";
+"medical.upload.result.health_exam.overview.subtitle" = "高 / 中 / 低风险分层";
+
+"medical.upload.result.health_exam.summary.title" = "Summary Row";
+"medical.upload.result.health_exam.summary.subtitle" = "按总数/正常/异常筛选指标";
+"medical.upload.result.health_exam.summary.total" = "总";
+"medical.upload.result.health_exam.summary.normal" = "正常";
+"medical.upload.result.health_exam.summary.abnormal" = "异常";
+
+"medical.upload.result.health_exam.groups.title" = "Category Groups";
+"medical.upload.result.health_exam.groups.subtitle" = "分组折叠查看风险指标项";
+
+"medical.upload.result.health_exam.risk.high" = "高风险";
+"medical.upload.result.health_exam.risk.mid" = "中风险";
+"medical.upload.result.health_exam.risk.low" = "低风险";
+"medical.upload.result.health_exam.risk.normal" = "正常";
+
+"medical.upload.result.health_exam.item.nav" = "编辑体检指标";
+"medical.upload.result.health_exam.item.edit_title" = "体检指标项";
+"medical.upload.result.health_exam.item.unnamed" = "未命名指标";
+"medical.upload.result.health_exam.item.category" = "类别";
+"medical.upload.result.health_exam.item.subcategory" = "子类别";
+"medical.upload.result.health_exam.item.name" = "指标名称";
+"medical.upload.result.health_exam.item.result" = "结果值";
+"medical.upload.result.health_exam.item.unit" = "单位";
+"medical.upload.result.health_exam.item.reference" = "参考范围";
+"medical.upload.result.health_exam.item.flag" = "异常标记";
+"medical.upload.result.health_exam.item.diagnosis" = "诊断建议";

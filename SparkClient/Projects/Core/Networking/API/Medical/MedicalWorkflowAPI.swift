@@ -68,6 +68,8 @@ struct SparkMedicalWorkflowAPI {
         let extra: [String: String]
         /// 子项目明细行；结构与检查报告明细保持一致。
         let details: [MedicalReportDetailPayload]
+        /// 已上传文件 ID，服务端在落库后绑定到该体检报告（与 ``HealthExamWorkflowSaveView`` 的 `file_ids` 一致）。
+        let fileIds: [Int]
 
         enum CodingKeys: String, CodingKey {
             case member
@@ -81,6 +83,7 @@ struct SparkMedicalWorkflowAPI {
             case status
             case extra
             case details
+            case fileIds = "file_ids"
         }
     }
 

@@ -111,14 +111,31 @@ enum OpenAIReasoningPayload {
             let thinkType = options.isEnabled ? "enabled" : "disabled"
             return (Extras(reasoningEffort: nil, enableThinking: nil, thinkingBudget: nil, thinkType: thinkType, thinkingType: nil), false, false)
 
-        case "ZHIPUAI", "HANLIN":
-            // 智谱、翰林 使用 thinking 字段：enabled / disabled
+        case "ZHIPUAI", "HANLIN", "MOONSHOT", "KIMI":
+            // 智谱、翰林、Moonshot/Kimi（如 kimi-k2.5）等：thinking.type = enabled / disabled
             let thinkingType = options.isEnabled ? "enabled" : "disabled"
             return (Extras(reasoningEffort: nil, enableThinking: nil, thinkingBudget: nil, thinkType: nil, thinkingType: thinkingType), false, false)
 
-        default:
-            // 不支持原生思考的厂商，使用 /think 后缀兼容
+        case "SPARK", "DEEPSEEK":
+            // 自有网关与 DeepSeek：维持仅 /think 后缀，不上送 thinking 对象，避免与既有契约冲突
             guard options.isEnabled else { return (nil, false, false) }
+            return (nil, true, true)
+
+        default:
+            // 其余 OpenAI 兼容厂商：关闭深度思考时显式 thinking.type=disabled，避免部分模型默认开启链式思考；开启时沿用 /think 后缀
+            guard options.isEnabled else {
+                return (
+                    Extras(
+                        reasoningEffort: nil,
+                        enableThinking: nil,
+                        thinkingBudget: nil,
+                        thinkType: nil,
+                        thinkingType: "disabled"
+                    ),
+                    false,
+                    false
+                )
+            }
             return (nil, true, true)
         }
     }

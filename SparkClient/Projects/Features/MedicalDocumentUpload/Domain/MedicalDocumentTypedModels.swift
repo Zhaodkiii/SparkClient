@@ -1,5 +1,47 @@
 import Foundation
 
+// MARK: - 流式 JSON 兼容：标量可为 String / Int / Double，统一为 String?
+
+/// LLM 流式输出常把 `sortOrder` 等字段写成数字；模型层仍用 `String?` 承接脏数据。
+@propertyWrapper
+struct FlexibleOptionalString: Codable, Sendable, Equatable, Hashable {
+    var wrappedValue: String?
+
+    init(wrappedValue: String?) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if try container.decodeNil() {
+            wrappedValue = nil
+            return
+        }
+        if let stringValue = try? container.decode(String.self) {
+            wrappedValue = stringValue
+        } else if let intValue = try? container.decode(Int.self) {
+            wrappedValue = String(intValue)
+        } else if let doubleValue = try? container.decode(Double.self) {
+            wrappedValue = String(doubleValue)
+        } else {
+            throw DecodingError.typeMismatch(
+                String.self,
+                .init(codingPath: decoder.codingPath, debugDescription: "无法将该字段转换为 String")
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch wrappedValue {
+        case .none:
+            try container.encodeNil()
+        case .some(let value):
+            try container.encode(value)
+        }
+    }
+}
+
 // MARK: - 基础枚举与配置
 
 /// 报告类型：定义了系统能够处理的所有医疗文档范畴。
@@ -65,7 +107,7 @@ struct MedicalReportItem: Sendable, Equatable, Codable {
     let diagnosis: String?     // 医生对该项的诊断
     let extra: [String: String]? // 其他扩展信息
     /// 排序序号（保持与原件一致）；流式 JSON 常为字符串 `"4"`，亦可能为数字
-    let sortOrder: String?
+    @FlexibleOptionalString var sortOrder: String?
 
 }
 
@@ -113,13 +155,14 @@ struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
     let reminderEnabled: Bool?
     let reminderTimes: [String]?
     /// 批次内排序；流式 JSON 常为字符串
-    let sortOrder: String?
+    @FlexibleOptionalString var sortOrder: String?
     let extra: [String: String]?
 
 }
 
 /// 处方批次抽取草稿（与 ``PrescriptionBatch`` / ``PrescriptionBatchSerializer`` 字段对齐；`member` 由上传信封提供）。
 struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
+    /// 关联病历 ID：由 App 在保存/编辑已有病例时注入；**不从** OCR 流式 JSON 解码（避免模型输出字符串与 `Int` 不一致）。
     let medicalCase: Int?
     let prescriberName: String?
     let institutionName: String?
@@ -132,6 +175,7 @@ struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     let extra: [String: String]?
     /// 批次内药品行；缺省或省略时按空数组处理。
     let medications: [MedicationRecognitionDraft]?
+
 }
 
 // MARK: - 新增 Draft 模型（症状/就诊/手术/随访）
