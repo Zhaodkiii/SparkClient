@@ -9,7 +9,7 @@ struct LoadChatThreadsUseCase: Sendable {
         items.reserveCapacity(threads.count)
 
         for thread in threads {
-            let messages = await repository.loadMessages(threadID: thread.id)
+            let messages = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
             let latest = messages.last
             let preview = latest?.content.trimmingCharacters(in: .whitespacesAndNewlines)
             items.append(

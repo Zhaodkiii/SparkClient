@@ -3,7 +3,20 @@ import Foundation
 struct ChatOrchestratorOutput: Sendable {
     let text: String
     let reasoningText: String?
+    let reasoningDurationMs: Int64?
     let kind: ChatMessageKind
+    let toolName: String?
+    let toolContent: String?
+}
+
+/// 助手流式回调的标准增量模型。
+/// 统一承载“正文 / 推理 / 工具链路”字段，避免多参数回调扩散。
+struct ChatAssistantPartialDelta: Sendable {
+    let answer: String
+    let reasoning: String?
+    let kind: ChatMessageKind
+    let toolName: String?
+    let toolContent: String?
 }
 
 struct ChatOrchestrator: Sendable {
@@ -30,7 +43,8 @@ struct ChatOrchestrator: Sendable {
         memberContextSummary: String,
         memberID: Int?,
         inference: ChatOrchestratorInferenceOptions = .default,
-        modelReasoning: ChatModelReasoningContext = .unknown
+        modelReasoning: ChatModelReasoningContext = .unknown,
+        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatOrchestratorOutput {
         let promptLocalizer = PromptLocalizer()
         let reasoningOpts = buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
@@ -58,7 +72,14 @@ struct ChatOrchestrator: Sendable {
 
                 \(promptLocalizer.consentBlockedHint(reason: modelConsent.reason))
                 """
-            return ChatOrchestratorOutput(text: output, reasoningText: nil, kind: .tool)
+            return ChatOrchestratorOutput(
+                text: output,
+                reasoningText: nil,
+                reasoningDurationMs: nil,
+                kind: .tool,
+                toolName: result.toolName,
+                toolContent: result.outputText
+            )
         }
 
         // 无工具命中时转入模型推理路径，显式记录入参规模，便于排查上下文膨胀问题。
@@ -76,12 +97,13 @@ struct ChatOrchestrator: Sendable {
         var loopMessages = runtimeMessages
         let maxToolRounds = 3
         var round = 0
+        var executedTools: [ToolExecutionResult] = []
 
         while round < maxToolRounds {
             round += 1
-            let response: AIRuntimeTextResponse
+            let collected: CollectedRuntimeResponse
             do {
-                response = try await collectRuntimeResponse(
+                collected = try await collectRuntimeResponse(
                     from: try await runtimeService.generateTextStream(
                         request: AIRuntimeTextRequest(
                             scenario: .chat,
@@ -91,12 +113,15 @@ struct ChatOrchestrator: Sendable {
                             reasoning: reasoningOpts,
                             providerCompanyUppercased: nil
                         )
-                    )
+                    ),
+                    onPartial: onPartial
                 )
             } catch {
                 logger.error("AI 推理路径失败：\(error.localizedDescription)", module: .aiConfig)
                 throw error
             }
+            let response = collected.response
+            let toolTrace = makeToolTrace(from: executedTools)
 
             if response.hasToolCalls == false {
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -107,7 +132,10 @@ struct ChatOrchestrator: Sendable {
                 return ChatOrchestratorOutput(
                     text: text.isEmpty ? promptLocalizer.fallbackAssistantText() : text,
                     reasoningText: reasoning.flatMap { $0.isEmpty ? nil : $0 },
-                    kind: .text
+                    reasoningDurationMs: collected.reasoningDurationMs,
+                    kind: .text,
+                    toolName: toolTrace?.name,
+                    toolContent: toolTrace?.content
                 )
             }
 
@@ -117,7 +145,10 @@ struct ChatOrchestrator: Sendable {
                 return ChatOrchestratorOutput(
                     text: text.isEmpty ? promptLocalizer.fallbackAssistantText() : text,
                     reasoningText: reasoning.flatMap { $0.isEmpty ? nil : $0 },
-                    kind: .text
+                    reasoningDurationMs: collected.reasoningDurationMs,
+                    kind: .text,
+                    toolName: toolTrace?.name,
+                    toolContent: toolTrace?.content
                 )
             }
 
@@ -129,11 +160,39 @@ struct ChatOrchestrator: Sendable {
                 AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls)
             )
             for call in response.toolCalls {
+                let roundReasoning = response.reasoningText?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nilIfEmpty
+                let toolStartText = "使用工具：\(call.name)"
+                if let onPartial {
+                    await onPartial(
+                        ChatAssistantPartialDelta(
+                            answer: "",
+                            reasoning: roundReasoning,
+                            kind: .tool,
+                            toolName: call.name,
+                            toolContent: toolStartText
+                        )
+                    )
+                }
                 let toolResult = await toolHub.executeToolCall(
                     name: call.name,
                     arguments: call.arguments,
                     memberID: memberID
                 )
+                let toolFinishText = "使用工具：\(call.name)\n\(toolResult.outputText)"
+                if let onPartial {
+                    await onPartial(
+                        ChatAssistantPartialDelta(
+                            answer: "",
+                            reasoning: roundReasoning,
+                            kind: .tool,
+                            toolName: call.name,
+                            toolContent: toolFinishText
+                        )
+                    )
+                }
+                executedTools.append(toolResult)
                 let modelConsent = consentGate.evaluate(result: toolResult, destination: .model)
                 let content = modelConsent.allowed
                     ? toolResult.outputText
@@ -150,7 +209,14 @@ struct ChatOrchestrator: Sendable {
         }
 
         logger.warning("工具调用超过最大轮次，回退兜底文案", module: .aiConfig)
-        return ChatOrchestratorOutput(text: promptLocalizer.fallbackAssistantText(), reasoningText: nil, kind: .text)
+        return ChatOrchestratorOutput(
+            text: promptLocalizer.fallbackAssistantText(),
+            reasoningText: nil,
+            reasoningDurationMs: nil,
+            kind: .text,
+            toolName: nil,
+            toolContent: nil
+        )
     }
 
     private func buildRuntimeReasoningOptions(
@@ -236,19 +302,49 @@ struct ChatOrchestrator: Sendable {
     }
 
     private func collectRuntimeResponse(
-        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
-    ) async throws -> AIRuntimeTextResponse {
+        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>,
+        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)?
+    ) async throws -> CollectedRuntimeResponse {
         var bufferedText = ""
         var bufferedReasoning = ""
         var toolCallsByIndex: [Int: AIRuntimeToolCall] = [:]
         var completedResponse: AIRuntimeTextResponse?
+        var firstReasoningAt: Date?
+        var lastReasoningAt: Date?
 
         for try await event in stream {
             switch event {
             case .textDelta(let delta):
                 bufferedText.append(delta)
+                if let onPartial {
+                    let reasoning = bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines)
+                    await onPartial(
+                        ChatAssistantPartialDelta(
+                            answer: bufferedText,
+                            reasoning: reasoning.isEmpty ? nil : reasoning,
+                            kind: .text,
+                            toolName: nil,
+                            toolContent: nil
+                        )
+                    )
+                }
             case .reasoningDelta(let delta):
+                let now = Date()
+                if firstReasoningAt == nil { firstReasoningAt = now }
+                lastReasoningAt = now
                 bufferedReasoning.append(delta)
+                if let onPartial {
+                    let reasoning = bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines)
+                    await onPartial(
+                        ChatAssistantPartialDelta(
+                            answer: bufferedText,
+                            reasoning: reasoning.isEmpty ? nil : reasoning,
+                            kind: .text,
+                            toolName: nil,
+                            toolContent: nil
+                        )
+                    )
+                }
             case .toolCallDelta(let delta):
                 var call = toolCallsByIndex[delta.index] ?? AIRuntimeToolCall(
                     id: delta.id ?? UUID().uuidString,
@@ -265,24 +361,89 @@ struct ChatOrchestrator: Sendable {
                     call = AIRuntimeToolCall(id: call.id, name: call.name, arguments: call.arguments + argumentsDelta)
                 }
                 toolCallsByIndex[delta.index] = call
+                if let onPartial {
+                    let content: String
+                    if call.arguments.isEmpty {
+                        content = "使用工具：\(call.name.isEmpty ? "Tool" : call.name)"
+                    } else {
+                        content = "使用工具：\(call.name.isEmpty ? "Tool" : call.name)\n\(call.arguments)"
+                    }
+                    await onPartial(
+                        ChatAssistantPartialDelta(
+                            answer: bufferedText,
+                            reasoning: bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                            kind: .tool,
+                            toolName: call.name.isEmpty ? nil : call.name,
+                            toolContent: content
+                        )
+                    )
+                }
             case .completed(let response):
                 completedResponse = response
             }
         }
+        let reasoningDurationMs = reasoningDurationMs(
+            firstReasoningAt: firstReasoningAt,
+            lastReasoningAt: lastReasoningAt
+        )
 
         if let completedResponse {
-            return completedResponse
+            return CollectedRuntimeResponse(
+                response: completedResponse,
+                reasoningDurationMs: reasoningDurationMs
+            )
         }
 
         let reasoningText = bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines)
-        return AIRuntimeTextResponse(
-            text: bufferedText,
-            reasoningText: reasoningText.isEmpty ? nil : reasoningText,
-            model: "unknown",
-            promptTokens: nil,
-            completionTokens: nil,
-            toolCalls: toolCallsByIndex.keys.sorted().compactMap { toolCallsByIndex[$0] },
-            finishReason: nil
+        let response = AIRuntimeTextResponse(
+                text: bufferedText,
+                reasoningText: reasoningText.isEmpty ? nil : reasoningText,
+                model: "unknown",
+                promptTokens: nil,
+                completionTokens: nil,
+                toolCalls: toolCallsByIndex.keys.sorted().compactMap { toolCallsByIndex[$0] },
+                finishReason: nil
+            )
+        return CollectedRuntimeResponse(
+            response: response,
+            reasoningDurationMs: reasoningDurationMs
         )
+    }
+
+    private struct CollectedRuntimeResponse: Sendable {
+        let response: AIRuntimeTextResponse
+        let reasoningDurationMs: Int64?
+    }
+
+    private func reasoningDurationMs(
+        firstReasoningAt: Date?,
+        lastReasoningAt: Date?
+    ) -> Int64? {
+        guard let firstReasoningAt, let lastReasoningAt else { return nil }
+        let ms = max(1, Int64(lastReasoningAt.timeIntervalSince(firstReasoningAt) * 1_000))
+        return ms
+    }
+
+    private func makeToolTrace(from results: [ToolExecutionResult]) -> (name: String, content: String)? {
+        guard results.isEmpty == false else { return nil }
+        let names = Array(Set(results.map(\.toolName)))
+            .sorted()
+            .joined(separator: ", ")
+        let content = results.enumerated().map { index, item in
+            """
+            [\(index + 1)] \(item.toolName)
+            \(item.outputText)
+            """
+        }
+        .joined(separator: "\n\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard content.isEmpty == false else { return nil }
+        return (names, content)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

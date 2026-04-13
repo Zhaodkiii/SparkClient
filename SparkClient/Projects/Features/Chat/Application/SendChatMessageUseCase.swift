@@ -5,6 +5,7 @@ struct SendChatMessageUseCase: Sendable {
     let orchestrator: ChatOrchestrator
     let syncEngine: ChatSyncEngine
     let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
+    let toolEventInterpreter: ChatToolEventInterpreter
     let logger: Logger
 
     init(
@@ -12,6 +13,7 @@ struct SendChatMessageUseCase: Sendable {
         orchestrator: ChatOrchestrator,
         syncEngine: ChatSyncEngine,
         buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase,
+        toolEventInterpreter: ChatToolEventInterpreter? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
@@ -19,6 +21,7 @@ struct SendChatMessageUseCase: Sendable {
         self.syncEngine = syncEngine
         self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
         self.logger = logger
+        self.toolEventInterpreter = toolEventInterpreter ?? ChatToolEventInterpreter(logger: logger)
     }
 
     func execute(
@@ -28,7 +31,7 @@ struct SendChatMessageUseCase: Sendable {
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
-        onAssistantPartial: (@Sendable (_ answer: String, _ reasoning: String?, _ kind: ChatMessageKind) async -> Void)? = nil
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatThreadSnapshot {
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard sanitizedInput.isEmpty == false else {
@@ -65,7 +68,7 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            let history = await repository.loadMessages(threadID: thread.id)
+            let history = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
             if let onUserMessagePersisted {
                 await onUserMessagePersisted(
                     ChatThreadSnapshot(thread: thread, messages: history)
@@ -89,29 +92,42 @@ struct SendChatMessageUseCase: Sendable {
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
                 inference: inference,
-                modelReasoning: modelReasoning
+                modelReasoning: modelReasoning,
+                onPartial: onAssistantPartial
             )
             logger.info(
                 "AI 编排完成，thread=\(shortID(thread.id)), kind=\(output.kind.rawValue), outputLength=\(output.text.count)",
                 module: .general
             )
 
-            if let onAssistantPartial {
-                await streamAssistantReply(
-                    output: output,
-                    onPartial: onAssistantPartial
+            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let interpreted = toolEventInterpreter.interpret(
+                kind: output.kind,
+                text: output.text,
+                toolName: output.toolName,
+                toolContent: output.toolContent
+            )
+            if interpreted.knowledgeCardAttachmentCount > 0 {
+                // 这里生成的是“预览卡片附件”，不是最终知识库落库动作。
+                logger.debug(
+                    "已生成知识卡预览附件，thread=\(shortID(thread.id)), count=\(interpreted.knowledgeCardAttachmentCount)",
+                    module: .general
                 )
             }
-
-            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if interpreted.richAttachmentCount > 0 {
+                logger.debug(
+                    "已生成富卡片附件，thread=\(shortID(thread.id)), count=\(interpreted.richAttachmentCount)",
+                    module: .general
+                )
+            }
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .assistant,
                 kind: output.kind,
                 content: output.text,
-                attachments: [],
+                attachments: interpreted.attachments,
                 reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
-                reasoningDurationMs: nil,
+                reasoningDurationMs: output.reasoningDurationMs,
                 reasoningExpanded: false,
                 reasoningVisibility: .full,
                 clientMessageID: UUID(),
@@ -129,7 +145,7 @@ struct SendChatMessageUseCase: Sendable {
             guard let latestThread = await repository.loadThread(id: thread.id) else {
                 throw ChatFeatureError.threadNotFound
             }
-            let latestHistory = await repository.loadMessages(threadID: thread.id)
+            let latestHistory = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
             let cost = Date().timeIntervalSince(start)
             logger.info(
                 "sendMessage 完成，thread=\(shortID(thread.id)), messages=\(latestHistory.count), cost=\(format(cost))s",
@@ -191,60 +207,5 @@ struct SendChatMessageUseCase: Sendable {
 
     private func format(_ seconds: TimeInterval) -> String {
         String(format: "%.3f", seconds)
-    }
-
-    private func streamAssistantReply(
-        output: ChatOrchestratorOutput,
-        onPartial: @Sendable (_ answer: String, _ reasoning: String?, _ kind: ChatMessageKind) async -> Void
-    ) async {
-        let kind = output.kind
-        let reasoningFull = output.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if reasoningFull.isEmpty == false {
-            await emitStreamingChunks(reasoningFull) { partial in
-                await onPartial("", partial.isEmpty ? nil : partial, kind)
-            }
-        }
-        let trimmed = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else {
-            await onPartial("", reasoningFull.isEmpty ? nil : reasoningFull, kind)
-            return
-        }
-        await emitStreamingChunks(trimmed) { partial in
-            await onPartial(partial, reasoningFull.isEmpty ? nil : reasoningFull, kind)
-        }
-    }
-
-    /// 即使上游当前是非流式返回，也在客户端按节流节奏增量落 UI，避免一次性大块刷新。
-    private func emitStreamingChunks(
-        _ text: String,
-        onChunk: @Sendable (_ cumulative: String) async -> Void
-    ) async {
-        let scalars = Array(text)
-        guard scalars.isEmpty == false else {
-            await onChunk("")
-            return
-        }
-        var built = ""
-        var index = 0
-        // 源头节流：把更新次数控制在合理上限，避免高频主线程刷新导致卡顿。
-        let total = scalars.count
-        let targetUpdateCount = min(90, max(18, Int(ceil(Double(total) / 22.0))))
-        let minChunkSize = max(6, Int(ceil(Double(total) / Double(targetUpdateCount))))
-        let emitDelayNanoseconds: UInt64 = 45_000_000
-
-        while index < scalars.count {
-            if Task.isCancelled { break }
-            built.append(scalars[index])
-            index += 1
-
-            let reachedChunk = (index % minChunkSize == 0)
-            let reachedTail = (index == scalars.count)
-            if reachedChunk || reachedTail {
-                await onChunk(built)
-                if reachedTail == false {
-                    try? await Task.sleep(nanoseconds: emitDelayNanoseconds)
-                }
-            }
-        }
     }
 }

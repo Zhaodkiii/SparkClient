@@ -27,12 +27,16 @@ actor CoreDataChatRepository: ChatRepository {
         await store.setActiveThread(id: id)
     }
 
-    func loadMessages(threadID: UUID) async -> [ChatMessage] {
-        await store.loadMessages(threadID: threadID)
+    func loadMessages(threadID: UUID, limit: Int? = nil, before: Date? = nil) async -> [ChatMessage] {
+        await store.loadMessages(threadID: threadID, limit: limit, before: before)
+    }
+
+    func countMessages(threadID: UUID) async -> Int {
+        await store.countMessages(threadID: threadID)
     }
 
     func latestServerActivity(for threadID: UUID) async -> Date? {
-        let messages = await store.loadMessages(threadID: threadID)
+        let messages = await store.loadMessages(threadID: threadID, limit: nil, before: nil)
         return messages.map { $0.serverUpdatedAt ?? $0.createdAt }.max()
     }
 
@@ -74,12 +78,28 @@ actor CoreDataChatRepository: ChatRepository {
         await store.upsertRemoteMessages(messages, in: threadID)
     }
 
+    func upsertRemoteThreads(_ threads: [ChatThread]) async {
+        await store.upsertRemoteThreads(threads)
+    }
+
     func loadOutboxMessages(limit: Int) async -> [ChatMessage] {
         await store.loadOutboxMessages(limit: limit)
     }
 
+    func softDeleteThread(id: UUID) async {
+        await store.softDeleteThread(id: id)
+    }
+
+    func loadPendingThreadDeletionIDs(limit: Int = 50) async -> [UUID] {
+        await store.loadPendingThreadDeletionIDs(limit: limit)
+    }
+
+    func removePendingThreadDeletionIDs(_ ids: [UUID]) async {
+        await store.removePendingThreadDeletionIDs(ids)
+    }
+
     func deleteThread(id: UUID) async {
-        await store.deleteThread(id: id)
+        await store.softDeleteThread(id: id)
     }
 
     func loadSyncCursor() async -> ChatSyncCursor? {
@@ -88,5 +108,21 @@ actor CoreDataChatRepository: ChatRepository {
 
     func saveSyncCursor(_ cursor: ChatSyncCursor) async {
         await store.saveSyncCursor(cursor)
+    }
+
+    func loadThreadSyncCursor() async -> ChatSyncCursor? {
+        await store.loadThreadSyncCursor()
+    }
+
+    func saveThreadSyncCursor(_ cursor: ChatSyncCursor) async {
+        await store.saveThreadSyncCursor(cursor)
+    }
+
+    func loadMessageSyncCursor(for threadID: UUID) async -> ChatSyncCursor? {
+        await store.loadMessageSyncCursor(for: threadID)
+    }
+
+    func saveMessageSyncCursor(_ cursor: ChatSyncCursor, for threadID: UUID) async {
+        await store.saveMessageSyncCursor(cursor, for: threadID)
     }
 }

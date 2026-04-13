@@ -25,8 +25,11 @@
         <attribute name="memberID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES" renamingIdentifier="patientID"/>
         <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="scenario" optional="NO" attributeType="String" defaultValueString="chat"/>
+        <attribute name="isSoftDeleted" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES" renamingIdentifier="isDeleted"/>
+        <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="isActive" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
     </entity>
     <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">

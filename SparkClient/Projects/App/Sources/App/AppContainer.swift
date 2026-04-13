@@ -398,13 +398,15 @@ final class AppContainer {
             syncEngine: chatSyncEngine,
             logger: logger
         )
-        let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository)
+        let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository, syncEngine: chatSyncEngine)
         let syncChatUseCase = SyncChatUseCase(syncEngine: chatSyncEngine)
+        let chatToolEventInterpreter = ChatToolEventInterpreter(logger: logger)
         let sendChatMessageUseCase = SendChatMessageUseCase(
             repository: chatRepository,
             orchestrator: chatOrchestrator,
             syncEngine: chatSyncEngine,
             buildMemberContextSummaryUseCase: buildMemberContextSummaryUseCase,
+            toolEventInterpreter: chatToolEventInterpreter,
             logger: logger
         )
 
@@ -580,6 +582,8 @@ final class AppContainer {
             notificationClient: notificationClient,
             aiConfigCenter: aiConfigCenter,
             aiSettingsRepository: aiSettingsRepository,
+            translateKnowledgeTextUseCase: translateKnowledgeTextUseCase,
+            createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
             logger: logger
         )
     }

@@ -3,6 +3,11 @@ import Foundation
 
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
+    private enum MessagePagingConfig {
+        static let initialLimit = 6
+        static let loadMoreLimit = 10
+    }
+
     private let stateStore: ChatStateStore
     private let memberContextStore: MemberContextStore
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
@@ -13,6 +18,8 @@ final class ChatDetailViewModel: ObservableObject {
     private let notificationClient: any NotificationClient
     private let aiConfigCenter: AIConfigCenter
     private let aiSettingsRepository: any AISettingsRepository
+    private let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
+    private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
     private let logger: Logger
     private var isRealtimeActive = false
 
@@ -32,6 +39,8 @@ final class ChatDetailViewModel: ObservableObject {
         notificationClient: any NotificationClient,
         aiConfigCenter: AIConfigCenter,
         aiSettingsRepository: any AISettingsRepository,
+        translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase,
+        createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -44,6 +53,8 @@ final class ChatDetailViewModel: ObservableObject {
         self.notificationClient = notificationClient
         self.aiConfigCenter = aiConfigCenter
         self.aiSettingsRepository = aiSettingsRepository
+        self.translateKnowledgeTextUseCase = translateKnowledgeTextUseCase
+        self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.logger = logger
     }
 
@@ -80,14 +91,54 @@ final class ChatDetailViewModel: ObservableObject {
     }
 
     func loadMessagesIfNeeded(for threadID: UUID) async {
-        do {
-            try await syncChatUseCase.syncThreadOnOpen(threadID: threadID)
-        } catch {
-            stateStore.setError(error.localizedDescription)
-            logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
+        let total = await loadChatMessagesUseCase.count(threadID: threadID)
+        let messages = await loadChatMessagesUseCase.execute(
+            threadID: threadID,
+            limit: MessagePagingConfig.initialLimit,
+            before: nil
+        )
+        let hasMore = total > messages.count
+        stateStore.setMessages(messages, for: threadID, hasMore: hasMore)
+
+        // 本地优先展示，再异步做远端增量同步，避免进入会话瞬时 UI 抖动。
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.syncChatUseCase.syncThreadOnOpen(threadID: threadID)
+                let latestTotal = await self.loadChatMessagesUseCase.count(threadID: threadID)
+                let latestMessages = await self.loadChatMessagesUseCase.execute(
+                    threadID: threadID,
+                    limit: MessagePagingConfig.initialLimit,
+                    before: nil
+                )
+                let latestHasMore = latestTotal > latestMessages.count
+                await MainActor.run {
+                    self.stateStore.setMessages(latestMessages, for: threadID, hasMore: latestHasMore)
+                }
+            } catch {
+                await MainActor.run {
+                    self.stateStore.setError(error.localizedDescription)
+                }
+                self.logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
+            }
         }
-        let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
-        stateStore.setMessages(messages, for: threadID)
+    }
+
+    func loadMoreMessages(for threadID: UUID) async {
+        guard stateStore.hasMoreMessages(for: threadID) else { return }
+        guard stateStore.isLoadingMoreMessages(for: threadID) == false else { return }
+        guard let oldest = stateStore.selectedMessages.first?.createdAt else { return }
+
+        stateStore.setLoadingMore(true, for: threadID)
+        defer { stateStore.setLoadingMore(false, for: threadID) }
+
+        let older = await loadChatMessagesUseCase.execute(
+            threadID: threadID,
+            limit: MessagePagingConfig.loadMoreLimit,
+            before: oldest
+        )
+        let hasMore = older.count >= MessagePagingConfig.loadMoreLimit
+        stateStore.prependMessages(older, for: threadID, hasMore: hasMore)
     }
 
     func sendCurrentDraft() async {
@@ -141,14 +192,9 @@ final class ChatDetailViewModel: ObservableObject {
                         stateStore.clearDraft(for: localSnapshot.thread.id)
                     }
                 },
-                onAssistantPartial: { answer, reasoning, kind in
+                onAssistantPartial: { delta in
                     await MainActor.run {
-                        stateStore.updateStreamingAssistant(
-                            threadID: threadID,
-                            kind: kind,
-                            content: answer,
-                            reasoningContent: reasoning
-                        )
+                        stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
                     }
                 }
             )
@@ -210,6 +256,64 @@ final class ChatDetailViewModel: ObservableObject {
         guard isRealtimeActive else { return }
         isRealtimeActive = false
         await syncChatUseCase.stopRealtime()
+    }
+
+    func translateMessageText(_ text: String) async throws -> String {
+        try await translateKnowledgeTextUseCase.execute(text: text)
+    }
+
+    func saveMessageAsKnowledge(content: String, suggestedTitle: String?) async throws -> KnowledgeDocument {
+        let fallback = String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(20))
+        let title = (suggestedTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? suggestedTitle!.trimmingCharacters(in: .whitespacesAndNewlines)
+            : (fallback.isEmpty ? "聊天知识" : fallback)
+        logger.info("保存消息为知识开始，title=\(title)", module: .general)
+        // 兼容旧入口：直接将整条消息保存为知识文档。
+        return try await createKnowledgeDocumentUseCase.execute(
+            KnowledgeDocumentDraft(
+                title: title,
+                content: content,
+                source: .tool
+            )
+        )
+    }
+
+    /// 保存消息内“已生成的知识卡”，用于卡片预览后的显式确认保存。
+    func saveKnowledgeCard(title: String, content: String) async throws -> KnowledgeDocument {
+        // 标题兜底策略：
+        // 1) 优先使用卡片标题；
+        // 2) 标题为空时，用正文前缀；
+        // 3) 仍为空时，使用默认标题。
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(20))
+        let resolvedTitle = trimmedTitle.isEmpty ? (fallback.isEmpty ? "聊天知识" : fallback) : trimmedTitle
+        logger.info("保存知识卡开始，title=\(resolvedTitle)", module: .general)
+        do {
+            let document = try await createKnowledgeDocumentUseCase.execute(
+                KnowledgeDocumentDraft(
+                    title: resolvedTitle,
+                    content: content,
+                    source: .tool
+                )
+            )
+            logger.info("保存知识卡完成，title=\(resolvedTitle)", module: .general)
+            // 成功后统一给轻提示，确保用户知道“已入库”。
+            notificationClient.success(
+                L10n.text("chat.bubble.knowledge.saved.toast"),
+                title: nil,
+                source: "chat.knowledge.save"
+            )
+            return document
+        } catch {
+            // 失败路径保留错误提示与日志，便于后续定位落库问题。
+            logger.error("保存知识卡失败：\(error.localizedDescription)", module: .general)
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("common.error"),
+                source: "chat.knowledge.save"
+            )
+            throw error
+        }
     }
 
     private func shortID(_ value: UUID?) -> String {

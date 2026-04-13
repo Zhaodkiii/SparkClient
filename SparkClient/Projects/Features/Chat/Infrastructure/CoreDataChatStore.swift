@@ -8,6 +8,21 @@ actor CoreDataChatStore {
         static let cursor = "ChatSyncCursorEntity"
     }
 
+    private enum CursorKey {
+        static let mainMessageSync = "chat.main"
+        static let threadSync = "chat.thread.cursor"
+        static let threadMessageSyncPrefix = "chat.thread.message.cursor."
+        static let pendingThreadDeletePrefix = "chat.thread.delete."
+
+        static func pendingThreadDelete(_ threadID: UUID) -> String {
+            pendingThreadDeletePrefix + threadID.uuidString.lowercased()
+        }
+
+        static func threadMessageSync(_ threadID: UUID) -> String {
+            threadMessageSyncPrefix + threadID.uuidString.lowercased()
+        }
+    }
+
     private let coreDataStack: CoreDataStack
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -20,7 +35,10 @@ actor CoreDataChatStore {
         try? await coreDataStack.performBackgroundTask { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             request.fetchLimit = 1
-            request.predicate = NSPredicate(format: "isActive == YES")
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                NSPredicate(format: "isActive == YES"),
+                NSPredicate(format: "isSoftDeleted == NO"),
+            ])
             request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
             return try context.fetch(request).first.flatMap(Self.toThread)
         }
@@ -38,6 +56,7 @@ actor CoreDataChatStore {
     func loadThreads() async -> [ChatThread] {
         (try? await coreDataStack.performBackgroundTask { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
+            request.predicate = NSPredicate(format: "isSoftDeleted == NO")
             request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
             return try context.fetch(request).compactMap(Self.toThread)
         }) ?? []
@@ -49,8 +68,11 @@ actor CoreDataChatStore {
             memberID: memberID,
             title: title,
             scenario: .chat,
+            isDeleted: false,
+            deletedAt: nil,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            serverUpdatedAt: nil
         )
 
         _ = try? await coreDataStack.performBackgroundTask { context in
@@ -65,8 +87,11 @@ actor CoreDataChatStore {
             object.setValue(thread.memberID.map { Int64($0) }, forKey: "memberID")
             object.setValue(thread.title, forKey: "title")
             object.setValue(thread.scenario.rawValue, forKey: "scenario")
+            object.setValue(false, forKey: "isSoftDeleted")
+            object.setValue(nil, forKey: "deletedAt")
             object.setValue(thread.createdAt, forKey: "createdAt")
             object.setValue(thread.updatedAt, forKey: "updatedAt")
+            object.setValue(thread.serverUpdatedAt, forKey: "serverUpdatedAt")
             object.setValue(true, forKey: "isActive")
         }
 
@@ -78,20 +103,50 @@ actor CoreDataChatStore {
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             for object in try context.fetch(request) {
                 let objectID = object.value(forKey: "id") as? UUID
-                object.setValue(objectID == id, forKey: "isActive")
+                let isDeleted = object.value(forKey: "isSoftDeleted") as? Bool ?? false
+                object.setValue(objectID == id && isDeleted == false, forKey: "isActive")
             }
         }
     }
 
-    func loadMessages(threadID: UUID) async -> [ChatMessage] {
+    /// 默认返回线程最新消息（尾部）以支持懒加载。
+    /// - Parameters:
+    ///   - limit: 读取条数，nil 表示读取全部。
+    ///   - before: 仅返回 createdAt 严格早于该时间戳的消息（用于分页翻页）。
+    func loadMessages(threadID: UUID, limit: Int? = nil, before: Date? = nil) async -> [ChatMessage] {
         (try? await coreDataStack.performBackgroundTask { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
-            request.predicate = NSPredicate(format: "threadID == %@", threadID as CVarArg)
-            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
-            return try context.fetch(request).compactMap { object in
-                Self.toMessage(object: object, decoder: self.decoder)
+            var predicates: [NSPredicate] = [
+                NSPredicate(format: "threadID == %@", threadID as CVarArg),
+                NSPredicate(format: "isTombstone == NO"),
+            ]
+            if let before {
+                predicates.append(NSPredicate(format: "createdAt < %@", before as NSDate))
             }
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+            if let limit, limit > 0 {
+                request.fetchLimit = limit
+            }
+            let rows = try context.fetch(request)
+                .compactMap { object in
+                    Self.toMessage(object: object, decoder: self.decoder)
+                }
+            // 因为查询使用 createdAt DESC（便于拿最近 N 条），返回给 UI 前再翻转为正序。
+            return rows.reversed()
         }) ?? []
+    }
+
+    func countMessages(threadID: UUID) async -> Int {
+        (try? await coreDataStack.performBackgroundTask { context in
+            let request = NSFetchRequest<NSNumber>(entityName: EntityName.message)
+            request.resultType = .countResultType
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                NSPredicate(format: "threadID == %@", threadID as CVarArg),
+                NSPredicate(format: "isTombstone == NO"),
+            ])
+            return try context.count(for: request)
+        }) ?? 0
     }
 
     func appendMessage(
@@ -171,8 +226,11 @@ actor CoreDataChatStore {
                 threadObject.setValue(nil, forKey: "memberID")
                 threadObject.setValue(PromptLocalizer().newThreadTitle(), forKey: "title")
                 threadObject.setValue(AIScenario.chat.rawValue, forKey: "scenario")
+                threadObject.setValue(false, forKey: "isSoftDeleted")
+                threadObject.setValue(nil, forKey: "deletedAt")
                 threadObject.setValue(now, forKey: "createdAt")
                 threadObject.setValue(now, forKey: "updatedAt")
+                threadObject.setValue(now, forKey: "serverUpdatedAt")
                 threadObject.setValue(false, forKey: "isActive")
             }
 
@@ -194,7 +252,40 @@ actor CoreDataChatStore {
             }
 
             if let threadObject = try Self.fetchThread(context: context, threadID: threadID) {
+                threadObject.setValue(false, forKey: "isSoftDeleted")
+                threadObject.setValue(nil, forKey: "deletedAt")
                 threadObject.setValue(Date(), forKey: "updatedAt")
+                let latestRemote = messages
+                    .compactMap { $0.serverUpdatedAt }
+                    .max()
+                if let latestRemote {
+                    threadObject.setValue(latestRemote, forKey: "serverUpdatedAt")
+                }
+            }
+        }
+    }
+
+    func upsertRemoteThreads(_ threads: [ChatThread]) async {
+        guard threads.isEmpty == false else { return }
+
+        _ = try? await coreDataStack.performBackgroundTask { context in
+            for thread in threads {
+                let object = try Self.fetchThread(context: context, threadID: thread.id)
+                    ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.thread, into: context)
+
+                object.setValue(thread.id, forKey: "id")
+                object.setValue(thread.memberID.map { Int64($0) }, forKey: "memberID")
+                object.setValue(thread.title, forKey: "title")
+                object.setValue(thread.scenario.rawValue, forKey: "scenario")
+                object.setValue(thread.isDeleted, forKey: "isSoftDeleted")
+                object.setValue(thread.deletedAt, forKey: "deletedAt")
+                object.setValue(thread.createdAt, forKey: "createdAt")
+                object.setValue(thread.updatedAt, forKey: "updatedAt")
+                object.setValue(thread.serverUpdatedAt, forKey: "serverUpdatedAt")
+
+                if thread.isDeleted {
+                    object.setValue(false, forKey: "isActive")
+                }
             }
         }
     }
@@ -212,27 +303,90 @@ actor CoreDataChatStore {
         }) ?? []
     }
 
-    func deleteThread(id: UUID) async {
+    /// 本地软删除会话，并记录待上送删除事件。
+    func softDeleteThread(id: UUID) async {
         _ = try? await coreDataStack.performBackgroundTask { context in
-            let threadRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
-            threadRequest.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-            for object in try context.fetch(threadRequest) {
-                context.delete(object)
+            let now = Date()
+
+            if let thread = try Self.fetchThread(context: context, threadID: id) {
+                thread.setValue(true, forKey: "isSoftDeleted")
+                thread.setValue(now, forKey: "deletedAt")
+                thread.setValue(now, forKey: "updatedAt")
+                thread.setValue(false, forKey: "isActive")
             }
 
-            let messageRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
-            messageRequest.predicate = NSPredicate(format: "threadID == %@", id as CVarArg)
-            for object in try context.fetch(messageRequest) {
-                context.delete(object)
+            let key = CursorKey.pendingThreadDelete(id)
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
+            request.fetchLimit = 1
+            request.predicate = NSPredicate(format: "key == %@", key)
+            let marker = try context.fetch(request).first
+                ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.cursor, into: context)
+            marker.setValue(key, forKey: "key")
+            marker.setValue(now.ISO8601Format(), forKey: "value")
+            marker.setValue(now, forKey: "updatedAt")
+        }
+    }
+
+    /// 保留旧接口：新架构默认转为软删除。
+    func deleteThread(id: UUID) async {
+        await softDeleteThread(id: id)
+    }
+
+    func loadPendingThreadDeletionIDs(limit: Int = 50) async -> [UUID] {
+        (try? await coreDataStack.performBackgroundTask { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
+            request.fetchLimit = max(1, limit)
+            request.predicate = NSPredicate(format: "key BEGINSWITH %@", CursorKey.pendingThreadDeletePrefix)
+            request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: true)]
+            return try context.fetch(request).compactMap { row in
+                guard let key = row.value(forKey: "key") as? String else { return nil }
+                let rawID = String(key.dropFirst(CursorKey.pendingThreadDeletePrefix.count))
+                return UUID(uuidString: rawID)
+            }
+        }) ?? []
+    }
+
+    func removePendingThreadDeletionIDs(_ ids: [UUID]) async {
+        guard ids.isEmpty == false else { return }
+        _ = try? await coreDataStack.performBackgroundTask { context in
+            let keys = ids.map(CursorKey.pendingThreadDelete)
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
+            request.predicate = NSPredicate(format: "key IN %@", keys)
+            for row in try context.fetch(request) {
+                context.delete(row)
             }
         }
     }
 
     func loadSyncCursor() async -> ChatSyncCursor? {
+        await loadSyncCursor(key: CursorKey.mainMessageSync)
+    }
+
+    func saveSyncCursor(_ cursor: ChatSyncCursor) async {
+        await saveSyncCursor(cursor, key: CursorKey.mainMessageSync)
+    }
+
+    func loadThreadSyncCursor() async -> ChatSyncCursor? {
+        await loadSyncCursor(key: CursorKey.threadSync)
+    }
+
+    func saveThreadSyncCursor(_ cursor: ChatSyncCursor) async {
+        await saveSyncCursor(cursor, key: CursorKey.threadSync)
+    }
+
+    func loadMessageSyncCursor(for threadID: UUID) async -> ChatSyncCursor? {
+        await loadSyncCursor(key: CursorKey.threadMessageSync(threadID))
+    }
+
+    func saveMessageSyncCursor(_ cursor: ChatSyncCursor, for threadID: UUID) async {
+        await saveSyncCursor(cursor, key: CursorKey.threadMessageSync(threadID))
+    }
+
+    private func loadSyncCursor(key: String) async -> ChatSyncCursor? {
         try? await coreDataStack.performBackgroundTask { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
             request.fetchLimit = 1
-            request.predicate = NSPredicate(format: "key == %@", "chat.main")
+            request.predicate = NSPredicate(format: "key == %@", key)
             guard
                 let object = try context.fetch(request).first,
                 let value = object.value(forKey: "value") as? String,
@@ -244,14 +398,14 @@ actor CoreDataChatStore {
         }
     }
 
-    func saveSyncCursor(_ cursor: ChatSyncCursor) async {
+    private func saveSyncCursor(_ cursor: ChatSyncCursor, key: String) async {
         _ = try? await coreDataStack.performBackgroundTask { context in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
             request.fetchLimit = 1
-            request.predicate = NSPredicate(format: "key == %@", "chat.main")
+            request.predicate = NSPredicate(format: "key == %@", key)
             let object = try context.fetch(request).first
                 ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.cursor, into: context)
-            object.setValue("chat.main", forKey: "key")
+            object.setValue(key, forKey: "key")
             object.setValue(cursor.value, forKey: "value")
             object.setValue(cursor.updatedAt, forKey: "updatedAt")
         }
@@ -275,7 +429,7 @@ actor CoreDataChatStore {
         if let serverMessageID, serverMessageID.isEmpty == false {
             request.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
                 NSPredicate(format: "clientMessageID == %@", clientMessageID as CVarArg),
-                NSPredicate(format: "serverMessageID == %@", serverMessageID)
+                NSPredicate(format: "serverMessageID == %@", serverMessageID),
             ])
         } else {
             request.predicate = NSPredicate(format: "clientMessageID == %@", clientMessageID as CVarArg)
@@ -320,8 +474,11 @@ actor CoreDataChatStore {
             memberID: (object.value(forKey: "memberID") as? Int64).map(Int.init),
             title: title,
             scenario: scenario,
+            isDeleted: object.value(forKey: "isSoftDeleted") as? Bool ?? false,
+            deletedAt: object.value(forKey: "deletedAt") as? Date,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            serverUpdatedAt: object.value(forKey: "serverUpdatedAt") as? Date
         )
     }
 

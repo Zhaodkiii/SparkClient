@@ -3,14 +3,19 @@ import Foundation
 
 @MainActor
 final class ChatStateStore: ObservableObject {
+    private struct MessagePaging: Sendable {
+        var hasMore: Bool
+        var isLoadingMore: Bool
+    }
+
     private struct StreamingAssistant: Sendable {
         let threadID: UUID
         let clientMessageID: UUID
-        var kind: ChatMessageKind
-        var content: String
-        var reasoningContent: String?
+        var state: ChatStreamingAssistantState
         let createdAt: Date
     }
+    private let streamingReducer = ChatStreamingAssistantReducer()
+    private let runtimeAttachmentBuilder = ChatToolRuntimeAttachmentBuilder()
 
     @Published private(set) var threadItems: [ChatThreadListItem] = []
     @Published private(set) var messagesByThread: [UUID: [ChatMessage]] = [:]
@@ -21,6 +26,7 @@ final class ChatStateStore: ObservableObject {
 
     @Published private var composerDrafts: [UUID: ChatComposerDraft] = [:]
     @Published private var streamingAssistants: [UUID: StreamingAssistant] = [:]
+    @Published private var messagePagingByThread: [UUID: MessagePaging] = [:]
     /// Bumps on each streaming text/reasoning update so views can scroll even when message count is unchanged.
     @Published private(set) var streamingContentGeneration: UInt64 = 0
 
@@ -37,11 +43,11 @@ final class ChatStateStore: ObservableObject {
                     id: streaming.clientMessageID,
                     threadID: streaming.threadID,
                     role: .assistant,
-                    kind: streaming.kind,
-                    content: streaming.content,
-                    attachments: [],
-                    reasoningContent: streaming.reasoningContent,
-                    reasoningDurationMs: nil,
+                    kind: streaming.state.kind,
+                    content: streaming.state.content,
+                    attachments: makeStreamingAttachments(from: streaming),
+                    reasoningContent: streaming.state.reasoningContent,
+                    reasoningDurationMs: streaming.state.reasoningDurationMs,
                     reasoningExpanded: true,
                     reasoningVisibility: .full,
                     clientMessageID: streaming.clientMessageID,
@@ -71,11 +77,47 @@ final class ChatStateStore: ObservableObject {
     }
 
     /// - Parameter clearStreamingAssistant: Set `false` while a reply is streaming so mid-send reloads (e.g. after user message persist) do not wipe `streamingAssistants`.
-    func setMessages(_ messages: [ChatMessage], for threadID: UUID, clearStreamingAssistant: Bool = true) {
+    func setMessages(
+        _ messages: [ChatMessage],
+        for threadID: UUID,
+        clearStreamingAssistant: Bool = true,
+        hasMore: Bool? = nil
+    ) {
         messagesByThread[threadID] = messages
         if clearStreamingAssistant {
             streamingAssistants[threadID] = nil
         }
+        if let hasMore {
+            let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: hasMore, isLoadingMore: false)
+            messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: current.isLoadingMore)
+        }
+    }
+
+    func prependMessages(_ messages: [ChatMessage], for threadID: UUID, hasMore: Bool) {
+        guard messages.isEmpty == false else {
+            let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: hasMore, isLoadingMore: false)
+            messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: current.isLoadingMore)
+            return
+        }
+        let current = messagesByThread[threadID] ?? []
+        let existingIDs = Set(current.map(\.id))
+        let mergedPrefix = messages.filter { existingIDs.contains($0.id) == false }
+        messagesByThread[threadID] = mergedPrefix + current
+        let paging = messagePagingByThread[threadID] ?? MessagePaging(hasMore: hasMore, isLoadingMore: false)
+        messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: paging.isLoadingMore)
+    }
+
+    func setLoadingMore(_ loading: Bool, for threadID: UUID) {
+        let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: true, isLoadingMore: false)
+        messagePagingByThread[threadID] = MessagePaging(hasMore: current.hasMore, isLoadingMore: loading)
+    }
+
+    func hasMoreMessages(for threadID: UUID) -> Bool {
+        messagePagingByThread[threadID]?.hasMore ?? false
+    }
+
+    func isLoadingMoreMessages(for threadID: UUID) -> Bool {
+        messagePagingByThread[threadID]?.isLoadingMore ?? false
     }
 
     func setDraft(_ text: String, for threadID: UUID?) {
@@ -186,9 +228,7 @@ final class ChatStateStore: ObservableObject {
         streamingAssistants[threadID] = StreamingAssistant(
             threadID: threadID,
             clientMessageID: clientMessageID,
-            kind: kind,
-            content: "",
-            reasoningContent: nil,
+            state: .initial(kind: kind),
             createdAt: createdAt
         )
         streamingContentGeneration &+= 1
@@ -196,18 +236,36 @@ final class ChatStateStore: ObservableObject {
 
     func updateStreamingAssistant(
         threadID: UUID,
+        delta: ChatAssistantPartialDelta
+    ) {
+        guard var streaming = streamingAssistants[threadID] else { return }
+        let changed = streamingReducer.reduce(
+            state: &streaming.state,
+            delta: delta
+        )
+        guard changed else { return }
+        streamingAssistants[threadID] = streaming
+        streamingContentGeneration &+= 1
+    }
+
+    func updateStreamingAssistant(
+        threadID: UUID,
         kind: ChatMessageKind,
         content: String,
-        reasoningContent: String?
+        reasoningContent: String?,
+        toolName: String?,
+        toolContent: String?
     ) {
-        guard var state = streamingAssistants[threadID] else { return }
-        let reasoning = reasoningContent.flatMap { $0.isEmpty ? nil : $0 }
-        guard state.content != content || state.kind != kind || state.reasoningContent != reasoning else { return }
-        state.kind = kind
-        state.content = content
-        state.reasoningContent = reasoning
-        streamingAssistants[threadID] = state
-        streamingContentGeneration &+= 1
+        updateStreamingAssistant(
+            threadID: threadID,
+            delta: ChatAssistantPartialDelta(
+                answer: content,
+                reasoning: reasoningContent,
+                kind: kind,
+                toolName: toolName,
+                toolContent: toolContent
+            )
+        )
     }
 
     func finishStreamingAssistant(threadID: UUID) {
@@ -222,5 +280,12 @@ final class ChatStateStore: ObservableObject {
         var draft = composerDrafts[threadID] ?? ChatComposerDraft()
         update(&draft)
         composerDrafts[threadID] = draft
+    }
+
+    private func makeStreamingAttachments(from state: StreamingAssistant) -> [ChatAttachment] {
+        runtimeAttachmentBuilder.build(
+            toolName: state.state.toolName,
+            toolContent: state.state.toolContent
+        )
     }
 }

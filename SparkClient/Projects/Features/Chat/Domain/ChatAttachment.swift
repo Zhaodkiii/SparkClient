@@ -18,3 +18,20 @@ struct ChatAttachment: Codable, Equatable, Sendable {
         self.text = text
     }
 }
+
+/// 对齐 AI_HLY `StreamData` 的字段键定义。
+/// 说明：新项目统一仅保留一套标准键（不做历史兼容分支）。
+enum ChatStreamFieldKey {
+    static let toolContent = "toolContent"
+    static let toolName = "toolName"
+    static let knowledgeCard = "knowledge_card"
+    static let locationsInfo = "locations_info"
+    static let routeInfo = "route_info"
+    static let healthInfo = "health_info"
+    static let healthSleepVisualization = "health_sleep_viz"
+    static let htmlContent = "htmlContent"
+    static let operationalState = "operationalState"
+    static let operationalDescription = "operationalDescription"
+    static let translatedText = "translatedText"
+    static let events = "events"
+}

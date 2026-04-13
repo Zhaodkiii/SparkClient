@@ -1,12 +1,24 @@
 import Foundation
 
 actor ChatSyncEngine {
+    private enum SyncScope: Hashable {
+        case global
+        case thread(UUID)
+    }
+
+    private enum SyncPaging {
+        static let threadPageLimit = 100
+        static let messagePageLimit = 200
+        static let maxPagesPerRun = 20
+    }
+
     private let repository: any ChatRepository
     private let outboxStore: ChatOutboxStore
     private let remoteAPI: SparkChatRemoteAPI
     private let realtimeClient: ChatRealtimeSyncClient?
     private let mergePolicy: ChatMergePolicy
     private let logger: Logger
+    private var inflightSyncTasks: [SyncScope: Task<Void, Error>] = [:]
 
     private static let syncCursorFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -30,85 +42,47 @@ actor ChatSyncEngine {
         self.logger = logger
     }
 
-    /// 全量同步：上送 outbox + 按全局 cursor 拉取（如下拉刷新）。
+    /// 同步（仅上送，不拉取）：
+    /// 1) 上送本地线程删除事件；
+    /// 2) 上送 outbox 消息。
     func syncNow() async throws {
-        let start = Date()
-        logger.debug("聊天同步开始", module: .general)
-        try await pushOutbox()
-        let cursor = await repository.loadSyncCursor()?.value
-        try await pullAndMerge(cursor: cursor, threadID: nil)
-        let cost = Date().timeIntervalSince(start)
-        logger.info("聊天同步完成，cost=\(format(cost))s", module: .general)
+        try await runSingleFlight(scope: .global) { engine in
+            try await engine.performGlobalSync()
+        }
     }
 
-    /// 仅上送待同步消息，不拉取（发送成功/重试等路径使用，避免每次增量都打全量 pull）。
+    /// 手动刷新同步：上送 + 拉取未同步的线程与消息。
+    func syncNowWithPull() async throws {
+        try await runSingleFlight(scope: .global) { engine in
+            try await engine.performManualRefreshSync()
+        }
+    }
+
+    /// 仅上送待同步消息，不拉取（发送成功/重试等路径使用）。
     func pushOutboxOnly() async throws {
         logger.debug("聊天仅上送 outbox", module: .general)
+        try await pushPendingThreadDeletions()
         try await pushOutbox()
     }
 
-    /// 进入具体会话时：先上送，再比对服务端与本地最近一条消息的更新时间，一致则跳过拉取。
+    /// 打开会话时：仅同步该会话，减少带宽。
     func syncThreadOnOpen(threadID: UUID) async throws {
-        let start = Date()
-        logger.debug("会话打开同步开始，thread=\(shortID(threadID))", module: .general)
-        try await pushOutbox()
-
-        let localWatermark = await repository.latestServerActivity(for: threadID)
-
-        var serverHead: Date?
-        var headFetchFailed = false
-        do {
-            serverHead = try await remoteAPI.threadHead(threadID: threadID)
-        } catch {
-            // 服务端仅在首条消息 push 时 `get_or_create` 线程；仅本地存在时尚无远程记录，head/pull 会 404。
-            if isRemoteThreadMissing(error) {
-                logger.debug(
-                    "服务端尚无该会话，跳过打开时同步（首条消息上送后将创建），thread=\(shortID(threadID))",
-                    module: .general
-                )
-                return
-            }
-            headFetchFailed = true
-            logger.warning("thread head 不可用，将尝试按会话拉取：\(error.localizedDescription)", module: .general)
+        try await runSingleFlight(scope: .thread(threadID)) { engine in
+            try await engine.performThreadOpenSync(threadID: threadID)
         }
-
-        if headFetchFailed {
-            let cursor = localWatermark.map(Self.formatSyncCursor)
-            try await pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
-            let cost = Date().timeIntervalSince(start)
-            logger.info("会话打开同步完成（head 降级），cost=\(format(cost))s", module: .general)
-            return
-        }
-
-        switch (localWatermark, serverHead) {
-        case (nil, nil):
-            logger.debug("会话打开同步跳过（本地与服务端均无消息）", module: .general)
-            return
-        case let (lw?, sh?):
-            if abs(lw.timeIntervalSince(sh)) < 1.0 {
-                logger.debug("会话已与服务端对齐，跳过拉取", module: .general)
-                return
-            }
-        default:
-            break
-        }
-
-        let cursor = localWatermark.map(Self.formatSyncCursor)
-        try await pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
-        let cost = Date().timeIntervalSince(start)
-        logger.info("会话打开同步完成，cost=\(format(cost))s", module: .general)
     }
 
     func startRealtimeSync() async {
         guard let realtimeClient else { return }
-        await realtimeClient.start { [weak self] _ in
+        await realtimeClient.start { [weak self] hintCursor in
             guard let self else { return }
             Task {
                 do {
-                    // 远端增量提示：只上送本地 pending，避免每条 WS 通知都触发全量 pull。
-                    try await self.pushOutboxOnly()
+                    try await self.runSingleFlight(scope: .global) { engine in
+                        try await engine.performRealtimeHintSync(cursor: hintCursor)
+                    }
                 } catch {
-                    self.logger.warning("chat realtime push failed: \(error.localizedDescription)", module: .general)
+                    self.logger.warning("chat realtime sync failed: \(error.localizedDescription)", module: .general)
                 }
             }
         }
@@ -118,11 +92,95 @@ actor ChatSyncEngine {
         await realtimeClient?.stop()
     }
 
+    private func performGlobalSync() async throws {
+        let start = Date()
+        logger.debug("聊天同步开始", module: .general)
+        try await pushPendingThreadDeletions()
+        try await pushOutbox()
+        let cost = Date().timeIntervalSince(start)
+        logger.info("聊天同步完成（仅上送），cost=\(format(cost))s", module: .general)
+    }
+
+    private func performManualRefreshSync() async throws {
+        let start = Date()
+        logger.debug("聊天手动刷新同步开始", module: .general)
+        try await pushPendingThreadDeletions()
+        try await pushOutbox()
+        let changedThreads = try await pullThreadDeltas(cursor: await repository.loadThreadSyncCursor()?.value)
+        try await pullMessagesForChangedThreads(changedThreads)
+        let cost = Date().timeIntervalSince(start)
+        logger.info(
+            "聊天手动刷新同步完成，changedThreads=\(changedThreads.count), cost=\(format(cost))s",
+            module: .general
+        )
+    }
+
+    private func performRealtimeHintSync(cursor: String?) async throws {
+        _ = cursor
+        // 按当前策略：realtime 后续拉取链路已移除，仅保留本地待同步数据上送。
+        try await pushPendingThreadDeletions()
+        try await pushOutbox()
+        logger.debug("realtime 提示处理完成：仅上送，不执行拉取", module: .general)
+    }
+
+    private func performThreadOpenSync(threadID: UUID) async throws {
+        let start = Date()
+        logger.debug("会话打开同步开始，thread=\(shortID(threadID))", module: .general)
+
+        // 本地新建会话：不走后续拉取链路。
+        // 仅在本地已有待上送消息时执行上送，避免新建会话触发远端拉取放大。
+        if let thread = await repository.loadThread(id: threadID),
+           thread.serverUpdatedAt == nil
+        {
+            let localMessageCount = await repository.countMessages(threadID: threadID)
+            if localMessageCount > 0 {
+                try await pushPendingThreadDeletions()
+                try await pushOutbox()
+                logger.debug(
+                    "会话打开同步完成：本地新建会话仅上送，不执行拉取，thread=\(shortID(threadID))",
+                    module: .general
+                )
+            } else {
+                logger.debug(
+                    "会话打开同步跳过：本地新建空会话，thread=\(shortID(threadID))",
+                    module: .general
+                )
+            }
+            return
+        }
+
+        // 存量会话打开：只拉取该会话的未同步消息（thread_id + cursor），不做全局拉取。
+        try await pushPendingThreadDeletions()
+        try await pushOutbox()
+        let persistedCursor = await repository.loadMessageSyncCursor(for: threadID)?.value
+        let cursor = if let persistedCursor {
+            persistedCursor
+        } else {
+            await repository.latestServerActivity(for: threadID).map(Self.formatSyncCursor)
+        }
+        try await pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
+        let cost = Date().timeIntervalSince(start)
+        logger.info("会话打开同步完成（单会话增量拉取），cost=\(format(cost))s", module: .general)
+    }
+
+    private func pushPendingThreadDeletions() async throws {
+        let pending = await repository.loadPendingThreadDeletionIDs(limit: 50)
+        guard pending.isEmpty == false else { return }
+        logger.info("准备上送线程删除，count=\(pending.count)", module: .general)
+        do {
+            let deleted = try await remoteAPI.deleteThreads(threadIDs: pending)
+            await repository.removePendingThreadDeletionIDs(deleted)
+            logger.info("线程删除上送完成，requested=\(pending.count), accepted=\(deleted.count)", module: .general)
+        } catch {
+            logger.warning("线程删除上送失败，将后台重试：\(error.localizedDescription)", module: .general)
+            throw error
+        }
+    }
+
     private func pushOutbox() async throws {
         let pending = await outboxStore.pending(limit: 50)
         guard pending.isEmpty == false else { return }
 
-        // 上送核心观测字段：消息条数、涉及线程数、工具消息条数（用于判断是否走过工具流转）。
         let toolCount = pending.filter { $0.kind == .tool }.count
         let threads = Set(pending.map(\.threadID)).count
         logger.info(
@@ -141,6 +199,7 @@ actor ChatSyncEngine {
                     role: message.role.rawValue,
                     kind: message.kind.rawValue,
                     content: message.content,
+                    attachments: message.attachments,
                     clientMessageID: message.clientMessageID,
                     serverMessageID: message.serverMessageID,
                     deliveryState: message.deliveryState.rawValue,
@@ -163,10 +222,9 @@ actor ChatSyncEngine {
                 module: .general
             )
 
-            // 服务端回包是“权威状态”，用 mergePolicy 回写本地，统一修正状态与时间戳。
             let grouped = Dictionary(grouping: pushed.compactMap(Self.toDomain), by: { $0.threadID })
             for (threadID, remoteMessages) in grouped {
-                let localMessages = await repository.loadMessages(threadID: threadID)
+                let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
                 let localByClient = Self.indexByClientMessageID(localMessages)
                 let merged = remoteMessages.map { remote in
                     mergePolicy.resolve(local: localByClient[remote.clientMessageID], remote: remote)
@@ -185,7 +243,59 @@ actor ChatSyncEngine {
         }
     }
 
-    /// 带 `thread_id` 的 pull 在服务端尚无该线程时会返回 404 `thread_not_found`，与「仅本地新建会话」兼容。
+    /// 拉线程增量（会话列表），并落本地。
+    @discardableResult
+    private func pullThreadDeltas(cursor: String?) async throws -> [ChatThread] {
+        var allThreads: [ChatThread] = []
+        var nextCursor = cursor
+        var page = 0
+
+        while true {
+            page += 1
+            let result = try await remoteAPI.pullThreads(cursor: nextCursor, limit: SyncPaging.threadPageLimit)
+            let threads = result.threads.compactMap(Self.toDomainThread)
+            if threads.isEmpty == false {
+                await repository.upsertRemoteThreads(threads)
+                allThreads.append(contentsOf: threads)
+            }
+            if let cursor = result.cursor {
+                await repository.saveThreadSyncCursor(ChatSyncCursor(value: cursor))
+            }
+
+            let canContinue = result.hasMore && page < SyncPaging.maxPagesPerRun
+            guard canContinue else { break }
+            guard let cursor = result.cursor, cursor != nextCursor else { break }
+            nextCursor = cursor
+        }
+
+        logger.debug(
+            "拉取线程增量完成，threads=\(allThreads.count), pages=\(page), nextCursor=\(nextCursor ?? "-")",
+            module: .general
+        )
+        return allThreads
+    }
+
+    private func pullMessagesForChangedThreads(_ threads: [ChatThread]) async throws {
+        guard threads.isEmpty == false else { return }
+
+        for thread in threads where thread.isDeleted == false {
+            let persistedCursor = await repository.loadMessageSyncCursor(for: thread.id)?.value
+            let cursor = if let persistedCursor {
+                persistedCursor
+            } else {
+                await repository.latestServerActivity(for: thread.id).map(Self.formatSyncCursor)
+            }
+            do {
+                try await pullAndMerge(cursor: cursor, threadID: thread.id)
+            } catch {
+                if isRemoteThreadMissing(error) {
+                    continue
+                }
+                throw error
+            }
+        }
+    }
+
     private func pullAndMergeAllowingMissingRemoteThread(cursor: String?, threadID: UUID) async throws {
         do {
             try await pullAndMerge(cursor: cursor, threadID: threadID)
@@ -204,24 +314,43 @@ actor ChatSyncEngine {
     private func pullAndMerge(cursor: String?, threadID: UUID?) async throws {
         let scope = threadID.map { "thread=\(shortID($0))" } ?? "global"
         logger.debug("拉取对话增量开始，cursor=\(cursor ?? "-") scope=\(scope)", module: .general)
-        let result = try await remoteAPI.pull(cursor: cursor, threadID: threadID)
 
-        // 拉取通道只做增量合并，不做 destructive 覆盖，保证本地可逆。
-        let grouped = Dictionary(grouping: result.messages.compactMap(Self.toDomain), by: { $0.threadID })
-        for (threadID, remoteMessages) in grouped {
-            let localMessages = await repository.loadMessages(threadID: threadID)
-            let localByClient = Self.indexByClientMessageID(localMessages)
-            let merged = remoteMessages.map { remote in
-                mergePolicy.resolve(local: localByClient[remote.clientMessageID], remote: remote)
+        var nextCursor = cursor
+        var page = 0
+        var totalMessages = 0
+        var touchedThreads: Set<UUID> = []
+
+        while true {
+            page += 1
+            let result = try await remoteAPI.pull(cursor: nextCursor, threadID: threadID, limit: SyncPaging.messagePageLimit)
+            let grouped = Dictionary(grouping: result.messages.compactMap(Self.toDomain), by: { $0.threadID })
+            for (threadID, remoteMessages) in grouped {
+                let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
+                let localByClient = Self.indexByClientMessageID(localMessages)
+                let merged = remoteMessages.map { remote in
+                    mergePolicy.resolve(local: localByClient[remote.clientMessageID], remote: remote)
+                }
+                await repository.upsertRemoteMessages(merged, in: threadID)
+                touchedThreads.insert(threadID)
             }
-            await repository.upsertRemoteMessages(merged, in: threadID)
+
+            totalMessages += result.messages.count
+            if let cursor = result.cursor {
+                if let threadID {
+                    await repository.saveMessageSyncCursor(ChatSyncCursor(value: cursor), for: threadID)
+                } else {
+                    await repository.saveSyncCursor(ChatSyncCursor(value: cursor))
+                }
+            }
+
+            let canContinue = result.hasMore && page < SyncPaging.maxPagesPerRun
+            guard canContinue else { break }
+            guard let cursor = result.cursor, cursor != nextCursor else { break }
+            nextCursor = cursor
         }
 
-        if let cursor = result.cursor {
-            await repository.saveSyncCursor(ChatSyncCursor(value: cursor))
-        }
         logger.debug(
-            "拉取对话增量完成，messages=\(result.messages.count), threads=\(grouped.count), nextCursor=\(result.cursor ?? "-")",
+            "拉取对话增量完成，messages=\(totalMessages), threads=\(touchedThreads.count), pages=\(page), nextCursor=\(nextCursor ?? "-")",
             module: .general
         )
     }
@@ -241,7 +370,7 @@ actor ChatSyncEngine {
             role: role,
             kind: kind,
             content: remote.content,
-            attachments: [],
+            attachments: remote.attachments ?? [],
             reasoningContent: remote.reasoningContent,
             reasoningDurationMs: remote.reasoningDurationMs,
             reasoningExpanded: remote.reasoningExpanded ?? false,
@@ -255,7 +384,21 @@ actor ChatSyncEngine {
         )
     }
 
-    /// 同一 `clientMessageID` 在 Core Data 中若出现重复行，保留时间更新、更完整的一条，避免 `Dictionary(uniqueKeysWithValues:)` 崩溃。
+    private static func toDomainThread(_ remote: ChatRemoteThreadDTO) -> ChatThread? {
+        guard let scenario = AIScenario(rawValue: remote.scenario) else { return nil }
+        return ChatThread(
+            id: remote.threadID,
+            memberID: nil,
+            title: remote.title,
+            scenario: scenario,
+            isDeleted: remote.isDeleted,
+            deletedAt: remote.deletedAt,
+            createdAt: remote.updatedAt,
+            updatedAt: remote.updatedAt,
+            serverUpdatedAt: remote.serverUpdatedAt
+        )
+    }
+
     private static func indexByClientMessageID(_ messages: [ChatMessage]) -> [UUID: ChatMessage] {
         var map: [UUID: ChatMessage] = [:]
         for message in messages {
@@ -296,5 +439,38 @@ actor ChatSyncEngine {
         guard case .httpError(let status, let backend, _) = network else { return false }
         guard status == 404, let backend else { return false }
         return backend.code == 40401 || backend.msg == "thread_not_found"
+    }
+
+    private func runSingleFlight(
+        scope: SyncScope,
+        operation: @escaping @Sendable (ChatSyncEngine) async throws -> Void
+    ) async throws {
+        if case .thread = scope, let globalTask = inflightSyncTasks[.global] {
+            logger.debug("同步复用进行中的全局任务", module: .general)
+            try await globalTask.value
+            return
+        }
+
+        if let existing = inflightSyncTasks[scope] {
+            logger.debug("同步复用进行中的任务 scope=\(scopeLabel(scope))", module: .general)
+            try await existing.value
+            return
+        }
+
+        let task = Task {
+            try await operation(self)
+        }
+        inflightSyncTasks[scope] = task
+        defer { inflightSyncTasks[scope] = nil }
+        try await task.value
+    }
+
+    private func scopeLabel(_ scope: SyncScope) -> String {
+        switch scope {
+        case .global:
+            return "global"
+        case .thread(let id):
+            return "thread=\(shortID(id))"
+        }
     }
 }

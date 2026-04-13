@@ -11,7 +11,7 @@
 "tool.summary.fetch_workout_details" = "Purpose: retrieve workout records. Input: start_date, end_date; optional types filter; max_items limit. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.generate_structured_health_card" = "Purpose: Saveable structured health cards (async extraction). Pass report_type; raw_text must be distilled excerpt (not full OCR). Optional oss_file_id. Spark uses a placeholder implementation.";
 "tool.summary.search_knowledge_bag" = "Purpose: search user's private Knowledge Bag and return digest. Trigger: personal notes/docs. Input 'query' precisely describes topic. Use before search_online. Pair with: retrieve_memory.";
-"tool.summary.create_knowledge_document" = "Usage: Create a knowledge document in the local backpack when summarizing or user requests. title concise; content in Markdown with clear headings.";
+"tool.summary.create_knowledge_document" = "Usage: Generate a preview knowledge-card draft (do not persist immediately) when summarizing or on user request. title concise; content in Markdown with clear headings; user confirms save in the chat card.";
 "tool.summary.search_calendar_and_reminders" = "Purpose: filter calendar events and reminders. Provide at least one of keyword, date range, or place. Dates yyyy‑MM‑dd in local TZ. Skip if all filters empty.";
 "tool.summary.write_system_event" = "Purpose: add calendar event or reminder. Times ISO‑8601 with TZ. calendar: start_date and end_date; reminder: due_date. Put location for reminders in notes.";
 "tool.summary.query_location" = "Purpose: place name to coordinates (WGS‑84) and static map. keyword: specific place or POI. Pair with: search_nearby_locations, get_current_location.";

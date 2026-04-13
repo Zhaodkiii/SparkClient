@@ -5,6 +5,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let role: String
     let kind: String
     let content: String
+    /// 消息结构化附件（工具结果、知识卡、地图/路线、事件、健康卡等）。
+    /// 该字段是“AI 工具结果可重建 UI”的核心数据载体。
+    let attachments: [ChatAttachment]?
     let clientMessageID: UUID
     let serverMessageID: String?
     let deliveryState: String
@@ -21,6 +24,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case role
         case kind
         case content
+        case attachments
         case clientMessageID = "client_message_id"
         case serverMessageID = "server_message_id"
         case deliveryState = "delivery_state"
@@ -38,6 +42,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         role: String,
         kind: String,
         content: String,
+        attachments: [ChatAttachment]? = nil,
         clientMessageID: UUID,
         serverMessageID: String?,
         deliveryState: String,
@@ -53,6 +58,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.role = role
         self.kind = kind
         self.content = content
+        self.attachments = attachments
         self.clientMessageID = clientMessageID
         self.serverMessageID = serverMessageID
         self.deliveryState = deliveryState
@@ -71,6 +77,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         role = try c.decode(String.self, forKey: .role)
         kind = try c.decode(String.self, forKey: .kind)
         content = try c.decode(String.self, forKey: .content)
+        attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .attachments)
         clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
         serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
         deliveryState = try c.decode(String.self, forKey: .deliveryState)
@@ -89,6 +96,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encode(role, forKey: .role)
         try c.encode(kind, forKey: .kind)
         try c.encode(content, forKey: .content)
+        try c.encodeIfPresent(attachments, forKey: .attachments)
         try c.encode(clientMessageID, forKey: .clientMessageID)
         try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
         try c.encode(deliveryState, forKey: .deliveryState)
@@ -105,6 +113,35 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
 struct ChatRemotePullResult: Sendable {
     let cursor: String?
     let messages: [ChatRemoteMessageDTO]
+    let hasMore: Bool
+}
+
+struct ChatRemoteThreadDTO: Codable, Sendable {
+    let threadID: UUID
+    let title: String
+    let scenario: String
+    let patientID: UUID?
+    let isDeleted: Bool
+    let deletedAt: Date?
+    let updatedAt: Date
+    let serverUpdatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case threadID = "thread_id"
+        case title
+        case scenario
+        case patientID = "patient_id"
+        case isDeleted = "is_deleted"
+        case deletedAt = "deleted_at"
+        case updatedAt = "updated_at"
+        case serverUpdatedAt = "server_updated_at"
+    }
+}
+
+struct ChatRemoteThreadPullResult: Sendable {
+    let cursor: String?
+    let threads: [ChatRemoteThreadDTO]
+    let hasMore: Bool
 }
 
 struct SparkChatRemoteAPI {
@@ -178,13 +215,16 @@ struct SparkChatRemoteAPI {
     /// - Parameters:
     ///   - cursor: 通常为本地已知的最新 `server_updated_at`（ISO8601）。
     ///   - threadID: 若指定，仅拉取该会话增量，避免进入单会话时拖回全账号历史。
-    func pull(cursor: String?, threadID: UUID? = nil) async throws -> ChatRemotePullResult {
+    func pull(cursor: String?, threadID: UUID? = nil, limit: Int? = nil) async throws -> ChatRemotePullResult {
         var queryItems: [URLQueryItem] = []
         if let cursor, cursor.isEmpty == false {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
         }
         if let threadID {
             queryItems.append(URLQueryItem(name: "thread_id", value: threadID.uuidString))
+        }
+        if let limit, limit > 0 {
+            queryItems.append(URLQueryItem(name: "limit", value: String(limit)))
         }
         // 增量拉取：cursor 由服务端 server_updated_at 驱动，避免全量扫描。
 
@@ -212,7 +252,79 @@ struct SparkChatRemoteAPI {
             from: response,
             decoder: ChatRemoteCoding.decoder
         )
-        return ChatRemotePullResult(cursor: payload.cursor, messages: payload.messages)
+        return ChatRemotePullResult(
+            cursor: payload.cursor,
+            messages: payload.messages,
+            hasMore: payload.hasMore ?? false
+        )
+    }
+
+    /// 会话维度增量拉取：用于“会话列表本地优先 + 最少同步”。
+    func pullThreads(cursor: String?, limit: Int = 100) async throws -> ChatRemoteThreadPullResult {
+        var queryItems: [URLQueryItem] = []
+        if let cursor, cursor.isEmpty == false {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        queryItems.append(URLQueryItem(name: "limit", value: String(max(1, min(200, limit)))))
+
+        let operation = CacheableSparkNetworkOperation(
+            name: "Chat.Sync.ThreadPull",
+            apiName: "ChatRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .get,
+                path: "/api/v1/ai/chat/sync/thread-pull/",
+                queryItems: queryItems,
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "chat.sync.threadPull",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .normal
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(
+            ChatThreadPullResponse.self,
+            from: response,
+            decoder: ChatRemoteCoding.decoder
+        )
+        return ChatRemoteThreadPullResult(
+            cursor: payload.cursor,
+            threads: payload.threads,
+            hasMore: payload.hasMore ?? false
+        )
+    }
+
+    /// 客户端软删会话后上送服务端。
+    func deleteThreads(threadIDs: [UUID]) async throws -> [UUID] {
+        guard threadIDs.isEmpty == false else { return [] }
+        let requestBody = try ChatRemoteCoding.encoder.encode(ChatThreadDeleteRequest(threadIDs: threadIDs))
+        let operation = CacheableSparkNetworkOperation(
+            name: "Chat.Sync.ThreadDelete",
+            apiName: "ChatRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/ai/chat/sync/thread-delete/",
+                body: .raw(requestBody, contentType: "application/json"),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "chat.sync.threadDelete",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(
+            ChatThreadDeleteResponse.self,
+            from: response,
+            decoder: ChatRemoteCoding.decoder
+        )
+        return payload.threadIDs
     }
 }
 
@@ -227,6 +339,41 @@ private struct ChatPushResponse: Decodable {
 private struct ChatPullResponse: Decodable {
     let cursor: String?
     let messages: [ChatRemoteMessageDTO]
+    let hasMore: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case cursor
+        case messages
+        case hasMore = "has_more"
+    }
+}
+
+private struct ChatThreadPullResponse: Decodable {
+    let cursor: String?
+    let threads: [ChatRemoteThreadDTO]
+    let hasMore: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case cursor
+        case threads
+        case hasMore = "has_more"
+    }
+}
+
+private struct ChatThreadDeleteRequest: Encodable {
+    let threadIDs: [UUID]
+
+    enum CodingKeys: String, CodingKey {
+        case threadIDs = "thread_ids"
+    }
+}
+
+private struct ChatThreadDeleteResponse: Decodable {
+    let threadIDs: [UUID]
+
+    enum CodingKeys: String, CodingKey {
+        case threadIDs = "thread_ids"
+    }
 }
 
 private struct ChatThreadHeadPayload: Decodable {

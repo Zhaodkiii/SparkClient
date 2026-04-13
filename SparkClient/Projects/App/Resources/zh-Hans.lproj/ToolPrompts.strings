@@ -11,7 +11,7 @@
 "tool.summary.fetch_workout_details" = "用途：检索运动记录（跑步、步行、骑行等）。输入：start_date、end_date；可选 types 筛选活动类型；max_items 限制返回条数。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.generate_structured_health_card" = "用途：生成可保存的结构化健康卡片（后台 AI 抽取）。调用时 report_type 指定卡片类型，raw_text 必须是你提炼后的关键摘录（勿传完整 OCR）。可选 oss_file_id（整数）。Spark 端为占位实现。";
 "tool.summary.search_knowledge_bag" = "用途：检索本地知识背包并返回摘要。触发场景：问题与个人笔记/文档相关。输入要求：query 精准描述主题。优先使用本工具，再考虑 search_online。可与 retrieve_memory 联用。";
-"tool.summary.create_knowledge_document" = "用途：当输出为总结/调研内容或用户要求创建知识文档时，在本地知识背包中创建文档。title 简短关键；content 使用 Markdown，层次清晰。";
+"tool.summary.create_knowledge_document" = "用途：当输出为总结/调研内容或用户要求创建知识文档时，先生成可预览的知识卡草稿（不直接落库）。title 简短关键；content 使用 Markdown，层次清晰；最终由用户点击保存到知识库。";
 "tool.summary.search_calendar_and_reminders" = "用途：筛选系统日历事件与提醒事项。至少需提供关键词、日期范围或地点之一。日期 yyyy‑MM‑dd，本地时区。若所有过滤条件为空，不应调用。可与 get_current_location 联用。";
 "tool.summary.write_system_event" = "用途：向系统写入日历或提醒。时间字段必须为 ISO‑8601 且包含时区；type=calendar 需 start_date 与 end_date；type=reminder 需 due_date。提醒地点放入 notes。可与 search_calendar_and_reminders 联用。";
 "tool.summary.query_location" = "用途：根据地名返回坐标 (WGS‑84) 并绘制静态地图缩略图。keyword 为具体地名或 POI。可与 search_nearby_locations、get_current_location 联用。";

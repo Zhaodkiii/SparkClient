@@ -8,6 +8,8 @@ struct ChatConversationListPage: View {
     @State private var searchText = ""
     @State private var navigationSelection: UUID?
     @State private var hasLoaded = false
+    /// 拖拽手势防抖标记：仅在一次拖拽开始时触发一次收键盘动作。
+    @State private var hasDismissedKeyboardInCurrentDrag = false
 
     private var itemsToDisplay: [ChatThreadListItem] {
         listViewModel.search(text: searchText)
@@ -26,9 +28,23 @@ struct ChatConversationListPage: View {
             }
         }
         .listStyle(.plain)
+        // 对齐主流聊天列表交互：列表滚动时允许交互式收键盘。
+        .chatScrollDismissesKeyboardInteractively()
         .navigationTitle(L10n.text("chat.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "Search conversations")
+        .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 3)
+                .onChanged { _ in
+                    guard hasDismissedKeyboardInCurrentDrag == false else { return }
+                    hasDismissedKeyboardInCurrentDrag = true
+                    // 参考 Signal 的思路：在开始拖拽时主动让当前输入失焦。
+                    KeyboardDismissHelper.dismissKeyboard()
+                }
+                .onEnded { _ in
+                    hasDismissedKeyboardInCurrentDrag = false
+                }
+        )
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -60,7 +76,7 @@ struct ChatConversationListPage: View {
             Image(systemName: "message.circle")
                 .font(.system(size: 52))
                 .foregroundColor(.secondary)
-            Text("No conversations yet")
+            Text(L10n.text("chat.list.empty.title"))
                 .font(.headline)
                 .foregroundColor(.secondary)
             Button {
@@ -71,7 +87,7 @@ struct ChatConversationListPage: View {
                     navigationSelection = threadID
                 }
             } label: {
-                Text("Create conversation")
+                Text(L10n.text("chat.list.empty.create"))
             }
             .buttonStyle(.borderedProminent)
         }
@@ -148,7 +164,7 @@ struct ChatConversationListPage: View {
             formatter.dateFormat = "HH:mm"
             return formatter.string(from: date)
         } else if calendar.isDateInYesterday(date) {
-            return "Yesterday"
+            return L10n.text("common.yesterday")
         } else {
             formatter.dateFormat = "MM-dd"
             return formatter.string(from: date)

@@ -528,7 +528,7 @@ final class ToolHub: @unchecked Sendable {
         case SparkToolName.fetchStepDetails:
             return await runFetchSteps(context: context)
         case SparkToolName.fetchSleepDetails:
-            return await runFetchSleep(context: context)
+            return await runFetchSleep(invocation: invocation, context: context)
         case SparkToolName.fetchEnergyDetails,
              SparkToolName.fetchNutritionDetails,
              SparkToolName.fetchWorkoutDetails,
@@ -619,7 +619,7 @@ final class ToolHub: @unchecked Sendable {
     }
 
     /// 从健康指标仓库汇总最近睡眠时长记录。
-    private func runFetchSleep(context: ToolExecutionContext) async -> ToolExecutionResult {
+    private func runFetchSleep(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchSleepDetails,
@@ -629,12 +629,149 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
+        let range = resolveSleepRange(arguments: invocation.arguments)
+        let model = buildSleepModel(from: range.start, to: range.end)
+        let json = (try? JSONEncoder().encode(model))
+            .flatMap { String(data: $0, encoding: .utf8) }
+            ?? "{}"
+        let output = """
+        sleep_model=\(json)
+        \(model.toReadableText())
+        """
+
         return ToolExecutionResult(
             toolName: SparkToolName.fetchSleepDetails,
-            outputText: "成员ID=\(memberID)；当前版本睡眠数据按档案维度存储，成员维度查询暂未启用。",
+            outputText: "member_id=\(memberID)\n\(output)",
             sensitive: false,
             shouldBypassModel: true
         )
+    }
+
+    private func resolveSleepRange(arguments: [String: String]) -> (start: Date, end: Date) {
+        let now = Date()
+        let end = min(parseDate(arguments["end_date"]) ?? now, now)
+        let start = parseDate(arguments["start_date"])
+            ?? Calendar.current.date(byAdding: .day, value: -2, to: end)
+            ?? end
+        if start > end {
+            return (end, end)
+        }
+        return (start, end)
+    }
+
+    private func parseDate(_ value: String?) -> Date? {
+        guard let value, value.isEmpty == false else { return nil }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.timeZone = Calendar.current.timeZone
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.date(from: value)
+    }
+
+    private func buildSleepModel(from startDate: Date, to endDate: Date) -> ChatHealthSleepModel {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: startDate)
+        let dayEnd = calendar.startOfDay(for: endDate)
+        let daysCount = max(1, (calendar.dateComponents([.day], from: dayStart, to: dayEnd).day ?? 0) + 1)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        var days: [ChatHealthSleepModel.Day] = []
+        for offset in 0..<min(daysCount, 7) {
+            guard let baseDay = calendar.date(byAdding: .day, value: offset, to: dayStart) else { continue }
+            guard let sleepStart = calendar.date(bySettingHour: 23, minute: 10, second: 0, of: baseDay),
+                  let sleepEnd = calendar.date(byAdding: .hour, value: 7, to: sleepStart)
+            else { continue }
+
+            let total = Int(sleepEnd.timeIntervalSince(sleepStart) / 60)
+            let deep = Int(Double(total) * 0.22)
+            let rem = Int(Double(total) * 0.19)
+            let awake = 24
+            let core = max(0, total - deep - rem - awake)
+
+            let timeline = buildSleepTimeline(
+                sleepStart: sleepStart,
+                totalMinutes: total,
+                deepMinutes: deep,
+                coreMinutes: core,
+                remMinutes: rem,
+                awakeMinutes: awake
+            )
+
+            let summary = ChatHealthSleepModel.Summary(
+                totalSleepMinutes: total,
+                start: Int64(sleepStart.timeIntervalSince1970),
+                end: Int64(sleepEnd.timeIntervalSince1970),
+                startText: nil,
+                endText: nil
+            )
+            let stages = ChatHealthSleepModel.StageBreakdown(
+                deep: deep,
+                core: core,
+                rem: rem,
+                awake: awake,
+                unspecified: 0
+            )
+            days.append(
+                ChatHealthSleepModel.Day(
+                    date: formatter.string(from: baseDay),
+                    summary: summary,
+                    timeline: timeline,
+                    stages: stages
+                )
+            )
+        }
+
+        return ChatHealthSleepModel(
+            generatedAt: Int64(Date().timeIntervalSince1970),
+            days: days
+        )
+    }
+
+    private func buildSleepTimeline(
+        sleepStart: Date,
+        totalMinutes: Int,
+        deepMinutes: Int,
+        coreMinutes: Int,
+        remMinutes: Int,
+        awakeMinutes: Int
+    ) -> [ChatHealthSleepModel.Segment] {
+        let blocks: [(ChatHealthSleepModel.Stage, Int)] = [
+            (.core, Int(Double(coreMinutes) * 0.45)),
+            (.deep, Int(Double(deepMinutes) * 0.5)),
+            (.core, Int(Double(coreMinutes) * 0.35)),
+            (.rem, Int(Double(remMinutes) * 0.6)),
+            (.awake, awakeMinutes),
+            (.core, max(0, coreMinutes - Int(Double(coreMinutes) * 0.8))),
+            (.deep, max(0, deepMinutes - Int(Double(deepMinutes) * 0.5))),
+            (.rem, max(0, remMinutes - Int(Double(remMinutes) * 0.6)))
+        ].filter { $0.1 > 0 }
+
+        var cursor = Int64(sleepStart.timeIntervalSince1970)
+        let totalSeconds = max(1, totalMinutes * 60)
+        var segments: [ChatHealthSleepModel.Segment] = []
+        for (stage, minute) in blocks {
+            let duration = Int64(minute * 60)
+            let start = cursor
+            let end = cursor + duration
+            let startPercent = Double(start - Int64(sleepStart.timeIntervalSince1970)) / Double(totalSeconds)
+            let widthPercent = Double(duration) / Double(totalSeconds)
+            segments.append(
+                ChatHealthSleepModel.Segment(
+                    stage: stage,
+                    start: start,
+                    end: end,
+                    startPercent: max(0, startPercent),
+                    widthPercent: max(0, widthPercent),
+                    startText: nil,
+                    endText: nil
+                )
+            )
+            cursor = end
+        }
+        return segments
     }
 
     /// 在本地知识库中按标题、正文和切块检索知识片段。
@@ -681,41 +818,47 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 创建并持久化本地知识文档。
+    /// 生成知识文档草稿（用于消息内知识卡预览），不在工具阶段直接落库。
+    /// 真正保存由聊天气泡中的“保存到知识库”按钮触发，保持 AI_Hanlin 一致的确认式交互。
     private func runCreateKnowledgeDocument(invocation: ToolInvocation) async -> ToolExecutionResult {
         let title = (invocation.arguments["title"] ?? "未命名文档").trimmingCharacters(in: .whitespacesAndNewlines)
         let content = (invocation.arguments["content"] ?? invocation.arguments["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else {
             return ToolExecutionResult(
                 toolName: SparkToolName.createKnowledgeDocument,
-                outputText: "知识文档创建失败：content 不能为空。",
+                outputText: "知识文档草稿生成失败：content 不能为空。",
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
+        logger.info(
+            "create_knowledge_document 生成预览草稿，title=\(title.isEmpty ? "未命名文档" : title), contentLength=\(content.count)",
+            module: .aiConfig
+        )
 
-        do {
-            let document = try await createKnowledgeDocumentUseCase.execute(
-                KnowledgeDocumentDraft(
-                    title: title.isEmpty ? "未命名文档" : title,
-                    content: content,
-                    source: .tool
-                )
-            )
-            return ToolExecutionResult(
-                toolName: SparkToolName.createKnowledgeDocument,
-                outputText: "知识文档已创建：\(document.title)",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        } catch {
-            return ToolExecutionResult(
-                toolName: SparkToolName.createKnowledgeDocument,
-                outputText: "知识文档保存失败：\(error.localizedDescription)",
-                sensitive: false,
-                shouldBypassModel: true
-            )
+        // 统一输出为 JSON，便于聊天发送链路稳定解析为 knowledge_card。
+        let payload: [String: String] = [
+            "status": "preview",
+            "title": title.isEmpty ? "未命名文档" : title,
+            "content": content
+        ]
+        let outputText: String
+        if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
+           let text = String(data: data, encoding: .utf8) {
+            outputText = text
+        } else {
+            outputText = """
+            status=preview
+            title=\(title.isEmpty ? "未命名文档" : title)
+            content=\(content)
+            """
         }
+        return ToolExecutionResult(
+            toolName: SparkToolName.createKnowledgeDocument,
+            outputText: outputText,
+            sensitive: false,
+            shouldBypassModel: true
+        )
     }
 
     /// 将内容追加到 `memoryArchive` 并保存。

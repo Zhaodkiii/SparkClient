@@ -77,8 +77,6 @@ final class ChatListViewModel: ObservableObject {
 
     func selectAndPrepare(threadID: UUID) async {
         stateStore.setSelectedThreadID(threadID)
-        let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
-        stateStore.setMessages(messages, for: threadID)
     }
 
     func search(text: String) -> [ChatThreadListItem] {

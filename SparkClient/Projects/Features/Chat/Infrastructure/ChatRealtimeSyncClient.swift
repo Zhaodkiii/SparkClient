@@ -84,7 +84,7 @@ actor ChatRealtimeSyncClient {
         switch event {
         case .connected:
             reconnectAttempt = 0
-            hintHandler?(nil)
+            // 连接建立不主动触发全量/全局同步；仅依赖服务端增量事件提示，避免重复拉取。
 
         case .text(let text):
             guard let data = text.data(using: .utf8) else { return }
@@ -94,8 +94,6 @@ actor ChatRealtimeSyncClient {
             if type == "chat.sync.updated" {
                 let cursor = json["cursor"] as? String
                 hintHandler?(cursor)
-            } else if type == "chat.sync.connected" {
-                hintHandler?(nil)
             }
 
         case .disconnected(let reason):
