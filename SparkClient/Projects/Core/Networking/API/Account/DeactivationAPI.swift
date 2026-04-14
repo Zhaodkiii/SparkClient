@@ -26,6 +26,9 @@ struct SparkDeactivationAPI {
     struct DeactivationRequestResult: Decodable {
         let deactivation_id: Int
         let state: String
+        let scheduled_at: String?
+        let immediate_deactivation: Bool?
+        let countdown_hours: Int?
     }
 
     func getDeactivationStatus(deactivationId: Int) async throws -> DeactivationStatus? {
@@ -54,9 +57,15 @@ struct SparkDeactivationAPI {
         return try APIResponseDecoder.decodeWrappedData(DeactivationStatus?.self, from: response)
     }
 
-    func requestDeactivation(reason: String = "") async throws -> DeactivationRequestResult {
+    func requestDeactivation(
+        reason: String = "",
+        immediateDeactivation: Bool = true,
+        countdownHours: Int = 24
+    ) async throws -> DeactivationRequestResult {
         struct Payload: Encodable {
             let reason: String
+            let immediate_deactivation: Bool
+            let countdown_hours: Int
         }
 
         let operation = CacheableSparkNetworkOperation(
@@ -66,13 +75,50 @@ struct SparkDeactivationAPI {
                 method: .post,
                 path: "/api/v1/deactivation/",
                 headers: [:],
-                body: .json(AnyEncodable(Payload(reason: reason))),
+                body: .json(
+                    AnyEncodable(
+                        Payload(
+                            reason: reason,
+                            immediate_deactivation: immediateDeactivation,
+                            countdown_hours: countdownHours
+                        )
+                    )
+                ),
                 strategy: NetworkStrategy(
                     requiresAuth: true,
                     allowETag: false,
                     serialKey: "deactivation.request",
                     retryConfig: .default,
                     isIdempotent: false,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        return try APIResponseDecoder.decodeWrappedData(DeactivationRequestResult.self, from: response)
+    }
+
+    func cancelDeactivation(deactivationId: Int, reason: String = "") async throws -> DeactivationRequestResult {
+        struct Payload: Encodable {
+            let reason: String
+        }
+
+        let operation = CacheableSparkNetworkOperation(
+            name: "Deactivation.Cancel",
+            apiName: "DeactivationAPI",
+            request: SparkNetworkRequest(
+                method: .delete,
+                path: "/api/v1/deactivation/",
+                queryItems: [URLQueryItem(name: "deactivation_id", value: "\(deactivationId)")],
+                headers: [:],
+                body: .json(AnyEncodable(Payload(reason: reason))),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "deactivation.cancel.\(deactivationId)",
+                    retryConfig: .default,
+                    isIdempotent: true,
                     queuePriority: .high
                 )
             )

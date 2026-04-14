@@ -382,9 +382,17 @@
 "settings.sync.now" = "立即同步";
 "settings.sync.never" = "从未同步";
 "settings.section.cache" = "缓存";
+"settings.section.danger" = "危险操作";
 "settings.cache.clear_etag" = "清理 ETag 缓存";
 "settings.cache.clear_etag.subtitle" = "删除本地条件请求缓存与响应体，下次请求将重新从网络拉取。";
 "settings.sign_out" = "退出登录";
+"settings.deactivation.current_status" = "注销状态";
+"settings.deactivation.request" = "申请注销账户";
+"settings.deactivation.confirm.title" = "确认发起注销？";
+"settings.deactivation.confirm.message" = "该操作会启动账户注销流程，处理开始后可能不可逆。";
+"settings.deactivation.confirm.submit" = "提交注销申请";
+"settings.deactivation.status.none" = "无进行中的申请";
+"settings.deactivation.status.query_failed" = "状态查询失败";
 
 "ai_settings.title" = "AI 场景配置";
 "ai_settings.save" = "保存";

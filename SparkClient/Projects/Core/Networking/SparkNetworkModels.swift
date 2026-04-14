@@ -479,3 +479,38 @@ extension SparkNetworkError: LocalizedError {
         }
     }
 }
+
+/// 认证失效事件：仅用于“服务端明确判定鉴权失败”后，通知 App 层回到登录页。
+enum AuthSessionInvalidation {
+    static let notificationName = Notification.Name("Spark.Auth.SessionInvalidatedByServer")
+
+    static func shouldInvalidate(statusCode: Int, backendCode: Int?) -> Bool {
+        if statusCode == 401 || statusCode == 403 {
+            return true
+        }
+        guard let backendCode else { return false }
+        if (40100...40199).contains(backendCode) || (40300...40399).contains(backendCode) {
+            return true
+        }
+        return false
+    }
+
+    static func postIfNeeded(
+        statusCode: Int,
+        backendCode: Int?,
+        message: String,
+        source: String
+    ) {
+        guard shouldInvalidate(statusCode: statusCode, backendCode: backendCode) else { return }
+        NotificationCenter.default.post(
+            name: notificationName,
+            object: nil,
+            userInfo: [
+                "statusCode": statusCode,
+                "backendCode": backendCode ?? -1,
+                "message": message,
+                "source": source
+            ]
+        )
+    }
+}

@@ -4,6 +4,7 @@ struct AppCoordinatorView: View {
     let container: AppContainer
     @StateObject private var sessionStore: AppSessionStore
     @StateObject private var networkMonitor = NetworkPathMonitor()
+    @State private var isHandlingServerAuthInvalidation = false
 
     init(container: AppContainer) {
         self.container = container
@@ -23,6 +24,11 @@ struct AppCoordinatorView: View {
         .animation(.easeInOut, value: sessionStore.state)
         .onAppear {
             networkMonitor.start()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AuthSessionInvalidation.notificationName)) { _ in
+            Task { @MainActor in
+                await handleServerAuthInvalidationIfNeeded()
+            }
         }
     }
 
@@ -68,5 +74,14 @@ struct AppCoordinatorView: View {
                 }
             }
         }
+    }
+
+    private func handleServerAuthInvalidationIfNeeded() async {
+        guard case .signedIn = sessionStore.state else { return }
+        guard isHandlingServerAuthInvalidation == false else { return }
+
+        isHandlingServerAuthInvalidation = true
+        defer { isHandlingServerAuthInvalidation = false }
+        await container.forceSignOutAfterServerAuthInvalidation()
     }
 }

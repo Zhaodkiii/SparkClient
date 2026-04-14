@@ -111,6 +111,12 @@ final class SparkNetworkEngine {
                     continue
                 }
 
+                AuthSessionInvalidation.postIfNeeded(
+                    statusCode: response.httpResponse.statusCode,
+                    backendCode: backendError?.code,
+                    message: backendError?.msg ?? "",
+                    source: "SparkNetworkEngine.sendRaw"
+                )
                 throw SparkNetworkError.httpError(
                     statusCode: response.httpResponse.statusCode,
                     backend: backendError,

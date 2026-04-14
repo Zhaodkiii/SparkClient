@@ -382,9 +382,17 @@
 "settings.sync.now" = "Sync Now";
 "settings.sync.never" = "Never";
 "settings.section.cache" = "Cache";
+"settings.section.danger" = "Danger Zone";
 "settings.cache.clear_etag" = "Clear HTTP ETag Cache";
 "settings.cache.clear_etag.subtitle" = "Removes saved conditional GET bodies and tags. The next requests fetch fresh data.";
 "settings.sign_out" = "Sign out";
+"settings.deactivation.current_status" = "Deactivation Status";
+"settings.deactivation.request" = "Request Account Deactivation";
+"settings.deactivation.confirm.title" = "Confirm account deactivation?";
+"settings.deactivation.confirm.message" = "This action will start account deactivation workflow and may become irreversible after processing starts.";
+"settings.deactivation.confirm.submit" = "Submit deactivation request";
+"settings.deactivation.status.none" = "No request";
+"settings.deactivation.status.query_failed" = "Status query failed";
 
 "ai_settings.title" = "AI Scenario Config";
 "ai_settings.save" = "Save";

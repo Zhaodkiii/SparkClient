@@ -119,6 +119,12 @@ actor AuthTokenProvider {
 
         guard loadRefreshToken() != nil else {
             logger.warning("刷新令牌不存在，无法发起 token refresh。", module: .auth)
+            AuthSessionInvalidation.postIfNeeded(
+                statusCode: 401,
+                backendCode: nil,
+                message: "missing_refresh_token",
+                source: "AuthTokenProvider.refreshTokensDeDuplicated"
+            )
             clearTokens()
             throw AuthTokenProviderError.missingTokens
         }
@@ -137,6 +143,12 @@ actor AuthTokenProvider {
     private func performRefresh() async throws -> AuthTokens {
         guard let refreshToken = loadRefreshToken() else {
             logger.warning("刷新令牌读取失败，判定为未登录态。", module: .auth)
+            AuthSessionInvalidation.postIfNeeded(
+                statusCode: 401,
+                backendCode: nil,
+                message: "missing_refresh_token",
+                source: "AuthTokenProvider.performRefresh"
+            )
             clearTokens()
             throw AuthTokenProviderError.missingTokens
         }
@@ -196,6 +208,12 @@ actor AuthTokenProvider {
 
         // 仅在明确的认证失效状态下清理 token；服务异常时保留本地登录态。
         if statusCode == 400 || statusCode == 401 || statusCode == 403 {
+            AuthSessionInvalidation.postIfNeeded(
+                statusCode: statusCode,
+                backendCode: nil,
+                message: "token_refresh_failed",
+                source: "AuthTokenProvider.performRefresh"
+            )
             clearTokens()
             logger.error(SparkNetworkingStrings.Auth.refreshFailed(), module: .auth)
             throw AuthTokenProviderError.refreshFailed

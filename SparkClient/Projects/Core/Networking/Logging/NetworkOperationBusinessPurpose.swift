@@ -55,6 +55,7 @@ enum NetworkOperationBusinessPurpose: Sendable {
         "Device.RegisterTrusted": "设备域：登记可信设备（兼容旧 operation 名，同全量登记）",
         "Deactivation.GetStatus": "查询账号注销进度",
         "Deactivation.Request": "发起账号注销申请",
+        "Deactivation.Cancel": "取消账号注销申请",
         "CombinedMedical.Create": "组合创建病历、检查/处方等医疗单据（一次提交）"
     ]
 

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let session: UserSession
+    @State private var showDeactivationConfirm = false
 
     var body: some View {
         List {
@@ -107,10 +108,39 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Section(L10n.text("settings.section.danger")) {
+                HStack {
+                    Text(L10n.text("settings.deactivation.current_status"))
+                    Spacer()
+                    Text(viewModel.deactivationStatusDescription.isEmpty ? L10n.text("settings.deactivation.status.none") : viewModel.deactivationStatusDescription)
+                        .foregroundStyle(.secondary)
+                        .font(.footnote)
+                }
+
+                Button(role: .destructive) {
+                    showDeactivationConfirm = true
+                } label: {
+                    if viewModel.isRequestingDeactivation {
+                        ProgressView()
+                    } else {
+                        Text(L10n.text("settings.deactivation.request"))
+                    }
+                }
+                .disabled(viewModel.isRequestingDeactivation)
+            }
         }
         .navigationTitle(L10n.text("settings.title"))
         .task {
             await viewModel.loadSyncPreference()
+        }
+        .confirmationDialog(L10n.text("settings.deactivation.confirm.title"), isPresented: $showDeactivationConfirm, titleVisibility: .visible) {
+            Button(L10n.text("settings.deactivation.confirm.submit"), role: .destructive) {
+                Task { await viewModel.requestDeactivation() }
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("settings.deactivation.confirm.message"))
         }
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { viewModel.errorMessage != nil },

@@ -678,7 +678,8 @@ final class AppContainer {
             signOutUseCase: signOutUseCase,
             memberContextStore: memberContextStore,
             medicalSyncService: medicalSyncService,
-            deviceCache: backend.deviceCache
+            deviceCache: backend.deviceCache,
+            backend: backend
         )
         cachedSettingsViewModel = created
         return created
@@ -738,5 +739,20 @@ final class AppContainer {
     /// 聊天详情（共享 `chatDetailViewModel`）。
     func makeChatDetailViewModel() -> ChatDetailViewModel {
         chatDetailViewModel
+    }
+
+    /// 服务端明确返回鉴权失效时触发：
+    /// 清理本地会话与 token，并切回登录态。
+    func forceSignOutAfterServerAuthInvalidation() async {
+        logger.warning("检测到服务端明确鉴权失效，准备强制回到登录页。", module: .auth)
+        do {
+            try await signOutUseCase.execute()
+        } catch {
+            logger.warning("强制登出执行失败，继续回收本地会话状态：\(error.localizedDescription)", module: .auth)
+        }
+        memberContextStore.clearSessionPersistenceAndReset()
+        routeStore.resetForNewSession()
+        resetSessionScopedViewModels()
+        sessionStore.setSignedOut()
     }
 }

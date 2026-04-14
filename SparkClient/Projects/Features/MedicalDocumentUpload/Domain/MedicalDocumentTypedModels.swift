@@ -42,6 +42,13 @@ struct FlexibleOptionalString: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+extension KeyedDecodingContainer {
+    /// 让 `@FlexibleOptionalString` 在键缺失时自动回落为 nil，避免触发 keyNotFound。
+    func decode(_ type: FlexibleOptionalString.Type, forKey key: Key) throws -> FlexibleOptionalString {
+        try decodeIfPresent(type, forKey: key) ?? FlexibleOptionalString(wrappedValue: nil)
+    }
+}
+
 // MARK: - 基础枚举与配置
 
 /// 报告类型：定义了系统能够处理的所有医疗文档范畴。

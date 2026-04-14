@@ -11,6 +11,12 @@ enum APIResponseDecoder {
         let wrapped = try decoder.decode(BackendWrappedResponse<T>.self, from: response.data)
 
         guard wrapped.code == 0 else {
+            AuthSessionInvalidation.postIfNeeded(
+                statusCode: response.httpResponse.statusCode,
+                backendCode: wrapped.code,
+                message: wrapped.msg,
+                source: "APIResponseDecoder.decodeWrappedData"
+            )
             throw SparkNetworkError.httpError(
                 statusCode: response.httpResponse.statusCode,
                 backend: BackendError(code: wrapped.code, msg: wrapped.msg, data: nil),
