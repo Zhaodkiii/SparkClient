@@ -90,21 +90,23 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             )
         }()
 
+        var effectiveMessages = effectiveRequest.messages
+        if let selectedModel = snapshot.allModels.first(where: { $0.name == resolved.model }),
+           selectedModel.identity == .agent,
+           let prompt = selectedModel.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+           prompt.isEmpty == false {
+            effectiveMessages.insert(AIRuntimeMessage(role: .system, content: prompt), at: 0)
+        }
+
         // MARK: - 优先使用本地模型
         if let localSelection = resolveLocalModelSelection(modelName: resolved.model, snapshot: snapshot) {
             // 必须有本地网关实例
             guard let localGateway else {
                 throw LocalModelServiceError.modelLoadFailed
             }
-            // 拼接本地模型的系统提示词
-            var localMessages = effectiveRequest.messages
-            if let prompt = localSelection.model.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
-               prompt.isEmpty == false {
-                localMessages.insert(AIRuntimeMessage(role: .system, content: prompt), at: 0)
-            }
             
             logger.debug(
-                "准备调用本地模型流式推理，scenario=\(request.scenario.rawValue), model=\(resolved.model), messages=\(localMessages.count), file=\(localSelection.fileName)",
+                "准备调用本地模型流式推理，scenario=\(request.scenario.rawValue), model=\(resolved.model), messages=\(effectiveMessages.count), file=\(localSelection.fileName)",
                 module: .aiConfig
             )
             
@@ -112,7 +114,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             let response = try await localGateway.generateText(
                 fileName: localSelection.fileName,
                 modelName: resolved.model,
-                messages: localMessages,
+                messages: effectiveMessages,
                 maxTokens: resolved.maxTokens,
                 temperature: resolved.temperature
             )
@@ -142,12 +144,22 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         // MARK: - 调用云端模型
         let client = AIClientFactory.makeClient(from: resolved)
         logger.debug(
-            "准备调用 AI 流式推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), provider=\(effectiveRequest.providerCompanyUppercased ?? "<nil>"), messages=\(effectiveRequest.messages.count), tools=\(effectiveRequest.tools.count)",
+            "准备调用 AI 流式推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), provider=\(effectiveRequest.providerCompanyUppercased ?? "<nil>"), messages=\(effectiveMessages.count), tools=\(effectiveRequest.tools.count)",
             module: .aiConfig
         )
         
         // 网关发起请求
-        let upstream = try await gateway.generateTextStream(client: client, request: effectiveRequest)
+        let upstream = try await gateway.generateTextStream(
+            client: client,
+            request: AIRuntimeTextRequest(
+                scenario: effectiveRequest.scenario,
+                messages: effectiveMessages,
+                tools: effectiveRequest.tools,
+                toolChoice: effectiveRequest.toolChoice,
+                reasoning: effectiveRequest.reasoning,
+                providerCompanyUppercased: effectiveRequest.providerCompanyUppercased
+            )
+        )
         
         // 包装并返回上流事件流
         return AsyncThrowingStream { continuation in

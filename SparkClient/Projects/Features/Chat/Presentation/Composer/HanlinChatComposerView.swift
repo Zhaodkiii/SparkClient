@@ -6,7 +6,7 @@ struct HanlinChatComposerView: View {
     let threadID: UUID
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
-    let modelRows: [AIScenarioRemoteModelRow]
+    let modelRows: [ChatComposerModelOption]
     let onSend: () -> Void
 
     @State private var showFileImporter = false

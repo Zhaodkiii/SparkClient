@@ -34,7 +34,10 @@ struct ModelsSettingsView: View {
     private var visibleProviderCompanies: Set<String> {
         Set(
             viewModel.snapshot.apiKeys
-                .filter { !$0.isHidden }
+                .filter {
+                    $0.isHidden == false &&
+                    $0.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                }
                 .map { $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
                 .filter { !$0.isEmpty }
         )
@@ -126,7 +129,6 @@ struct ModelsSettingsView: View {
                         } label: {
                             Label(L10n.text("ai_settings.models.menu.add_agent"), systemImage: "person.crop.circle.badge.plus")
                         }
-                        .disabled(models.contains(where: { $0.isLocalModel }) == false)
 
                         NavigationLink {
                             ModelsAdvancedEditorView(
@@ -320,10 +322,7 @@ struct ModelsSettingsView: View {
 
     /// 与 Health `filteredModels`：非智能体且非本地目录行时，厂商须在可见密钥集合中。
     private func matchesApiKeyVisibility(_ model: AllModels) -> Bool {
-        if model.identity == .agent {
-            return true
-        }
-        if model.isLocalModel {
+        if model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == LocalModelService.localCompany.uppercased() {
             return true
         }
         let c = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()

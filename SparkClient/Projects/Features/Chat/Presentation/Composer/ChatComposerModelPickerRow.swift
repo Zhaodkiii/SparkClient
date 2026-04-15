@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 专业版模型横滑（使用系统语义色，不依赖固定品牌色）。
 struct ChatComposerModelPickerRow: View {
-    let models: [AIScenarioRemoteModelRow]
+    let models: [ChatComposerModelOption]
     @Binding var selectedModelName: String?
 
     var body: some View {
@@ -29,13 +29,13 @@ struct ChatComposerModelPickerRow: View {
                             selectedModelName = nil
                         }
 
-                        ForEach(models, id: \.model) { row in
+                        ForEach(models) { row in
                             modelButton(
-                                title: row.pickerLabel,
-                                isSelected: selectedModelName == row.model,
-                                systemImage: "cpu"
+                                title: row.title,
+                                isSelected: selectedModelName == row.modelName,
+                                systemImage: row.iconSystemName
                             ) {
-                                selectedModelName = row.model
+                                selectedModelName = row.modelName
                             }
                         }
                     }
@@ -93,17 +93,5 @@ struct ChatComposerModelPickerRow: View {
                 Color(.secondarySystemFill)
             }
         }
-    }
-}
-
-private extension AIScenarioRemoteModelRow {
-    var pickerLabel: String {
-        if let name = providerName, name.isEmpty == false {
-            return name
-        }
-        if let id = identity, id.isEmpty == false {
-            return "\(model) · \(id)"
-        }
-        return model
     }
 }

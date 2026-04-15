@@ -1,6 +1,20 @@
 import Combine
 import Foundation
 
+struct ChatComposerModelOption: Identifiable, Equatable, Sendable {
+    let id: String
+    let modelName: String
+    let title: String
+    let iconSystemName: String
+
+    init(modelName: String, title: String, iconSystemName: String = "cpu") {
+        self.id = modelName
+        self.modelName = modelName
+        self.title = title
+        self.iconSystemName = iconSystemName
+    }
+}
+
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
     private enum MessagePagingConfig {
@@ -23,8 +37,8 @@ final class ChatDetailViewModel: ObservableObject {
     private let logger: Logger
     private var isRealtimeActive = false
 
-    /// 对话场景可选模型行（来自远程 bundle），供 Hanlin 输入栏展示。
-    @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
+    /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
+    @Published private(set) var chatScenarioModels: [ChatComposerModelOption] = []
     /// 当前会话输入栏关联模型的推理能力（用于思考开关展示策略）。
     @Published private(set) var reasoningToolbarContext: ChatModelReasoningContext = .unknown
 
@@ -60,8 +74,25 @@ final class ChatDetailViewModel: ObservableObject {
 
     func refreshChatModelPicker() async {
         let snapshot = await aiSettingsRepository.loadSnapshot()
-        let rows = snapshot.scenarioRemoteBundles?.chat.models ?? []
-        chatScenarioModels = rows.filter { snapshot.shouldOfferTrialModelInChatPicker(modelName: $0.model) }
+        let models = snapshot.allModels
+            .filter { model in
+                model.isHidden == false &&
+                model.supportsText &&
+                snapshot.shouldOfferTrialModelInChatPicker(modelName: model.name) &&
+                canUseInChatPicker(model: model, snapshot: snapshot)
+            }
+            .sorted { $0.position < $1.position }
+
+        let options = models.map { model in
+            ChatComposerModelOption(
+                modelName: model.name,
+                title: model.displayName,
+                iconSystemName: model.identity == .agent
+                    ? (model.iconSymbol?.isEmpty == false ? model.iconSymbol! : "person.crop.circle")
+                    : "cpu"
+            )
+        }
+        chatScenarioModels = options
     }
 
     func refreshReasoningToolbarContext(for threadID: UUID) async {
@@ -77,17 +108,97 @@ final class ChatDetailViewModel: ObservableObject {
 
     private func applyChatModelRuntimeOverride(selectedName: String?) async {
         let snapshot = await aiSettingsRepository.loadSnapshot()
-        guard let bundle = snapshot.scenarioRemoteBundles?.chat else {
+        guard let name = selectedName, name.isEmpty == false else {
             await aiConfigCenter.clearRuntimeOverride(for: .chat)
             return
         }
-        guard let name = selectedName, name.isEmpty == false,
-              let row = bundle.models.first(where: { $0.model == name })
-        else {
-            await aiConfigCenter.clearRuntimeOverride(for: .chat)
+
+        if let selected = snapshot.allModels.first(where: { $0.name == name }) {
+            if selected.company.uppercased() == LocalModelService.localCompany {
+                await aiConfigCenter.setRuntimeOverride(
+                    AIScenarioConfig(
+                        endpoint: "local://chat/completions",
+                        model: selected.name,
+                        apiKey: nil,
+                        temperature: snapshot.chat.temperature,
+                        maxTokens: snapshot.chat.maxTokens
+                    ),
+                    for: .chat
+                )
+                return
+            }
+
+            if selected.identity == .agent,
+               let baseModelName = selected.baseModelName,
+               let base = snapshot.allModels.first(where: { $0.name == baseModelName }) {
+                let endpoint = endpointForModelCompany(base.company, snapshot: snapshot) ?? snapshot.chat.endpoint
+                let apiKey = apiKeyForModelCompany(base.company, snapshot: snapshot)
+                await aiConfigCenter.setRuntimeOverride(
+                    AIScenarioConfig(
+                        endpoint: endpoint,
+                        model: base.name,
+                        apiKey: apiKey,
+                        temperature: snapshot.chat.temperature,
+                        maxTokens: snapshot.chat.maxTokens
+                    ),
+                    for: .chat
+                )
+                return
+            }
+
+            let endpoint = endpointForModelCompany(selected.company, snapshot: snapshot) ?? snapshot.chat.endpoint
+            let apiKey = apiKeyForModelCompany(selected.company, snapshot: snapshot)
+            await aiConfigCenter.setRuntimeOverride(
+                AIScenarioConfig(
+                    endpoint: endpoint,
+                    model: selected.name,
+                    apiKey: apiKey,
+                    temperature: snapshot.chat.temperature,
+                    maxTokens: snapshot.chat.maxTokens
+                ),
+                for: .chat
+            )
             return
         }
-        await aiConfigCenter.setRuntimeOverride(row.asScenarioConfig(), for: .chat)
+
+        if let bundle = snapshot.scenarioRemoteBundles?.chat,
+           let row = bundle.models.first(where: { $0.model == name }) {
+            await aiConfigCenter.setRuntimeOverride(row.asScenarioConfig(), for: .chat)
+            return
+        }
+
+        await aiConfigCenter.clearRuntimeOverride(for: .chat)
+    }
+
+    private func endpointForModelCompany(_ company: String, snapshot: AISettingsSnapshot) -> String? {
+        snapshot.apiKeys.first(where: {
+            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            == company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        })?.requestURL
+    }
+
+    private func apiKeyForModelCompany(_ company: String, snapshot: AISettingsSnapshot) -> String? {
+        let raw = snapshot.apiKeys.first(where: {
+            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            == company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        })?.key ?? ""
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func canUseInChatPicker(model: AllModels, snapshot: AISettingsSnapshot) -> Bool {
+        let localCompany = LocalModelService.localCompany.uppercased()
+        let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if company == localCompany {
+            return true
+        }
+
+        let provider = snapshot.apiKeys.first(where: {
+            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company
+        })
+        guard let provider else { return false }
+        return provider.isHidden == false &&
+        provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     func loadMessagesIfNeeded(for threadID: UUID) async {
