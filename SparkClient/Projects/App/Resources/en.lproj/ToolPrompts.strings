@@ -10,6 +10,8 @@
 "tool.summary.fetch_sleep_details" = "Purpose: Retrieve sleep by session and daily summary (core/deep/REM/unspecified). Trigger: sleep quality review. Input start_date/end_date ≤ today, yyyy‑MM‑dd. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.fetch_workout_details" = "Purpose: retrieve workout records. Input: start_date, end_date; optional types filter; max_items limit. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.generate_structured_health_card" = "Purpose: Saveable structured health cards (async extraction). Pass report_type; raw_text must be distilled excerpt (not full OCR). Optional oss_file_id. Spark uses a placeholder implementation.";
+"tool.summary.query_tasks_by_member" = "Purpose: query member-level existing tasks (main + subtype status) for dedup analysis before task generation. member_id is optional and defaults to current home member. Rule: call this before generate_task. Output should be structured JSON.";
+"tool.summary.generate_task" = "Purpose: generate pending task-card JSON from user input, including async extraction and similarity checks. member_id is optional and defaults to current home member. Rule: query_tasks_by_member must run first. If similar tasks exist, return no-create JSON; otherwise return task_cards JSON.";
 "tool.summary.search_knowledge_bag" = "Purpose: search user's private Knowledge Bag and return digest. Trigger: personal notes/docs. Input 'query' precisely describes topic. Use before search_online. Pair with: retrieve_memory.";
 "tool.summary.create_knowledge_document" = "Usage: Generate a preview knowledge-card draft (do not persist immediately) when summarizing or on user request. title concise; content in Markdown with clear headings; user confirms save in the chat card.";
 "tool.summary.search_calendar_and_reminders" = "Purpose: filter calendar events and reminders. Provide at least one of keyword, date range, or place. Dates yyyy‑MM‑dd in local TZ. Skip if all filters empty.";
@@ -51,6 +53,10 @@
 "tool.param.report_type_enum" = "Card type: medication, prescription, exam_report, medical_case (same semantics as HealthClient).";
 "tool.param.raw_text_distilled" = "Distilled key medical facts only for report_type; do not paste full OCR.";
 "tool.param.oss_file_id_optional" = "Optional integer source file id (Health parity).";
+"tool.param.member_id_for_task" = "Task owner member ID (optional, defaults to current home member).";
+"tool.param.user_input_for_extraction" = "Raw user input used for generic task extraction and generation.";
+"tool.param.include_completed_optional" = "Optional include completed/canceled tasks (true/false), default true.";
+"tool.param.require_query_first" = "Optional enforce query-first flow, default true.";
 "tool.param.query_keyword" = "Query keyword";
 "tool.param.doc_title" = "Document title";
 "tool.param.doc_content_markdown" = "Markdown body with clear headings";
@@ -99,3 +105,11 @@
 "tool.param.replacement_item" = "Replacement";
 "tool.param.file_path_local" = "Local absolute file path";
 "tool.param.tool_query_generic" = "Tool query parameter";
+
+/* ========== Tool UI Strings (card titles etc.) ========== */
+"tool.ui.knowledge.search_title" = "Knowledge Search";
+"tool.ui.knowledge.card_title" = "Knowledge Card";
+"tool.ui.knowledge.draft_default_title" = "Knowledge Draft";
+"tool.ui.rich.location.default_name" = "Location";
+"tool.ui.rich.event.default_title" = "Event";
+"tool.ui.rich.health.default_title" = "Health Card";

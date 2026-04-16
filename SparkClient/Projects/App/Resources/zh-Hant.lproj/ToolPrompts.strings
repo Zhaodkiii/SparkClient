@@ -10,6 +10,8 @@
 "tool.summary.fetch_sleep_details" = "用途：按會話和日彙總檢索睡眠資料（核心/深度/REM/未指定睡眠階段）。觸發場景：使用者回顧睡眠質量、分析睡眠模式、制定睡眠計劃。輸入要求：start_date、end_date ≤ 今天，格式 yyyy‑MM‑dd。可與 fetch_step_details、fetch_energy_details 聯用。";
 "tool.summary.fetch_workout_details" = "用途：檢索運動記錄（跑步、步行、騎行等）。輸入：start_date、end_date；可選 types 篩選活動型別；max_items 限制返回條數。可與 fetch_step_details、fetch_energy_details 聯用。";
 "tool.summary.generate_structured_health_card" = "用途：生成可儲存的結構化健康卡片（後臺 AI 抽取）。呼叫時 report_type 指定卡片型別，raw_text 必須是你提煉後的關鍵摘錄（勿傳完整 OCR）。可選 oss_file_id（整數）。Spark 端為佔位實現。";
+"tool.summary.query_tasks_by_member" = "用途：按成員維度查詢既有任務（主任務+子任務狀態），用於任務生成前去重分析。member_id 可選，預設當前首頁成員。呼叫規則：在 generate_task 前必須先呼叫。輸出必須是結構化 JSON。";
+"tool.summary.generate_task" = "用途：根據使用者輸入生成「待確認任務卡片 JSON」，並執行異步任務抽取與相似任務分析。member_id 可選，預設當前首頁成員。呼叫規則：必須先呼叫 query_tasks_by_member；若存在相似任務則返回不建立說明 JSON；否則返回 task_cards JSON。";
 "tool.summary.search_knowledge_bag" = "用途：檢索本地知識揹包並返回摘要。觸發場景：問題與個人筆記/文件相關。輸入要求：query 精準描述主題。優先使用本工具，再考慮 search_online。可與 retrieve_memory 聯用。";
 "tool.summary.create_knowledge_document" = "用途：當輸出為總結/調研內容或使用者要求建立知識文件時，先生成可預覽的知識卡草稿（不直接落庫）。title 簡短關鍵；content 使用 Markdown，層次清晰；最終由使用者點擊保存到知識庫。";
 "tool.summary.search_calendar_and_reminders" = "用途：篩選系統日曆事件與提醒事項。至少需提供關鍵詞、日期範圍或地點之一。日期 yyyy‑MM‑dd，本地時區。若所有過濾條件為空，不應呼叫。可與 get_current_location 聯用。";
@@ -51,6 +53,10 @@
 "tool.param.report_type_enum" = "卡片型別：medication / prescription / exam_report / medical_case（含義與 HealthClient 一致）。";
 "tool.param.raw_text_distilled" = "須先提煉：只傳入與 report_type 相關的關鍵醫學資訊；禁止把完整 OCR 原文貼上進本引數。";
 "tool.param.oss_file_id_optional" = "可選，原始檔關聯整型 ID（Health 對齊）。";
+"tool.param.member_id_for_task" = "任務歸屬成員 ID（可選，預設當前首頁成員）。";
+"tool.param.user_input_for_extraction" = "使用者原始輸入文本，用於通用任務抽取與任務生成。";
+"tool.param.include_completed_optional" = "可選，是否包含已完成/已取消任務（true/false），預設 true。";
+"tool.param.require_query_first" = "可選，是否強制先查詢任務，預設 true。";
 "tool.param.query_keyword" = "查詢關鍵詞";
 "tool.param.doc_title" = "文件標題，簡短關鍵";
 "tool.param.doc_content_markdown" = "文件內容，Markdown，層次清晰";
@@ -99,3 +105,11 @@
 "tool.param.replacement_item" = "替換為";
 "tool.param.file_path_local" = "本機檔案絕對路徑";
 "tool.param.tool_query_generic" = "工具查詢引數";
+
+/* ========== Tool UI 文案（工具結果卡片標題等） ========== */
+"tool.ui.knowledge.search_title" = "知識檢索";
+"tool.ui.knowledge.card_title" = "知識卡片";
+"tool.ui.knowledge.draft_default_title" = "知識文件草稿";
+"tool.ui.rich.location.default_name" = "位置";
+"tool.ui.rich.event.default_title" = "日程事件";
+"tool.ui.rich.health.default_title" = "健康卡片";

@@ -10,6 +10,8 @@
 "tool.summary.fetch_sleep_details" = "用途：按会话和日汇总检索睡眠数据（核心/深度/REM/未指定睡眠阶段）。触发场景：用户回顾睡眠质量、分析睡眠模式、制定睡眠计划。输入要求：start_date、end_date ≤ 今天，格式 yyyy‑MM‑dd。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.fetch_workout_details" = "用途：检索运动记录（跑步、步行、骑行等）。输入：start_date、end_date；可选 types 筛选活动类型；max_items 限制返回条数。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.generate_structured_health_card" = "用途：生成可保存的结构化健康卡片（后台 AI 抽取）。调用时 report_type 指定卡片类型，raw_text 必须是你提炼后的关键摘录（勿传完整 OCR）。可选 oss_file_id（整数）。Spark 端为占位实现。";
+"tool.summary.query_tasks_by_member" = "用途：按成员维度查询已有任务（主任务+子任务状态），用于任务生成前去重分析。member_id 可选，默认当前主页成员。调用规则：在 generate_task 前必须先调用。输出必须是结构化 JSON。";
+"tool.summary.generate_task" = "用途：基于用户输入生成“待确认任务卡片 JSON”，并执行异步任务抽取与相似任务分析。member_id 可选，默认当前主页成员。调用规则：必须先调用 query_tasks_by_member；若存在相似任务则返回不创建说明 JSON；否则返回 task_cards JSON。";
 "tool.summary.search_knowledge_bag" = "用途：检索本地知识背包并返回摘要。触发场景：问题与个人笔记/文档相关。输入要求：query 精准描述主题。优先使用本工具，再考虑 search_online。可与 retrieve_memory 联用。";
 "tool.summary.create_knowledge_document" = "用途：当输出为总结/调研内容或用户要求创建知识文档时，先生成可预览的知识卡草稿（不直接落库）。title 简短关键；content 使用 Markdown，层次清晰；最终由用户点击保存到知识库。";
 "tool.summary.search_calendar_and_reminders" = "用途：筛选系统日历事件与提醒事项。至少需提供关键词、日期范围或地点之一。日期 yyyy‑MM‑dd，本地时区。若所有过滤条件为空，不应调用。可与 get_current_location 联用。";
@@ -51,6 +53,10 @@
 "tool.param.report_type_enum" = "卡片类型：medication / prescription / exam_report / medical_case（含义与 HealthClient 一致）。";
 "tool.param.raw_text_distilled" = "须先提炼：只传入与 report_type 相关的关键医学信息；禁止把完整 OCR 原文粘贴进本参数。";
 "tool.param.oss_file_id_optional" = "可选，源文件关联整型 ID（Health 对齐）。";
+"tool.param.member_id_for_task" = "任务归属成员 ID（可选，默认当前主页成员）。";
+"tool.param.user_input_for_extraction" = "用户原始输入文本，用于通用任务抽取与任务生成。";
+"tool.param.include_completed_optional" = "可选，是否包含已完成/已取消任务（true/false），默认 true。";
+"tool.param.require_query_first" = "可选，是否强制先查询任务，默认 true。";
 "tool.param.query_keyword" = "查询关键词";
 "tool.param.doc_title" = "文档标题，简短关键";
 "tool.param.doc_content_markdown" = "文档内容，Markdown，层次清晰";
@@ -99,3 +105,11 @@
 "tool.param.replacement_item" = "替换为";
 "tool.param.file_path_local" = "本机文件绝对路径";
 "tool.param.tool_query_generic" = "工具查询参数";
+
+/* ========== Tool UI 文案（工具结果卡片标题等） ========== */
+"tool.ui.knowledge.search_title" = "知识检索";
+"tool.ui.knowledge.card_title" = "知识卡片";
+"tool.ui.knowledge.draft_default_title" = "知识文档草稿";
+"tool.ui.rich.location.default_name" = "位置";
+"tool.ui.rich.event.default_title" = "日程事件";
+"tool.ui.rich.health.default_title" = "健康卡片";

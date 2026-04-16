@@ -14,6 +14,7 @@ struct HomeView: View {
     @State private var showDeleteConfirmation = false
     @State private var addMemberMode: AddFamilyMemberView.Mode?
     @State private var showMedicalDocumentUpload = false
+    @State private var showTaskCenter = false
 
     var body: some View {
         ScrollView {
@@ -71,6 +72,11 @@ struct HomeView: View {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
         }
+        .sheet(isPresented: $showTaskCenter) {
+            NavigationView {
+                TaskCenterViewController(memberID: viewModel.selectedMemberID)
+            }
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
     }
 
@@ -123,8 +129,22 @@ struct HomeView: View {
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.homeGreeting(session.displayName))
-                .font(.title.weight(.bold))
+            HStack(alignment: .top) {
+                Text(L10n.homeGreeting(session.displayName))
+                    .font(.title.weight(.bold))
+                Spacer()
+                Button {
+                    showTaskCenter = true
+                    triggerHaptic(style: .light)
+                } label: {
+                    Label(
+                        NSLocalizedString("task.center.entry", comment: "任务中心"),
+                        systemImage: "checklist"
+                    )
+                    .font(.footnote.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+            }
 
             Text(L10n.text("home.mode.remote"))
                 .font(.callout)

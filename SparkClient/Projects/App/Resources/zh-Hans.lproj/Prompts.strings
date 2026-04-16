@@ -571,3 +571,4 @@ JSON
 "ai.prompt.thread.new_title" = "新对话";
 "ai.prompt.consent.blocked.default_reason" = "敏感信息未发送到模型。";
 "ai.prompt.consent.blocked.template" = "[ConsentGate] %@";
+"ai.prompt.task.extraction.template" = "你是任务抽取助手。请根据用户输入，抽取任务结构化信息并仅返回 JSON，不要输出解释文本。\n\n返回字段：\n{\n  \"task_type\":\"medical|exercise|diet|unknown\",\n  \"target_metric\":\"目标指标（如血糖/步数/热量控制）\",\n  \"time_info\":{\n    \"start_time\":\"ISO8601 或空字符串\",\n    \"frequency\":\"如每天2次/每周3次\",\n    \"period\":\"如daily/weekly/none\"\n  },\n  \"action\":\"行为动作（如测量/步行/控制饮食）\",\n  \"intensity_or_value\":\"强度或数值（如8000步/30分钟）\",\n  \"confidence\":0.0\n}\n\n要求：\n1) 必须尽量从输入中抽取 task_type、target_metric、time_info、action、intensity_or_value。\n2) 未识别内容用空字符串，不要用 null。\n3) 仅输出 JSON 对象。\n\n用户输入：\n%@";

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct AppCoordinatorView: View {
     let container: AppContainer
@@ -28,6 +29,12 @@ struct AppCoordinatorView: View {
         .onReceive(NotificationCenter.default.publisher(for: AuthSessionInvalidation.notificationName)) { _ in
             Task { @MainActor in
                 await handleServerAuthInvalidationIfNeeded()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { @MainActor in
+                guard case .signedIn = sessionStore.state else { return }
+                await TaskManager.shared.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
             }
         }
     }
@@ -69,6 +76,7 @@ struct AppCoordinatorView: View {
                 .task(id: session.profileID) {
                     container.memberContextStore.setActiveProfile(session.profileID)
                     await container.appBootstrapper.bootstrapIfNeeded(for: session)
+                    await TaskManager.shared.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
                     // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
                     container.pushAdapter.requestAuthorizationIfNeeded()
                 }

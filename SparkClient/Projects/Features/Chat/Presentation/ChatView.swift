@@ -26,7 +26,11 @@ struct ChatView: View {
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var isSavingMessageIDs: Set<UUID> = []
     @State private var savedMessageIDs: Set<UUID> = []
+    @State private var taskCardLoadingIDs: Set<Int> = []
+    @State private var ignoredTaskCardIDs: Set<Int> = []
+    @State private var createdTaskCardIDs: Set<Int> = []
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
+    @StateObject private var taskManager = TaskManager.shared
     private let logger: Logger = ConsoleLogger()
 
     private var reasoningRefreshId: String {
@@ -218,113 +222,137 @@ struct ChatView: View {
         .padding(.trailing, 16)
     }
 
+    /// 渲染单条聊天消息的气泡内容（根据消息角色和类型展示不同组件）
+    /// - Parameter message: 聊天消息模型
+    /// - Returns: 消息气泡视图
     private func bubbleContent(_ message: ChatMessage) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            // 从消息中解析出通用元数据
             let metadata = ChatMessageMetadata(message: message)
+            
+            // ============== 1. 助手消息：图片展示区域 ==============
             if message.role == .assistant {
                 let imagePayloads = imagePayloads(from: message)
-                if imagePayloads.isEmpty == false {
+                // 如果有图片，渲染图片画廊
+                if !imagePayloads.isEmpty {
                     ChatImageGalleryBlockView(images: imagePayloads)
                 }
             }
 
+            // ============== 2. 助手消息：思考过程（推理内容）展示 ==============
             if message.role == .assistant,
                let reasoning = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
-               reasoning.isEmpty == false {
+               !reasoning.isEmpty {
                 ChatReasoningBlockView(
-                    text: reasoning,
-                    timeText: formatReasoningTime(message.reasoningDurationMs),
-                    isStreaming: message.deliveryState == .sending,
-                    isLastAssistantMessage: isLastAssistantMessage(message)
+                    text: reasoning,                // 推理文本
+                    timeText: formatReasoningTime(message.reasoningDurationMs),  // 推理耗时
+                    isStreaming: message.deliveryState == .sending,              // 是否正在流式输出
+                    isLastAssistantMessage: isLastAssistantMessage(message)      // 是否是最后一条助手消息
                 )
             }
 
+            // ============== 3. 助手消息：操作状态展示 ==============
             if message.role == .assistant,
                let operational = operationalMeta(from: message, metadata: metadata),
                isLastAssistantMessage(message) {
                 ChatOperationalStatusBlockView(
-                    operationalState: operational.state,
-                    operationalDescription: operational.description
+                    operationalState: operational.state,         // 操作状态
+                    operationalDescription: operational.description // 状态描述
                 )
             }
 
+            // ============== 4. 助手消息：工具调用内容展示 ==============
             if message.role == .assistant,
-               let tool = toolMeta(from: message, metadata: metadata) {
+               let tool = toolMeta(from: message, metadata: metadata),
+               shouldShowToolContentBlock(metadata: metadata) {
                 ChatToolContentBlockView(
-                    toolName: tool.name,
-                    toolContent: tool.content,
-                    isStreaming: message.deliveryState == .sending
+                    toolName: tool.name,             // 工具名称
+                    toolContent: tool.content,       // 工具返回内容
+                    isStreaming: message.deliveryState == .sending  // 是否正在流式输出
                 )
             }
 
+
+            // ============== 6. 助手消息：知识卡片展示 ==============
             if message.role == .assistant {
-                // 知识卡渲染优先：展示“消息附件中的卡 + 本地临时生成卡”的合并结果。
+                // 知识卡渲染优先：展示“消息附件中的卡 + 本地临时生成卡”的合并结果
                 let cards = combinedKnowledgeCards(for: message, metadata: metadata)
-                if cards.isEmpty == false {
+                if !cards.isEmpty {
                     ChatKnowledgeCardListView(
                         cards: cards,
                         onSave: { card in
-                            saveKnowledgeCard(card, from: message)
+                            saveKnowledgeCard(card, from: message)  // 保存知识卡片
                         },
                         isSaving: { card in
-                            savingKnowledgeCardIDs.contains(card.id)
+                            savingKnowledgeCardIDs.contains(card.id)  // 是否正在保存
                         },
                         isSaved: { card in
-                            savedKnowledgeCardIDs.contains(card.id)
+                            savedKnowledgeCardIDs.contains(card.id)   // 是否已保存
                         }
                     )
                 }
             }
 
+            // ============== 7. 助手消息：翻译结果展示 ==============
             if message.role == .assistant,
                let translated = translatedText(for: message, metadata: metadata),
-               translated.isEmpty == false {
+               !translated.isEmpty {
                 ChatTranslatedBlockView(text: translated)
             }
 
+            // ============== 8. 助手消息：地图/路线展示 ==============
             if message.role == .assistant {
                 let locations = metadata.locations
                 let routes = metadata.routes
-                if locations.isEmpty == false || routes.isEmpty == false {
+                // 有地点或路线时展示地图
+                if !locations.isEmpty || !routes.isEmpty {
                     ChatMapRouteBlockView(locations: locations, routes: routes)
                 }
             }
 
+            // ============== 9. 助手消息：日程/事件卡片展示 ==============
             if message.role == .assistant {
                 let events = metadata.events
-                if events.isEmpty == false {
+                if !events.isEmpty {
                     ChatEventsCardListView(events: events)
                 }
             }
 
+            // ============== 10. 助手消息：健康卡片 + 睡眠可视化 ==============
             if message.role == .assistant {
                 let cards = metadata.healthCards
-                if cards.isEmpty == false {
+                if !cards.isEmpty {
                     ChatHealthCardListView(cards: cards)
                 }
+                // 睡眠数据图表
                 if let sleep = metadata.sleepVisualization {
                     ChatSleepCardView(model: sleep)
                 }
             }
 
+            // ============== 11. 助手消息：HTML 内容预览 ==============
             if message.role == .assistant,
                let htmlContent = metadata.htmlContent,
-               htmlContent.isEmpty == false {
+               !htmlContent.isEmpty {
                 ChatHTMLPreviewBlockView(htmlContent: htmlContent)
             }
 
+            // ============== 12. 主文本内容（Markdown / 纯文本） ==============
             if shouldRenderMainMarkdown(for: message, metadata: metadata) {
+                // 数学公式模式：等宽纯文本展示
                 if mathModeMessageIDs.contains(message.id) {
                     Text(message.content)
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
+                    // 普通模式：Markdown 渲染
                     Markdown(message.content)
                         .markdownTheme(.chatBubble(foreground: message.role == .user ? .white : .primary))
                 }
             }
 
+            // ============== 13. 消息发送失败：重试按钮 ==============
             if message.deliveryState == .failed {
                 Button {
                     Task {
@@ -336,11 +364,34 @@ struct ChatView: View {
                 }
             }
 
+            // ============== 14. 消息操作按钮（复制/转发/删除等） ==============
             messageActions(message)
+            
+            
+            // ============== 5. 助手消息：任务卡片展示 ==============
+            if message.role == .assistant {
+                // 过滤掉已忽略、已创建的任务卡片
+                let taskCards = metadata.taskCards.filter { card in
+                    !ignoredTaskCardIDs.contains(card.id) && !createdTaskCardIDs.contains(card.id)
+                }
+                // 渲染任务卡片列表
+                if !taskCards.isEmpty {
+                    ForEach(taskCards) { card in
+                        TaskCardCell(
+                            card: card,
+                            onConfirm: { confirmTaskCard(card) },    // 确认任务
+                            onIgnore: { ignoreTaskCard(card) },      // 忽略任务
+                            isLoading: taskCardLoadingIDs.contains(card.id)  // 是否加载中
+                        )
+                    }
+                }
+            }
+            
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
+            // 气泡背景：用户消息使用主题色，助手消息使用系统背景色
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(message.role == .user ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
         )
@@ -348,9 +399,13 @@ struct ChatView: View {
 
     private func toolMeta(from message: ChatMessage, metadata: ChatMessageMetadata) -> (name: String, content: String)? {
         let name = metadata.toolName ?? ""
-        let content = metadata.toolContent ?? ""
-        guard content.isEmpty == false else { return nil }
-        return (name.isEmpty ? L10n.text("chat.bubble.tool.default_name") : name, content)
+        let rawContent = metadata.toolContent ?? ""
+        guard rawContent.isEmpty == false else { return nil }
+        return (name.isEmpty ? L10n.text("chat.bubble.tool.default_name") : name, rawContent)
+    }
+
+    private func shouldShowToolContentBlock(metadata: ChatMessageMetadata) -> Bool {
+        true
     }
 
     /// 对齐 AI_HLY 的 operationalState / operationalDescription：
@@ -414,9 +469,10 @@ struct ChatView: View {
     private func shouldRenderMainMarkdown(for message: ChatMessage, metadata: ChatMessageMetadata? = nil) -> Bool {
         guard message.role == .assistant else { return true }
         guard message.kind == .tool else { return true }
+        let resolvedMeta = metadata ?? ChatMessageMetadata(message: message)
         let trimmedContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedContent.isEmpty == false else { return false }
-        let toolContent = metadata?.toolContent ?? ChatMessageMetadata(message: message).toolContent ?? ""
+        let toolContent = resolvedMeta.toolContent ?? ""
         if toolContent.isEmpty {
             return true
         }
@@ -539,6 +595,132 @@ struct ChatView: View {
         }
     }
 
+    /// 点击“创建任务”：直接创建 Task 总表与子任务，不再走 TaskCard 服务端接口。
+    private func confirmTaskCard(_ card: TaskCard) {
+        guard taskCardLoadingIDs.contains(card.id) == false else { return }
+        taskCardLoadingIDs.insert(card.id)
+        Task {
+            defer { taskCardLoadingIDs.remove(card.id) }
+            do {
+                let payload = buildCreatePayload(from: card)
+                try await taskManager.createTask(payload: payload)
+                createdTaskCardIDs.insert(card.id)
+                logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
+            } catch {
+                logger.error("任务卡片直接创建任务失败 card_id=\(card.id) error=\(error.localizedDescription)", module: .general)
+            }
+        }
+    }
+
+    private func ignoreTaskCard(_ card: TaskCard) {
+        ignoredTaskCardIDs.insert(card.id)
+        logger.info("任务卡片本地忽略 card_id=\(card.id)", module: .general)
+    }
+
+    private func buildCreatePayload(from card: TaskCard) -> TaskCreatePayload {
+        let base = parseJSONObject(card.taskPayload["task"]) ?? [:]
+        let subMedical = parseJSONObject(card.taskPayload["task_medical"])
+        let subExercise = parseJSONObject(card.taskPayload["task_exercise"])
+        let subDiet = parseJSONObject(card.taskPayload["task_diet"])
+
+        let startText = stringValue(base["start_time"]) ?? card.startTime.map(iso8601)
+        let dueText = stringValue(base["due_time"]) ?? card.dueTime.map(iso8601)
+        let repeatTypeRaw = intValue(base["repeat_type"]) ?? card.repeatType.rawValue
+        let priorityRaw = intValue(base["priority"]) ?? card.priority.rawValue
+
+        return TaskCreatePayload(
+            member: intValue(base["member"]) ?? intValue(base["member_id"]) ?? card.member,
+            title: stringValue(base["title"]) ?? card.title,
+            description: stringValue(base["description"]) ?? card.description,
+            type: card.type,
+            status: .pending,
+            startTime: startText,
+            dueTime: dueText,
+            repeatType: HealthTask.RepeatType(rawValue: repeatTypeRaw) ?? .none,
+            priority: HealthTask.Priority(rawValue: priorityRaw) ?? .medium,
+            businessType: stringValue(base["business_type"]) ?? card.businessType,
+            businessID: stringValue(base["business_id"]) ?? card.businessID,
+            extra: [:],
+            taskMedical: buildMedicalPayload(from: subMedical, fallback: card),
+            taskExercise: buildExercisePayload(from: subExercise, fallback: card),
+            taskDiet: buildDietPayload(from: subDiet, fallback: card)
+        )
+    }
+
+    private func buildMedicalPayload(from json: [String: Any], fallback card: TaskCard) -> TaskMedicalPayload? {
+        guard card.type == .medical else { return nil }
+        return TaskMedicalPayload(
+            reminderTime: stringValue(json["reminder_time"]) ?? card.startTime.map(iso8601),
+            medicalTaskType: stringValue(json["medical_task_type"]) ?? card.title,
+            description: stringValue(json["description"]) ?? card.description,
+            source: "ai",
+            extra: [:]
+        )
+    }
+
+    private func buildExercisePayload(from json: [String: Any], fallback card: TaskCard) -> TaskExercisePayload? {
+        guard card.type == .exercise else { return nil }
+        return TaskExercisePayload(
+            exerciseType: stringValue(json["exercise_type"]) ?? card.title,
+            durationMin: intValue(json["duration_min"]) ?? 30,
+            intensity: stringValue(json["intensity"]) ?? "medium",
+            description: stringValue(json["description"]) ?? card.description,
+            source: "ai",
+            extra: [:]
+        )
+    }
+
+    /// Diet 卡片直接创建 Task + task_diet 子表。
+    private func buildDietPayload(from json: [String: Any], fallback card: TaskCard) -> TaskDietPayload? {
+        guard card.type == .diet else { return nil }
+        var foodRecommend = [String]()
+        if let array = json["food_recommend"] as? [String] {
+            foodRecommend = array
+        } else if let text = stringValue(json["food_recommend"]), text.isEmpty == false {
+            foodRecommend = [text]
+        }
+        if foodRecommend.isEmpty {
+            foodRecommend = [card.description]
+        }
+        return TaskDietPayload(
+            mealType: stringValue(json["meal_type"]) ?? "dinner",
+            calorieTarget: intValue(json["calorie_target"]) ?? 1800,
+            foodRecommend: foodRecommend,
+            description: stringValue(json["description"]) ?? card.description,
+            source: "ai",
+            extra: [:]
+        )
+    }
+
+    private func parseJSONObject(_ text: String?) -> [String: Any] {
+        guard let text, let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dict = object as? [String: Any] else {
+            return [:]
+        }
+        return dict
+    }
+
+    private func intValue(_ value: Any?) -> Int? {
+        if let intValue = value as? Int { return intValue }
+        if let doubleValue = value as? Double { return Int(doubleValue) }
+        if let stringValue = value as? String { return Int(stringValue) }
+        return nil
+    }
+
+    private func stringValue(_ value: Any?) -> String? {
+        if let text = value as? String { return text }
+        if let intValue = value as? Int { return "\(intValue)" }
+        if let doubleValue = value as? Double { return "\(doubleValue)" }
+        return nil
+    }
+
+    private func iso8601(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
     private func generateKnowledgeCardsPreview(for message: ChatMessage) {
         guard message.role == .assistant else { return }
         guard combinedKnowledgeCards(for: message).isEmpty else {
@@ -578,7 +760,7 @@ struct ChatView: View {
         guard savingKnowledgeCardIDs.contains(card.id) == false else { return }
         guard savedKnowledgeCardIDs.contains(card.id) == false else { return }
         savingKnowledgeCardIDs.insert(card.id)
-        Task {
+        Task { @MainActor in
             // 无论成功失败，都要清理 saving 状态，避免按钮一直卡住。
             defer { savingKnowledgeCardIDs.remove(card.id) }
             do {

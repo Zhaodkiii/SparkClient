@@ -13,3 +13,4 @@
 "ai.prompt.thread.new_title" = "New Chat";
 "ai.prompt.consent.blocked.default_reason" = "Sensitive information was not forwarded to the model.";
 "ai.prompt.consent.blocked.template" = "[ConsentGate] %@";
+"ai.prompt.task.extraction.template" = "You are a task extraction assistant. Extract structured task information from user input and return JSON only.\n\nReturn object:\n{\n  \"task_type\":\"medical|exercise|diet|unknown\",\n  \"target_metric\":\"...\",\n  \"time_info\":{\n    \"start_time\":\"ISO8601 or empty string\",\n    \"frequency\":\"e.g. twice daily / 3 times weekly\",\n    \"period\":\"daily|weekly|none\"\n  },\n  \"action\":\"...\",\n  \"intensity_or_value\":\"...\",\n  \"confidence\":0.0\n}\n\nRules:\n1) Extract task_type, target_metric, time_info, action, intensity_or_value whenever possible.\n2) Use empty strings for unknown scalar fields; do not output null.\n3) Return a single JSON object only.\n\nUser input:\n%@";

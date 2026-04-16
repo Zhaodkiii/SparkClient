@@ -16,6 +16,7 @@ struct ChatMessageMetadata {
     let events: [ChatEventPayload]
     let healthCards: [ChatHealthCardPayload]
     let sleepVisualization: ChatHealthSleepModel?
+    let taskCards: [TaskCard]
 
     init(message: ChatMessage) {
         toolName = Self.attachmentText(type: ChatStreamFieldKey.toolName, from: message)
@@ -30,6 +31,9 @@ struct ChatMessageMetadata {
         events = Self.decodeArray(type: ChatStreamFieldKey.events, from: message)
         healthCards = Self.decodeArray(type: ChatStreamFieldKey.healthInfo, from: message)
         sleepVisualization = Self.decodeObject(type: ChatStreamFieldKey.healthSleepVisualization, from: message)
+        taskCards = Self
+            .decodeArray(type: ChatStreamFieldKey.taskCards, from: message)
+            .filter { $0.status == .pending }
     }
 
     private static func attachmentText(type: String, from message: ChatMessage) -> String? {
@@ -42,12 +46,37 @@ struct ChatMessageMetadata {
     private static func decodeArray<T: Decodable>(type: String, from message: ChatMessage) -> [T] {
         guard let raw = attachmentText(type: type, from: message),
               let data = raw.data(using: .utf8) else { return [] }
-        return (try? JSONDecoder().decode([T].self, from: data)) ?? []
+        if let rows = try? makeDecoder().decode([T].self, from: data) {
+            return rows
+        }
+        // 兼容服务端返回单对象的情况，自动包装成数组，避免卡片丢失。
+        if let single = try? makeDecoder().decode(T.self, from: data) {
+            return [single]
+        }
+        return []
     }
 
     private static func decodeObject<T: Decodable>(type: String, from message: ChatMessage) -> T? {
         guard let raw = attachmentText(type: type, from: message),
               let data = raw.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+        return try? makeDecoder().decode(T.self, from: data)
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let text = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: text) {
+                return date
+            }
+            if let fallback = ISO8601DateFormatter().date(from: text) {
+                return fallback
+            }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "invalid date")
+        }
+        return decoder
     }
 }

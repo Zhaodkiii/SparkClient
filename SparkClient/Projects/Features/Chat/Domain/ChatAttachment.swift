@@ -34,4 +34,5 @@ enum ChatStreamFieldKey {
     static let operationalDescription = "operationalDescription"
     static let translatedText = "translatedText"
     static let events = "events"
+    static let taskCards = "task_cards"
 }

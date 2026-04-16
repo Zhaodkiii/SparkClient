@@ -1,3 +1,4 @@
+import CryptoKit
 import SwiftUI
 import UIKit
 
@@ -6,8 +7,26 @@ struct ChatKnowledgeCard: Codable, Equatable, Identifiable {
     let title: String
     let content: String
 
-    init(id: UUID = UUID(), title: String, content: String) {
-        self.id = id
+    /// 与服务端只下发 title/content、attachment 里无稳定 `id` 时一致：用正文派生确定性 UUID。
+    /// 若每次 JSON 解析都 `UUID()`，同一张卡在每次 `body` 重算后都会换新 id，`savedKnowledgeCardIDs` 会永远对不上。
+    static func stableID(title: String, content: String) -> UUID {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let seed = "\(normalizedTitle)|\(normalizedContent)"
+        let digest = SHA256.hash(data: Data(seed.utf8))
+        let bytes = Array(digest.prefix(16))
+        return UUID(
+            uuid: (
+                bytes[0], bytes[1], bytes[2], bytes[3],
+                bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[8], bytes[9], bytes[10], bytes[11],
+                bytes[12], bytes[13], bytes[14], bytes[15]
+            )
+        )
+    }
+
+    init(id: UUID? = nil, title: String, content: String) {
+        self.id = id ?? Self.stableID(title: title, content: content)
         self.title = title
         self.content = content
     }
@@ -20,9 +39,15 @@ struct ChatKnowledgeCard: Codable, Equatable, Identifiable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        title = try c.decode(String.self, forKey: .title)
-        content = try c.decode(String.self, forKey: .content)
+        let title = try c.decode(String.self, forKey: .title)
+        let content = try c.decode(String.self, forKey: .content)
+        if let id = try c.decodeIfPresent(UUID.self, forKey: .id) {
+            self.id = id
+        } else {
+            self.id = Self.stableID(title: title, content: content)
+        }
+        self.title = title
+        self.content = content
     }
 }
 

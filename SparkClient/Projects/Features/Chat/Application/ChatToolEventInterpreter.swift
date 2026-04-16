@@ -68,7 +68,12 @@ struct ChatToolEventInterpreter: Sendable {
         if toolNameLower.contains("search_knowledge_bag") {
             let body = (toolContent ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if body.isEmpty == false {
-                cards.append(KnowledgeCardPayload(title: "知识检索", content: body))
+                cards.append(
+                    KnowledgeCardPayload(
+                        title: toolText("tool.ui.knowledge.search_title", fallback: "Knowledge Search"),
+                        content: body
+                    )
+                )
             }
         // 规则 2：模型显式调用 create_knowledge_document 时，按工具返回草稿生成知识卡预览。
         } else if toolNameLower.contains("create_knowledge_document") {
@@ -77,7 +82,12 @@ struct ChatToolEventInterpreter: Sendable {
             }
         // 规则 3：当回复类型本身是 card，使用模型回复正文生成知识卡。
         } else if kind == .card, trimmedText.isEmpty == false {
-            cards.append(KnowledgeCardPayload(title: "知识卡片", content: trimmedText))
+                cards.append(
+                    KnowledgeCardPayload(
+                        title: toolText("tool.ui.knowledge.card_title", fallback: "Knowledge Card"),
+                        content: trimmedText
+                    )
+                )
         }
 
         // 无卡片内容则不附带 knowledge_card，避免空卡片渲染。
@@ -111,7 +121,7 @@ struct ChatToolEventInterpreter: Sendable {
             let title = (object["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let content = (object["content"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard content.isEmpty == false else { return nil }
-            return (title.isEmpty ? "知识文档草稿" : title, content)
+            return (title.isEmpty ? toolText("tool.ui.knowledge.draft_default_title", fallback: "Knowledge Draft") : title, content)
         }
 
         // 情况 2：回退兼容 key=value 行格式。
@@ -128,7 +138,7 @@ struct ChatToolEventInterpreter: Sendable {
             }
         }
         guard content.isEmpty == false else { return nil }
-        return (title.isEmpty ? "知识文档草稿" : title, content)
+        return (title.isEmpty ? toolText("tool.ui.knowledge.draft_default_title", fallback: "Knowledge Draft") : title, content)
     }
 
     private func makeRichUIAttachments(
@@ -144,7 +154,13 @@ struct ChatToolEventInterpreter: Sendable {
         if name.contains("query_location") || name.contains("get_current_location") || name.contains("search_nearby_locations") || name.contains("get_route") {
             if let latitude = Double(args["latitude"] ?? ""),
                let longitude = Double(args["longitude"] ?? "") {
-                let loc = [RichLocation(name: args["keyword"] ?? args["query"] ?? "Location", latitude: latitude, longitude: longitude)]
+                let loc = [
+                    RichLocation(
+                        name: args["keyword"] ?? args["query"] ?? toolText("tool.ui.rich.location.default_name", fallback: "Location"),
+                        latitude: latitude,
+                        longitude: longitude
+                    )
+                ]
                 if let text = jsonString(loc) {
                     attachments.append(ChatAttachment(type: ChatStreamFieldKey.locationsInfo, text: text))
                 }
@@ -170,7 +186,7 @@ struct ChatToolEventInterpreter: Sendable {
         if name.contains("search_calendar_and_reminders") || name.contains("write_system_event") {
             let events = [RichEvent(
                 type: args["event_type"] ?? args["type"] ?? "calendar",
-                title: args["title"] ?? args["keyword"] ?? "Event",
+                title: args["title"] ?? args["keyword"] ?? toolText("tool.ui.rich.event.default_title", fallback: "Event"),
                 dateText: args["start_date"] ?? args["due_date"] ?? args["end_date"],
                 location: args["location"],
                 notes: args["notes"]
@@ -182,7 +198,7 @@ struct ChatToolEventInterpreter: Sendable {
 
         if name.contains("generate_structured_health_card") {
             let card = [RichHealthCard(
-                title: args["category"] ?? "Health Card",
+                title: args["category"] ?? toolText("tool.ui.rich.health.default_title", fallback: "Health Card"),
                 energyKilocalories: Double(args["energy"] ?? ""),
                 proteinGrams: Double(args["protein"] ?? ""),
                 carbohydratesGrams: Double(args["carbohydrates"] ?? ""),
@@ -200,12 +216,141 @@ struct ChatToolEventInterpreter: Sendable {
             attachments.append(ChatAttachment(type: ChatStreamFieldKey.healthSleepVisualization, text: text))
         }
 
+        // 任务卡片：仅用于消息内可视化展示，点击后直接创建 Task。
+        if name.contains("generate_task") || name.contains("task_card") || name.contains("create_task"),
+           let cardsText = parseTaskCardsJSON(from: content) {
+            attachments.append(ChatAttachment(type: ChatStreamFieldKey.taskCards, text: cardsText))
+        }
+
         // 网页内容字段（如工具直接返回 HTML），对齐 StreamData.htmlContent。
         if name.contains("read_web_page") || name.contains("create_webpage") {
             attachments.append(ChatAttachment(type: ChatStreamFieldKey.htmlContent, text: content))
         }
 
         return attachments
+    }
+
+    private func parseTaskCardsJSON(from toolContent: String) -> String? {
+        if let line = toolContent
+            .components(separatedBy: .newlines)
+            .first(where: { $0.hasPrefix("task_cards=") }) {
+            return String(line.dropFirst("task_cards=".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        for jsonText in jsonCandidates(in: toolContent) {
+            guard let data = jsonText.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) else {
+                continue
+            }
+            if let parsed = parseTaskCards(from: object) {
+                return parsed
+            }
+        }
+        return nil
+    }
+
+    private func parseTaskCards(from object: Any) -> String? {
+        if let rows = object as? [[String: Any]],
+           let text = encodeJSONArray(rows) {
+            return text
+        }
+
+        guard let dict = object as? [String: Any] else { return nil }
+        if let cards = dict["task_cards"] as? [[String: Any]],
+           let text = encodeJSONArray(cards) {
+            return text
+        }
+        if let card = dict["task_card"] as? [String: Any],
+           let text = encodeJSONArray([card]) {
+            return text
+        }
+        if let dataDict = dict["data"] as? [String: Any] {
+            if let cards = dataDict["task_cards"] as? [[String: Any]],
+               let text = encodeJSONArray(cards) {
+                return text
+            }
+            if let card = dataDict["task_card"] as? [String: Any],
+               let text = encodeJSONArray([card]) {
+                return text
+            }
+        }
+        if looksLikeSingleTaskCard(dict),
+           let text = encodeJSONArray([dict]) {
+            return text
+        }
+        return nil
+    }
+
+    /// 从文本中提取所有“完整 JSON 对象/数组”候选，兼容工具 trace 多段 JSON 输出。
+    private func jsonCandidates(in text: String) -> [String] {
+        let chars = Array(text)
+        guard chars.isEmpty == false else { return [] }
+        var results: [String] = []
+        var stack: [Character] = []
+        var startIndex: Int?
+        var inString = false
+        var escaped = false
+
+        for idx in chars.indices {
+            let ch = chars[idx]
+            if inString {
+                if escaped {
+                    escaped = false
+                } else if ch == "\\" {
+                    escaped = true
+                } else if ch == "\"" {
+                    inString = false
+                }
+                continue
+            }
+
+            if ch == "\"" {
+                inString = true
+                continue
+            }
+
+            if ch == "{" || ch == "[" {
+                if stack.isEmpty {
+                    startIndex = idx
+                }
+                stack.append(ch)
+                continue
+            }
+
+            if ch == "}" || ch == "]" {
+                guard let last = stack.last else { continue }
+                if (last == "{" && ch == "}") || (last == "[" && ch == "]") {
+                    _ = stack.popLast()
+                    if stack.isEmpty, let start = startIndex, start <= idx {
+                        let fragment = String(chars[start...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if fragment.isEmpty == false {
+                            results.append(fragment)
+                        }
+                        startIndex = nil
+                    }
+                }
+            }
+        }
+
+        let trimmedWhole = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if results.isEmpty, (trimmedWhole.hasPrefix("{") || trimmedWhole.hasPrefix("[")) {
+            results.append(trimmedWhole)
+        }
+        return results
+    }
+
+    private func looksLikeSingleTaskCard(_ dict: [String: Any]) -> Bool {
+        dict["title"] != nil && dict["type"] != nil
+    }
+
+    private func encodeJSONArray(_ rows: [[String: Any]]) -> String? {
+        guard JSONSerialization.isValidJSONObject(rows),
+              let data = try? JSONSerialization.data(withJSONObject: rows, options: []),
+              let text = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+        return text
     }
 
     private func parseArgsFromToolContent(_ content: String) -> [String: String] {
@@ -252,6 +397,10 @@ struct ChatToolEventInterpreter: Sendable {
             }
         }
         return nil
+    }
+
+    private func toolText(_ key: String, fallback: String) -> String {
+        AIPromptL10n(locale: .current).tool(key, fallback: fallback)
     }
 }
 

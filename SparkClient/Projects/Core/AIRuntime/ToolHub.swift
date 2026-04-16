@@ -5,6 +5,8 @@ final class ToolHub: @unchecked Sendable {
     private let auditStore: ToolAuditStore
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let aiSettingsRepository: any AISettingsRepository
+    private let runtimeService: any AIRuntimeServing
+    private let taskService: TaskService
     /// 知识库检索/创建：经用例访问 `CoreDataKnowledgeRepository`，避免在此直接操作持久化。
     private let searchKnowledgeUseCase: SearchKnowledgeUseCase
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
@@ -17,6 +19,8 @@ final class ToolHub: @unchecked Sendable {
         auditStore: ToolAuditStore,
         medicalQueryAPI: SparkMedicalQueryAPI,
         aiSettingsRepository: any AISettingsRepository,
+        runtimeService: any AIRuntimeServing,
+        taskService: TaskService,
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         logger: Logger = ConsoleLogger()
@@ -24,6 +28,8 @@ final class ToolHub: @unchecked Sendable {
         self.auditStore = auditStore
         self.medicalQueryAPI = medicalQueryAPI
         self.aiSettingsRepository = aiSettingsRepository
+        self.runtimeService = runtimeService
+        self.taskService = taskService
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.logger = logger
@@ -169,6 +175,10 @@ final class ToolHub: @unchecked Sendable {
             return td("tool.summary.fetch_workout_details")
         case SparkToolName.generateStructuredHealthCard:
             return td("tool.summary.generate_structured_health_card")
+        case SparkToolName.queryTasksByMember:
+            return td("tool.summary.query_tasks_by_member")
+        case SparkToolName.generateTask:
+            return td("tool.summary.generate_task")
         case SparkToolName.searchKnowledgeBag:
             return td("tool.summary.search_knowledge_bag")
         case SparkToolName.createKnowledgeDocument:
@@ -260,6 +270,18 @@ final class ToolHub: @unchecked Sendable {
                     description: td("tool.param.raw_text_distilled")
                 ),
                 "oss_file_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.oss_file_id_optional"))
+            ]
+        case SparkToolName.queryTasksByMember:
+            return [
+                "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_for_task")),
+                "include_completed": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.include_completed_optional")),
+                "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.max_items"))
+            ]
+        case SparkToolName.generateTask:
+            return [
+                "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_for_task")),
+                "user_input": AIRuntimeToolProperty(type: "string", description: td("tool.param.user_input_for_extraction")),
+                "require_query_first": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.require_query_first"))
             ]
         case SparkToolName.searchKnowledgeBag:
             return [
@@ -412,6 +434,10 @@ final class ToolHub: @unchecked Sendable {
             return ["protein", "carbohydrates", "fat", "energy"]
         case SparkToolName.generateStructuredHealthCard:
             return ["category", "raw_text"]
+        case SparkToolName.queryTasksByMember:
+            return []
+        case SparkToolName.generateTask:
+            return ["user_input"]
         case SparkToolName.searchKnowledgeBag:
             return ["query"]
         case SparkToolName.createKnowledgeDocument:
@@ -559,6 +585,10 @@ final class ToolHub: @unchecked Sendable {
 
         case SparkToolName.generateStructuredHealthCard:
             return await runGenerateStructuredHealthCard(invocation: invocation, context: context)
+        case SparkToolName.queryTasksByMember:
+            return await runQueryTasksByMember(invocation: invocation, context: context)
+        case SparkToolName.generateTask:
+            return await runGenerateTask(invocation: invocation, context: context)
         case SparkToolName.generateChatTitle:
             return runGenerateChatTitle(invocation: invocation)
         case SparkToolName.createCanvas:
@@ -1156,6 +1186,427 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
+    /// 任务查询工具：按成员维度返回主任务与子任务信息，供后续任务生成去重。
+    private func runQueryTasksByMember(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
+        guard let memberID else {
+            return ToolExecutionResult(
+                toolName: SparkToolName.queryTasksByMember,
+                outputText: #"{"ok":false,"error":"no_available_member"}"#,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+        let includeCompleted = parseBool(invocation.arguments["include_completed"], defaultValue: true)
+        let limit = max(1, min(Int(invocation.arguments["limit"] ?? "") ?? 50, 200))
+
+        do {
+            var tasks = try await taskService.fetchTasks(memberID: memberID, since: nil)
+            if includeCompleted == false {
+                tasks.removeAll { $0.status != .pending }
+            }
+            tasks = Array(tasks.sorted { $0.updatedAt > $1.updatedAt }.prefix(limit))
+            let payload = TaskQueryToolPayload(
+                ok: true,
+                memberID: memberID,
+                queriedAt: iso8601(Date()),
+                total: tasks.count,
+                tasks: tasks
+            )
+            return ToolExecutionResult(
+                toolName: SparkToolName.queryTasksByMember,
+                outputText: encodeJSON(payload) ?? #"{"ok":false,"error":"encode_failed"}"#,
+                sensitive: true,
+                shouldBypassModel: true
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.queryTasksByMember,
+                outputText: #"{"ok":false,"error":"task_query_failed"}"#,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+    }
+
+    /// 任务生成工具：先查询任务，再执行抽取与相似度判断，最后只输出任务卡片 JSON（待用户确认）。
+    private func runGenerateTask(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
+        guard let memberID else {
+            return ToolExecutionResult(
+                toolName: SparkToolName.generateTask,
+                outputText: #"{"ok":false,"error":"no_available_member"}"#,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+        let userInput = (
+            invocation.arguments["user_input"]
+            ?? invocation.arguments["query"]
+            ?? invocation.arguments["content"]
+            ?? invocation.arguments["raw_text"]
+            ?? ""
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard userInput.isEmpty == false else {
+            return ToolExecutionResult(
+                toolName: SparkToolName.generateTask,
+                outputText: #"{"ok":false,"error":"user_input_required"}"#,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        // 规则：生成前必须先查任务。这里在工具内部强制执行，确保流程不被模型跳过。
+        let existingTasks: [HealthTask]
+        do {
+            existingTasks = try await taskService.fetchTasks(memberID: memberID, since: nil)
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.generateTask,
+                outputText: #"{"ok":false,"error":"query_tasks_before_generate_failed"}"#,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        let extracted = await extractTaskIntent(from: userInput)
+        let similarTasks = findSimilarTasks(existing: existingTasks, extracted: extracted)
+        if similarTasks.isEmpty == false {
+            let response = TaskNoCreateToolPayload(
+                ok: true,
+                action: "no_create",
+                reason: "similar_task_exists",
+                queriedFirst: true,
+                memberID: memberID,
+                extracted: extracted,
+                similarTasks: similarTasks.map {
+                    TaskSimilarityItem(
+                        taskID: $0.id,
+                        title: $0.title,
+                        type: $0.type.rawValue,
+                        status: $0.status.rawValue,
+                        updatedAt: iso8601($0.updatedAt)
+                    )
+                }
+            )
+            return ToolExecutionResult(
+                toolName: SparkToolName.generateTask,
+                outputText: encodeJSON(response) ?? #"{"ok":false,"error":"encode_failed"}"#,
+                sensitive: true,
+                shouldBypassModel: true
+            )
+        }
+
+        let now = Date()
+        let taskType = mapTaskType(extracted.taskType)
+        let startAt = parseISODate(extracted.timeInfo.startTime) ?? now
+        let repeatType = mapRepeatType(period: extracted.timeInfo.period, frequency: extracted.timeInfo.frequency)
+        let dueAt = resolveDueDate(startAt: startAt, repeatType: repeatType)
+        let priority: HealthTask.Priority = .medium
+
+        let card = TaskToolCardPayload(
+            id: -Int(now.timeIntervalSince1970),
+            member: memberID,
+            creator: nil,
+            title: makeTaskTitle(extracted: extracted, type: taskType),
+            description: makeTaskDescription(extracted: extracted, type: taskType),
+            type: taskType.rawValue,
+            startTime: iso8601(startAt),
+            dueTime: dueAt.map(iso8601),
+            repeatType: repeatType.rawValue,
+            priority: priority.rawValue,
+            businessType: "ai_task_generation",
+            businessID: "",
+            source: HealthTask.Source.ai.rawValue,
+            status: TaskCard.CardStatus.pending.rawValue,
+            extractPayload: extracted.asStringMap(),
+            taskPayload: buildTaskPayloadStrings(memberID: memberID, type: taskType, extracted: extracted, startAt: startAt, dueAt: dueAt, repeatType: repeatType, priority: priority),
+            similarityPayload: [
+                "queried_first": "true",
+                "similar_count": "0",
+                "member_source": invocation.arguments["member_id"] == nil ? "current_member_default" : "explicit_member"
+            ],
+            ignoredReason: "",
+            confirmedTask: nil,
+            createdAt: iso8601(now),
+            updatedAt: iso8601(now)
+        )
+        let wrapper = TaskCardToolWrapper(taskCards: [card])
+        return ToolExecutionResult(
+            toolName: SparkToolName.generateTask,
+            outputText: encodeJSON(wrapper) ?? #"{"ok":false,"error":"encode_failed"}"#,
+            sensitive: true,
+            shouldBypassModel: true
+        )
+    }
+
+    /// 使用现有抽取链路（AIRuntime + JSON 规整器）进行任务结构化抽取，失败时回退规则抽取。
+    private func extractTaskIntent(from input: String) async -> TaskIntentExtraction {
+        let prompt = PromptLocalizer(locale: .current).taskExtractionPrompt(userInput: input)
+        do {
+            let stream = try await runtimeService.generateTextStream(
+                request: AIRuntimeTextRequest(
+                    scenario: .medicalStructuredExtraction,
+                    messages: [AIRuntimeMessage(role: .user, content: prompt)],
+                    reasoning: .disabled
+                )
+            )
+            let raw = try await collectStreamText(from: stream)
+            let normalizer = MedicalDocumentModelJSONNormalizer()
+            let normalized = normalizer.normalizedModelJSONText(raw)
+            if let data = normalized.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode(TaskIntentExtraction.self, from: data) {
+                return decoded.normalized()
+            }
+        } catch {
+            logger.warning("任务抽取模型失败，降级到规则抽取", module: .aiConfig)
+        }
+        return TaskIntentExtraction.ruleBased(from: input)
+    }
+
+    private func collectStreamText(from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>) async throws -> String {
+        var text = ""
+        var completedText = ""
+        for try await event in stream {
+            switch event {
+            case .textDelta(let delta):
+                text.append(delta)
+            case .completed(let response):
+                completedText = response.text
+            case .reasoningDelta, .toolCallDelta:
+                continue
+            }
+        }
+        return text.isEmpty ? completedText : text
+    }
+
+    private func findSimilarTasks(existing: [HealthTask], extracted: TaskIntentExtraction) -> [HealthTask] {
+        let type = mapTaskType(extracted.taskType)
+        let target = extracted.targetMetric.lowercased()
+        let action = extracted.action.lowercased()
+        return existing.filter { task in
+            guard task.type == type, task.status == .pending else { return false }
+            let titleText = task.title.lowercased()
+            let descText = task.description.lowercased()
+            let targetHit = target.isEmpty == false && (titleText.contains(target) || descText.contains(target))
+            let actionHit = action.isEmpty == false && (titleText.contains(action) || descText.contains(action))
+            let repeatHit = extracted.timeInfo.period.isEmpty == false && mapRepeatType(period: extracted.timeInfo.period, frequency: extracted.timeInfo.frequency) == task.repeatType
+            return targetHit || actionHit || repeatHit
+        }
+    }
+
+    private func makeTaskTitle(extracted: TaskIntentExtraction, type: HealthTask.TaskType) -> String {
+        if extracted.targetMetric.isEmpty == false {
+            return extracted.targetMetric
+        }
+        switch type {
+        case .medical: return "健康指标任务"
+        case .exercise: return "运动任务"
+        case .diet: return "饮食任务"
+        }
+    }
+
+    private func makeTaskDescription(extracted: TaskIntentExtraction, type: HealthTask.TaskType) -> String {
+        let action = extracted.action.isEmpty ? defaultAction(for: type) : extracted.action
+        let metric = extracted.targetMetric.isEmpty ? defaultMetric(for: type) : extracted.targetMetric
+        let intensity = extracted.intensityOrValue.isEmpty ? defaultIntensity(for: type) : extracted.intensityOrValue
+        let frequency = extracted.timeInfo.frequency.isEmpty ? defaultFrequency(for: type) : extracted.timeInfo.frequency
+        return "目标：\(metric)\n动作：\(action)\n计划：\(frequency)\n强度：\(intensity)"
+    }
+
+    private func defaultMetric(for type: HealthTask.TaskType) -> String {
+        switch type {
+        case .medical: return "健康指标稳定"
+        case .exercise: return "活动量提升"
+        case .diet: return "饮食控制"
+        }
+    }
+
+    private func defaultAction(for type: HealthTask.TaskType) -> String {
+        switch type {
+        case .medical: return "定时监测"
+        case .exercise: return "中等强度运动"
+        case .diet: return "控制高糖高脂摄入"
+        }
+    }
+
+    private func defaultIntensity(for type: HealthTask.TaskType) -> String {
+        switch type {
+        case .medical: return "每天 2 次"
+        case .exercise: return "30 分钟"
+        case .diet: return "每日热量控制"
+        }
+    }
+
+    private func defaultFrequency(for type: HealthTask.TaskType) -> String {
+        switch type {
+        case .medical, .exercise, .diet:
+            return "daily"
+        }
+    }
+
+    private func resolveDueDate(startAt: Date, repeatType: HealthTask.RepeatType) -> Date? {
+        switch repeatType {
+        case .none:
+            return Calendar.current.date(byAdding: .day, value: 1, to: startAt)
+        case .daily:
+            return Calendar.current.date(byAdding: .day, value: 1, to: startAt)
+        case .weekly:
+            return Calendar.current.date(byAdding: .day, value: 7, to: startAt)
+        }
+    }
+
+    private func mapTaskType(_ value: String) -> HealthTask.TaskType {
+        switch value.lowercased() {
+        case "medical": return .medical
+        case "exercise": return .exercise
+        case "diet": return .diet
+        default: return .medical
+        }
+    }
+
+    private func mapRepeatType(period: String, frequency: String) -> HealthTask.RepeatType {
+        let p = period.lowercased()
+        let f = frequency.lowercased()
+        if p.contains("week") || f.contains("每周") || f.contains("weekly") {
+            return .weekly
+        }
+        if p.contains("day") || f.contains("每天") || f.contains("daily") {
+            return .daily
+        }
+        return .none
+    }
+
+    private func buildTaskPayloadStrings(
+        memberID: Int,
+        type: HealthTask.TaskType,
+        extracted: TaskIntentExtraction,
+        startAt: Date,
+        dueAt: Date?,
+        repeatType: HealthTask.RepeatType,
+        priority: HealthTask.Priority
+    ) -> [String: String] {
+        let base: [String: Any] = [
+            "member_id": memberID,
+            "creator_id": "current_user",
+            "type": type.rawValue,
+            "status": HealthTask.TaskStatus.pending.rawValue,
+            "repeat_type": repeatType.rawValue,
+            "priority": priority.rawValue,
+            "source": HealthTask.Source.ai.rawValue,
+            "start_time": iso8601(startAt),
+            "due_time": dueAt.map(iso8601) ?? ""
+        ]
+        var payload: [String: String] = [
+            "task": jsonString(from: base) ?? "{}"
+        ]
+        let reminder = reminderTimeString(from: extracted, fallback: startAt)
+        switch type {
+        case .medical:
+            payload["task_medical"] = jsonString(from: [
+                "medical_task_type": extracted.targetMetric.isEmpty ? "health_monitoring" : extracted.targetMetric,
+                "description": extracted.action.isEmpty ? defaultAction(for: .medical) : extracted.action,
+                "reminder_time": reminder
+            ]) ?? "{}"
+        case .exercise:
+            let durationMin = parseIntValue(extracted.intensityOrValue) ?? 30
+            payload["task_exercise"] = jsonString(from: [
+                "exercise_type": extracted.action.isEmpty ? defaultAction(for: .exercise) : extracted.action,
+                "duration_min": durationMin,
+                "intensity": "medium",
+                "description": extracted.targetMetric.isEmpty ? defaultMetric(for: .exercise) : extracted.targetMetric
+            ]) ?? "{}"
+        case .diet:
+            let calorieTarget = parseIntValue(extracted.intensityOrValue) ?? 1800
+            payload["task_diet"] = jsonString(from: [
+                "meal_type": "dinner",
+                "calorie_target": calorieTarget,
+                "description": extracted.action.isEmpty ? defaultAction(for: .diet) : extracted.action,
+                "food_recommend": extracted.targetMetric.isEmpty ? defaultMetric(for: .diet) : extracted.targetMetric,
+                "reminder_time": reminder
+            ]) ?? "{}"
+        }
+        return payload
+    }
+
+    private func reminderTimeString(from extracted: TaskIntentExtraction, fallback: Date) -> String {
+        if let parsed = parseISODate(extracted.timeInfo.startTime) {
+            return iso8601Minute(parsed)
+        }
+        return iso8601Minute(fallback)
+    }
+
+    private func parseIntValue(_ text: String) -> Int? {
+        let pattern = #"[0-9]+"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 0), in: text) else {
+            return nil
+        }
+        return Int(text[range])
+    }
+
+    private func jsonString(from object: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: []),
+              let text = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+        return text
+    }
+
+    private func parseISODate(_ text: String) -> Date? {
+        guard text.isEmpty == false else { return nil }
+        return ISO8601DateFormatter().date(from: text)
+    }
+
+    private func parseBool(_ text: String?, defaultValue: Bool) -> Bool {
+        guard let text else { return defaultValue }
+        switch text.lowercased() {
+        case "1", "true", "yes": return true
+        case "0", "false", "no": return false
+        default: return defaultValue
+        }
+    }
+
+    private func iso8601(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    private func iso8601Minute(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
+    }
+
+    /// 解析任务归属成员：优先显式 member_id，其次当前成员；都没有时回退首个成员。
+    private func resolveTargetMemberID(invocation: ToolInvocation, context: ToolExecutionContext) async -> Int? {
+        if let value = invocation.arguments["member_id"], let explicit = Int(value) {
+            return explicit
+        }
+        if let current = context.memberID {
+            return current
+        }
+        if let members = try? await medicalQueryAPI.listMembers(),
+           let first = members.first {
+            return first.id
+        }
+        return nil
+    }
+
+    private func encodeJSON<T: Encodable>(_ value: T) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        if let data = try? encoder.encode(value),
+           let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        return nil
+    }
+
     /// 从参数截取短标题（最多 18 字）作为会话标题建议。
     private func runGenerateChatTitle(invocation: ToolInvocation) -> ToolExecutionResult {
         let source = invocation.arguments["content"] ?? invocation.arguments["query"] ?? "新对话"
@@ -1319,5 +1770,262 @@ final class ToolHub: @unchecked Sendable {
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
+    }
+}
+
+private struct TaskQueryToolPayload: Encodable {
+    let ok: Bool
+    let memberID: Int
+    let queriedAt: String
+    let total: Int
+    let tasks: [HealthTask]
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case memberID = "member_id"
+        case queriedAt = "queried_at"
+        case total
+        case tasks
+    }
+}
+
+private struct TaskNoCreateToolPayload: Encodable {
+    let ok: Bool
+    let action: String
+    let reason: String
+    let queriedFirst: Bool
+    let memberID: Int
+    let extracted: TaskIntentExtraction
+    let similarTasks: [TaskSimilarityItem]
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case action
+        case reason
+        case queriedFirst = "queried_first"
+        case memberID = "member_id"
+        case extracted
+        case similarTasks = "similar_tasks"
+    }
+}
+
+private struct TaskSimilarityItem: Encodable {
+    let taskID: Int
+    let title: String
+    let type: Int
+    let status: Int
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case taskID = "task_id"
+        case title
+        case type
+        case status
+        case updatedAt = "updated_at"
+    }
+}
+
+private struct TaskCardToolWrapper: Encodable {
+    let taskCards: [TaskToolCardPayload]
+
+    enum CodingKeys: String, CodingKey {
+        case taskCards = "task_cards"
+    }
+}
+
+private struct TaskToolCardPayload: Encodable {
+    let id: Int
+    let member: Int
+    let creator: Int?
+    let title: String
+    let description: String
+    let type: Int
+    let startTime: String?
+    let dueTime: String?
+    let repeatType: Int
+    let priority: Int
+    let businessType: String
+    let businessID: String
+    let source: Int
+    let status: Int
+    let extractPayload: [String: String]
+    let taskPayload: [String: String]
+    let similarityPayload: [String: String]
+    let ignoredReason: String
+    let confirmedTask: Int?
+    let createdAt: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case member
+        case creator
+        case title
+        case description
+        case type
+        case startTime = "start_time"
+        case dueTime = "due_time"
+        case repeatType = "repeat_type"
+        case priority
+        case businessType = "business_type"
+        case businessID = "business_id"
+        case source
+        case status
+        case extractPayload = "extract_payload"
+        case taskPayload = "task_payload"
+        case similarityPayload = "similarity_payload"
+        case ignoredReason = "ignored_reason"
+        case confirmedTask = "confirmed_task"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+private struct TaskIntentExtraction: Codable {
+    struct TimeInfo: Codable {
+        let startTime: String
+        let frequency: String
+        let period: String
+
+        enum CodingKeys: String, CodingKey {
+            case startTime = "start_time"
+            case frequency
+            case period
+        }
+
+        init(startTime: String, frequency: String, period: String) {
+            self.startTime = startTime
+            self.frequency = frequency
+            self.period = period
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            startTime = try c.decodeIfPresent(String.self, forKey: .startTime) ?? ""
+            frequency = try c.decodeIfPresent(String.self, forKey: .frequency) ?? ""
+            period = try c.decodeIfPresent(String.self, forKey: .period) ?? ""
+        }
+    }
+
+    let taskType: String
+    let targetMetric: String
+    let timeInfo: TimeInfo
+    let action: String
+    let intensityOrValue: String
+    let confidence: Double
+
+    enum CodingKeys: String, CodingKey {
+        case taskType = "task_type"
+        case targetMetric = "target_metric"
+        case timeInfo = "time_info"
+        case action
+        case intensityOrValue = "intensity_or_value"
+        case confidence
+    }
+
+    init(
+        taskType: String,
+        targetMetric: String,
+        timeInfo: TimeInfo,
+        action: String,
+        intensityOrValue: String,
+        confidence: Double
+    ) {
+        self.taskType = taskType
+        self.targetMetric = targetMetric
+        self.timeInfo = timeInfo
+        self.action = action
+        self.intensityOrValue = intensityOrValue
+        self.confidence = confidence
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        taskType = try c.decodeIfPresent(String.self, forKey: .taskType) ?? "unknown"
+        targetMetric = try c.decodeIfPresent(String.self, forKey: .targetMetric) ?? ""
+        timeInfo = try c.decodeIfPresent(TimeInfo.self, forKey: .timeInfo) ?? .init(startTime: "", frequency: "", period: "")
+        action = try c.decodeIfPresent(String.self, forKey: .action) ?? ""
+        intensityOrValue = try c.decodeIfPresent(String.self, forKey: .intensityOrValue) ?? ""
+        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+    }
+
+    func normalized() -> TaskIntentExtraction {
+        TaskIntentExtraction(
+            taskType: taskType.trimmingCharacters(in: .whitespacesAndNewlines),
+            targetMetric: targetMetric.trimmingCharacters(in: .whitespacesAndNewlines),
+            timeInfo: .init(
+                startTime: timeInfo.startTime.trimmingCharacters(in: .whitespacesAndNewlines),
+                frequency: timeInfo.frequency.trimmingCharacters(in: .whitespacesAndNewlines),
+                period: timeInfo.period.trimmingCharacters(in: .whitespacesAndNewlines)
+            ),
+            action: action.trimmingCharacters(in: .whitespacesAndNewlines),
+            intensityOrValue: intensityOrValue.trimmingCharacters(in: .whitespacesAndNewlines),
+            confidence: confidence
+        )
+    }
+
+    func asStringMap() -> [String: String] {
+        [
+            "task_type": taskType,
+            "target_metric": targetMetric,
+            "start_time": timeInfo.startTime,
+            "frequency": timeInfo.frequency,
+            "period": timeInfo.period,
+            "action": action,
+            "intensity_or_value": intensityOrValue,
+            "confidence": String(format: "%.2f", confidence)
+        ]
+    }
+
+    static func ruleBased(from input: String) -> TaskIntentExtraction {
+        let text = input.lowercased()
+        let type: String
+        if text.contains("血糖") || text.contains("血压") || text.contains("服药") || text.contains("复诊") {
+            type = "medical"
+        } else if text.contains("步") || text.contains("运动") || text.contains("跑步") || text.contains("walk") {
+            type = "exercise"
+        } else if text.contains("饮食") || text.contains("热量") || text.contains("减脂") || text.contains("diet") {
+            type = "diet"
+        } else {
+            type = "unknown"
+        }
+        return TaskIntentExtraction(
+            taskType: type,
+            targetMetric: extractTargetMetric(from: input),
+            timeInfo: .init(
+                startTime: "",
+                frequency: extractFrequency(from: input),
+                period: ""
+            ),
+            action: extractAction(from: input),
+            intensityOrValue: extractIntensity(from: input),
+            confidence: 0.55
+        )
+    }
+
+    private static func extractTargetMetric(from text: String) -> String {
+        let candidates = ["血糖", "血压", "体重", "步数", "热量", "饮食控制", "减脂"]
+        return candidates.first(where: { text.contains($0) }) ?? ""
+    }
+
+    private static func extractAction(from text: String) -> String {
+        let candidates = ["测量", "监测", "步行", "跑步", "运动", "控制饮食", "复诊", "服药"]
+        return candidates.first(where: { text.contains($0) }) ?? ""
+    }
+
+    private static func extractFrequency(from text: String) -> String {
+        if text.contains("每天") { return "daily" }
+        if text.contains("每周") { return "weekly" }
+        return ""
+    }
+
+    private static func extractIntensity(from text: String) -> String {
+        let pattern = #"([0-9]+(\.[0-9]+)?\s*(次|步|分钟|分|km|公里|kcal|千卡))"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else {
+            return ""
+        }
+        return String(text[range])
     }
 }

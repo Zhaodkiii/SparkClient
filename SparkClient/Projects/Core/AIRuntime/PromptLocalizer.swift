@@ -127,6 +127,28 @@ struct PromptLocalizer: Sendable {
         l10n.promptFormat("ai.prompt.medication.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
+    /// 通用任务抽取提示：用于把自然语言整理为“任务生成前的结构化依据”。
+    func taskExtractionPrompt(userInput: String) -> String {
+        l10n.promptFormat(
+            "ai.prompt.task.extraction.template",
+            fallback: """
+            You are a task extraction assistant.
+            Return JSON only with keys:
+            {
+              "task_type":"medical|exercise|diet|unknown",
+              "target_metric":"...",
+              "time_info":{"start_time":"ISO8601 or empty","frequency":"...","period":"..."},
+              "action":"...",
+              "intensity_or_value":"...",
+              "confidence":0.0
+            }
+            Input:
+            %@
+            """,
+            userInput
+        )
+    }
+
     func contextSummaryHeader(recordCount: Int) -> String {
         l10n.promptFormat(
             "ai.prompt.context.header",
@@ -168,4 +190,3 @@ struct PromptLocalizer: Sendable {
         )
     }
 }
-

@@ -213,6 +213,11 @@ final class AppContainer {
         self.coreDataStack = coreDataStack
         self.backend = backend
         self.logger = logger
+        let taskService = TaskService(configuration: backend.configuration, logger: logger)
+        TaskManager.shared.configure(
+            taskService: taskService,
+            logger: logger
+        )
         self.fileCacheManager = FileCacheManager(logger: logger)
         let ossConfigurationStore = SparkOSSConfigurationStore(logger: logger)
         let ossManager = OSSManager.shared
@@ -363,6 +368,8 @@ final class AppContainer {
             auditStore: toolAuditStore,
             medicalQueryAPI: backend.medicalQuery,
             aiSettingsRepository: aiSettingsRepository,
+            runtimeService: aiRuntimeService,
+            taskService: taskService,
             searchKnowledgeUseCase: searchKnowledgeUseCase,
             createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
             logger: logger
