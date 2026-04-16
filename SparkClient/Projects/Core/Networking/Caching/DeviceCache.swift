@@ -50,6 +50,7 @@ final class DeviceCache: @unchecked Sendable {
     }
 
     var currentUserID: String? { cachedCurrentUserID.value }
+    var currentUserIDInt: Int? { cachedCurrentUserID.value.flatMap(Int.init) }
     var trustedDeviceID: String? { cachedTrustedDeviceID.value }
     var persistedLogLevel: LogLevel? { cachedLogLevel.value }
 
@@ -57,6 +58,10 @@ final class DeviceCache: @unchecked Sendable {
         userDefaults.set(currentUserID, forKey: Keys.currentUserID)
         cachedCurrentUserID.value = currentUserID
         logger.debug("已缓存当前用户 ID=\(currentUserID)", module: .cache)
+    }
+
+    func cache(currentUserID: Int64) {
+        cache(currentUserID: String(currentUserID))
     }
 
     func cache(trustedDeviceID: String) {

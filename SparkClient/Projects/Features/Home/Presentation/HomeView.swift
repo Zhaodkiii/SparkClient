@@ -65,7 +65,7 @@ struct HomeView: View {
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
-            await viewModel.load()
+            await viewModel.loadInitialIfNeeded(syncRemote: true)
         }
         .fullScreenCover(isPresented: $showMedicalDocumentUpload) {
             NavigationView {
@@ -403,11 +403,11 @@ private struct MemberSelectorChip: View {
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
-                profileID: UUID(),
-                remoteUserID: "preview-001",
+                accountID: 1,
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                signedInAt: .now
+                signedInAt: .now,
+                signInMethod: .apple
             )
         )
     }
@@ -421,11 +421,11 @@ private struct MemberSelectorChip: View {
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
-                profileID: UUID(),
-                remoteUserID: "preview-001",
+                accountID: 1,
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                signedInAt: .now
+                signedInAt: .now,
+                signInMethod: .apple
             )
         )
     }
@@ -435,13 +435,13 @@ private struct MemberSelectorChip: View {
 extension HomeViewModel {
     static var preview: HomeViewModel {
         let now = Date()
-        let profileID = UUID()
+        let accountID: Int64 = 1
         let memberA = Member(id: 1, name: "本人", gender: "female", relationship: "self", birthDate: now.addingTimeInterval(-86_400 * 365 * 30), isPrimary: true)
         let memberB = Member(id: 2, name: "妈妈", gender: "female", relationship: "mother", birthDate: now.addingTimeInterval(-86_400 * 365 * 56), isPrimary: false)
 
         let dashboard = HomeDashboard(
             profile: UserProfile(
-                id: profileID,
+                id: accountID,
                 email: "preview@spark.com",
                 displayName: "Spark User",
                 createdAt: now.addingTimeInterval(-86_400 * 120),
@@ -462,11 +462,11 @@ extension HomeViewModel {
         )
         sessionStore.setAuthenticated(
             UserSession(
-                profileID: profileID,
-                remoteUserID: "preview-001",
+                accountID: accountID,
                 email: "preview@spark.com",
                 displayName: "Spark User",
-                signedInAt: now
+                signedInAt: now,
+                signInMethod: .apple
             )
         )
 
@@ -507,7 +507,7 @@ private final class PreviewNotificationClient: NotificationClient {
 private struct PreviewUserProfileRepository: UserProfileRepository {
     let profile: UserProfile
 
-    func fetchProfile(id: UUID) async throws -> UserProfile? {
+    func fetchProfile(id: Int64) async throws -> UserProfile? {
         profile
     }
 
@@ -516,12 +516,14 @@ private struct PreviewUserProfileRepository: UserProfileRepository {
     }
 
     func upsertProfile(
+        accountID: Int64,
         email: String,
         displayName: String,
-        signedInAt: Date
+        signedInAt: Date,
+        signInMethod: UserSession.SignInMethod
     ) async throws -> UserProfile {
         UserProfile(
-            id: profile.id,
+            id: accountID,
             email: email,
             displayName: displayName,
             createdAt: profile.createdAt,
@@ -534,6 +536,14 @@ private struct PreviewAuthRepository: AuthRepository {
     func restoreSession() async -> UserSession? { nil }
 
     func signInWithApple(payload: AppleSignInPayload) async throws -> UserSession {
+        throw NSError(domain: "PreviewAuthRepository", code: -1)
+    }
+
+    func requestPhoneOTP(phoneNumber: String) async throws -> PhoneOTPRequestContext {
+        PhoneOTPRequestContext(otpID: "preview-otp-id", expiresIn: 300)
+    }
+
+    func signInWithPhoneOTP(phoneNumber: String, verificationCode: String, otpID: String) async throws -> UserSession {
         throw NSError(domain: "PreviewAuthRepository", code: -1)
     }
 

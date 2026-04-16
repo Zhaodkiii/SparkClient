@@ -6,6 +6,7 @@ final class ToolHub: @unchecked Sendable {
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let aiSettingsRepository: any AISettingsRepository
     private let runtimeService: any AIRuntimeServing
+    private let medicalStructuredExtractor: any MedicalDocumentStructuredExtracting
     private let taskService: TaskService
     /// 知识库检索/创建：经用例访问 `CoreDataKnowledgeRepository`，避免在此直接操作持久化。
     private let searchKnowledgeUseCase: SearchKnowledgeUseCase
@@ -20,6 +21,7 @@ final class ToolHub: @unchecked Sendable {
         medicalQueryAPI: SparkMedicalQueryAPI,
         aiSettingsRepository: any AISettingsRepository,
         runtimeService: any AIRuntimeServing,
+        medicalStructuredExtractor: any MedicalDocumentStructuredExtracting,
         taskService: TaskService,
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
@@ -29,6 +31,7 @@ final class ToolHub: @unchecked Sendable {
         self.medicalQueryAPI = medicalQueryAPI
         self.aiSettingsRepository = aiSettingsRepository
         self.runtimeService = runtimeService
+        self.medicalStructuredExtractor = medicalStructuredExtractor
         self.taskService = taskService
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
@@ -260,7 +263,7 @@ final class ToolHub: @unchecked Sendable {
             ]
         case SparkToolName.generateStructuredHealthCard:
             return [
-                "category": AIRuntimeToolProperty(
+                "report_type": AIRuntimeToolProperty(
                     type: "string",
                     description: td("tool.param.report_type_enum"),
                     enumValues: ["medication", "prescription", "exam_report", "medical_case"]
@@ -433,7 +436,7 @@ final class ToolHub: @unchecked Sendable {
         case SparkToolName.makeNutritionData:
             return ["protein", "carbohydrates", "fat", "energy"]
         case SparkToolName.generateStructuredHealthCard:
-            return ["category", "raw_text"]
+            return ["report_type", "raw_text"]
         case SparkToolName.queryTasksByMember:
             return []
         case SparkToolName.generateTask:
@@ -1151,7 +1154,7 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// 占位：根据 `raw_text` 等参数生成结构化健康卡片描述（未接真实结构化管线）。
+    /// `generate_structured_health_card`：返回异步抽取提示与任务参数，由聊天层后台抽取并回插卡片。
     private func runGenerateStructuredHealthCard(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         guard let memberID = context.memberID else {
             return ToolExecutionResult(
@@ -1162,7 +1165,11 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let category = (invocation.arguments["category"] ?? "medical_case").lowercased()
+        let reportType = (
+            invocation.arguments["report_type"]
+            ?? invocation.arguments["category"]
+            ?? "medical_case"
+        ).lowercased()
         let rawText = (invocation.arguments["raw_text"] ?? invocation.arguments["content"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard rawText.isEmpty == false else {
             return ToolExecutionResult(
@@ -1172,18 +1179,151 @@ final class ToolHub: @unchecked Sendable {
                 shouldBypassModel: true
             )
         }
-
-        let title = "\(category)_\(Date().formatted(date: .abbreviated, time: .omitted))"
-        let summary = String(rawText.prefix(120))
-        let oss = invocation.arguments["oss_file_id"].map { ", oss_file_id=\($0)" } ?? ""
-        let output = "已生成结构化卡片：category=\(category), title=\(title), member=\(memberID)\(oss), summary=\(summary)"
-
+        guard let kind = structuredKind(from: reportType) else {
+            return ToolExecutionResult(
+                toolName: SparkToolName.generateStructuredHealthCard,
+                outputText: #"{"ok":false,"error":"invalid_report_type"}"#,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+        let taskPayload = makeStructuredCardAsyncTaskPayload(
+            reportType: reportType,
+            memberID: memberID,
+            kind: kind,
+            rawText: rawText,
+            ossFileID: invocation.arguments["oss_file_id"]
+        )
+        let combinedOutput = "\(asyncStructuredCardGenerationModelHint)\n\(taskPayload)"
         return ToolExecutionResult(
             toolName: SparkToolName.generateStructuredHealthCard,
-            outputText: output,
+            outputText: combinedOutput,
             sensitive: true,
             shouldBypassModel: true
         )
+    }
+
+    private func structuredKind(from reportType: String) -> MedicalDocumentKind? {
+        switch reportType {
+        case "medication":
+            return .medication
+        case "prescription":
+            return .prescription
+        case "exam_report":
+            return .medicalReport
+        case "medical_case":
+            return .caseDocument
+        default:
+            return nil
+        }
+    }
+
+    private func makeStructuredCardToolPayload(typedResult: MedicalDocumentTypedResult) -> String {
+        let payload: [String: Any]
+        switch typedResult {
+        case .medication(let drafts):
+            payload = [
+                "medication_cards": drafts.map {
+                    [
+                        "id": UUID().uuidString,
+                        "name": $0.drugName ?? $0.genericName ?? $0.brandName ?? "未知药品",
+                        "dosage": $0.dosePerTime ?? "",
+                        "frequency": $0.frequencyText ?? $0.frequencyCode ?? "",
+                        "instructions": $0.instructions ?? ""
+                    ]
+                }
+            ]
+        case .prescription(let draft):
+            let meds: [[String: Any]] = (draft.medications ?? []).map {
+                [
+                    "id": UUID().uuidString,
+                    "name": $0.drugName ?? $0.genericName ?? $0.brandName ?? "未知药品",
+                    "dosage": $0.dosePerTime ?? "",
+                    "frequency": $0.frequencyText ?? $0.frequencyCode ?? "",
+                    "instructions": $0.instructions ?? ""
+                ]
+            }
+            payload = [
+                "prescription_cards": [[
+                    "id": UUID().uuidString,
+                    "batchNo": draft.batchNo ?? "",
+                    "institutionName": draft.institutionName ?? "",
+                    "prescribedAt": draft.prescribedAt ?? "",
+                    "diagnosis": draft.diagnosis ?? "",
+                    "medications": meds
+                ]]
+            ]
+        case .medicalReport(let drafts):
+            payload = [
+                "exam_report_cards": drafts.map {
+                    [
+                        "id": UUID().uuidString,
+                        "title": $0.title,
+                        "hospital": $0.hospital ?? "",
+                        "date": $0.date ?? "",
+                        "conclusion": $0.content
+                    ]
+                }
+            ]
+        case .caseDocument(let draft):
+            payload = [
+                "medical_case_cards": [[
+                    "id": UUID().uuidString,
+                    "title": draft.title,
+                    "summary": draft.summary ?? "",
+                    "diagnosis": draft.diagnosis ?? "",
+                    "hospitalName": draft.hospitalName ?? "",
+                    "occurredAt": draft.occurredAt ?? ""
+                ]]
+            ]
+        case .healthExamReport(let draft):
+            payload = [
+                "exam_report_cards": [[
+                    "id": UUID().uuidString,
+                    "title": draft.examType ?? "体检报告",
+                    "hospital": draft.institutionName ?? "",
+                    "date": draft.examDate ?? "",
+                    "conclusion": draft.summary ?? ""
+                ]]
+            ]
+        }
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
+    }
+
+    private func makeStructuredCardAsyncTaskPayload(
+        reportType: String,
+        memberID: Int,
+        kind: MedicalDocumentKind,
+        rawText: String,
+        ossFileID: String?
+    ) -> String {
+        var payload: [String: Any] = [
+            "ok": true,
+            "mode": "async_structured_extraction",
+            "tool": SparkToolName.generateStructuredHealthCard,
+            "report_type": reportType,
+            "document_kind": kind.rawValue,
+            "member_id": memberID,
+            "raw_text": rawText
+        ]
+        if let ossFileID, let parsed = Int(ossFileID) {
+            payload["oss_file_id"] = parsed
+        }
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let text = String(data: data, encoding: .utf8) else {
+            return #"{"ok":false,"error":"build_async_task_payload_failed"}"#
+        }
+        return text
+    }
+
+    private var asyncStructuredCardGenerationModelHint: String {
+        td("tool.hint.generate_structured_health_card_async")
     }
 
     /// 任务查询工具：按成员维度返回主任务与子任务信息，供后续任务生成去重。

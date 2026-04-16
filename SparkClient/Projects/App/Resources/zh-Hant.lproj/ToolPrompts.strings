@@ -9,7 +9,7 @@
 "tool.summary.make_nutrition_data" = "用途：根據使用者提供或模型解析的飲食資訊生成營養卡片；欄位值需為非負 (g/kcal)。觸發場景：記錄或分析一次具體飲食或使用者提到營養卡片。可與 fetch_nutrition_details 聯用，校正和補全資料。";
 "tool.summary.fetch_sleep_details" = "用途：按會話和日彙總檢索睡眠資料（核心/深度/REM/未指定睡眠階段）。觸發場景：使用者回顧睡眠質量、分析睡眠模式、制定睡眠計劃。輸入要求：start_date、end_date ≤ 今天，格式 yyyy‑MM‑dd。可與 fetch_step_details、fetch_energy_details 聯用。";
 "tool.summary.fetch_workout_details" = "用途：檢索運動記錄（跑步、步行、騎行等）。輸入：start_date、end_date；可選 types 篩選活動型別；max_items 限制返回條數。可與 fetch_step_details、fetch_energy_details 聯用。";
-"tool.summary.generate_structured_health_card" = "用途：生成可儲存的結構化健康卡片（後臺 AI 抽取）。呼叫時 report_type 指定卡片型別，raw_text 必須是你提煉後的關鍵摘錄（勿傳完整 OCR）。可選 oss_file_id（整數）。Spark 端為佔位實現。";
+"tool.summary.generate_structured_health_card" = "用途：生成可儲存的結構化健康卡片（後臺 AI 抽取）。呼叫時 report_type 指定卡片型別，raw_text 必須是你提煉後的關鍵摘錄（勿傳完整 OCR）。可選 oss_file_id（整數）。";
 "tool.summary.query_tasks_by_member" = "用途：按成員維度查詢既有任務（主任務+子任務狀態），用於任務生成前去重分析。member_id 可選，預設當前首頁成員。呼叫規則：在 generate_task 前必須先呼叫。輸出必須是結構化 JSON。";
 "tool.summary.generate_task" = "用途：根據使用者輸入生成「待確認任務卡片 JSON」，並執行異步任務抽取與相似任務分析。member_id 可選，預設當前首頁成員。呼叫規則：必須先呼叫 query_tasks_by_member；若存在相似任務則返回不建立說明 JSON；否則返回 task_cards JSON。";
 "tool.summary.search_knowledge_bag" = "用途：檢索本地知識揹包並返回摘要。觸發場景：問題與個人筆記/文件相關。輸入要求：query 精準描述主題。優先使用本工具，再考慮 search_online。可與 retrieve_memory 聯用。";
@@ -113,3 +113,4 @@
 "tool.ui.rich.location.default_name" = "位置";
 "tool.ui.rich.event.default_title" = "日程事件";
 "tool.ui.rich.health.default_title" = "健康卡片";
+"tool.hint.generate_structured_health_card_async" = "【系統】結構化保存卡片正在後台生成中。請直接根據使用者訊息或對話中的相關原文進行專業解讀，無需等待卡片即可繼續回答；卡片生成後將顯示在本條助手回覆下方。若再次呼叫 generate_structured_health_card：raw_text 必須是你提煉後的醫學要點，可選 oss_file_id 與訊息中的 oss_file_id 一致，勿把完整 OCR 傳給工具。";

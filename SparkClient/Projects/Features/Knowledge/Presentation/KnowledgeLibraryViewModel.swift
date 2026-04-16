@@ -145,4 +145,12 @@ final class KnowledgeLibraryViewModel: ObservableObject {
     func clearError() {
         errorMessage = nil
     }
+
+    func resetForSessionSwitch() {
+        hasLoaded = false
+        documents = []
+        searchResults = []
+        isLoading = false
+        errorMessage = nil
+    }
 }

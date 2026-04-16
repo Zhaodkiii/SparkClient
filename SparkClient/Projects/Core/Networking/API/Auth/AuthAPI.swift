@@ -84,7 +84,7 @@ struct SparkAuthAPI {
             tokenType: result.token_type
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: "\(result.user_id)")
+        configuration.deviceCache.cache(currentUserID: Int64(result.user_id))
 
         return tokens
     }
@@ -161,7 +161,7 @@ struct SparkAuthAPI {
             tokenType: result.token_type
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: "\(result.user_id)")
+        configuration.deviceCache.cache(currentUserID: Int64(result.user_id))
 
         return AuthenticatedUserContext(
             userID: result.user_id,
@@ -172,13 +172,15 @@ struct SparkAuthAPI {
     }
 
     struct TokenRefreshSuccess: Decodable {
-        let access: String
-        let refresh: String?
+        let user_id: Int
+        let access_token: String
+        let refresh_token: String?
+        let token_type: String?
     }
 
     func refresh(refreshToken: String) async throws -> AuthTokens {
         struct Payload: Encodable {
-            let refresh: String
+            let refresh_token: String
         }
 
         let operation = CacheableSparkNetworkOperation(
@@ -188,7 +190,7 @@ struct SparkAuthAPI {
                 method: .post,
                 path: "/api/v1/auth/token/refresh/",
                 headers: [:],
-                body: .json(AnyEncodable(Payload(refresh: refreshToken))),
+                body: .json(AnyEncodable(Payload(refresh_token: refreshToken))),
                 strategy: NetworkStrategy(
                     requiresAuth: false,
                     allowETag: false,
@@ -202,15 +204,16 @@ struct SparkAuthAPI {
 
         let response = try await configuration.execute(operation)
         let success = try JSONDecoder().decode(TokenRefreshSuccess.self, from: response.data)
-        let claims = try JWTExpParser.parseClaims(success.access)
+        let claims = try JWTExpParser.parseClaims(success.access_token)
 
         let tokens = AuthTokens(
-            accessToken: success.access,
-            refreshToken: success.refresh ?? refreshToken,
+            accessToken: success.access_token,
+            refreshToken: success.refresh_token ?? refreshToken,
             expiresAt: claims.expDate,
-            tokenType: "Bearer"
+            tokenType: success.token_type ?? "Bearer"
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
+        configuration.deviceCache.cache(currentUserID: Int64(success.user_id))
 
         return tokens
     }

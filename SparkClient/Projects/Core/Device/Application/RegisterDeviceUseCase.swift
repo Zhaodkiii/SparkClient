@@ -27,12 +27,7 @@ final class RegisterDeviceUseCase {
             }
         }
 
-        let userIdInt: Int?
-        if let s = backend.deviceCache.currentUserID, let v = Int(s) {
-            userIdInt = v
-        } else {
-            userIdInt = nil
-        }
+        let userIdInt = backend.deviceCache.currentUserIDInt
 
         do {
             let result = try await backend.device.registerDevice(

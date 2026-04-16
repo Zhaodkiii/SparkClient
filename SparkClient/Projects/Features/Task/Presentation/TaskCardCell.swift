@@ -47,26 +47,28 @@ struct TaskCardCell: View {
                     .lineLimit(3)
             }
 
-            HStack(spacing: 12) {
-                Button(action: onConfirm) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text(NSLocalizedString("task.card.create", comment: "创建任务"))
+            if card.status == .pending {
+                HStack(spacing: 12) {
+                    Button(action: onConfirm) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text(NSLocalizedString("task.card.create", comment: "创建任务"))
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(canOperate == false)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(canOperate == false)
 
-                Button(role: .destructive, action: onIgnore) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark.circle")
-                        Text(NSLocalizedString("task.card.ignore", comment: "忽略"))
+                    Button(role: .destructive, action: onIgnore) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark.circle")
+                            Text(NSLocalizedString("task.card.ignore", comment: "忽略"))
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.bordered)
+                    .disabled(canOperate == false)
                 }
-                .buttonStyle(.bordered)
-                .disabled(canOperate == false)
             }
         }
         .padding(12)

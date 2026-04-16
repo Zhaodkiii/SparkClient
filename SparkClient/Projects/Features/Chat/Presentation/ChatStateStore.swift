@@ -107,6 +107,35 @@ final class ChatStateStore: ObservableObject {
         messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: paging.isLoadingMore)
     }
 
+    func updateMessageAttachments(
+        threadID: UUID,
+        clientMessageID: UUID,
+        attachments: [ChatAttachment]
+    ) {
+        guard var messages = messagesByThread[threadID] else { return }
+        guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
+        let old = messages[idx]
+        messages[idx] = ChatMessage(
+            id: old.id,
+            threadID: old.threadID,
+            role: old.role,
+            kind: old.kind,
+            content: old.content,
+            attachments: attachments,
+            reasoningContent: old.reasoningContent,
+            reasoningDurationMs: old.reasoningDurationMs,
+            reasoningExpanded: old.reasoningExpanded,
+            reasoningVisibility: old.reasoningVisibility,
+            clientMessageID: old.clientMessageID,
+            serverMessageID: old.serverMessageID,
+            deliveryState: old.deliveryState,
+            createdAt: old.createdAt,
+            serverUpdatedAt: old.serverUpdatedAt,
+            isTombstone: old.isTombstone
+        )
+        messagesByThread[threadID] = messages
+    }
+
     func setLoadingMore(_ loading: Bool, for threadID: UUID) {
         let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: true, isLoadingMore: false)
         messagePagingByThread[threadID] = MessagePaging(hasMore: current.hasMore, isLoadingMore: loading)
@@ -217,6 +246,20 @@ final class ChatStateStore: ObservableObject {
 
     func setError(_ message: String?) {
         errorMessage = message
+    }
+
+    /// 会话切换时清空内存态，避免短暂展示上一账号的会话列表与消息。
+    func resetForSessionSwitch() {
+        threadItems = []
+        messagesByThread = [:]
+        selectedThreadID = nil
+        isLoading = false
+        isSending = false
+        errorMessage = nil
+        composerDrafts = [:]
+        streamingAssistants = [:]
+        messagePagingByThread = [:]
+        streamingContentGeneration &+= 1
     }
 
     func startStreamingAssistant(

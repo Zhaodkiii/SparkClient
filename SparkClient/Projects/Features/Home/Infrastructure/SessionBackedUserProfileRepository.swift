@@ -8,34 +8,37 @@ final class SessionBackedUserProfileRepository: UserProfileRepository {
     }
 
     func upsertProfile(
+        accountID: Int64,
         email: String,
         displayName: String,
-        signedInAt: Date
+        signedInAt: Date,
+        signInMethod: UserSession.SignInMethod
     ) async throws -> UserProfile {
-        if let existing = await snapshotStore.load() {
+        let normalizedEmail = normalizeAccountIdentifier(email, signInMethod: signInMethod)
+
+        if let existing = await snapshotStore.load(), existing.accountID == accountID {
             return UserProfile(
-                id: existing.profileID,
-                email: email,
+                id: existing.accountID,
+                email: normalizedEmail,
                 displayName: displayName,
                 createdAt: existing.signedInAt,
                 lastSignedInAt: signedInAt
             )
         }
 
-        let profileID = UUID()
         return UserProfile(
-            id: profileID,
-            email: email,
+            id: accountID,
+            email: normalizedEmail,
             displayName: displayName,
             createdAt: signedInAt,
             lastSignedInAt: signedInAt
         )
     }
 
-    func fetchProfile(id: UUID) async throws -> UserProfile? {
-        guard let session = await snapshotStore.load(), session.profileID == id else { return nil }
+    func fetchProfile(id: Int64) async throws -> UserProfile? {
+        guard let session = await snapshotStore.load(), session.accountID == id else { return nil }
         return UserProfile(
-            id: session.profileID,
+            id: session.accountID,
             email: session.email,
             displayName: session.displayName,
             createdAt: session.signedInAt,
@@ -46,11 +49,24 @@ final class SessionBackedUserProfileRepository: UserProfileRepository {
     func fetchLastActiveProfile() async throws -> UserProfile? {
         guard let session = await snapshotStore.load() else { return nil }
         return UserProfile(
-            id: session.profileID,
+            id: session.accountID,
             email: session.email,
             displayName: session.displayName,
             createdAt: session.signedInAt,
             lastSignedInAt: session.signedInAt
         )
+    }
+
+    private func normalizeAccountIdentifier(
+        _ rawValue: String,
+        signInMethod: UserSession.SignInMethod
+    ) -> String {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch signInMethod {
+        case .apple:
+            return trimmed.lowercased()
+        case .phone:
+            return trimmed.replacingOccurrences(of: " ", with: "")
+        }
     }
 }

@@ -10,12 +10,12 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
     private let logModule = LogModule.home
 
     func execute(
-        profileID: UUID,
+        accountID: Int64,
         selectedMemberID: Int?,
         refreshRemoteSnapshot: Bool
     ) async throws -> HomeMedicalLoadResult {
         let startedAt = Date()
-        guard let profile = try await userProfileRepository.fetchProfile(id: profileID) else {
+        guard let profile = try await userProfileRepository.fetchProfile(id: accountID) else {
             throw NSError(domain: "SparkClient.Home", code: 404, userInfo: [NSLocalizedDescriptionKey: "未找到当前档案"])
         }
 
@@ -31,7 +31,7 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
 
         let resolvedSelectedID: Int? = {
             guard members.isEmpty == false else { return nil }
-            let persisted = selectedMemberIDPersistence.load(for: profileID)
+            let persisted = selectedMemberIDPersistence.load(for: accountID)
             let preferred = selectedMemberID ?? persisted
             if let preferred, members.contains(where: { $0.id == preferred }) {
                 return preferred

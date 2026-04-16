@@ -7,48 +7,64 @@ import Foundation
 /// - 检索：可选查询向量 + 切块余弦相似度，无向量或未嵌入时回退词法打分（与 `ToolHub.search_knowledge_bag` 共用）。
 /// - 后台上下文写入由 `CoreDataStack.performBackgroundTask` 统一提交，避免主线程阻塞。
 final class CoreDataKnowledgeRepository: KnowledgeRepository {
+    private enum Field {
+        static let ownerAccountID = "ownerAccountID"
+    }
+
     private let coreDataStack: CoreDataStack
+    private let snapshotStore: SessionSnapshotStore
     private let logger: Logger
 
-    init(coreDataStack: CoreDataStack, logger: Logger = ConsoleLogger()) {
+    init(
+        coreDataStack: CoreDataStack,
+        snapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
+        logger: Logger = ConsoleLogger()
+    ) {
         self.coreDataStack = coreDataStack
+        self.snapshotStore = snapshotStore
         self.logger = logger
     }
 
     func loadDocuments(matching query: String?) async throws -> [KnowledgeDocument] {
-        try await coreDataStack.performBackgroundTask { context in
+        let accountID = try await requireAccountID()
+        return try await coreDataStack.performBackgroundTask { context in
             let request = KnowledgeDocumentEntity.fetchRequest()
             request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
+            var predicates = [self.ownerPredicate(accountID)]
 
             if let trimmed = query?.trimmingCharacters(in: .whitespacesAndNewlines), trimmed.isEmpty == false {
-                request.predicate = NSPredicate(
+                predicates.append(NSPredicate(
                     format: "title CONTAINS[cd] %@ OR content CONTAINS[cd] %@ OR excerpt CONTAINS[cd] %@",
                     trimmed,
                     trimmed,
                     trimmed
-                )
+                ))
             }
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
 
             return try context.fetch(request).compactMap { $0.toDomain() }
         }
     }
 
     func loadDocument(id: UUID) async throws -> KnowledgeDocument? {
-        try await coreDataStack.performBackgroundTask { context in
-            try self.fetchDocumentEntity(id: id, context: context)?.toDomain()
+        let accountID = try await requireAccountID()
+        return try await coreDataStack.performBackgroundTask { context in
+            try self.fetchDocumentEntity(id: id, ownerAccountID: accountID, context: context)?.toDomain()
         }
     }
 
     func createDocument(_ draft: KnowledgeDocumentDraft) async throws -> KnowledgeDocument {
+        let accountID = try await requireAccountID()
         let prepared = try validate(draft)
         return try await coreDataStack.performBackgroundTask { context in
             let now = Date()
             let entity = KnowledgeDocumentEntity(context: context)
             entity.id = UUID()
+            entity.ownerAccountID = accountID
             entity.createdAt = now
             entity.isEmbeddingIndexed = false
             self.apply(prepared, to: entity, updatedAt: now)
-            try self.rebuildChunks(for: entity, context: context)
+            try self.rebuildChunks(for: entity, ownerAccountID: accountID, context: context)
             guard let document = entity.toDomain() else {
                 throw self.knowledgeError("知识文档创建后无法生成领域对象")
             }
@@ -57,13 +73,14 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
     }
 
     func updateDocument(id: UUID, draft: KnowledgeDocumentDraft) async throws -> KnowledgeDocument {
+        let accountID = try await requireAccountID()
         let prepared = try validate(draft)
         return try await coreDataStack.performBackgroundTask { context in
-            guard let entity = try self.fetchDocumentEntity(id: id, context: context) else {
+            guard let entity = try self.fetchDocumentEntity(id: id, ownerAccountID: accountID, context: context) else {
                 throw self.knowledgeError("未找到要更新的知识文档")
             }
             self.apply(prepared, to: entity, updatedAt: Date())
-            try self.rebuildChunks(for: entity, context: context)
+            try self.rebuildChunks(for: entity, ownerAccountID: accountID, context: context)
             guard let document = entity.toDomain() else {
                 throw self.knowledgeError("知识文档更新后无法生成领域对象")
             }
@@ -72,12 +89,13 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
     }
 
     func rebuildIndex(id: UUID) async throws -> KnowledgeDocument {
-        try await coreDataStack.performBackgroundTask { context in
-            guard let entity = try self.fetchDocumentEntity(id: id, context: context) else {
+        let accountID = try await requireAccountID()
+        return try await coreDataStack.performBackgroundTask { context in
+            guard let entity = try self.fetchDocumentEntity(id: id, ownerAccountID: accountID, context: context) else {
                 throw self.knowledgeError("未找到要重建索引的知识文档")
             }
             entity.updatedAt = Date()
-            try self.rebuildChunks(for: entity, context: context)
+            try self.rebuildChunks(for: entity, ownerAccountID: accountID, context: context)
             guard let document = entity.toDomain() else {
                 throw self.knowledgeError("知识文档重建索引后无法生成领域对象")
             }
@@ -86,18 +104,23 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
     }
 
     func deleteDocument(id: UUID) async throws {
+        let accountID = try await requireAccountID()
         try await coreDataStack.performBackgroundTask { context in
-            guard let entity = try self.fetchDocumentEntity(id: id, context: context) else { return }
-            try self.deleteChunks(documentID: id, context: context)
+            guard let entity = try self.fetchDocumentEntity(id: id, ownerAccountID: accountID, context: context) else { return }
+            try self.deleteChunks(documentID: id, ownerAccountID: accountID, context: context)
             context.delete(entity)
         }
     }
 
     func hasVectorIndexedChunks() async throws -> Bool {
-        try await coreDataStack.performBackgroundTask { context in
+        let accountID = try await requireAccountID()
+        return try await coreDataStack.performBackgroundTask { context in
             let request = KnowledgeChunkEntity.fetchRequest()
             request.fetchLimit = 1
-            request.predicate = NSPredicate(format: "vectorData != nil")
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                self.ownerPredicate(accountID),
+                NSPredicate(format: "vectorData != nil"),
+            ])
             return try context.fetch(request).isEmpty == false
         }
     }
@@ -111,15 +134,17 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
         guard chunkTexts.count == embeddings.count else {
             throw knowledgeError("嵌入向量数量与文本块数量不一致")
         }
+        let accountID = try await requireAccountID()
         return try await coreDataStack.performBackgroundTask { context in
-            guard let entity = try self.fetchDocumentEntity(id: documentID, context: context) else {
+            guard let entity = try self.fetchDocumentEntity(id: documentID, ownerAccountID: accountID, context: context) else {
                 throw self.knowledgeError("未找到要写入向量索引的知识文档")
             }
-            try self.deleteChunks(documentID: documentID, context: context)
+            try self.deleteChunks(documentID: documentID, ownerAccountID: accountID, context: context)
             let now = Date()
             for (index, text) in chunkTexts.enumerated() {
                 let chunk = KnowledgeChunkEntity(context: context)
                 chunk.id = UUID()
+                chunk.ownerAccountID = accountID
                 chunk.documentID = documentID
                 chunk.sequence = Int32(index)
                 chunk.content = text
@@ -141,12 +166,15 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
     func search(query: String, limit: Int, queryEmbedding: [Float]?) async throws -> [KnowledgeSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return [] }
+        let accountID = try await requireAccountID()
 
         return try await coreDataStack.performBackgroundTask { context in
             let documentsRequest = KnowledgeDocumentEntity.fetchRequest()
+            documentsRequest.predicate = self.ownerPredicate(accountID)
             let documents = try context.fetch(documentsRequest)
 
             let chunkRequest = KnowledgeChunkEntity.fetchRequest()
+            chunkRequest.predicate = self.ownerPredicate(accountID)
             let chunks = try context.fetch(chunkRequest)
 
             let lexical = self.lexicalSearchMatches(
@@ -284,10 +312,17 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
             .map { $0 }
     }
 
-    private func fetchDocumentEntity(id: UUID, context: NSManagedObjectContext) throws -> KnowledgeDocumentEntity? {
+    private func fetchDocumentEntity(
+        id: UUID,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws -> KnowledgeDocumentEntity? {
         let request = KnowledgeDocumentEntity.fetchRequest()
         request.fetchLimit = 1
-        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "id == %@", id as CVarArg),
+        ])
         return try context.fetch(request).first
     }
 
@@ -315,14 +350,18 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
         entity.updatedAt = updatedAt
     }
 
-    private func rebuildChunks(for entity: KnowledgeDocumentEntity, context: NSManagedObjectContext) throws {
+    private func rebuildChunks(
+        for entity: KnowledgeDocumentEntity,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
         guard let documentID = entity.id, let content = entity.content else {
             throw knowledgeError("知识文档缺少必要字段，无法重建索引")
         }
         // 正文切块重建后，旧的向量索引失效。
         entity.isEmbeddingIndexed = false
         entity.lastEmbeddingModelName = nil
-        try deleteChunks(documentID: documentID, context: context)
+        try deleteChunks(documentID: documentID, ownerAccountID: ownerAccountID, context: context)
         let chunks = chunkContent(content)
         entity.chunkCount = Int32(chunks.count)
 
@@ -330,6 +369,7 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
         for (index, chunkContent) in chunks.enumerated() {
             let chunk = KnowledgeChunkEntity(context: context)
             chunk.id = UUID()
+            chunk.ownerAccountID = ownerAccountID
             chunk.documentID = documentID
             chunk.sequence = Int32(index)
             chunk.content = chunkContent
@@ -339,12 +379,31 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
         }
     }
 
-    private func deleteChunks(documentID: UUID, context: NSManagedObjectContext) throws {
+    private func deleteChunks(
+        documentID: UUID,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
         let request = KnowledgeChunkEntity.fetchRequest()
-        request.predicate = NSPredicate(format: "documentID == %@", documentID as CVarArg)
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "documentID == %@", documentID as CVarArg),
+        ])
         for chunk in try context.fetch(request) {
             context.delete(chunk)
         }
+    }
+
+    private func ownerPredicate(_ accountID: Int64) -> NSPredicate {
+        NSPredicate(format: "\(Field.ownerAccountID) == %lld", accountID)
+    }
+
+    private func requireAccountID() async throws -> Int64 {
+        if let accountID = await snapshotStore.load()?.accountID {
+            return accountID
+        }
+        logger.warning("知识库访问被拒绝：当前无已登录用户。", module: .general)
+        throw knowledgeError("当前无登录用户，无法访问知识库数据")
     }
 
     private func chunkContent(_ content: String, maxLength: Int = 480) -> [String] {

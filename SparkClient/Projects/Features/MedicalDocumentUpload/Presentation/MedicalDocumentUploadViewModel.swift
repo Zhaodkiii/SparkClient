@@ -520,15 +520,22 @@ extension MedicalDocumentUploadViewModel {
         previewMemberContextStore.update(members: [member], selectedMemberID: member.id)
 
         let promptFactory = MedicalPromptFactory()
+        let previewRuntime = PreviewMedicalRuntimeService()
         let typeResolver = DefaultMedicalDocumentTypeResolver(
-            runtimeService: PreviewMedicalRuntimeService(),
+            runtimeService: previewRuntime,
             promptFactory: promptFactory
         )
-        let extractor = DefaultTypedMedicalDocumentExtractor(
-            ocrOrchestrator: OCROrchestrator(config: OCRConfiguration()),
-            typeResolver: typeResolver,
+        let ocrBuilder = DefaultMedicalDocumentOCRBuilder(
+            ocrOrchestrator: OCROrchestrator(config: OCRConfiguration())
+        )
+        let structuredExtractor = DefaultMedicalDocumentStructuredExtractor(
             promptFactory: promptFactory,
-            runtimeService: PreviewMedicalRuntimeService()
+            runtimeService: previewRuntime
+        )
+        let extractor = DefaultTypedMedicalDocumentExtractor(
+            ocrBuilder: ocrBuilder,
+            typeResolver: typeResolver,
+            structuredExtractor: structuredExtractor
         )
         let previewEngine = SparkNetworkEngine(baseURL: URL(string: "https://preview.sparkclient.local")!)
         let previewBackendConfig = SparkBackendConfiguration(engine: previewEngine)

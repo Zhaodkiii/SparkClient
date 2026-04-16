@@ -24,6 +24,11 @@ protocol ChatRepository: Sendable {
         deliveryState: ChatDeliveryState
     ) async throws -> ChatMessage
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async
+    func updateMessageAttachments(
+        clientMessageID: UUID,
+        attachments: [ChatAttachment],
+        markPendingForSync: Bool
+    ) async
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID) async
     func upsertRemoteThreads(_ threads: [ChatThread]) async
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]

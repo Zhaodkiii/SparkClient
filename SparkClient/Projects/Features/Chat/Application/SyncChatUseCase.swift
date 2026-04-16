@@ -12,6 +12,10 @@ struct SyncChatUseCase: Sendable {
         try await syncEngine.syncThreadOnOpen(threadID: threadID)
     }
 
+    func pushOutboxOnly() async throws {
+        try await syncEngine.pushOutboxOnly()
+    }
+
     func startRealtime() async {
         await syncEngine.startRealtimeSync()
     }

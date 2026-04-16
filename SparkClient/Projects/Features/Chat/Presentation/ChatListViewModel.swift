@@ -93,6 +93,10 @@ final class ChatListViewModel: ObservableObject {
         await reloadThreads(selectFirstIfNeeded: true)
     }
 
+    func resetForSessionSwitch() {
+        hasLoadedForList = false
+    }
+
     private func reloadThreads(selectFirstIfNeeded: Bool) async {
         let threads = await loadChatThreadsUseCase.execute()
         stateStore.setThreads(threads)
@@ -107,7 +111,7 @@ final class ChatListViewModel: ObservableObject {
         if memberContextStore.context.members.isEmpty == false { return }
         guard case .signedIn(let session) = sessionStore.state else { return }
         let members = await loadMembersUseCase.execute()
-        let persisted = selectedMemberIDPersistence.load(for: session.profileID)
+        let persisted = selectedMemberIDPersistence.load(for: session.accountID)
         let preferred = memberContextStore.context.selectedMemberID ?? persisted
         let selectedID = selectMemberUseCase.execute(
             members: members,

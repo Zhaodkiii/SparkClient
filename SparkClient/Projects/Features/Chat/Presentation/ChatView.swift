@@ -10,28 +10,18 @@ struct ChatView: View {
     @ObservedObject var detailViewModel: ChatDetailViewModel
 
     @State private var hasLoaded = false
-    @State private var lastStreamingAutoScrollGeneration: UInt64 = 0
-    @State private var deletedMessageIDs: Set<UUID> = []
-    @State private var translatedTexts: [UUID: String] = [:]
-    @State private var isTranslatingMessageIDs: Set<UUID> = []
-    @State private var mathModeMessageIDs: Set<UUID> = []
-    /// 用户在本地“生成预览”得到的知识卡（尚未入库）。
-    /// key = message.id，value = 该消息生成出的知识卡列表。
-    @State private var generatedKnowledgeCards: [UUID: [ChatKnowledgeCard]] = [:]
-    /// 正在保存中的知识卡 id，用于控制按钮 loading 与防重复点击。
-    @State private var savingKnowledgeCardIDs: Set<UUID> = []
-    /// 已保存成功的知识卡 id，用于展示“已保存”状态并禁用按钮。
-    @State private var savedKnowledgeCardIDs: Set<UUID> = []
+    @StateObject private var uiStateStore = ChatMessageUIStateStore()
+    private let actionState = ChatMessageActionState()
+    private let scrollThrottler = ChatScrollThrottler(minGenerationStep: 4)
     @State private var selectedTextSheet: SelectableTextPayload?
     @StateObject private var speechHelper = ChatSpeechHelper()
-    @State private var isSavingMessageIDs: Set<UUID> = []
-    @State private var savedMessageIDs: Set<UUID> = []
-    @State private var taskCardLoadingIDs: Set<Int> = []
-    @State private var ignoredTaskCardIDs: Set<Int> = []
-    @State private var createdTaskCardIDs: Set<Int> = []
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
     @StateObject private var taskManager = TaskManager.shared
     private let logger: Logger = ConsoleLogger()
+    private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
+    private var messageActionUseCase: any ChatMessageActionUseCase {
+        DefaultChatMessageActionUseCase(taskManager: taskManager, logger: logger)
+    }
 
     private var reasoningRefreshId: String {
         let name = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName ?? "-"
@@ -43,7 +33,7 @@ struct ChatView: View {
     }
 
     private var visibleMessages: [ChatMessage] {
-        stateStore.selectedMessages.filter { deletedMessageIDs.contains($0.id) == false }
+        stateStore.selectedMessages.filter { uiStateStore.isDeleted($0.id) == false }
     }
 
     private var hasMoreMessages: Bool {
@@ -55,6 +45,10 @@ struct ChatView: View {
     }
 
     var body: some View {
+        AnyView(configuredLayout)
+    }
+
+    private var baseLayout: some View {
         VStack(spacing: 0) {
             messageList
 
@@ -83,50 +77,90 @@ struct ChatView: View {
                 }
             }
         }
-        .navigationTitle(stateStore.selectedThread?.listDisplayTitle ?? L10n.text("chat.title"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Picker(L10n.text("chat.composer.style.title"), selection: $composerStyleRaw) {
-                        Text(L10n.text("chat.composer.style.signal")).tag(ChatComposerStyle.signal.rawValue)
-                        Text(L10n.text("chat.composer.style.hanlin")).tag(ChatComposerStyle.hanlin.rawValue)
+    }
+
+    private var configuredLayout: some View {
+        lifecycleLayout
+    }
+
+    private var navigationDecoratedLayout: some View {
+        baseLayout
+            .navigationTitle(stateStore.selectedThread?.listDisplayTitle ?? L10n.text("chat.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Picker(L10n.text("chat.composer.style.title"), selection: $composerStyleRaw) {
+                            Text(L10n.text("chat.composer.style.signal")).tag(ChatComposerStyle.signal.rawValue)
+                            Text(L10n.text("chat.composer.style.hanlin")).tag(ChatComposerStyle.hanlin.rawValue)
+                        }
+                    } label: {
+                        Label(L10n.text("chat.composer.style.title"), systemImage: "rectangle.split.2x1")
                     }
-                } label: {
-                    Label(L10n.text("chat.composer.style.title"), systemImage: "rectangle.split.2x1")
                 }
             }
-        }
-        .task {
-            guard hasLoaded == false else { return }
-            hasLoaded = true
-            listViewModel.selectThread(threadID)
-            await detailViewModel.loadMessagesIfNeeded(for: threadID)
-        }
-        .task(id: threadID) {
-            await detailViewModel.refreshChatModelPicker()
-        }
-        .task(id: reasoningRefreshId) {
-            await detailViewModel.refreshReasoningToolbarContext(for: threadID)
-        }
-        .sheet(item: $selectedTextSheet) { payload in
-            NavigationView {
-                ScrollView {
-                    Text(payload.text)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .navigationTitle(payload.title)
+    }
+
+    private var initialLoadLayout: some View {
+        navigationDecoratedLayout
+            .task {
+                guard hasLoaded == false else { return }
+                hasLoaded = true
+                listViewModel.selectThread(threadID)
+                await detailViewModel.loadMessagesIfNeeded(for: threadID)
+                restoreCardActionSnapshotIfNeeded(forceReload: true)
             }
-            .navigationViewStyle(.stack)
-        }
-        .onAppear {
-            Task { await detailViewModel.chatPageDidAppear() }
-        }
-        .onDisappear {
-            Task { await detailViewModel.chatPageDidDisappear() }
-        }
+            .onChange(of: threadID) { _ in
+                restoreCardActionSnapshotIfNeeded(forceReload: true)
+            }
+    }
+
+    private var statePersistenceLayoutStep1: some View {
+        initialLoadLayout
+            .onChange(of: uiStateStore.savedKnowledgeCardIDs) { _ in
+                persistCardActionSnapshot()
+            }
+            .onChange(of: uiStateStore.savedMessageIDs) { _ in
+                persistCardActionSnapshot()
+            }
+    }
+
+    private var statePersistenceLayout: some View {
+        statePersistenceLayoutStep1
+            .onChange(of: uiStateStore.ignoredTaskCardIDs) { _ in
+                persistCardActionSnapshot()
+            }
+            .onChange(of: uiStateStore.createdTaskCardIDs) { _ in
+                persistCardActionSnapshot()
+            }
+    }
+
+    private var lifecycleLayout: some View {
+        statePersistenceLayout
+            .task(id: threadID) {
+                await detailViewModel.refreshChatModelPicker()
+            }
+            .task(id: reasoningRefreshId) {
+                await detailViewModel.refreshReasoningToolbarContext(for: threadID)
+            }
+            .sheet(item: $selectedTextSheet) { payload in
+                NavigationView {
+                    ScrollView {
+                        Text(payload.text)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    }
+                    .navigationTitle(payload.title)
+                }
+                .navigationViewStyle(.stack)
+            }
+            .onAppear {
+                Task { await detailViewModel.chatPageDidAppear() }
+            }
+            .onDisappear {
+                Task { await detailViewModel.chatPageDidDisappear() }
+            }
     }
 
     private var messageList: some View {
@@ -177,10 +211,13 @@ struct ChatView: View {
                 scrollToLastMessage(proxy: proxy, animated: true)
             }
             .onChange(of: stateStore.streamingContentGeneration) { generation in
-                let minGenerationStep: UInt64 = 4
-                guard generation >= lastStreamingAutoScrollGeneration + minGenerationStep else { return }
-                lastStreamingAutoScrollGeneration = generation
-                scrollToLastMessage(proxy: proxy, animated: false)
+                Task {
+                    if await scrollThrottler.shouldScroll(generation: generation) {
+                        await MainActor.run {
+                            scrollToLastMessage(proxy: proxy, animated: false)
+                        }
+                    }
+                }
             }
             .refreshable {
                 await detailViewModel.sync()
@@ -225,175 +262,75 @@ struct ChatView: View {
     /// 渲染单条聊天消息的气泡内容（根据消息角色和类型展示不同组件）
     /// - Parameter message: 聊天消息模型
     /// - Returns: 消息气泡视图
-    private func bubbleContent(_ message: ChatMessage) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // 从消息中解析出通用元数据
-            let metadata = ChatMessageMetadata(message: message)
-            
-            // ============== 1. 助手消息：图片展示区域 ==============
-            if message.role == .assistant {
-                let imagePayloads = imagePayloads(from: message)
-                // 如果有图片，渲染图片画廊
-                if !imagePayloads.isEmpty {
-                    ChatImageGalleryBlockView(images: imagePayloads)
-                }
-            }
-
-            // ============== 2. 助手消息：思考过程（推理内容）展示 ==============
-            if message.role == .assistant,
-               let reasoning = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !reasoning.isEmpty {
-                ChatReasoningBlockView(
-                    text: reasoning,                // 推理文本
-                    timeText: formatReasoningTime(message.reasoningDurationMs),  // 推理耗时
-                    isStreaming: message.deliveryState == .sending,              // 是否正在流式输出
-                    isLastAssistantMessage: isLastAssistantMessage(message)      // 是否是最后一条助手消息
-                )
-            }
-
-            // ============== 3. 助手消息：操作状态展示 ==============
-            if message.role == .assistant,
-               let operational = operationalMeta(from: message, metadata: metadata),
-               isLastAssistantMessage(message) {
-                ChatOperationalStatusBlockView(
-                    operationalState: operational.state,         // 操作状态
-                    operationalDescription: operational.description // 状态描述
-                )
-            }
-
-            // ============== 4. 助手消息：工具调用内容展示 ==============
-            if message.role == .assistant,
-               let tool = toolMeta(from: message, metadata: metadata),
-               shouldShowToolContentBlock(metadata: metadata) {
-                ChatToolContentBlockView(
-                    toolName: tool.name,             // 工具名称
-                    toolContent: tool.content,       // 工具返回内容
-                    isStreaming: message.deliveryState == .sending  // 是否正在流式输出
-                )
-            }
-
-
-            // ============== 6. 助手消息：知识卡片展示 ==============
-            if message.role == .assistant {
-                // 知识卡渲染优先：展示“消息附件中的卡 + 本地临时生成卡”的合并结果
-                let cards = combinedKnowledgeCards(for: message, metadata: metadata)
-                if !cards.isEmpty {
-                    ChatKnowledgeCardListView(
-                        cards: cards,
-                        onSave: { card in
-                            saveKnowledgeCard(card, from: message)  // 保存知识卡片
-                        },
-                        isSaving: { card in
-                            savingKnowledgeCardIDs.contains(card.id)  // 是否正在保存
-                        },
-                        isSaved: { card in
-                            savedKnowledgeCardIDs.contains(card.id)   // 是否已保存
-                        }
-                    )
-                }
-            }
-
-            // ============== 7. 助手消息：翻译结果展示 ==============
-            if message.role == .assistant,
-               let translated = translatedText(for: message, metadata: metadata),
-               !translated.isEmpty {
-                ChatTranslatedBlockView(text: translated)
-            }
-
-            // ============== 8. 助手消息：地图/路线展示 ==============
-            if message.role == .assistant {
-                let locations = metadata.locations
-                let routes = metadata.routes
-                // 有地点或路线时展示地图
-                if !locations.isEmpty || !routes.isEmpty {
-                    ChatMapRouteBlockView(locations: locations, routes: routes)
-                }
-            }
-
-            // ============== 9. 助手消息：日程/事件卡片展示 ==============
-            if message.role == .assistant {
-                let events = metadata.events
-                if !events.isEmpty {
-                    ChatEventsCardListView(events: events)
-                }
-            }
-
-            // ============== 10. 助手消息：健康卡片 + 睡眠可视化 ==============
-            if message.role == .assistant {
-                let cards = metadata.healthCards
-                if !cards.isEmpty {
-                    ChatHealthCardListView(cards: cards)
-                }
-                // 睡眠数据图表
-                if let sleep = metadata.sleepVisualization {
-                    ChatSleepCardView(model: sleep)
-                }
-            }
-
-            // ============== 11. 助手消息：HTML 内容预览 ==============
-            if message.role == .assistant,
-               let htmlContent = metadata.htmlContent,
-               !htmlContent.isEmpty {
-                ChatHTMLPreviewBlockView(htmlContent: htmlContent)
-            }
-
-            // ============== 12. 主文本内容（Markdown / 纯文本） ==============
-            if shouldRenderMainMarkdown(for: message, metadata: metadata) {
-                // 数学公式模式：等宽纯文本展示
-                if mathModeMessageIDs.contains(message.id) {
-                    Text(message.content)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // 普通模式：Markdown 渲染
-                    Markdown(message.content)
-                        .markdownTheme(.chatBubble(foreground: message.role == .user ? .white : .primary))
-                }
-            }
-
-            // ============== 13. 消息发送失败：重试按钮 ==============
-            if message.deliveryState == .failed {
-                Button {
+    private func bubbleContent(_ message: ChatMessage) -> AnyView {
+        let metadata = ChatMessageMetadata(message: message)
+        return AnyView(
+            ChatMessageBubbleContentView(
+                message: message,
+                metadata: metadata,
+                isLastAssistantMessage: isLastAssistantMessage(message),
+                translatedText: translatedText(for: message, metadata: metadata),
+                combinedKnowledgeCards: combinedKnowledgeCards(for: message, metadata: metadata),
+                isMathMode: uiStateStore.isMathMode(message.id),
+                isTranslating: uiStateStore.isTranslating(message.id),
+                isSavingMessage: uiStateStore.isMessageSaving(message.id),
+                isSavedMessage: uiStateStore.isMessageSaved(message.id),
+                isSpeaking: speechHelper.isSpeaking(message.id),
+                taskCardLoadingIDs: uiStateStore.taskCardLoadingIDs,
+                ignoredTaskCardIDs: uiStateStore.ignoredTaskCardIDs,
+                createdTaskCardIDs: uiStateStore.createdTaskCardIDs,
+                savingKnowledgeCardIDs: uiStateStore.savingKnowledgeCardIDs,
+                savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
+                savingMedicalCardIDs: uiStateStore.savingMedicalCardIDs,
+                showActions: message.id == visibleMessages.last?.id,
+                onRetry: {
                     Task {
                         await detailViewModel.retryFailedMessage(clientMessageID: message.clientMessageID)
                     }
-                } label: {
-                    Text(L10n.text("common.retry"))
-                        .font(.caption)
+                },
+                onCopy: {
+                    UIPasteboard.general.string = message.content
+                },
+                onDelete: {
+                    uiStateStore.markDeleted(message.id)
+                },
+                onToggleSpeech: {
+                    speechHelper.toggle(text: message.content, id: message.id)
+                },
+                onToggleTranslate: {
+                    toggleTranslate(message)
+                },
+                onOpenNetworkSearch: {
+                    openNetworkSearch(with: message.content)
+                },
+                onSaveMessageToKnowledge: {
+                    saveMessageToKnowledge(message)
+                },
+                onGenerateKnowledgeCardsPreview: {
+                    generateKnowledgeCardsPreview(for: message, metadata: metadata)
+                },
+                onSaveKnowledgeCard: { card in
+                    saveKnowledgeCard(card, from: message)
+                },
+                onConfirmTaskCard: { card in
+                    confirmTaskCard(card)
+                },
+                onIgnoreTaskCard: { card in
+                    ignoreTaskCard(card)
+                },
+                onSaveMedicationCard: { card in
+                    saveMedicationCard(card, from: message)
+                },
+                onSavePrescriptionCard: { card in
+                    savePrescriptionCard(card, from: message)
+                },
+                onSaveExamReportCard: { card in
+                    saveExamReportCard(card, from: message)
+                },
+                onSaveMedicalCaseCard: { card in
+                    saveMedicalCaseCard(card, from: message)
                 }
-            }
-
-            // ============== 14. 消息操作按钮（复制/转发/删除等） ==============
-            messageActions(message)
-            
-            
-            // ============== 5. 助手消息：任务卡片展示 ==============
-            if message.role == .assistant {
-                // 过滤掉已忽略、已创建的任务卡片
-                let taskCards = metadata.taskCards.filter { card in
-                    !ignoredTaskCardIDs.contains(card.id) && !createdTaskCardIDs.contains(card.id)
-                }
-                // 渲染任务卡片列表
-                if !taskCards.isEmpty {
-                    ForEach(taskCards) { card in
-                        TaskCardCell(
-                            card: card,
-                            onConfirm: { confirmTaskCard(card) },    // 确认任务
-                            onIgnore: { ignoreTaskCard(card) },      // 忽略任务
-                            isLoading: taskCardLoadingIDs.contains(card.id)  // 是否加载中
-                        )
-                    }
-                }
-            }
-            
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            // 气泡背景：用户消息使用主题色，助手消息使用系统背景色
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(message.role == .user ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
+            )
         )
     }
 
@@ -442,7 +379,7 @@ struct ChatView: View {
         // 合并“持久化卡片 + 本地临时卡片”，并按 title+content 做去重。
         // 这样可以兼容：服务器返回卡片 + 用户手动点击“生成知识卡预览”。
         let persisted = metadata?.knowledgeCards ?? knowledgeCards(from: message)
-        let generated = generatedKnowledgeCards[message.id] ?? []
+        let generated = uiStateStore.knowledgeCards(for: message.id)
         var dedup: Set<String> = []
         var merged: [ChatKnowledgeCard] = []
         for card in persisted + generated {
@@ -479,78 +416,6 @@ struct ChatView: View {
         return trimmedContent != toolContent
     }
 
-    @ViewBuilder
-    private func messageActions(_ message: ChatMessage) -> some View {
-        if message.id == visibleMessages.last?.id {
-            // 与 AI_HLY 交互一致：助手流式回复中隐藏底部操作栏，避免误触与视觉干扰。
-            if message.role == .assistant, message.deliveryState == .sending {
-                EmptyView()
-            } else {
-                HStack(spacing: 10) {
-                    Button {
-                        UIPasteboard.general.string = message.content
-                    } label: {
-                        Image(systemName: "square.on.square")
-                    }
-                    .font(.caption)
-
-                    Button(role: .destructive) {
-                        deletedMessageIDs.insert(message.id)
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                    .font(.caption)
-
-                    if message.role == .assistant {
-                        Button {
-                            speechHelper.toggle(text: message.content, id: message.id)
-                        } label: {
-                            Image(systemName: speechHelper.isSpeaking(message.id) ? "pause.circle" : "waveform")
-                        }
-                        .font(.caption)
-
-                        Button {
-                            toggleTranslate(message)
-                        } label: {
-                            if isTranslatingMessageIDs.contains(message.id) {
-                                ProgressView().scaleEffect(0.8)
-                            } else {
-                                Image(systemName: translatedText(for: message)?.isEmpty == false ? "trash" : "globe")
-                            }
-                        }
-                        .font(.caption)
-
-                        Button {
-                            openNetworkSearch(with: message.content)
-                        } label: {
-                            Image(systemName: "network")
-                        }
-                        .font(.caption)
-
-                        Button {
-                            saveMessageToKnowledge(message)
-                        } label: {
-                            if isSavingMessageIDs.contains(message.id) {
-                                ProgressView().scaleEffect(0.8)
-                            } else {
-                                Image(systemName: savedMessageIDs.contains(message.id) ? "checkmark.circle.fill" : "square.and.arrow.down")
-                            }
-                        }
-                        .font(.caption)
-
-                        Button {
-                            generateKnowledgeCardsPreview(for: message)
-                        } label: {
-                            Image(systemName: combinedKnowledgeCards(for: message).isEmpty ? "backpack" : "backpack.fill")
-                        }
-                        .font(.caption)
-                    }
-                }
-                .foregroundStyle(.secondary)
-            }
-        }
-    }
-
     private func openNetworkSearch(with text: String) {
         let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard keyword.isEmpty == false else { return }
@@ -560,17 +425,29 @@ struct ChatView: View {
     }
 
     private func saveMessageToKnowledge(_ message: ChatMessage) {
-        guard isSavingMessageIDs.contains(message.id) == false else { return }
-        guard savedMessageIDs.contains(message.id) == false else { return }
-        isSavingMessageIDs.insert(message.id)
+        guard uiStateStore.isMessageSaving(message.id) == false else { return }
+        guard uiStateStore.isMessageSaved(message.id) == false else { return }
         Task {
-            defer { isSavingMessageIDs.remove(message.id) }
+            guard await actionState.beginSavingMessage(message.id) else { return }
+            await MainActor.run {
+                uiStateStore.setMessageSaving(true, for: message.id)
+            }
+            defer {
+                Task {
+                    await actionState.endSavingMessage(message.id)
+                    await MainActor.run {
+                        uiStateStore.setMessageSaving(false, for: message.id)
+                    }
+                }
+            }
             do {
-                _ = try await detailViewModel.saveMessageAsKnowledge(
+                try await messageActionUseCase.saveMessageToKnowledge(
                     content: message.content,
-                    suggestedTitle: nil
+                    detailViewModel: detailViewModel
                 )
-                savedMessageIDs.insert(message.id)
+                await MainActor.run {
+                    uiStateStore.setMessageSaved(true, for: message.id)
+                }
             } catch {
                 logger.error("保存消息到知识库失败：\(error.localizedDescription)", module: .general)
             }
@@ -578,34 +455,62 @@ struct ChatView: View {
     }
 
     private func toggleTranslate(_ message: ChatMessage) {
-        if translatedTexts[message.id]?.isEmpty == false {
-            translatedTexts[message.id] = nil
+        if uiStateStore.translatedText(for: message.id)?.isEmpty == false {
+            uiStateStore.setTranslatedText(nil, for: message.id)
             return
         }
-        guard isTranslatingMessageIDs.contains(message.id) == false else { return }
-        isTranslatingMessageIDs.insert(message.id)
+        guard uiStateStore.isTranslating(message.id) == false else { return }
         Task {
-            defer { isTranslatingMessageIDs.remove(message.id) }
+            guard await actionState.beginTranslating(message.id) else { return }
+            await MainActor.run {
+                uiStateStore.setTranslating(true, for: message.id)
+            }
+            defer {
+                Task {
+                    await actionState.endTranslating(message.id)
+                    await MainActor.run {
+                        uiStateStore.setTranslating(false, for: message.id)
+                    }
+                }
+            }
             do {
-                let translated = try await detailViewModel.translateMessageText(message.content)
-                translatedTexts[message.id] = translated.trimmingCharacters(in: .whitespacesAndNewlines)
+                let translated = try await messageActionUseCase.translate(message.content, detailViewModel: detailViewModel)
+                await MainActor.run {
+                    uiStateStore.setTranslatedText(translated.trimmingCharacters(in: .whitespacesAndNewlines), for: message.id)
+                }
             } catch {
-                translatedTexts[message.id] = nil
+                await MainActor.run {
+                    uiStateStore.setTranslatedText(nil, for: message.id)
+                }
             }
         }
     }
 
     /// 点击“创建任务”：直接创建 Task 总表与子任务，不再走 TaskCard 服务端接口。
     private func confirmTaskCard(_ card: TaskCard) {
-        guard taskCardLoadingIDs.contains(card.id) == false else { return }
-        taskCardLoadingIDs.insert(card.id)
+        guard uiStateStore.isTaskCardLoading(card.id) == false else { return }
+        guard let message = messageContainingTaskCard(cardID: card.id) else { return }
         Task {
-            defer { taskCardLoadingIDs.remove(card.id) }
+            guard await actionState.beginTaskCardLoading(card.id) else { return }
+            await MainActor.run {
+                uiStateStore.setTaskCardLoading(true, for: card.id)
+            }
+            defer {
+                Task {
+                    await actionState.endTaskCardLoading(card.id)
+                    await MainActor.run {
+                        uiStateStore.setTaskCardLoading(false, for: card.id)
+                    }
+                }
+            }
             do {
-                let payload = buildCreatePayload(from: card)
-                try await taskManager.createTask(payload: payload)
-                createdTaskCardIDs.insert(card.id)
-                logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
+                try await messageActionUseCase.createTask(from: card)
+                await detailViewModel.updateTaskCardStatus(
+                    threadID: threadID,
+                    message: message,
+                    cardID: card.id,
+                    status: .confirmed
+                )
             } catch {
                 logger.error("任务卡片直接创建任务失败 card_id=\(card.id) error=\(error.localizedDescription)", module: .general)
             }
@@ -613,115 +518,25 @@ struct ChatView: View {
     }
 
     private func ignoreTaskCard(_ card: TaskCard) {
-        ignoredTaskCardIDs.insert(card.id)
+        guard let message = messageContainingTaskCard(cardID: card.id) else { return }
+        Task {
+            await detailViewModel.updateTaskCardStatus(
+                threadID: threadID,
+                message: message,
+                cardID: card.id,
+                status: .ignored
+            )
+        }
         logger.info("任务卡片本地忽略 card_id=\(card.id)", module: .general)
     }
 
-    private func buildCreatePayload(from card: TaskCard) -> TaskCreatePayload {
-        let base = parseJSONObject(card.taskPayload["task"]) ?? [:]
-        let subMedical = parseJSONObject(card.taskPayload["task_medical"])
-        let subExercise = parseJSONObject(card.taskPayload["task_exercise"])
-        let subDiet = parseJSONObject(card.taskPayload["task_diet"])
-
-        let startText = stringValue(base["start_time"]) ?? card.startTime.map(iso8601)
-        let dueText = stringValue(base["due_time"]) ?? card.dueTime.map(iso8601)
-        let repeatTypeRaw = intValue(base["repeat_type"]) ?? card.repeatType.rawValue
-        let priorityRaw = intValue(base["priority"]) ?? card.priority.rawValue
-
-        return TaskCreatePayload(
-            member: intValue(base["member"]) ?? intValue(base["member_id"]) ?? card.member,
-            title: stringValue(base["title"]) ?? card.title,
-            description: stringValue(base["description"]) ?? card.description,
-            type: card.type,
-            status: .pending,
-            startTime: startText,
-            dueTime: dueText,
-            repeatType: HealthTask.RepeatType(rawValue: repeatTypeRaw) ?? .none,
-            priority: HealthTask.Priority(rawValue: priorityRaw) ?? .medium,
-            businessType: stringValue(base["business_type"]) ?? card.businessType,
-            businessID: stringValue(base["business_id"]) ?? card.businessID,
-            extra: [:],
-            taskMedical: buildMedicalPayload(from: subMedical, fallback: card),
-            taskExercise: buildExercisePayload(from: subExercise, fallback: card),
-            taskDiet: buildDietPayload(from: subDiet, fallback: card)
-        )
-    }
-
-    private func buildMedicalPayload(from json: [String: Any], fallback card: TaskCard) -> TaskMedicalPayload? {
-        guard card.type == .medical else { return nil }
-        return TaskMedicalPayload(
-            reminderTime: stringValue(json["reminder_time"]) ?? card.startTime.map(iso8601),
-            medicalTaskType: stringValue(json["medical_task_type"]) ?? card.title,
-            description: stringValue(json["description"]) ?? card.description,
-            source: "ai",
-            extra: [:]
-        )
-    }
-
-    private func buildExercisePayload(from json: [String: Any], fallback card: TaskCard) -> TaskExercisePayload? {
-        guard card.type == .exercise else { return nil }
-        return TaskExercisePayload(
-            exerciseType: stringValue(json["exercise_type"]) ?? card.title,
-            durationMin: intValue(json["duration_min"]) ?? 30,
-            intensity: stringValue(json["intensity"]) ?? "medium",
-            description: stringValue(json["description"]) ?? card.description,
-            source: "ai",
-            extra: [:]
-        )
-    }
-
-    /// Diet 卡片直接创建 Task + task_diet 子表。
-    private func buildDietPayload(from json: [String: Any], fallback card: TaskCard) -> TaskDietPayload? {
-        guard card.type == .diet else { return nil }
-        var foodRecommend = [String]()
-        if let array = json["food_recommend"] as? [String] {
-            foodRecommend = array
-        } else if let text = stringValue(json["food_recommend"]), text.isEmpty == false {
-            foodRecommend = [text]
+    private func messageContainingTaskCard(cardID: Int) -> ChatMessage? {
+        visibleMessages.first { message in
+            ChatMessageMetadata(message: message).taskCards.contains(where: { $0.id == cardID })
         }
-        if foodRecommend.isEmpty {
-            foodRecommend = [card.description]
-        }
-        return TaskDietPayload(
-            mealType: stringValue(json["meal_type"]) ?? "dinner",
-            calorieTarget: intValue(json["calorie_target"]) ?? 1800,
-            foodRecommend: foodRecommend,
-            description: stringValue(json["description"]) ?? card.description,
-            source: "ai",
-            extra: [:]
-        )
     }
 
-    private func parseJSONObject(_ text: String?) -> [String: Any] {
-        guard let text, let data = text.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data),
-              let dict = object as? [String: Any] else {
-            return [:]
-        }
-        return dict
-    }
-
-    private func intValue(_ value: Any?) -> Int? {
-        if let intValue = value as? Int { return intValue }
-        if let doubleValue = value as? Double { return Int(doubleValue) }
-        if let stringValue = value as? String { return Int(stringValue) }
-        return nil
-    }
-
-    private func stringValue(_ value: Any?) -> String? {
-        if let text = value as? String { return text }
-        if let intValue = value as? Int { return "\(intValue)" }
-        if let doubleValue = value as? Double { return "\(doubleValue)" }
-        return nil
-    }
-
-    private func iso8601(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
-    }
-
-    private func generateKnowledgeCardsPreview(for message: ChatMessage) {
+    private func generateKnowledgeCardsPreview(for message: ChatMessage, metadata: ChatMessageMetadata? = nil) {
         guard message.role == .assistant else { return }
         guard combinedKnowledgeCards(for: message).isEmpty else {
             // 该消息已经存在可展示卡片，不重复生成，避免 UI 重复。
@@ -729,43 +544,33 @@ struct ChatView: View {
             return
         }
         // 仅生成预览，不直接落库。
-        let card = buildKnowledgePreviewCard(from: message)
-        generatedKnowledgeCards[message.id] = [card]
+        let resolved = metadata ?? ChatMessageMetadata(message: message)
+        let card = messageActionUseCase.buildKnowledgePreviewCard(message: message, metadata: resolved)
+        uiStateStore.setKnowledgeCards([card], for: message.id)
         logger.info("知识卡预览已生成，message=\(message.id.uuidString), title=\(card.title)", module: .general)
     }
 
-    /// 使用轻量本地规则先生成可预览知识卡，再由用户决定是否保存到知识库。
-    private func buildKnowledgePreviewCard(from message: ChatMessage) -> ChatKnowledgeCard {
-        // 优先使用工具输出作为知识卡正文来源；若没有工具输出，则退回主回复正文。
-        let toolContent = ChatMessageMetadata(message: message).toolContent ?? ""
-        let primary = toolContent.isEmpty ? message.content : toolContent
-        // 文本预处理：压缩空行、去首尾空白，避免卡片展示噪音。
-        let normalized = primary
-            .replacingOccurrences(of: "\n\n", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        // 预览控制长度，避免气泡中出现超长卡片影响可读性。
-        let previewBody = String(normalized.prefix(320))
-        // 标题优先取首个非空行，再截断到固定长度；兜底走本地化默认标题。
-        let titleSeed = normalized.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { $0.isEmpty == false }) ?? ""
-        let title = titleSeed.isEmpty
-            ? L10n.text("chat.bubble.knowledge.default_title")
-            : String(titleSeed.prefix(20))
-        return ChatKnowledgeCard(title: title, content: previewBody)
-    }
-
     private func saveKnowledgeCard(_ card: ChatKnowledgeCard, from message: ChatMessage) {
-        // 幂等保护：保存中或已保存都直接返回，避免重复请求。
-        guard savingKnowledgeCardIDs.contains(card.id) == false else { return }
-        guard savedKnowledgeCardIDs.contains(card.id) == false else { return }
-        savingKnowledgeCardIDs.insert(card.id)
-        Task { @MainActor in
-            // 无论成功失败，都要清理 saving 状态，避免按钮一直卡住。
-            defer { savingKnowledgeCardIDs.remove(card.id) }
+        guard uiStateStore.isKnowledgeCardSaving(card.id) == false else { return }
+        guard uiStateStore.isKnowledgeCardSaved(card.id) == false else { return }
+        Task {
+            guard await actionState.beginSavingKnowledgeCard(card.id) else { return }
+            await MainActor.run {
+                uiStateStore.setKnowledgeCardSaving(true, for: card.id)
+            }
+            defer {
+                Task {
+                    await actionState.endSavingKnowledgeCard(card.id)
+                    await MainActor.run {
+                        uiStateStore.setKnowledgeCardSaving(false, for: card.id)
+                    }
+                }
+            }
             do {
-                _ = try await detailViewModel.saveKnowledgeCard(title: card.title, content: card.content)
-                savedKnowledgeCardIDs.insert(card.id)
+                try await messageActionUseCase.saveKnowledgeCard(card, detailViewModel: detailViewModel)
+                await MainActor.run {
+                    uiStateStore.setKnowledgeCardSaved(true, for: card.id)
+                }
                 logger.info("知识卡保存成功，message=\(message.id.uuidString), card=\(card.id.uuidString)", module: .general)
             } catch {
                 logger.error("知识卡保存失败：\(error.localizedDescription)", module: .general)
@@ -773,12 +578,87 @@ struct ChatView: View {
         }
     }
 
+    private func saveMedicationCard(_ card: ChatMedicationCardPayload, from message: ChatMessage) {
+        guard card.isSaved == false else { return }
+        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
+        Task {
+            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
+            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
+            do {
+                try await messageActionUseCase.saveMedicationCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
+            } catch {
+                logger.error("用药卡保存失败：\(error.localizedDescription)", module: .general)
+            }
+        }
+    }
+
+    private func savePrescriptionCard(_ card: ChatPrescriptionCardPayload, from message: ChatMessage) {
+        guard card.isSaved == false else { return }
+        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
+        Task {
+            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
+            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
+            do {
+                try await messageActionUseCase.savePrescriptionCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
+            } catch {
+                logger.error("处方卡保存失败：\(error.localizedDescription)", module: .general)
+            }
+        }
+    }
+
+    private func saveExamReportCard(_ card: ChatExamReportCardPayload, from message: ChatMessage) {
+        guard card.isSaved == false else { return }
+        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
+        Task {
+            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
+            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
+            do {
+                try await messageActionUseCase.saveExamReportCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
+            } catch {
+                logger.error("检查报告卡保存失败：\(error.localizedDescription)", module: .general)
+            }
+        }
+    }
+
+    private func saveMedicalCaseCard(_ card: ChatMedicalCaseCardPayload, from message: ChatMessage) {
+        guard card.isSaved == false else { return }
+        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
+        Task {
+            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
+            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
+            do {
+                try await messageActionUseCase.saveMedicalCaseCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
+            } catch {
+                logger.error("病例卡保存失败：\(error.localizedDescription)", module: .general)
+            }
+        }
+    }
+
     private func translatedText(for message: ChatMessage, metadata: ChatMessageMetadata? = nil) -> String? {
-        if let local = translatedTexts[message.id], local.isEmpty == false {
+        if let local = uiStateStore.translatedText(for: message.id), local.isEmpty == false {
             return local
         }
         let attachment = metadata?.translatedText ?? ChatMessageMetadata(message: message).translatedText
         return attachment?.isEmpty == false ? attachment : nil
+    }
+
+    private var cardActionSnapshotStorageKey: String {
+        Self.cardActionSnapshotStorageKeyPrefix + threadID.uuidString.lowercased()
+    }
+
+    private func restoreCardActionSnapshotIfNeeded(forceReload: Bool = false) {
+        if forceReload {
+            uiStateStore.applyCardActionSnapshot(.empty, forceReload: true)
+        }
+        guard let data = UserDefaults.standard.data(forKey: cardActionSnapshotStorageKey) else { return }
+        guard let snapshot = try? JSONDecoder().decode(CardActionSnapshot.self, from: data) else { return }
+        uiStateStore.applyCardActionSnapshot(snapshot, forceReload: false)
+    }
+
+    private func persistCardActionSnapshot() {
+        let snapshot = uiStateStore.makeCardActionSnapshot()
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        UserDefaults.standard.set(data, forKey: cardActionSnapshotStorageKey)
     }
 
     private func htmlContent(from message: ChatMessage) -> String? {

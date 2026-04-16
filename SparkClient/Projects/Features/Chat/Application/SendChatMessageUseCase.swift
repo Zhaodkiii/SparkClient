@@ -6,6 +6,7 @@ struct SendChatMessageUseCase: Sendable {
     let syncEngine: ChatSyncEngine
     let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
     let toolEventInterpreter: ChatToolEventInterpreter
+    let generateStructuredHealthCardsAsyncUseCase: GenerateStructuredHealthCardsAsyncUseCase
     let logger: Logger
 
     init(
@@ -13,6 +14,7 @@ struct SendChatMessageUseCase: Sendable {
         orchestrator: ChatOrchestrator,
         syncEngine: ChatSyncEngine,
         buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase,
+        generateStructuredHealthCardsAsyncUseCase: GenerateStructuredHealthCardsAsyncUseCase,
         toolEventInterpreter: ChatToolEventInterpreter? = nil,
         logger: Logger = ConsoleLogger()
     ) {
@@ -20,6 +22,7 @@ struct SendChatMessageUseCase: Sendable {
         self.orchestrator = orchestrator
         self.syncEngine = syncEngine
         self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
+        self.generateStructuredHealthCardsAsyncUseCase = generateStructuredHealthCardsAsyncUseCase
         self.logger = logger
         self.toolEventInterpreter = toolEventInterpreter ?? ChatToolEventInterpreter(logger: logger)
     }
@@ -31,7 +34,8 @@ struct SendChatMessageUseCase: Sendable {
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
-        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil,
+        onAssistantAttachmentsUpdated: (@Sendable (_ clientMessageID: UUID, _ attachments: [ChatAttachment]) async -> Void)? = nil
     ) async throws -> ChatThreadSnapshot {
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard sanitizedInput.isEmpty == false else {
@@ -120,6 +124,7 @@ struct SendChatMessageUseCase: Sendable {
                     module: .general
                 )
             }
+            let assistantClientMessageID = UUID()
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .assistant,
@@ -130,9 +135,19 @@ struct SendChatMessageUseCase: Sendable {
                 reasoningDurationMs: output.reasoningDurationMs,
                 reasoningExpanded: false,
                 reasoningVisibility: .full,
-                clientMessageID: UUID(),
+                clientMessageID: assistantClientMessageID,
                 serverMessageID: nil,
                 deliveryState: .pending
+            )
+            generateStructuredHealthCardsAsyncUseCase.kickoffIfNeeded(
+                threadID: thread.id,
+                assistantClientMessageID: assistantClientMessageID,
+                toolName: output.toolName,
+                toolContent: output.toolContent,
+                onAttachmentsUpdated: { attachments in
+                    guard let onAssistantAttachmentsUpdated else { return }
+                    await onAssistantAttachmentsUpdated(assistantClientMessageID, attachments)
+                }
             )
 
             do {

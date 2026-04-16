@@ -120,7 +120,7 @@ actor AuthTokenProvider {
         guard loadRefreshToken() != nil else {
             logger.warning("刷新令牌不存在，无法发起 token refresh。", module: .auth)
             AuthSessionInvalidation.postIfNeeded(
-                statusCode: 401,
+                statusCode: 404,
                 backendCode: nil,
                 message: "missing_refresh_token",
                 source: "AuthTokenProvider.refreshTokensDeDuplicated"
@@ -144,7 +144,7 @@ actor AuthTokenProvider {
         guard let refreshToken = loadRefreshToken() else {
             logger.warning("刷新令牌读取失败，判定为未登录态。", module: .auth)
             AuthSessionInvalidation.postIfNeeded(
-                statusCode: 401,
+                statusCode: 404,
                 backendCode: nil,
                 message: "missing_refresh_token",
                 source: "AuthTokenProvider.performRefresh"

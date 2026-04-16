@@ -29,6 +29,8 @@ final class ChatDetailViewModel: ObservableObject {
     private let sendMessageUseCase: SendChatMessageUseCase
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
     private let syncChatUseCase: SyncChatUseCase
+    private let updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase
+    private let saveChatMedicalCardUseCase: SaveChatMedicalCardUseCase
     private let notificationClient: any NotificationClient
     private let aiConfigCenter: AIConfigCenter
     private let aiSettingsRepository: any AISettingsRepository
@@ -50,6 +52,8 @@ final class ChatDetailViewModel: ObservableObject {
         sendMessageUseCase: SendChatMessageUseCase,
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
         syncChatUseCase: SyncChatUseCase,
+        updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase,
+        saveChatMedicalCardUseCase: SaveChatMedicalCardUseCase,
         notificationClient: any NotificationClient,
         aiConfigCenter: AIConfigCenter,
         aiSettingsRepository: any AISettingsRepository,
@@ -64,6 +68,8 @@ final class ChatDetailViewModel: ObservableObject {
         self.sendMessageUseCase = sendMessageUseCase
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.syncChatUseCase = syncChatUseCase
+        self.updateChatMessageAttachmentsUseCase = updateChatMessageAttachmentsUseCase
+        self.saveChatMedicalCardUseCase = saveChatMedicalCardUseCase
         self.notificationClient = notificationClient
         self.aiConfigCenter = aiConfigCenter
         self.aiSettingsRepository = aiSettingsRepository
@@ -307,6 +313,15 @@ final class ChatDetailViewModel: ObservableObject {
                     await MainActor.run {
                         stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
                     }
+                },
+                onAssistantAttachmentsUpdated: { clientMessageID, attachments in
+                    await MainActor.run {
+                        stateStore.updateMessageAttachments(
+                            threadID: threadID,
+                            clientMessageID: clientMessageID,
+                            attachments: attachments
+                        )
+                    }
                 }
             )
             let finalItems = await loadChatThreadsUseCase.execute()
@@ -425,6 +440,151 @@ final class ChatDetailViewModel: ObservableObject {
             )
             throw error
         }
+    }
+
+    func updateTaskCardStatus(
+        threadID: UUID,
+        message: ChatMessage,
+        cardID: Int,
+        status: TaskCard.CardStatus
+    ) async {
+        guard let updatedAttachments = replacingTaskCardStatus(
+            in: message.attachments,
+            cardID: cardID,
+            status: status
+        ) else { return }
+
+        await updateChatMessageAttachmentsUseCase.execute(
+            clientMessageID: message.clientMessageID,
+            attachments: updatedAttachments,
+            markPendingForSync: true
+        )
+
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: message.clientMessageID,
+            attachments: updatedAttachments
+        )
+
+        do {
+            try await syncChatUseCase.pushOutboxOnly()
+        } catch {
+            logger.warning("任务卡状态上送失败，稍后重试：\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    private func replacingTaskCardStatus(
+        in attachments: [ChatAttachment],
+        cardID: Int,
+        status: TaskCard.CardStatus
+    ) -> [ChatAttachment]? {
+        guard let index = attachments.firstIndex(where: { $0.type == ChatStreamFieldKey.taskCards }),
+              let raw = attachments[index].text,
+              let data = raw.data(using: .utf8) else {
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard var cards = try? decoder.decode([TaskCard].self, from: data) else { return nil }
+        guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { return nil }
+        cards[cardIndex].status = status
+        cards[cardIndex].updatedAt = Date()
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let encoded = try? encoder.encode(cards),
+              let text = String(data: encoded, encoding: .utf8) else {
+            return nil
+        }
+        var next = attachments
+        next[index] = ChatAttachment(
+            id: attachments[index].id,
+            type: attachments[index].type,
+            url: attachments[index].url,
+            text: text
+        )
+        return next
+    }
+
+    func saveMedicationCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatMedicationCardPayload
+    ) async throws {
+        guard let memberID = memberContextStore.context.selectedMemberID else {
+            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
+        }
+        let attachments = try await saveChatMedicalCardUseCase.saveMedicationCard(
+            memberID: memberID,
+            message: message,
+            card: card
+        )
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: message.clientMessageID,
+            attachments: attachments
+        )
+    }
+
+    func savePrescriptionCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatPrescriptionCardPayload
+    ) async throws {
+        guard let memberID = memberContextStore.context.selectedMemberID else {
+            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
+        }
+        let attachments = try await saveChatMedicalCardUseCase.savePrescriptionCard(
+            memberID: memberID,
+            message: message,
+            card: card
+        )
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: message.clientMessageID,
+            attachments: attachments
+        )
+    }
+
+    func saveExamReportCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatExamReportCardPayload
+    ) async throws {
+        guard let memberID = memberContextStore.context.selectedMemberID else {
+            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
+        }
+        let attachments = try await saveChatMedicalCardUseCase.saveExamReportCard(
+            memberID: memberID,
+            message: message,
+            card: card
+        )
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: message.clientMessageID,
+            attachments: attachments
+        )
+    }
+
+    func saveMedicalCaseCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatMedicalCaseCardPayload
+    ) async throws {
+        guard let memberID = memberContextStore.context.selectedMemberID else {
+            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
+        }
+        let attachments = try await saveChatMedicalCardUseCase.saveMedicalCaseCard(
+            memberID: memberID,
+            message: message,
+            card: card
+        )
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: message.clientMessageID,
+            attachments: attachments
+        )
     }
 
     private func shortID(_ value: UUID?) -> String {

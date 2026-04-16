@@ -96,6 +96,10 @@ final class AppContainer {
     let restoreSessionUseCase: RestoreSessionUseCase
     /// Sign in with Apple 完整流程。
     let signInWithAppleUseCase: SignInWithAppleUseCase
+    /// 请求手机号验证码。
+    let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
+    /// 手机号验证码登录。
+    let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     /// 清除令牌与会话。
     let signOutUseCase: SignOutUseCase
     /// 首页医疗卡片：成员、病例、体检、用药等摘要（可带远程刷新策略）。
@@ -332,11 +336,18 @@ final class AppContainer {
             promptFactory: medicalPromptFactory,
             logger: logger
         )
-        let typedMedicalDocumentExtractor = DefaultTypedMedicalDocumentExtractor(
-            ocrOrchestrator: ocrOrchestrator,
-            typeResolver: medicalDocumentTypeResolver,
+        let medicalDocumentOCRBuilder = DefaultMedicalDocumentOCRBuilder(
+            ocrOrchestrator: ocrOrchestrator
+        )
+        let medicalDocumentStructuredExtractor = DefaultMedicalDocumentStructuredExtractor(
             promptFactory: medicalPromptFactory,
             runtimeService: aiRuntimeService,
+            logger: logger
+        )
+        let typedMedicalDocumentExtractor = DefaultTypedMedicalDocumentExtractor(
+            ocrBuilder: medicalDocumentOCRBuilder,
+            typeResolver: medicalDocumentTypeResolver,
+            structuredExtractor: medicalDocumentStructuredExtractor,
             logger: logger
         )
         let typedMedicalDocumentSaver = DefaultTypedMedicalDocumentSaver(
@@ -369,6 +380,7 @@ final class AppContainer {
             medicalQueryAPI: backend.medicalQuery,
             aiSettingsRepository: aiSettingsRepository,
             runtimeService: aiRuntimeService,
+            medicalStructuredExtractor: medicalDocumentStructuredExtractor,
             taskService: taskService,
             searchKnowledgeUseCase: searchKnowledgeUseCase,
             createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
@@ -405,14 +417,30 @@ final class AppContainer {
             syncEngine: chatSyncEngine,
             logger: logger
         )
+        let updateChatMessageAttachmentsUseCase = UpdateChatMessageAttachmentsUseCase(repository: chatRepository)
         let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository, syncEngine: chatSyncEngine)
         let syncChatUseCase = SyncChatUseCase(syncEngine: chatSyncEngine)
         let chatToolEventInterpreter = ChatToolEventInterpreter(logger: logger)
+        let medicalRecordFormSubmissionService = MedicalRecordFormSubmissionService(workflowAPI: backend.medicalWorkflow)
+        let saveChatMedicalCardUseCase = SaveChatMedicalCardUseCase(
+            submissionService: medicalRecordFormSubmissionService,
+            updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
+            syncChatUseCase: syncChatUseCase,
+            logger: logger
+        )
+        let generateStructuredHealthCardsAsyncUseCase = GenerateStructuredHealthCardsAsyncUseCase(
+            repository: chatRepository,
+            updateAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
+            syncChatUseCase: syncChatUseCase,
+            medicalStructuredExtractor: medicalDocumentStructuredExtractor,
+            logger: logger
+        )
         let sendChatMessageUseCase = SendChatMessageUseCase(
             repository: chatRepository,
             orchestrator: chatOrchestrator,
             syncEngine: chatSyncEngine,
             buildMemberContextSummaryUseCase: buildMemberContextSummaryUseCase,
+            generateStructuredHealthCardsAsyncUseCase: generateStructuredHealthCardsAsyncUseCase,
             toolEventInterpreter: chatToolEventInterpreter,
             logger: logger
         )
@@ -493,6 +521,8 @@ final class AppContainer {
 
         self.restoreSessionUseCase = RestoreSessionUseCase(authRepository: authRepository)
         self.signInWithAppleUseCase = SignInWithAppleUseCase(authRepository: authRepository)
+        self.requestPhoneOTPUseCase = RequestPhoneOTPUseCase(authRepository: authRepository)
+        self.signInWithPhoneOTPUseCase = SignInWithPhoneOTPUseCase(authRepository: authRepository)
         self.signOutUseCase = SignOutUseCase(authRepository: authRepository)
         self.loadHomeMedicalOverviewUseCase = LoadHomeMedicalOverviewUseCase(
             userProfileRepository: profileRepository,
@@ -586,6 +616,8 @@ final class AppContainer {
             sendMessageUseCase: sendChatMessageUseCase,
             retryFailedMessageUseCase: retryFailedMessageUseCase,
             syncChatUseCase: syncChatUseCase,
+            updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
+            saveChatMedicalCardUseCase: saveChatMedicalCardUseCase,
             notificationClient: notificationClient,
             aiConfigCenter: aiConfigCenter,
             aiSettingsRepository: aiSettingsRepository,
@@ -637,6 +669,8 @@ final class AppContainer {
     func makeLoginViewModel() -> LoginViewModel {
         LoginViewModel(
             signInWithAppleUseCase: signInWithAppleUseCase,
+            requestPhoneOTPUseCase: requestPhoneOTPUseCase,
+            signInWithPhoneOTPUseCase: signInWithPhoneOTPUseCase,
             sessionStore: sessionStore
         )
     }
@@ -699,6 +733,26 @@ final class AppContainer {
         cachedSettingsViewModel = nil
     }
 
+    /// 登录态切换（含恢复会话）后调用：按用户会话重置内存缓存。
+    func activateUserScopedLocalStore(accountID: Int64) {
+        chatStateStore.resetForSessionSwitch()
+        chatListViewModel.resetForSessionSwitch()
+        knowledgeViewModel.resetForSessionSwitch()
+        memberContextStore.activateAccountAndReset(accountID)
+        routeStore.resetForNewSession()
+        resetSessionScopedViewModels()
+    }
+
+    /// 回到未登录态时调用：重置会话相关内存状态。
+    func activateGuestLocalStore() {
+        chatStateStore.resetForSessionSwitch()
+        chatListViewModel.resetForSessionSwitch()
+        knowledgeViewModel.resetForSessionSwitch()
+        memberContextStore.resetInMemoryContext()
+        routeStore.resetForNewSession()
+        resetSessionScopedViewModels()
+    }
+
     /// AI 设置：本地偏好读写 + 可选远程模型列表（`backend.aiConfig`）。
     func makeAISettingsViewModel() -> AISettingsViewModel {
         AISettingsViewModel(
@@ -758,8 +812,7 @@ final class AppContainer {
             logger.warning("强制登出执行失败，继续回收本地会话状态：\(error.localizedDescription)", module: .auth)
         }
         memberContextStore.clearSessionPersistenceAndReset()
-        routeStore.resetForNewSession()
-        resetSessionScopedViewModels()
+        activateGuestLocalStore()
         sessionStore.setSignedOut()
     }
 }

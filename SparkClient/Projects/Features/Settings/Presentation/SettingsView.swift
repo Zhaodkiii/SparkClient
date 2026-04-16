@@ -9,10 +9,13 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section(L10n.text("settings.section.session")) {
-                settingsRow(title: L10n.text("settings.email"), value: session.email)
+                settingsRow(
+                    title: session.signInMethod == .phone ? "手机号" : L10n.text("settings.email"),
+                    value: session.email
+                )
                 settingsRow(
                     title: L10n.text("settings.sign_in_method"),
-                    value: L10n.text("settings.sign_in_method.apple")
+                    value: session.signInMethod == .phone ? "手机号验证码" : L10n.text("settings.sign_in_method.apple")
                 )
                 settingsRow(title: L10n.text("settings.sign_in_time"), value: session.signedInAt.formatted(date: .abbreviated, time: .shortened))
             }

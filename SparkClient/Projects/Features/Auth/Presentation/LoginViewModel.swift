@@ -11,14 +11,20 @@ final class LoginViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let signInWithAppleUseCase: SignInWithAppleUseCase
+    private let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
+    private let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     private let sessionStore: AppSessionStore
     private var currentNonce: String?
 
     init(
         signInWithAppleUseCase: SignInWithAppleUseCase,
+        requestPhoneOTPUseCase: RequestPhoneOTPUseCase,
+        signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase,
         sessionStore: AppSessionStore
     ) {
         self.signInWithAppleUseCase = signInWithAppleUseCase
+        self.requestPhoneOTPUseCase = requestPhoneOTPUseCase
+        self.signInWithPhoneOTPUseCase = signInWithPhoneOTPUseCase
         self.sessionStore = sessionStore
     }
 
@@ -43,6 +49,33 @@ final class LoginViewModel: ObservableObject {
             let session = try await signInWithAppleUseCase.execute(payload: payload)
             sessionStore.setAuthenticated(session)
             errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func sendOTP(phoneNumber: String) async -> PhoneOTPRequestContext? {
+        errorMessage = nil
+        do {
+            return try await requestPhoneOTPUseCase.execute(phoneNumber: phoneNumber)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func phoneLogin(phoneNumber: String, verificationCode: String, otpId: String) async {
+        isLoading = true
+        defer { isLoading = false }
+        errorMessage = nil
+
+        do {
+            let session = try await signInWithPhoneOTPUseCase.execute(
+                phoneNumber: phoneNumber,
+                verificationCode: verificationCode,
+                otpID: otpId
+            )
+            sessionStore.setAuthenticated(session)
         } catch {
             errorMessage = error.localizedDescription
         }

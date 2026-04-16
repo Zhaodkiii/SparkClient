@@ -12,7 +12,7 @@ final class AppBootstrapper {
     private let registerDevice: () async -> Void
 
     private var didBootstrapLaunch = false
-    private var bootstrappedProfiles: Set<UUID> = []
+    private var bootstrappedAccounts: Set<Int64> = []
 
     init(
         aiConfigCenter: AIConfigCenter,
@@ -52,8 +52,8 @@ final class AppBootstrapper {
     }
 
     func bootstrapIfNeeded(for session: UserSession) async {
-        guard bootstrappedProfiles.contains(session.profileID) == false else { return }
-        bootstrappedProfiles.insert(session.profileID)
+        guard bootstrappedAccounts.contains(session.accountID) == false else { return }
+        bootstrappedAccounts.insert(session.accountID)
         routeStore.resetForNewSession()
 
         do {
@@ -64,7 +64,7 @@ final class AppBootstrapper {
             for scenario in AIScenario.allCases {
                 _ = try await aiConfigCenter.resolve(for: scenario)
             }
-            logger.info("用户档案 \(session.profileID) 引导已完成", module: .general)
+            logger.info("用户档案 \(session.accountID) 引导已完成", module: .general)
         } catch {
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
@@ -73,7 +73,7 @@ final class AppBootstrapper {
 
     func reset() async {
         didBootstrapLaunch = false
-        bootstrappedProfiles.removeAll()
+        bootstrappedAccounts.removeAll()
         routeStore.resetForNewSession()
         ossConfigurationStore.clear()
         await syncChatUseCase?.stopRealtime()

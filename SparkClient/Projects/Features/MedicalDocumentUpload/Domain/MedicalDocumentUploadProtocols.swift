@@ -15,6 +15,22 @@ protocol MedicalDocumentTypeResolving: Sendable {
     ) async throws -> MedicalDocumentTypeResolution
 }
 
+protocol MedicalDocumentOCRBuilding: Sendable {
+    func buildMergedOCRText(files: [MedicalUploadLocalFile]) async throws -> String
+}
+
+protocol MedicalDocumentStructuredExtracting: Sendable {
+    func extract(
+        kind: MedicalDocumentKind,
+        mergedOCRText: String
+    ) async throws -> MedicalDocumentStructuredExtractionOutput
+}
+
+struct MedicalDocumentStructuredExtractionOutput: Sendable {
+    let typedResult: MedicalDocumentTypedResult
+    let extractedJSON: String
+}
+
 protocol TypedMedicalDocumentExtracting: Sendable {
     func extract(
         memberID: Int,

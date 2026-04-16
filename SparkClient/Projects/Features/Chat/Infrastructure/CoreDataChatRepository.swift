@@ -74,6 +74,18 @@ actor CoreDataChatRepository: ChatRepository {
         await store.updateMessageDeliveryState(clientMessageID: clientMessageID, state: state)
     }
 
+    func updateMessageAttachments(
+        clientMessageID: UUID,
+        attachments: [ChatAttachment],
+        markPendingForSync: Bool
+    ) async {
+        await store.updateMessageAttachments(
+            clientMessageID: clientMessageID,
+            attachments: attachments,
+            markPendingForSync: markPendingForSync
+        )
+    }
+
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID) async {
         await store.upsertRemoteMessages(messages, in: threadID)
     }

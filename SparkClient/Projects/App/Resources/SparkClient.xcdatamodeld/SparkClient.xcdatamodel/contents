@@ -2,6 +2,7 @@
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
     <entity name="ExaminationReportEntity" representedClassName="ExaminationReportEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="memberID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="medicalRecordID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="category" optional="NO" attributeType="String" defaultValueString=""/>
@@ -22,6 +23,7 @@
     </entity>
     <entity name="ChatThreadEntity" representedClassName="ChatThreadEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="memberID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES" renamingIdentifier="patientID"/>
         <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="scenario" optional="NO" attributeType="String" defaultValueString="chat"/>
@@ -34,6 +36,7 @@
     </entity>
     <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="threadID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="role" optional="NO" attributeType="String" defaultValueString="user"/>
         <attribute name="kind" optional="NO" attributeType="String" defaultValueString="text"/>
@@ -51,12 +54,14 @@
         <attribute name="isTombstone" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
     </entity>
     <entity name="ChatSyncCursorEntity" representedClassName="ChatSyncCursorEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="key" optional="NO" attributeType="String"/>
         <attribute name="value" optional="NO" attributeType="String"/>
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="KnowledgeDocumentEntity" representedClassName="KnowledgeDocumentEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="title" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>
         <attribute name="excerpt" optional="NO" attributeType="String" defaultValueString=""/>
@@ -71,6 +76,7 @@
     </entity>
     <entity name="KnowledgeChunkEntity" representedClassName="KnowledgeChunkEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="documentID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="sequence" optional="NO" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="content" optional="NO" attributeType="String" defaultValueString=""/>

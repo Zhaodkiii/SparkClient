@@ -23,6 +23,7 @@ final class HomeViewModel: ObservableObject {
     private let logger: Logger
 
     private let logModule = LogModule.home
+    private var isInitialLoadInFlight = false
 
     init(
         sessionStore: AppSessionStore,
@@ -42,6 +43,16 @@ final class HomeViewModel: ObservableObject {
 
     // MARK: - Loading
 
+    /// 首屏加载防重入：用于 Coordinator 预加载与页面 `task` 并发场景。
+    func loadInitialIfNeeded(syncRemote: Bool = true) async {
+        guard dashboard == nil else { return }
+        guard isInitialLoadInFlight == false else { return }
+
+        isInitialLoadInFlight = true
+        defer { isInitialLoadInFlight = false }
+        await load(syncRemote: syncRemote)
+    }
+
     func load(syncRemote: Bool = true) async {
         guard case .signedIn(let session) = sessionStore.state else { return }
 
@@ -58,7 +69,7 @@ final class HomeViewModel: ObservableObject {
         let medicalResult: HomeMedicalLoadResult
         do {
             medicalResult = try await loadHomeMedicalOverviewUseCase.execute(
-                profileID: session.profileID,
+                accountID: session.accountID,
                 selectedMemberID: selectedMemberID,
                 refreshRemoteSnapshot: syncRemote
             )
