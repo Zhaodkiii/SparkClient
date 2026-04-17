@@ -5,17 +5,21 @@ struct ChatAttachment: Codable, Equatable, Sendable {
     let type: String
     let url: URL?
     let text: String?
+    /// 消息上送 piggyback：仅图片 attachment 使用，用于同步线程图片送达方式。
+    let imageDeliveryModeRaw: String?
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         type: String,
         url: URL? = nil,
-        text: String? = nil
+        text: String? = nil,
+        imageDeliveryModeRaw: String? = nil
     ) {
         self.id = id
         self.type = type
         self.url = url
         self.text = text
+        self.imageDeliveryModeRaw = imageDeliveryModeRaw
     }
 }
 
@@ -29,10 +33,6 @@ enum ChatStreamFieldKey {
     static let routeInfo = "route_info"
     static let healthInfo = "health_info"
     static let healthSleepVisualization = "health_sleep_viz"
-    static let medicationCards = "medication_cards"
-    static let prescriptionCards = "prescription_cards"
-    static let examReportCards = "exam_report_cards"
-    static let medicalCaseCards = "medical_case_cards"
     static let htmlContent = "htmlContent"
     static let operationalState = "operationalState"
     static let operationalDescription = "operationalDescription"

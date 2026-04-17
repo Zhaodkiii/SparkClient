@@ -25,6 +25,10 @@ final class ChatStateStore: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     @Published private var composerDrafts: [UUID: ChatComposerDraft] = [:]
+    /// 待发图片上传进度（发送过程中由 `SendChatMessageUseCase` 回写）。
+    @Published private(set) var composerAttachmentUploadProgress: [UUID: Double] = [:]
+    /// 选图后即上传/OCR 的附件状态（按附件 id 记录）。
+    @Published private(set) var composerPreparedAttachmentStates: [UUID: ChatComposerPreparedAttachmentState] = [:]
     @Published private var streamingAssistants: [UUID: StreamingAssistant] = [:]
     @Published private var messagePagingByThread: [UUID: MessagePaging] = [:]
     /// Bumps on each streaming text/reasoning update so views can scroll even when message count is unchanged.
@@ -165,6 +169,9 @@ final class ChatStateStore: ObservableObject {
     }
 
     func clearDraft(for threadID: UUID?) {
+        let attachmentIDsToClear: [UUID]? = threadID.flatMap { id in
+            composerDrafts[id]?.attachments.map(\.id)
+        }
         updateComposerDraft(for: threadID) { draft in
             draft.text = ""
             draft.attachments = []
@@ -173,6 +180,53 @@ final class ChatStateStore: ObservableObject {
             draft.isShowingCamera = false
             draft.previewSelection = nil
         }
+        if let attachmentIDsToClear {
+            for aid in attachmentIDsToClear {
+                composerAttachmentUploadProgress.removeValue(forKey: aid)
+                composerPreparedAttachmentStates.removeValue(forKey: aid)
+            }
+        } else {
+            composerAttachmentUploadProgress = [:]
+            composerPreparedAttachmentStates = [:]
+        }
+    }
+
+    func setComposerAttachmentUploadProgress(id: UUID, progress: Double) {
+        composerAttachmentUploadProgress[id] = progress
+    }
+
+    func clearComposerAttachmentUploadProgress() {
+        composerAttachmentUploadProgress = [:]
+    }
+
+    func setComposerPreparedAttachmentState(id: UUID, _ state: ChatComposerPreparedAttachmentState) {
+        composerPreparedAttachmentStates[id] = state
+    }
+
+    func composerPreparedAttachmentState(id: UUID) -> ChatComposerPreparedAttachmentState? {
+        composerPreparedAttachmentStates[id]
+    }
+
+    func removeComposerPreparedAttachmentState(id: UUID) {
+        composerPreparedAttachmentStates.removeValue(forKey: id)
+    }
+
+    func preparedImageAttachments(for threadID: UUID?) -> [ChatPreparedImageAttachment] {
+        let draft = composerDraft(for: threadID)
+        return draft.attachments.compactMap { attachment in
+            composerPreparedAttachmentStates[attachment.id]?.prepared
+        }
+    }
+
+    func hasBlockingPreparedAttachmentWork(for threadID: UUID?) -> Bool {
+        let draft = composerDraft(for: threadID)
+        guard draft.attachments.isEmpty == false else { return false }
+        for attachment in draft.attachments {
+            guard let state = composerPreparedAttachmentStates[attachment.id] else { continue }
+            if state.phase == .success { continue }
+            return true
+        }
+        return false
     }
 
     func clearComposer(for threadID: UUID?) {
@@ -219,6 +273,10 @@ final class ChatStateStore: ObservableObject {
             draft.attachments.append(contentsOf: attachments)
             draft.previewSelection = attachments.last?.id
         }
+        for item in attachments {
+            composerPreparedAttachmentStates[item.id] = .pending
+            composerAttachmentUploadProgress[item.id] = 0
+        }
     }
 
     func removeComposerAttachment(id: UUID, for threadID: UUID?) {
@@ -228,6 +286,8 @@ final class ChatStateStore: ObservableObject {
                 draft.previewSelection = draft.attachments.last?.id
             }
         }
+        composerAttachmentUploadProgress.removeValue(forKey: id)
+        composerPreparedAttachmentStates.removeValue(forKey: id)
     }
 
     func setPreviewSelection(_ attachmentID: UUID?, for threadID: UUID?) {
@@ -257,6 +317,8 @@ final class ChatStateStore: ObservableObject {
         isSending = false
         errorMessage = nil
         composerDrafts = [:]
+        composerAttachmentUploadProgress = [:]
+        composerPreparedAttachmentStates = [:]
         streamingAssistants = [:]
         messagePagingByThread = [:]
         streamingContentGeneration &+= 1

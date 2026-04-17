@@ -72,6 +72,12 @@ struct ChatView: View {
                         onSend: {
                             KeyboardDismissHelper.dismissKeyboard()
                             Task { await detailViewModel.sendCurrentDraft() }
+                        },
+                        onAttachmentsPicked: { attachments in
+                            detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
+                        },
+                        onRemoveAttachment: { attachmentID in
+                            detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
                         }
                     )
                 }
@@ -96,6 +102,27 @@ struct ChatView: View {
                         }
                     } label: {
                         Label(L10n.text("chat.composer.style.title"), systemImage: "rectangle.split.2x1")
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button {
+                            Task {
+                                await detailViewModel.setThreadImageDeliveryMode(.directMultimodal, for: threadID)
+                            }
+                        } label: {
+                            Label(L10n.text("chat.image_delivery.direct"), systemImage: "photo.on.rectangle")
+                        }
+                        .disabled(detailViewModel.currentModelSupportsMultimodal == false)
+                        Button {
+                            Task {
+                                await detailViewModel.setThreadImageDeliveryMode(.localOCR, for: threadID)
+                            }
+                        } label: {
+                            Label(L10n.text("chat.image_delivery.ocr_only"), systemImage: "text.viewfinder")
+                        }
+                    } label: {
+                        Label(L10n.text("chat.image_delivery.menu"), systemImage: "photo.on.rectangle.angled")
                     }
                 }
             }
@@ -139,6 +166,7 @@ struct ChatView: View {
         statePersistenceLayout
             .task(id: threadID) {
                 await detailViewModel.refreshChatModelPicker()
+                await detailViewModel.refreshThreadImageDeliveryMode(for: threadID)
             }
             .task(id: reasoningRefreshId) {
                 await detailViewModel.refreshReasoningToolbarContext(for: threadID)
@@ -281,7 +309,6 @@ struct ChatView: View {
                 createdTaskCardIDs: uiStateStore.createdTaskCardIDs,
                 savingKnowledgeCardIDs: uiStateStore.savingKnowledgeCardIDs,
                 savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
-                savingMedicalCardIDs: uiStateStore.savingMedicalCardIDs,
                 showActions: message.id == visibleMessages.last?.id,
                 onRetry: {
                     Task {
@@ -318,17 +345,29 @@ struct ChatView: View {
                 onIgnoreTaskCard: { card in
                     ignoreTaskCard(card)
                 },
+                savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
                 onSaveMedicationCard: { card in
-                    saveMedicationCard(card, from: message)
+                    Task {
+                        await detailViewModel.saveMedicationStructuredCard(threadID: threadID, message: message, card: card)
+                    }
                 },
                 onSavePrescriptionCard: { card in
-                    savePrescriptionCard(card, from: message)
+                    Task {
+                        await detailViewModel.savePrescriptionStructuredCard(threadID: threadID, message: message, card: card)
+                    }
                 },
                 onSaveExamReportCard: { card in
-                    saveExamReportCard(card, from: message)
+                    Task {
+                        await detailViewModel.saveExamReportStructuredCard(threadID: threadID, message: message, card: card)
+                    }
                 },
                 onSaveMedicalCaseCard: { card in
-                    saveMedicalCaseCard(card, from: message)
+                    Task {
+                        await detailViewModel.saveMedicalCaseStructuredCard(threadID: threadID, message: message, card: card)
+                    }
+                },
+                onDownloadImageToLocalFile: { meta in
+                    try await detailViewModel.downloadChatImageToLocalFile(meta: meta)
                 }
             )
         )
@@ -578,62 +617,6 @@ struct ChatView: View {
         }
     }
 
-    private func saveMedicationCard(_ card: ChatMedicationCardPayload, from message: ChatMessage) {
-        guard card.isSaved == false else { return }
-        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
-        Task {
-            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
-            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
-            do {
-                try await messageActionUseCase.saveMedicationCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
-            } catch {
-                logger.error("用药卡保存失败：\(error.localizedDescription)", module: .general)
-            }
-        }
-    }
-
-    private func savePrescriptionCard(_ card: ChatPrescriptionCardPayload, from message: ChatMessage) {
-        guard card.isSaved == false else { return }
-        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
-        Task {
-            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
-            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
-            do {
-                try await messageActionUseCase.savePrescriptionCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
-            } catch {
-                logger.error("处方卡保存失败：\(error.localizedDescription)", module: .general)
-            }
-        }
-    }
-
-    private func saveExamReportCard(_ card: ChatExamReportCardPayload, from message: ChatMessage) {
-        guard card.isSaved == false else { return }
-        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
-        Task {
-            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
-            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
-            do {
-                try await messageActionUseCase.saveExamReportCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
-            } catch {
-                logger.error("检查报告卡保存失败：\(error.localizedDescription)", module: .general)
-            }
-        }
-    }
-
-    private func saveMedicalCaseCard(_ card: ChatMedicalCaseCardPayload, from message: ChatMessage) {
-        guard card.isSaved == false else { return }
-        guard uiStateStore.isMedicalCardSaving(card.id) == false else { return }
-        Task {
-            await MainActor.run { uiStateStore.setMedicalCardSaving(true, for: card.id) }
-            defer { Task { await MainActor.run { uiStateStore.setMedicalCardSaving(false, for: card.id) } } }
-            do {
-                try await messageActionUseCase.saveMedicalCaseCard(card, message: message, threadID: threadID, detailViewModel: detailViewModel)
-            } catch {
-                logger.error("病例卡保存失败：\(error.localizedDescription)", module: .general)
-            }
-        }
-    }
-
     private func translatedText(for message: ChatMessage, metadata: ChatMessageMetadata? = nil) -> String? {
         if let local = uiStateStore.translatedText(for: message.id), local.isEmpty == false {
             return local
@@ -671,9 +654,9 @@ struct ChatView: View {
             let raw = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard raw.isEmpty == false else { continue }
             if let image = decodeImage(from: raw) {
-                payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: image))
+                payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: image, downloadableMeta: nil))
             } else if let url = URL(string: raw) {
-                payloads.append(ChatImagePayload(id: attachment.id, url: url, image: nil))
+                payloads.append(ChatImagePayload(id: attachment.id, url: url, image: nil, downloadableMeta: nil))
             }
         }
         return payloads

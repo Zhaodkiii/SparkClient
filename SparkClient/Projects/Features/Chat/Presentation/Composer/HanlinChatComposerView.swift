@@ -8,6 +8,8 @@ struct HanlinChatComposerView: View {
     @ObservedObject var stateStore: ChatStateStore
     let modelRows: [ChatComposerModelOption]
     let onSend: () -> Void
+    let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
+    let onRemoveAttachment: (UUID) -> Void
 
     @State private var showFileImporter = false
 
@@ -26,7 +28,9 @@ struct HanlinChatComposerView: View {
                     modelReasoning: modelReasoning,
                     stateStore: stateStore,
                     onSend: onSend,
-                    onRequestFileImport: { showFileImporter = true }
+                    onRequestFileImport: { showFileImporter = true },
+                    onAttachmentsPicked: onAttachmentsPicked,
+                    onRemoveAttachment: onRemoveAttachment
                 )
 
                 ChatComposerModelPickerRow(
@@ -74,7 +78,7 @@ struct HanlinChatComposerView: View {
             )
         }
         await MainActor.run {
-            stateStore.appendComposerAttachments(previews, for: threadID)
+            onAttachmentsPicked(previews)
         }
     }
 }

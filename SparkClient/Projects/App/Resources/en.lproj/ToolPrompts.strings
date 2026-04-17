@@ -9,7 +9,7 @@
 "tool.summary.make_nutrition_data" = "Purpose: Generate nutrition cards from dietary info; values must be non‑negative (g/kcal). Trigger: recording or analyzing a meal. Can pair with fetch_nutrition_details.";
 "tool.summary.fetch_sleep_details" = "Purpose: Retrieve sleep by session and daily summary (core/deep/REM/unspecified). Trigger: sleep quality review. Input start_date/end_date ≤ today, yyyy‑MM‑dd. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.fetch_workout_details" = "Purpose: retrieve workout records. Input: start_date, end_date; optional types filter; max_items limit. Pair with: fetch_step_details, fetch_energy_details.";
-"tool.summary.generate_structured_health_card" = "Purpose: Saveable structured health cards (async extraction). Pass report_type; raw_text must be distilled excerpt (not full OCR). Optional oss_file_id.";
+"tool.summary.generate_structured_health_card" = "Purpose: Saveable structured health cards (async AI extraction). Pass report_type; raw_text must be distilled excerpt (not full OCR). Optional oss_file_id.";
 "tool.summary.query_tasks_by_member" = "Purpose: query member-level existing tasks (main + subtype status) for dedup analysis before task generation. member_id is optional and defaults to current home member. Rule: call this before generate_task. Output should be structured JSON.";
 "tool.summary.generate_task" = "Purpose: generate pending task-card JSON from user input, including async extraction and similarity checks. member_id is optional and defaults to current home member. Rule: query_tasks_by_member must run first. If similar tasks exist, return no-create JSON; otherwise return task_cards JSON.";
 "tool.summary.search_knowledge_bag" = "Purpose: search user's private Knowledge Bag and return digest. Trigger: personal notes/docs. Input 'query' precisely describes topic. Use before search_online. Pair with: retrieve_memory.";
@@ -113,4 +113,8 @@
 "tool.ui.rich.location.default_name" = "Location";
 "tool.ui.rich.event.default_title" = "Event";
 "tool.ui.rich.health.default_title" = "Health Card";
-"tool.hint.generate_structured_health_card_async" = "[System] Structured save cards are generating in the background. Continue interpreting from the user message without waiting; cards appear below this reply. If you call generate_structured_health_card again: raw_text must be your distilled medical points, optional oss_file_id matches oss_file_id in the message—do not pass full OCR to the tool.";
+
+"tool.async.structured_health_card.model_hint" = "[System] Structured save cards are generating in the background. Continue interpreting from the user message without waiting; cards appear below this reply. If you call generate_structured_health_card again: raw_text must be your distilled medical points; optional oss_file_id matches the message—do not pass full OCR to the tool.";
+"tool.error.structured_health_card.no_member" = "No member selected; cannot generate structured health cards.";
+"tool.error.structured_health_card.empty_raw_text" = "Missing raw_text (distilled excerpt).";
+"tool.error.structured_health_card.no_message_binding" = "[System] Internal error: assistant message not bound.";

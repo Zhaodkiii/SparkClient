@@ -82,12 +82,13 @@ actor CoreDataChatStore {
         }) ?? []
     }
 
-    func createThread(memberID: Int?, title: String) async -> ChatThread {
+    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String? = nil) async -> ChatThread {
         guard let accountID = await activeAccountID() else {
             return ChatThread(
                 memberID: memberID,
                 title: title,
                 scenario: .chat,
+                imageDeliveryModeRaw: imageDeliveryModeRaw,
                 isDeleted: false,
                 deletedAt: nil,
                 createdAt: Date(),
@@ -100,6 +101,7 @@ actor CoreDataChatStore {
             memberID: memberID,
             title: title,
             scenario: .chat,
+            imageDeliveryModeRaw: imageDeliveryModeRaw,
             isDeleted: false,
             deletedAt: nil,
             createdAt: now,
@@ -128,10 +130,22 @@ actor CoreDataChatStore {
             object.setValue(thread.createdAt, forKey: "createdAt")
             object.setValue(thread.updatedAt, forKey: "updatedAt")
             object.setValue(thread.serverUpdatedAt, forKey: "serverUpdatedAt")
+            object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
             object.setValue(true, forKey: "isActive")
         }
 
         return thread
+    }
+
+    func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async {
+        guard let accountID = await activeAccountID() else { return }
+        _ = try? await coreDataStack.performBackgroundTask { context in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
     }
 
     func setActiveThread(id: UUID) async {
@@ -362,6 +376,7 @@ actor CoreDataChatStore {
                 object.setValue(thread.createdAt, forKey: "createdAt")
                 object.setValue(thread.updatedAt, forKey: "updatedAt")
                 object.setValue(thread.serverUpdatedAt, forKey: "serverUpdatedAt")
+                object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
 
                 if thread.isDeleted {
                     object.setValue(false, forKey: "isActive")
@@ -608,6 +623,7 @@ actor CoreDataChatStore {
             memberID: (object.value(forKey: "memberID") as? Int64).map(Int.init),
             title: title,
             scenario: scenario,
+            imageDeliveryModeRaw: object.value(forKey: "imageDeliveryModeRaw") as? String,
             isDeleted: object.value(forKey: "isSoftDeleted") as? Bool ?? false,
             deletedAt: object.value(forKey: "deletedAt") as? Date,
             createdAt: createdAt,

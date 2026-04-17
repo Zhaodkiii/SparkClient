@@ -19,8 +19,8 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadThreads()
     }
 
-    func createThread(memberID: Int?, title: String) async -> ChatThread {
-        await store.createThread(memberID: memberID, title: title)
+    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread {
+        await store.createThread(memberID: memberID, title: title, imageDeliveryModeRaw: imageDeliveryModeRaw)
     }
 
     func setActiveThread(id: UUID) async {
@@ -92,6 +92,10 @@ actor CoreDataChatRepository: ChatRepository {
 
     func upsertRemoteThreads(_ threads: [ChatThread]) async {
         await store.upsertRemoteThreads(threads)
+    }
+
+    func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async {
+        await store.updateThreadImageDeliveryMode(threadID: threadID, imageDeliveryModeRaw: imageDeliveryModeRaw)
     }
 
     func loadOutboxMessages(limit: Int) async -> [ChatMessage] {

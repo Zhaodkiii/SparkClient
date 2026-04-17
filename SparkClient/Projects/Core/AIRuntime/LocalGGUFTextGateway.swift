@@ -81,18 +81,18 @@ final class LocalGGUFTextGateway: @unchecked Sendable {
         let conversation = messages.filter { $0.role != .system }
         var input = ""
         if let lastUser = conversation.last(where: { $0.role == .user }) {
-            input = lastUser.content ?? ""
+            input = lastUser.normalizedTextContent ?? ""
         } else if let last = conversation.last {
-            input = last.content ?? ""
+            input = last.normalizedTextContent ?? ""
         }
 
         let historyCandidates = conversation.dropLast()
         let history: [Chat] = historyCandidates.compactMap { message in
             switch message.role {
             case .user:
-                return (.user, message.content ?? "")
+                return (.user, message.normalizedTextContent ?? "")
             case .assistant:
-                return (.bot, message.content ?? "")
+                return (.bot, message.normalizedTextContent ?? "")
             case .tool:
                 return nil
             case .system:

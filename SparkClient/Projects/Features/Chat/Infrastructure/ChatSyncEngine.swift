@@ -193,13 +193,33 @@ actor ChatSyncEngine {
         }
 
         do {
-            let payload = pending.map { message in
-                ChatRemoteMessageDTO(
+            var threadModeByID: [UUID: String?] = [:]
+            for threadID in Set(pending.map(\.threadID)) {
+                let mode = await repository.loadThread(id: threadID)?.imageDeliveryModeRaw
+                threadModeByID[threadID] = mode
+            }
+            let payload: [ChatRemoteMessageDTO] = pending.map { message in
+                let attachmentsWithMode: [ChatAttachment] = {
+                    let attachments = message.attachments
+                    guard attachments.isEmpty == false else { return attachments }
+                    let modeRaw = threadModeByID[message.threadID] ?? nil
+                    return attachments.map { attachment in
+                        guard attachment.type == "image_url" else { return attachment }
+                        return ChatAttachment(
+                            id: attachment.id,
+                            type: attachment.type,
+                            url: attachment.url,
+                            text: attachment.text,
+                            imageDeliveryModeRaw: modeRaw
+                        )
+                    }
+                }()
+                return ChatRemoteMessageDTO(
                     threadID: message.threadID,
                     role: message.role.rawValue,
                     kind: message.kind.rawValue,
                     content: message.content,
-                    attachments: message.attachments,
+                    attachments: attachmentsWithMode,
                     clientMessageID: message.clientMessageID,
                     serverMessageID: message.serverMessageID,
                     deliveryState: message.deliveryState.rawValue,
@@ -391,6 +411,7 @@ actor ChatSyncEngine {
             memberID: nil,
             title: remote.title,
             scenario: scenario,
+            imageDeliveryModeRaw: remote.imageDeliveryModeRaw,
             isDeleted: remote.isDeleted,
             deletedAt: remote.deletedAt,
             createdAt: remote.updatedAt,

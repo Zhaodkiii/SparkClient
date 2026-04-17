@@ -6,7 +6,9 @@ struct SendChatMessageUseCase: Sendable {
     let syncEngine: ChatSyncEngine
     let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
     let toolEventInterpreter: ChatToolEventInterpreter
-    let generateStructuredHealthCardsAsyncUseCase: GenerateStructuredHealthCardsAsyncUseCase
+    let fileTransferService: FileTransferService
+    let ocrOrchestrator: OCROrchestrator
+    let aiSettingsRepository: any AISettingsRepository
     let logger: Logger
 
     init(
@@ -14,51 +16,118 @@ struct SendChatMessageUseCase: Sendable {
         orchestrator: ChatOrchestrator,
         syncEngine: ChatSyncEngine,
         buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase,
-        generateStructuredHealthCardsAsyncUseCase: GenerateStructuredHealthCardsAsyncUseCase,
         toolEventInterpreter: ChatToolEventInterpreter? = nil,
+        fileTransferService: FileTransferService,
+        ocrOrchestrator: OCROrchestrator,
+        aiSettingsRepository: any AISettingsRepository,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
         self.orchestrator = orchestrator
         self.syncEngine = syncEngine
         self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
-        self.generateStructuredHealthCardsAsyncUseCase = generateStructuredHealthCardsAsyncUseCase
         self.logger = logger
         self.toolEventInterpreter = toolEventInterpreter ?? ChatToolEventInterpreter(logger: logger)
+        self.fileTransferService = fileTransferService
+        self.ocrOrchestrator = ocrOrchestrator
+        self.aiSettingsRepository = aiSettingsRepository
     }
 
     func execute(
         threadID: UUID?,
         memberID: Int? = nil,
         userInput: String,
+        composerAttachments: [ChatComposerAttachmentPreview] = [],
+        preparedImageAttachments: [ChatPreparedImageAttachment] = [],
+        selectedChatModelName: String? = nil,
+        assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
-        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil,
-        onAssistantAttachmentsUpdated: (@Sendable (_ clientMessageID: UUID, _ attachments: [ChatAttachment]) async -> Void)? = nil
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatThreadSnapshot {
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard sanitizedInput.isEmpty == false else {
+        guard sanitizedInput.isEmpty == false || composerAttachments.isEmpty == false else {
             throw ChatFeatureError.emptyInput
         }
 
+        let snapshot = await aiSettingsRepository.loadSnapshot()
         let start = Date()
         logger.info(
-            "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count)",
+            "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count), attachments=\(composerAttachments.count)",
             module: .general
         )
 
         do {
-            // 发送链路：用户消息落库 -> AI 编排 -> 助手消息落库 -> 尝试上送（失败不阻断主流程）。
-            let thread = try await resolveThread(existingThreadID: threadID, memberID: memberID, firstUserInput: sanitizedInput)
+            let thread = try await resolveThread(
+                existingThreadID: threadID,
+                memberID: memberID,
+                firstUserInput: sanitizedInput,
+                defaultImageDeliveryRaw: snapshot.defaultThreadImageDeliveryModeRaw
+            )
+
+            let (supportsMultimodal, providerCompany) = snapshot.chatMultimodalCapabilities(selectedModelName: selectedChatModelName)
+            let effectiveMode = effectiveChatImageDeliveryMode(
+                threadMode: thread.imageDeliveryMode,
+                supportsMultimodal: supportsMultimodal
+            )
+            let deliverMultimodal = effectiveMode == .directMultimodal
+                && supportsMultimodal
+                && composerAttachments.isEmpty == false
+
+            let preparedByID = Dictionary(uniqueKeysWithValues: preparedImageAttachments.map { ($0.previewID, $0) })
+            var chatAttachments: [ChatAttachment] = []
+
+            for preview in composerAttachments {
+                if let prepared = preparedByID[preview.id] {
+                    chatAttachments.append(
+                        ChatSendImageAssembly.makeAttachment(
+                            previewID: preview.id,
+                            record: prepared.record,
+                            ocrText: prepared.ocrText,
+                            imageDeliveryModeRaw: thread.imageDeliveryMode.rawValue
+                        )
+                    )
+                    continue
+                }
+
+                let record = try await fileTransferService.upload(
+                    ManagedFileUploadPayload(
+                        data: preview.imageData,
+                        fileName: preview.displayName,
+                        businessType: ChatSendImageAssembly.chatAttachmentBusinessType,
+                        businessID: preview.id.uuidString,
+                        isPublic: false,
+                        onUploadProgress: { progress in
+                            onImageUploadProgress?(preview.id, progress)
+                        }
+                    )
+                )
+                let ocrResult = try await ocrOrchestrator.recognize(
+                    imageData: preview.imageData,
+                    options: .fastPreview
+                )
+                chatAttachments.append(
+                    ChatSendImageAssembly.makeAttachment(
+                        previewID: preview.id,
+                        record: record,
+                        ocrText: ocrResult.text,
+                        imageDeliveryModeRaw: thread.imageDeliveryMode.rawValue
+                    )
+                )
+            }
+
+            // 落库的 content 始终只保存用户原始输入（不包含 OCR 拼接文本）
+            let persistedContent = sanitizedInput
 
             let clientMessageID = UUID()
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .user,
                 kind: .text,
-                content: sanitizedInput,
-                attachments: [],
+                content: persistedContent,
+                attachments: chatAttachments,
                 reasoningContent: nil,
                 reasoningDurationMs: nil,
                 reasoningExpanded: false,
@@ -86,17 +155,23 @@ struct SendChatMessageUseCase: Sendable {
                 memberContextSummary = ""
             }
             logger.debug(
-                "准备 AI 编排，thread=\(shortID(thread.id)), history=\(history.count), memberContextLength=\(memberContextSummary.count)",
+                "准备 AI 编排，thread=\(shortID(thread.id)), history=\(history.count), memberContextLength=\(memberContextSummary.count), multimodal=\(deliverMultimodal)",
                 module: .general
             )
 
+            let textForTools = sanitizedInput
+
             let output = try await orchestrator.generateReply(
-                userInput: sanitizedInput,
+                userInput: textForTools,
                 history: history,
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
+                threadID: thread.id,
+                assistantMessageClientID: assistantClientMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                deliverMultimodalImages: deliverMultimodal,
+                providerCompanyUppercased: providerCompany,
                 onPartial: onAssistantPartial
             )
             logger.info(
@@ -112,7 +187,6 @@ struct SendChatMessageUseCase: Sendable {
                 toolContent: output.toolContent
             )
             if interpreted.knowledgeCardAttachmentCount > 0 {
-                // 这里生成的是“预览卡片附件”，不是最终知识库落库动作。
                 logger.debug(
                     "已生成知识卡预览附件，thread=\(shortID(thread.id)), count=\(interpreted.knowledgeCardAttachmentCount)",
                     module: .general
@@ -124,7 +198,6 @@ struct SendChatMessageUseCase: Sendable {
                     module: .general
                 )
             }
-            let assistantClientMessageID = UUID()
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .assistant,
@@ -139,21 +212,10 @@ struct SendChatMessageUseCase: Sendable {
                 serverMessageID: nil,
                 deliveryState: .pending
             )
-            generateStructuredHealthCardsAsyncUseCase.kickoffIfNeeded(
-                threadID: thread.id,
-                assistantClientMessageID: assistantClientMessageID,
-                toolName: output.toolName,
-                toolContent: output.toolContent,
-                onAttachmentsUpdated: { attachments in
-                    guard let onAssistantAttachmentsUpdated else { return }
-                    await onAssistantAttachmentsUpdated(assistantClientMessageID, attachments)
-                }
-            )
 
             do {
                 try await syncEngine.pushOutboxOnly()
             } catch {
-                // 本地消息已经持久化，后台可重试，主流程不阻断。
                 logger.warning("消息上送失败，将由后台重试：\(error.localizedDescription)", module: .general)
             }
 
@@ -177,7 +239,8 @@ struct SendChatMessageUseCase: Sendable {
     private func resolveThread(
         existingThreadID: UUID?,
         memberID: Int?,
-        firstUserInput: String
+        firstUserInput: String,
+        defaultImageDeliveryRaw: String
     ) async throws -> ChatThread {
         let promptLocalizer = PromptLocalizer()
         if let existingThreadID {
@@ -193,7 +256,8 @@ struct SendChatMessageUseCase: Sendable {
                 let title = String(firstUserInput.prefix(18))
                 let created = await repository.createThread(
                     memberID: memberID,
-                    title: title.isEmpty ? promptLocalizer.newThreadTitle() : title
+                    title: title.isEmpty ? promptLocalizer.newThreadTitle() : title,
+                    imageDeliveryModeRaw: defaultImageDeliveryRaw
                 )
                 await repository.setActiveThread(id: created.id)
                 return created
@@ -204,7 +268,8 @@ struct SendChatMessageUseCase: Sendable {
         let title = String(firstUserInput.prefix(18))
         let created = await repository.createThread(
             memberID: memberID,
-            title: title.isEmpty ? promptLocalizer.newThreadTitle() : title
+            title: title.isEmpty ? promptLocalizer.newThreadTitle() : title,
+            imageDeliveryModeRaw: defaultImageDeliveryRaw
         )
         await repository.setActiveThread(id: created.id)
         return created

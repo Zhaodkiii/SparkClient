@@ -10,6 +10,7 @@ struct ChatComposerView: View {
 
     @State private var inputHeight: CGFloat = 24
     @State private var showFilePlaceholderAlert = false
+    @State private var unifiedFilePreview: FilePreviewInput?
 
     private var composerDraft: ChatComposerDraft {
         stateStore.composerDraft(for: threadID)
@@ -22,11 +23,6 @@ struct ChatComposerView: View {
 
     private var canOpenCamera: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
-    }
-
-    private var selectedPreview: ChatComposerAttachmentPreview? {
-        guard let previewSelection = composerDraft.previewSelection else { return nil }
-        return composerDraft.attachments.first(where: { $0.id == previewSelection })
     }
 
     var body: some View {
@@ -101,21 +97,12 @@ struct ChatComposerView: View {
             )
             .ignoresSafeArea()
         }
-        .sheet(isPresented: previewPresentedBinding) {
-            if let selectedPreview {
-                ChatComposerPreviewSheet(
-                    attachment: selectedPreview,
-                    onClose: {
-                        stateStore.setPreviewSelection(nil, for: threadID)
-                    }
-                )
-            }
-        }
         .alert(L10n.text("chat.attachments.files.title"), isPresented: $showFilePlaceholderAlert) {
             Button(L10n.text("common.ok")) {}
         } message: {
             Text(L10n.text("chat.attachments.files.message"))
         }
+        .unifiedFilePreview(selection: $unifiedFilePreview)
     }
 
     private var signalComposerContent: some View {
@@ -213,9 +200,13 @@ struct ChatComposerView: View {
                 ForEach(composerDraft.attachments) { attachment in
                     ChatComposerAttachmentThumbnail(
                         attachment: attachment,
+                        uploadProgress: stateStore.composerAttachmentUploadProgress[attachment.id],
                         isSelected: composerDraft.previewSelection == attachment.id,
                         onTap: {
                             stateStore.setPreviewSelection(attachment.id, for: threadID)
+                            if let input = Self.makeComposerPreviewInput(attachment) {
+                                unifiedFilePreview = input
+                            }
                         },
                         onRemove: {
                             stateStore.removeComposerAttachment(id: attachment.id, for: threadID)
@@ -258,20 +249,26 @@ struct ChatComposerView: View {
         )
     }
 
-    private var previewPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { selectedPreview != nil },
-            set: { isPresented in
-                if isPresented == false {
-                    stateStore.setPreviewSelection(nil, for: threadID)
-                }
-            }
-        )
+    private static func makeComposerPreviewInput(_ attachment: ChatComposerAttachmentPreview) -> FilePreviewInput? {
+        let ext = (attachment.displayName as NSString).pathExtension
+        let suffix = ext.isEmpty ? "jpg" : ext
+        let fileName = attachment.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "chat-attachment.\(suffix)"
+            : attachment.displayName
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chat-composer-\(attachment.id.uuidString).\(suffix)")
+        do {
+            try attachment.imageData.write(to: tmp, options: [.atomic])
+            return FilePreviewInput(fileURL: tmp, displayName: fileName, mimeType: nil)
+        } catch {
+            return nil
+        }
     }
 }
 
 private struct ChatComposerAttachmentThumbnail: View {
     let attachment: ChatComposerAttachmentPreview
+    var uploadProgress: Double?
     let isSelected: Bool
     let onTap: () -> Void
     let onRemove: () -> Void
@@ -286,6 +283,15 @@ private struct ChatComposerAttachmentThumbnail: View {
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                     )
+                    .overlay {
+                        if let p = uploadProgress, p < 1.0 - 0.001 {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color.black.opacity(0.45))
+                            ProgressView(value: p, total: 1.0)
+                                .tint(.white)
+                                .padding(12)
+                        }
+                    }
             }
             .buttonStyle(.plain)
 
@@ -399,42 +405,6 @@ private struct ChatComposerAttachmentSheet: View {
             )
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct ChatComposerPreviewSheet: View {
-    let attachment: ChatComposerAttachmentPreview
-    let onClose: () -> Void
-
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.opacity(0.95)
-                    .ignoresSafeArea()
-
-                if let image = UIImage(data: attachment.imageData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(20)
-                } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 36))
-                        Text(L10n.text("chat.attachments.preview.unavailable"))
-                            .font(.body)
-                    }
-                    .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            .navigationBarTitle(attachment.displayName, displayMode: .inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(L10n.text("common.ok"), action: onClose)
-                }
-            }
-        }
-        .navigationViewStyle(.stack)
     }
 }
 

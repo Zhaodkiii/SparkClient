@@ -5,17 +5,39 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
     let memberID: Int?
     let title: String
     let scenario: AIScenario
+    /// 持久化枚举 `ChatThreadImageDeliveryMode.rawValue`；`nil` 表示旧数据，按产品默认视为直发多模态。
+    let imageDeliveryModeRaw: String?
     let isDeleted: Bool
     let deletedAt: Date?
     let createdAt: Date
     let updatedAt: Date
     let serverUpdatedAt: Date?
 
+    /// 与 ZDK 兼容：缺失时默认 `.directMultimodal`。
+    var imageDeliveryMode: ChatThreadImageDeliveryMode {
+        guard let raw = imageDeliveryModeRaw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              raw.isEmpty == false else {
+            return .directMultimodal
+        }
+        if let mode = ChatThreadImageDeliveryMode(rawValue: raw) {
+            return mode
+        }
+        switch raw {
+        case "direct_multimodal":
+            return .directMultimodal
+        case "local_ocr":
+            return .localOCR
+        default:
+            return .directMultimodal
+        }
+    }
+
     nonisolated init(
         id: UUID = UUID(),
         memberID: Int? = nil,
         title: String,
         scenario: AIScenario = .chat,
+        imageDeliveryModeRaw: String? = nil,
         isDeleted: Bool = false,
         deletedAt: Date? = nil,
         createdAt: Date = Date(),
@@ -26,6 +48,7 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         self.memberID = memberID
         self.title = title
         self.scenario = scenario
+        self.imageDeliveryModeRaw = imageDeliveryModeRaw
         self.isDeleted = isDeleted
         self.deletedAt = deletedAt
         self.createdAt = createdAt

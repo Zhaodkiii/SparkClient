@@ -28,11 +28,58 @@ enum AIRuntimeRole: String, Codable, Sendable {
     case tool        // 工具调用返回角色
 }
 
+// MARK: - 多模态 content parts（OpenAI Chat Completions 兼容）
+/// 单条 `image_url` 载荷（OpenAI Chat Completions 兼容；`detail` 仅部分厂商使用，如 XAI `high`）。
+struct AIRuntimeImageURLPayload: Codable, Equatable, Sendable {
+    let url: String
+    /// 例如 `high`（XAI 多模态）；`nil` 时不编码该字段。
+    let detail: String?
+
+    init(url: String, detail: String? = nil) {
+        self.url = url
+        self.detail = detail
+    }
+}
+
+/// 用户消息多模态片段（`type` + `text` 或 `image_url`）。
+struct AIRuntimeContentPart: Codable, Equatable, Sendable {
+    let type: String
+    let text: String?
+    let imageURL: AIRuntimeImageURLPayload?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case text
+        case imageURL = "image_url"
+    }
+
+    static func textPart(_ text: String) -> AIRuntimeContentPart {
+        AIRuntimeContentPart(type: "text", text: text, imageURL: nil)
+    }
+
+    static func imagePart(url: String) -> AIRuntimeContentPart {
+        AIRuntimeContentPart(type: "image_url", text: nil, imageURL: AIRuntimeImageURLPayload(url: url))
+    }
+
+    /// 与 `OpenAICompatibleTextGateway` 约定：内联 JPEG 的 **base64 原文**（不含 `data:` 前缀），由网关按厂商编码为最终 `image_url.url`。
+    static let sparkInlineJPEGBase64Prefix = "spark:inline-jpeg-base64:"
+
+    static func imageInlineJPEGBase64(_ jpegBase64: String) -> AIRuntimeContentPart {
+        AIRuntimeContentPart(
+            type: "image_url",
+            text: nil,
+            imageURL: AIRuntimeImageURLPayload(url: Self.sparkInlineJPEGBase64Prefix + jpegBase64, detail: nil)
+        )
+    }
+}
+
 // MARK: - AI 对话消息结构体
 /// AI 运行时单条消息体（请求/响应通用）
 struct AIRuntimeMessage: Codable, Equatable, Sendable {
     let role: AIRuntimeRole          // 消息角色
     let content: String?             // 消息文本内容
+    /// 与 `content` 二选一：非 `nil` 时网关编码为 JSON 数组（多模态）。
+    let contentParts: [AIRuntimeContentPart]?
     let toolCalls: [AIRuntimeToolCall]?  // 工具调用列表
     let toolCallID: String?          // 工具调用ID（用于关联响应）
     let name: String?                 // 工具/函数名称
@@ -41,15 +88,29 @@ struct AIRuntimeMessage: Codable, Equatable, Sendable {
     init(
         role: AIRuntimeRole,
         content: String? = nil,
+        contentParts: [AIRuntimeContentPart]? = nil,
         toolCalls: [AIRuntimeToolCall]? = nil,
         toolCallID: String? = nil,
         name: String? = nil
     ) {
         self.role = role
         self.content = content
+        self.contentParts = contentParts
         self.toolCalls = toolCalls
         self.toolCallID = toolCallID
         self.name = name
+    }
+
+    /// 本地 GGUF 等仅文本路径：从纯文本或多模态 parts 中提取可拼接的字符串。
+    var normalizedTextContent: String? {
+        if let contentParts, contentParts.isEmpty == false {
+            let joined = contentParts.compactMap { part -> String? in
+                guard part.type == "text" else { return nil }
+                return part.text
+            }.joined(separator: "\n")
+            return joined.isEmpty ? nil : joined
+        }
+        return content
     }
 }
 

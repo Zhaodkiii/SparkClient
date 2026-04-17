@@ -16,11 +16,9 @@ struct ChatMessageMetadata {
     let events: [ChatEventPayload]
     let healthCards: [ChatHealthCardPayload]
     let sleepVisualization: ChatHealthSleepModel?
-    let medicationCards: [ChatMedicationCardPayload]
-    let prescriptionCards: [ChatPrescriptionCardPayload]
-    let examReportCards: [ChatExamReportCardPayload]
-    let medicalCaseCards: [ChatMedicalCaseCardPayload]
     let taskCards: [TaskCard]
+    /// 对话内结构化医疗卡片（用药/处方/检查/病历），见 ``ChatStreamFieldKey.structuredHealthCards``。
+    let structuredHealthCards: StructuredHealthCardsBlob?
 
     init(message: ChatMessage) {
         toolName = Self.attachmentText(type: ChatStreamFieldKey.toolName, from: message)
@@ -35,11 +33,8 @@ struct ChatMessageMetadata {
         events = Self.decodeArray(type: ChatStreamFieldKey.events, from: message)
         healthCards = Self.decodeArray(type: ChatStreamFieldKey.healthInfo, from: message)
         sleepVisualization = Self.decodeObject(type: ChatStreamFieldKey.healthSleepVisualization, from: message)
-        medicationCards = Self.decodeArray(type: ChatStreamFieldKey.medicationCards, from: message)
-        prescriptionCards = Self.decodeArray(type: ChatStreamFieldKey.prescriptionCards, from: message)
-        examReportCards = Self.decodeArray(type: ChatStreamFieldKey.examReportCards, from: message)
-        medicalCaseCards = Self.decodeArray(type: ChatStreamFieldKey.medicalCaseCards, from: message)
         taskCards = Self.decodeArray(type: ChatStreamFieldKey.taskCards, from: message)
+        structuredHealthCards = Self.decodeObject(type: ChatStreamFieldKey.structuredHealthCards, from: message)
     }
 
     private static func attachmentText(type: String, from message: ChatMessage) -> String? {

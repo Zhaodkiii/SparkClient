@@ -8,30 +8,6 @@ protocol ChatMessageActionUseCase {
     func saveMessageToKnowledge(content: String, detailViewModel: ChatDetailViewModel) async throws
     func saveKnowledgeCard(_ card: ChatKnowledgeCard, detailViewModel: ChatDetailViewModel) async throws
     func createTask(from card: TaskCard) async throws
-    func saveMedicationCard(
-        _ card: ChatMedicationCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws
-    func savePrescriptionCard(
-        _ card: ChatPrescriptionCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws
-    func saveExamReportCard(
-        _ card: ChatExamReportCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws
-    func saveMedicalCaseCard(
-        _ card: ChatMedicalCaseCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws
     func buildKnowledgePreviewCard(message: ChatMessage, metadata: ChatMessageMetadata) -> ChatKnowledgeCard
 }
 
@@ -64,42 +40,6 @@ final class DefaultChatMessageActionUseCase: ChatMessageActionUseCase {
         let payload = ChatTaskPayloadBuilder.build(from: card)
         try await taskManager.createTask(payload: payload)
         logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
-    }
-
-    func saveMedicationCard(
-        _ card: ChatMedicationCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws {
-        try await detailViewModel.saveMedicationCard(threadID: threadID, message: message, card: card)
-    }
-
-    func savePrescriptionCard(
-        _ card: ChatPrescriptionCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws {
-        try await detailViewModel.savePrescriptionCard(threadID: threadID, message: message, card: card)
-    }
-
-    func saveExamReportCard(
-        _ card: ChatExamReportCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws {
-        try await detailViewModel.saveExamReportCard(threadID: threadID, message: message, card: card)
-    }
-
-    func saveMedicalCaseCard(
-        _ card: ChatMedicalCaseCardPayload,
-        message: ChatMessage,
-        threadID: UUID,
-        detailViewModel: ChatDetailViewModel
-    ) async throws {
-        try await detailViewModel.saveMedicalCaseCard(threadID: threadID, message: message, card: card)
     }
 
     /// 使用轻量本地规则先生成可预览知识卡，再由用户决定是否保存到知识库。

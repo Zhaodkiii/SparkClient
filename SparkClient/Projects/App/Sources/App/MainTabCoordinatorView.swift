@@ -16,7 +16,7 @@ struct MainTabCoordinatorView: View {
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
-            rootNavigationContainer {
+            NavigationView {
                 HomeView(
                     appContainer: appContainer,
                     viewModel: homeViewModel,
@@ -29,7 +29,7 @@ struct MainTabCoordinatorView: View {
             }
             .tag(AppRouteStore.RootTab.home)
 
-            rootNavigationContainer {
+            NavigationView {
                 KnowledgeLibraryView(appContainer: appContainer, viewModel: knowledgeViewModel)
             }
             .tabItem {
@@ -37,7 +37,7 @@ struct MainTabCoordinatorView: View {
             }
             .tag(AppRouteStore.RootTab.knowledge)
 
-            rootNavigationContainer {
+            NavigationView {
                 ChatConversationListPage(
                     stateStore: chatStateStore,
                     listViewModel: chatListViewModel,
@@ -49,7 +49,7 @@ struct MainTabCoordinatorView: View {
             }
             .tag(AppRouteStore.RootTab.chat)
 
-            rootNavigationContainer {
+            NavigationView {
                 SettingsView(
                     viewModel: settingsViewModel,
                     aiSettingsViewModel: aiSettingsViewModel,
@@ -60,22 +60,6 @@ struct MainTabCoordinatorView: View {
                 Label(L10n.text("tab.settings"), systemImage: "gearshape.fill")
             }
             .tag(AppRouteStore.RootTab.settings)
-        }
-    }
-
-    @ViewBuilder
-    private func rootNavigationContainer<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if #available(iOS 16.0, *) {
-            NavigationStack {
-                content()
-            }
-        } else {
-            NavigationView {
-                content()
-            }
-            .navigationViewStyle(.stack)
         }
     }
 }

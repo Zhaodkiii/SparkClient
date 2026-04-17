@@ -25,6 +25,28 @@ struct ChatComposerAttachmentPreview: Identifiable, Equatable, Sendable {
     }
 }
 
+enum ChatComposerAttachmentPhase: String, Equatable, Sendable {
+    case pending
+    case uploading
+    case ocring
+    case success
+    case failed
+}
+
+struct ChatComposerPreparedAttachmentState: Equatable, Sendable {
+    var phase: ChatComposerAttachmentPhase
+    var progress: Double
+    var prepared: ChatPreparedImageAttachment?
+    var errorMessage: String?
+
+    static let pending = ChatComposerPreparedAttachmentState(
+        phase: .pending,
+        progress: 0,
+        prepared: nil,
+        errorMessage: nil
+    )
+}
+
 struct ChatComposerDraft: Equatable, Sendable {
     var text: String = ""
     var attachments: [ChatComposerAttachmentPreview] = []

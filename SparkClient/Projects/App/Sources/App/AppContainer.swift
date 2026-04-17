@@ -336,18 +336,11 @@ final class AppContainer {
             promptFactory: medicalPromptFactory,
             logger: logger
         )
-        let medicalDocumentOCRBuilder = DefaultMedicalDocumentOCRBuilder(
-            ocrOrchestrator: ocrOrchestrator
-        )
-        let medicalDocumentStructuredExtractor = DefaultMedicalDocumentStructuredExtractor(
+        let typedMedicalDocumentExtractor = DefaultTypedMedicalDocumentExtractor(
+            ocrOrchestrator: ocrOrchestrator,
+            typeResolver: medicalDocumentTypeResolver,
             promptFactory: medicalPromptFactory,
             runtimeService: aiRuntimeService,
-            logger: logger
-        )
-        let typedMedicalDocumentExtractor = DefaultTypedMedicalDocumentExtractor(
-            ocrBuilder: medicalDocumentOCRBuilder,
-            typeResolver: medicalDocumentTypeResolver,
-            structuredExtractor: medicalDocumentStructuredExtractor,
             logger: logger
         )
         let typedMedicalDocumentSaver = DefaultTypedMedicalDocumentSaver(
@@ -373,6 +366,10 @@ final class AppContainer {
             binder: attachmentBinder
         )
 
+        // MARK: 聊天持久化仓库（供 ToolHub 内医疗卡片异步合并与后续同步共用）
+        let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
+        let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(repository: chatRepository)
+
         // MARK: 聊天 Tool 调用：把草稿/知识库/医疗只读查询暴露给模型工具层
         let toolAuditStore = ToolAuditStore()
         let toolHub = ToolHub(
@@ -380,15 +377,15 @@ final class AppContainer {
             medicalQueryAPI: backend.medicalQuery,
             aiSettingsRepository: aiSettingsRepository,
             runtimeService: aiRuntimeService,
-            medicalStructuredExtractor: medicalDocumentStructuredExtractor,
             taskService: taskService,
             searchKnowledgeUseCase: searchKnowledgeUseCase,
             createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
+            typedMedicalDocumentExtractor: typedMedicalDocumentExtractor,
+            structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
             logger: logger
         )
 
         // MARK: 聊天持久化与同步（Core Data + Outbox + REST + WebSocket）
-        let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
         let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
         let chatRealtimeClient = ChatRealtimeSyncClient(
             tokenProvider: backend.tokenProvider(),
@@ -407,11 +404,12 @@ final class AppContainer {
             runtimeService: aiRuntimeService,
             toolHub: toolHub,
             consentGate: ConsentGate(),
+            fileCacheManager: fileCacheManager,
             logger: logger
         )
         let loadChatThreadsUseCase = LoadChatThreadsUseCase(repository: chatRepository)
         let loadChatMessagesUseCase = LoadChatMessagesUseCase(repository: chatRepository)
-        let createThreadUseCase = CreateThreadUseCase(repository: chatRepository)
+        let createThreadUseCase = CreateThreadUseCase(repository: chatRepository, aiSettingsRepository: aiSettingsRepository)
         let retryFailedMessageUseCase = RetryFailedMessageUseCase(
             repository: chatRepository,
             syncEngine: chatSyncEngine,
@@ -421,27 +419,15 @@ final class AppContainer {
         let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository, syncEngine: chatSyncEngine)
         let syncChatUseCase = SyncChatUseCase(syncEngine: chatSyncEngine)
         let chatToolEventInterpreter = ChatToolEventInterpreter(logger: logger)
-        let medicalRecordFormSubmissionService = MedicalRecordFormSubmissionService(workflowAPI: backend.medicalWorkflow)
-        let saveChatMedicalCardUseCase = SaveChatMedicalCardUseCase(
-            submissionService: medicalRecordFormSubmissionService,
-            updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
-            syncChatUseCase: syncChatUseCase,
-            logger: logger
-        )
-        let generateStructuredHealthCardsAsyncUseCase = GenerateStructuredHealthCardsAsyncUseCase(
-            repository: chatRepository,
-            updateAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
-            syncChatUseCase: syncChatUseCase,
-            medicalStructuredExtractor: medicalDocumentStructuredExtractor,
-            logger: logger
-        )
         let sendChatMessageUseCase = SendChatMessageUseCase(
             repository: chatRepository,
             orchestrator: chatOrchestrator,
             syncEngine: chatSyncEngine,
             buildMemberContextSummaryUseCase: buildMemberContextSummaryUseCase,
-            generateStructuredHealthCardsAsyncUseCase: generateStructuredHealthCardsAsyncUseCase,
             toolEventInterpreter: chatToolEventInterpreter,
+            fileTransferService: fileTransferService,
+            ocrOrchestrator: ocrOrchestrator,
+            aiSettingsRepository: aiSettingsRepository,
             logger: logger
         )
 
@@ -586,6 +572,7 @@ final class AppContainer {
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
         self.memberContextStore = memberContextStore
         self.chatStateStore = ChatStateStore()
+        structuredHealthCardMergeCoordinator.register(stateStore: chatStateStore)
         self.knowledgeViewModel = KnowledgeLibraryViewModel(
             loadListUseCase: loadKnowledgeListUseCase,
             loadDocumentUseCase: loadKnowledgeDocumentUseCase,
@@ -611,18 +598,21 @@ final class AppContainer {
         self.chatDetailViewModel = ChatDetailViewModel(
             stateStore: chatStateStore,
             memberContextStore: memberContextStore,
+            chatRepository: chatRepository,
             loadChatThreadsUseCase: loadChatThreadsUseCase,
             loadChatMessagesUseCase: loadChatMessagesUseCase,
             sendMessageUseCase: sendChatMessageUseCase,
+            fileTransferService: fileTransferService,
+            ocrOrchestrator: ocrOrchestrator,
             retryFailedMessageUseCase: retryFailedMessageUseCase,
             syncChatUseCase: syncChatUseCase,
             updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
-            saveChatMedicalCardUseCase: saveChatMedicalCardUseCase,
             notificationClient: notificationClient,
             aiConfigCenter: aiConfigCenter,
             aiSettingsRepository: aiSettingsRepository,
             translateKnowledgeTextUseCase: translateKnowledgeTextUseCase,
             createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
+            saveTypedMedicalDocumentUseCase: saveTypedMedicalDocumentUseCase,
             logger: logger
         )
     }

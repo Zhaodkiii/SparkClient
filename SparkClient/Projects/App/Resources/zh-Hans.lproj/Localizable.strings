@@ -240,21 +240,6 @@
 "medical.upload.picking.clear" = "清空";
 "medical.upload.picking.report_type" = "报告类型";
 "medical.upload.picking.a11y.report_type" = "报告类型，当前为 %@";
-
-"chat.medical.card.medication.title" = "用药卡片";
-"chat.medical.card.prescription.title" = "处方卡片";
-"chat.medical.card.prescription.fallback" = "处方";
-"chat.medical.card.exam_report.title" = "检查报告卡片";
-"chat.medical.card.medical_case.title" = "病例卡片";
-"chat.medical.card.field.dosage" = "剂量";
-"chat.medical.card.field.frequency" = "频次";
-"chat.medical.card.field.prescribed_at" = "开方时间";
-"chat.medical.card.field.diagnosis" = "诊断";
-"chat.medical.card.field.medication_count" = "药品数";
-"chat.medical.card.field.date" = "日期";
-"chat.medical.card.field.hospital" = "医院";
-"chat.medical.card.action.save_bind_current_member" = "保存并绑定当前成员";
-"chat.medical.card.action.saved" = "已保存";
 "medical.upload.kind.auto" = "自动识别";
 "medical.upload.kind.case" = "病例";
 "medical.upload.kind.health_exam" = "体检报告";
@@ -342,6 +327,10 @@
 "chat.composer.toggle.web" = "联网搜索";
 "chat.composer.toggle.thinking" = "深度思考";
 "chat.composer.toggle.deep_thinking" = "深度思考";
+"chat.image_delivery.menu" = "图片送达方式";
+"chat.image_delivery.direct" = "直发 AI（图+文）";
+"chat.image_delivery.ocr_only" = "本地 OCR（仅文本）";
+"chat.image_delivery.unavailable_hint" = "当前模型仅支持文本识别";
 "chat.composer.reasoning.builtin" = "模型思考";
 "chat.composer.reasoning.tier.0" = "最小（不思考）";
 "chat.composer.reasoning.tier.1" = "低";
@@ -1011,3 +1000,19 @@
 "chat.tool.rich.location.default_name" = "位置";
 "chat.tool.rich.event.default_title" = "日程事件";
 "chat.tool.rich.health.default_title" = "健康卡片";
+
+"chat.medical_card.section.medications" = "用药";
+"chat.medical_card.section.prescriptions" = "处方";
+"chat.medical_card.section.exam_reports" = "检查 / 检验报告";
+"chat.medical_card.section.cases" = "病历 / 就诊";
+"chat.medical_card.save_to_health" = "保存到健康档案";
+"chat.medical_card.saved" = "已保存";
+"chat.medical_card.saved.toast" = "已保存到健康档案。";
+"chat.medical_card.error.decode" = "无法解析卡片数据。";
+"chat.medical_card.error.no_member" = "请先在首页选择家庭成员。";
+"chat.medical_card.medication.untitled" = "用药";
+"chat.medical_card.prescription.title" = "处方";
+"chat.medical_card.exam.title" = "检查报告";
+"chat.medical_card.case.title" = "病历";
+"chat.medical_card.extraction_failed.title" = "抽取未完成";
+"chat.medical_card.extraction_failed.body" = "请手动编辑或稍后重试。";

@@ -32,7 +32,6 @@ final class ChatMessageUIStateStore: ObservableObject {
     @Published private(set) var taskCardLoadingIDs: Set<Int> = []
     @Published private(set) var ignoredTaskCardIDs: Set<Int> = []
     @Published private(set) var createdTaskCardIDs: Set<Int> = []
-    @Published private(set) var savingMedicalCardIDs: Set<UUID> = []
 
     func isDeleted(_ id: UUID) -> Bool { deletedMessageIDs.contains(id) }
     func markDeleted(_ id: UUID) { deletedMessageIDs.insert(id) }
@@ -113,15 +112,6 @@ final class ChatMessageUIStateStore: ObservableObject {
 
     func isTaskCardCreated(_ id: Int) -> Bool { createdTaskCardIDs.contains(id) }
     func markTaskCardCreated(_ id: Int) { createdTaskCardIDs.insert(id) }
-
-    func isMedicalCardSaving(_ id: UUID) -> Bool { savingMedicalCardIDs.contains(id) }
-    func setMedicalCardSaving(_ value: Bool, for id: UUID) {
-        if value {
-            savingMedicalCardIDs.insert(id)
-        } else {
-            savingMedicalCardIDs.remove(id)
-        }
-    }
 
     func makeCardActionSnapshot() -> CardActionSnapshot {
         CardActionSnapshot(

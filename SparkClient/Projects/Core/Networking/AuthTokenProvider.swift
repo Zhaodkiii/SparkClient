@@ -28,6 +28,32 @@ enum AuthTokenProviderError: Error, LocalizedError, Sendable, Equatable {
     }
 }
 
+/// 兼容多种刷新成功 JSON：`access`/`refresh` 与 `access_token`/`refresh_token`/`token_type`。
+private struct TokenRefreshSuccessEnvelope: Decodable {
+    let access: String?
+    let refresh: String?
+    let accessToken: String?
+    let refreshToken: String?
+    let tokenType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case access
+        case refresh
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case tokenType = "token_type"
+    }
+
+    func resolvedTokens(fallbackRefreshToken: String) -> (access: String, refresh: String, tokenType: String)? {
+        let accessString = access ?? accessToken
+        guard let accessString else { return nil }
+        let refreshString = refresh ?? refreshToken ?? fallbackRefreshToken
+        let rawType = (tokenType ?? "Bearer").trimmingCharacters(in: .whitespacesAndNewlines)
+        let type = rawType.isEmpty ? "Bearer" : rawType
+        return (accessString, refreshString, type)
+    }
+}
+
 /// Owns access/refresh tokens and performs refresh de-duping.
 actor AuthTokenProvider {
     private let keychainService: String
@@ -119,12 +145,6 @@ actor AuthTokenProvider {
 
         guard loadRefreshToken() != nil else {
             logger.warning("刷新令牌不存在，无法发起 token refresh。", module: .auth)
-            AuthSessionInvalidation.postIfNeeded(
-                statusCode: 404,
-                backendCode: nil,
-                message: "missing_refresh_token",
-                source: "AuthTokenProvider.refreshTokensDeDuplicated"
-            )
             clearTokens()
             throw AuthTokenProviderError.missingTokens
         }
@@ -143,12 +163,6 @@ actor AuthTokenProvider {
     private func performRefresh() async throws -> AuthTokens {
         guard let refreshToken = loadRefreshToken() else {
             logger.warning("刷新令牌读取失败，判定为未登录态。", module: .auth)
-            AuthSessionInvalidation.postIfNeeded(
-                statusCode: 404,
-                backendCode: nil,
-                message: "missing_refresh_token",
-                source: "AuthTokenProvider.performRefresh"
-            )
             clearTokens()
             throw AuthTokenProviderError.missingTokens
         }
@@ -165,32 +179,30 @@ actor AuthTokenProvider {
 
         let response = try await transport.send(urlRequest)
 
-        // Success shape: { "access": "...", "refresh": "..."? }
+        // Success: SimpleJWT 风格 { "access","refresh" } 或网关/账户服务常用 { "access_token","refresh_token","token_type" }。
         if (200...299).contains(response.httpResponse.statusCode) {
-            struct TokenRefreshSuccess: Decodable {
-                let access: String
-                let refresh: String?
-            }
-
             do {
                 let decoder = JSONDecoder()
-                let success = try decoder.decode(TokenRefreshSuccess.self, from: response.data)
+                let envelope = try decoder.decode(TokenRefreshSuccessEnvelope.self, from: response.data)
+                guard let triple = envelope.resolvedTokens(fallbackRefreshToken: refreshToken) else {
+                    logger.error("令牌刷新响应解析失败：缺少 access/access_token 字段。", module: .auth)
+                    throw AuthTokenProviderError.invalidRefreshResponse
+                }
 
-                let newAccess = success.access
-                let newRefresh = success.refresh ?? refreshToken
-                let claims = try JWTExpParser.parseClaims(newAccess)
-                let tokenType = "Bearer"
+                let claims = try JWTExpParser.parseClaims(triple.access)
 
                 let tokens = AuthTokens(
-                    accessToken: newAccess,
-                    refreshToken: newRefresh,
+                    accessToken: triple.access,
+                    refreshToken: triple.refresh,
                     expiresAt: claims.expDate,
-                    tokenType: tokenType
+                    tokenType: triple.tokenType
                 )
                 cachedTokens = tokens
                 saveToKeychain(tokens)
                 logger.info(SparkNetworkingStrings.Auth.refreshSucceeded(), module: .auth)
                 return tokens
+            } catch let error as AuthTokenProviderError {
+                throw error
             } catch {
                 logger.error("令牌刷新响应解析失败：\(error.localizedDescription)", module: .auth)
                 throw AuthTokenProviderError.invalidRefreshResponse
@@ -199,28 +211,44 @@ actor AuthTokenProvider {
 
         // Error shape fallback: { "code":..., "msg":..., "data":... }
         let statusCode = response.httpResponse.statusCode
+        let backendError: BackendError?
         do {
-            let backendError = try JSONDecoder().decode(BackendError.self, from: response.data)
-            logger.error("令牌刷新 HTTP 错误：code=\(backendError.code) msg=\(backendError.msg)", module: .auth)
+            let decoded = try JSONDecoder().decode(BackendError.self, from: response.data)
+            backendError = decoded
+            logger.error("令牌刷新 HTTP 错误：code=\(decoded.code) msg=\(decoded.msg)", module: .auth)
         } catch {
-            // Ignore; we still throw.
+            backendError = nil
+            logger.error("令牌刷新 HTTP 错误：status=\(statusCode)，响应体无法解析为 BackendError", module: .auth)
         }
 
-        // 仅在明确的认证失效状态下清理 token；服务异常时保留本地登录态。
-        if statusCode == 400 || statusCode == 401 || statusCode == 403 {
-            AuthSessionInvalidation.postIfNeeded(
-                statusCode: statusCode,
-                backendCode: nil,
-                message: "token_refresh_failed",
-                source: "AuthTokenProvider.performRefresh"
-            )
+        // 仅在响应体可解析且业务码/msg 明确为鉴权失效时清理 token；仅凭 HTTP 状态或网关/HTML 错误页时保留本地登录态。
+        // 不在此处发送 AuthSessionInvalidation：避免刷新失败时强制登出/回登录页；业务 API 的 401 仍由 SparkNetworkEngine 处理。
+        if let backend = backendError, isDefinitiveRefreshAuthFailure(backend) {
             clearTokens()
             logger.error(SparkNetworkingStrings.Auth.refreshFailed(), module: .auth)
             throw AuthTokenProviderError.refreshFailed
         } else {
-            logger.warning("令牌刷新临时失败（HTTP \(statusCode)），保留本地 token。", module: .auth)
+            if let backend = backendError {
+                logger.warning(
+                    "令牌刷新失败：HTTP \(statusCode) code=\(backend.code) msg=\(backend.msg)，未判定为明确鉴权失效，保留本地 token。",
+                    module: .auth
+                )
+            } else {
+                logger.warning("令牌刷新临时失败（HTTP \(statusCode)），保留本地 token。", module: .auth)
+            }
             throw AuthTokenProviderError.refreshTemporarilyUnavailable
         }
+    }
+
+    /// 刷新接口返回的 JSON 是否明确表示「刷新令牌已不可用」，可安全清理本地凭证。
+    private func isDefinitiveRefreshAuthFailure(_ backend: BackendError) -> Bool {
+        if (40100...40199).contains(backend.code) || (40300...40399).contains(backend.code) {
+            return true
+        }
+        if backend.msg == "token_not_valid" {
+            return true
+        }
+        return false
     }
 
     private func url(for path: String) -> URL {

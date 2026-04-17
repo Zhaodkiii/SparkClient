@@ -55,54 +55,8 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "D55F8E08-8672-4BE0-B42C-A15B527FFFF0"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "122"
-            endingLineNumber = "122"
-            landmarkName = "refreshTokensDeDuplicated()"
-            landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "D55F8E08-8672-4BE0-B42C-A15B527FFFF0 - c67fba0f834e5797"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(1) suspend resume partial function for SparkClient.AuthTokenProvider.refreshTokensDeDuplicated() async throws -&gt; SparkClient.AuthTokens"
-                  moduleName = "SparkClient.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "122"
-                  endingLineNumber = "122">
-               </Location>
-               <Location
-                  uuid = "D55F8E08-8672-4BE0-B42C-A15B527FFFF0 - e3028bb54085709c"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(6) suspend resume partial function for SparkClient.AuthTokenProvider.refreshTokensDeDuplicated() async throws -&gt; SparkClient.AuthTokens"
-                  moduleName = "SparkClient.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "122"
-                  endingLineNumber = "122">
-               </Location>
-            </Locations>
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
             uuid = "B38DADDD-2E18-4536-A91B-FAEC2B2B3665"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
@@ -111,6 +65,22 @@
             startingLineNumber = "147"
             endingLineNumber = "147"
             landmarkName = "performRefresh()"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "65253E3A-DDFB-44D2-935C-6688050E35D1"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "123"
+            endingLineNumber = "123"
+            landmarkName = "refreshTokensDeDuplicated()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

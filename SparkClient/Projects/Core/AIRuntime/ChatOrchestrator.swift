@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct ChatOrchestratorOutput: Sendable {
     let text: String
@@ -23,17 +24,20 @@ struct ChatOrchestrator: Sendable {
     let runtimeService: any AIRuntimeServing
     let toolHub: ToolHub
     let consentGate: ConsentGate
+    let fileCacheManager: FileCacheManager
     let logger: Logger
 
     init(
         runtimeService: any AIRuntimeServing,
         toolHub: ToolHub,
         consentGate: ConsentGate,
+        fileCacheManager: FileCacheManager,
         logger: Logger = ConsoleLogger()
     ) {
         self.runtimeService = runtimeService
         self.toolHub = toolHub
         self.consentGate = consentGate
+        self.fileCacheManager = fileCacheManager
         self.logger = logger
     }
 
@@ -42,8 +46,14 @@ struct ChatOrchestrator: Sendable {
         history: [ChatMessage],
         memberContextSummary: String,
         memberID: Int?,
+        threadID: UUID? = nil,
+        assistantMessageClientID: UUID? = nil,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        /// 为 `true` 时，用户消息中的 `image_url` 附件编码为多模态 `content` 数组；否则仅使用 `ChatMessage.content` 字符串。
+        deliverMultimodalImages: Bool = false,
+        /// 网关单点编码（如厂商对 `image_url` 形式的差异）。
+        providerCompanyUppercased: String? = nil,
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatOrchestratorOutput {
         let promptLocalizer = PromptLocalizer()
@@ -83,10 +93,11 @@ struct ChatOrchestrator: Sendable {
         }
 
         // 无工具命中时转入模型推理路径，显式记录入参规模，便于排查上下文膨胀问题。
-        let runtimeMessages = makeRuntimeMessages(
+        let runtimeMessages = await makeRuntimeMessages(
             from: history,
             memberContextSummary: memberContextSummary,
-            reasoning: reasoningOpts
+            reasoning: reasoningOpts,
+            deliverMultimodalImages: deliverMultimodalImages
         )
         let toolDefinitions = filteredToolDefinitions(inference: inference)
         let toolChoice: AIRuntimeToolChoice = inference.useTools && toolDefinitions.isEmpty == false ? .auto : .none
@@ -111,7 +122,7 @@ struct ChatOrchestrator: Sendable {
                             tools: toolDefinitions,
                             toolChoice: toolChoice,
                             reasoning: reasoningOpts,
-                            providerCompanyUppercased: nil
+                            providerCompanyUppercased: providerCompanyUppercased
                         )
                     ),
                     onPartial: onPartial
@@ -178,7 +189,9 @@ struct ChatOrchestrator: Sendable {
                 let toolResult = await toolHub.executeToolCall(
                     name: call.name,
                     arguments: call.arguments,
-                    memberID: memberID
+                    memberID: memberID,
+                    threadID: threadID,
+                    assistantMessageClientID: assistantMessageClientID
                 )
                 let toolFinishText = "使用工具：\(call.name)\n\(toolResult.outputText)"
                 if let onPartial {
@@ -249,8 +262,9 @@ struct ChatOrchestrator: Sendable {
     private func makeRuntimeMessages(
         from history: [ChatMessage],
         memberContextSummary: String,
-        reasoning: AIRuntimeReasoningOptions
-    ) -> [AIRuntimeMessage] {
+        reasoning: AIRuntimeReasoningOptions,
+        deliverMultimodalImages: Bool
+    ) async -> [AIRuntimeMessage] {
         let promptLocalizer = PromptLocalizer()
         var runtimeMessages: [AIRuntimeMessage] = [
             AIRuntimeMessage(role: .system, content: promptLocalizer.chatSystemPrompt())
@@ -268,12 +282,88 @@ struct ChatOrchestrator: Sendable {
             )
         }
 
-        runtimeMessages.append(
-            contentsOf: history.map {
-                AIRuntimeMessage(role: $0.role.runtimeRole, content: $0.content)
-            }
-        )
+        for chatMessage in history {
+            let msg = await runtimeMessage(from: chatMessage, deliverMultimodalImages: deliverMultimodalImages)
+            runtimeMessages.append(msg)
+        }
         return runtimeMessages
+    }
+
+    private func runtimeMessage(from message: ChatMessage, deliverMultimodalImages: Bool) async -> AIRuntimeMessage {
+        // 多模态模式：从本地缓存读取 JPEG 字节并内联 base64（不向模型发送远端 URL）
+        if deliverMultimodalImages, message.role == .user {
+            if let parts = await buildMultimodalParts(from: message) {
+                return AIRuntimeMessage(role: .user, content: nil, contentParts: parts)
+            }
+        }
+
+        // LocalOCR 模式：非多模态但有图片附件时，从附件中提取 OCR 文本拼接
+        if message.role == .user, message.attachments.isEmpty == false {
+            let enhancedContent = buildLocalOCRContent(from: message)
+            if enhancedContent != message.content {
+                return AIRuntimeMessage(role: .user, content: enhancedContent)
+            }
+        }
+
+        return AIRuntimeMessage(role: message.role.runtimeRole, content: message.content)
+    }
+
+    private func buildMultimodalParts(from message: ChatMessage) async -> [AIRuntimeContentPart]? {
+        let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let imageAttachments = message.attachments.filter { $0.type == "image_url" }
+        guard imageAttachments.isEmpty == false else { return nil }
+        var parts: [AIRuntimeContentPart] = []
+        if text.isEmpty == false {
+            parts.append(.textPart(text))
+        } else {
+            parts.append(.textPart(" "))
+        }
+        for att in imageAttachments {
+            guard let meta = ChatUploadedImageAttachmentCodec.decode(from: att.text) else {
+                logger.debug("多模态：附件缺少 JSON 元数据，跳过", module: .aiConfig)
+                return nil
+            }
+            guard let localURL = await fileCacheManager.cachedFileURL(fileUUID: meta.fileUUID, fileName: meta.originalName),
+                  let data = try? Data(contentsOf: localURL),
+                  let jpegData = UIImage(data: data)?.jpegData(compressionQuality: 0.9) else {
+                logger.debug(
+                    "多模态：本地缓存不可用或无法转 JPEG，降级（file_uuid=\(meta.fileUUID)）",
+                    module: .aiConfig
+                )
+                return nil
+            }
+            let b64 = jpegData.base64EncodedString()
+            parts.append(.imageInlineJPEGBase64(b64))
+        }
+        return parts.count > 1 ? parts : nil
+    }
+
+    /// LocalOCR 模式：从附件元数据中提取 OCR 文本，构造增强后的用户内容
+    private func buildLocalOCRContent(from message: ChatMessage) -> String {
+        let userText = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let imageAttachments = message.attachments.filter { $0.type == "image_url" }
+        guard imageAttachments.isEmpty == false else { return message.content }
+        
+        var blocks: [String] = []
+        for attachment in imageAttachments {
+            guard let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text) else { continue }
+            let ocr = meta.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let fileIdStr = "file_id=\(meta.fileId)"
+            let fileUUIDStr = "file_uuid=\(meta.fileUUID)"
+            blocks.append(
+                """
+                【图片附件】\(fileIdStr) \(fileUUIDStr)
+                【图片识别】
+                \(ocr.isEmpty ? "(无文字)" : ocr)
+                """
+            )
+        }
+        
+        if userText.isEmpty == false {
+            blocks.append("【用户输入】\n\(userText)")
+        }
+        
+        return blocks.isEmpty ? message.content : blocks.joined(separator: "\n\n")
     }
 
     private func filteredToolDefinitions(inference: ChatOrchestratorInferenceOptions) -> [AIRuntimeToolDefinition] {

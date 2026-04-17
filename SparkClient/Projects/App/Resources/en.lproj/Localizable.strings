@@ -240,21 +240,6 @@
 "medical.upload.picking.clear" = "Clear";
 "medical.upload.picking.report_type" = "Report type";
 "medical.upload.picking.a11y.report_type" = "Report type, currently %@";
-
-"chat.medical.card.medication.title" = "Medication Card";
-"chat.medical.card.prescription.title" = "Prescription Card";
-"chat.medical.card.prescription.fallback" = "Prescription";
-"chat.medical.card.exam_report.title" = "Exam Report Card";
-"chat.medical.card.medical_case.title" = "Medical Case Card";
-"chat.medical.card.field.dosage" = "Dosage";
-"chat.medical.card.field.frequency" = "Frequency";
-"chat.medical.card.field.prescribed_at" = "Prescribed At";
-"chat.medical.card.field.diagnosis" = "Diagnosis";
-"chat.medical.card.field.medication_count" = "Medications";
-"chat.medical.card.field.date" = "Date";
-"chat.medical.card.field.hospital" = "Hospital";
-"chat.medical.card.action.save_bind_current_member" = "Save and bind current member";
-"chat.medical.card.action.saved" = "Saved";
 "medical.upload.kind.auto" = "Auto-detect";
 "medical.upload.kind.case" = "Case record";
 "medical.upload.kind.health_exam" = "Health checkup";
@@ -342,6 +327,10 @@
 "chat.composer.toggle.web" = "Web search";
 "chat.composer.toggle.thinking" = "Deep";
 "chat.composer.toggle.deep_thinking" = "Deep thinking";
+"chat.image_delivery.menu" = "Image delivery";
+"chat.image_delivery.direct" = "Direct to AI (image + text)";
+"chat.image_delivery.ocr_only" = "Local OCR (text only)";
+"chat.image_delivery.unavailable_hint" = "This model supports text only";
 "chat.composer.reasoning.builtin" = "Reasoning";
 "chat.composer.reasoning.tier.0" = "Minimal";
 "chat.composer.reasoning.tier.1" = "Low";
@@ -1011,3 +1000,19 @@
 "chat.tool.rich.location.default_name" = "Location";
 "chat.tool.rich.event.default_title" = "Event";
 "chat.tool.rich.health.default_title" = "Health Card";
+
+"chat.medical_card.section.medications" = "Medications";
+"chat.medical_card.section.prescriptions" = "Prescriptions";
+"chat.medical_card.section.exam_reports" = "Exam & lab reports";
+"chat.medical_card.section.cases" = "Medical cases";
+"chat.medical_card.save_to_health" = "Save to health records";
+"chat.medical_card.saved" = "Saved";
+"chat.medical_card.saved.toast" = "Saved to health records.";
+"chat.medical_card.error.decode" = "Could not read card data.";
+"chat.medical_card.error.no_member" = "Select a family member on Home first.";
+"chat.medical_card.medication.untitled" = "Medication";
+"chat.medical_card.prescription.title" = "Prescription";
+"chat.medical_card.exam.title" = "Exam report";
+"chat.medical_card.case.title" = "Medical case";
+"chat.medical_card.extraction_failed.title" = "Extraction incomplete";
+"chat.medical_card.extraction_failed.body" = "Please edit the record manually or retry.";

@@ -5,6 +5,8 @@ import UIKit
 /// - 纯渲染组件，不直接持有全局状态；
 /// - 通过入参和回调与上层协作。
 struct ChatMessageBubbleContentView: View {
+    @State private var unifiedFilePreview: FilePreviewInput?
+
     let message: ChatMessage
     let metadata: ChatMessageMetadata
     let isLastAssistantMessage: Bool
@@ -20,7 +22,6 @@ struct ChatMessageBubbleContentView: View {
     let createdTaskCardIDs: Set<Int>
     let savingKnowledgeCardIDs: Set<UUID>
     let savedKnowledgeCardIDs: Set<UUID>
-    let savingMedicalCardIDs: Set<UUID>
     let showActions: Bool
 
     let onRetry: () -> Void
@@ -34,17 +35,24 @@ struct ChatMessageBubbleContentView: View {
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void
     let onConfirmTaskCard: (TaskCard) -> Void
     let onIgnoreTaskCard: (TaskCard) -> Void
-    let onSaveMedicationCard: (ChatMedicationCardPayload) -> Void
-    let onSavePrescriptionCard: (ChatPrescriptionCardPayload) -> Void
-    let onSaveExamReportCard: (ChatExamReportCardPayload) -> Void
-    let onSaveMedicalCaseCard: (ChatMedicalCaseCardPayload) -> Void
+    let savingStructuredHealthCardIDs: Set<UUID>
+    let onSaveMedicationCard: (MedicationChatCardPayload) -> Void
+    let onSavePrescriptionCard: (PrescriptionChatCardPayload) -> Void
+    let onSaveExamReportCard: (ExamReportChatCardPayload) -> Void
+    let onSaveMedicalCaseCard: (MedicalCaseChatCardPayload) -> Void
+    let onDownloadImageToLocalFile: (ChatUploadedImageAttachmentMeta) async throws -> URL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if message.role == .assistant {
                 let payloads = imagePayloads(from: message)
                 if payloads.isEmpty == false {
-                    ChatImageGalleryBlockView(images: payloads)
+                    ChatImageGalleryBlockView(
+                        images: payloads,
+                        style: .assistant,
+                        unifiedFilePreview: $unifiedFilePreview,
+                        downloadToLocalFile: onDownloadImageToLocalFile
+                    )
                 }
             }
 
@@ -112,35 +120,18 @@ struct ChatMessageBubbleContentView: View {
                 ChatHealthCardListView(cards: metadata.healthCards)
             }
             if message.role == .assistant,
-               metadata.medicationCards.isEmpty == false {
-                ChatMedicationCardListView(
-                    cards: metadata.medicationCards,
-                    isSaving: { savingMedicalCardIDs.contains($0) },
-                    onSave: onSaveMedicationCard
-                )
-            }
-            if message.role == .assistant,
-               metadata.prescriptionCards.isEmpty == false {
-                ChatPrescriptionCardListView(
-                    cards: metadata.prescriptionCards,
-                    isSaving: { savingMedicalCardIDs.contains($0) },
-                    onSave: onSavePrescriptionCard
-                )
-            }
-            if message.role == .assistant,
-               metadata.examReportCards.isEmpty == false {
-                ChatExamReportCardListView(
-                    cards: metadata.examReportCards,
-                    isSaving: { savingMedicalCardIDs.contains($0) },
-                    onSave: onSaveExamReportCard
-                )
-            }
-            if message.role == .assistant,
-               metadata.medicalCaseCards.isEmpty == false {
-                ChatMedicalCaseCardListView(
-                    cards: metadata.medicalCaseCards,
-                    isSaving: { savingMedicalCardIDs.contains($0) },
-                    onSave: onSaveMedicalCaseCard
+               let blob = metadata.structuredHealthCards,
+               blob.medications.isEmpty == false
+                || blob.prescriptions.isEmpty == false
+                || blob.examReports.isEmpty == false
+                || blob.medicalCases.isEmpty == false {
+                ChatStructuredHealthCardsBlockView(
+                    blob: blob,
+                    isSavingIDs: savingStructuredHealthCardIDs,
+                    onSaveMedication: onSaveMedicationCard,
+                    onSavePrescription: onSavePrescriptionCard,
+                    onSaveExamReport: onSaveExamReportCard,
+                    onSaveMedicalCase: onSaveMedicalCaseCard
                 )
             }
             if message.role == .assistant,
@@ -152,6 +143,18 @@ struct ChatMessageBubbleContentView: View {
                let htmlContent = metadata.htmlContent,
                htmlContent.isEmpty == false {
                 ChatHTMLPreviewBlockView(htmlContent: htmlContent)
+            }
+
+            if message.role == .user {
+                let payloads = imagePayloads(from: message)
+                if payloads.isEmpty == false {
+                    ChatImageGalleryBlockView(
+                        images: payloads,
+                        style: .user,
+                        unifiedFilePreview: $unifiedFilePreview,
+                        downloadToLocalFile: onDownloadImageToLocalFile
+                    )
+                }
             }
 
             if shouldRenderMainMarkdown {
@@ -247,9 +250,14 @@ struct ChatMessageBubbleContentView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(message.role == .user ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
         )
+        .unifiedFilePreview(selection: $unifiedFilePreview)
     }
 
     private var shouldRenderMainMarkdown: Bool {
+        if message.role == .user {
+            let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty == false
+        }
         guard message.role == .assistant else { return true }
         guard message.kind == .tool else { return true }
         let trimmedContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -308,12 +316,33 @@ struct ChatMessageBubbleContentView: View {
     private func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
         var payloads: [ChatImagePayload] = []
         for attachment in message.attachments where attachment.type == "image_url" || attachment.type == "image_base64" {
+            if attachment.type == "image_url" {
+                if let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text),
+                   let img = ChatLocalImageCache.uiImageIfCached(fileUUID: meta.fileUUID, originalName: meta.originalName) {
+                    payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: img, downloadableMeta: meta))
+                    continue
+                }
+                if let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text) {
+                    payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: nil, downloadableMeta: meta))
+                    continue
+                }
+                if let u = attachment.url {
+                    payloads.append(ChatImagePayload(id: attachment.id, url: u, image: nil, downloadableMeta: nil))
+                    continue
+                }
+                if let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text),
+                   let s = meta.remoteURLString,
+                   let u = URL(string: s) {
+                    payloads.append(ChatImagePayload(id: attachment.id, url: u, image: nil, downloadableMeta: nil))
+                    continue
+                }
+            }
             let raw = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard raw.isEmpty == false else { continue }
             if let image = decodeImage(from: raw) {
-                payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: image))
+                payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: image, downloadableMeta: nil))
             } else if let url = URL(string: raw) {
-                payloads.append(ChatImagePayload(id: attachment.id, url: url, image: nil))
+                payloads.append(ChatImagePayload(id: attachment.id, url: url, image: nil, downloadableMeta: nil))
             }
         }
         return payloads

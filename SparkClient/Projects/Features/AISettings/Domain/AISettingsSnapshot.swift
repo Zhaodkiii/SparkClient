@@ -24,6 +24,8 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var scenarioSelectedModel: [String: String]
     /// 试用期内，在「对话」模型选择器中**隐藏**的试用模型 id（`trialModelPolicy` 中 `chat` 场景）；空表示未手动排除任何试用模型。
     var trialChatPickerDisabledModelNames: [String]
+    /// 新建会话时默认的图片送达方式（`ChatThreadImageDeliveryMode.rawValue`）。
+    var defaultThreadImageDeliveryModeRaw: String
 
     private static let defaultChatEndpoint = "https://api.sparkclient.local/v1/chat/completions"
     private static let defaultEmbedEndpoint = "https://api.sparkclient.local/v1/embeddings"
@@ -103,7 +105,8 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         translationDic: [TranslationDic],
         scenarioRemoteBundles: AIScenarioRemoteBundlesCollection?,
         scenarioSelectedModel: [String: String],
-        trialChatPickerDisabledModelNames: [String] = []
+        trialChatPickerDisabledModelNames: [String] = [],
+        defaultThreadImageDeliveryModeRaw: String = ChatThreadImageDeliveryMode.directMultimodal.rawValue
     ) {
         self.chat = chat
         self.optimizationText = optimizationText
@@ -125,6 +128,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.scenarioRemoteBundles = scenarioRemoteBundles
         self.scenarioSelectedModel = scenarioSelectedModel
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
+        self.defaultThreadImageDeliveryModeRaw = defaultThreadImageDeliveryModeRaw
     }
 
     static let `default` = AISettingsSnapshot(
@@ -162,7 +166,8 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
             reportInterpretation: defaultChatBundle
         ),
         scenarioSelectedModel: [:],
-        trialChatPickerDisabledModelNames: []
+        trialChatPickerDisabledModelNames: [],
+        defaultThreadImageDeliveryModeRaw: ChatThreadImageDeliveryMode.directMultimodal.rawValue
     )
 
     enum CodingKeys: String, CodingKey {
@@ -186,6 +191,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         case scenarioRemoteBundles
         case scenarioSelectedModel
         case trialChatPickerDisabledModelNames
+        case defaultThreadImageDeliveryModeRaw
     }
 
     init(from decoder: Decoder) throws {
@@ -210,6 +216,8 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         scenarioRemoteBundles = try c.decode(AIScenarioRemoteBundlesCollection.self, forKey: .scenarioRemoteBundles)
         scenarioSelectedModel = try c.decodeIfPresent([String: String].self, forKey: .scenarioSelectedModel) ?? [:]
         trialChatPickerDisabledModelNames = try c.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
+        defaultThreadImageDeliveryModeRaw = try c.decodeIfPresent(String.self, forKey: .defaultThreadImageDeliveryModeRaw)
+            ?? ChatThreadImageDeliveryMode.directMultimodal.rawValue
     }
 
     func encode(to encoder: Encoder) throws {
@@ -234,6 +242,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         try c.encode(scenarioRemoteBundles, forKey: .scenarioRemoteBundles)
         try c.encode(scenarioSelectedModel, forKey: .scenarioSelectedModel)
         try c.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
+        try c.encode(defaultThreadImageDeliveryModeRaw, forKey: .defaultThreadImageDeliveryModeRaw)
     }
 
     func config(for scenario: AIScenario) -> AIScenarioConfig {

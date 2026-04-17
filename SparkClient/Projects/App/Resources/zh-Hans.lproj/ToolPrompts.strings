@@ -113,4 +113,8 @@
 "tool.ui.rich.location.default_name" = "位置";
 "tool.ui.rich.event.default_title" = "日程事件";
 "tool.ui.rich.health.default_title" = "健康卡片";
-"tool.hint.generate_structured_health_card_async" = "【系统】结构化保存卡片正在后台生成中。请直接根据用户消息或对话中的相关原文进行专业解读，无需等待卡片即可继续回答；卡片生成后将显示在本条助手回复下方。若再次调用 generate_structured_health_card：raw_text 必须是你提炼后的医学要点，可选 oss_file_id 与消息中的 oss_file_id 一致，勿把完整 OCR 传给工具。";
+
+"tool.async.structured_health_card.model_hint" = "【系统】结构化保存卡片正在后台生成中。请直接根据用户消息或对话中的相关原文进行专业解读，无需等待卡片即可继续回答；卡片生成后将显示在本条助手回复下方。若再次调用 generate_structured_health_card：raw_text 必须是你提炼后的医学要点，可选 oss_file_id 与消息中的 oss_file_id 一致，勿把完整 OCR 传给工具。";
+"tool.error.structured_health_card.no_member" = "未选择成员，无法生成结构化健康卡片。";
+"tool.error.structured_health_card.empty_raw_text" = "参数不完整：请提供 raw_text（提炼后的关键信息）。";
+"tool.error.structured_health_card.no_message_binding" = "【系统】内部错误：无法关联助手消息。";

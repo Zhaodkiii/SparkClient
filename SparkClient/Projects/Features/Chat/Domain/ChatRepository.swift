@@ -4,7 +4,7 @@ protocol ChatRepository: Sendable {
     func loadActiveThread() async -> ChatThread?
     func loadThread(id: UUID) async -> ChatThread?
     func loadThreads() async -> [ChatThread]
-    func createThread(memberID: Int?, title: String) async -> ChatThread
+    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread
     func setActiveThread(id: UUID) async
     func loadMessages(threadID: UUID, limit: Int?, before: Date?) async -> [ChatMessage]
     func countMessages(threadID: UUID) async -> Int
@@ -31,6 +31,7 @@ protocol ChatRepository: Sendable {
     ) async
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID) async
     func upsertRemoteThreads(_ threads: [ChatThread]) async
+    func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
     func softDeleteThread(id: UUID) async
     func loadPendingThreadDeletionIDs(limit: Int) async -> [UUID]

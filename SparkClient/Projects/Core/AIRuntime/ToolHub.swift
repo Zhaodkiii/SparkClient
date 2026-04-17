@@ -6,11 +6,14 @@ final class ToolHub: @unchecked Sendable {
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let aiSettingsRepository: any AISettingsRepository
     private let runtimeService: any AIRuntimeServing
-    private let medicalStructuredExtractor: any MedicalDocumentStructuredExtracting
     private let taskService: TaskService
     /// 知识库检索/创建：经用例访问 `CoreDataKnowledgeRepository`，避免在此直接操作持久化。
     private let searchKnowledgeUseCase: SearchKnowledgeUseCase
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
+    /// 与上传流水线共用：对话工具 `generate_structured_health_card` 的结构化抽取。
+    private let typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor
+    /// 异步将卡片合并回当前助手消息（Core Data + `ChatStateStore`）。
+    private let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
     private let logger: Logger
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
@@ -21,20 +24,22 @@ final class ToolHub: @unchecked Sendable {
         medicalQueryAPI: SparkMedicalQueryAPI,
         aiSettingsRepository: any AISettingsRepository,
         runtimeService: any AIRuntimeServing,
-        medicalStructuredExtractor: any MedicalDocumentStructuredExtracting,
         taskService: TaskService,
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
+        typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor,
+        structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator,
         logger: Logger = ConsoleLogger()
     ) {
         self.auditStore = auditStore
         self.medicalQueryAPI = medicalQueryAPI
         self.aiSettingsRepository = aiSettingsRepository
         self.runtimeService = runtimeService
-        self.medicalStructuredExtractor = medicalStructuredExtractor
         self.taskService = taskService
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
+        self.typedMedicalDocumentExtractor = typedMedicalDocumentExtractor
+        self.structuredHealthCardMergeCoordinator = structuredHealthCardMergeCoordinator
         self.logger = logger
     }
 
@@ -77,9 +82,20 @@ final class ToolHub: @unchecked Sendable {
     }
 
     /// 执行模型返回的 tool_call，并写入统一审计。
-    func executeToolCall(name: String, arguments: String, memberID: Int?) async -> ToolExecutionResult {
+    func executeToolCall(
+        name: String,
+        arguments: String,
+        memberID: Int?,
+        threadID: UUID? = nil,
+        assistantMessageClientID: UUID? = nil
+    ) async -> ToolExecutionResult {
         let invocation = ToolInvocation(name: name, arguments: parseArguments(arguments))
-        let context = ToolExecutionContext(memberID: memberID, locale: .current)
+        let context = ToolExecutionContext(
+            memberID: memberID,
+            locale: .current,
+            assistantMessageClientID: assistantMessageClientID,
+            threadID: threadID
+        )
         let result = await execute(invocation: invocation, context: context)
         await appendAudit(invocation: invocation, context: context, result: result)
         return result
@@ -1154,176 +1170,102 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// `generate_structured_health_card`：返回异步抽取提示与任务参数，由聊天层后台抽取并回插卡片。
+    /// 对齐 HealthClient：同步返回系统提示，结构化卡片在后台抽取完成后合并到当前助手消息。
     private func runGenerateStructuredHealthCard(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let l10n = AIPromptL10n(locale: context.locale)
+        let hintTemplate = l10n.tool(
+            "tool.async.structured_health_card.model_hint",
+            fallback: """
+            [System] Structured save cards are generating in the background. Continue interpreting from the user message without waiting; cards appear below this reply.
+            """
+        )
         guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
-                outputText: "未选择成员，无法生成结构化健康卡片。",
+                outputText: l10n.tool(
+                    "tool.error.structured_health_card.no_member",
+                    fallback: "No member selected; cannot generate structured health cards."
+                ),
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
 
-        let reportType = (
-            invocation.arguments["report_type"]
-            ?? invocation.arguments["category"]
-            ?? "medical_case"
-        ).lowercased()
-        let rawText = (invocation.arguments["raw_text"] ?? invocation.arguments["content"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let reportType = (invocation.arguments["report_type"] ?? invocation.arguments["category"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let rawText = (invocation.arguments["raw_text"] ?? invocation.arguments["content"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard rawText.isEmpty == false else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
-                outputText: "生成失败：raw_text 不能为空。",
+                outputText: l10n.tool(
+                    "tool.error.structured_health_card.empty_raw_text",
+                    fallback: "Missing raw_text (distilled excerpt)."
+                ),
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-        guard let kind = structuredKind(from: reportType) else {
+
+        guard let threadID = context.threadID, let assistantID = context.assistantMessageClientID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
-                outputText: #"{"ok":false,"error":"invalid_report_type"}"#,
+                outputText: l10n.tool(
+                    "tool.error.structured_health_card.no_message_binding",
+                    fallback: "[System] Internal error: assistant message not bound."
+                ),
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-        let taskPayload = makeStructuredCardAsyncTaskPayload(
-            reportType: reportType,
-            memberID: memberID,
-            kind: kind,
-            rawText: rawText,
-            ossFileID: invocation.arguments["oss_file_id"]
-        )
-        let combinedOutput = "\(asyncStructuredCardGenerationModelHint)\n\(taskPayload)"
+
+        let effectiveReportType = reportType.isEmpty ? "medical_case" : reportType
+        let ossFileId = invocation.arguments["oss_file_id"].flatMap { Int($0) }
+        let merge = structuredHealthCardMergeCoordinator
+        let extractor = typedMedicalDocumentExtractor
+
+        Task {
+            do {
+                let output = try await extractor.extractFromChatDistilledText(
+                    memberID: memberID,
+                    reportType: effectiveReportType,
+                    rawText: rawText
+                )
+                let delta = ChatStructuredHealthCardsPayloadBuilder.appendPayloads(
+                    from: output,
+                    memberID: memberID,
+                    ossFileId: ossFileId
+                )
+                await merge.mergeAppendWhenAssistantMessageReady(
+                    threadID: threadID,
+                    assistantClientMessageID: assistantID,
+                    delta: delta
+                )
+            } catch {
+                logger.warning(
+                    "generate_structured_health_card 抽取失败：\(error.localizedDescription)",
+                    module: .aiConfig
+                )
+                let delta = ChatStructuredHealthCardsPayloadBuilder.extractionFailureBlob(
+                    memberID: memberID,
+                    reportType: effectiveReportType,
+                    ossFileId: ossFileId
+                )
+                await merge.mergeAppendWhenAssistantMessageReady(
+                    threadID: threadID,
+                    assistantClientMessageID: assistantID,
+                    delta: delta
+                )
+            }
+        }
+
         return ToolExecutionResult(
             toolName: SparkToolName.generateStructuredHealthCard,
-            outputText: combinedOutput,
-            sensitive: true,
-            shouldBypassModel: true
+            outputText: hintTemplate,
+            sensitive: false,
+            shouldBypassModel: false
         )
-    }
-
-    private func structuredKind(from reportType: String) -> MedicalDocumentKind? {
-        switch reportType {
-        case "medication":
-            return .medication
-        case "prescription":
-            return .prescription
-        case "exam_report":
-            return .medicalReport
-        case "medical_case":
-            return .caseDocument
-        default:
-            return nil
-        }
-    }
-
-    private func makeStructuredCardToolPayload(typedResult: MedicalDocumentTypedResult) -> String {
-        let payload: [String: Any]
-        switch typedResult {
-        case .medication(let drafts):
-            payload = [
-                "medication_cards": drafts.map {
-                    [
-                        "id": UUID().uuidString,
-                        "name": $0.drugName ?? $0.genericName ?? $0.brandName ?? "未知药品",
-                        "dosage": $0.dosePerTime ?? "",
-                        "frequency": $0.frequencyText ?? $0.frequencyCode ?? "",
-                        "instructions": $0.instructions ?? ""
-                    ]
-                }
-            ]
-        case .prescription(let draft):
-            let meds: [[String: Any]] = (draft.medications ?? []).map {
-                [
-                    "id": UUID().uuidString,
-                    "name": $0.drugName ?? $0.genericName ?? $0.brandName ?? "未知药品",
-                    "dosage": $0.dosePerTime ?? "",
-                    "frequency": $0.frequencyText ?? $0.frequencyCode ?? "",
-                    "instructions": $0.instructions ?? ""
-                ]
-            }
-            payload = [
-                "prescription_cards": [[
-                    "id": UUID().uuidString,
-                    "batchNo": draft.batchNo ?? "",
-                    "institutionName": draft.institutionName ?? "",
-                    "prescribedAt": draft.prescribedAt ?? "",
-                    "diagnosis": draft.diagnosis ?? "",
-                    "medications": meds
-                ]]
-            ]
-        case .medicalReport(let drafts):
-            payload = [
-                "exam_report_cards": drafts.map {
-                    [
-                        "id": UUID().uuidString,
-                        "title": $0.title,
-                        "hospital": $0.hospital ?? "",
-                        "date": $0.date ?? "",
-                        "conclusion": $0.content
-                    ]
-                }
-            ]
-        case .caseDocument(let draft):
-            payload = [
-                "medical_case_cards": [[
-                    "id": UUID().uuidString,
-                    "title": draft.title,
-                    "summary": draft.summary ?? "",
-                    "diagnosis": draft.diagnosis ?? "",
-                    "hospitalName": draft.hospitalName ?? "",
-                    "occurredAt": draft.occurredAt ?? ""
-                ]]
-            ]
-        case .healthExamReport(let draft):
-            payload = [
-                "exam_report_cards": [[
-                    "id": UUID().uuidString,
-                    "title": draft.examType ?? "体检报告",
-                    "hospital": draft.institutionName ?? "",
-                    "date": draft.examDate ?? "",
-                    "conclusion": draft.summary ?? ""
-                ]]
-            ]
-        }
-        guard JSONSerialization.isValidJSONObject(payload),
-              let data = try? JSONSerialization.data(withJSONObject: payload),
-              let text = String(data: data, encoding: .utf8) else {
-            return "{}"
-        }
-        return text
-    }
-
-    private func makeStructuredCardAsyncTaskPayload(
-        reportType: String,
-        memberID: Int,
-        kind: MedicalDocumentKind,
-        rawText: String,
-        ossFileID: String?
-    ) -> String {
-        var payload: [String: Any] = [
-            "ok": true,
-            "mode": "async_structured_extraction",
-            "tool": SparkToolName.generateStructuredHealthCard,
-            "report_type": reportType,
-            "document_kind": kind.rawValue,
-            "member_id": memberID,
-            "raw_text": rawText
-        ]
-        if let ossFileID, let parsed = Int(ossFileID) {
-            payload["oss_file_id"] = parsed
-        }
-        guard JSONSerialization.isValidJSONObject(payload),
-              let data = try? JSONSerialization.data(withJSONObject: payload),
-              let text = String(data: data, encoding: .utf8) else {
-            return #"{"ok":false,"error":"build_async_task_payload_failed"}"#
-        }
-        return text
-    }
-
-    private var asyncStructuredCardGenerationModelHint: String {
-        td("tool.hint.generate_structured_health_card_async")
     }
 
     /// 任务查询工具：按成员维度返回主任务与子任务信息，供后续任务生成去重。

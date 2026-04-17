@@ -52,12 +52,13 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         }
         
         // 构建OpenAI规范的聊天完成请求体
+        let providerUpper = runtimeRequest.providerCompanyUppercased
         let payload = ChatCompletionRequest(
             model: client.model,
             messages: runtimeMessages.map {
                 .init(
                     role: $0.role.rawValue,
-                    content: $0.content,
+                    content: Self.encodeRequestMessageContent(from: $0, providerUppercased: providerUpper),
                     toolCalls: ($0.toolCalls ?? []).map {
                         .init(
                             id: $0.id,
@@ -446,12 +447,87 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         guard text.count > limit else { return text }
         return "\(text.prefix(limit))...(truncated)"
     }
+
+    /// 将 `AIRuntimeMessage` 编码为 OpenAI `content`：纯字符串或多模态 JSON 数组。
+    private static func encodeRequestMessageContent(
+        from message: AIRuntimeMessage,
+        providerUppercased: String?
+    ) -> RequestMessageContentBox? {
+        if let parts = message.contentParts, parts.isEmpty == false {
+            let mapped = parts.compactMap { normalizeContentPart($0, providerUppercased: providerUppercased) }
+            if mapped.isEmpty {
+                return message.content.map { .string($0) }
+            }
+            return .parts(mapped)
+        }
+        return message.content.map { .string($0) }
+    }
+
+    /// - Returns: `nil` 表示该 part 不应出现在请求中（例如仍带 `http(s)` 的图链，避免向模型发送远端 URL）。
+    private static func normalizeContentPart(
+        _ part: AIRuntimeContentPart,
+        providerUppercased: String?
+    ) -> AIRuntimeContentPart? {
+        guard part.type == "image_url", let raw = part.imageURL?.url else { return part }
+        let p = providerUppercased?.uppercased() ?? ""
+
+        if raw.hasPrefix("http://") || raw.hasPrefix("https://") {
+            return nil
+        }
+
+        // 运行时内联 JPEG：仅携带 base64 原文，由本方法按厂商格式化为最终 `image_url`。
+        let base64Payload: String
+        if raw.hasPrefix(AIRuntimeContentPart.sparkInlineJPEGBase64Prefix) {
+            base64Payload = String(raw.dropFirst(AIRuntimeContentPart.sparkInlineJPEGBase64Prefix.count))
+        } else if raw.hasPrefix("data:image") {
+            base64Payload = raw.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).last.map(String.init) ?? raw
+        } else {
+            base64Payload = raw
+        }
+
+        let dataURL = "data:image/jpeg;base64,\(base64Payload)"
+
+        if p.contains("XAI") {
+            return AIRuntimeContentPart(
+                type: "image_url",
+                text: nil,
+                imageURL: AIRuntimeImageURLPayload(url: dataURL, detail: "high")
+            )
+        }
+        if p.contains("ZHIPU") || p.contains("GLM") || p.contains("HANLIN") {
+            return AIRuntimeContentPart(
+                type: "image_url",
+                text: nil,
+                imageURL: AIRuntimeImageURLPayload(url: base64Payload, detail: nil)
+            )
+        }
+        return AIRuntimeContentPart(
+            type: "image_url",
+            text: nil,
+            imageURL: AIRuntimeImageURLPayload(url: dataURL, detail: nil)
+        )
+    }
+}
+
+/// OpenAI `messages[].content`：字符串或 part 数组。
+private enum RequestMessageContentBox: Encodable {
+    case string(String)
+    case parts([AIRuntimeContentPart])
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .string(let s):
+            try s.encode(to: encoder)
+        case .parts(let parts):
+            try parts.encode(to: encoder)
+        }
+    }
 }
 
 private struct ChatCompletionRequest: Encodable {
     struct RequestMessage: Encodable {
         let role: String
-        let content: String?
+        let content: RequestMessageContentBox?
         let toolCalls: [RequestToolCall]?
         let toolCallID: String?
         let name: String?

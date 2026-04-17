@@ -38,19 +38,23 @@ struct ManagedFileUploadPayload: Sendable {
     let businessType: String
     let businessID: String
     let isPublic: Bool
+    /// 上传进度 0.0 ... 1.0；在 OSS `putObject` 阶段回调（`OSSClientWrapper` 已在主线程派发）。
+    let onUploadProgress: (@Sendable (Double) -> Void)?
 
     init(
         data: Data,
         fileName: String,
         businessType: String,
         businessID: String = "",
-        isPublic: Bool = false
+        isPublic: Bool = false,
+        onUploadProgress: (@Sendable (Double) -> Void)? = nil
     ) {
         self.data = data
         self.fileName = fileName
         self.businessType = businessType
         self.businessID = businessID
         self.isPublic = isPublic
+        self.onUploadProgress = onUploadProgress
     }
 }
 

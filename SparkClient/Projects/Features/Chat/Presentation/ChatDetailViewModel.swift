@@ -24,58 +24,210 @@ final class ChatDetailViewModel: ObservableObject {
 
     private let stateStore: ChatStateStore
     private let memberContextStore: MemberContextStore
+    private let chatRepository: any ChatRepository
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
     private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let sendMessageUseCase: SendChatMessageUseCase
+    private let fileTransferService: FileTransferService
+    private let ocrOrchestrator: OCROrchestrator
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
     private let syncChatUseCase: SyncChatUseCase
     private let updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase
-    private let saveChatMedicalCardUseCase: SaveChatMedicalCardUseCase
     private let notificationClient: any NotificationClient
     private let aiConfigCenter: AIConfigCenter
     private let aiSettingsRepository: any AISettingsRepository
     private let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
+    private let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
     private let logger: Logger
     private var isRealtimeActive = false
+    private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
+
+    /// 结构化医疗卡片保存中（用于按钮 Progress）。
+    @Published private(set) var savingStructuredHealthCardIDs: Set<UUID> = []
 
     /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
     @Published private(set) var chatScenarioModels: [ChatComposerModelOption] = []
     /// 当前会话输入栏关联模型的推理能力（用于思考开关展示策略）。
     @Published private(set) var reasoningToolbarContext: ChatModelReasoningContext = .unknown
+    /// 当前会话在列表中的图片送达方式（用于工具栏菜单展示）。
+    @Published private(set) var threadImageDeliveryMode: ChatThreadImageDeliveryMode = .directMultimodal
+    /// 当前所选对话模型是否支持多模态（用于置灰「直发」选项）。
+    @Published private(set) var currentModelSupportsMultimodal: Bool = false
 
     init(
         stateStore: ChatStateStore,
         memberContextStore: MemberContextStore,
+        chatRepository: any ChatRepository,
         loadChatThreadsUseCase: LoadChatThreadsUseCase,
         loadChatMessagesUseCase: LoadChatMessagesUseCase,
         sendMessageUseCase: SendChatMessageUseCase,
+        fileTransferService: FileTransferService,
+        ocrOrchestrator: OCROrchestrator,
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
         syncChatUseCase: SyncChatUseCase,
         updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase,
-        saveChatMedicalCardUseCase: SaveChatMedicalCardUseCase,
         notificationClient: any NotificationClient,
         aiConfigCenter: AIConfigCenter,
         aiSettingsRepository: any AISettingsRepository,
         translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
+        saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
         self.memberContextStore = memberContextStore
+        self.chatRepository = chatRepository
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.sendMessageUseCase = sendMessageUseCase
+        self.fileTransferService = fileTransferService
+        self.ocrOrchestrator = ocrOrchestrator
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.syncChatUseCase = syncChatUseCase
         self.updateChatMessageAttachmentsUseCase = updateChatMessageAttachmentsUseCase
-        self.saveChatMedicalCardUseCase = saveChatMedicalCardUseCase
         self.notificationClient = notificationClient
         self.aiConfigCenter = aiConfigCenter
         self.aiSettingsRepository = aiSettingsRepository
         self.translateKnowledgeTextUseCase = translateKnowledgeTextUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
+        self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
         self.logger = logger
+    }
+
+    func enqueueComposerAttachments(_ attachments: [ChatComposerAttachmentPreview], for threadID: UUID) {
+        guard attachments.isEmpty == false else { return }
+        stateStore.appendComposerAttachments(attachments, for: threadID)
+        for attachment in attachments {
+            startPreparingAttachment(attachment, threadID: threadID)
+        }
+    }
+
+    func removeComposerAttachment(id: UUID, for threadID: UUID) {
+        composerAttachmentTasks[id]?.cancel()
+        composerAttachmentTasks[id] = nil
+        stateStore.removeComposerAttachment(id: id, for: threadID)
+    }
+
+    func downloadChatImageToLocalFile(meta: ChatUploadedImageAttachmentMeta) async throws -> URL {
+        let resolvedPath: String
+        if let objectKey = meta.objectKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+           objectKey.isEmpty == false {
+            resolvedPath = try await fileTransferService.makePresignedDownloadURL(objectKey: objectKey).absoluteString
+        } else if let remote = meta.remoteURLString?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  remote.isEmpty == false {
+            resolvedPath = remote
+        } else if let filePath = meta.filePath?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  (filePath.hasPrefix("http://") || filePath.hasPrefix("https://")) {
+            resolvedPath = filePath
+        } else {
+            logger.warning("聊天图片下载缺少 object_key/remote_url，fileID=\(meta.fileId)", module: .general)
+            throw SparkNetworkError.decoding(
+                NSError(
+                    domain: "ChatImageDownload",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "图片缺少可下载地址"]
+                )
+            )
+        }
+        let managedFile = ManagedFileRecord(
+            id: meta.fileId,
+            fileUUID: meta.fileUUID,
+            filePath: resolvedPath,
+            originalName: meta.originalName,
+            fileSize: 0,
+            mimeType: meta.mimeType,
+            fileMd5: meta.fileMd5,
+            isPublic: false,
+            businessType: ChatSendImageAssembly.chatAttachmentBusinessType,
+            businessID: "",
+            createdAt: "",
+            objectKey: nil,
+            storageType: nil
+        )
+        if let cached = await fileTransferService.cachedURL(file: managedFile) {
+            return cached
+        }
+        logger.debug("聊天图片触发公共下载，fileID=\(meta.fileId)", module: .general)
+        return try await fileTransferService.download(file: managedFile)
+    }
+
+    private func startPreparingAttachment(_ attachment: ChatComposerAttachmentPreview, threadID: UUID) {
+        composerAttachmentTasks[attachment.id]?.cancel()
+        stateStore.setComposerPreparedAttachmentState(
+            id: attachment.id,
+            ChatComposerPreparedAttachmentState(phase: .uploading, progress: 0, prepared: nil, errorMessage: nil)
+        )
+        composerAttachmentTasks[attachment.id] = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let record = try await self.fileTransferService.upload(
+                    ManagedFileUploadPayload(
+                        data: attachment.imageData,
+                        fileName: attachment.displayName,
+                        businessType: ChatSendImageAssembly.chatAttachmentBusinessType,
+                        businessID: attachment.id.uuidString,
+                        isPublic: false,
+                        onUploadProgress: { progress in
+                            Task { @MainActor [weak self] in
+                                guard let self else { return }
+                                self.stateStore.setComposerAttachmentUploadProgress(id: attachment.id, progress: progress)
+                                var state = self.stateStore.composerPreparedAttachmentState(id: attachment.id) ?? .pending
+                                state.phase = .uploading
+                                state.progress = progress
+                                state.errorMessage = nil
+                                self.stateStore.setComposerPreparedAttachmentState(id: attachment.id, state)
+                            }
+                        }
+                    )
+                )
+                await MainActor.run {
+                    var state = self.stateStore.composerPreparedAttachmentState(id: attachment.id) ?? .pending
+                    state.phase = .ocring
+                    state.progress = 1
+                    state.errorMessage = nil
+                    self.stateStore.setComposerPreparedAttachmentState(id: attachment.id, state)
+                }
+                let ocrResult = try await self.ocrOrchestrator.recognize(
+                    imageData: attachment.imageData,
+                    options: .fastPreview
+                )
+                await MainActor.run {
+                    let prepared = ChatPreparedImageAttachment(
+                        previewID: attachment.id,
+                        record: record,
+                        ocrText: ocrResult.text
+                    )
+                    let state = ChatComposerPreparedAttachmentState(
+                        phase: .success,
+                        progress: 1,
+                        prepared: prepared,
+                        errorMessage: nil
+                    )
+                    self.stateStore.setComposerPreparedAttachmentState(id: attachment.id, state)
+                    self.stateStore.setComposerAttachmentUploadProgress(id: attachment.id, progress: 1)
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.stateStore.removeComposerPreparedAttachmentState(id: attachment.id)
+                    self.stateStore.setComposerAttachmentUploadProgress(id: attachment.id, progress: 0)
+                }
+            } catch {
+                await MainActor.run {
+                    let state = ChatComposerPreparedAttachmentState(
+                        phase: .failed,
+                        progress: 0,
+                        prepared: nil,
+                        errorMessage: error.localizedDescription
+                    )
+                    self.stateStore.setComposerPreparedAttachmentState(id: attachment.id, state)
+                    self.stateStore.setComposerAttachmentUploadProgress(id: attachment.id, progress: 0)
+                }
+            }
+            await MainActor.run {
+                self.composerAttachmentTasks[attachment.id] = nil
+            }
+        }
     }
 
     func refreshChatModelPicker() async {
@@ -107,8 +259,37 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName
         }
         let ctx = snapshot.chatReasoningContext(selectedModelName: name)
+        let mm = snapshot.chatMultimodalCapabilities(selectedModelName: name)
         await MainActor.run {
             reasoningToolbarContext = ctx
+            currentModelSupportsMultimodal = mm.supportsMultimodal
+        }
+    }
+
+    /// 刷新会话级图片送达方式展示（依赖线程列表中的 `ChatThread`）。
+    func refreshThreadImageDeliveryMode(for threadID: UUID) async {
+        let fromList = await MainActor.run {
+            stateStore.threadItems.first(where: { $0.id == threadID })?.thread
+        }
+        if let thread = fromList {
+            await MainActor.run {
+                threadImageDeliveryMode = thread.imageDeliveryMode
+            }
+            return
+        }
+        if let thread = await chatRepository.loadThread(id: threadID) {
+            await MainActor.run {
+                threadImageDeliveryMode = thread.imageDeliveryMode
+            }
+        }
+    }
+
+    func setThreadImageDeliveryMode(_ mode: ChatThreadImageDeliveryMode, for threadID: UUID) async {
+        await chatRepository.updateThreadImageDeliveryMode(threadID: threadID, imageDeliveryModeRaw: mode.rawValue)
+        let items = await loadChatThreadsUseCase.execute()
+        await MainActor.run {
+            stateStore.setThreads(items)
+            threadImageDeliveryMode = mode
         }
     }
 
@@ -262,10 +443,12 @@ final class ChatDetailViewModel: ObservableObject {
         guard stateStore.isSending == false else { return }
         guard let threadID = stateStore.selectedThreadID else { return }
 
-        let draft = stateStore.draft(for: threadID).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard draft.isEmpty == false else { return }
+        let composer = stateStore.composerDraft(for: threadID)
+        guard composer.hasVisualContent else { return }
+        guard stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false else { return }
 
-        let flags = stateStore.composerDraft(for: threadID).runtimeFlags
+        let draft = composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let flags = composer.runtimeFlags
         let inference = ChatOrchestratorInferenceOptions(
             useTools: flags.useTools,
             useKnowledgeBag: flags.useKnowledgeBag,
@@ -275,7 +458,7 @@ final class ChatDetailViewModel: ObservableObject {
         )
 
         logger.info(
-            "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), length=\(draft.count)",
+            "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), textLen=\(draft.count), attachments=\(composer.attachments.count)",
             module: .general
         )
         stateStore.setSending(true)
@@ -287,6 +470,7 @@ final class ChatDetailViewModel: ObservableObject {
                 .chatReasoningContext(selectedModelName: flags.selectedChatModelName)
             let streamingMessageID = UUID()
             let stateStore = self.stateStore
+            stateStore.clearComposerAttachmentUploadProgress()
             stateStore.startStreamingAssistant(
                 threadID: threadID,
                 clientMessageID: streamingMessageID,
@@ -296,9 +480,18 @@ final class ChatDetailViewModel: ObservableObject {
             let snapshot = try await sendMessageUseCase.execute(
                 threadID: threadID,
                 memberID: memberContextStore.context.selectedMemberID,
-                userInput: draft,
+                userInput: composer.text,
+                composerAttachments: composer.attachments,
+                preparedImageAttachments: stateStore.preparedImageAttachments(for: threadID),
+                selectedChatModelName: flags.selectedChatModelName,
+                assistantClientMessageID: streamingMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                onImageUploadProgress: { id, progress in
+                    Task { @MainActor in
+                        stateStore.setComposerAttachmentUploadProgress(id: id, progress: progress)
+                    }
+                },
                 onUserMessagePersisted: { localSnapshot in
                     let threadItems = await loadChatThreadsUseCase.execute()
                     await MainActor.run {
@@ -312,15 +505,6 @@ final class ChatDetailViewModel: ObservableObject {
                 onAssistantPartial: { delta in
                     await MainActor.run {
                         stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
-                    }
-                },
-                onAssistantAttachmentsUpdated: { clientMessageID, attachments in
-                    await MainActor.run {
-                        stateStore.updateMessageAttachments(
-                            threadID: threadID,
-                            clientMessageID: clientMessageID,
-                            attachments: attachments
-                        )
                     }
                 }
             )
@@ -507,86 +691,6 @@ final class ChatDetailViewModel: ObservableObject {
         return next
     }
 
-    func saveMedicationCard(
-        threadID: UUID,
-        message: ChatMessage,
-        card: ChatMedicationCardPayload
-    ) async throws {
-        guard let memberID = memberContextStore.context.selectedMemberID else {
-            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
-        }
-        let attachments = try await saveChatMedicalCardUseCase.saveMedicationCard(
-            memberID: memberID,
-            message: message,
-            card: card
-        )
-        stateStore.updateMessageAttachments(
-            threadID: threadID,
-            clientMessageID: message.clientMessageID,
-            attachments: attachments
-        )
-    }
-
-    func savePrescriptionCard(
-        threadID: UUID,
-        message: ChatMessage,
-        card: ChatPrescriptionCardPayload
-    ) async throws {
-        guard let memberID = memberContextStore.context.selectedMemberID else {
-            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
-        }
-        let attachments = try await saveChatMedicalCardUseCase.savePrescriptionCard(
-            memberID: memberID,
-            message: message,
-            card: card
-        )
-        stateStore.updateMessageAttachments(
-            threadID: threadID,
-            clientMessageID: message.clientMessageID,
-            attachments: attachments
-        )
-    }
-
-    func saveExamReportCard(
-        threadID: UUID,
-        message: ChatMessage,
-        card: ChatExamReportCardPayload
-    ) async throws {
-        guard let memberID = memberContextStore.context.selectedMemberID else {
-            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
-        }
-        let attachments = try await saveChatMedicalCardUseCase.saveExamReportCard(
-            memberID: memberID,
-            message: message,
-            card: card
-        )
-        stateStore.updateMessageAttachments(
-            threadID: threadID,
-            clientMessageID: message.clientMessageID,
-            attachments: attachments
-        )
-    }
-
-    func saveMedicalCaseCard(
-        threadID: UUID,
-        message: ChatMessage,
-        card: ChatMedicalCaseCardPayload
-    ) async throws {
-        guard let memberID = memberContextStore.context.selectedMemberID else {
-            throw NSError(domain: "ChatDetailViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_not_selected"])
-        }
-        let attachments = try await saveChatMedicalCardUseCase.saveMedicalCaseCard(
-            memberID: memberID,
-            message: message,
-            card: card
-        )
-        stateStore.updateMessageAttachments(
-            threadID: threadID,
-            clientMessageID: message.clientMessageID,
-            attachments: attachments
-        )
-    }
-
     private func shortID(_ value: UUID?) -> String {
         guard let value else { return "-" }
         return String(value.uuidString.prefix(8))
@@ -595,5 +699,256 @@ final class ChatDetailViewModel: ObservableObject {
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
+    }
+
+    // MARK: - 对话内结构化医疗卡片保存
+
+    func saveMedicationStructuredCard(threadID: UUID, message: ChatMessage, card: MedicationChatCardPayload) async {
+        guard let data = card.draftJSON.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(MedicationRecognitionDraft.self, from: data) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
+            return
+        }
+        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
+            return
+        }
+        await saveWithCardId(card.id, rawTrace: card.displayName) {
+            let envelope = MedicalDocumentRecognitionEnvelope(
+                memberID: memberID,
+                sourceFiles: [],
+                rawOCRText: card.displayName,
+                typeResolution: MedicalDocumentTypeResolution(
+                    kind: .medication,
+                    confidence: 1,
+                    source: .manual,
+                    reason: "chat_save"
+                )
+            )
+            return MedicalDocumentTypedExtractionOutput(
+                envelope: envelope,
+                typedResult: .medication([draft]),
+                extractedJSON: card.draftJSON,
+                payloadPreview: ""
+            )
+        } onSuccess: {
+            await markMedicationSaved(threadID: threadID, message: message, cardID: card.id)
+        }
+    }
+
+    func savePrescriptionStructuredCard(threadID: UUID, message: ChatMessage, card: PrescriptionChatCardPayload) async {
+        guard let data = card.draftJSON.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(PrescriptionRecognitionDraft.self, from: data) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
+            return
+        }
+        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
+            return
+        }
+        await saveWithCardId(card.id, rawTrace: card.title) {
+            let envelope = MedicalDocumentRecognitionEnvelope(
+                memberID: memberID,
+                sourceFiles: [],
+                rawOCRText: card.title,
+                typeResolution: MedicalDocumentTypeResolution(
+                    kind: .prescription,
+                    confidence: 1,
+                    source: .manual,
+                    reason: "chat_save"
+                )
+            )
+            return MedicalDocumentTypedExtractionOutput(
+                envelope: envelope,
+                typedResult: .prescription(draft),
+                extractedJSON: card.draftJSON,
+                payloadPreview: ""
+            )
+        } onSuccess: {
+            await markPrescriptionSaved(threadID: threadID, message: message, cardID: card.id)
+        }
+    }
+
+    func saveExamReportStructuredCard(threadID: UUID, message: ChatMessage, card: ExamReportChatCardPayload) async {
+        guard let data = card.draftJSON.data(using: .utf8) else { return }
+        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
+            return
+        }
+        if let report = try? JSONDecoder().decode(MedicalReportRecognitionDraft.self, from: data) {
+            await saveWithCardId(card.id, rawTrace: card.title) {
+                let envelope = MedicalDocumentRecognitionEnvelope(
+                    memberID: memberID,
+                    sourceFiles: [],
+                    rawOCRText: card.title,
+                    typeResolution: MedicalDocumentTypeResolution(
+                        kind: .medicalReport,
+                        confidence: 1,
+                        source: .manual,
+                        reason: "chat_save"
+                    )
+                )
+                return MedicalDocumentTypedExtractionOutput(
+                    envelope: envelope,
+                    typedResult: .medicalReport([report]),
+                    extractedJSON: card.draftJSON,
+                    payloadPreview: ""
+                )
+            } onSuccess: {
+                await markExamReportSaved(threadID: threadID, message: message, cardID: card.id)
+            }
+            return
+        }
+        if let health = try? JSONDecoder().decode(HealthExamRecognitionDraft.self, from: data) {
+            await saveWithCardId(card.id, rawTrace: card.title) {
+                let envelope = MedicalDocumentRecognitionEnvelope(
+                    memberID: memberID,
+                    sourceFiles: [],
+                    rawOCRText: card.title,
+                    typeResolution: MedicalDocumentTypeResolution(
+                        kind: .healthExamReport,
+                        confidence: 1,
+                        source: .manual,
+                        reason: "chat_save"
+                    )
+                )
+                return MedicalDocumentTypedExtractionOutput(
+                    envelope: envelope,
+                    typedResult: .healthExamReport(health),
+                    extractedJSON: card.draftJSON,
+                    payloadPreview: ""
+                )
+            } onSuccess: {
+                await markExamReportSaved(threadID: threadID, message: message, cardID: card.id)
+            }
+        }
+    }
+
+    func saveMedicalCaseStructuredCard(threadID: UUID, message: ChatMessage, card: MedicalCaseChatCardPayload) async {
+        guard let data = card.draftJSON.data(using: .utf8),
+              let draft = try? JSONDecoder().decode(CaseRecognitionDraft.self, from: data) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
+            return
+        }
+        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
+            return
+        }
+        await saveWithCardId(card.id, rawTrace: card.title) {
+            let envelope = MedicalDocumentRecognitionEnvelope(
+                memberID: memberID,
+                sourceFiles: [],
+                rawOCRText: card.title,
+                typeResolution: MedicalDocumentTypeResolution(
+                    kind: .caseDocument,
+                    confidence: 1,
+                    source: .manual,
+                    reason: "chat_save"
+                )
+            )
+            return MedicalDocumentTypedExtractionOutput(
+                envelope: envelope,
+                typedResult: .caseDocument(draft),
+                extractedJSON: card.draftJSON,
+                payloadPreview: ""
+            )
+        } onSuccess: {
+            await markMedicalCaseSaved(threadID: threadID, message: message, cardID: card.id)
+        }
+    }
+
+    private func saveWithCardId(
+        _ cardID: UUID,
+        rawTrace: String,
+        buildOutput: () throws -> MedicalDocumentTypedExtractionOutput,
+        onSuccess: () async -> Void
+    ) async {
+        savingStructuredHealthCardIDs.insert(cardID)
+        defer { savingStructuredHealthCardIDs.remove(cardID) }
+        do {
+            let output = try buildOutput()
+            _ = try await saveTypedMedicalDocumentUseCase.execute(output: output)
+            notificationClient.success(
+                L10n.text("chat.medical_card.saved.toast"),
+                title: nil,
+                source: "chat.medical.save"
+            )
+            logger.info("对话医疗卡片已保存 trace=\(rawTrace)", module: .general)
+            await onSuccess()
+        } catch {
+            logger.error("对话医疗卡片保存失败：\(error.localizedDescription)", module: .general)
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.medical.save")
+        }
+    }
+
+    private func resolvedMemberID(fallback: Int) -> Int? {
+        if let id = memberContextStore.context.selectedMemberID {
+            return id
+        }
+        return fallback > 0 ? fallback : nil
+    }
+
+    private func markMedicationSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
+        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markMedicationSaved(id: cardID) }) else { return }
+        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+    }
+
+    private func markPrescriptionSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
+        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markPrescriptionSaved(id: cardID) }) else { return }
+        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+    }
+
+    private func markExamReportSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
+        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markExamReportSaved(id: cardID) }) else { return }
+        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+    }
+
+    private func markMedicalCaseSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
+        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markMedicalCaseSaved(id: cardID) }) else { return }
+        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+    }
+
+    private func persistStructuredAttachments(threadID: UUID, message: ChatMessage, attachments: [ChatAttachment]) async {
+        await updateChatMessageAttachmentsUseCase.execute(
+            clientMessageID: message.clientMessageID,
+            attachments: attachments,
+            markPendingForSync: true
+        )
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: message.clientMessageID,
+            attachments: attachments
+        )
+        do {
+            try await syncChatUseCase.pushOutboxOnly()
+        } catch {
+            logger.warning("医疗卡片状态上送失败，稍后重试：\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    private func replacingStructuredHealthCardsBlob(
+        in attachments: [ChatAttachment],
+        mutate: (inout StructuredHealthCardsBlob) -> Void
+    ) -> [ChatAttachment]? {
+        guard let index = attachments.firstIndex(where: { $0.type == ChatStreamFieldKey.structuredHealthCards }),
+              let raw = attachments[index].text,
+              let data = raw.data(using: .utf8),
+              var blob = try? JSONDecoder().decode(StructuredHealthCardsBlob.self, from: data) else {
+            return nil
+        }
+        mutate(&blob)
+        let enc = JSONEncoder()
+        guard let outData = try? enc.encode(blob),
+              let text = String(data: outData, encoding: .utf8) else {
+            return nil
+        }
+        var next = attachments
+        next[index] = ChatAttachment(
+            id: attachments[index].id,
+            type: attachments[index].type,
+            url: attachments[index].url,
+            text: text
+        )
+        return next
     }
 }

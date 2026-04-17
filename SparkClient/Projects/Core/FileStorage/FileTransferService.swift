@@ -63,7 +63,10 @@ actor FileTransferService {
         try await ossClient.putObject(
             data: payload.data,
             objectKey: objectKey,
-            contentType: mimeType
+            contentType: mimeType,
+            progressCallback: payload.onUploadProgress.map { sendable in
+                { progress in sendable(progress) }
+            }
         )
 
         let uploaded = try await api.registerFile(.init(
@@ -79,6 +82,18 @@ actor FileTransferService {
             objectKey: objectKey,
             storageType: "oss"
         ))
+
+        let cacheMatches = await cacheManager.validateMD5(
+            fileUUID: fileUUID,
+            fileName: safeFileName,
+            expectedMD5: fileMD5
+        )
+        if !cacheMatches {
+            logger.warning(
+                "上传完成后本地缓存 MD5 与预期不一致，uuid=\(fileUUID)，name=\(safeFileName)",
+                module: .cache
+            )
+        }
 
         logger.info("文件上传完成，file_id=\(uploaded.id)，uuid=\(uploaded.fileUUID)", module: .cache)
         return uploaded
@@ -142,6 +157,25 @@ actor FileTransferService {
     /// 获取文件的本地缓存路径（如果存在）
     func cachedURL(file: ManagedFileRecord) async -> URL? {
         await cacheManager.cachedFileURL(fileUUID: file.fileUUID, fileName: file.originalName)
+    }
+
+    /// 基于 OSS object key 生成客户端本地 presigned 下载 URL（不依赖 files/{id}/download-url）。
+    func makePresignedDownloadURL(objectKey: String, expires: TimeInterval = 3600) async throws -> URL {
+        let trimmed = objectKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            throw SparkNetworkError.decoding(
+                NSError(domain: "SparkFileTransfer", code: -1, userInfo: [NSLocalizedDescriptionKey: "objectKey 为空，无法生成下载链接"])
+            )
+        }
+        let runtimeConfig = try await ossConfigurationStore.configurationForUpload(using: ossAPI)
+        await MainActor.run {
+            OSSManager.shared.updateConfiguration(
+                endpoint: runtimeConfig.endpointURL,
+                bucket: runtimeConfig.bucketName,
+                region: runtimeConfig.region
+            )
+        }
+        return try await ossClient.presignedURL(objectKey: trimmed, expires: expires)
     }
 
     /// 获取远程文件列表

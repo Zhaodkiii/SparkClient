@@ -54,6 +54,22 @@ struct ToolInvocation: Sendable {
 struct ToolExecutionContext: Sendable {
     let memberID: Int?
     let locale: Locale
+    /// 当前助手消息 `clientMessageID`（异步医疗卡片回填目标）；仅模型工具轮次传入。
+    let assistantMessageClientID: UUID?
+    /// 当前会话 ID（与 ``assistantMessageClientID`` 成对使用）。
+    let threadID: UUID?
+
+    init(
+        memberID: Int?,
+        locale: Locale,
+        assistantMessageClientID: UUID? = nil,
+        threadID: UUID? = nil
+    ) {
+        self.memberID = memberID
+        self.locale = locale
+        self.assistantMessageClientID = assistantMessageClientID
+        self.threadID = threadID
+    }
 }
 
 struct ToolDefinition: Sendable {

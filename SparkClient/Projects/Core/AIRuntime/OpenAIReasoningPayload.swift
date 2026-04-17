@@ -208,6 +208,7 @@ enum OpenAIReasoningPayload {
         out[idx] = AIRuntimeMessage(
             role: m.role,
             content: content,
+            contentParts: m.contentParts,
             toolCalls: m.toolCalls,
             toolCallID: m.toolCallID,
             name: m.name

@@ -437,86 +437,353 @@ struct ChatImagePayload: Identifiable, Equatable {
     let id: UUID
     let url: URL?
     let image: UIImage?
+    let downloadableMeta: ChatUploadedImageAttachmentMeta?
+}
+
+/// 对齐 `AI_HLY` 的聊天图片条：用户消息约 `120×120`、助手约 `200×200`，横向滚动与圆角卡片；点击预览统一走 `UnifiedFilePreview`。
+enum ChatImageGalleryStyle {
+    case user
+    case assistant
+
+    fileprivate var thumbSide: CGFloat {
+        switch self {
+        case .user: return 120
+        case .assistant: return 200
+        }
+    }
+
+    fileprivate var spacing: CGFloat {
+        switch self {
+        case .user: return 6
+        case .assistant: return 8
+        }
+    }
+
+    fileprivate var cornerRadius: CGFloat { 14 }
 }
 
 struct ChatImageGalleryBlockView: View {
     let images: [ChatImagePayload]
-    @State private var selectedImage: UIImage?
-    @State private var selectedURL: URL?
+    var style: ChatImageGalleryStyle = .user
+    var unifiedFilePreview: Binding<FilePreviewInput?>?
+    var downloadToLocalFile: ((ChatUploadedImageAttachmentMeta) async throws -> URL)? = nil
+    @State private var downloadingImageIDs: Set<UUID> = []
+    @State private var downloadedImageFiles: [UUID: URL] = [:]
+    @State private var autoTriggeredImageIDs: Set<UUID> = []
+    @State private var failedImageIDs: Set<UUID> = []
+
+    init(
+        images: [ChatImagePayload],
+        style: ChatImageGalleryStyle = .user,
+        unifiedFilePreview: Binding<FilePreviewInput?>? = nil,
+        downloadToLocalFile: ((ChatUploadedImageAttachmentMeta) async throws -> URL)? = nil
+    ) {
+        self.images = images
+        self.style = style
+        self.unifiedFilePreview = unifiedFilePreview
+        self.downloadToLocalFile = downloadToLocalFile
+    }
+
+    private var galleryWidth: CGFloat {
+        let count = Double(images.count)
+        let cell = style.thumbSide + style.spacing
+        return CGFloat(min(count, 2.5) * Double(cell) - Double(style.spacing))
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: style.spacing) {
                 ForEach(images) { payload in
-                    ZStack {
-                        if let image = payload.image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        } else if let url = payload.url {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                case .success(let image):
-                                    image.resizable().scaledToFill()
-                                case .failure:
-                                    Image(systemName: "photo")
-                                @unknown default:
-                                    Image(systemName: "photo")
-                                }
-                            }
-                        } else {
-                            Image(systemName: "photo")
-                        }
-                    }
-                    .frame(width: 180, height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .contextMenu {
-                        if let image = payload.image {
-                            Button(L10n.text("chat.bubble.image.copy"), systemImage: "square.on.square") {
-                                UIPasteboard.general.image = image
-                            }
-                            Button(L10n.text("chat.bubble.image.save"), systemImage: "square.and.arrow.down") {
-                                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-                            }
-                        }
-                    }
-                    .onTapGesture {
-                        selectedImage = payload.image
-                        selectedURL = payload.url
-                    }
+                    galleryCell(for: payload)
                 }
             }
         }
-        .sheet(isPresented: Binding(
-            get: { selectedImage != nil || selectedURL != nil },
-            set: { if !$0 { selectedImage = nil; selectedURL = nil } }
-        )) {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if let selectedImage {
-                    Image(uiImage: selectedImage)
-                        .resizable()
-                        .scaledToFit()
-                        .padding()
-                } else if let selectedURL {
-                    AsyncImage(url: selectedURL) { phase in
-                        switch phase {
-                        case .empty:
-                            ProgressView().tint(.white)
-                        case .success(let image):
-                            image.resizable().scaledToFit().padding()
-                        case .failure:
-                            Image(systemName: "photo")
-                                .foregroundStyle(.white)
-                        @unknown default:
-                            Image(systemName: "photo")
-                                .foregroundStyle(.white)
-                        }
+        .frame(width: galleryWidth, height: style.thumbSide)
+        .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func galleryCell(for payload: ChatImagePayload) -> some View {
+        ZStack {
+            if let local = downloadedImageFiles[payload.id], let image = UIImage(contentsOfFile: local.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let image = payload.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if payload.downloadableMeta != nil {
+                downloadPlaceholder(for: payload)
+            } else if let url = payload.url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure:
+                        Image(systemName: "photo")
+                    @unknown default:
+                        Image(systemName: "photo")
                     }
                 }
+            } else {
+                Image(systemName: "photo")
             }
+        }
+        .frame(width: style.thumbSide, height: style.thumbSide)
+        .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+        .contextMenu {
+            contextButtons(for: payload)
+        }
+        .onTapGesture {
+            Task {
+                await openPreview(for: payload)
+            }
+        }
+        .task(id: payload.id) {
+            await autoDownloadIfNeeded(for: payload)
+        }
+    }
+
+    @ViewBuilder
+    private func downloadPlaceholder(for payload: ChatImagePayload) -> some View {
+        let isDownloading = downloadingImageIDs.contains(payload.id)
+        ZStack {
+            RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemFill))
+            VStack(spacing: 8) {
+                Image(systemName: "photo")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                if isDownloading {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if let meta = payload.downloadableMeta {
+                    Button {
+                        Task {
+                            do {
+                                _ = try await ensureLocalFile(for: payload.id, meta: meta)
+                                await MainActor.run {
+                                    failedImageIDs.remove(payload.id)
+                                }
+                            } catch {
+                                await MainActor.run {
+                                    failedImageIDs.insert(payload.id)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            failedImageIDs.contains(payload.id) ? L10n.text("common.retry") : L10n.text("common.download"),
+                            systemImage: "arrow.down.circle.fill"
+                        )
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func contextButtons(for payload: ChatImagePayload) -> some View {
+        Button(L10n.text("chat.bubble.image.copy"), systemImage: "square.on.square") {
+            Task {
+                await copyImage(payload)
+            }
+        }
+        Button(L10n.text("chat.bubble.image.save"), systemImage: "square.and.arrow.down") {
+            Task {
+                await saveImage(payload)
+            }
+        }
+    }
+
+    private func copyImage(_ payload: ChatImagePayload) async {
+        if let image = payload.image {
+            await MainActor.run { UIPasteboard.general.image = image }
+            return
+        }
+        guard let url = payload.url else { return }
+        if let data = try? await downloadData(from: url), let image = UIImage(data: data) {
+            await MainActor.run { UIPasteboard.general.image = image }
+        }
+    }
+
+    private func saveImage(_ payload: ChatImagePayload) async {
+        if let image = payload.image {
+            await MainActor.run { UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil) }
+            return
+        }
+        guard let url = payload.url else { return }
+        if let data = try? await downloadData(from: url), let image = UIImage(data: data) {
+            await MainActor.run { UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil) }
+        }
+    }
+
+    private func downloadData(from url: URL) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        if let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) == false {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }
+
+    /// 统一预览入口：本地图片写入临时 JPEG；远程先下载再交给 `UnifiedFilePreview` / Quick Look。
+    private func openPreview(for payload: ChatImagePayload) async {
+        guard let binding = unifiedFilePreview else { return }
+
+        if let local = downloadedImageFiles[payload.id] {
+            await MainActor.run {
+                binding.wrappedValue = FilePreviewInput(
+                    fileURL: local,
+                    displayName: local.lastPathComponent,
+                    mimeType: nil
+                )
+            }
+            return
+        }
+
+        if let image = payload.image,
+           let tmp = Self.writeTempJPEG(image) {
+            await MainActor.run {
+                binding.wrappedValue = FilePreviewInput(
+                    fileURL: tmp,
+                    displayName: "chat-image.jpg",
+                    mimeType: "image/jpeg"
+                )
+            }
+            return
+        }
+
+        if let meta = payload.downloadableMeta {
+            do {
+                let localURL = try await ensureLocalFile(for: payload.id, meta: meta)
+                await MainActor.run {
+                    binding.wrappedValue = FilePreviewInput(
+                        fileURL: localURL,
+                        displayName: meta.originalName,
+                        mimeType: meta.mimeType
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    binding.wrappedValue = Self.previewUnavailableInput()
+                }
+            }
+            return
+        }
+
+        guard let url = payload.url else {
+            await MainActor.run {
+                binding.wrappedValue = Self.previewUnavailableInput()
+            }
+            return
+        }
+
+        do {
+            let data = try await downloadData(from: url)
+            if let image = UIImage(data: data),
+               let tmp = Self.writeTempJPEG(image) {
+                await MainActor.run {
+                    binding.wrappedValue = FilePreviewInput(
+                        fileURL: tmp,
+                        displayName: url.lastPathComponent,
+                        mimeType: "image/jpeg"
+                    )
+                }
+                return
+            }
+            let ext = url.pathExtension.isEmpty ? "bin" : url.pathExtension
+            if let tmp = Self.writeTempData(data, suffix: ext) {
+                await MainActor.run {
+                    binding.wrappedValue = FilePreviewInput(
+                        fileURL: tmp,
+                        displayName: "download.\(ext)",
+                        mimeType: nil
+                    )
+                }
+            } else {
+                await MainActor.run {
+                    binding.wrappedValue = Self.previewUnavailableInput()
+                }
+            }
+        } catch {
+            await MainActor.run {
+                binding.wrappedValue = Self.previewUnavailableInput()
+            }
+        }
+    }
+
+    private func ensureLocalFile(for payloadID: UUID, meta: ChatUploadedImageAttachmentMeta) async throws -> URL {
+        if let existing = downloadedImageFiles[payloadID] {
+            return existing
+        }
+        guard let downloader = downloadToLocalFile else {
+            throw URLError(.unsupportedURL)
+        }
+        await MainActor.run {
+            downloadingImageIDs.insert(payloadID)
+        }
+        defer {
+            Task { @MainActor in
+                downloadingImageIDs.remove(payloadID)
+            }
+        }
+        let localURL = try await downloader(meta)
+        await MainActor.run {
+            downloadedImageFiles[payloadID] = localURL
+            failedImageIDs.remove(payloadID)
+        }
+        return localURL
+    }
+
+    private func autoDownloadIfNeeded(for payload: ChatImagePayload) async {
+        guard let meta = payload.downloadableMeta else { return }
+        guard downloadedImageFiles[payload.id] == nil else { return }
+        guard downloadingImageIDs.contains(payload.id) == false else { return }
+        guard autoTriggeredImageIDs.contains(payload.id) == false else { return }
+        await MainActor.run {
+            autoTriggeredImageIDs.insert(payload.id)
+        }
+        do {
+            _ = try await ensureLocalFile(for: payload.id, meta: meta)
+        } catch {
+            await MainActor.run {
+                failedImageIDs.insert(payload.id)
+            }
+        }
+    }
+
+    private static func previewUnavailableInput() -> FilePreviewInput {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-preview-missing-\(UUID().uuidString)")
+        return FilePreviewInput(fileURL: url, displayName: "Preview unavailable", mimeType: nil)
+    }
+
+    private static func writeTempJPEG(_ image: UIImage) -> URL? {
+        guard let data = image.jpegData(compressionQuality: 0.92) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-preview-\(UUID().uuidString).jpg")
+        do {
+            try data.write(to: url, options: [.atomic])
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    private static func writeTempData(_ data: Data, suffix: String) -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("chat-preview-\(UUID().uuidString).\(suffix)")
+        do {
+            try data.write(to: url, options: [.atomic])
+            return url
+        } catch {
+            return nil
         }
     }
 }

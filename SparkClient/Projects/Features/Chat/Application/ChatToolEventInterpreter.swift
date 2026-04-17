@@ -196,34 +196,7 @@ struct ChatToolEventInterpreter: Sendable {
             }
         }
 
-        if name.contains("generate_structured_health_card") {
-            if let structured = parseStructuredHealthCardPayload(from: content) {
-                if structured.medicationCards.isEmpty == false, let text = jsonString(structured.medicationCards) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.medicationCards, text: text))
-                }
-                if structured.prescriptionCards.isEmpty == false, let text = jsonString(structured.prescriptionCards) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.prescriptionCards, text: text))
-                }
-                if structured.examReportCards.isEmpty == false, let text = jsonString(structured.examReportCards) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.examReportCards, text: text))
-                }
-                if structured.medicalCaseCards.isEmpty == false, let text = jsonString(structured.medicalCaseCards) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.medicalCaseCards, text: text))
-                }
-            } else {
-                let card = [RichHealthCard(
-                    title: args["report_type"] ?? args["category"] ?? toolText("tool.ui.rich.health.default_title", fallback: "Health Card"),
-                    energyKilocalories: Double(args["energy"] ?? ""),
-                    proteinGrams: Double(args["protein"] ?? ""),
-                    carbohydratesGrams: Double(args["carbohydrates"] ?? ""),
-                    fatGrams: Double(args["fat"] ?? ""),
-                    dateText: nil
-                )]
-                if let text = jsonString(card) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.healthInfo, text: text))
-                }
-            }
-        }
+        // `generate_structured_health_card`：卡片由异步抽取合并到 `structured_health_cards` 附件，此处不把营养占位写入 `health_info`。
 
         if name.contains("fetch_sleep_details"),
            let sleepModel = parseSleepModel(from: content),
@@ -414,17 +387,6 @@ struct ChatToolEventInterpreter: Sendable {
         return nil
     }
 
-    private func parseStructuredHealthCardPayload(from toolContent: String) -> StructuredHealthToolPayload? {
-        for jsonText in jsonCandidates(in: toolContent) {
-            guard let data = jsonText.data(using: .utf8),
-                  let decoded = try? JSONDecoder().decode(StructuredHealthToolPayload.self, from: data) else {
-                continue
-            }
-            return decoded
-        }
-        return nil
-    }
-
     private func toolText(_ key: String, fallback: String) -> String {
         AIPromptL10n(locale: .current).tool(key, fallback: fallback)
     }
@@ -481,39 +443,5 @@ private struct SleepModelWrapper: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case sleepModel = "sleep_model"
-    }
-}
-
-private struct StructuredHealthToolPayload: Codable, Sendable {
-    let medicationCards: [ChatMedicationCardPayload]
-    let prescriptionCards: [ChatPrescriptionCardPayload]
-    let examReportCards: [ChatExamReportCardPayload]
-    let medicalCaseCards: [ChatMedicalCaseCardPayload]
-
-    enum CodingKeys: String, CodingKey {
-        case medicationCards = "medication_cards"
-        case prescriptionCards = "prescription_cards"
-        case examReportCards = "exam_report_cards"
-        case medicalCaseCards = "medical_case_cards"
-    }
-
-    init(
-        medicationCards: [ChatMedicationCardPayload] = [],
-        prescriptionCards: [ChatPrescriptionCardPayload] = [],
-        examReportCards: [ChatExamReportCardPayload] = [],
-        medicalCaseCards: [ChatMedicalCaseCardPayload] = []
-    ) {
-        self.medicationCards = medicationCards
-        self.prescriptionCards = prescriptionCards
-        self.examReportCards = examReportCards
-        self.medicalCaseCards = medicalCaseCards
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        medicationCards = try c.decodeIfPresent([ChatMedicationCardPayload].self, forKey: .medicationCards) ?? []
-        prescriptionCards = try c.decodeIfPresent([ChatPrescriptionCardPayload].self, forKey: .prescriptionCards) ?? []
-        examReportCards = try c.decodeIfPresent([ChatExamReportCardPayload].self, forKey: .examReportCards) ?? []
-        medicalCaseCards = try c.decodeIfPresent([ChatMedicalCaseCardPayload].self, forKey: .medicalCaseCards) ?? []
     }
 }

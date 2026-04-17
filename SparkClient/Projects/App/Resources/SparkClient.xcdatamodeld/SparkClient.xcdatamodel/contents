@@ -33,6 +33,7 @@
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="isActive" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="imageDeliveryModeRaw" optional="YES" attributeType="String"/>
     </entity>
     <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>

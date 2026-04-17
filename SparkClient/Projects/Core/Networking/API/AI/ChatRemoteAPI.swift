@@ -37,7 +37,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case reasoningVisibility = "reasoning_visibility"
     }
 
-    init(
+    nonisolated init(
         threadID: UUID,
         role: String,
         kind: String,
@@ -125,6 +125,7 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let deletedAt: Date?
     let updatedAt: Date
     let serverUpdatedAt: Date
+    let imageDeliveryModeRaw: String?
 
     enum CodingKeys: String, CodingKey {
         case threadID = "thread_id"
@@ -135,6 +136,7 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         case deletedAt = "deleted_at"
         case updatedAt = "updated_at"
         case serverUpdatedAt = "server_updated_at"
+        case imageDeliveryModeRaw = "image_delivery_mode"
     }
 }
 
