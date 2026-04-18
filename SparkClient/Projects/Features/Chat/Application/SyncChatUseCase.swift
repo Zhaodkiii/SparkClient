@@ -1,26 +1,25 @@
 import Foundation
 
 struct SyncChatUseCase: Sendable {
-    let syncEngine: ChatSyncEngine
+    let supervisor: ChatSyncSupervisor
 
     func execute() async throws {
-        // 该入口用于“聊天页手动下拉刷新”，需要支持拉取远端未同步会话与消息。
-        try await syncEngine.syncNowWithPull()
+        try await supervisor.syncNowWithPull()
     }
 
     func syncThreadOnOpen(threadID: UUID) async throws {
-        try await syncEngine.syncThreadOnOpen(threadID: threadID)
+        try await supervisor.syncThreadOnOpen(threadID: threadID)
     }
 
     func pushOutboxOnly() async throws {
-        try await syncEngine.pushOutboxOnly()
+        try await supervisor.pushOutboxOnly()
     }
 
     func startRealtime() async {
-        await syncEngine.startRealtimeSync()
+        await supervisor.startRealtimeSync()
     }
 
     func stopRealtime() async {
-        await syncEngine.stopRealtimeSync()
+        await supervisor.stopRealtimeSync()
     }
 }

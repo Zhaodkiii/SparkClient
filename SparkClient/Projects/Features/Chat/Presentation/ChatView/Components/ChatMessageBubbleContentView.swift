@@ -40,7 +40,7 @@ struct ChatMessageBubbleContentView: View {
     let onSavePrescriptionCard: (PrescriptionChatCardPayload) -> Void
     let onSaveExamReportCard: (ExamReportChatCardPayload) -> Void
     let onSaveMedicalCaseCard: (MedicalCaseChatCardPayload) -> Void
-    let onDownloadImageToLocalFile: (ChatUploadedImageAttachmentMeta) async throws -> URL
+    let onDownloadImageToLocalFile: (ChatAttachment) async throws -> URL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -314,49 +314,6 @@ struct ChatMessageBubbleContentView: View {
     }
 
     private func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
-        var payloads: [ChatImagePayload] = []
-        for attachment in message.attachments where attachment.type == "image_url" || attachment.type == "image_base64" {
-            if attachment.type == "image_url" {
-                if let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text),
-                   let img = ChatLocalImageCache.uiImageIfCached(fileUUID: meta.fileUUID, originalName: meta.originalName) {
-                    payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: img, downloadableMeta: meta))
-                    continue
-                }
-                if let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text) {
-                    payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: nil, downloadableMeta: meta))
-                    continue
-                }
-                if let u = attachment.url {
-                    payloads.append(ChatImagePayload(id: attachment.id, url: u, image: nil, downloadableMeta: nil))
-                    continue
-                }
-                if let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text),
-                   let s = meta.remoteURLString,
-                   let u = URL(string: s) {
-                    payloads.append(ChatImagePayload(id: attachment.id, url: u, image: nil, downloadableMeta: nil))
-                    continue
-                }
-            }
-            let raw = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard raw.isEmpty == false else { continue }
-            if let image = decodeImage(from: raw) {
-                payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: image, downloadableMeta: nil))
-            } else if let url = URL(string: raw) {
-                payloads.append(ChatImagePayload(id: attachment.id, url: url, image: nil, downloadableMeta: nil))
-            }
-        }
-        return payloads
-    }
-
-    private func decodeImage(from text: String) -> UIImage? {
-        if text.hasPrefix("data:image"),
-           let base64 = text.components(separatedBy: ",").last,
-           let data = Data(base64Encoded: base64) {
-            return UIImage(data: data)
-        }
-        if let data = Data(base64Encoded: text) {
-            return UIImage(data: data)
-        }
-        return nil
+        ChatImagePayloadBuilder.imagePayloads(from: message)
     }
 }

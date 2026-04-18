@@ -8,53 +8,37 @@ struct ChatPreparedImageAttachment: Equatable, Sendable {
 
 /// 组装聊天图片上传后的附件元数据与用户可见/模型可见正文（本地 OCR 路径）。
 enum ChatSendImageAssembly {
-    /// 与 ZDK / OSSUploader 对齐的聊天附件业务类型。
-    static let chatAttachmentBusinessType = "chat_attachment"
+    nonisolated static let chatAttachmentBusinessType = "chat_attachment"
 
-    static func remoteURLString(from record: ManagedFileRecord) -> String? {
-        guard let path = record.filePath?.trimmingCharacters(in: .whitespacesAndNewlines),
-              path.isEmpty == false else { return nil }
-        if path.hasPrefix("http://") || path.hasPrefix("https://") {
-            return path
-        }
-        return nil
-    }
-
-    static func makeAttachment(
+    nonisolated static func makeAttachment(
         previewID: UUID,
         record: ManagedFileRecord,
         ocrText: String?,
-        imageDeliveryModeRaw: String?
+        publicFullURL: URL?
     ) -> ChatAttachment {
-        let remote = remoteURLString(from: record)
-        let meta = ChatUploadedImageAttachmentMeta(
-            fileId: record.id,
-            fileUUID: record.fileUUID,
-            originalName: record.originalName,
-            fileMd5: record.fileMd5,
-            mimeType: record.mimeType,
-            filePath: record.filePath,
-            objectKey: record.objectKey,
-            storageType: record.storageType,
-            remoteURLString: remote,
-            ocrText: ocrText
-        )
-        let text = ChatUploadedImageAttachmentCodec.encode(meta)
-        let url = remote.flatMap { URL(string: $0) }
+        let trimmedOCR = ocrText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = trimmedOCR.isEmpty ? nil : trimmedOCR
         return ChatAttachment(
             id: previewID,
-            type: "image_url",
-            url: url,
+            type: .image,
+            url: publicFullURL,
             text: text,
-            imageDeliveryModeRaw: imageDeliveryModeRaw
+            fileId: record.id,
+            fullCacheKey: ChatAttachment.makeFullCacheKey(fileUUID: record.fileUUID, fileName: record.originalName),
+            fileMd5: record.fileMd5
         )
     }
 
-    /// 本地 OCR + 文本送达：不向模型送像素，仅拼接可审计文本。
-    static func buildLocalOCRUserContent(userText: String, attachmentsWithOCR: [(record: ManagedFileRecord, ocr: String)]) -> String {
+    nonisolated static func buildLocalOCRUserContent(userText: String, attachmentsWithOCR: [(record: ManagedFileRecord, ocr: String)]) -> String {
         var blocks: [String] = []
         for item in attachmentsWithOCR {
-            let urlLine = remoteURLString(from: item.record).map { "url: \($0)" } ?? "url: (pending)"
+            let urlLine: String = {
+                if let path = item.record.filePath?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   path.hasPrefix("http://") || path.hasPrefix("https://") {
+                    return "url: \(path)"
+                }
+                return "url: (pending)"
+            }()
             let ocr = item.ocr.trimmingCharacters(in: .whitespacesAndNewlines)
             blocks.append(
                 """

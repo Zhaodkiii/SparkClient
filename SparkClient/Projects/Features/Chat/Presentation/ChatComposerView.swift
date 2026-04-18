@@ -49,22 +49,12 @@ struct ChatComposerView: View {
                 onCancel: {
                     stateStore.setPhotoPickerPresented(false, for: threadID)
                 },
-                onImagesPicked: { images in
-                    var attachments: [ChatComposerAttachmentPreview] = []
-                    for (index, image) in images.enumerated() {
-                        guard let imageData = image.jpegData(compressionQuality: 0.88) ?? image.pngData() else {
-                            continue
-                        }
-                        attachments.append(
-                            ChatComposerAttachmentPreview(
-                                source: .photoLibrary,
-                                imageData: imageData,
-                                displayName: String(
-                                    format: L10n.text("chat.attachments.photo.result"),
-                                    locale: Locale.current,
-                                    Int64(index + 1)
-                                )
-                            )
+                onPhotosPicked: { photos in
+                    let attachments = photos.map {
+                        ChatComposerAttachmentPreview(
+                            source: .photoLibrary,
+                            imageData: $0.imageData,
+                            displayName: $0.suggestedFileName
                         )
                     }
                     stateStore.appendComposerAttachments(attachments, for: threadID)
@@ -462,7 +452,7 @@ private struct ChatComposerTextView: UIViewRepresentable {
 
 private struct ChatPhotoLibraryPicker: UIViewControllerRepresentable {
     let onCancel: () -> Void
-    let onImagesPicked: ([UIImage]) -> Void
+    let onPhotosPicked: ([ChatComposerPickedPhoto]) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -493,21 +483,8 @@ private struct ChatPhotoLibraryPicker: UIViewControllerRepresentable {
                 return
             }
 
-            let dispatchGroup = DispatchGroup()
-            var images: [UIImage] = []
-
-            for result in results {
-                dispatchGroup.enter()
-                result.itemProvider.loadObject(ofClass: UIImage.self) { object, _ in
-                    defer { dispatchGroup.leave() }
-                    if let image = object as? UIImage {
-                        images.append(image)
-                    }
-                }
-            }
-
-            dispatchGroup.notify(queue: .main) {
-                self.parent.onImagesPicked(images)
+            ChatComposerPhotoLibraryLoader.load(from: results) { photos in
+                self.parent.onPhotosPicked(photos)
             }
         }
     }

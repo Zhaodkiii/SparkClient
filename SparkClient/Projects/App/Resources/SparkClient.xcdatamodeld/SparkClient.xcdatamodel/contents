@@ -60,6 +60,19 @@
         <attribute name="value" optional="NO" attributeType="String"/>
         <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="ChatAttachmentDownloadEntity" representedClassName="ChatAttachmentDownloadEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="dedupeKey" optional="NO" attributeType="String" defaultValueString=""/>
+        <attribute name="threadID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="clientMessageID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="attachmentID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="stateRaw" optional="NO" attributeType="String" defaultValueString="pending"/>
+        <attribute name="attachmentPayload" optional="YES" attributeType="Binary"/>
+        <attribute name="localFileURLString" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
     <entity name="KnowledgeDocumentEntity" representedClassName="KnowledgeDocumentEntity" syncable="YES" codeGenerationType="class">
         <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="ownerAccountID" optional="NO" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -90,6 +103,7 @@
         <element name="ChatThreadEntity" positionX="-260" positionY="500" width="128" height="164"/>
         <element name="ChatMessageEntity" positionX="-80" positionY="500" width="128" height="269"/>
         <element name="ChatSyncCursorEntity" positionX="110" positionY="500" width="128" height="104"/>
+        <element name="ChatAttachmentDownloadEntity" positionX="300" positionY="500" width="128" height="179"/>
         <element name="KnowledgeDocumentEntity" positionX="300" positionY="500" width="128" height="209"/>
         <element name="KnowledgeChunkEntity" positionX="490" positionY="500" width="128" height="149"/>
     </elements>

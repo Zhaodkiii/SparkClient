@@ -97,7 +97,7 @@ struct ChatToolEventInterpreter: Sendable {
         else {
             return []
         }
-        return [ChatAttachment(type: ChatStreamFieldKey.knowledgeCard, text: json)]
+        return [ChatAttachment(type: .knowledgeCard, text: json)]
     }
 
     /// 解析 create_knowledge_document 工具输出，兼容 JSON 与 key=value 两种格式。
@@ -162,7 +162,7 @@ struct ChatToolEventInterpreter: Sendable {
                     )
                 ]
                 if let text = jsonString(loc) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.locationsInfo, text: text))
+                    attachments.append(ChatAttachment(type: .locationsInfo, text: text))
                 }
             }
             if let startLat = Double(args["start.latitude"] ?? ""),
@@ -174,11 +174,11 @@ struct ChatToolEventInterpreter: Sendable {
                     RichLocation(name: "End", latitude: endLat, longitude: endLng),
                 ]
                 if let text = jsonString(loc) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.locationsInfo, text: text))
+                    attachments.append(ChatAttachment(type: .locationsInfo, text: text))
                 }
                 let routes = [RichRoute(summary: "Route", distance: args["distance"], duration: args["duration"], mode: args["mode"])]
                 if let text = jsonString(routes) {
-                    attachments.append(ChatAttachment(type: ChatStreamFieldKey.routeInfo, text: text))
+                    attachments.append(ChatAttachment(type: .routeInfo, text: text))
                 }
             }
         }
@@ -192,7 +192,7 @@ struct ChatToolEventInterpreter: Sendable {
                 notes: args["notes"]
             )]
             if let text = jsonString(events) {
-                attachments.append(ChatAttachment(type: ChatStreamFieldKey.events, text: text))
+                attachments.append(ChatAttachment(type: .events, text: text))
             }
         }
 
@@ -201,18 +201,18 @@ struct ChatToolEventInterpreter: Sendable {
         if name.contains("fetch_sleep_details"),
            let sleepModel = parseSleepModel(from: content),
            let text = jsonString(sleepModel) {
-            attachments.append(ChatAttachment(type: ChatStreamFieldKey.healthSleepVisualization, text: text))
+            attachments.append(ChatAttachment(type: .healthSleepVisualization, text: text))
         }
 
         // 任务卡片：仅用于消息内可视化展示，点击后直接创建 Task。
         if name.contains("generate_task") || name.contains("task_card") || name.contains("create_task"),
            let cardsText = parseTaskCardsJSON(from: content) {
-            attachments.append(ChatAttachment(type: ChatStreamFieldKey.taskCards, text: cardsText))
+            attachments.append(ChatAttachment(type: .taskCards, text: cardsText))
         }
 
         // 网页内容字段（如工具直接返回 HTML），对齐 StreamData.htmlContent。
         if name.contains("read_web_page") || name.contains("create_webpage") {
-            attachments.append(ChatAttachment(type: ChatStreamFieldKey.htmlContent, text: content))
+            attachments.append(ChatAttachment(type: .htmlContent, text: content))
         }
 
         return attachments

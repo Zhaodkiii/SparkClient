@@ -118,20 +118,27 @@ struct ChatConversationListPage: View {
                     navigationSelection = item.id
                 }
             } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text(item.thread.listDisplayTitle)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Spacer()
-                        Text(formattedDate(item.latestMessageAt))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                HStack(alignment: .center, spacing: 10) {
+                    if let thumb = item.latestListImageAttachment {
+                        ChatThreadListThumbnailView(attachment: thumb) { att in
+                            try await detailViewModel.downloadChatImageToLocalFile(attachment: att)
+                        }
                     }
-                    Text(item.latestMessagePreview)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(item.thread.listDisplayTitle)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(formattedDate(item.latestMessageAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(item.latestMessagePreview)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
                 .padding(.vertical, 6)
             }

@@ -1,6 +1,8 @@
 import Combine
 import Foundation
 
+/// 聊天 **UI 工作集**（选中线程、草稿、流式助手占位、分页标志等）。持久真相源为 ``ChatRepository`` / ``ChatQueryService``；
+/// 持久化写入成功后广播 ``Notification/Name/sparkChatDatabaseDidChange``，由列表/详情 ViewModel 经 Query 层刷新。
 @MainActor
 final class ChatStateStore: ObservableObject {
     private struct MessagePaging: Sendable {
@@ -40,30 +42,45 @@ final class ChatStateStore: ObservableObject {
 
     var selectedMessages: [ChatMessage] {
         guard let selectedThreadID else { return [] }
-        var messages = messagesByThread[selectedThreadID] ?? []
-        if let streaming = streamingAssistants[selectedThreadID] {
-            messages.append(
-                ChatMessage(
-                    id: streaming.clientMessageID,
-                    threadID: streaming.threadID,
-                    role: .assistant,
-                    kind: streaming.state.kind,
-                    content: streaming.state.content,
-                    attachments: makeStreamingAttachments(from: streaming),
-                    reasoningContent: streaming.state.reasoningContent,
-                    reasoningDurationMs: streaming.state.reasoningDurationMs,
-                    reasoningExpanded: true,
-                    reasoningVisibility: .full,
-                    clientMessageID: streaming.clientMessageID,
-                    serverMessageID: nil,
-                    deliveryState: .sending,
-                    createdAt: streaming.createdAt,
-                    serverUpdatedAt: nil,
-                    isTombstone: false
-                )
-            )
-        }
-        return messages
+        return conversationListItems(for: selectedThreadID)
+    }
+
+    /// 仅 Core Data 中的消息（不含流式尾部占位）。
+    func persistedMessages(for threadID: UUID) -> [ChatMessage] {
+        messagesByThread[threadID] ?? []
+    }
+
+    /// 会话列表展示用：持久化消息 + 流式尾部（按 `clientMessageID` 合并，避免整表 identity 抖动）。
+    func conversationListItems(for threadID: UUID) -> [ChatMessage] {
+        let persisted = messagesByThread[threadID] ?? []
+        let tail = streamingTailMessage(for: threadID)
+        return ConversationRenderState.mergedList(persisted: persisted, streamingTail: tail)
+    }
+
+    private func streamingTailMessage(for threadID: UUID) -> ChatMessage? {
+        guard let streaming = streamingAssistants[threadID] else { return nil }
+        return ChatMessage(
+            id: streaming.clientMessageID,
+            threadID: streaming.threadID,
+            role: .assistant,
+            kind: streaming.state.kind,
+            content: streaming.state.content,
+            attachments: makeStreamingAttachments(from: streaming),
+            reasoningContent: streaming.state.reasoningContent,
+            reasoningDurationMs: streaming.state.reasoningDurationMs,
+            reasoningExpanded: true,
+            reasoningVisibility: .full,
+            clientMessageID: streaming.clientMessageID,
+            serverMessageID: nil,
+            deliveryState: .sending,
+            createdAt: streaming.createdAt,
+            serverUpdatedAt: nil,
+            isTombstone: false
+        )
+    }
+
+    func isStreamingAssistantActive(for threadID: UUID) -> Bool {
+        streamingAssistants[threadID] != nil
     }
 
     func setThreads(_ items: [ChatThreadListItem]) {
@@ -73,6 +90,24 @@ final class ChatStateStore: ObservableObject {
         }
         if self.selectedThreadID == nil {
             self.selectedThreadID = items.first?.id
+        }
+    }
+
+    /// 用投影行替换或插入一条，并按最新消息时间排序（用于 DB 通知局部刷新）。
+    func upsertThreadListItem(_ item: ChatThreadListItem) {
+        var next = threadItems.filter { $0.id != item.id }
+        next.append(item)
+        threadItems = next.sorted { $0.latestMessageAt > $1.latestMessageAt }
+        if selectedThreadID == nil {
+            selectedThreadID = threadItems.first?.id
+        }
+    }
+
+    /// 线程已从列表移除（如软删）时更新内存列表与选中态。
+    func removeThreadListItem(id: UUID) {
+        threadItems.removeAll { $0.id == id }
+        if selectedThreadID == id {
+            selectedThreadID = threadItems.first?.id
         }
     }
 

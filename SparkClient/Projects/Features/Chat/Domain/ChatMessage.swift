@@ -137,6 +137,41 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - 同步合并（用户图片附件）
+
+extension ChatMessage {
+    /// 同一 `clientMessageID` 的用户消息：若远端附件携带的可下载/可缓存信息明显多于本地，则必须采纳远端。
+    ///
+    /// 背景：`CoreDataChatStore.upsertRemoteMessages` 曾仅用 `serverUpdatedAt` 决定是否跳过写入；本地若因
+    /// `updateMessageDeliveryState` 等把 `serverUpdatedAt` 刷得比服务端新，但附件行仍是旧/空数据，会永久挡住
+    /// pull 下来的完整 `url` / `fullCacheKey` / `fileMd5`，进而出现「同步里有图、下载时 attachment 全空」。
+    nonisolated static func shouldPreferRemoteUserImageSyncData(local: ChatMessage, remote: ChatMessage) -> Bool {
+        guard local.clientMessageID == remote.clientMessageID else { return false }
+        guard local.role == .user, remote.role == .user else { return false }
+        let localScore = userImageRichAttachmentScore(local)
+        let remoteScore = userImageRichAttachmentScore(remote)
+        return remoteScore > localScore
+    }
+
+    /// 对「类聊天图片」附件打分：有 https 地址权重最高；否则累计缓存键、MD5、file_id、OCR 文本等。
+    nonisolated private static func userImageRichAttachmentScore(_ message: ChatMessage) -> Int {
+        var score = 0
+        for att in message.attachments where att.isChatImageLike {
+            if att.effectiveHTTPSImageDownloadURL != nil {
+                score += 8
+                continue
+            }
+            var piece = 0
+            if let k = att.fullCacheKey?.trimmingCharacters(in: .whitespacesAndNewlines), k.isEmpty == false { piece += 2 }
+            if let md5 = att.fileMd5?.trimmingCharacters(in: .whitespacesAndNewlines), md5.isEmpty == false { piece += 2 }
+            if let fid = att.fileId, fid > 0 { piece += 2 }
+            if let t = att.text?.trimmingCharacters(in: .whitespacesAndNewlines), t.isEmpty == false { piece += 1 }
+            score += piece
+        }
+        return score
+    }
+}
+
 struct ChatThreadSnapshot: Sendable {
     let thread: ChatThread
     let messages: [ChatMessage]
@@ -148,6 +183,8 @@ struct ChatThreadListItem: Identifiable, Equatable, Sendable {
     let latestMessagePreview: String
     let latestMessageAt: Date
     let unreadCount: Int
+    /// 最新消息中首张可同步下载的图片（用于列表缩略图）。
+    let latestListImageAttachment: ChatAttachment?
 }
 
 enum ChatFeatureError: LocalizedError {

@@ -6,6 +6,7 @@ actor CoreDataChatStore {
         static let thread = "ChatThreadEntity"
         static let message = "ChatMessageEntity"
         static let cursor = "ChatSyncCursorEntity"
+        static let downloadJob = "ChatAttachmentDownloadEntity"
     }
 
     private enum Field {
@@ -27,23 +28,25 @@ actor CoreDataChatStore {
         }
     }
 
-    private let coreDataStack: CoreDataStack
+    private let kernel: ChatDatabaseKernel
     private let snapshotStore: SessionSnapshotStore
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private let logger: Logger
 
     init(
         coreDataStack: CoreDataStack,
         snapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
         logger: Logger = ConsoleLogger()
     ) {
-        self.coreDataStack = coreDataStack
         self.snapshotStore = snapshotStore
+        self.kernel = ChatDatabaseKernel(coreDataStack: coreDataStack, snapshotStore: snapshotStore, logger: logger)
+        self.logger = logger
     }
 
     func loadActiveThread() async -> ChatThread? {
-        guard let accountID = await activeAccountID() else { return nil }
-        return try? await coreDataStack.performBackgroundTask { context in
+        try? await kernel.read { context, accountID in
+            guard let accountID else { return nil }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             request.fetchLimit = 1
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -57,8 +60,8 @@ actor CoreDataChatStore {
     }
 
     func loadThread(id: UUID) async -> ChatThread? {
-        guard let accountID = await activeAccountID() else { return nil }
-        return try? await coreDataStack.performBackgroundTask { context in
+        try? await kernel.read { context, accountID in
+            guard let accountID else { return nil }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             request.fetchLimit = 1
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -70,8 +73,8 @@ actor CoreDataChatStore {
     }
 
     func loadThreads() async -> [ChatThread] {
-        guard let accountID = await activeAccountID() else { return [] }
-        return (try? await coreDataStack.performBackgroundTask { context in
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 Self.ownerPredicate(accountID),
@@ -80,6 +83,53 @@ actor CoreDataChatStore {
             request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
             return try context.fetch(request).compactMap(Self.toThread)
         }) ?? []
+    }
+
+    func loadThreadListItems() async -> [ChatThreadListItem] {
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
+            let threadRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
+            threadRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "isSoftDeleted == NO"),
+            ])
+            threadRequest.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
+            let threadObjects = try context.fetch(threadRequest)
+
+            var items: [ChatThreadListItem] = []
+            items.reserveCapacity(threadObjects.count)
+            for threadObject in threadObjects {
+                guard let thread = Self.toThread(threadObject) else { continue }
+                items.append(
+                    try Self.makeThreadListProjectionItem(
+                        context: context,
+                        ownerAccountID: accountID,
+                        thread: thread,
+                        decoder: self.decoder,
+                        logger: self.logger
+                    )
+                )
+            }
+
+            return items.sorted { $0.latestMessageAt > $1.latestMessageAt }
+        }) ?? []
+    }
+
+    func loadThreadListItem(threadID: UUID) async -> ChatThreadListItem? {
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return nil }
+            guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return nil
+            }
+            guard let thread = Self.toThread(threadObject), thread.isDeleted == false else { return nil }
+            return try Self.makeThreadListProjectionItem(
+                context: context,
+                ownerAccountID: accountID,
+                thread: thread,
+                decoder: self.decoder,
+                logger: self.logger
+            )
+        }) ?? nil
     }
 
     func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String? = nil) async -> ChatThread {
@@ -109,7 +159,7 @@ actor CoreDataChatStore {
             serverUpdatedAt: nil
         )
 
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             let clearRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             clearRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 Self.ownerPredicate(accountID),
@@ -133,24 +183,38 @@ actor CoreDataChatStore {
             object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
             object.setValue(true, forKey: "isActive")
         }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: thread.id,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
 
         return thread
     }
 
     func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async {
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
                 return
             }
             object.setValue(imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
             object.setValue(Date(), forKey: "updatedAt")
         }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
     }
 
     func setActiveThread(id: UUID) async {
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             request.predicate = Self.ownerPredicate(accountID)
             for object in try context.fetch(request) {
@@ -161,13 +225,9 @@ actor CoreDataChatStore {
         }
     }
 
-    /// 默认返回线程最新消息（尾部）以支持懒加载。
-    /// - Parameters:
-    ///   - limit: 读取条数，nil 表示读取全部。
-    ///   - before: 仅返回 createdAt 严格早于该时间戳的消息（用于分页翻页）。
     func loadMessages(threadID: UUID, limit: Int? = nil, before: Date? = nil) async -> [ChatMessage] {
-        guard let accountID = await activeAccountID() else { return [] }
-        return (try? await coreDataStack.performBackgroundTask { context in
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
             var predicates: [NSPredicate] = [
                 Self.ownerPredicate(accountID),
@@ -184,16 +244,15 @@ actor CoreDataChatStore {
             }
             let rows = try context.fetch(request)
                 .compactMap { object in
-                    Self.toMessage(object: object, decoder: self.decoder)
+                    Self.toMessage(object: object, decoder: self.decoder, logger: self.logger)
                 }
-            // 因为查询使用 createdAt DESC（便于拿最近 N 条），返回给 UI 前再翻转为正序。
             return rows.reversed()
         }) ?? []
     }
 
     func countMessages(threadID: UUID) async -> Int {
-        guard let accountID = await activeAccountID() else { return 0 }
-        return (try? await coreDataStack.performBackgroundTask { context in
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return 0 }
             let request = NSFetchRequest<NSNumber>(entityName: EntityName.message)
             request.resultType = .countResultType
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -203,6 +262,40 @@ actor CoreDataChatStore {
             ])
             return try context.count(for: request)
         }) ?? 0
+    }
+
+    func latestServerActivity(for threadID: UUID) async -> Date? {
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return nil }
+            let base = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "threadID == %@", threadID as CVarArg),
+                NSPredicate(format: "isTombstone == NO"),
+            ])
+
+            func maxDate(keyPath: String, extra: NSPredicate?) throws -> Date? {
+                let request = NSFetchRequest<NSDictionary>(entityName: EntityName.message)
+                request.resultType = .dictionaryResultType
+                let expr = NSExpressionDescription()
+                expr.name = "maxValue"
+                expr.expression = NSExpression(forFunction: "max:", arguments: [NSExpression(forKeyPath: keyPath)])
+                expr.resultType = NSAttributeDescription.AttributeType.date
+                expr.expressionResultType = NSAttributeType.dateAttributeType
+                request.propertiesToFetch = [expr]
+                var predicates: [NSPredicate] = [base]
+                if let extra { predicates.append(extra) }
+                request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+                guard let row = try context.fetch(request).first else { return nil }
+                return row["maxValue"] as? Date
+            }
+
+            let maxCreated = try maxDate(keyPath: "createdAt", extra: nil)
+            let maxServer = try maxDate(
+                keyPath: "serverUpdatedAt",
+                extra: NSPredicate(format: "serverUpdatedAt != nil")
+            )
+            return [maxCreated, maxServer].compactMap { $0 }.max()
+        }) ?? nil
     }
 
     func appendMessage(
@@ -219,7 +312,7 @@ actor CoreDataChatStore {
         serverMessageID: String?,
         deliveryState: ChatDeliveryState
     ) async throws -> ChatMessage {
-        guard let accountID = await activeAccountID() else {
+        guard await activeAccountID() != nil else {
             throw ChatFeatureError.threadNotFound
         }
         let message = ChatMessage(
@@ -240,7 +333,7 @@ actor CoreDataChatStore {
             isTombstone: false
         )
 
-        try await coreDataStack.performBackgroundTask { context in
+        try await kernel.writeWithoutNotification { context, accountID in
             guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
                 throw ChatFeatureError.threadNotFound
             }
@@ -255,25 +348,47 @@ actor CoreDataChatStore {
 
             threadObject.setValue(Date(), forKey: "updatedAt")
         }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .messagesAppended,
+                affectedClientMessageIDs: [clientMessageID],
+                affectsThreadList: true
+            )
+        )
 
         return message
     }
 
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async {
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        let change = try? await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchMessage(
                 context: context,
                 ownerAccountID: accountID,
                 clientMessageID: clientMessageID,
                 serverMessageID: nil
             ) else {
-                return
+                return nil as (UUID, Bool)?
             }
+            let roleRaw = object.value(forKey: "role") as? String
+            let role = ChatMessageRole(rawValue: roleRaw ?? "") ?? .user
             object.setValue(state.rawValue, forKey: "deliveryState")
             if state == .sent || state == .read {
                 object.setValue(Date(), forKey: "serverUpdatedAt")
             }
+            guard let threadID = object.value(forKey: "threadID") as? UUID else { return nil }
+            // 用户消息送达态变化不改变列表预览/未读角标；助手消息可能改变未读等展示。
+            return (threadID, role == .assistant)
+        }
+        if let change {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: change.0,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [clientMessageID],
+                    affectsThreadList: change.1
+                )
+            )
         }
     }
 
@@ -282,33 +397,58 @@ actor CoreDataChatStore {
         attachments: [ChatAttachment],
         markPendingForSync: Bool
     ) async {
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        let change = try? await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchMessage(
                 context: context,
                 ownerAccountID: accountID,
                 clientMessageID: clientMessageID,
                 serverMessageID: nil
             ) else {
-                return
+                return nil as (UUID, Bool)?
             }
+            guard let threadID = object.value(forKey: "threadID") as? UUID else { return nil }
+            let latestRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
+            latestRequest.fetchLimit = 1
+            latestRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "threadID == %@", threadID as CVarArg),
+                NSPredicate(format: "isTombstone == NO"),
+            ])
+            latestRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+            let latestClientID = try context.fetch(latestRequest).first?.value(forKey: "clientMessageID") as? UUID
+            let thisClientID = object.value(forKey: "clientMessageID") as? UUID
+            let isLatestMessage = latestClientID != nil && latestClientID == thisClientID
+
             object.setValue(try self.encoder.encode(attachments), forKey: "attachmentsData")
             if markPendingForSync {
                 object.setValue(ChatDeliveryState.pending.rawValue, forKey: "deliveryState")
             }
             object.setValue(Date(), forKey: "serverUpdatedAt")
-            if let threadID = object.value(forKey: "threadID") as? UUID,
-               let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
+            if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
                 thread.setValue(Date(), forKey: "updatedAt")
             }
+            return (threadID, isLatestMessage)
+        }
+        if let change {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: change.0,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [clientMessageID],
+                    affectsThreadList: change.1
+                )
+            )
         }
     }
 
-    func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID) async {
+    func upsertRemoteMessages(
+        _ messages: [ChatMessage],
+        in threadID: UUID,
+        enqueueAttachmentDownloadJobs: Bool = false
+    ) async {
         guard messages.isEmpty == false else { return }
-        guard let accountID = await activeAccountID() else { return }
-
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        let mergeEngine = ChatMergeEngine()
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             if try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) == nil {
                 let threadObject = NSEntityDescription.insertNewObject(forEntityName: EntityName.thread, into: context)
                 let now = Date()
@@ -335,12 +475,22 @@ actor CoreDataChatStore {
                     serverMessageID: message.serverMessageID
                 ) ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.message, into: context)
 
-                if let local = Self.toMessage(object: object, decoder: self.decoder),
-                   Self.shouldKeepLocal(local: local, remote: message) {
+                if let local = Self.toMessage(object: object, decoder: self.decoder, logger: self.logger),
+                   mergeEngine.shouldSkipApplyingRemote(local: local, remote: message) {
                     continue
                 }
 
                 try Self.fillMessage(object: object, message: message, ownerAccountID: accountID, encoder: self.encoder)
+
+                if enqueueAttachmentDownloadJobs {
+                    try Self.insertImageDownloadJobsIfNeeded(
+                        context: context,
+                        ownerAccountID: accountID,
+                        threadID: threadID,
+                        message: message,
+                        encoder: self.encoder
+                    )
+                }
             }
 
             if let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
@@ -355,13 +505,19 @@ actor CoreDataChatStore {
                 }
             }
         }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .messagesMerged,
+                affectedClientMessageIDs: messages.map(\.clientMessageID),
+                affectsThreadList: true
+            )
+        )
     }
 
     func upsertRemoteThreads(_ threads: [ChatThread]) async {
         guard threads.isEmpty == false else { return }
-        guard let accountID = await activeAccountID() else { return }
-
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             for thread in threads {
                 let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: thread.id)
                     ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.thread, into: context)
@@ -383,29 +539,27 @@ actor CoreDataChatStore {
                 }
             }
         }
+        await kernel.postChangeNotification(.genericThreadsChanged)
     }
 
     func loadOutboxMessages(limit: Int) async -> [ChatMessage] {
-        guard let accountID = await activeAccountID() else { return [] }
-        return (try? await coreDataStack.performBackgroundTask { context in
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
             request.fetchLimit = max(1, limit)
-            // 自动同步只处理 pending；failed 仅允许用户触发手动重试后再入队。
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 Self.ownerPredicate(accountID),
                 NSPredicate(format: "deliveryState == %@", ChatDeliveryState.pending.rawValue),
             ])
             request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
             return try context.fetch(request).compactMap { object in
-                Self.toMessage(object: object, decoder: self.decoder)
+                Self.toMessage(object: object, decoder: self.decoder, logger: self.logger)
             }
         }) ?? []
     }
 
-    /// 本地软删除会话，并记录待上送删除事件。
     func softDeleteThread(id: UUID) async {
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             let now = Date()
 
             if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: id) {
@@ -429,16 +583,23 @@ actor CoreDataChatStore {
             marker.setValue(now.ISO8601Format(), forKey: "value")
             marker.setValue(now, forKey: "updatedAt")
         }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: id,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
     }
 
-    /// 保留旧接口：新架构默认转为软删除。
     func deleteThread(id: UUID) async {
         await softDeleteThread(id: id)
     }
 
     func loadPendingThreadDeletionIDs(limit: Int = 50) async -> [UUID] {
-        guard let accountID = await activeAccountID() else { return [] }
-        return (try? await coreDataStack.performBackgroundTask { context in
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
             request.fetchLimit = max(1, limit)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -456,8 +617,7 @@ actor CoreDataChatStore {
 
     func removePendingThreadDeletionIDs(_ ids: [UUID]) async {
         guard ids.isEmpty == false else { return }
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             let keys = ids.map(CursorKey.pendingThreadDelete)
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -494,9 +654,38 @@ actor CoreDataChatStore {
         await saveSyncCursor(cursor, key: CursorKey.threadMessageSync(threadID))
     }
 
+    func loadPendingAttachmentDownloadJobs(limit: Int) async -> [ChatAttachmentDownloadJobRecord] {
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.downloadJob)
+            request.fetchLimit = max(1, limit)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "stateRaw == %@", ChatAttachmentDownloadJobRecord.State.pending.rawValue),
+            ])
+            request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: true)]
+            return try context.fetch(request).compactMap { Self.toDownloadJob(object: $0, decoder: self.decoder, logger: self.logger) }
+        }) ?? []
+    }
+
+    func updateAttachmentDownloadJob(id: UUID, state: ChatAttachmentDownloadJobRecord.State, localFileURLString: String?) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            let req = NSFetchRequest<NSManagedObject>(entityName: EntityName.downloadJob)
+            req.fetchLimit = 1
+            req.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "id == %@", id as CVarArg),
+            ])
+            guard let row = try context.fetch(req).first else { return }
+            row.setValue(state.rawValue, forKey: "stateRaw")
+            row.setValue(localFileURLString, forKey: "localFileURLString")
+            row.setValue(Date(), forKey: "updatedAt")
+        }
+    }
+
     private func loadSyncCursor(key: String) async -> ChatSyncCursor? {
-        guard let accountID = await activeAccountID() else { return nil }
-        return try? await coreDataStack.performBackgroundTask { context in
+        try? await kernel.read { context, accountID in
+            guard let accountID else { return nil }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
             request.fetchLimit = 1
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -515,8 +704,7 @@ actor CoreDataChatStore {
     }
 
     private func saveSyncCursor(_ cursor: ChatSyncCursor, key: String) async {
-        guard let accountID = await activeAccountID() else { return }
-        _ = try? await coreDataStack.performBackgroundTask { context in
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
             request.fetchLimit = 1
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -530,6 +718,71 @@ actor CoreDataChatStore {
             object.setValue(cursor.value, forKey: "value")
             object.setValue(cursor.updatedAt, forKey: "updatedAt")
         }
+    }
+
+    private static func insertImageDownloadJobsIfNeeded(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        threadID: UUID,
+        message: ChatMessage,
+        encoder: JSONEncoder
+    ) throws {
+        let now = Date()
+        for attachment in message.attachments where attachment.isChatImageLike && attachment.effectiveHTTPSImageDownloadURL != nil {
+            let dedupeKey = attachment.imageDownloadDedupeKey
+            let existing = NSFetchRequest<NSManagedObject>(entityName: EntityName.downloadJob)
+            existing.fetchLimit = 1
+            existing.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                ownerPredicate(ownerAccountID),
+                NSPredicate(format: "dedupeKey == %@", dedupeKey),
+            ])
+            if try context.fetch(existing).first != nil {
+                continue
+            }
+            let row = NSEntityDescription.insertNewObject(forEntityName: EntityName.downloadJob, into: context)
+            row.setValue(UUID(), forKey: "id")
+            row.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+            row.setValue(dedupeKey, forKey: "dedupeKey")
+            row.setValue(threadID, forKey: "threadID")
+            row.setValue(message.clientMessageID, forKey: "clientMessageID")
+            row.setValue(attachment.id, forKey: "attachmentID")
+            row.setValue(ChatAttachmentDownloadJobRecord.State.pending.rawValue, forKey: "stateRaw")
+            row.setValue(try encoder.encode(attachment), forKey: "attachmentPayload")
+            row.setValue(nil, forKey: "localFileURLString")
+            row.setValue(now, forKey: "createdAt")
+            row.setValue(now, forKey: "updatedAt")
+        }
+    }
+
+    private static func toDownloadJob(
+        object: NSManagedObject,
+        decoder: JSONDecoder,
+        logger: Logger
+    ) -> ChatAttachmentDownloadJobRecord? {
+        guard
+            let id = object.value(forKey: "id") as? UUID,
+            let dedupeKey = object.value(forKey: "dedupeKey") as? String,
+            let threadID = object.value(forKey: "threadID") as? UUID,
+            let clientMessageID = object.value(forKey: "clientMessageID") as? UUID,
+            let attachmentID = object.value(forKey: "attachmentID") as? UUID,
+            let stateRaw = object.value(forKey: "stateRaw") as? String,
+            let state = ChatAttachmentDownloadJobRecord.State(rawValue: stateRaw),
+            let payload = object.value(forKey: "attachmentPayload") as? Data,
+            let snapshot = try? decoder.decode(ChatAttachment.self, from: payload)
+        else {
+            logger.warning("聊天附件下载任务行解析失败", module: .general)
+            return nil
+        }
+        return ChatAttachmentDownloadJobRecord(
+            id: id,
+            dedupeKey: dedupeKey,
+            threadID: threadID,
+            clientMessageID: clientMessageID,
+            attachmentID: attachmentID,
+            attachmentSnapshot: snapshot,
+            state: state,
+            localFileURLString: object.value(forKey: "localFileURLString") as? String
+        )
     }
 
     private static func fetchThread(
@@ -632,7 +885,7 @@ actor CoreDataChatStore {
         )
     }
 
-    private static func toMessage(object: NSManagedObject, decoder: JSONDecoder) -> ChatMessage? {
+    private static func toMessage(object: NSManagedObject, decoder: JSONDecoder, logger: Logger) -> ChatMessage? {
         guard
             let id = object.value(forKey: "id") as? UUID,
             let threadID = object.value(forKey: "threadID") as? UUID,
@@ -650,7 +903,22 @@ actor CoreDataChatStore {
         }
 
         let attachmentsData = object.value(forKey: "attachmentsData") as? Data
-        let attachments = (try? attachmentsData.flatMap { try decoder.decode([ChatAttachment].self, from: $0) }) ?? []
+        let attachments: [ChatAttachment]
+        if let data = attachmentsData {
+            do {
+                attachments = try decoder.decode([ChatAttachment].self, from: data)
+            } catch {
+                let cid = object.value(forKey: "clientMessageID") as? UUID
+                let tid = object.value(forKey: "threadID") as? UUID
+                logger.warning(
+                    "消息附件 JSON 解码失败，将置空附件。thread=\(tid.map { String($0.uuidString.prefix(8)) } ?? "-") client=\(cid.map { String($0.uuidString.prefix(8)) } ?? "-") error=\(error.localizedDescription)",
+                    module: .general
+                )
+                attachments = []
+            }
+        } else {
+            attachments = []
+        }
 
         let reasoningContent = object.value(forKey: "reasoningContent") as? String
         let reasoningDurationMs: Int64? = {
@@ -683,14 +951,62 @@ actor CoreDataChatStore {
         )
     }
 
-    private static func shouldKeepLocal(local: ChatMessage, remote: ChatMessage) -> Bool {
-        switch (local.serverUpdatedAt, remote.serverUpdatedAt) {
-        case let (.some(localDate), .some(remoteDate)):
-            return localDate > remoteDate
-        case (.some, .none):
-            return true
-        default:
-            return false
+    private static func makeThreadListProjectionItem(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        thread: ChatThread,
+        decoder: JSONDecoder,
+        logger: Logger
+    ) throws -> ChatThreadListItem {
+        let threadID = thread.id
+
+        let latestRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
+        latestRequest.fetchLimit = 1
+        latestRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "threadID == %@", threadID as CVarArg),
+            NSPredicate(format: "isTombstone == NO"),
+        ])
+        latestRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+        let latestMessage = try context.fetch(latestRequest).first.flatMap {
+            Self.toMessage(object: $0, decoder: decoder, logger: logger)
         }
+
+        let unreadRequest = NSFetchRequest<NSNumber>(entityName: EntityName.message)
+        unreadRequest.resultType = .countResultType
+        unreadRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "threadID == %@", threadID as CVarArg),
+            NSPredicate(format: "isTombstone == NO"),
+            NSPredicate(format: "role == %@", ChatMessageRole.assistant.rawValue),
+            NSPredicate(format: "deliveryState != %@", ChatDeliveryState.read.rawValue),
+        ])
+        let unreadCount = try context.count(for: unreadRequest)
+
+        let previewRaw = latestMessage?.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let fallbackTitle = thread.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preview = previewRaw.isEmpty == false ? previewRaw : (fallbackTitle.isEmpty ? "新对话" : fallbackTitle)
+
+        return ChatThreadListItem(
+            id: thread.id,
+            thread: thread,
+            latestMessagePreview: preview,
+            latestMessageAt: latestMessage?.createdAt ?? thread.updatedAt,
+            unreadCount: unreadCount,
+            latestListImageAttachment: Self.firstListThumbnailAttachment(from: latestMessage)
+        )
+    }
+
+    private static func firstListThumbnailAttachment(from message: ChatMessage?) -> ChatAttachment? {
+        guard let message else { return nil }
+        for attachment in message.attachments where attachment.isChatImageLike {
+            if attachment.sparkClientOSSFileUUIDAndFileName() != nil {
+                return attachment
+            }
+            if attachment.effectiveHTTPSImageDownloadURL != nil {
+                return attachment
+            }
+        }
+        return nil
     }
 }

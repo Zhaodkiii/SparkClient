@@ -5,6 +5,7 @@ final class AppBootstrapper {
     private let aiConfigCenter: AIConfigCenter
     private let medicalSyncService: MedicalSyncService
     private let syncChatUseCase: SyncChatUseCase?
+    private let chatSyncSupervisor: ChatSyncSupervisor?
     private let routeStore: AppRouteStore
     private let ossConfigurationStore: SparkOSSConfigurationStore
     private let ossAPI: SparkOSSAPI
@@ -18,6 +19,7 @@ final class AppBootstrapper {
         aiConfigCenter: AIConfigCenter,
         medicalSyncService: MedicalSyncService,
         syncChatUseCase: SyncChatUseCase? = nil,
+        chatSyncSupervisor: ChatSyncSupervisor? = nil,
         routeStore: AppRouteStore,
         ossConfigurationStore: SparkOSSConfigurationStore,
         ossAPI: SparkOSSAPI,
@@ -27,6 +29,7 @@ final class AppBootstrapper {
         self.aiConfigCenter = aiConfigCenter
         self.medicalSyncService = medicalSyncService
         self.syncChatUseCase = syncChatUseCase
+        self.chatSyncSupervisor = chatSyncSupervisor
         self.routeStore = routeStore
         self.ossConfigurationStore = ossConfigurationStore
         self.ossAPI = ossAPI
@@ -69,6 +72,7 @@ final class AppBootstrapper {
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
         await registerDevice()
+        await chatSyncSupervisor?.kickAttachmentDrain()
     }
 
     func reset() async {

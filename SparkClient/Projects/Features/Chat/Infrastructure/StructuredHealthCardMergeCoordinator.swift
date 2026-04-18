@@ -2,10 +2,10 @@ import Foundation
 
 /// 结构化医疗卡片异步合并：将抽取结果追加写入同一条助手消息的 `structured_health_cards` 附件，并同步内存态 `ChatStateStore`。
 final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
-    private let repository: CoreDataChatRepository
+    private let repository: any ChatRepository
     private weak var stateStore: ChatStateStore?
 
-    init(repository: CoreDataChatRepository) {
+    init(repository: any ChatRepository) {
         self.repository = repository
     }
 
@@ -74,7 +74,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
     }
 
     private static func decodeBlob(from message: ChatMessage) -> StructuredHealthCardsBlob? {
-        guard let raw = message.attachments.first(where: { $0.type == ChatStreamFieldKey.structuredHealthCards })?.text,
+        guard let raw = message.attachments.first(where: { $0.type == .structuredHealthCards })?.text,
               let data = raw.data(using: .utf8) else {
             return nil
         }
@@ -86,15 +86,10 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         json: String
     ) -> [ChatAttachment] {
         var out = attachments
-        if let i = out.firstIndex(where: { $0.type == ChatStreamFieldKey.structuredHealthCards }) {
-            out[i] = ChatAttachment(
-                id: out[i].id,
-                type: ChatStreamFieldKey.structuredHealthCards,
-                url: out[i].url,
-                text: json
-            )
+        if let i = out.firstIndex(where: { $0.type == .structuredHealthCards }) {
+            out[i] = out[i].replacing(type: .structuredHealthCards, text: json)
         } else {
-            out.append(ChatAttachment(type: ChatStreamFieldKey.structuredHealthCards, text: json))
+            out.append(ChatAttachment(type: .structuredHealthCards, text: json))
         }
         return out
     }

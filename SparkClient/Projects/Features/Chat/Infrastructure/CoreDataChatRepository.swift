@@ -19,6 +19,14 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadThreads()
     }
 
+    func loadThreadListItems() async -> [ChatThreadListItem] {
+        await store.loadThreadListItems()
+    }
+
+    func loadThreadListItem(threadID: UUID) async -> ChatThreadListItem? {
+        await store.loadThreadListItem(threadID: threadID)
+    }
+
     func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread {
         await store.createThread(memberID: memberID, title: title, imageDeliveryModeRaw: imageDeliveryModeRaw)
     }
@@ -36,8 +44,7 @@ actor CoreDataChatRepository: ChatRepository {
     }
 
     func latestServerActivity(for threadID: UUID) async -> Date? {
-        let messages = await store.loadMessages(threadID: threadID, limit: nil, before: nil)
-        return messages.map { $0.serverUpdatedAt ?? $0.createdAt }.max()
+        await store.latestServerActivity(for: threadID)
     }
 
     func appendMessage(
@@ -86,8 +93,8 @@ actor CoreDataChatRepository: ChatRepository {
         )
     }
 
-    func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID) async {
-        await store.upsertRemoteMessages(messages, in: threadID)
+    func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID, enqueueAttachmentDownloadJobs: Bool) async {
+        await store.upsertRemoteMessages(messages, in: threadID, enqueueAttachmentDownloadJobs: enqueueAttachmentDownloadJobs)
     }
 
     func upsertRemoteThreads(_ threads: [ChatThread]) async {
@@ -140,5 +147,17 @@ actor CoreDataChatRepository: ChatRepository {
 
     func saveMessageSyncCursor(_ cursor: ChatSyncCursor, for threadID: UUID) async {
         await store.saveMessageSyncCursor(cursor, for: threadID)
+    }
+
+    func loadPendingAttachmentDownloadJobs(limit: Int) async -> [ChatAttachmentDownloadJobRecord] {
+        await store.loadPendingAttachmentDownloadJobs(limit: limit)
+    }
+
+    func updateAttachmentDownloadJob(
+        id: UUID,
+        state: ChatAttachmentDownloadJobRecord.State,
+        localFileURLString: String?
+    ) async {
+        await store.updateAttachmentDownloadJob(id: id, state: state, localFileURLString: localFileURLString)
     }
 }

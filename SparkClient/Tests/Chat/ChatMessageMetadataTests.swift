@@ -26,17 +26,17 @@ final class ChatMessageMetadataTests: XCTestCase {
             kind: .tool,
             content: "",
             attachments: [
-                ChatAttachment(type: ChatStreamFieldKey.toolName, text: "query_location"),
-                ChatAttachment(type: ChatStreamFieldKey.toolContent, text: "工具输出"),
-                ChatAttachment(type: ChatStreamFieldKey.operationalState, text: "正在使用工具：query_location"),
-                ChatAttachment(type: ChatStreamFieldKey.operationalDescription, text: "请求中"),
-                ChatAttachment(type: ChatStreamFieldKey.translatedText, text: "translated result"),
-                ChatAttachment(type: ChatStreamFieldKey.htmlContent, text: "<html>ok</html>"),
-                ChatAttachment(type: ChatStreamFieldKey.knowledgeCard, text: cardsJSON),
-                ChatAttachment(type: ChatStreamFieldKey.locationsInfo, text: locationsJSON),
-                ChatAttachment(type: ChatStreamFieldKey.routeInfo, text: routesJSON),
-                ChatAttachment(type: ChatStreamFieldKey.events, text: eventsJSON),
-                ChatAttachment(type: ChatStreamFieldKey.healthInfo, text: healthJSON),
+                ChatAttachment(type: .toolName, text: "query_location"),
+                ChatAttachment(type: .toolContent, text: "工具输出"),
+                ChatAttachment(type: .operationalState, text: "正在使用工具：query_location"),
+                ChatAttachment(type: .operationalDescription, text: "请求中"),
+                ChatAttachment(type: .translatedText, text: "translated result"),
+                ChatAttachment(type: .htmlContent, text: "<html>ok</html>"),
+                ChatAttachment(type: .knowledgeCard, text: cardsJSON),
+                ChatAttachment(type: .locationsInfo, text: locationsJSON),
+                ChatAttachment(type: .routeInfo, text: routesJSON),
+                ChatAttachment(type: .events, text: eventsJSON),
+                ChatAttachment(type: .healthInfo, text: healthJSON),
             ]
         )
 

@@ -1,11 +1,7 @@
 import Foundation
 
-// MARK: - 附件键（与 StreamData 风格一致，单独 key，避免与营养 `health_info` 混淆）
-
-extension ChatStreamFieldKey {
-    /// 对话内结构化医疗卡片聚合 JSON（用药/处方/检查报告/病历）
-    static let structuredHealthCards = "structured_health_cards"
-}
+// MARK: - 附件键
+// 结构化医疗卡片键见 ``ChatAttachmentType.structuredHealthCards``（`structured_health_cards`）。
 
 // MARK: - 持久化 Blob（单附件内四类数组，增量 merge）
 

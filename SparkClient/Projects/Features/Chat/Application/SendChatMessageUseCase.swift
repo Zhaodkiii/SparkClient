@@ -3,7 +3,7 @@ import Foundation
 struct SendChatMessageUseCase: Sendable {
     let repository: any ChatRepository
     let orchestrator: ChatOrchestrator
-    let syncEngine: ChatSyncEngine
+    let chatSyncSupervisor: ChatSyncSupervisor
     let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
     let toolEventInterpreter: ChatToolEventInterpreter
     let fileTransferService: FileTransferService
@@ -14,7 +14,7 @@ struct SendChatMessageUseCase: Sendable {
     init(
         repository: any ChatRepository,
         orchestrator: ChatOrchestrator,
-        syncEngine: ChatSyncEngine,
+        chatSyncSupervisor: ChatSyncSupervisor,
         buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase,
         toolEventInterpreter: ChatToolEventInterpreter? = nil,
         fileTransferService: FileTransferService,
@@ -24,7 +24,7 @@ struct SendChatMessageUseCase: Sendable {
     ) {
         self.repository = repository
         self.orchestrator = orchestrator
-        self.syncEngine = syncEngine
+        self.chatSyncSupervisor = chatSyncSupervisor
         self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
         self.logger = logger
         self.toolEventInterpreter = toolEventInterpreter ?? ChatToolEventInterpreter(logger: logger)
@@ -81,12 +81,13 @@ struct SendChatMessageUseCase: Sendable {
 
             for preview in composerAttachments {
                 if let prepared = preparedByID[preview.id] {
+                    let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(prepared.record.objectKey)
                     chatAttachments.append(
                         ChatSendImageAssembly.makeAttachment(
                             previewID: preview.id,
                             record: prepared.record,
                             ocrText: prepared.ocrText,
-                            imageDeliveryModeRaw: thread.imageDeliveryMode.rawValue
+                            publicFullURL: publicURL
                         )
                     )
                     continue
@@ -108,12 +109,13 @@ struct SendChatMessageUseCase: Sendable {
                     imageData: preview.imageData,
                     options: .fastPreview
                 )
+                let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
                 chatAttachments.append(
                     ChatSendImageAssembly.makeAttachment(
                         previewID: preview.id,
                         record: record,
                         ocrText: ocrResult.text,
-                        imageDeliveryModeRaw: thread.imageDeliveryMode.rawValue
+                        publicFullURL: publicURL
                     )
                 )
             }
@@ -140,6 +142,13 @@ struct SendChatMessageUseCase: Sendable {
                 "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID))",
                 module: .general
             )
+
+            Task {
+                await OutboxCoordinator.pushPendingMessages(
+                    chatSyncSupervisor: chatSyncSupervisor,
+                    logger: logger
+                )
+            }
 
             let history = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
             if let onUserMessagePersisted {
@@ -213,11 +222,10 @@ struct SendChatMessageUseCase: Sendable {
                 deliveryState: .pending
             )
 
-            do {
-                try await syncEngine.pushOutboxOnly()
-            } catch {
-                logger.warning("消息上送失败，将由后台重试：\(error.localizedDescription)", module: .general)
-            }
+            await OutboxCoordinator.pushPendingMessages(
+                chatSyncSupervisor: chatSyncSupervisor,
+                logger: logger
+            )
 
             guard let latestThread = await repository.loadThread(id: thread.id) else {
                 throw ChatFeatureError.threadNotFound

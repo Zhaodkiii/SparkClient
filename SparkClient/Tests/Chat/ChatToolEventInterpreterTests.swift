@@ -23,7 +23,7 @@ final class ChatToolEventInterpreterTests: XCTestCase {
         )
 
         XCTAssertEqual(result.knowledgeCardAttachmentCount, 1)
-        let attachment = try XCTUnwrap(result.attachments.first(where: { $0.type == ChatStreamFieldKey.knowledgeCard }))
+        let attachment = try XCTUnwrap(result.attachments.first(where: { $0.type == .knowledgeCard }))
         let raw = try XCTUnwrap(attachment.text)
         let data = try XCTUnwrap(raw.data(using: .utf8))
         let cards = try JSONDecoder().decode([KnowledgeCardDraft].self, from: data)
@@ -42,8 +42,8 @@ final class ChatToolEventInterpreterTests: XCTestCase {
             toolContent: "使用工具：query_location\nargs=latitude=31.23,longitude=121.47,keyword=医院"
         )
 
-        let state = result.attachments.first(where: { $0.type == ChatStreamFieldKey.operationalState })?.text
-        let description = result.attachments.first(where: { $0.type == ChatStreamFieldKey.operationalDescription })?.text
+        let state = result.attachments.first(where: { $0.type == .operationalState })?.text
+        let description = result.attachments.first(where: { $0.type == .operationalDescription })?.text
 
         XCTAssertEqual(state, "使用工具：query_location")
         XCTAssertEqual(description, "args=latitude=31.23,longitude=121.47,keyword=医院")

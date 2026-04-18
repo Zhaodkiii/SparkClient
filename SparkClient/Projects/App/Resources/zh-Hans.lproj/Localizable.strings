@@ -349,6 +349,7 @@
 "chat.bubble.action.select_text" = "选择文本";
 "chat.bubble.image.copy" = "复制图片";
 "chat.bubble.image.save" = "保存图片";
+"chat.bubble.image.loading" = "加载中…";
 "chat.bubble.knowledge.save" = "保存到知识库";
 "chat.bubble.knowledge.saving" = "保存中";
 "chat.bubble.knowledge.saved" = "已保存";

@@ -15,6 +15,7 @@ final class ChatListViewModel: ObservableObject {
     private let deleteThreadUseCase: DeleteThreadUseCase
     private let notificationClient: any NotificationClient
     private var hasLoadedForList = false
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         stateStore: ChatStateStore,
@@ -40,6 +41,23 @@ final class ChatListViewModel: ObservableObject {
         self.createThreadUseCase = createThreadUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
         self.notificationClient = notificationClient
+
+        NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                guard let self else { return }
+                Task { @MainActor in
+                    guard case .signedIn = self.sessionStore.state else { return }
+                    if let event = note.chatConversationChangeEvent {
+                        guard event.affectsThreadList else { return }
+                        if await self.tryPatchThreadList(for: event) {
+                            return
+                        }
+                    }
+                    await self.reloadThreads(selectFirstIfNeeded: false)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func loadForListIfNeeded() async {
@@ -105,6 +123,20 @@ final class ChatListViewModel: ObservableObject {
            stateStore.selectedThreadID == nil {
             stateStore.setSelectedThreadID(threads.first?.id)
         }
+    }
+
+    /// 已知 `threadID` 的变更：只刷新投影行，避免整表 `loadThreadListItems`。
+    private func tryPatchThreadList(for event: ChatConversationChangeEvent) async -> Bool {
+        guard let threadID = event.threadID else { return false }
+        if stateStore.threadItems.isEmpty {
+            return false
+        }
+        if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
+            stateStore.upsertThreadListItem(item)
+        } else {
+            stateStore.removeThreadListItem(id: threadID)
+        }
+        return true
     }
 
     private func ensureMemberContextLoaded() async {

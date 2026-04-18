@@ -349,6 +349,7 @@
 "chat.bubble.action.select_text" = "Select Text";
 "chat.bubble.image.copy" = "Copy Image";
 "chat.bubble.image.save" = "Save Image";
+"chat.bubble.image.loading" = "Loading…";
 "chat.bubble.knowledge.save" = "Save to Knowledge";
 "chat.bubble.knowledge.saving" = "Saving";
 "chat.bubble.knowledge.saved" = "Saved";

@@ -99,6 +99,19 @@ actor FileTransferService {
         return uploaded
     }
 
+    /// 基于 STS 返回的 bucket + endpoint，拼接 OSS 对象的外网 HTTPS URL（virtual-hosted style）。
+    func publicHTTPSURLForObjectKey(_ objectKey: String?) async -> URL? {
+        let trimmed = objectKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.isEmpty == false else { return nil }
+        do {
+            let cfg = try await ossConfigurationStore.configurationForUpload(using: ossAPI)
+            return Self.makePublicObjectURL(endpoint: cfg.endpointURL, bucket: cfg.bucketName, objectKey: trimmed)
+        } catch {
+            logger.debug("无法拼接 OSS 公网 URL：\(error.localizedDescription)", module: .cache)
+            return nil
+        }
+    }
+
     /// 下载文件（带缓存检测机制）
     /// - Parameters:
     ///   - file: 要下载的文件记录
@@ -194,5 +207,24 @@ actor FileTransferService {
         formatter.dateFormat = "yyyyMMdd"
         return formatter
     }()
+
+    /// `https://{bucket}.{endpointHost}/{objectKey}`
+    nonisolated static func makePublicObjectURL(endpoint: String, bucket: String, objectKey: String) -> URL? {
+        let key = objectKey.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let bucketTrimmed = bucket.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard key.isEmpty == false, bucketTrimmed.isEmpty == false else { return nil }
+
+        let endpointTrimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        var endpointString = endpointTrimmed
+        if endpointString.hasPrefix("//") {
+            endpointString = "https:" + endpointString
+        }
+        guard let endpointURL = URL(string: endpointString),
+              let host = endpointURL.host else {
+            return nil
+        }
+        let scheme = endpointURL.scheme ?? "https"
+        return URL(string: "\(scheme)://\(bucketTrimmed).\(host)/\(key)")
+    }
 
 }

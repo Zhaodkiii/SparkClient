@@ -10,7 +10,7 @@ struct ChatToolRuntimeAttachmentBuilder: Sendable {
 
         let normalizedName = toolName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if normalizedName.isEmpty == false {
-            attachments.append(ChatAttachment(type: ChatStreamFieldKey.toolName, text: normalizedName))
+            attachments.append(ChatAttachment(type: .toolName, text: normalizedName))
         }
 
         let normalizedContent = toolContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -18,7 +18,7 @@ struct ChatToolRuntimeAttachmentBuilder: Sendable {
             return attachments
         }
 
-        attachments.append(ChatAttachment(type: ChatStreamFieldKey.toolContent, text: normalizedContent))
+        attachments.append(ChatAttachment(type: .toolContent, text: normalizedContent))
 
         // operationalState/operationalDescription 与 AI_HLY 的语义保持一致：
         // 1) state 显示当前“正在使用工具”；
@@ -36,11 +36,11 @@ struct ChatToolRuntimeAttachmentBuilder: Sendable {
         } else {
             stateText = "正在使用工具"
         }
-        attachments.append(ChatAttachment(type: ChatStreamFieldKey.operationalState, text: stateText))
+        attachments.append(ChatAttachment(type: .operationalState, text: stateText))
 
         let description = lines.dropFirst().joined(separator: "\n")
         if description.isEmpty == false {
-            attachments.append(ChatAttachment(type: ChatStreamFieldKey.operationalDescription, text: description))
+            attachments.append(ChatAttachment(type: .operationalDescription, text: description))
         }
         return attachments
     }

@@ -12,17 +12,17 @@ final class ChatToolRuntimeAttachmentBuilderTests: XCTestCase {
         )
 
         let types = attachments.map(\.type)
-        XCTAssertTrue(types.contains(ChatStreamFieldKey.toolName))
-        XCTAssertTrue(types.contains(ChatStreamFieldKey.toolContent))
-        XCTAssertTrue(types.contains(ChatStreamFieldKey.operationalState))
-        XCTAssertTrue(types.contains(ChatStreamFieldKey.operationalDescription))
+        XCTAssertTrue(types.contains(.toolName))
+        XCTAssertTrue(types.contains(.toolContent))
+        XCTAssertTrue(types.contains(.operationalState))
+        XCTAssertTrue(types.contains(.operationalDescription))
 
         XCTAssertEqual(
-            attachments.first(where: { $0.type == ChatStreamFieldKey.operationalState })?.text,
+            attachments.first(where: { $0.type == .operationalState })?.text,
             "使用工具：query_location"
         )
         XCTAssertEqual(
-            attachments.first(where: { $0.type == ChatStreamFieldKey.operationalDescription })?.text,
+            attachments.first(where: { $0.type == .operationalDescription })?.text,
             "args=latitude=31.23,longitude=121.47"
         )
     }
@@ -36,7 +36,7 @@ final class ChatToolRuntimeAttachmentBuilderTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            attachments.first(where: { $0.type == ChatStreamFieldKey.operationalState })?.text,
+            attachments.first(where: { $0.type == .operationalState })?.text,
             "正在使用工具：search_calendar_and_reminders"
         )
     }

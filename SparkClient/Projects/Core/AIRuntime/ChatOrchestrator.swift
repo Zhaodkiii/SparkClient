@@ -310,7 +310,7 @@ struct ChatOrchestrator: Sendable {
 
     private func buildMultimodalParts(from message: ChatMessage) async -> [AIRuntimeContentPart]? {
         let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageAttachments = message.attachments.filter { $0.type == "image_url" }
+        let imageAttachments = message.attachments.filter { $0.isUserImageForModelOrOCR }
         guard imageAttachments.isEmpty == false else { return nil }
         var parts: [AIRuntimeContentPart] = []
         if text.isEmpty == false {
@@ -319,21 +319,24 @@ struct ChatOrchestrator: Sendable {
             parts.append(.textPart(" "))
         }
         for att in imageAttachments {
-            guard let meta = ChatUploadedImageAttachmentCodec.decode(from: att.text) else {
-                logger.debug("多模态：附件缺少 JSON 元数据，跳过", module: .aiConfig)
+            let jpegData: Data?
+            if let parsed = att.sparkClientOSSFileUUIDAndFileName(),
+               let localURL = await fileCacheManager.cachedFileURL(fileUUID: parsed.fileUUID, fileName: parsed.fileName),
+               let data = try? Data(contentsOf: localURL),
+               let converted = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
+                jpegData = converted
+            } else if let url = att.url,
+                      let data = try? await URLSession.shared.data(from: url).0,
+                      let converted = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
+                jpegData = converted
+            } else {
+                jpegData = nil
+            }
+            guard let jpegData else {
+                logger.debug("多模态：无法取得图片字节（缓存或 URL），跳过", module: .aiConfig)
                 return nil
             }
-            guard let localURL = await fileCacheManager.cachedFileURL(fileUUID: meta.fileUUID, fileName: meta.originalName),
-                  let data = try? Data(contentsOf: localURL),
-                  let jpegData = UIImage(data: data)?.jpegData(compressionQuality: 0.9) else {
-                logger.debug(
-                    "多模态：本地缓存不可用或无法转 JPEG，降级（file_uuid=\(meta.fileUUID)）",
-                    module: .aiConfig
-                )
-                return nil
-            }
-            let b64 = jpegData.base64EncodedString()
-            parts.append(.imageInlineJPEGBase64(b64))
+            parts.append(.imageInlineJPEGBase64(jpegData.base64EncodedString()))
         }
         return parts.count > 1 ? parts : nil
     }
@@ -341,15 +344,15 @@ struct ChatOrchestrator: Sendable {
     /// LocalOCR 模式：从附件元数据中提取 OCR 文本，构造增强后的用户内容
     private func buildLocalOCRContent(from message: ChatMessage) -> String {
         let userText = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageAttachments = message.attachments.filter { $0.type == "image_url" }
+        let imageAttachments = message.attachments.filter { $0.isUserImageForModelOrOCR }
         guard imageAttachments.isEmpty == false else { return message.content }
         
         var blocks: [String] = []
         for attachment in imageAttachments {
-            guard let meta = ChatUploadedImageAttachmentCodec.decode(from: attachment.text) else { continue }
-            let ocr = meta.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let fileIdStr = "file_id=\(meta.fileId)"
-            let fileUUIDStr = "file_uuid=\(meta.fileUUID)"
+            let ocr = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let fileIdStr = "file_id=\(attachment.fileId.map(String.init) ?? "-")"
+            let uuidHint = attachment.sparkClientOSSFileUUIDAndFileName()?.fileUUID ?? "-"
+            let fileUUIDStr = "file_uuid=\(uuidHint)"
             blocks.append(
                 """
                 【图片附件】\(fileIdStr) \(fileUUIDStr)

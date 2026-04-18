@@ -152,6 +152,8 @@ final class AppContainer {
     let loadChatThreadsUseCase: LoadChatThreadsUseCase
     /// 加载某线程下的消息历史（含本地未同步）。
     let loadChatMessagesUseCase: LoadChatMessagesUseCase
+    /// 聊天读模型（Query 层），与 ``ChatRepository`` 解耦 UI 拼装逻辑。
+    let chatQueryService: ChatQueryService
     /// 创建新聊天线程。
     let createThreadUseCase: CreateThreadUseCase
     /// 失败气泡重试：重新入同步引擎。
@@ -160,6 +162,8 @@ final class AppContainer {
     let deleteThreadUseCase: DeleteThreadUseCase
     /// 手动或定时拉取远端增量、处理 outbox。
     let syncChatUseCase: SyncChatUseCase
+    /// 聊天同步编排（引擎 + 附件管线）。
+    let chatSyncSupervisor: ChatSyncSupervisor
     /// 用户发送一条消息：落库、触发编排（流式模型 + 工具）。
     let sendChatMessageUseCase: SendChatMessageUseCase
 
@@ -400,6 +404,15 @@ final class AppContainer {
             mergePolicy: ChatMergePolicy(),
             logger: logger
         )
+        let chatAttachmentPipeline = ChatAttachmentPipeline(
+            repository: chatRepository,
+            fileTransferService: fileTransferService,
+            logger: logger
+        )
+        let chatSyncSupervisor = ChatSyncSupervisor(
+            syncEngine: chatSyncEngine,
+            attachmentPipeline: chatAttachmentPipeline
+        )
         let chatOrchestrator = ChatOrchestrator(
             runtimeService: aiRuntimeService,
             toolHub: toolHub,
@@ -407,22 +420,23 @@ final class AppContainer {
             fileCacheManager: fileCacheManager,
             logger: logger
         )
-        let loadChatThreadsUseCase = LoadChatThreadsUseCase(repository: chatRepository)
-        let loadChatMessagesUseCase = LoadChatMessagesUseCase(repository: chatRepository)
+        let chatQueryService = ChatQueryService(repository: chatRepository)
+        let loadChatThreadsUseCase = LoadChatThreadsUseCase(queryService: chatQueryService)
+        let loadChatMessagesUseCase = LoadChatMessagesUseCase(queryService: chatQueryService)
         let createThreadUseCase = CreateThreadUseCase(repository: chatRepository, aiSettingsRepository: aiSettingsRepository)
         let retryFailedMessageUseCase = RetryFailedMessageUseCase(
             repository: chatRepository,
-            syncEngine: chatSyncEngine,
+            chatSyncSupervisor: chatSyncSupervisor,
             logger: logger
         )
         let updateChatMessageAttachmentsUseCase = UpdateChatMessageAttachmentsUseCase(repository: chatRepository)
-        let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository, syncEngine: chatSyncEngine)
-        let syncChatUseCase = SyncChatUseCase(syncEngine: chatSyncEngine)
+        let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository, chatSyncSupervisor: chatSyncSupervisor)
+        let syncChatUseCase = SyncChatUseCase(supervisor: chatSyncSupervisor)
         let chatToolEventInterpreter = ChatToolEventInterpreter(logger: logger)
         let sendChatMessageUseCase = SendChatMessageUseCase(
             repository: chatRepository,
             orchestrator: chatOrchestrator,
-            syncEngine: chatSyncEngine,
+            chatSyncSupervisor: chatSyncSupervisor,
             buildMemberContextSummaryUseCase: buildMemberContextSummaryUseCase,
             toolEventInterpreter: chatToolEventInterpreter,
             fileTransferService: fileTransferService,
@@ -491,6 +505,7 @@ final class AppContainer {
             aiConfigCenter: aiConfigCenter,
             medicalSyncService: medicalSyncService,
             syncChatUseCase: syncChatUseCase,
+            chatSyncSupervisor: chatSyncSupervisor,
             routeStore: routeStore,
             ossConfigurationStore: ossConfigurationStore,
             ossAPI: backend.oss,
@@ -540,10 +555,12 @@ final class AppContainer {
         self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
+        self.chatQueryService = chatQueryService
         self.createThreadUseCase = createThreadUseCase
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
         self.syncChatUseCase = syncChatUseCase
+        self.chatSyncSupervisor = chatSyncSupervisor
         self.sendChatMessageUseCase = sendChatMessageUseCase
 
         self.routeStore = routeStore

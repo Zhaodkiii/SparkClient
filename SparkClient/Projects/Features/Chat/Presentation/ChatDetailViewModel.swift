@@ -17,11 +17,6 @@ struct ChatComposerModelOption: Identifiable, Equatable, Sendable {
 
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
-    private enum MessagePagingConfig {
-        static let initialLimit = 6
-        static let loadMoreLimit = 10
-    }
-
     private let stateStore: ChatStateStore
     private let memberContextStore: MemberContextStore
     private let chatRepository: any ChatRepository
@@ -42,6 +37,8 @@ final class ChatDetailViewModel: ObservableObject {
     private let logger: Logger
     private var isRealtimeActive = false
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
+    private var cancellables = Set<AnyCancellable>()
+    private let chatLoadCoordinator = ChatLoadCoordinator()
 
     /// 结构化医疗卡片保存中（用于按钮 Progress）。
     @Published private(set) var savingStructuredHealthCardIDs: Set<UUID> = []
@@ -93,6 +90,36 @@ final class ChatDetailViewModel: ObservableObject {
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
         self.logger = logger
+
+        NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] note in
+                guard let self else { return }
+                guard let threadID = self.stateStore.selectedThreadID else { return }
+                if let event = note.chatConversationChangeEvent {
+                    if let changedThreadID = event.threadID, changedThreadID != threadID {
+                        return
+                    }
+                    switch event.kind {
+                    case .messagesAppended:
+                        let currentIDs = Set(self.stateStore.persistedMessages(for: threadID).map(\.clientMessageID))
+                        if event.affectedClientMessageIDs.allSatisfy(currentIDs.contains) {
+                            return
+                        }
+                    case .threadsChanged:
+                        return
+                    case .messagesUpdated, .messagesMerged:
+                        break
+                    }
+                }
+                let streaming = self.stateStore.isStreamingAssistantActive(for: threadID)
+                let delay: UInt64 = streaming ? 220 : 120
+                self.chatLoadCoordinator.schedule(delayMs: delay) { [weak self] in
+                    guard let self else { return }
+                    await self.loadMessagesIfNeeded(for: threadID, skipRemoteSync: true)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func enqueueComposerAttachments(_ attachments: [ChatComposerAttachmentPreview], for threadID: UUID) {
@@ -109,47 +136,17 @@ final class ChatDetailViewModel: ObservableObject {
         stateStore.removeComposerAttachment(id: id, for: threadID)
     }
 
-    func downloadChatImageToLocalFile(meta: ChatUploadedImageAttachmentMeta) async throws -> URL {
-        let resolvedPath: String
-        if let objectKey = meta.objectKey?.trimmingCharacters(in: .whitespacesAndNewlines),
-           objectKey.isEmpty == false {
-            resolvedPath = try await fileTransferService.makePresignedDownloadURL(objectKey: objectKey).absoluteString
-        } else if let remote = meta.remoteURLString?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  remote.isEmpty == false {
-            resolvedPath = remote
-        } else if let filePath = meta.filePath?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  (filePath.hasPrefix("http://") || filePath.hasPrefix("https://")) {
-            resolvedPath = filePath
-        } else {
-            logger.warning("聊天图片下载缺少 object_key/remote_url，fileID=\(meta.fileId)", module: .general)
-            throw SparkNetworkError.decoding(
-                NSError(
-                    domain: "ChatImageDownload",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "图片缺少可下载地址"]
-                )
+    func downloadChatImageToLocalFile(attachment: ChatAttachment) async throws -> URL {
+        let dedupeKey = attachment.imageDownloadDedupeKey
+        let fts = fileTransferService
+        let log = logger
+        return try await ChatImageDownloadCoordinator.shared.cachedOrDownload(dedupeKey: dedupeKey) {
+            try await ChatAttachmentImageDownload.downloadToLocalFile(
+                attachment: attachment,
+                fileTransferService: fts,
+                logger: log
             )
         }
-        let managedFile = ManagedFileRecord(
-            id: meta.fileId,
-            fileUUID: meta.fileUUID,
-            filePath: resolvedPath,
-            originalName: meta.originalName,
-            fileSize: 0,
-            mimeType: meta.mimeType,
-            fileMd5: meta.fileMd5,
-            isPublic: false,
-            businessType: ChatSendImageAssembly.chatAttachmentBusinessType,
-            businessID: "",
-            createdAt: "",
-            objectKey: nil,
-            storageType: nil
-        )
-        if let cached = await fileTransferService.cachedURL(file: managedFile) {
-            return cached
-        }
-        logger.debug("聊天图片触发公共下载，fileID=\(meta.fileId)", module: .general)
-        return try await fileTransferService.download(file: managedFile)
     }
 
     private func startPreparingAttachment(_ attachment: ChatComposerAttachmentPreview, threadID: UUID) {
@@ -286,10 +283,15 @@ final class ChatDetailViewModel: ObservableObject {
 
     func setThreadImageDeliveryMode(_ mode: ChatThreadImageDeliveryMode, for threadID: UUID) async {
         await chatRepository.updateThreadImageDeliveryMode(threadID: threadID, imageDeliveryModeRaw: mode.rawValue)
-        let items = await loadChatThreadsUseCase.execute()
-        await MainActor.run {
-            stateStore.setThreads(items)
-            threadImageDeliveryMode = mode
+        if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
+            await MainActor.run {
+                stateStore.upsertThreadListItem(item)
+                threadImageDeliveryMode = mode
+            }
+        } else {
+            await MainActor.run {
+                threadImageDeliveryMode = mode
+            }
         }
     }
 
@@ -388,55 +390,78 @@ final class ChatDetailViewModel: ObservableObject {
         provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
-    func loadMessagesIfNeeded(for threadID: UUID) async {
-        let total = await loadChatMessagesUseCase.count(threadID: threadID)
-        let messages = await loadChatMessagesUseCase.execute(
-            threadID: threadID,
-            limit: MessagePagingConfig.initialLimit,
-            before: nil
-        )
-        let hasMore = total > messages.count
-        stateStore.setMessages(messages, for: threadID, hasMore: hasMore)
-
-        // 本地优先展示，再异步做远端增量同步，避免进入会话瞬时 UI 抖动。
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.syncChatUseCase.syncThreadOnOpen(threadID: threadID)
-                let latestTotal = await self.loadChatMessagesUseCase.count(threadID: threadID)
-                let latestMessages = await self.loadChatMessagesUseCase.execute(
-                    threadID: threadID,
-                    limit: MessagePagingConfig.initialLimit,
-                    before: nil
-                )
-                let latestHasMore = latestTotal > latestMessages.count
-                await MainActor.run {
-                    self.stateStore.setMessages(latestMessages, for: threadID, hasMore: latestHasMore)
-                }
-            } catch {
-                await MainActor.run {
-                    self.stateStore.setError(error.localizedDescription)
-                }
-                self.logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
-            }
-        }
+    func loadMessagesIfNeeded(for threadID: UUID, skipRemoteSync: Bool = false) async {
+        await satisfyLoadRequest(.openOrReloadNewest(threadID: threadID, skipRemoteSync: skipRemoteSync))
     }
 
     func loadMoreMessages(for threadID: UUID) async {
         guard stateStore.hasMoreMessages(for: threadID) else { return }
         guard stateStore.isLoadingMoreMessages(for: threadID) == false else { return }
-        guard let oldest = stateStore.selectedMessages.first?.createdAt else { return }
+        guard let oldest = stateStore.persistedMessages(for: threadID).first?.createdAt else { return }
 
         stateStore.setLoadingMore(true, for: threadID)
         defer { stateStore.setLoadingMore(false, for: threadID) }
 
-        let older = await loadChatMessagesUseCase.execute(
-            threadID: threadID,
-            limit: MessagePagingConfig.loadMoreLimit,
-            before: oldest
-        )
-        let hasMore = older.count >= MessagePagingConfig.loadMoreLimit
-        stateStore.prependMessages(older, for: threadID, hasMore: hasMore)
+        await satisfyLoadRequest(.loadOlderPage(threadID: threadID, before: oldest))
+    }
+
+    private func satisfyLoadRequest(_ request: ChatLoadRequest) async {
+        switch request {
+        case .openOrReloadNewest(let threadID, let skipRemoteSync):
+            let windowLimit = ChatMessageWindow.newestFetchLimit(
+                persistedCount: stateStore.persistedMessages(for: threadID).count
+            )
+            let total = await loadChatMessagesUseCase.count(threadID: threadID)
+            let messages = await loadChatMessagesUseCase.execute(
+                threadID: threadID,
+                limit: windowLimit,
+                before: nil
+            )
+            let hasMore = total > messages.count
+            stateStore.setMessages(
+                messages,
+                for: threadID,
+                clearStreamingAssistant: skipRemoteSync == false,
+                hasMore: hasMore
+            )
+
+            guard skipRemoteSync == false else { return }
+
+            // 本地优先展示，再异步做远端增量同步，避免进入会话瞬时 UI 抖动。
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.syncChatUseCase.syncThreadOnOpen(threadID: threadID)
+                    let latestWindowLimit = ChatMessageWindow.newestFetchLimit(
+                        persistedCount: self.stateStore.persistedMessages(for: threadID).count
+                    )
+                    let latestTotal = await self.loadChatMessagesUseCase.count(threadID: threadID)
+                    let latestMessages = await self.loadChatMessagesUseCase.execute(
+                        threadID: threadID,
+                        limit: latestWindowLimit,
+                        before: nil
+                    )
+                    let latestHasMore = latestTotal > latestMessages.count
+                    await MainActor.run {
+                        self.stateStore.setMessages(latestMessages, for: threadID, hasMore: latestHasMore)
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.stateStore.setError(error.localizedDescription)
+                    }
+                    self.logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
+                }
+            }
+
+        case .loadOlderPage(let threadID, let before):
+            let older = await loadChatMessagesUseCase.execute(
+                threadID: threadID,
+                limit: ChatMessageWindow.loadOlderPageSize,
+                before: before
+            )
+            let hasMore = older.count >= ChatMessageWindow.loadOlderPageSize
+            stateStore.prependMessages(older, for: threadID, hasMore: hasMore)
+        }
     }
 
     func sendCurrentDraft() async {
@@ -493,12 +518,14 @@ final class ChatDetailViewModel: ObservableObject {
                     }
                 },
                 onUserMessagePersisted: { localSnapshot in
-                    let threadItems = await loadChatThreadsUseCase.execute()
+                    let listItem = await loadChatThreadsUseCase.execute(threadID: localSnapshot.thread.id)
                     await MainActor.run {
                         stateStore.setSelectedThreadID(localSnapshot.thread.id)
                         // 保留流式占位：setMessages 默认会清空 streamingAssistants，会导致后续 onAssistantPartial 全部失效。
                         stateStore.setMessages(localSnapshot.messages, for: localSnapshot.thread.id, clearStreamingAssistant: false)
-                        stateStore.setThreads(threadItems)
+                        if let listItem {
+                            stateStore.upsertThreadListItem(listItem)
+                        }
                         stateStore.clearDraft(for: localSnapshot.thread.id)
                     }
                 },
@@ -508,8 +535,9 @@ final class ChatDetailViewModel: ObservableObject {
                     }
                 }
             )
-            let finalItems = await loadChatThreadsUseCase.execute()
-            stateStore.setThreads(finalItems)
+            if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
+                stateStore.upsertThreadListItem(finalRow)
+            }
             stateStore.setMessages(snapshot.messages, for: snapshot.thread.id)
             stateStore.clearDraft(for: snapshot.thread.id)
             stateStore.setError(nil)
@@ -662,7 +690,7 @@ final class ChatDetailViewModel: ObservableObject {
         cardID: Int,
         status: TaskCard.CardStatus
     ) -> [ChatAttachment]? {
-        guard let index = attachments.firstIndex(where: { $0.type == ChatStreamFieldKey.taskCards }),
+        guard let index = attachments.firstIndex(where: { $0.type == .taskCards }),
               let raw = attachments[index].text,
               let data = raw.data(using: .utf8) else {
             return nil
@@ -682,12 +710,7 @@ final class ChatDetailViewModel: ObservableObject {
             return nil
         }
         var next = attachments
-        next[index] = ChatAttachment(
-            id: attachments[index].id,
-            type: attachments[index].type,
-            url: attachments[index].url,
-            text: text
-        )
+        next[index] = attachments[index].withText(text)
         return next
     }
 
@@ -930,7 +953,7 @@ final class ChatDetailViewModel: ObservableObject {
         in attachments: [ChatAttachment],
         mutate: (inout StructuredHealthCardsBlob) -> Void
     ) -> [ChatAttachment]? {
-        guard let index = attachments.firstIndex(where: { $0.type == ChatStreamFieldKey.structuredHealthCards }),
+        guard let index = attachments.firstIndex(where: { $0.type == .structuredHealthCards }),
               let raw = attachments[index].text,
               let data = raw.data(using: .utf8),
               var blob = try? JSONDecoder().decode(StructuredHealthCardsBlob.self, from: data) else {
@@ -943,12 +966,7 @@ final class ChatDetailViewModel: ObservableObject {
             return nil
         }
         var next = attachments
-        next[index] = ChatAttachment(
-            id: attachments[index].id,
-            type: attachments[index].type,
-            url: attachments[index].url,
-            text: text
-        )
+        next[index] = attachments[index].withText(text)
         return next
     }
 }

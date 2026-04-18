@@ -2,16 +2,16 @@ import Foundation
 
 struct RetryFailedMessageUseCase: Sendable {
     let repository: any ChatRepository
-    let syncEngine: ChatSyncEngine
+    let chatSyncSupervisor: ChatSyncSupervisor
     let logger: Logger
 
     init(
         repository: any ChatRepository,
-        syncEngine: ChatSyncEngine,
+        chatSyncSupervisor: ChatSyncSupervisor,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
-        self.syncEngine = syncEngine
+        self.chatSyncSupervisor = chatSyncSupervisor
         self.logger = logger
     }
 
@@ -19,7 +19,7 @@ struct RetryFailedMessageUseCase: Sendable {
         logger.info("retry 开始，clientMessageID=\(String(clientMessageID.uuidString.prefix(8)))", module: .general)
         do {
             await repository.updateMessageDeliveryState(clientMessageID: clientMessageID, state: .pending)
-            try await syncEngine.pushOutboxOnly()
+            try await chatSyncSupervisor.pushOutboxOnly()
             logger.info("retry 完成，clientMessageID=\(String(clientMessageID.uuidString.prefix(8)))", module: .general)
         } catch {
             logger.error("retry 失败：\(error.localizedDescription)", module: .general)

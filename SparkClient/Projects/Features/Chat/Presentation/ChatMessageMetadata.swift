@@ -17,34 +17,34 @@ struct ChatMessageMetadata {
     let healthCards: [ChatHealthCardPayload]
     let sleepVisualization: ChatHealthSleepModel?
     let taskCards: [TaskCard]
-    /// 对话内结构化医疗卡片（用药/处方/检查/病历），见 ``ChatStreamFieldKey.structuredHealthCards``。
+    /// 对话内结构化医疗卡片（用药/处方/检查/病历），见 ``ChatAttachmentType.structuredHealthCards``。
     let structuredHealthCards: StructuredHealthCardsBlob?
 
     init(message: ChatMessage) {
-        toolName = Self.attachmentText(type: ChatStreamFieldKey.toolName, from: message)
-        toolContent = Self.attachmentText(type: ChatStreamFieldKey.toolContent, from: message)
-        operationalState = Self.attachmentText(type: ChatStreamFieldKey.operationalState, from: message)
-        operationalDescription = Self.attachmentText(type: ChatStreamFieldKey.operationalDescription, from: message)
-        translatedText = Self.attachmentText(type: ChatStreamFieldKey.translatedText, from: message)
-        htmlContent = Self.attachmentText(type: ChatStreamFieldKey.htmlContent, from: message)
-        knowledgeCards = Self.decodeArray(type: ChatStreamFieldKey.knowledgeCard, from: message)
-        locations = Self.decodeArray(type: ChatStreamFieldKey.locationsInfo, from: message)
-        routes = Self.decodeArray(type: ChatStreamFieldKey.routeInfo, from: message)
-        events = Self.decodeArray(type: ChatStreamFieldKey.events, from: message)
-        healthCards = Self.decodeArray(type: ChatStreamFieldKey.healthInfo, from: message)
-        sleepVisualization = Self.decodeObject(type: ChatStreamFieldKey.healthSleepVisualization, from: message)
-        taskCards = Self.decodeArray(type: ChatStreamFieldKey.taskCards, from: message)
-        structuredHealthCards = Self.decodeObject(type: ChatStreamFieldKey.structuredHealthCards, from: message)
+        toolName = Self.attachmentText(type: .toolName, from: message)
+        toolContent = Self.attachmentText(type: .toolContent, from: message)
+        operationalState = Self.attachmentText(type: .operationalState, from: message)
+        operationalDescription = Self.attachmentText(type: .operationalDescription, from: message)
+        translatedText = Self.attachmentText(type: .translatedText, from: message)
+        htmlContent = Self.attachmentText(type: .htmlContent, from: message)
+        knowledgeCards = Self.decodeArray(type: .knowledgeCard, from: message)
+        locations = Self.decodeArray(type: .locationsInfo, from: message)
+        routes = Self.decodeArray(type: .routeInfo, from: message)
+        events = Self.decodeArray(type: .events, from: message)
+        healthCards = Self.decodeArray(type: .healthInfo, from: message)
+        sleepVisualization = Self.decodeObject(type: .healthSleepVisualization, from: message)
+        taskCards = Self.decodeArray(type: .taskCards, from: message)
+        structuredHealthCards = Self.decodeObject(type: .structuredHealthCards, from: message)
     }
 
-    private static func attachmentText(type: String, from message: ChatMessage) -> String? {
+    private static func attachmentText(type: ChatAttachmentType, from message: ChatMessage) -> String? {
         let value = message.attachments.first(where: { $0.type == type })?.text?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let value, value.isEmpty == false else { return nil }
         return value
     }
 
-    private static func decodeArray<T: Decodable>(type: String, from message: ChatMessage) -> [T] {
+    private static func decodeArray<T: Decodable>(type: ChatAttachmentType, from message: ChatMessage) -> [T] {
         guard let raw = attachmentText(type: type, from: message),
               let data = raw.data(using: .utf8) else { return [] }
         if let rows = try? makeDecoder().decode([T].self, from: data) {
@@ -57,7 +57,7 @@ struct ChatMessageMetadata {
         return []
     }
 
-    private static func decodeObject<T: Decodable>(type: String, from message: ChatMessage) -> T? {
+    private static func decodeObject<T: Decodable>(type: ChatAttachmentType, from message: ChatMessage) -> T? {
         guard let raw = attachmentText(type: type, from: message),
               let data = raw.data(using: .utf8) else { return nil }
         return try? makeDecoder().decode(T.self, from: data)
