@@ -13,8 +13,10 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     private var dataSource: UICollectionViewDiffableDataSource<Int, UUID>!
     private var messageLookup: [UUID: ChatMessage] = [:]
     private var lastStreamingGeneration: UInt64 = 0
-    private var needsInitialBottomPin = true
     private var userDragging = false
+    private var hasUserInteractedSinceThreadOpen = false
+    private var bottomViewportLockActive = false
+    private var lastLockedContentHeight: CGFloat = 0
     private var lastAppliedMessageIDs: [UUID] = []
     private var lastRenderedMessages: [ChatMessage] = []
 
@@ -57,20 +59,19 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         configureDataSource()
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        if needsInitialBottomPin {
-            DispatchQueue.main.async { [weak self] in
-                self?.scrollToBottom(animated: false, force: true)
-            }
-        }
-    }
-
     func resetForNewThread() {
-        needsInitialBottomPin = true
         lastAppliedMessageIDs = []
         lastStreamingGeneration = 0
         lastRenderedMessages = []
+        userDragging = false
+        hasUserInteractedSinceThreadOpen = false
+        bottomViewportLockActive = false
+        lastLockedContentHeight = 0
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        maintainBottomViewportLockIfNeeded()
     }
 
     @objc private func handleRefresh() {
@@ -93,6 +94,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         let messages = payload.messages
         let hasMoreMessages = payload.hasMoreMessages
         let streamingContentGeneration = payload.streamingContentGeneration
+        bottomViewportLockActive = payload.lockBottomViewport && hasUserInteractedSinceThreadOpen == false
         let previousForPlan = payload.forceFullListRediff ? [] : lastRenderedMessages
         let updatePlan = ConversationUpdateBuilder.plan(previous: previousForPlan, current: messages)
         let wasPinnedToBottom = ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView)
@@ -129,10 +131,10 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
 
         dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
             guard let self else { return }
+            self.view.layoutIfNeeded()
             self.collectionView.layoutIfNeeded()
-            if self.needsInitialBottomPin {
-                self.needsInitialBottomPin = false
-                self.scrollToBottom(animated: false, force: true)
+            if self.bottomViewportLockActive {
+                self.maintainBottomViewportLockIfNeeded(force: true)
             } else if updatePlan.hasPrependedItems, let topAnchor {
                 self.restoreTopAnchor(topAnchor)
             } else if updatePlan.kind == .structural {
@@ -183,10 +185,20 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         collectionView.scrollToItem(at: indexPath, at: .bottom, animated: animated)
     }
 
+    private func maintainBottomViewportLockIfNeeded(force: Bool = false) {
+        guard bottomViewportLockActive, hasUserInteractedSinceThreadOpen == false else { return }
+        let contentHeight = collectionView.collectionViewLayout.collectionViewContentSize.height
+        guard force || abs(contentHeight - lastLockedContentHeight) > 0.5 else { return }
+        lastLockedContentHeight = contentHeight
+        scrollToBottom(animated: false, force: true)
+    }
+
     // MARK: - UICollectionViewDelegate
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         userDragging = true
+        hasUserInteractedSinceThreadOpen = true
+        bottomViewportLockActive = false
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -200,6 +212,11 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        if bottomViewportLockActive,
+           indexPath.section == 0,
+           indexPath.item == collectionView.numberOfItems(inSection: 0) - 1 {
+            maintainBottomViewportLockIfNeeded(force: true)
+        }
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
         if item == ConversationListLayoutConstants.loadMoreRowUUID {
             onLoadMore?()

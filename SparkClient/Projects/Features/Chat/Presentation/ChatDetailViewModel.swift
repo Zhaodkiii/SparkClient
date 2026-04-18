@@ -25,6 +25,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let sendMessageUseCase: SendChatMessageUseCase
     private let fileTransferService: FileTransferService
     private let ocrOrchestrator: OCROrchestrator
+    private let ocrDocumentExtractor: OCRDocumentExtractor
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
     private let syncChatUseCase: SyncChatUseCase
     private let updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase
@@ -61,6 +62,7 @@ final class ChatDetailViewModel: ObservableObject {
         sendMessageUseCase: SendChatMessageUseCase,
         fileTransferService: FileTransferService,
         ocrOrchestrator: OCROrchestrator,
+        ocrDocumentExtractor: OCRDocumentExtractor,
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
         syncChatUseCase: SyncChatUseCase,
         updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase,
@@ -80,6 +82,7 @@ final class ChatDetailViewModel: ObservableObject {
         self.sendMessageUseCase = sendMessageUseCase
         self.fileTransferService = fileTransferService
         self.ocrOrchestrator = ocrOrchestrator
+        self.ocrDocumentExtractor = ocrDocumentExtractor
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.syncChatUseCase = syncChatUseCase
         self.updateChatMessageAttachmentsUseCase = updateChatMessageAttachmentsUseCase
@@ -136,12 +139,17 @@ final class ChatDetailViewModel: ObservableObject {
         stateStore.removeComposerAttachment(id: id, for: threadID)
     }
 
-    func downloadChatImageToLocalFile(attachment: ChatAttachment) async throws -> URL {
+    func cachedLocalURLForChatAttachment(_ attachment: ChatAttachment) async -> URL? {
+        let managedFile = Self.managedFileRecord(for: attachment)
+        return await fileTransferService.cachedURL(file: managedFile)
+    }
+
+    func downloadChatAttachmentToLocalFile(attachment: ChatAttachment) async throws -> URL {
         let dedupeKey = attachment.imageDownloadDedupeKey
         let fts = fileTransferService
         let log = logger
         return try await ChatImageDownloadCoordinator.shared.cachedOrDownload(dedupeKey: dedupeKey) {
-            try await ChatAttachmentImageDownload.downloadToLocalFile(
+            try await ChatAttachmentFileDownload.downloadToLocalFile(
                 attachment: attachment,
                 fileTransferService: fts,
                 logger: log
@@ -160,9 +168,9 @@ final class ChatDetailViewModel: ObservableObject {
             do {
                 let record = try await self.fileTransferService.upload(
                     ManagedFileUploadPayload(
-                        data: attachment.imageData,
+                        data: attachment.data,
                         fileName: attachment.displayName,
-                        businessType: ChatSendImageAssembly.chatAttachmentBusinessType,
+                        businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
                         businessID: attachment.id.uuidString,
                         isPublic: false,
                         onUploadProgress: { progress in
@@ -185,13 +193,27 @@ final class ChatDetailViewModel: ObservableObject {
                     state.errorMessage = nil
                     self.stateStore.setComposerPreparedAttachmentState(id: attachment.id, state)
                 }
-                let ocrResult = try await self.ocrOrchestrator.recognize(
-                    imageData: attachment.imageData,
-                    options: .fastPreview
-                )
+                let ocrResult: OCRRecognition
+                if attachment.kind == .image {
+                    ocrResult = try await self.ocrOrchestrator.recognize(
+                        imageData: attachment.data,
+                        options: .fastPreview
+                    )
+                } else {
+                    let tempURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("chat-document-\(attachment.id.uuidString)-\(attachment.displayName)")
+                    try attachment.data.write(to: tempURL, options: [.atomic])
+                    defer { try? FileManager.default.removeItem(at: tempURL) }
+                    ocrResult = try await self.ocrDocumentExtractor.extractText(
+                        from: tempURL,
+                        orchestrator: self.ocrOrchestrator,
+                        options: .fastPreview
+                    )
+                }
                 await MainActor.run {
-                    let prepared = ChatPreparedImageAttachment(
+                    let prepared = ChatPreparedAttachment(
                         previewID: attachment.id,
+                        kind: attachment.kind,
                         record: record,
                         ocrText: ocrResult.text
                     )
@@ -390,8 +412,18 @@ final class ChatDetailViewModel: ObservableObject {
         provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
-    func loadMessagesIfNeeded(for threadID: UUID, skipRemoteSync: Bool = false) async {
-        await satisfyLoadRequest(.openOrReloadNewest(threadID: threadID, skipRemoteSync: skipRemoteSync))
+    func loadMessagesIfNeeded(
+        for threadID: UUID,
+        lockBottomViewport: Bool = false,
+        skipRemoteSync: Bool = false
+    ) async {
+        await satisfyLoadRequest(
+            .openOrReloadNewest(
+                threadID: threadID,
+                skipRemoteSync: skipRemoteSync,
+                lockBottomViewport: lockBottomViewport
+            )
+        )
     }
 
     func loadMoreMessages(for threadID: UUID) async {
@@ -407,7 +439,10 @@ final class ChatDetailViewModel: ObservableObject {
 
     private func satisfyLoadRequest(_ request: ChatLoadRequest) async {
         switch request {
-        case .openOrReloadNewest(let threadID, let skipRemoteSync):
+        case .openOrReloadNewest(let threadID, let skipRemoteSync, let lockBottomViewport):
+            if lockBottomViewport {
+                stateStore.beginBottomViewportLock(for: threadID)
+            }
             let windowLimit = ChatMessageWindow.newestFetchLimit(
                 persistedCount: stateStore.persistedMessages(for: threadID).count
             )
@@ -425,11 +460,22 @@ final class ChatDetailViewModel: ObservableObject {
                 hasMore: hasMore
             )
 
-            guard skipRemoteSync == false else { return }
+            guard skipRemoteSync == false else {
+                if lockBottomViewport {
+                    stateStore.endBottomViewportLock(for: threadID)
+                }
+                return
+            }
 
             // 本地优先展示，再异步做远端增量同步，避免进入会话瞬时 UI 抖动。
             Task { [weak self] in
                 guard let self else { return }
+                defer {
+                    Task { @MainActor [weak self] in
+                        guard let self, lockBottomViewport else { return }
+                        self.stateStore.endBottomViewportLock(for: threadID)
+                    }
+                }
                 do {
                     try await self.syncChatUseCase.syncThreadOnOpen(threadID: threadID)
                     let latestWindowLimit = ChatMessageWindow.newestFetchLimit(
@@ -507,7 +553,7 @@ final class ChatDetailViewModel: ObservableObject {
                 memberID: memberContextStore.context.selectedMemberID,
                 userInput: composer.text,
                 composerAttachments: composer.attachments,
-                preparedImageAttachments: stateStore.preparedImageAttachments(for: threadID),
+                preparedAttachments: stateStore.preparedAttachments(for: threadID),
                 selectedChatModelName: flags.selectedChatModelName,
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
@@ -717,6 +763,34 @@ final class ChatDetailViewModel: ObservableObject {
     private func shortID(_ value: UUID?) -> String {
         guard let value else { return "-" }
         return String(value.uuidString.prefix(8))
+    }
+
+    private static func managedFileRecord(for attachment: ChatAttachment) -> ManagedFileRecord {
+        let resolvedPath = attachment.effectiveHTTPSImageDownloadURL?.absoluteString
+            ?? attachment.url?.absoluteString
+            ?? ""
+        let parsed = attachment.sparkClientOSSFileUUIDAndFileName()
+        let fileUUID = parsed?.fileUUID ?? attachment.id.uuidString
+        let originalName =
+            parsed?.fileName
+            ?? attachment.url?.lastPathComponent.removingPercentEncoding
+            ?? "attachment"
+        let mimeType = FileUtilities.mimeType(forName: originalName)
+        return ManagedFileRecord(
+            id: attachment.fileId ?? 0,
+            fileUUID: fileUUID,
+            filePath: resolvedPath,
+            originalName: originalName,
+            fileSize: 0,
+            mimeType: mimeType,
+            fileMd5: attachment.fileMd5,
+            isPublic: false,
+            businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
+            businessID: "",
+            createdAt: "",
+            objectKey: nil,
+            storageType: nil
+        )
     }
 
     private func shortID(_ value: Int?) -> String {

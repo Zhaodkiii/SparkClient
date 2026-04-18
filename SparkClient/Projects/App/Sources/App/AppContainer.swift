@@ -621,6 +621,7 @@ final class AppContainer {
             sendMessageUseCase: sendChatMessageUseCase,
             fileTransferService: fileTransferService,
             ocrOrchestrator: ocrOrchestrator,
+            ocrDocumentExtractor: OCRDocumentExtractor(config: ocrConfiguration),
             retryFailedMessageUseCase: retryFailedMessageUseCase,
             syncChatUseCase: syncChatUseCase,
             updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,

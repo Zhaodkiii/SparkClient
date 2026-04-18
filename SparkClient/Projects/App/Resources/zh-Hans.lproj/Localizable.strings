@@ -313,9 +313,11 @@
 "chat.attachments.camera.unavailable" = "当前设备不可使用相机";
 "chat.attachments.camera.result" = "拍摄照片";
 "chat.attachments.files" = "文件";
-"chat.attachments.files.subtitle" = "文档支持将在下一步接入";
-"chat.attachments.files.title" = "文件功能即将提供";
-"chat.attachments.files.message" = "这一版先聚焦相册、相机和本地预览体验。";
+"chat.attachments.files.subtitle" = "选择 PDF 或图片并在发送前完成准备";
+"chat.attachments.files.title" = "选择文件";
+"chat.attachments.files.message" = "支持图片与 PDF 文件。";
+"chat.attachments.file.tap_to_download" = "点击下载后预览";
+"chat.attachments.file.tap_to_preview" = "点击预览";
 "chat.attachments.preview.unavailable" = "暂时无法预览该附件";
 "chat.composer.style.title" = "输入栏样式";
 "chat.composer.style.signal" = "简洁";

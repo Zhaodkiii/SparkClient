@@ -72,9 +72,27 @@ struct ChatAttachment: Equatable, Sendable {
         }
     }
 
-    nonisolated var isUserImageForModelOrOCR: Bool {
+    nonisolated var isUserImageForMultimodal: Bool {
         switch type {
         case .image:
+            return true
+        default:
+            return false
+        }
+    }
+
+    nonisolated var isUserFileForLocalOCR: Bool {
+        switch type {
+        case .image, .pdf, .file:
+            return true
+        default:
+            return false
+        }
+    }
+
+    nonisolated var isGenericFileAttachment: Bool {
+        switch type {
+        case .pdf, .file:
             return true
         default:
             return false

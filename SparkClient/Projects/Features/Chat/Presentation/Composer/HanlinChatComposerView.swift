@@ -72,8 +72,20 @@ struct HanlinChatComposerView: View {
             previews.append(
                 ChatComposerAttachmentPreview(
                     source: .document,
-                    imageData: data,
-                    displayName: url.lastPathComponent
+                    kind: {
+                        let inferredType = UTType(filenameExtension: url.pathExtension)
+                        if inferredType?.conforms(to: .pdf) == true || url.pathExtension.lowercased() == "pdf" {
+                            return .pdf
+                        }
+                        if inferredType?.conforms(to: .image) == true {
+                            return .image
+                        }
+                        return .file
+                    }(),
+                    data: data,
+                    displayName: url.lastPathComponent,
+                    mimeType: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType,
+                    utTypeIdentifier: UTType(filenameExtension: url.pathExtension)?.identifier
                 )
             )
         }

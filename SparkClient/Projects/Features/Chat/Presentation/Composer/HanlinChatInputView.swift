@@ -61,7 +61,7 @@ struct HanlinChatInputView: View {
                         let attachments = photos.map {
                             ChatComposerAttachmentPreview(
                                 source: .photoLibrary,
-                                imageData: $0.imageData,
+                                data: $0.imageData,
                                 displayName: $0.suggestedFileName
                             )
                         }
@@ -84,7 +84,7 @@ struct HanlinChatInputView: View {
                             [
                                 ChatComposerAttachmentPreview(
                                     source: .camera,
-                                    imageData: imageData,
+                                    data: imageData,
                                     displayName: L10n.text("chat.attachments.camera.result")
                                 )
                             ]
@@ -292,15 +292,20 @@ struct HanlinChatInputView: View {
 
     private static func makeComposerPreviewInput(_ attachment: ChatComposerAttachmentPreview) -> FilePreviewInput? {
         let ext = (attachment.displayName as NSString).pathExtension
-        let suffix = ext.isEmpty ? "jpg" : ext
+        let suffix = ext.isEmpty ? (attachment.isImage ? "jpg" : "bin") : ext
         let fileName = attachment.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "chat-attachment.\(suffix)"
             : attachment.displayName
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("chat-composer-\(attachment.id.uuidString).\(suffix)")
         do {
-            try attachment.imageData.write(to: tmp, options: [.atomic])
-            return FilePreviewInput(fileURL: tmp, displayName: fileName, mimeType: nil)
+            try attachment.data.write(to: tmp, options: [.atomic])
+            return FilePreviewInput(
+                fileURL: tmp,
+                displayName: fileName,
+                mimeType: attachment.mimeType,
+                utTypeIdentifier: attachment.utTypeIdentifier
+            )
         } catch {
             return nil
         }
@@ -352,17 +357,23 @@ private struct HanlinAttachmentThumbnail: View {
 
     private var previewImage: some View {
         Group {
-            if let image = UIImage(data: attachment.imageData) {
+            if attachment.isImage, let image = UIImage(data: attachment.data) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
             } else {
-                Rectangle()
-                    .fill(Color(uiColor: .secondarySystemFill))
-                    .overlay(
-                        Image(systemName: "photo")
+                ZStack {
+                    Rectangle()
+                        .fill(Color(uiColor: .secondarySystemFill))
+                    VStack(spacing: 6) {
+                        Image(systemName: attachment.isPDF ? "doc.richtext.fill" : "doc.fill")
+                            .font(.title3)
                             .foregroundStyle(.secondary)
-                    )
+                        Text(attachment.isPDF ? "PDF" : "FILE")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

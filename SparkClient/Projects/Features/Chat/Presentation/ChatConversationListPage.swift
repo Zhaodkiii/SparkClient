@@ -51,7 +51,7 @@ struct ChatConversationListPage: View {
                     Task {
                         await listViewModel.createThread()
                         guard let threadID = stateStore.selectedThreadID else { return }
-                        await detailViewModel.loadMessagesIfNeeded(for: threadID)
+                        await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
                         navigationSelection = threadID
                     }
                 } label: {
@@ -83,7 +83,7 @@ struct ChatConversationListPage: View {
                 Task {
                     await listViewModel.createThread()
                     guard let threadID = stateStore.selectedThreadID else { return }
-                    await detailViewModel.loadMessagesIfNeeded(for: threadID)
+                    await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
                     navigationSelection = threadID
                 }
             } label: {
@@ -121,7 +121,7 @@ struct ChatConversationListPage: View {
                 HStack(alignment: .center, spacing: 10) {
                     if let thumb = item.latestListImageAttachment {
                         ChatThreadListThumbnailView(attachment: thumb) { att in
-                            try await detailViewModel.downloadChatImageToLocalFile(attachment: att)
+                            try await detailViewModel.downloadChatAttachmentToLocalFile(attachment: att)
                         }
                     }
                     VStack(alignment: .leading, spacing: 6) {

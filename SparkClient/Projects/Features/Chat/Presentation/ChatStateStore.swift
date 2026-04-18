@@ -33,6 +33,7 @@ final class ChatStateStore: ObservableObject {
     @Published private(set) var composerPreparedAttachmentStates: [UUID: ChatComposerPreparedAttachmentState] = [:]
     @Published private var streamingAssistants: [UUID: StreamingAssistant] = [:]
     @Published private var messagePagingByThread: [UUID: MessagePaging] = [:]
+    @Published private var bottomViewportLockedThreadIDs: Set<UUID> = []
     /// Bumps on each streaming text/reasoning update so views can scroll even when message count is unchanged.
     @Published private(set) var streamingContentGeneration: UInt64 = 0
 
@@ -188,6 +189,19 @@ final class ChatStateStore: ObservableObject {
         messagePagingByThread[threadID]?.isLoadingMore ?? false
     }
 
+    /// 打开会话时短暂保持底部视口锁，直到首屏 newest 窗口稳定落地。
+    func beginBottomViewportLock(for threadID: UUID) {
+        bottomViewportLockedThreadIDs.insert(threadID)
+    }
+
+    func endBottomViewportLock(for threadID: UUID) {
+        bottomViewportLockedThreadIDs.remove(threadID)
+    }
+
+    func isBottomViewportLocked(for threadID: UUID) -> Bool {
+        bottomViewportLockedThreadIDs.contains(threadID)
+    }
+
     func setDraft(_ text: String, for threadID: UUID?) {
         updateComposerDraft(for: threadID) { draft in
             draft.text = text
@@ -246,7 +260,7 @@ final class ChatStateStore: ObservableObject {
         composerPreparedAttachmentStates.removeValue(forKey: id)
     }
 
-    func preparedImageAttachments(for threadID: UUID?) -> [ChatPreparedImageAttachment] {
+    func preparedAttachments(for threadID: UUID?) -> [ChatPreparedAttachment] {
         let draft = composerDraft(for: threadID)
         return draft.attachments.compactMap { attachment in
             composerPreparedAttachmentStates[attachment.id]?.prepared

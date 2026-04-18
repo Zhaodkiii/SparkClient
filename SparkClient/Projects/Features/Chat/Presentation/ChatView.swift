@@ -58,6 +58,12 @@ struct ChatView: View {
                 onSend: {
                     KeyboardDismissHelper.dismissKeyboard()
                     Task { await detailViewModel.sendCurrentDraft() }
+                },
+                onAttachmentsPicked: { attachments in
+                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
+                },
+                onRemoveAttachment: { attachmentID in
+                    detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
                 }
             )
         case .hanlin:
@@ -132,7 +138,7 @@ struct ChatView: View {
                 guard hasLoaded == false else { return }
                 hasLoaded = true
                 listViewModel.selectThread(threadID)
-                await detailViewModel.loadMessagesIfNeeded(for: threadID)
+                await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
             }
             .onChange(of: threadID) { _ in
@@ -202,6 +208,7 @@ struct ChatView: View {
             visibleMessages: visibleMessages,
             hasMoreMessages: hasMoreMessages,
             isLoadingMoreMessages: isLoadingMoreMessages,
+            lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
             streamingContentGeneration: stateStore.streamingContentGeneration,
             onLoadMore: {
                 Task { await detailViewModel.loadMoreMessages(for: threadID) }

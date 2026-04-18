@@ -313,9 +313,11 @@
 "chat.attachments.camera.unavailable" = "Camera is unavailable on this device";
 "chat.attachments.camera.result" = "Camera photo";
 "chat.attachments.files" = "Files";
-"chat.attachments.files.subtitle" = "Document support is coming next";
-"chat.attachments.files.title" = "Files coming soon";
-"chat.attachments.files.message" = "This first version focuses on photo library, camera, and local preview.";
+"chat.attachments.files.subtitle" = "Pick PDFs or images and prepare them before send";
+"chat.attachments.files.title" = "Choose files";
+"chat.attachments.files.message" = "Images and PDF files are supported.";
+"chat.attachments.file.tap_to_download" = "Tap to download and preview";
+"chat.attachments.file.tap_to_preview" = "Tap to preview";
 "chat.attachments.preview.unavailable" = "Unable to preview this attachment";
 "chat.composer.style.title" = "Input layout";
 "chat.composer.style.signal" = "Compact";

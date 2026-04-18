@@ -310,7 +310,7 @@ struct ChatOrchestrator: Sendable {
 
     private func buildMultimodalParts(from message: ChatMessage) async -> [AIRuntimeContentPart]? {
         let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageAttachments = message.attachments.filter { $0.isUserImageForModelOrOCR }
+        let imageAttachments = message.attachments.filter { $0.isUserImageForMultimodal }
         guard imageAttachments.isEmpty == false else { return nil }
         var parts: [AIRuntimeContentPart] = []
         if text.isEmpty == false {
@@ -344,19 +344,35 @@ struct ChatOrchestrator: Sendable {
     /// LocalOCR 模式：从附件元数据中提取 OCR 文本，构造增强后的用户内容
     private func buildLocalOCRContent(from message: ChatMessage) -> String {
         let userText = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageAttachments = message.attachments.filter { $0.isUserImageForModelOrOCR }
-        guard imageAttachments.isEmpty == false else { return message.content }
-        
+        let attachments = message.attachments.filter { $0.isUserFileForLocalOCR }
+        guard attachments.isEmpty == false else { return message.content }
+
         var blocks: [String] = []
-        for attachment in imageAttachments {
+        for attachment in attachments {
             let ocr = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let fileIdStr = "file_id=\(attachment.fileId.map(String.init) ?? "-")"
             let uuidHint = attachment.sparkClientOSSFileUUIDAndFileName()?.fileUUID ?? "-"
             let fileUUIDStr = "file_uuid=\(uuidHint)"
+            let label: String = switch attachment.type {
+            case .pdf:
+                "PDF附件"
+            case .file:
+                "文件附件"
+            default:
+                "图片附件"
+            }
+            let ocrLabel: String = switch attachment.type {
+            case .pdf:
+                "PDF识别"
+            case .file:
+                "文件识别"
+            default:
+                "图片识别"
+            }
             blocks.append(
                 """
-                【图片附件】\(fileIdStr) \(fileUUIDStr)
-                【图片识别】
+                【\(label)】\(fileIdStr) \(fileUUIDStr)
+                【\(ocrLabel)】
                 \(ocr.isEmpty ? "(无文字)" : ocr)
                 """
             )

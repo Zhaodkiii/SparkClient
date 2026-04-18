@@ -106,8 +106,11 @@ struct ChatConversationMessageRow: View {
                     await detailViewModel.saveMedicalCaseStructuredCard(threadID: threadID, message: message, card: card)
                 }
             },
-            onDownloadImageToLocalFile: { attachment in
-                try await detailViewModel.downloadChatImageToLocalFile(attachment: attachment)
+            onCachedChatAttachmentLocalURL: { attachment in
+                await detailViewModel.cachedLocalURLForChatAttachment(attachment)
+            },
+            onDownloadChatAttachmentToLocalFile: { attachment in
+                try await detailViewModel.downloadChatAttachmentToLocalFile(attachment: attachment)
             }
         )
     }

@@ -38,7 +38,7 @@ struct SendChatMessageUseCase: Sendable {
         memberID: Int? = nil,
         userInput: String,
         composerAttachments: [ChatComposerAttachmentPreview] = [],
-        preparedImageAttachments: [ChatPreparedImageAttachment] = [],
+        preparedAttachments: [ChatPreparedAttachment] = [],
         selectedChatModelName: String? = nil,
         assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
@@ -76,14 +76,15 @@ struct SendChatMessageUseCase: Sendable {
                 && supportsMultimodal
                 && composerAttachments.isEmpty == false
 
-            let preparedByID = Dictionary(uniqueKeysWithValues: preparedImageAttachments.map { ($0.previewID, $0) })
+            let preparedByID = Dictionary(uniqueKeysWithValues: preparedAttachments.map { ($0.previewID, $0) })
             var chatAttachments: [ChatAttachment] = []
 
             for preview in composerAttachments {
                 if let prepared = preparedByID[preview.id] {
                     let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(prepared.record.objectKey)
                     chatAttachments.append(
-                        ChatSendImageAssembly.makeAttachment(
+                        ChatSendAttachmentAssembly.makeAttachment(
+                            kind: prepared.kind,
                             previewID: preview.id,
                             record: prepared.record,
                             ocrText: prepared.ocrText,
@@ -95,9 +96,9 @@ struct SendChatMessageUseCase: Sendable {
 
                 let record = try await fileTransferService.upload(
                     ManagedFileUploadPayload(
-                        data: preview.imageData,
+                        data: preview.data,
                         fileName: preview.displayName,
-                        businessType: ChatSendImageAssembly.chatAttachmentBusinessType,
+                        businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
                         businessID: preview.id.uuidString,
                         isPublic: false,
                         onUploadProgress: { progress in
@@ -105,13 +106,19 @@ struct SendChatMessageUseCase: Sendable {
                         }
                     )
                 )
-                let ocrResult = try await ocrOrchestrator.recognize(
-                    imageData: preview.imageData,
-                    options: .fastPreview
-                )
+                let ocrResult: OCRRecognition
+                if preview.kind == .image {
+                    ocrResult = try await ocrOrchestrator.recognize(
+                        imageData: preview.data,
+                        options: .fastPreview
+                    )
+                } else {
+                    ocrResult = OCRRecognition(text: "", selectedEngine: "none", outputs: [])
+                }
                 let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
                 chatAttachments.append(
-                    ChatSendImageAssembly.makeAttachment(
+                    ChatSendAttachmentAssembly.makeAttachment(
+                        kind: preview.kind,
                         previewID: preview.id,
                         record: record,
                         ocrText: ocrResult.text,

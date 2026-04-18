@@ -40,7 +40,8 @@ struct ChatMessageBubbleContentView: View {
     let onSavePrescriptionCard: (PrescriptionChatCardPayload) -> Void
     let onSaveExamReportCard: (ExamReportChatCardPayload) -> Void
     let onSaveMedicalCaseCard: (MedicalCaseChatCardPayload) -> Void
-    let onDownloadImageToLocalFile: (ChatAttachment) async throws -> URL
+    let onCachedChatAttachmentLocalURL: (ChatAttachment) async -> URL?
+    let onDownloadChatAttachmentToLocalFile: (ChatAttachment) async throws -> URL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -51,7 +52,7 @@ struct ChatMessageBubbleContentView: View {
                         images: payloads,
                         style: .assistant,
                         unifiedFilePreview: $unifiedFilePreview,
-                        downloadToLocalFile: onDownloadImageToLocalFile
+                        downloadToLocalFile: onDownloadChatAttachmentToLocalFile
                     )
                 }
             }
@@ -152,9 +153,20 @@ struct ChatMessageBubbleContentView: View {
                         images: payloads,
                         style: .user,
                         unifiedFilePreview: $unifiedFilePreview,
-                        downloadToLocalFile: onDownloadImageToLocalFile
+                        downloadToLocalFile: onDownloadChatAttachmentToLocalFile
                     )
                 }
+            }
+
+            let fileAttachments = message.attachments.filter(\.isGenericFileAttachment)
+            if fileAttachments.isEmpty == false {
+                ChatFileAttachmentBlockView(
+                    unifiedFilePreview: $unifiedFilePreview,
+                    attachments: fileAttachments,
+                    role: message.role,
+                    cachedLocalURL: onCachedChatAttachmentLocalURL,
+                    downloadToLocalFile: onDownloadChatAttachmentToLocalFile
+                )
             }
 
             if shouldRenderMainMarkdown {

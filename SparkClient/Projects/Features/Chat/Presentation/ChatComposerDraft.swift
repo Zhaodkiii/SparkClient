@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 enum ChatComposerAttachmentSource: String, Sendable {
     case photoLibrary
@@ -6,22 +7,61 @@ enum ChatComposerAttachmentSource: String, Sendable {
     case document
 }
 
+enum ChatComposerAttachmentKind: String, Equatable, Sendable {
+    case image
+    case pdf
+    case file
+}
+
 struct ChatComposerAttachmentPreview: Identifiable, Equatable, Sendable {
     let id: UUID
     let source: ChatComposerAttachmentSource
-    let imageData: Data
+    let kind: ChatComposerAttachmentKind
+    let data: Data
     let displayName: String
+    let mimeType: String?
+    let utTypeIdentifier: String?
 
     init(
         id: UUID = UUID(),
         source: ChatComposerAttachmentSource,
-        imageData: Data,
-        displayName: String
+        kind: ChatComposerAttachmentKind = .image,
+        data: Data,
+        displayName: String,
+        mimeType: String? = nil,
+        utTypeIdentifier: String? = nil
     ) {
         self.id = id
         self.source = source
-        self.imageData = imageData
+        self.kind = kind
+        self.data = data
         self.displayName = displayName
+        self.mimeType = mimeType
+        self.utTypeIdentifier = utTypeIdentifier
+    }
+
+    var isImage: Bool {
+        kind == .image
+    }
+
+    var isPDF: Bool {
+        kind == .pdf
+    }
+
+    var resolvedUTType: UTType? {
+        if let utTypeIdentifier,
+           let type = UTType(utTypeIdentifier) {
+            return type
+        }
+        if let mimeType,
+           let type = UTType(mimeType: mimeType) {
+            return type
+        }
+        let ext = (displayName as NSString).pathExtension
+        if ext.isEmpty == false {
+            return UTType(filenameExtension: ext)
+        }
+        return nil
     }
 }
 
@@ -36,7 +76,7 @@ enum ChatComposerAttachmentPhase: String, Equatable, Sendable {
 struct ChatComposerPreparedAttachmentState: Equatable, Sendable {
     var phase: ChatComposerAttachmentPhase
     var progress: Double
-    var prepared: ChatPreparedImageAttachment?
+    var prepared: ChatPreparedAttachment?
     var errorMessage: String?
 
     static let pending = ChatComposerPreparedAttachmentState(

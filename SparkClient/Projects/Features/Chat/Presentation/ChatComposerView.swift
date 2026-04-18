@@ -1,15 +1,18 @@
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// 简洁（Compact）输入栏，仅用于 `ChatComposerStyle.signal`；专业版使用 `HanlinChatComposerView`。
 struct ChatComposerView: View {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     let onSend: () -> Void
+    let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
+    let onRemoveAttachment: (UUID) -> Void
 
     @State private var inputHeight: CGFloat = 24
-    @State private var showFilePlaceholderAlert = false
+    @State private var showFileImporter = false
     @State private var unifiedFilePreview: FilePreviewInput?
 
     private var composerDraft: ChatComposerDraft {
@@ -19,6 +22,7 @@ struct ChatComposerView: View {
     private var canSendText: Bool {
         (composerDraft.trimmedText.isEmpty == false || composerDraft.hasVisualContent)
             && stateStore.isSending == false
+            && stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false
     }
 
     private var canOpenCamera: Bool {
@@ -40,7 +44,7 @@ struct ChatComposerView: View {
                 },
                 onFiles: {
                     stateStore.setAttachmentMenuPresented(false, for: threadID)
-                    showFilePlaceholderAlert = true
+                    showFileImporter = true
                 }
             )
         }
@@ -53,11 +57,11 @@ struct ChatComposerView: View {
                     let attachments = photos.map {
                         ChatComposerAttachmentPreview(
                             source: .photoLibrary,
-                            imageData: $0.imageData,
+                            data: $0.imageData,
                             displayName: $0.suggestedFileName
                         )
                     }
-                    stateStore.appendComposerAttachments(attachments, for: threadID)
+                    onAttachmentsPicked(attachments)
                     stateStore.setPhotoPickerPresented(false, for: threadID)
                 }
             )
@@ -72,25 +76,32 @@ struct ChatComposerView: View {
                         stateStore.setCameraPresented(false, for: threadID)
                         return
                     }
-                    stateStore.appendComposerAttachments(
+                    onAttachmentsPicked(
                         [
                             ChatComposerAttachmentPreview(
                                 source: .camera,
-                                imageData: imageData,
+                                data: imageData,
                                 displayName: L10n.text("chat.attachments.camera.result")
                             )
                         ],
-                        for: threadID
                     )
                     stateStore.setCameraPresented(false, for: threadID)
                 }
             )
             .ignoresSafeArea()
         }
-        .alert(L10n.text("chat.attachments.files.title"), isPresented: $showFilePlaceholderAlert) {
-            Button(L10n.text("common.ok")) {}
-        } message: {
-            Text(L10n.text("chat.attachments.files.message"))
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.pdf, .image, .jpeg, .png],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result else { return }
+            Task {
+                let attachments = await Self.importFiles(urls: urls)
+                await MainActor.run {
+                    onAttachmentsPicked(attachments)
+                }
+            }
         }
         .unifiedFilePreview(selection: $unifiedFilePreview)
     }
@@ -199,7 +210,7 @@ struct ChatComposerView: View {
                             }
                         },
                         onRemove: {
-                            stateStore.removeComposerAttachment(id: attachment.id, for: threadID)
+                            onRemoveAttachment(attachment.id)
                         }
                     )
                 }
@@ -241,18 +252,56 @@ struct ChatComposerView: View {
 
     private static func makeComposerPreviewInput(_ attachment: ChatComposerAttachmentPreview) -> FilePreviewInput? {
         let ext = (attachment.displayName as NSString).pathExtension
-        let suffix = ext.isEmpty ? "jpg" : ext
+        let suffix = ext.isEmpty ? (attachment.isImage ? "jpg" : "bin") : ext
         let fileName = attachment.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "chat-attachment.\(suffix)"
             : attachment.displayName
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("chat-composer-\(attachment.id.uuidString).\(suffix)")
         do {
-            try attachment.imageData.write(to: tmp, options: [.atomic])
-            return FilePreviewInput(fileURL: tmp, displayName: fileName, mimeType: nil)
+            try attachment.data.write(to: tmp, options: [.atomic])
+            return FilePreviewInput(
+                fileURL: tmp,
+                displayName: fileName,
+                mimeType: attachment.mimeType,
+                utTypeIdentifier: attachment.utTypeIdentifier
+            )
         } catch {
             return nil
         }
+    }
+
+    private static func importFiles(urls: [URL]) async -> [ChatComposerAttachmentPreview] {
+        var previews: [ChatComposerAttachmentPreview] = []
+        for url in urls {
+            let gotAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if gotAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            guard let data = try? Data(contentsOf: url), data.isEmpty == false else { continue }
+            let inferredType = UTType(filenameExtension: url.pathExtension)
+            let kind: ChatComposerAttachmentKind
+            if inferredType?.conforms(to: .pdf) == true || url.pathExtension.lowercased() == "pdf" {
+                kind = .pdf
+            } else if inferredType?.conforms(to: .image) == true {
+                kind = .image
+            } else {
+                kind = .file
+            }
+            previews.append(
+                ChatComposerAttachmentPreview(
+                    source: .document,
+                    kind: kind,
+                    data: data,
+                    displayName: url.lastPathComponent,
+                    mimeType: inferredType?.preferredMIMEType,
+                    utTypeIdentifier: inferredType?.identifier
+                )
+            )
+        }
+        return previews
     }
 }
 
@@ -299,17 +348,23 @@ private struct ChatComposerAttachmentThumbnail: View {
 
     private var previewImage: some View {
         Group {
-            if let image = UIImage(data: attachment.imageData) {
+            if attachment.isImage, let image = UIImage(data: attachment.data) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
             } else {
-                Rectangle()
-                    .fill(Color(uiColor: .secondarySystemFill))
-                    .overlay(
-                        Image(systemName: "photo")
+                ZStack {
+                    Rectangle()
+                        .fill(Color(uiColor: .secondarySystemFill))
+                    VStack(spacing: 6) {
+                        Image(systemName: attachment.isPDF ? "doc.richtext.fill" : "doc.fill")
+                            .font(.title3)
                             .foregroundStyle(.secondary)
-                    )
+                        Text(attachment.isPDF ? "PDF" : "FILE")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
