@@ -98,7 +98,8 @@ final class DefaultAuthRepository: AuthRepository {
             email: normalizedEmail,
             displayName: displayName,
             signedInAt: signedInAt,
-            signInMethod: .apple
+            signInMethod: .apple,
+            isPro: context.isPro
         )
 
         try await snapshotStore.save(session)
@@ -150,7 +151,8 @@ final class DefaultAuthRepository: AuthRepository {
             email: normalizedPhone,
             displayName: displayName,
             signedInAt: signedInAt,
-            signInMethod: .phone
+            signInMethod: .phone,
+            isPro: result.is_pro ?? false
         )
 
         try await snapshotStore.save(session)

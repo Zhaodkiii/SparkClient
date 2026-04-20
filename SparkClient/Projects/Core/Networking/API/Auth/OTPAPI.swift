@@ -34,6 +34,7 @@ struct SparkOTPAPI {
         let user_id: Int
         let phone_number: String
         let display_name: String?
+        let is_pro: Bool?
         let access_token: String
         let refresh_token: String
         let expires_in: Int

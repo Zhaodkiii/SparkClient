@@ -105,6 +105,26 @@ actor CoreDataChatRepository: ChatRepository {
         await store.updateThreadImageDeliveryMode(threadID: threadID, imageDeliveryModeRaw: imageDeliveryModeRaw)
     }
 
+    func updateThreadCurrentModelName(threadID: UUID, currentModelName: String?) async {
+        await store.updateThreadCurrentModelName(threadID: threadID, currentModelName: currentModelName)
+    }
+
+    func updateThreadGenerationConfig(
+        threadID: UUID,
+        currentModelName: String?,
+        temperature: Double,
+        maxTokens: Int,
+        rolePrompt: String
+    ) async {
+        await store.updateThreadGenerationConfig(
+            threadID: threadID,
+            currentModelName: currentModelName,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            rolePrompt: rolePrompt
+        )
+    }
+
     func loadOutboxMessages(limit: Int) async -> [ChatMessage] {
         await store.loadOutboxMessages(limit: limit)
     }

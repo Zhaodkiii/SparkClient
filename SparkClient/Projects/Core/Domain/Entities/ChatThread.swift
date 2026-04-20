@@ -5,6 +5,10 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
     let memberID: Int?
     let title: String
     let scenario: AIScenario
+    let currentModelName: String?
+    let temperature: Double
+    let maxTokens: Int
+    let rolePrompt: String
     /// 持久化枚举 `ChatThreadImageDeliveryMode.rawValue`；`nil` 表示旧数据，按产品默认视为直发多模态。
     let imageDeliveryModeRaw: String?
     let isDeleted: Bool
@@ -37,6 +41,10 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         memberID: Int? = nil,
         title: String,
         scenario: AIScenario = .chat,
+        currentModelName: String? = nil,
+        temperature: Double = 0.6,
+        maxTokens: Int = 4096,
+        rolePrompt: String = "",
         imageDeliveryModeRaw: String? = nil,
         isDeleted: Bool = false,
         deletedAt: Date? = nil,
@@ -48,6 +56,10 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         self.memberID = memberID
         self.title = title
         self.scenario = scenario
+        self.currentModelName = currentModelName
+        self.temperature = temperature
+        self.maxTokens = maxTokens
+        self.rolePrompt = rolePrompt
         self.imageDeliveryModeRaw = imageDeliveryModeRaw
         self.isDeleted = isDeleted
         self.deletedAt = deletedAt

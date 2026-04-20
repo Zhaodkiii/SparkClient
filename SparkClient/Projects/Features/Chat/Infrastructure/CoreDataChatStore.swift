@@ -132,12 +132,24 @@ actor CoreDataChatStore {
         }) ?? nil
     }
 
-    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String? = nil) async -> ChatThread {
+    func createThread(
+        memberID: Int?,
+        title: String,
+        imageDeliveryModeRaw: String? = nil,
+        currentModelName: String? = nil,
+        temperature: Double = 0.6,
+        maxTokens: Int = 4096,
+        rolePrompt: String = ""
+    ) async -> ChatThread {
         guard let accountID = await activeAccountID() else {
             return ChatThread(
                 memberID: memberID,
                 title: title,
                 scenario: .chat,
+                currentModelName: currentModelName,
+                temperature: temperature,
+                maxTokens: maxTokens,
+                rolePrompt: rolePrompt,
                 imageDeliveryModeRaw: imageDeliveryModeRaw,
                 isDeleted: false,
                 deletedAt: nil,
@@ -151,6 +163,10 @@ actor CoreDataChatStore {
             memberID: memberID,
             title: title,
             scenario: .chat,
+            currentModelName: currentModelName,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            rolePrompt: rolePrompt,
             imageDeliveryModeRaw: imageDeliveryModeRaw,
             isDeleted: false,
             deletedAt: nil,
@@ -181,6 +197,10 @@ actor CoreDataChatStore {
             object.setValue(thread.updatedAt, forKey: "updatedAt")
             object.setValue(thread.serverUpdatedAt, forKey: "serverUpdatedAt")
             object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
+            object.setValue(thread.currentModelName, forKey: "currentModelName")
+            object.setValue(thread.temperature, forKey: "temperature")
+            object.setValue(thread.maxTokens, forKey: "maxTokens")
+            object.setValue(thread.rolePrompt, forKey: "rolePrompt")
             object.setValue(true, forKey: "isActive")
         }
         await kernel.postChangeNotification(
@@ -201,6 +221,51 @@ actor CoreDataChatStore {
                 return
             }
             object.setValue(imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
+    }
+
+    func updateThreadCurrentModelName(threadID: UUID, currentModelName: String?) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(currentModelName, forKey: "currentModelName")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
+    }
+
+    func updateThreadGenerationConfig(
+        threadID: UUID,
+        currentModelName: String?,
+        temperature: Double,
+        maxTokens: Int,
+        rolePrompt: String
+    ) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(currentModelName, forKey: "currentModelName")
+            object.setValue(temperature, forKey: "temperature")
+            object.setValue(max(maxTokens, 1), forKey: "maxTokens")
+            object.setValue(rolePrompt, forKey: "rolePrompt")
             object.setValue(Date(), forKey: "updatedAt")
         }
         await kernel.postChangeNotification(
@@ -533,6 +598,10 @@ actor CoreDataChatStore {
                 object.setValue(thread.updatedAt, forKey: "updatedAt")
                 object.setValue(thread.serverUpdatedAt, forKey: "serverUpdatedAt")
                 object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
+                object.setValue(thread.currentModelName, forKey: "currentModelName")
+                object.setValue(thread.temperature, forKey: "temperature")
+                object.setValue(thread.maxTokens, forKey: "maxTokens")
+                object.setValue(thread.rolePrompt, forKey: "rolePrompt")
 
                 if thread.isDeleted {
                     object.setValue(false, forKey: "isActive")
@@ -876,6 +945,10 @@ actor CoreDataChatStore {
             memberID: (object.value(forKey: "memberID") as? Int64).map(Int.init),
             title: title,
             scenario: scenario,
+            currentModelName: object.value(forKey: "currentModelName") as? String,
+            temperature: object.value(forKey: "temperature") as? Double ?? 0.6,
+            maxTokens: object.value(forKey: "maxTokens") as? Int ?? 4096,
+            rolePrompt: object.value(forKey: "rolePrompt") as? String ?? "",
             imageDeliveryModeRaw: object.value(forKey: "imageDeliveryModeRaw") as? String,
             isDeleted: object.value(forKey: "isSoftDeleted") as? Bool ?? false,
             deletedAt: object.value(forKey: "deletedAt") as? Date,

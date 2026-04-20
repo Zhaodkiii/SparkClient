@@ -249,36 +249,120 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    func refreshChatModelPicker() async {
-        let snapshot = await aiSettingsRepository.loadSnapshot()
-        let models = snapshot.allModels
-            .filter { model in
-                model.isHidden == false &&
-                model.supportsText &&
-                snapshot.shouldOfferTrialModelInChatPicker(modelName: model.name) &&
-                canUseInChatPicker(model: model, snapshot: snapshot)
+    /// 刷新输入栏模型列表，并返回「当前线程/场景」下的推荐初始模型名（用于首次进入会话时恢复选择）。
+    /// 列表与校验均以 `effectiveScenarioBundles().chat.models` 为准（客户端与服务端 Pro 合并后的场景模型），不经过本地目录/试用筛选。
+    func refreshChatModelPicker(for threadID: UUID) async -> String? {
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
+            chatScenarioModels = []
+            return nil
+        }
+        let rows = bundles.chat.models
+        chatScenarioModels = rows.map { row in
+            let trimmedTitle = row.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = trimmedTitle.isEmpty ? row.name : trimmedTitle
+            let trimmedIcon = row.icon?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let icon: String
+            if trimmedIcon.isEmpty == false {
+                icon = trimmedIcon
+            } else {
+                icon = row.identity == AIModelIdentity.agent.rawValue ? "person.crop.circle" : "cpu"
             }
-            .sorted { $0.position < $1.position }
-
-        let options = models.map { model in
-            ChatComposerModelOption(
-                modelName: model.name,
-                title: model.displayName,
-                iconSystemName: model.identity == .agent
-                    ? (model.iconSymbol?.isEmpty == false ? model.iconSymbol! : "person.crop.circle")
-                    : "cpu"
+            return ChatComposerModelOption(
+                modelName: row.name,
+                title: title,
+                iconSystemName: icon
             )
         }
-        chatScenarioModels = options
+
+        await validateCurrentSelection(for: threadID)
+
+        let namesInPicker = Set(chatScenarioModels.map(\.modelName))
+        guard namesInPicker.isEmpty == false else { return nil }
+
+        let thread = await chatRepository.loadThread(id: threadID)
+        let trimmedThreadModel = thread?.currentModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let threadModel = trimmedThreadModel.isEmpty ? nil : trimmedThreadModel
+
+        if let threadModel, namesInPicker.contains(threadModel) {
+            return threadModel
+        }
+        if let defaultName = bundles.resolveRow(for: .chat, preferredModelName: nil)?.name,
+           namesInPicker.contains(defaultName) {
+            return defaultName
+        }
+        return chatScenarioModels.first?.modelName
+    }
+
+    /// 将所选模型立即写入线程并尝试上送同步（不等待发送消息）。
+    func updateThreadModel(_ preferredModelName: String?, for threadID: UUID) async {
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else { return }
+
+        let trimmedSelected = preferredModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferredForResolve = (trimmedSelected?.isEmpty == false) ? trimmedSelected : nil
+        guard let row = bundles.resolveRow(for: .chat, preferredModelName: preferredForResolve) else {
+            logger.warning("updateThreadModel：无法解析 chat 场景模型，thread=\(shortID(threadID))", module: .general)
+            return
+        }
+        let persistedModelName: String
+        if let trimmedSelected, trimmedSelected.isEmpty == false {
+            persistedModelName = trimmedSelected
+        } else {
+            persistedModelName = row.name
+        }
+
+        guard let thread = await chatRepository.loadThread(id: threadID) else { return }
+        if thread.currentModelName == persistedModelName,
+           thread.temperature == row.temperature,
+           thread.maxTokens == row.maxTokens {
+            return
+        }
+
+        await chatRepository.updateThreadGenerationConfig(
+            threadID: threadID,
+            currentModelName: persistedModelName,
+            temperature: row.temperature,
+            maxTokens: row.maxTokens,
+            rolePrompt: ""
+        )
+
+        if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
+            stateStore.upsertThreadListItem(item)
+        }
+
+        do {
+            try await syncChatUseCase.pushOutboxOnly()
+        } catch {
+            logger.warning("线程模型配置上送失败，稍后重试：\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    /// 当远程模型列表变化时，丢弃已不在可选列表中的选择并回退为场景默认。
+    func validateCurrentSelection(for threadID: UUID) async {
+        let namesInPicker = Set(chatScenarioModels.map(\.modelName))
+        let trimmed = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let selected = trimmed.isEmpty ? nil : trimmed
+        guard let selected else { return }
+        guard namesInPicker.contains(selected) == false else { return }
+
+        stateStore.setSelectedChatModelName(nil, for: threadID)
+        await updateThreadModel(nil, for: threadID)
     }
 
     func refreshReasoningToolbarContext(for threadID: UUID) async {
-        let snapshot = await aiSettingsRepository.loadSnapshot()
         let name = await MainActor.run {
             stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName
         }
-        let ctx = snapshot.chatReasoningContext(selectedModelName: name)
-        let mm = snapshot.chatMultimodalCapabilities(selectedModelName: name)
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
+            await MainActor.run {
+                reasoningToolbarContext = .unknown
+                currentModelSupportsMultimodal = false
+            }
+            return
+        }
+        let ctx = bundles.chatReasoningContext(selectedModelName: name)
+        let mm = bundles.chatMultimodalCapabilities(selectedModelName: name)
         await MainActor.run {
             reasoningToolbarContext = ctx
             currentModelSupportsMultimodal = mm.supportsMultimodal
@@ -315,101 +399,6 @@ final class ChatDetailViewModel: ObservableObject {
                 threadImageDeliveryMode = mode
             }
         }
-    }
-
-    private func applyChatModelRuntimeOverride(selectedName: String?) async {
-        let snapshot = await aiSettingsRepository.loadSnapshot()
-        guard let name = selectedName, name.isEmpty == false else {
-            await aiConfigCenter.clearRuntimeOverride(for: .chat)
-            return
-        }
-
-        if let selected = snapshot.allModels.first(where: { $0.name == name }) {
-            if selected.company.uppercased() == LocalModelService.localCompany {
-                await aiConfigCenter.setRuntimeOverride(
-                    AIScenarioConfig(
-                        endpoint: "local://chat/completions",
-                        model: selected.name,
-                        apiKey: nil,
-                        temperature: snapshot.chat.temperature,
-                        maxTokens: snapshot.chat.maxTokens
-                    ),
-                    for: .chat
-                )
-                return
-            }
-
-            if selected.identity == .agent,
-               let baseModelName = selected.baseModelName,
-               let base = snapshot.allModels.first(where: { $0.name == baseModelName }) {
-                let endpoint = endpointForModelCompany(base.company, snapshot: snapshot) ?? snapshot.chat.endpoint
-                let apiKey = apiKeyForModelCompany(base.company, snapshot: snapshot)
-                await aiConfigCenter.setRuntimeOverride(
-                    AIScenarioConfig(
-                        endpoint: endpoint,
-                        model: base.name,
-                        apiKey: apiKey,
-                        temperature: snapshot.chat.temperature,
-                        maxTokens: snapshot.chat.maxTokens
-                    ),
-                    for: .chat
-                )
-                return
-            }
-
-            let endpoint = endpointForModelCompany(selected.company, snapshot: snapshot) ?? snapshot.chat.endpoint
-            let apiKey = apiKeyForModelCompany(selected.company, snapshot: snapshot)
-            await aiConfigCenter.setRuntimeOverride(
-                AIScenarioConfig(
-                    endpoint: endpoint,
-                    model: selected.name,
-                    apiKey: apiKey,
-                    temperature: snapshot.chat.temperature,
-                    maxTokens: snapshot.chat.maxTokens
-                ),
-                for: .chat
-            )
-            return
-        }
-
-        if let bundle = snapshot.scenarioRemoteBundles?.chat,
-           let row = bundle.models.first(where: { $0.model == name }) {
-            await aiConfigCenter.setRuntimeOverride(row.asScenarioConfig(), for: .chat)
-            return
-        }
-
-        await aiConfigCenter.clearRuntimeOverride(for: .chat)
-    }
-
-    private func endpointForModelCompany(_ company: String, snapshot: AISettingsSnapshot) -> String? {
-        snapshot.apiKeys.first(where: {
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            == company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        })?.requestURL
-    }
-
-    private func apiKeyForModelCompany(_ company: String, snapshot: AISettingsSnapshot) -> String? {
-        let raw = snapshot.apiKeys.first(where: {
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            == company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        })?.key ?? ""
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func canUseInChatPicker(model: AllModels, snapshot: AISettingsSnapshot) -> Bool {
-        let localCompany = LocalModelService.localCompany.uppercased()
-        let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if company == localCompany {
-            return true
-        }
-
-        let provider = snapshot.apiKeys.first(where: {
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company
-        })
-        guard let provider else { return false }
-        return provider.isHidden == false &&
-        provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     func loadMessagesIfNeeded(
@@ -536,9 +525,9 @@ final class ChatDetailViewModel: ObservableObject {
         defer { stateStore.setSending(false) }
 
         do {
-            await applyChatModelRuntimeOverride(selectedName: flags.selectedChatModelName)
-            let modelReasoning = await aiSettingsRepository.loadSnapshot()
-                .chatReasoningContext(selectedModelName: flags.selectedChatModelName)
+            await aiConfigCenter.clearRuntimeOverride(for: .chat)
+            let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
+                .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
             let streamingMessageID = UUID()
             let stateStore = self.stateStore
             stateStore.clearComposerAttachmentUploadProgress()

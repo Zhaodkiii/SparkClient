@@ -1,358 +1,143 @@
 import Foundation
 
+/// 按账号存于 Core Data 的 AI 设置快照（含 `allModels` / `apiKeys`）。
+/// 已登录冷启动：`AppBootstrapper.bootstrapIfNeeded(for:)` 以 `UserSession.accountID` 调用 `AIConfigCenter.prewarm` 写入运行时缓存；设置页 `AISettingsViewModel` 应传入同一 `ownerAccountID` 加载目录，避免依赖会话快照解析顺序。
 struct AISettingsSnapshot: Codable, Equatable, Sendable {
-    var chat: AIScenarioConfig
-    var optimizationText: AIScenarioConfig
-    var optimizationVisual: AIScenarioConfig
-    var contextFolding: AIScenarioConfig
-    var router: AIScenarioConfig
-    var modelConfig: AIScenarioConfig
-    var reportInterpretation: AIScenarioConfig
-    var apiKeys: [APIKeys]
-    var searchKeys: [SearchKeys]
-    var toolKeys: [ToolKeys]
     var allModels: [AllModels]
+    var apiKeys: [APIKeys]
+    /// 用户偏好与其它本地选项（嵌入模型名、各场景来源等）。
     var userInfo: UserInfo
+    /// 场景级默认模型（`AIScenario.rawValue` -> 模型 `name`）。
+    var scenarioDefaultModels: [String: String]
+    /// 输入栏中隐藏的试用模型名（仅本地偏好）。
+    var trialChatPickerDisabledModelNames: [String]
+    /// 试用状态（内存偏好，持久化于 UserDefaults payload）。
     var trial: AITrialState
     var trialModelPolicy: [AITrialModelPolicyItem]
+    var searchKeys: [SearchKeys]
+    var toolKeys: [ToolKeys]
     var promptRepo: [PromptRepo]
     var memoryArchive: [MemoryArchive]
     var translationDic: [TranslationDic]
-    /// Server `scenarios` multi-model catalog.
-    var scenarioRemoteBundles: AIScenarioRemoteBundlesCollection?
-    /// Per-scenario chosen model name (`AIScenario.rawValue` → model id); empty uses bundle default.
-    var scenarioSelectedModel: [String: String]
-    /// 试用期内，在「对话」模型选择器中**隐藏**的试用模型 id（`trialModelPolicy` 中 `chat` 场景）；空表示未手动排除任何试用模型。
-    var trialChatPickerDisabledModelNames: [String]
-    /// 新建会话时默认的图片送达方式（`ChatThreadImageDeliveryMode.rawValue`）。
-    var defaultThreadImageDeliveryModeRaw: String
-
-    private static let defaultChatEndpoint = "https://api.sparkclient.local/v1/chat/completions"
-    private static let defaultEmbedEndpoint = "https://api.sparkclient.local/v1/embeddings"
-    private static let defaultChatConfig = AIScenarioConfig(
-        endpoint: defaultChatEndpoint,
-        model: "spark-chat-default",
-        apiKey: nil,
-        temperature: 0.2,
-        maxTokens: 4096
-    )
-    private static let defaultTextConfig = AIScenarioConfig(
-        endpoint: defaultChatEndpoint,
-        model: "spark-chat-default",
-        apiKey: nil,
-        temperature: 0.0,
-        maxTokens: 4096
-    )
-    private static let defaultEmbedConfig = AIScenarioConfig(
-        endpoint: defaultEmbedEndpoint,
-        model: "spark-embedding-default",
-        apiKey: nil,
-        temperature: 0.0,
-        maxTokens: 2048
-    )
-    private static func defaultScenarioBundle(
-        endpoint: String,
-        model: String,
-        temperature: Double,
-        maxTokens: Int
-    ) -> AIScenarioRemoteBundle {
-        .singleModelFallback(
-            AIScenarioConfig(
-                endpoint: endpoint,
-                model: model,
-                apiKey: nil,
-                temperature: temperature,
-                maxTokens: maxTokens
-            )
-        )
-    }
-    private static let defaultChatBundle = defaultScenarioBundle(
-        endpoint: defaultChatEndpoint,
-        model: "spark-chat-default",
-        temperature: 0.2,
-        maxTokens: 4096
-    )
-    private static let defaultTextBundle = defaultScenarioBundle(
-        endpoint: defaultChatEndpoint,
-        model: "spark-chat-default",
-        temperature: 0.0,
-        maxTokens: 4096
-    )
-    private static let defaultEmbedBundle = defaultScenarioBundle(
-        endpoint: defaultEmbedEndpoint,
-        model: "spark-embedding-default",
-        temperature: 0.0,
-        maxTokens: 2048
-    )
 
     init(
-        chat: AIScenarioConfig,
-        optimizationText: AIScenarioConfig,
-        optimizationVisual: AIScenarioConfig,
-        contextFolding: AIScenarioConfig,
-        router: AIScenarioConfig,
-        modelConfig: AIScenarioConfig,
-        reportInterpretation: AIScenarioConfig,
-        apiKeys: [APIKeys],
-        searchKeys: [SearchKeys],
-        toolKeys: [ToolKeys],
         allModels: [AllModels],
-        userInfo: UserInfo,
-        trial: AITrialState,
-        trialModelPolicy: [AITrialModelPolicyItem],
-        promptRepo: [PromptRepo],
-        memoryArchive: [MemoryArchive],
-        translationDic: [TranslationDic],
-        scenarioRemoteBundles: AIScenarioRemoteBundlesCollection?,
-        scenarioSelectedModel: [String: String],
+        apiKeys: [APIKeys],
+        userInfo: UserInfo = AISettingsDefaults.userInfo,
+        scenarioDefaultModels: [String: String] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
-        defaultThreadImageDeliveryModeRaw: String = ChatThreadImageDeliveryMode.directMultimodal.rawValue
+        trial: AITrialState = .inactive,
+        trialModelPolicy: [AITrialModelPolicyItem] = [],
+        searchKeys: [SearchKeys] = [],
+        toolKeys: [ToolKeys] = [],
+        promptRepo: [PromptRepo] = [],
+        memoryArchive: [MemoryArchive] = [],
+        translationDic: [TranslationDic] = []
     ) {
-        self.chat = chat
-        self.optimizationText = optimizationText
-        self.optimizationVisual = optimizationVisual
-        self.contextFolding = contextFolding
-        self.router = router
-        self.modelConfig = modelConfig
-        self.reportInterpretation = reportInterpretation
-        self.apiKeys = apiKeys
-        self.searchKeys = searchKeys
-        self.toolKeys = toolKeys
         self.allModels = allModels
+        self.apiKeys = apiKeys
         self.userInfo = userInfo
+        self.scenarioDefaultModels = scenarioDefaultModels
+        self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
         self.trial = trial
         self.trialModelPolicy = trialModelPolicy
+        self.searchKeys = searchKeys
+        self.toolKeys = toolKeys
         self.promptRepo = promptRepo
         self.memoryArchive = memoryArchive
         self.translationDic = translationDic
-        self.scenarioRemoteBundles = scenarioRemoteBundles
-        self.scenarioSelectedModel = scenarioSelectedModel
-        self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
-        self.defaultThreadImageDeliveryModeRaw = defaultThreadImageDeliveryModeRaw
     }
 
+    /// 内存默认态：目录数据以 Core Data 为准，不在此处读取 `AllModels.json` / `APIKeys.json`。
     static let `default` = AISettingsSnapshot(
-        chat: defaultChatConfig,
-        optimizationText: defaultTextConfig,
-        optimizationVisual: defaultChatConfig,
-        contextFolding: defaultChatConfig,
-        router: defaultChatConfig,
-        modelConfig: defaultEmbedConfig,
-        reportInterpretation: defaultChatConfig,
-        apiKeys: AISettingsDefaults.apiKeys,
-        searchKeys: AISettingsDefaults.searchKeys,
-        toolKeys: AISettingsDefaults.toolKeys,
-        allModels: AISettingsDefaults.allModels,
+        allModels: [],
+        apiKeys: [],
         userInfo: AISettingsDefaults.userInfo,
+        scenarioDefaultModels: [:],
+        trialChatPickerDisabledModelNames: [],
         trial: .inactive,
         trialModelPolicy: [],
+        searchKeys: AISettingsDefaults.searchKeys,
+        toolKeys: AISettingsDefaults.toolKeys,
         promptRepo: AISettingsDefaults.promptRepo,
         memoryArchive: AISettingsDefaults.memoryArchive,
-        translationDic: AISettingsDefaults.translationDic,
-        scenarioRemoteBundles: AIScenarioRemoteBundlesCollection(
-            chat: defaultChatBundle,
-            medicalStructuredExtraction: defaultTextBundle,
-            medicalDocumentTypeRecognition: defaultTextBundle,
-            medicalCaseExtraction: defaultTextBundle,
-            healthExamExtraction: defaultTextBundle,
-            medicalReportExtraction: defaultTextBundle,
-            prescriptionExtraction: defaultTextBundle,
-            medicationExtraction: defaultTextBundle,
-            optimizationText: defaultTextBundle,
-            optimizationVisual: defaultChatBundle,
-            contextFolding: defaultChatBundle,
-            router: defaultChatBundle,
-            modelConfig: defaultEmbedBundle,
-            reportInterpretation: defaultChatBundle
-        ),
-        scenarioSelectedModel: [:],
-        trialChatPickerDisabledModelNames: [],
-        defaultThreadImageDeliveryModeRaw: ChatThreadImageDeliveryMode.directMultimodal.rawValue
+        translationDic: AISettingsDefaults.translationDic
     )
 
-    enum CodingKeys: String, CodingKey {
-        case chat
-        case optimizationText
-        case optimizationVisual
-        case contextFolding
-        case router
-        case modelConfig
-        case reportInterpretation
-        case apiKeys
-        case searchKeys
-        case toolKeys
-        case allModels
-        case userInfo
-        case trial
-        case trialModelPolicy
-        case promptRepo
-        case memoryArchive
-        case translationDic
-        case scenarioRemoteBundles
-        case scenarioSelectedModel
-        case trialChatPickerDisabledModelNames
-        case defaultThreadImageDeliveryModeRaw
+    func chatTrialPolicyModelNames() -> [String] {
+        trialModelPolicy
+            .filter { $0.scenario == .chat }
+            .map(\.config.model)
     }
 
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        chat = try c.decode(AIScenarioConfig.self, forKey: .chat)
-        optimizationText = try c.decode(AIScenarioConfig.self, forKey: .optimizationText)
-        optimizationVisual = try c.decode(AIScenarioConfig.self, forKey: .optimizationVisual)
-        contextFolding = try c.decode(AIScenarioConfig.self, forKey: .contextFolding)
-        router = try c.decode(AIScenarioConfig.self, forKey: .router)
-        modelConfig = try c.decode(AIScenarioConfig.self, forKey: .modelConfig)
-        reportInterpretation = try c.decode(AIScenarioConfig.self, forKey: .reportInterpretation)
-        apiKeys = try c.decode([APIKeys].self, forKey: .apiKeys)
-        searchKeys = try c.decode([SearchKeys].self, forKey: .searchKeys)
-        toolKeys = try c.decode([ToolKeys].self, forKey: .toolKeys)
-        allModels = try c.decode([AllModels].self, forKey: .allModels)
-        userInfo = try c.decode(UserInfo.self, forKey: .userInfo)
-        trial = try c.decode(AITrialState.self, forKey: .trial)
-        trialModelPolicy = try c.decode([AITrialModelPolicyItem].self, forKey: .trialModelPolicy)
-        promptRepo = try c.decode([PromptRepo].self, forKey: .promptRepo)
-        memoryArchive = try c.decode([MemoryArchive].self, forKey: .memoryArchive)
-        translationDic = try c.decode([TranslationDic].self, forKey: .translationDic)
-        scenarioRemoteBundles = try c.decode(AIScenarioRemoteBundlesCollection.self, forKey: .scenarioRemoteBundles)
-        scenarioSelectedModel = try c.decodeIfPresent([String: String].self, forKey: .scenarioSelectedModel) ?? [:]
-        trialChatPickerDisabledModelNames = try c.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
-        defaultThreadImageDeliveryModeRaw = try c.decodeIfPresent(String.self, forKey: .defaultThreadImageDeliveryModeRaw)
-            ?? ChatThreadImageDeliveryMode.directMultimodal.rawValue
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(chat, forKey: .chat)
-        try c.encode(optimizationText, forKey: .optimizationText)
-        try c.encode(optimizationVisual, forKey: .optimizationVisual)
-        try c.encode(contextFolding, forKey: .contextFolding)
-        try c.encode(router, forKey: .router)
-        try c.encode(modelConfig, forKey: .modelConfig)
-        try c.encode(reportInterpretation, forKey: .reportInterpretation)
-        try c.encode(apiKeys, forKey: .apiKeys)
-        try c.encode(searchKeys, forKey: .searchKeys)
-        try c.encode(toolKeys, forKey: .toolKeys)
-        try c.encode(allModels, forKey: .allModels)
-        try c.encode(userInfo, forKey: .userInfo)
-        try c.encode(trial, forKey: .trial)
-        try c.encode(trialModelPolicy, forKey: .trialModelPolicy)
-        try c.encode(promptRepo, forKey: .promptRepo)
-        try c.encode(memoryArchive, forKey: .memoryArchive)
-        try c.encode(translationDic, forKey: .translationDic)
-        try c.encode(scenarioRemoteBundles, forKey: .scenarioRemoteBundles)
-        try c.encode(scenarioSelectedModel, forKey: .scenarioSelectedModel)
-        try c.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
-        try c.encode(defaultThreadImageDeliveryModeRaw, forKey: .defaultThreadImageDeliveryModeRaw)
-    }
-
-    func config(for scenario: AIScenario) -> AIScenarioConfig {
-        if let bundles = scenarioRemoteBundles {
-            let preferred = scenarioSelectedModel[scenario.rawValue]
-            if let row = bundles.bundle(for: scenario).resolveRow(preferredModelName: preferred) {
-                return row.asScenarioConfig()
-            }
-        }
-
-        switch scenario {
-        case .chat:
-            return chat
-        case .medicalStructuredExtraction:
-            return optimizationText
-        case .medicalDocumentTypeRecognition:
-            return optimizationText
-        case .medicalCaseExtraction:
-            return optimizationText
-        case .healthExamExtraction:
-            return optimizationText
-        case .medicalReportExtraction:
-            return optimizationText
-        case .prescriptionExtraction:
-            return optimizationText
-        case .medicationExtraction:
-            return optimizationText
-        case .optimizationText:
-            return optimizationText
-        case .optimizationVisual:
-            return optimizationVisual
-        case .contextFolding:
-            return contextFolding
-        case .router:
-            return router
-        case .modelConfig:
-            return modelConfig
-        case .reportInterpretation:
-            return reportInterpretation
-        }
-    }
-
-    /// Trial rows for this scenario; priority: `scenarioSelectedModel` match → `isDefault` → first.
     func trialPolicyConfig(for scenario: AIScenario) -> AIScenarioConfig? {
-        guard trial.isActive else { return nil }
-        let items = trialModelPolicy.filter { $0.scenario == scenario }
-        guard items.isEmpty == false else { return nil }
-        let sel = scenarioSelectedModel[scenario.rawValue]
-        if let sel, let hit = items.first(where: { $0.config.model == sel }) {
-            return hit.config
-        }
-        if let hit = items.first(where: { $0.isDefault }) {
-            return hit.config
-        }
-        return items.first?.config
-    }
-
-    mutating func materializeAllScenariosFromBundles() {
-        guard let bundles = scenarioRemoteBundles else { return }
-        for scenario in AIScenario.allCases {
-            let bundle = bundles.bundle(for: scenario)
-            let preferred = scenarioSelectedModel[scenario.rawValue]
-            guard let row = bundle.resolveRow(preferredModelName: preferred) else { continue }
-            let config = row.asScenarioConfig()
-            switch scenario {
-            case .chat:
-                chat = config
-            case .medicalStructuredExtraction:
-                break
-            case .medicalDocumentTypeRecognition:
-                break
-            case .medicalCaseExtraction:
-                break
-            case .healthExamExtraction:
-                break
-            case .medicalReportExtraction:
-                break
-            case .prescriptionExtraction:
-                break
-            case .medicationExtraction:
-                break
-            case .optimizationText:
-                optimizationText = config
-            case .optimizationVisual:
-                optimizationVisual = config
-            case .contextFolding:
-                contextFolding = config
-            case .router:
-                router = config
-            case .modelConfig:
-                modelConfig = config
-            case .reportInterpretation:
-                reportInterpretation = config
-            }
-        }
-    }
-
-    mutating func pruneInvalidScenarioSelections() {
-        guard let bundles = scenarioRemoteBundles else { return }
-        for scenario in AIScenario.allCases {
-            guard let name = scenarioSelectedModel[scenario.rawValue] else { continue }
-            let bundle = bundles.bundle(for: scenario)
-            if bundle.models.contains(where: { $0.model == name }) == false {
-                scenarioSelectedModel[scenario.rawValue] = nil
-            }
-        }
+        trialModelPolicy.first(where: { $0.scenario == scenario && $0.isDefault })?.config
+            ?? trialModelPolicy.first(where: { $0.scenario == scenario })?.config
     }
 }
 
-protocol AISettingsRepository: Sendable {
-    func loadSnapshot() async -> AISettingsSnapshot
-    func save(snapshot: AISettingsSnapshot) async throws
+// MARK: - 偏好持久化载荷（与快照非目录字段一致）
+
+extension AISettingsSnapshot {
+    /// 与 `AISettingsSnapshot` 中除 `allModels` / `apiKeys` 外的字段一一对应，供账号级 UserDefaults 序列化；
+    /// 仓储层只对该类型做 `JSONEncoder` / `JSONDecoder`，避免重复结构体与手写映射。
+    struct PreferencesPayload: Codable, Equatable, Sendable {
+        var userInfo: UserInfo
+        var scenarioDefaultModels: [String: String]
+        var trialChatPickerDisabledModelNames: [String]
+        var trial: AITrialState
+        var trialModelPolicy: [AITrialModelPolicyItem]
+        var searchKeys: [SearchKeys]
+        var toolKeys: [ToolKeys]
+        var promptRepo: [PromptRepo]
+        var memoryArchive: [MemoryArchive]
+        var translationDic: [TranslationDic]
+
+        static let `default` = PreferencesPayload(
+            userInfo: AISettingsDefaults.userInfo,
+            scenarioDefaultModels: [:],
+            trialChatPickerDisabledModelNames: [],
+            trial: .inactive,
+            trialModelPolicy: [],
+            searchKeys: AISettingsDefaults.searchKeys,
+            toolKeys: AISettingsDefaults.toolKeys,
+            promptRepo: AISettingsDefaults.promptRepo,
+            memoryArchive: AISettingsDefaults.memoryArchive,
+            translationDic: AISettingsDefaults.translationDic
+        )
+    }
+
+    /// 从当前快照提取偏好载荷（字段与 `PreferencesPayload` 一致）。
+    var preferencesPayload: PreferencesPayload {
+        PreferencesPayload(
+            userInfo: userInfo,
+            scenarioDefaultModels: scenarioDefaultModels,
+            trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
+            trial: trial,
+            trialModelPolicy: trialModelPolicy,
+            searchKeys: searchKeys,
+            toolKeys: toolKeys,
+            promptRepo: promptRepo,
+            memoryArchive: memoryArchive,
+            translationDic: translationDic
+        )
+    }
+
+    /// 用 Core Data 中的目录数据与已解码的偏好载荷组装完整快照。
+    init(allModels: [AllModels], apiKeys: [APIKeys], preferences: PreferencesPayload) {
+        self.init(
+            allModels: allModels,
+            apiKeys: apiKeys,
+            userInfo: preferences.userInfo,
+            scenarioDefaultModels: preferences.scenarioDefaultModels,
+            trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
+            trial: preferences.trial,
+            trialModelPolicy: preferences.trialModelPolicy,
+            searchKeys: preferences.searchKeys,
+            toolKeys: preferences.toolKeys,
+            promptRepo: preferences.promptRepo,
+            memoryArchive: preferences.memoryArchive,
+            translationDic: preferences.translationDic
+        )
+    }
 }

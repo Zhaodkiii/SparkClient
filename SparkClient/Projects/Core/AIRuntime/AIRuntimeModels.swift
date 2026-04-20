@@ -247,6 +247,7 @@ struct AIRuntimeTextRequest: Sendable {
     let tools: [AIRuntimeToolDefinition]         // 可用工具列表
     let toolChoice: AIRuntimeToolChoice          // 工具调用策略
     let reasoning: AIRuntimeReasoningOptions     // 推理控制配置
+    let preferredModelName: String?              // 显式指定模型名（高于场景默认）
     let providerCompanyUppercased: String?       // 厂商大写标识（服务内部填充）
 
     /// 构造方法（提供默认值）
@@ -256,6 +257,7 @@ struct AIRuntimeTextRequest: Sendable {
         tools: [AIRuntimeToolDefinition] = [],
         toolChoice: AIRuntimeToolChoice = .auto,
         reasoning: AIRuntimeReasoningOptions = .disabled,
+        preferredModelName: String? = nil,
         providerCompanyUppercased: String? = nil
     ) {
         self.scenario = scenario
@@ -263,6 +265,7 @@ struct AIRuntimeTextRequest: Sendable {
         self.tools = tools
         self.toolChoice = toolChoice
         self.reasoning = reasoning
+        self.preferredModelName = preferredModelName
         self.providerCompanyUppercased = providerCompanyUppercased
     }
 }

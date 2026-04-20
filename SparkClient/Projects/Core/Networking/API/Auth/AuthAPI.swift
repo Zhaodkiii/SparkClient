@@ -30,6 +30,7 @@ struct SparkAuthAPI {
         let userID: Int
         let email: String?
         let displayName: String?
+        let isPro: Bool
         let tokens: AuthTokens
     }
 
@@ -97,6 +98,7 @@ struct SparkAuthAPI {
         let token_type: String
         let email: String?
         let display_name: String?
+        let is_pro: Bool?
     }
 
     func loginWithApple(
@@ -167,6 +169,7 @@ struct SparkAuthAPI {
             userID: result.user_id,
             email: result.email,
             displayName: result.display_name,
+            isPro: result.is_pro ?? false,
             tokens: tokens
         )
     }

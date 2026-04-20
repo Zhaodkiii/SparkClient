@@ -4,6 +4,8 @@ final class AIConfigCenter {
     private let repository: any AISettingsRepository
     private let remoteProvider: (any AIRemoteConfigProvider)?
     private let runtimeStore: AIRuntimeStore
+    private let runtimeConfigStore: AIRuntimeConfigStore
+    private let sessionSnapshotStore: SessionSnapshotStore
     private let resolver: ScenarioPolicyResolver
     private let logger: Logger
 
@@ -11,22 +13,34 @@ final class AIConfigCenter {
         repository: any AISettingsRepository,
         remoteProvider: (any AIRemoteConfigProvider)? = nil,
         runtimeStore: AIRuntimeStore,
+        runtimeConfigStore: AIRuntimeConfigStore,
+        sessionSnapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
         resolver: ScenarioPolicyResolver = ScenarioPolicyResolver(),
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
         self.remoteProvider = remoteProvider
         self.runtimeStore = runtimeStore
+        self.runtimeConfigStore = runtimeConfigStore
+        self.sessionSnapshotStore = sessionSnapshotStore
         self.resolver = resolver
         self.logger = logger
     }
 
-    func resolve(for scenario: AIScenario) async throws -> AIResolvedConfig {
-        let snapshot = await repository.loadSnapshot()
+    private func resolvedOwnerAccountID(explicit explicitID: Int64?) async -> Int64? {
+        if let explicitID {
+            return explicitID
+        }
+        return await sessionSnapshotStore.load()?.accountID
+    }
+
+    func resolve(for scenario: AIScenario, preferredModelName: String? = nil) async throws -> AIResolvedConfig {
+        let bundles = try await runtimeConfigStore.effectiveBundles()
         let resolved = try await resolver.resolve(
             scenario: scenario,
-            snapshot: snapshot,
-            runtimeStore: runtimeStore
+            bundles: bundles,
+            runtimeStore: runtimeStore,
+            preferredModelName: preferredModelName
         )
         logger.debug(
             "已解析场景=\(scenario.rawValue)，来源=\(resolved.source.rawValue)，模型=\(resolved.model)",
@@ -35,34 +49,71 @@ final class AIConfigCenter {
         return resolved
     }
 
-    func prewarm() async {
-        _ = await repository.loadSnapshot()
-        logger.debug("AI 配置已预热", module: .aiConfig)
+    /// 将快照写入 `AIRuntimeConfigStore`（含 `AISettingsSnapshot` 缓存与本地 bundle）。不绑定账号时沿用已缓存的 `ownerAccountID`。
+    func rebuildRuntimeCache(from snapshot: AISettingsSnapshot) async {
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: nil)
+        logger.debug("AI 运行时快照与场景 bundle 已更新", module: .aiConfig)
     }
 
-    func currentSnapshot() async -> AISettingsSnapshot {
-        await repository.loadSnapshot()
+    /// 设置页草稿：更新运行时内快照与 bundle，不覆盖已绑定的账号键。
+    func applyDraftSnapshot(_ snapshot: AISettingsSnapshot) async {
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: nil)
+        logger.debug("AI 运行时草稿快照已应用", module: .aiConfig)
+    }
+
+    /// 登录引导：按账号从仓储加载目录（bundle 种子仅在该账号首次初始化时入库），再写入 `AIRuntimeConfigStore`。
+    /// - Parameter ownerAccountID: 与 `UserSession.accountID` 一致，避免仅依赖会话快照解析顺序。
+    func prewarm(ownerAccountID: Int64? = nil) async {
+        let source = ownerAccountID.map { "ownerAccountID=\($0)" } ?? "ownerAccountID=nil（由仓储解析会话）"
+        logger.info("AIConfigCenter.prewarm 开始 \(source)", module: .aiConfig)
+        let snapshot = await repository.loadSnapshot(ownerAccountID: ownerAccountID)
+        let resolvedOwner = await resolvedOwnerAccountID(explicit: ownerAccountID)
+        logger.info(
+            "AIConfigCenter.prewarm 已从仓储拿到快照 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count)，即将写入运行时缓存",
+            module: .aiConfig
+        )
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: resolvedOwner)
+        logger.info("AIConfigCenter.prewarm 结束，运行时本地 bundle 已更新", module: .aiConfig)
+    }
+
+    func currentSnapshot(ownerAccountID: Int64? = nil) async -> AISettingsSnapshot {
+        let resolved = await resolvedOwnerAccountID(explicit: ownerAccountID)
+        let source = ownerAccountID.map { "显式 ownerAccountID=\($0)" } ?? "仓储解析会话"
+        logger.debug("AIConfigCenter.currentSnapshot 读链路开始（\(source)，resolved=\(String(describing: resolved))）", module: .aiConfig)
+
+        if let hit = await runtimeConfigStore.cachedSnapshotIfMatches(ownerAccountID: resolved) {
+            logger.debug(
+                "AIConfigCenter.currentSnapshot 命中内存缓存 厂商Key=\(hit.apiKeys.count) 模型=\(hit.allModels.count)",
+                module: .aiConfig
+            )
+            return hit
+        }
+
+        let snapshot = await repository.loadSnapshot(ownerAccountID: ownerAccountID)
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: resolved)
+        logger.debug(
+            "AIConfigCenter.currentSnapshot 已从仓储回填缓存 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count)",
+            module: .aiConfig
+        )
+        return snapshot
+    }
+
+    func effectiveScenarioBundles() async throws -> AIScenarioRemoteBundlesCollection {
+        try await runtimeConfigStore.effectiveBundles()
     }
 
     func refreshRemoteConfig() async {
         guard let remoteProvider else { return }
-
-        let localSnapshot = await repository.loadSnapshot()
         do {
             let patch = try await remoteProvider.fetchRemotePatch()
-            let merged = localSnapshot.merging(remotePatch: patch)
-            guard merged != localSnapshot else {
-                logger.debug("远程 AI 配置已拉取，与本地无差异", module: .aiConfig)
-                return
-            }
-
-            try await repository.save(snapshot: merged)
+            await runtimeConfigStore.setProOverlay(patch.scenarioRemoteBundles, revision: patch.revision)
             logger.info(
-                "远程 AI 配置已合并，revision=\(patch.revision ?? "unknown")",
+                "远程 AI 场景模型已载入内存，revision=\(patch.revision ?? "unknown")",
                 module: .aiConfig
             )
         } catch {
-            logger.warning("远程 AI 配置刷新失败：\(error.localizedDescription)", module: .aiConfig)
+            logger.error("\(error)")
+            logger.error("远程 AI 配置刷新失败：\(error.localizedDescription)", module: .aiConfig)
         }
     }
 
@@ -75,6 +126,11 @@ final class AIConfigCenter {
     }
 
     func clearRuntimeOverrides() async {
+        await runtimeStore.clearAll()
+    }
+
+    func resetRuntimeCaches() async {
+        await runtimeConfigStore.reset()
         await runtimeStore.clearAll()
     }
 }

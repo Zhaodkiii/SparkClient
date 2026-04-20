@@ -156,69 +156,19 @@ struct BackendAIRemoteConfigProvider: AIRemoteConfigProvider, @unchecked Sendabl
 private struct RemoteAIBootstrapPayload: Decodable {
     let revision: String?
     let scenarios: RemoteScenarioCollection?
-    let apiKeys: [RemoteAPIKeyItem]?
-    let searchKeys: [RemoteSearchKeyItem]?
-    let toolKeys: [RemoteToolKeyItem]?
-    let allModels: [RemoteModelItem]?
-    let userInfo: RemoteUserInfoPatch?
-    let trial: RemoteTrialState?
-    let trialModelPolicy: [RemoteTrialModelPolicyItem]?
 
     enum CodingKeys: String, CodingKey {
         case revision
         case scenarios
-        case apiKeys = "api_keys"
-        case searchKeys = "search_keys"
-        case toolKeys = "tool_keys"
-        case allModels = "all_models"
-        case userInfo = "user_info"
-        case trial
-        case trialModelPolicy = "trial_model_policy"
     }
 
-    func toPatch(now: Date = Date()) -> AIRemoteSettingsPatch {
-        let defaults = AISettingsSnapshot.default
-        if let scenarios {
-            let bundles = scenarios.asCollection(fallback: defaults)
-            func materialize(_ bundle: AIScenarioRemoteBundle) -> AIScenarioConfig? {
-                bundle.resolveRow(preferredModelName: nil)?.asScenarioConfig()
-            }
-            return AIRemoteSettingsPatch(
-                revision: revision,
-                scenarioRemoteBundles: bundles,
-                chat: materialize(bundles.chat),
-                optimizationText: materialize(bundles.optimizationText),
-                optimizationVisual: materialize(bundles.optimizationVisual),
-                contextFolding: materialize(bundles.contextFolding),
-                router: materialize(bundles.router),
-                modelConfig: materialize(bundles.modelConfig),
-                reportInterpretation: materialize(bundles.reportInterpretation),
-                apiKeys: apiKeys?.map { $0.toModel(now: now) },
-                searchKeys: searchKeys?.map { $0.toModel(now: now) },
-                toolKeys: toolKeys?.map { $0.toModel(now: now) },
-                allModels: allModels?.map { $0.toModel(now: now) },
-                userInfo: userInfo?.toPatch(),
-                trial: trial?.toModel(),
-                trialModelPolicy: trialModelPolicy?.compactMap { $0.toModel(fallbackSnapshot: defaults) }
-            )
+    func toPatch() -> AIRemoteSettingsPatch {
+        guard let scenarios else {
+            return AIRemoteSettingsPatch(revision: revision, scenarioRemoteBundles: nil)
         }
         return AIRemoteSettingsPatch(
             revision: revision,
-            scenarioRemoteBundles: nil,
-            chat: nil,
-            optimizationText: nil,
-            optimizationVisual: nil,
-            contextFolding: nil,
-            router: nil,
-            modelConfig: nil,
-            reportInterpretation: nil,
-            apiKeys: apiKeys?.map { $0.toModel(now: now) },
-            searchKeys: searchKeys?.map { $0.toModel(now: now) },
-            toolKeys: toolKeys?.map { $0.toModel(now: now) },
-            allModels: allModels?.map { $0.toModel(now: now) },
-            userInfo: userInfo?.toPatch(),
-            trial: trial?.toModel(),
-            trialModelPolicy: trialModelPolicy?.compactMap { $0.toModel(fallbackSnapshot: defaults) }
+            scenarioRemoteBundles: scenarios.asProScenarioCollection()
         )
     }
 }
@@ -256,304 +206,42 @@ private struct RemoteScenarioCollection: Decodable {
         case reportInterpretation = "report_interpretation"
     }
 
-    func asCollection(fallback: AISettingsSnapshot) -> AIScenarioRemoteBundlesCollection {
-        AIScenarioRemoteBundlesCollection(
-            chat: chat ?? .singleModelFallback(fallback.chat),
-            medicalStructuredExtraction: medicalStructuredExtraction ?? .singleModelFallback(fallback.optimizationText),
-            medicalDocumentTypeRecognition: medicalDocumentTypeRecognition ?? .singleModelFallback(fallback.optimizationText),
-            medicalCaseExtraction: medicalCaseExtraction ?? .singleModelFallback(fallback.optimizationText),
-            healthExamExtraction: healthExamExtraction ?? .singleModelFallback(fallback.optimizationText),
-            medicalReportExtraction: medicalReportExtraction ?? .singleModelFallback(fallback.optimizationText),
-            prescriptionExtraction: prescriptionExtraction ?? .singleModelFallback(fallback.optimizationText),
-            medicationExtraction: medicationExtraction ?? .singleModelFallback(fallback.optimizationText),
-            optimizationText: optimizationText ?? .singleModelFallback(fallback.optimizationText),
-            optimizationVisual: optimizationVisual ?? .singleModelFallback(fallback.optimizationVisual),
-            contextFolding: contextFolding ?? .singleModelFallback(fallback.contextFolding),
-            router: router ?? .singleModelFallback(fallback.router),
-            modelConfig: modelConfig ?? .singleModelFallback(fallback.modelConfig),
-            reportInterpretation: reportInterpretation ?? .singleModelFallback(fallback.reportInterpretation)
+    /// Pro bootstrap 可能只返回部分场景；未出现的场景用空包占位（合并时由运行时逻辑回退到本地包）。
+    /// 所有模型统一标记 source 为 `.pro`，以区别于本地模型（`system`/`custom`）。
+    func asProScenarioCollection() -> AIScenarioRemoteBundlesCollection {
+        let empty = AIScenarioRemoteBundle(defaultModelName: "", models: [])
+        return AIScenarioRemoteBundlesCollection(
+            chat: markPro(chat) ?? empty,
+            medicalStructuredExtraction: markPro(medicalStructuredExtraction) ?? empty,
+            medicalDocumentTypeRecognition: markPro(medicalDocumentTypeRecognition) ?? empty,
+            medicalCaseExtraction: markPro(medicalCaseExtraction) ?? empty,
+            healthExamExtraction: markPro(healthExamExtraction) ?? empty,
+            medicalReportExtraction: markPro(medicalReportExtraction) ?? empty,
+            prescriptionExtraction: markPro(prescriptionExtraction) ?? empty,
+            medicationExtraction: markPro(medicationExtraction) ?? empty,
+            optimizationText: markPro(optimizationText) ?? empty,
+            optimizationVisual: markPro(optimizationVisual) ?? empty,
+            contextFolding: markPro(contextFolding) ?? empty,
+            router: markPro(router) ?? empty,
+            modelConfig: markPro(modelConfig) ?? empty,
+            reportInterpretation: markPro(reportInterpretation) ?? empty
         )
     }
-}
 
-private struct RemoteAPIKeyItem: Decodable {
-    let name: String
-    let company: String
-    let key: String?
-    let requestURL: String
-    let isHidden: Bool?
-    let help: String?
-    let source: String?
-    let privacyPolicyURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case company
-        case key
-        case requestURL = "request_url"
-        case isHidden = "is_hidden"
-        case help
-        case source
-        case privacyPolicyURL = "privacy_policy_url"
-    }
-
-    func toModel(now: Date) -> APIKeys {
-        APIKeys(
-            name: name,
-            company: company,
-            key: key ?? "",
-            requestURL: requestURL,
-            isHidden: isHidden ?? false,
-            help: help ?? "",
-            source: AIRecordSource(rawValue: source ?? "") ?? .system,
-            privacyPolicyURL: privacyPolicyURL ?? "",
-            timestamp: now
-        )
-    }
-}
-
-private struct RemoteSearchKeyItem: Decodable {
-    let name: String
-    let company: String
-    let key: String?
-    let requestURL: String
-    let isUsing: Bool?
-    let searchClass: String?
-    let help: String?
-    let source: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case company
-        case key
-        case requestURL = "request_url"
-        case isUsing = "is_using"
-        case searchClass = "search_class"
-        case help
-        case source
-    }
-
-    func toModel(now: Date) -> SearchKeys {
-        SearchKeys(
-            name: name,
-            company: company,
-            key: key ?? "",
-            requestURL: requestURL,
-            isUsing: isUsing ?? false,
-            searchClass: searchClass ?? "web",
-            help: help ?? "",
-            source: AIRecordSource(rawValue: source ?? "") ?? .system,
-            timestamp: now
-        )
-    }
-}
-
-private struct RemoteToolKeyItem: Decodable {
-    let name: String
-    let company: String
-    let key: String?
-    let requestURL: String
-    let isUsing: Bool?
-    let toolClass: String?
-    let help: String?
-    let source: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case company
-        case key
-        case requestURL = "request_url"
-        case isUsing = "is_using"
-        case toolClass = "tool_class"
-        case help
-        case source
-    }
-
-    func toModel(now: Date) -> ToolKeys {
-        ToolKeys(
-            name: name,
-            company: company,
-            key: key ?? "",
-            requestURL: requestURL,
-            isUsing: isUsing ?? false,
-            toolClass: toolClass ?? "native",
-            help: help ?? "",
-            source: AIRecordSource(rawValue: source ?? "") ?? .system,
-            timestamp: now
-        )
-    }
-}
-
-private struct RemoteModelItem: Decodable {
-    let name: String
-    let displayName: String?
-    let position: Int?
-    let company: String
-    let isHidden: Bool?
-    let supportsSearch: Bool?
-    let supportsMultimodal: Bool?
-    let supportsReasoning: Bool?
-    let supportsToolUse: Bool?
-    let supportsVoiceGen: Bool?
-    let supportsImageGen: Bool?
-    let priceTier: Int?
-    let supportsText: Bool?
-    let reasoningControllable: Bool?
-    let source: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case displayName = "display_name"
-        case position
-        case company
-        case isHidden = "is_hidden"
-        case supportsSearch = "supports_search"
-        case supportsMultimodal = "supports_multimodal"
-        case supportsReasoning = "supports_reasoning"
-        case supportsToolUse = "supports_tool_use"
-        case supportsVoiceGen = "supports_voice_gen"
-        case supportsImageGen = "supports_image_gen"
-        case priceTier = "price_tier"
-        case supportsText = "supports_text"
-        case reasoningControllable = "reasoning_controllable"
-        case source
-    }
-
-    func toModel(now: Date) -> AllModels {
-        let tier = priceTier.map { min(max($0, 0), 3) } ?? 0
-        return AllModels(
-            name: name,
-            displayName: displayName ?? name,
-            identity: .model,
-            position: position ?? 0,
-            company: company,
-            isHidden: isHidden ?? false,
-            supportsSearch: supportsSearch ?? false,
-            supportsMultimodal: supportsMultimodal ?? false,
-            supportsReasoning: supportsReasoning ?? false,
-            supportsToolUse: supportsToolUse ?? false,
-            supportsVoiceGen: supportsVoiceGen ?? false,
-            supportsImageGen: supportsImageGen ?? false,
-            source: AIRecordSource(rawValue: source ?? "") ?? .system,
-            timestamp: now,
-            priceTier: tier,
-            supportsText: supportsText ?? true,
-            reasoningControllable: reasoningControllable ?? false
-        )
-    }
-}
-
-private struct RemoteUserInfoPatch: Decodable {
-    let chooseEmbeddingModel: String?
-    let optimizationTextModel: String?
-    let optimizationVisualModel: String?
-    let contextFoldingModel: String?
-    let routerModel: String?
-    let dataExtractionModel: String?
-    let reportInterpretationModel: String?
-    let textToSpeechModel: String?
-    let useContextFolding: Bool?
-    let maxToolSets: Int?
-    let useKnowledge: Bool?
-    let knowledgeCount: Int?
-    let knowledgeSimilarity: Double?
-    let useSearch: Bool?
-    let bilingualSearch: Bool?
-    let searchCount: Int?
-    let useMap: Bool?
-    let useCalendar: Bool?
-    let useWeather: Bool?
-    let useCanvas: Bool?
-    let useCode: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case chooseEmbeddingModel = "choose_embedding_model"
-        case optimizationTextModel = "optimization_text_model"
-        case optimizationVisualModel = "optimization_visual_model"
-        case contextFoldingModel = "context_folding_model"
-        case routerModel = "router_model"
-        case dataExtractionModel = "data_extraction_model"
-        case reportInterpretationModel = "report_interpretation_model"
-        case textToSpeechModel = "text_to_speech_model"
-        case useContextFolding = "use_context_folding"
-        case maxToolSets = "max_tool_sets"
-        case useKnowledge = "use_knowledge"
-        case knowledgeCount = "knowledge_count"
-        case knowledgeSimilarity = "knowledge_similarity"
-        case useSearch = "use_search"
-        case bilingualSearch = "bilingual_search"
-        case searchCount = "search_count"
-        case useMap = "use_map"
-        case useCalendar = "use_calendar"
-        case useWeather = "use_weather"
-        case useCanvas = "use_canvas"
-        case useCode = "use_code"
-    }
-
-    func toPatch() -> AIRemoteUserInfoPatch {
-        AIRemoteUserInfoPatch(
-            chooseEmbeddingModel: chooseEmbeddingModel,
-            optimizationTextModel: optimizationTextModel,
-            optimizationVisualModel: optimizationVisualModel,
-            contextFoldingModel: contextFoldingModel,
-            routerModel: routerModel,
-            dataExtractionModel: dataExtractionModel,
-            reportInterpretationModel: reportInterpretationModel,
-            textToSpeechModel: textToSpeechModel,
-            useContextFolding: useContextFolding,
-            maxToolSets: maxToolSets,
-            useKnowledge: useKnowledge,
-            knowledgeCount: knowledgeCount,
-            knowledgeSimilarity: knowledgeSimilarity,
-            useSearch: useSearch,
-            bilingualSearch: bilingualSearch,
-            searchCount: searchCount,
-            useMap: useMap,
-            useCalendar: useCalendar,
-            useWeather: useWeather,
-            useCanvas: useCanvas,
-            useCode: useCode
-        )
-    }
-}
-
-private struct RemoteTrialState: Decodable {
-    let status: String?
-    let isActive: Bool?
-    let grantSource: String?
-    let startedAt: String?
-    let expiresAt: String?
-    let remainingSeconds: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case status
-        case isActive = "is_active"
-        case grantSource = "grant_source"
-        case startedAt = "started_at"
-        case expiresAt = "expires_at"
-        case remainingSeconds = "remaining_seconds"
-    }
-
-    func toModel() -> AITrialState {
-        let formatter = ISO8601DateFormatter()
-        let fractionalFormatter = ISO8601DateFormatter()
-        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        func parseDate(_ value: String?) -> Date? {
-            guard let value else { return nil }
-            return fractionalFormatter.date(from: value) ?? formatter.date(from: value)
+    /// 将 bundle 内所有模型的 source 统一标记为 Pro；若 bundle 为 nil 则返回 nil。
+    private func markPro(_ bundle: AIScenarioRemoteBundle?) -> AIScenarioRemoteBundle? {
+        guard let bundle else { return nil }
+        let proSource = AIRecordSource.pro.rawValue
+        let markedModels = bundle.models.map { row -> AIScenarioRemoteModelRow in
+            var m = row
+            m.source = proSource
+            return m
         }
-
-        return AITrialState(
-            status: status ?? AITrialState.inactive.status,
-            isActive: isActive ?? false,
-            grantSource: grantSource ?? AITrialState.inactive.grantSource,
-            startedAt: parseDate(startedAt),
-            expiresAt: parseDate(expiresAt),
-            remainingSeconds: remainingSeconds ?? 0
-        )
+        return AIScenarioRemoteBundle(defaultModelName: bundle.defaultModelName, models: markedModels)
     }
 }
+
+// MARK: - Trial Status API Models
 
 private struct RemoteTrialStatusPayload: Decodable {
     let status: String?
@@ -593,53 +281,8 @@ private struct RemoteTrialStatusPayload: Decodable {
     }
 }
 
+// MARK: - Provider Test API Models
+
 private struct RemoteProviderTestPayload: Decodable {
     let reachable: Bool
-}
-
-private struct RemoteTrialModelPolicyItem: Decodable {
-    let scenario: String?
-    let endpoint: String?
-    let model: String?
-    let apiKey: String?
-    let temperature: Double?
-    let maxTokens: Int?
-    let isDefault: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case scenario
-        case endpoint
-        case model
-        case apiKey = "api_key"
-        case temperature
-        case maxTokens = "max_tokens"
-        case isDefault = "is_default"
-    }
-
-    func toModel(fallbackSnapshot: AISettingsSnapshot) -> AITrialModelPolicyItem? {
-        guard
-            let rawScenario = scenario,
-            let typedScenario = decodeScenario(rawScenario)
-        else {
-            return nil
-        }
-
-        let fallback = fallbackSnapshot.config(for: typedScenario)
-        let scenarioConfig = AIScenarioConfig(
-            endpoint: endpoint ?? fallback.endpoint,
-            model: model ?? fallback.model,
-            apiKey: apiKey ?? fallback.apiKey,
-            temperature: temperature ?? fallback.temperature,
-            maxTokens: maxTokens ?? fallback.maxTokens
-        )
-        return AITrialModelPolicyItem(
-            scenario: typedScenario,
-            config: scenarioConfig,
-            isDefault: isDefault ?? false
-        )
-    }
-
-    private func decodeScenario(_ raw: String) -> AIScenario? {
-        AIScenario(rawValue: raw)
-    }
 }

@@ -254,16 +254,24 @@ final class AppContainer {
         // MARK: 仓库层（数据访问抽象）
         let profileRepository = SessionBackedUserProfileRepository()
         let selectedMemberIDPersistence = UserDefaultsSelectedMemberIDStore()
+        /// 与认证共用，保证写入会话与 AI 仓储读取同一快照源。
+        let sessionSnapshotStore = SessionSnapshotStore()
         let authRepository = DefaultAuthRepository(
             backend: backend,
             userProfileRepository: profileRepository,
+            snapshotStore: sessionSnapshotStore,
             logger: logger
         )
-        let aiSettingsRepository = DefaultAISettingsRepository(logger: logger)
+        let aiSettingsRepository = DefaultAISettingsRepository(
+            coreDataStack: coreDataStack,
+            snapshotStore: sessionSnapshotStore,
+            logger: logger
+        )
         // 知识库：独立 Core Data 仓库，不嵌在 AISettings 里，避免提示词仓库与文档仓库概念混淆。
         let knowledgeRepository = CoreDataKnowledgeRepository(coreDataStack: coreDataStack, logger: logger)
         let knowledgeEmbeddingClient = OpenAICompatibleEmbeddingClient()
         let aiRuntimeStore = AIRuntimeStore()
+        let aiRuntimeConfigStore = AIRuntimeConfigStore()
         let localModelService = LocalModelService()
         let remoteConfigProvider = BackendAIRemoteConfigProvider(api: backend.aiConfig)
         let medicalSyncPreferenceRepository = DefaultMedicalSyncPreferenceRepository()
@@ -273,6 +281,8 @@ final class AppContainer {
             repository: aiSettingsRepository,
             remoteProvider: remoteConfigProvider,
             runtimeStore: aiRuntimeStore,
+            runtimeConfigStore: aiRuntimeConfigStore,
+            sessionSnapshotStore: sessionSnapshotStore,
             logger: logger
         )
 
@@ -320,13 +330,13 @@ final class AppContainer {
         let deleteKnowledgeDocumentUseCase = DeleteKnowledgeDocumentUseCase(repository: knowledgeRepository)
         let searchKnowledgeUseCase = SearchKnowledgeUseCase(
             repository: knowledgeRepository,
-            aiSettingsRepository: aiSettingsRepository,
+            aiConfigCenter: aiConfigCenter,
             embeddingClient: knowledgeEmbeddingClient
         )
         let reindexKnowledgeDocumentUseCase = ReindexKnowledgeDocumentUseCase(repository: knowledgeRepository)
         let buildKnowledgeEmbeddingsUseCase = BuildKnowledgeEmbeddingsUseCase(
             repository: knowledgeRepository,
-            aiSettingsRepository: aiSettingsRepository,
+            aiConfigCenter: aiConfigCenter,
             embeddingClient: knowledgeEmbeddingClient
         )
 
@@ -380,6 +390,7 @@ final class AppContainer {
             auditStore: toolAuditStore,
             medicalQueryAPI: backend.medicalQuery,
             aiSettingsRepository: aiSettingsRepository,
+            aiConfigCenter: aiConfigCenter,
             runtimeService: aiRuntimeService,
             taskService: taskService,
             searchKnowledgeUseCase: searchKnowledgeUseCase,
@@ -423,7 +434,7 @@ final class AppContainer {
         let chatQueryService = ChatQueryService(repository: chatRepository)
         let loadChatThreadsUseCase = LoadChatThreadsUseCase(queryService: chatQueryService)
         let loadChatMessagesUseCase = LoadChatMessagesUseCase(queryService: chatQueryService)
-        let createThreadUseCase = CreateThreadUseCase(repository: chatRepository, aiSettingsRepository: aiSettingsRepository)
+        let createThreadUseCase = CreateThreadUseCase(repository: chatRepository, aiConfigCenter: aiConfigCenter)
         let retryFailedMessageUseCase = RetryFailedMessageUseCase(
             repository: chatRepository,
             chatSyncSupervisor: chatSyncSupervisor,
@@ -441,7 +452,7 @@ final class AppContainer {
             toolEventInterpreter: chatToolEventInterpreter,
             fileTransferService: fileTransferService,
             ocrOrchestrator: ocrOrchestrator,
-            aiSettingsRepository: aiSettingsRepository,
+            aiConfigCenter: aiConfigCenter,
             logger: logger
         )
 
@@ -741,6 +752,11 @@ final class AppContainer {
         cachedSettingsViewModel = nil
     }
 
+    /// 进入新账号会话前：清空 AI 运行时（本地 bundle 缓存 + Pro overlay + `AIRuntimeStore` 覆盖），避免沿用上一登录用户。
+    func resetAIConfigRuntimeForSessionSwitch() async {
+        await aiConfigCenter.resetRuntimeCaches()
+    }
+
     /// 登录态切换（含恢复会话）后调用：按用户会话重置内存缓存。
     func activateUserScopedLocalStore(accountID: Int64) {
         chatStateStore.resetForSessionSwitch()
@@ -762,12 +778,14 @@ final class AppContainer {
     }
 
     /// AI 设置：本地偏好读写 + 可选远程模型列表（`backend.aiConfig`）。
-    func makeAISettingsViewModel() -> AISettingsViewModel {
+    func makeAISettingsViewModel(ownerAccountID: Int64) -> AISettingsViewModel {
         AISettingsViewModel(
             loadUseCase: LoadAISettingsUseCase(repository: aiSettingsRepository),
             saveUseCase: SaveAISettingsUseCase(repository: aiSettingsRepository),
             localModelService: localModelService,
-            aiConfigAPI: backend.aiConfig
+            ownerAccountIDForLoad: ownerAccountID,
+            aiConfigAPI: backend.aiConfig,
+            aiConfigCenter: aiConfigCenter
         )
     }
 
@@ -795,7 +813,7 @@ final class AppContainer {
             ocrUseCase: ocrKnowledgeImageUseCase,
             importFileUseCase: importKnowledgeFromFileUseCase,
             importWebUseCase: importKnowledgeFromWebUseCase,
-            aiSettingsRepository: aiSettingsRepository,
+            aiConfigCenter: aiConfigCenter,
             logger: logger
         )
     }

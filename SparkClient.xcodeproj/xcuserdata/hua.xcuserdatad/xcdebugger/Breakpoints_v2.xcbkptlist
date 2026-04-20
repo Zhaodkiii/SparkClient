@@ -64,7 +64,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "147"
             endingLineNumber = "147"
-            landmarkName = "performRefresh()"
+            landmarkName = "refreshTokensDeDuplicated()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -80,7 +80,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "123"
             endingLineNumber = "123"
-            landmarkName = "refreshTokensDeDuplicated()"
+            landmarkName = "validTokens()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

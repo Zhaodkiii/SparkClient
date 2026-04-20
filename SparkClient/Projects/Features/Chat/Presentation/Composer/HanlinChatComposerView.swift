@@ -10,13 +10,18 @@ struct HanlinChatComposerView: View {
     let onSend: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
+    /// 模型选择变更时立即持久化到线程并触发同步（由 `ChatDetailViewModel.updateThreadModel` 承担）。
+    let onPersistSelectedChatModel: (String?) -> Void
 
     @State private var showFileImporter = false
 
     private var selectedModelBinding: Binding<String?> {
         Binding(
             get: { stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName },
-            set: { stateStore.setSelectedChatModelName($0, for: threadID) }
+            set: { newValue in
+                stateStore.setSelectedChatModelName(newValue, for: threadID)
+                onPersistSelectedChatModel(newValue)
+            }
         )
     }
 

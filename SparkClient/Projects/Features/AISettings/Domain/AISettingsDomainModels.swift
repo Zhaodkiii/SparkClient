@@ -3,6 +3,7 @@ import Foundation
 enum AIRecordSource: String, Codable, CaseIterable, Sendable {
     case system
     case custom
+    case pro
 }
 
 enum AIModelIdentity: String, Codable, CaseIterable, Sendable {
@@ -21,13 +22,49 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     var company: String
     var key: String
     var requestURL: String
-    var isHidden: Bool
     var help: String
-    var source: AIRecordSource
+    var from: String
     var privacyPolicyURL: String
+    var isEnabled: Bool
+    var source: AIRecordSource
     var privacyPolicyAccepted: Bool
     var privacyPolicyAcceptedAt: Date?
     var timestamp: Date
+
+    var isHidden: Bool {
+        get { !isEnabled }
+        set { isEnabled = !newValue }
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        company: String,
+        key: String,
+        requestURL: String,
+        help: String,
+        from: String = AIRecordSource.system.rawValue,
+        privacyPolicyURL: String = "",
+        isEnabled: Bool = true,
+        source: AIRecordSource,
+        privacyPolicyAccepted: Bool = false,
+        privacyPolicyAcceptedAt: Date? = nil,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.company = company
+        self.key = key
+        self.requestURL = requestURL
+        self.help = help
+        self.from = from
+        self.privacyPolicyURL = privacyPolicyURL
+        self.isEnabled = isEnabled
+        self.source = source
+        self.privacyPolicyAccepted = privacyPolicyAccepted
+        self.privacyPolicyAcceptedAt = privacyPolicyAcceptedAt
+        self.timestamp = timestamp
+    }
 
     init(
         id: UUID = UUID(),
@@ -41,20 +78,23 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
         privacyPolicyURL: String = "",
         privacyPolicyAccepted: Bool = false,
         privacyPolicyAcceptedAt: Date? = nil,
-        timestamp: Date
+        timestamp: Date = Date()
     ) {
-        self.id = id
-        self.name = name
-        self.company = company
-        self.key = key
-        self.requestURL = requestURL
-        self.isHidden = isHidden
-        self.help = help
-        self.source = source
-        self.privacyPolicyURL = privacyPolicyURL
-        self.privacyPolicyAccepted = privacyPolicyAccepted
-        self.privacyPolicyAcceptedAt = privacyPolicyAcceptedAt
-        self.timestamp = timestamp
+        self.init(
+            id: id,
+            name: name,
+            company: company,
+            key: key,
+            requestURL: requestURL,
+            help: help,
+            from: source.rawValue,
+            privacyPolicyURL: privacyPolicyURL,
+            isEnabled: !isHidden,
+            source: source,
+            privacyPolicyAccepted: privacyPolicyAccepted,
+            privacyPolicyAcceptedAt: privacyPolicyAcceptedAt,
+            timestamp: timestamp
+        )
     }
 
     enum CodingKeys: String, CodingKey {
@@ -63,45 +103,14 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
         case company
         case key
         case requestURL
-        case isHidden
         case help
-        case source
+        case from
         case privacyPolicyURL
+        case isEnabled
+        case source
         case privacyPolicyAccepted
         case privacyPolicyAcceptedAt
         case timestamp
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
-        company = try container.decodeIfPresent(String.self, forKey: .company) ?? ""
-        key = try container.decodeIfPresent(String.self, forKey: .key) ?? ""
-        requestURL = try container.decodeIfPresent(String.self, forKey: .requestURL) ?? ""
-        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? true
-        help = try container.decodeIfPresent(String.self, forKey: .help) ?? ""
-        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
-        privacyPolicyURL = try container.decodeIfPresent(String.self, forKey: .privacyPolicyURL) ?? ""
-        privacyPolicyAccepted = try container.decodeIfPresent(Bool.self, forKey: .privacyPolicyAccepted) ?? false
-        privacyPolicyAcceptedAt = try container.decodeIfPresent(Date.self, forKey: .privacyPolicyAcceptedAt)
-        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(name, forKey: .name)
-        try container.encode(company, forKey: .company)
-        try container.encode(key, forKey: .key)
-        try container.encode(requestURL, forKey: .requestURL)
-        try container.encode(isHidden, forKey: .isHidden)
-        try container.encode(help, forKey: .help)
-        try container.encode(source, forKey: .source)
-        try container.encode(privacyPolicyURL, forKey: .privacyPolicyURL)
-        try container.encode(privacyPolicyAccepted, forKey: .privacyPolicyAccepted)
-        try container.encodeIfPresent(privacyPolicyAcceptedAt, forKey: .privacyPolicyAcceptedAt)
-        try container.encode(timestamp, forKey: .timestamp)
     }
 }
 
@@ -138,23 +147,112 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     var identity: AIModelIdentity
     var position: Int
     var company: String
-    var isHidden: Bool
+    var price: Int
+    var isEnabled: Bool
     var supportsSearch: Bool
+    var supportsTextGen: Bool
     var supportsMultimodal: Bool
     var supportsReasoning: Bool
-    var supportsToolUse: Bool
-    var supportsVoiceGen: Bool
+    var supportReasoningChange: Bool
     var supportsImageGen: Bool
-    /// 0 免费，1 经济，2 标准，3 高级
-    var priceTier: Int
-    var supportsText: Bool
-    var reasoningControllable: Bool
-    var iconSymbol: String?
+    var supportsVoiceGen: Bool
+    var supportsToolUse: Bool
+    var systemProvision: String
+    var icon: String
+    var briefDescription: String
+    var characterDesign: String
+    var aiScenarios: [String]
+    var aiToolScenarios: [String]
     var baseModelName: String?
     var localFilename: String?
-    var systemPrompt: String?
     var source: AIRecordSource
     var timestamp: Date
+
+    var isHidden: Bool {
+        get { !isEnabled }
+        set { isEnabled = !newValue }
+    }
+
+    var priceTier: Int {
+        get { price }
+        set { price = newValue }
+    }
+
+    var supportsText: Bool {
+        get { supportsTextGen }
+        set { supportsTextGen = newValue }
+    }
+
+    var reasoningControllable: Bool {
+        get { supportReasoningChange }
+        set { supportReasoningChange = newValue }
+    }
+
+    var iconSymbol: String? {
+        get { icon.isEmpty ? nil : icon }
+        set { icon = newValue ?? "" }
+    }
+
+    var systemPrompt: String? {
+        get { systemProvision.isEmpty ? nil : systemProvision }
+        set { systemProvision = newValue ?? "" }
+    }
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        displayName: String,
+        identity: AIModelIdentity,
+        position: Int,
+        company: String,
+        price: Int = 0,
+        isEnabled: Bool = true,
+        supportsSearch: Bool,
+        supportsTextGen: Bool = true,
+        supportsMultimodal: Bool,
+        supportsReasoning: Bool,
+        supportReasoningChange: Bool = false,
+        supportsImageGen: Bool,
+        supportsVoiceGen: Bool,
+        supportsToolUse: Bool,
+        systemProvision: String = "",
+        icon: String = "",
+        briefDescription: String = "",
+        characterDesign: String = "",
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = [],
+        baseModelName: String? = nil,
+        localFilename: String? = nil,
+        source: AIRecordSource,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.displayName = displayName
+        self.identity = identity
+        self.position = position
+        self.company = company
+        self.price = price
+        self.isEnabled = isEnabled
+        self.supportsSearch = supportsSearch
+        self.supportsTextGen = supportsTextGen
+        self.supportsMultimodal = supportsMultimodal
+        self.supportsReasoning = supportsReasoning
+        self.supportReasoningChange = supportReasoningChange
+        self.supportsImageGen = supportsImageGen
+        self.supportsVoiceGen = supportsVoiceGen
+        self.supportsToolUse = supportsToolUse
+        self.systemProvision = systemProvision
+        self.icon = icon
+        self.briefDescription = briefDescription
+        self.characterDesign = characterDesign
+        self.aiScenarios = aiScenarios
+        self.aiToolScenarios = aiToolScenarios
+        self.baseModelName = baseModelName
+        self.localFilename = localFilename
+        self.source = source
+        self.timestamp = timestamp
+    }
 
     init(
         id: UUID = UUID(),
@@ -175,33 +273,39 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         localFilename: String? = nil,
         systemPrompt: String? = nil,
         source: AIRecordSource,
-        timestamp: Date,
+        timestamp: Date = Date(),
         priceTier: Int = 0,
         supportsText: Bool = true,
         reasoningControllable: Bool = false
     ) {
-        self.id = id
-        self.name = name
-        self.displayName = displayName
-        self.identity = identity
-        self.position = position
-        self.company = company
-        self.isHidden = isHidden
-        self.supportsSearch = supportsSearch
-        self.supportsMultimodal = supportsMultimodal
-        self.supportsReasoning = supportsReasoning
-        self.supportsToolUse = supportsToolUse
-        self.supportsVoiceGen = supportsVoiceGen
-        self.supportsImageGen = supportsImageGen
-        self.priceTier = min(max(priceTier, 0), 3)
-        self.supportsText = supportsText
-        self.reasoningControllable = reasoningControllable
-        self.iconSymbol = iconSymbol
-        self.baseModelName = baseModelName
-        self.localFilename = localFilename
-        self.systemPrompt = systemPrompt
-        self.source = source
-        self.timestamp = timestamp
+        self.init(
+            id: id,
+            name: name,
+            displayName: displayName,
+            identity: identity,
+            position: position,
+            company: company,
+            price: priceTier,
+            isEnabled: !isHidden,
+            supportsSearch: supportsSearch,
+            supportsTextGen: supportsText,
+            supportsMultimodal: supportsMultimodal,
+            supportsReasoning: supportsReasoning,
+            supportReasoningChange: reasoningControllable,
+            supportsImageGen: supportsImageGen,
+            supportsVoiceGen: supportsVoiceGen,
+            supportsToolUse: supportsToolUse,
+            systemProvision: systemPrompt ?? "",
+            icon: iconSymbol ?? "",
+            briefDescription: "",
+            characterDesign: "",
+            aiScenarios: [],
+            aiToolScenarios: [],
+            baseModelName: baseModelName,
+            localFilename: localFilename,
+            source: source,
+            timestamp: timestamp
+        )
     }
 
     enum CodingKeys: String, CodingKey {
@@ -211,52 +315,26 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         case identity
         case position
         case company
-        case isHidden
+        case price
+        case isEnabled
         case supportsSearch
+        case supportsTextGen
         case supportsMultimodal
         case supportsReasoning
-        case supportsToolUse
-        case supportsVoiceGen
+        case supportReasoningChange
         case supportsImageGen
-        case priceTier
-        case supportsText
-        case reasoningControllable
-        case iconSymbol
+        case supportsVoiceGen
+        case supportsToolUse
+        case systemProvision
+        case icon
+        case briefDescription
+        case characterDesign
+        case aiScenarios
+        case aiToolScenarios
         case baseModelName
         case localFilename
-        case systemPrompt
         case source
         case timestamp
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
-        displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? name
-        identity = try container.decodeIfPresent(AIModelIdentity.self, forKey: .identity) ?? .model
-        position = try container.decodeIfPresent(Int.self, forKey: .position) ?? 0
-        company = try container.decodeIfPresent(String.self, forKey: .company) ?? ""
-        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
-        supportsSearch = try container.decodeIfPresent(Bool.self, forKey: .supportsSearch) ?? false
-        supportsMultimodal = try container.decodeIfPresent(Bool.self, forKey: .supportsMultimodal) ?? false
-        supportsReasoning = try container.decodeIfPresent(Bool.self, forKey: .supportsReasoning) ?? false
-        supportsToolUse = try container.decodeIfPresent(Bool.self, forKey: .supportsToolUse) ?? false
-        supportsVoiceGen = try container.decodeIfPresent(Bool.self, forKey: .supportsVoiceGen) ?? false
-        supportsImageGen = try container.decodeIfPresent(Bool.self, forKey: .supportsImageGen) ?? false
-        if let tier = try container.decodeIfPresent(Int.self, forKey: .priceTier) {
-            priceTier = min(max(tier, 0), 3)
-        } else {
-            priceTier = 0
-        }
-        supportsText = try container.decodeIfPresent(Bool.self, forKey: .supportsText) ?? true
-        reasoningControllable = try container.decodeIfPresent(Bool.self, forKey: .reasoningControllable) ?? false
-        iconSymbol = try container.decodeIfPresent(String.self, forKey: .iconSymbol)
-        baseModelName = try container.decodeIfPresent(String.self, forKey: .baseModelName)
-        localFilename = try container.decodeIfPresent(String.self, forKey: .localFilename)
-        systemPrompt = try container.decodeIfPresent(String.self, forKey: .systemPrompt)
-        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
-        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
     }
 
     var isLocalModel: Bool {

@@ -3,11 +3,11 @@ import Foundation
 /// 对单篇文档做 Markdown 切块、批量请求嵌入并写回 `vectorData`（与 UI「构建以允许聊天召回」一致）。
 struct BuildKnowledgeEmbeddingsUseCase: Sendable {
     let repository: any KnowledgeRepository
-    let aiSettingsRepository: any AISettingsRepository
+    let aiConfigCenter: AIConfigCenter
     let embeddingClient: any KnowledgeEmbeddingClient
 
     func execute(documentID: UUID, modelName: String) async throws -> KnowledgeDocument {
-        let snapshot = await aiSettingsRepository.loadSnapshot()
+        let snapshot = await aiConfigCenter.currentSnapshot()
         let resolved = try KnowledgeEmbeddingResolution.resolve(modelName: modelName, snapshot: snapshot)
 
         guard let doc = try await repository.loadDocument(id: documentID) else {

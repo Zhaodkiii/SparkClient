@@ -81,6 +81,9 @@ struct ChatView: View {
                 },
                 onRemoveAttachment: { attachmentID in
                     detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
+                },
+                onPersistSelectedChatModel: { modelName in
+                    Task { await detailViewModel.updateThreadModel(modelName, for: threadID) }
                 }
             )
         }
@@ -169,7 +172,11 @@ struct ChatView: View {
     private var lifecycleLayout: some View {
         statePersistenceLayout
             .task(id: threadID) {
-                await detailViewModel.refreshChatModelPicker()
+                if let initialModel = await detailViewModel.refreshChatModelPicker(for: threadID) {
+                    if stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName == nil {
+                        stateStore.setSelectedChatModelName(initialModel, for: threadID)
+                    }
+                }
                 await detailViewModel.refreshThreadImageDeliveryMode(for: threadID)
             }
             .task(id: reasoningRefreshId) {

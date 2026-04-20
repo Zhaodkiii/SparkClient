@@ -13,6 +13,14 @@ protocol ChatThreadStoring: Sendable {
     func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread
     func setActiveThread(id: UUID) async
     func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async
+    func updateThreadCurrentModelName(threadID: UUID, currentModelName: String?) async
+    func updateThreadGenerationConfig(
+        threadID: UUID,
+        currentModelName: String?,
+        temperature: Double,
+        maxTokens: Int,
+        rolePrompt: String
+    ) async
     func softDeleteThread(id: UUID) async
     func loadPendingThreadDeletionIDs(limit: Int) async -> [UUID]
     func removePendingThreadDeletionIDs(_ ids: [UUID]) async

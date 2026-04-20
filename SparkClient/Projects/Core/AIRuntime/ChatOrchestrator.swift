@@ -50,6 +50,7 @@ struct ChatOrchestrator: Sendable {
         assistantMessageClientID: UUID? = nil,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        preferredModelName: String? = nil,
         /// 为 `true` 时，用户消息中的 `image_url` 附件编码为多模态 `content` 数组；否则仅使用 `ChatMessage.content` 字符串。
         deliverMultimodalImages: Bool = false,
         /// 网关单点编码（如厂商对 `image_url` 形式的差异）。
@@ -122,6 +123,7 @@ struct ChatOrchestrator: Sendable {
                             tools: toolDefinitions,
                             toolChoice: toolChoice,
                             reasoning: reasoningOpts,
+                            preferredModelName: preferredModelName,
                             providerCompanyUppercased: providerCompanyUppercased
                         )
                     ),

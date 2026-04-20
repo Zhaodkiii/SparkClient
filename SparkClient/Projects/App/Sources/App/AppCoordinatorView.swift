@@ -77,7 +77,7 @@ struct AppCoordinatorView: View {
                         chatListViewModel: container.makeChatListViewModel(),
                         chatDetailViewModel: container.makeChatDetailViewModel(),
                         settingsViewModel: container.makeSettingsViewModel(),
-                        aiSettingsViewModel: container.makeAISettingsViewModel()
+                        aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: session.accountID)
                     )
                     .environmentObject(container.memberContextStore)
                     .id(session.accountID)
@@ -102,6 +102,7 @@ struct AppCoordinatorView: View {
         preparingAccountID = session.accountID
         defer { preparingAccountID = nil }
 
+        await container.resetAIConfigRuntimeForSessionSwitch()
         container.activateUserScopedLocalStore(accountID: session.accountID)
         await container.appBootstrapper.bootstrapIfNeeded(for: session)
         await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)

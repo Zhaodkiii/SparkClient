@@ -14,6 +14,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let createdAt: Date
     let serverUpdatedAt: Date?
     let isTombstone: Bool
+    let threadCurrentModelName: String?
+    let threadTemperature: Double?
+    let threadMaxTokens: Int?
+    let threadRolePrompt: String?
     let reasoningContent: String?
     let reasoningDurationMs: Int64?
     let reasoningExpanded: Bool?
@@ -31,6 +35,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case createdAt = "created_at"
         case serverUpdatedAt = "server_updated_at"
         case isTombstone = "tombstone"
+        case threadCurrentModelName = "thread_current_model_name"
+        case threadTemperature = "thread_temperature"
+        case threadMaxTokens = "thread_max_tokens"
+        case threadRolePrompt = "thread_role_prompt"
         case reasoningContent = "reasoning_content"
         case reasoningDurationMs = "reasoning_duration_ms"
         case reasoningExpanded = "reasoning_expanded"
@@ -49,6 +57,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         createdAt: Date,
         serverUpdatedAt: Date?,
         isTombstone: Bool,
+        threadCurrentModelName: String? = nil,
+        threadTemperature: Double? = nil,
+        threadMaxTokens: Int? = nil,
+        threadRolePrompt: String? = nil,
         reasoningContent: String? = nil,
         reasoningDurationMs: Int64? = nil,
         reasoningExpanded: Bool? = nil,
@@ -65,6 +77,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.createdAt = createdAt
         self.serverUpdatedAt = serverUpdatedAt
         self.isTombstone = isTombstone
+        self.threadCurrentModelName = threadCurrentModelName
+        self.threadTemperature = threadTemperature
+        self.threadMaxTokens = threadMaxTokens
+        self.threadRolePrompt = threadRolePrompt
         self.reasoningContent = reasoningContent
         self.reasoningDurationMs = reasoningDurationMs
         self.reasoningExpanded = reasoningExpanded
@@ -84,6 +100,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         serverUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .serverUpdatedAt)
         isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
+        threadCurrentModelName = try c.decodeIfPresent(String.self, forKey: .threadCurrentModelName)
+        threadTemperature = try c.decodeIfPresent(Double.self, forKey: .threadTemperature)
+        threadMaxTokens = try c.decodeIfPresent(Int.self, forKey: .threadMaxTokens)
+        threadRolePrompt = try c.decodeIfPresent(String.self, forKey: .threadRolePrompt)
         reasoningContent = try c.decodeIfPresent(String.self, forKey: .reasoningContent)
         reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
         reasoningExpanded = try c.decodeIfPresent(Bool.self, forKey: .reasoningExpanded)
@@ -103,6 +123,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encode(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
         try c.encode(isTombstone, forKey: .isTombstone)
+        try c.encodeIfPresent(threadCurrentModelName, forKey: .threadCurrentModelName)
+        try c.encodeIfPresent(threadTemperature, forKey: .threadTemperature)
+        try c.encodeIfPresent(threadMaxTokens, forKey: .threadMaxTokens)
+        try c.encodeIfPresent(threadRolePrompt, forKey: .threadRolePrompt)
         try c.encodeIfPresent(reasoningContent, forKey: .reasoningContent)
         try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
         try c.encodeIfPresent(reasoningExpanded, forKey: .reasoningExpanded)
@@ -126,6 +150,10 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let updatedAt: Date
     let serverUpdatedAt: Date
     let imageDeliveryModeRaw: String?
+    let currentModelName: String?
+    let temperature: Double?
+    let maxTokens: Int?
+    let rolePrompt: String?
 
     enum CodingKeys: String, CodingKey {
         case threadID = "thread_id"
@@ -137,6 +165,10 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         case updatedAt = "updated_at"
         case serverUpdatedAt = "server_updated_at"
         case imageDeliveryModeRaw = "image_delivery_mode"
+        case currentModelName = "current_model_name"
+        case temperature
+        case maxTokens = "max_tokens"
+        case rolePrompt = "role_prompt"
     }
 }
 

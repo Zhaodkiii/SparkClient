@@ -52,6 +52,7 @@ struct ChatOutboxPipeline: Sendable {
         }
 
         do {
+            let threadsByID = Dictionary(uniqueKeysWithValues: await repository.loadThreads().map { ($0.id, $0) })
             let payload: [ChatRemoteMessageDTO] = pending.map { message in
                 ChatRemoteMessageDTO(
                     threadID: message.threadID,
@@ -65,6 +66,10 @@ struct ChatOutboxPipeline: Sendable {
                     createdAt: message.createdAt,
                     serverUpdatedAt: message.serverUpdatedAt,
                     isTombstone: message.isTombstone,
+                    threadCurrentModelName: threadsByID[message.threadID]?.currentModelName,
+                    threadTemperature: threadsByID[message.threadID]?.temperature,
+                    threadMaxTokens: threadsByID[message.threadID]?.maxTokens,
+                    threadRolePrompt: threadsByID[message.threadID]?.rolePrompt,
                     reasoningContent: message.reasoningContent,
                     reasoningDurationMs: message.reasoningDurationMs,
                     reasoningExpanded: message.reasoningExpanded,

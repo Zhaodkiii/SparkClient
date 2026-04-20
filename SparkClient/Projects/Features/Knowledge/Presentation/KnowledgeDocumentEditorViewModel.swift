@@ -30,7 +30,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
     private let ocrUseCase: OCRKnowledgeImageUseCase
     private let importFileUseCase: ImportKnowledgeFromFileUseCase
     private let importWebUseCase: ImportKnowledgeFromWebUseCase
-    private let aiSettingsRepository: any AISettingsRepository
+    private let aiConfigCenter: AIConfigCenter
     private let logger: Logger
 
     private var saveDebounceTask: Task<Void, Never>?
@@ -47,7 +47,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
         ocrUseCase: OCRKnowledgeImageUseCase,
         importFileUseCase: ImportKnowledgeFromFileUseCase,
         importWebUseCase: ImportKnowledgeFromWebUseCase,
-        aiSettingsRepository: any AISettingsRepository,
+        aiConfigCenter: AIConfigCenter,
         logger: Logger = ConsoleLogger()
     ) {
         self.documentID = documentID
@@ -61,7 +61,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
         self.ocrUseCase = ocrUseCase
         self.importFileUseCase = importFileUseCase
         self.importWebUseCase = importWebUseCase
-        self.aiSettingsRepository = aiSettingsRepository
+        self.aiConfigCenter = aiConfigCenter
         self.logger = logger
     }
 
@@ -79,7 +79,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            let snapshot = await aiSettingsRepository.loadSnapshot()
+            let snapshot = await aiConfigCenter.currentSnapshot()
             refreshEmbeddingModels(from: snapshot)
 
             guard let doc = try await loadDocumentUseCase.execute(id: documentID) else {

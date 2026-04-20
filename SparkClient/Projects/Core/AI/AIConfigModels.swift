@@ -84,6 +84,10 @@ enum AIConfigError: LocalizedError {
     case invalidEndpoint(String)
     /// 请求了未配置的场景。
     case missingScenario(AIScenario)
+    /// 场景下没有可用模型行。
+    case missingModelForScenario(AIScenario)
+    /// 运行时缓存尚未完成本地构建（未登录或未 bootstrap）。
+    case runtimeNotBootstrapped
 
     /// 面向日志与上层展示的错误描述。
     var errorDescription: String? {
@@ -92,6 +96,10 @@ enum AIConfigError: LocalizedError {
             return "Invalid AI endpoint: \(endpoint)"
         case .missingScenario(let scenario):
             return "Missing AI config for scenario: \(scenario.rawValue)"
+        case .missingModelForScenario(let scenario):
+            return "No AI model available for scenario: \(scenario.rawValue)"
+        case .runtimeNotBootstrapped:
+            return "AI runtime config is not ready"
         }
     }
 }
@@ -166,45 +174,73 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
 
 /// 场景下的一条模型配置（由 bootstrap 的 `default_model` 与 `models[]` 组成）。
 struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
-    /// 模型名称。
-    var model: String
-    /// 是否默认模型。
-    var isDefault: Bool
-    /// 身份标识（服务端可选，常用于角色/能力标签）。
-    var identity: String?
-    /// 温度参数。
-    var temperature: Double
-    /// 最大 token 数。
-    var maxTokens: Int
-    /// 请求地址（字符串形态）。
+    var name: String
+    var displayName: String
+    var identity: String
+    var company: String
     var endpoint: String
-    /// 模型级 API Key（可选）。
     var apiKey: String?
-    /// 供应商公司（可选元数据）。
-    var providerCompany: String?
-    /// 供应商名称（可选元数据）。
-    var providerName: String?
+    var supportsSearch: Bool
+    var supportsMultimodal: Bool
+    var supportsReasoning: Bool
+    var supportsToolUse: Bool
+    var supportsVoiceGen: Bool
+    var supportsImageGen: Bool
+    var supportsText: Bool
+    var supportsDeepReasoning: Bool
+    var reasoningControllable: Bool
+    var priceTier: Int
+    var systemProvision: String?
+    var icon: String?
+    var briefDescription: String?
+    var source: String
+    var aiScenarios: [String]
+    var aiToolScenarios: [String]
+    var isDefault: Bool = false
+    var temperature: Double = 0.2
+    var maxTokens: Int = 4096
 
-    /// 字段映射：
-    /// - 兼容 snake_case 返回；
-    /// - 本地统一 camelCase 命名，便于 Swift 侧调用。
+    var model: String {
+        get { name }
+        set { name = newValue }
+    }
+
+    var providerCompany: String? {
+        company.isEmpty ? nil : company
+    }
+
     enum CodingKeys: String, CodingKey {
-        case model
+        case name
+        case displayName = "display_name"
         case isDefault = "is_default"
         case identity
+        case company
+        case supportsSearch = "supports_search"
+        case supportsMultimodal = "supports_multimodal"
+        case supportsReasoning = "supports_reasoning"
+        case supportsToolUse = "supports_tool_use"
+        case supportsVoiceGen = "supports_voice_gen"
+        case supportsImageGen = "supports_image_gen"
+        case supportsText = "supports_text"
+        case supportsDeepReasoning = "supports_deep_reasoning"
+        case reasoningControllable = "reasoning_controllable"
+        case priceTier = "price_tier"
+        case systemProvision
+        case icon
+        case briefDescription
+        case source
+        case aiScenarios
+        case aiToolScenarios
         case temperature
         case maxTokens = "max_tokens"
         case endpoint
         case apiKey = "api_key"
-        case providerCompany = "provider_company"
-        case providerName = "provider_name"
     }
 
-    /// 将远端行配置降维成通用 `AIScenarioConfig`，用于后续统一处理。
     func asScenarioConfig() -> AIScenarioConfig {
         AIScenarioConfig(
             endpoint: endpoint,
-            model: model,
+            model: name,
             apiKey: apiKey,
             temperature: temperature,
             maxTokens: maxTokens
@@ -224,21 +260,72 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
         case models
     }
 
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let models = try c.decode([AIScenarioRemoteModelRow].self, forKey: .models)
+        let decodedDefault = try c.decodeIfPresent(String.self, forKey: .defaultModelName)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultModelName: String = {
+            if let decodedDefault, decodedDefault.isEmpty == false,
+               models.contains(where: { $0.name == decodedDefault })
+            {
+                return decodedDefault
+            }
+            if let row = models.first(where: { $0.isDefault }) {
+                return row.name
+            }
+            return models.first?.name ?? ""
+        }()
+        self.defaultModelName = defaultModelName
+        self.models = models.map { row in
+            var m = row
+            m.isDefault = m.name == defaultModelName
+            return m
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(defaultModelName, forKey: .defaultModelName)
+        try c.encode(models, forKey: .models)
+    }
+
+    init(defaultModelName: String, models: [AIScenarioRemoteModelRow]) {
+        self.defaultModelName = defaultModelName
+        self.models = models
+    }
+
     /// 用单模型配置构造“多模型格式”兜底包。
     /// 使用场景：
     /// - 老数据仅有单模型配置；
     /// - 远端多模型 bootstrap 尚不可用时，统一走同一解析链路。
     static func singleModelFallback(_ config: AIScenarioConfig) -> AIScenarioRemoteBundle {
         let row = AIScenarioRemoteModelRow(
-            model: config.model,
-            isDefault: true,
+            name: config.model,
+            displayName: config.model,
             identity: "model",
-            temperature: config.temperature,
-            maxTokens: config.maxTokens,
+            company: "SPARK",
             endpoint: config.endpoint,
             apiKey: config.apiKey,
-            providerCompany: nil,
-            providerName: nil
+            supportsSearch: true,
+            supportsMultimodal: true,
+            supportsReasoning: true,
+            supportsToolUse: true,
+            supportsVoiceGen: false,
+            supportsImageGen: false,
+            supportsText: true,
+            supportsDeepReasoning: true,
+            reasoningControllable: false,
+            priceTier: 0,
+            systemProvision: nil,
+            icon: nil,
+            briefDescription: nil,
+            source: AIRecordSource.system.rawValue,
+            aiScenarios: [],
+            aiToolScenarios: [],
+            isDefault: true,
+            temperature: config.temperature,
+            maxTokens: config.maxTokens
         )
         return AIScenarioRemoteBundle(defaultModelName: config.model, models: [row])
     }
@@ -250,7 +337,12 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     /// 4) 若 `models` 为空则返回 `nil`。
     func resolveRow(preferredModelName: String?) -> AIScenarioRemoteModelRow? {
         if let name = preferredModelName, name.isEmpty == false,
-           let row = models.first(where: { $0.model == name })
+           let row = models.first(where: { $0.name == name })
+        {
+            return row
+        }
+        if defaultModelName.isEmpty == false,
+           let row = models.first(where: { $0.name == defaultModelName })
         {
             return row
         }
@@ -258,6 +350,45 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
             return row
         }
         return models.first
+    }
+
+    func resolveConfig(preferredModelName: String?) -> AIScenarioConfig? {
+        resolveRow(preferredModelName: preferredModelName)?.asScenarioConfig()
+    }
+}
+
+extension AIScenarioRemoteBundlesCollection {
+    mutating func setBundle(_ bundle: AIScenarioRemoteBundle, for scenario: AIScenario) {
+        switch scenario {
+        case .chat:
+            chat = bundle
+        case .medicalStructuredExtraction:
+            medicalStructuredExtraction = bundle
+        case .medicalDocumentTypeRecognition:
+            medicalDocumentTypeRecognition = bundle
+        case .medicalCaseExtraction:
+            medicalCaseExtraction = bundle
+        case .healthExamExtraction:
+            healthExamExtraction = bundle
+        case .medicalReportExtraction:
+            medicalReportExtraction = bundle
+        case .prescriptionExtraction:
+            prescriptionExtraction = bundle
+        case .medicationExtraction:
+            medicationExtraction = bundle
+        case .optimizationText:
+            optimizationText = bundle
+        case .optimizationVisual:
+            optimizationVisual = bundle
+        case .contextFolding:
+            contextFolding = bundle
+        case .router:
+            router = bundle
+        case .modelConfig:
+            modelConfig = bundle
+        case .reportInterpretation:
+            reportInterpretation = bundle
+        }
     }
 }
 
@@ -393,6 +524,14 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         case .reportInterpretation:
             return reportInterpretation
         }
+    }
+
+    func resolveRow(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioRemoteModelRow? {
+        bundle(for: scenario).resolveRow(preferredModelName: preferredModelName)
+    }
+
+    func resolveConfig(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioConfig? {
+        bundle(for: scenario).resolveConfig(preferredModelName: preferredModelName)
     }
 
 }

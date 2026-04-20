@@ -5,6 +5,7 @@ final class ToolHub: @unchecked Sendable {
     private let auditStore: ToolAuditStore
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let aiSettingsRepository: any AISettingsRepository
+    private let aiConfigCenter: AIConfigCenter
     private let runtimeService: any AIRuntimeServing
     private let taskService: TaskService
     /// 知识库检索/创建：经用例访问 `CoreDataKnowledgeRepository`，避免在此直接操作持久化。
@@ -23,6 +24,7 @@ final class ToolHub: @unchecked Sendable {
         auditStore: ToolAuditStore,
         medicalQueryAPI: SparkMedicalQueryAPI,
         aiSettingsRepository: any AISettingsRepository,
+        aiConfigCenter: AIConfigCenter,
         runtimeService: any AIRuntimeServing,
         taskService: TaskService,
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
@@ -34,6 +36,7 @@ final class ToolHub: @unchecked Sendable {
         self.auditStore = auditStore
         self.medicalQueryAPI = medicalQueryAPI
         self.aiSettingsRepository = aiSettingsRepository
+        self.aiConfigCenter = aiConfigCenter
         self.runtimeService = runtimeService
         self.taskService = taskService
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
@@ -922,7 +925,7 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        var snapshot = await aiSettingsRepository.loadSnapshot()
+        var snapshot = await aiConfigCenter.currentSnapshot()
         let title = String(content.prefix(20))
         snapshot.memoryArchive.append(
             MemoryArchive(title: title.isEmpty ? "新记忆" : title, content: content, pinned: false, timestamp: Date())
@@ -930,6 +933,7 @@ final class ToolHub: @unchecked Sendable {
 
         do {
             try await aiSettingsRepository.save(snapshot: snapshot)
+            await aiConfigCenter.rebuildRuntimeCache(from: snapshot)
             return ToolExecutionResult(
                 toolName: SparkToolName.saveMemory,
                 outputText: "记忆已保存：\(title)",
@@ -949,7 +953,7 @@ final class ToolHub: @unchecked Sendable {
     /// 无 query 时取最近几条记忆；有 query 时在 `memoryArchive` 中筛选。
     private func runRetrieveMemory(invocation: ToolInvocation) async -> ToolExecutionResult {
         let query = (invocation.arguments["query"] ?? invocation.arguments["keyword"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let snapshot = await aiSettingsRepository.loadSnapshot()
+        let snapshot = await aiConfigCenter.currentSnapshot()
         let hits: [MemoryArchive]
         if query.isEmpty {
             hits = Array(snapshot.memoryArchive.suffix(5))
@@ -991,7 +995,7 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        var snapshot = await aiSettingsRepository.loadSnapshot()
+        var snapshot = await aiConfigCenter.currentSnapshot()
         guard let index = snapshot.memoryArchive.firstIndex(where: { $0.content == original || $0.title == original }) else {
             return ToolExecutionResult(
                 toolName: SparkToolName.updateMemory,
@@ -1006,6 +1010,7 @@ final class ToolHub: @unchecked Sendable {
 
         do {
             try await aiSettingsRepository.save(snapshot: snapshot)
+            await aiConfigCenter.rebuildRuntimeCache(from: snapshot)
             return ToolExecutionResult(
                 toolName: SparkToolName.updateMemory,
                 outputText: "记忆已更新：\(snapshot.memoryArchive[index].title)",
@@ -1771,7 +1776,7 @@ final class ToolHub: @unchecked Sendable {
 
     /// 联网/地图/日历等外部工具：根据 `toolKeys` 解析 endpoint，当前仅返回路由占位说明。
     private func runExternalConnectorTool(invocation: ToolInvocation) async -> ToolExecutionResult {
-        let snapshot = await aiSettingsRepository.loadSnapshot()
+        let snapshot = await aiConfigCenter.currentSnapshot()
         let endpoint = resolveEndpoint(for: invocation.name, toolKeys: snapshot.toolKeys)
         let payloadSummary = invocation.arguments
             .map { "\($0.key)=\($0.value)" }

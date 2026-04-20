@@ -1,14 +1,14 @@
 import Foundation
 
 enum AISettingsSeedCatalog {
-    static let version = 3
+    static let version = 6
 
     static func getModelList() -> [AllModels] {
-        AISettingsDefaults.allModels
+        AISettingsSeedLoader.loadAllModels() ?? []
     }
 
     static func getAPIKeyList() -> [APIKeys] {
-        AISettingsDefaults.apiKeys
+        AISettingsSeedLoader.loadAPIKeys() ?? []
     }
 
     static func getSearchKeyList() -> [SearchKeys] {

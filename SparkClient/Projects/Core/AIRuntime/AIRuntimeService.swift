@@ -50,7 +50,10 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
 
         let start = Date()
         // 解析当前场景对应的模型配置
-        let resolved = try await configCenter.resolve(for: request.scenario)
+        let resolved = try await configCenter.resolve(
+            for: request.scenario,
+            preferredModelName: request.preferredModelName
+        )
         // 获取当前模型配置快照
         let snapshot = await configCenter.currentSnapshot()
         // 判断模型是否支持工具调用（Function Call）
@@ -73,6 +76,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     tools: request.tools,
                     toolChoice: request.toolChoice,
                     reasoning: request.reasoning,
+                    preferredModelName: request.preferredModelName,
                     providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog
                 )
             }
@@ -86,6 +90,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 tools: [],
                 toolChoice: .none,
                 reasoning: request.reasoning,
+                preferredModelName: request.preferredModelName,
                 providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog
             )
         }()
@@ -157,6 +162,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 tools: effectiveRequest.tools,
                 toolChoice: effectiveRequest.toolChoice,
                 reasoning: effectiveRequest.reasoning,
+                preferredModelName: effectiveRequest.preferredModelName,
                 providerCompanyUppercased: effectiveRequest.providerCompanyUppercased
             )
         )

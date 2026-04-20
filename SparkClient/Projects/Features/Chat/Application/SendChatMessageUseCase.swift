@@ -8,7 +8,7 @@ struct SendChatMessageUseCase: Sendable {
     let toolEventInterpreter: ChatToolEventInterpreter
     let fileTransferService: FileTransferService
     let ocrOrchestrator: OCROrchestrator
-    let aiSettingsRepository: any AISettingsRepository
+    let aiConfigCenter: AIConfigCenter
     let logger: Logger
 
     init(
@@ -19,7 +19,7 @@ struct SendChatMessageUseCase: Sendable {
         toolEventInterpreter: ChatToolEventInterpreter? = nil,
         fileTransferService: FileTransferService,
         ocrOrchestrator: OCROrchestrator,
-        aiSettingsRepository: any AISettingsRepository,
+        aiConfigCenter: AIConfigCenter,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
@@ -30,7 +30,7 @@ struct SendChatMessageUseCase: Sendable {
         self.toolEventInterpreter = toolEventInterpreter ?? ChatToolEventInterpreter(logger: logger)
         self.fileTransferService = fileTransferService
         self.ocrOrchestrator = ocrOrchestrator
-        self.aiSettingsRepository = aiSettingsRepository
+        self.aiConfigCenter = aiConfigCenter
     }
 
     func execute(
@@ -52,7 +52,8 @@ struct SendChatMessageUseCase: Sendable {
             throw ChatFeatureError.emptyInput
         }
 
-        let snapshot = await aiSettingsRepository.loadSnapshot()
+        let catalogSnapshot = await aiConfigCenter.currentSnapshot()
+        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
         let start = Date()
         logger.info(
             "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count), attachments=\(composerAttachments.count)",
@@ -64,10 +65,29 @@ struct SendChatMessageUseCase: Sendable {
                 existingThreadID: threadID,
                 memberID: memberID,
                 firstUserInput: sanitizedInput,
-                defaultImageDeliveryRaw: snapshot.defaultThreadImageDeliveryModeRaw
+                defaultImageDeliveryRaw: catalogSnapshot.defaultThreadImageDeliveryModeRaw
+            )
+            let trimmedSelected = selectedChatModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            let trimmedThreadModel = thread.currentModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            let preferredName = (trimmedSelected?.isEmpty == false)
+                ? trimmedSelected
+                : ((trimmedThreadModel?.isEmpty == false) ? trimmedThreadModel : nil)
+            guard let resolvedRow = bundles.resolveRow(for: .chat, preferredModelName: preferredName) else {
+                throw AIConfigError.missingModelForScenario(.chat)
+            }
+            let persistedModelName = trimmedSelected?.isEmpty == false
+                ? trimmedSelected
+                : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+
+            await repository.updateThreadGenerationConfig(
+                threadID: thread.id,
+                currentModelName: persistedModelName,
+                temperature: resolvedRow.temperature,
+                maxTokens: resolvedRow.maxTokens,
+                rolePrompt: ""
             )
 
-            let (supportsMultimodal, providerCompany) = snapshot.chatMultimodalCapabilities(selectedModelName: selectedChatModelName)
+            let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
             let effectiveMode = effectiveChatImageDeliveryMode(
                 threadMode: thread.imageDeliveryMode,
                 supportsMultimodal: supportsMultimodal
@@ -186,6 +206,7 @@ struct SendChatMessageUseCase: Sendable {
                 assistantMessageClientID: assistantClientMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                preferredModelName: resolvedRow.name,
                 deliverMultimodalImages: deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
                 onPartial: onAssistantPartial
@@ -195,7 +216,7 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             let interpreted = toolEventInterpreter.interpret(
                 kind: output.kind,
                 text: output.text,

@@ -46,7 +46,7 @@ struct DeleteKnowledgeDocumentUseCase: Sendable {
 
 struct SearchKnowledgeUseCase: Sendable {
     let repository: any KnowledgeRepository
-    let aiSettingsRepository: any AISettingsRepository
+    let aiConfigCenter: AIConfigCenter
     let embeddingClient: any KnowledgeEmbeddingClient
 
     func execute(query: String, limit: Int = 8) async throws -> [KnowledgeSearchResult] {
@@ -55,7 +55,7 @@ struct SearchKnowledgeUseCase: Sendable {
 
         let hasVectors = try await repository.hasVectorIndexedChunks()
         if hasVectors {
-            let snapshot = await aiSettingsRepository.loadSnapshot()
+            let snapshot = await aiConfigCenter.currentSnapshot()
             let modelName = snapshot.userInfo.chooseEmbeddingModel.trimmingCharacters(in: .whitespacesAndNewlines)
             if modelName.isEmpty == false {
                 do {
