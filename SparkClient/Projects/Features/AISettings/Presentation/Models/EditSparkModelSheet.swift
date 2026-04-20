@@ -7,19 +7,17 @@ struct EditSparkModelSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var displayName = ""
-    @State private var iconSymbol = "circle.dotted.circle"
+    @State private var iconSymbol = ModelIconCatalog.fallbackSymbol
     @State private var supportsText = true
     @State private var supportsMultimodal = false
     @State private var supportsReasoning = false
     @State private var reasoningControllable = false
     @State private var supportsToolUse = false
     @State private var supportsImageGen = false
+    @State private var selectedScenarioRawValues: Set<String> = []
+    @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
     @State private var showIconPicker = false
-
-    private let iconCandidates = [
-        "circle.dotted.circle", "cpu", "sparkles", "brain.head.profile",
-        "heart.text.square", "stethoscope", "leaf", "bolt.heart"
-    ]
+    @State private var hasSyncedFromModel = false
 
     private var model: AllModels? {
         viewModel.snapshot.allModels.first(where: { $0.id == modelID })
@@ -27,7 +25,7 @@ struct EditSparkModelSheet: View {
 
     private var canEditCapabilities: Bool {
         guard let m = model else { return false }
-        return m.source != .system && m.company.uppercased() != LocalModelService.localCompany.uppercased()
+        return m.company.uppercased() != LocalModelService.localCompany.uppercased()
     }
 
     var body: some View {
@@ -53,6 +51,38 @@ struct EditSparkModelSheet: View {
                     .listRowBackground(Color.clear)
                 }
                 if canEditCapabilities {
+                    Section(L10n.text("ai_settings.models.online.section.usage")) {
+                        NavigationLink {
+                            MultiSelectOptionsView(
+                                title: L10n.text("ai_settings.models.online.field.scenarios"),
+                                options: AIScenario.allCases.map { ($0.rawValue, $0.localizedTitle) },
+                                selectedValues: $selectedScenarioRawValues
+                            )
+                        } label: {
+                            HStack {
+                                Text(L10n.text("ai_settings.models.online.field.scenarios"))
+                                Spacer()
+                                Text(selectedScenarioSummary)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        NavigationLink {
+                            MultiSelectOptionsView(
+                                title: L10n.text("ai_settings.models.online.field.tools"),
+                                options: SparkToolName.all.map { ($0, SparkToolName.displayName(for: $0)) },
+                                selectedValues: $selectedToolNames
+                            )
+                        } label: {
+                            HStack {
+                                Text(L10n.text("ai_settings.models.online.field.tools"))
+                                Spacer()
+                                Text(selectedToolsSummary)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
                     Section(L10n.text("ai_settings.models.edit.section.capabilities")) {
                         Toggle(L10n.text("ai_settings.models.online.toggle.supports_text"), isOn: $supportsText)
                         Toggle(L10n.text("ai_settings.field.supports_multimodal"), isOn: $supportsMultimodal)
@@ -73,32 +103,12 @@ struct EditSparkModelSheet: View {
                 }
             }
             .sheet(isPresented: $showIconPicker) {
-                NavigationView {
-                    List {
-                        ForEach(iconCandidates, id: \.self) { icon in
-                            Button {
-                                iconSymbol = icon
-                                showIconPicker = false
-                            } label: {
-                                HStack {
-                                    Image(systemName: icon)
-                                    Text(icon)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .navigationTitle(L10n.text("ai_settings.models.edit.icon_picker_title"))
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(L10n.text("common.cancel")) { showIconPicker = false }
-                        }
-                    }
-                }
+                ModelIconPickerSheet(selectedIcon: $iconSymbol)
             }
             .onAppear {
+                guard hasSyncedFromModel == false else { return }
                 syncFromModel()
+                hasSyncedFromModel = true
             }
         }
     }
@@ -106,13 +116,15 @@ struct EditSparkModelSheet: View {
     private func syncFromModel() {
         guard let m = model else { return }
         displayName = m.displayName
-        iconSymbol = m.iconSymbol ?? "circle.dotted.circle"
+        iconSymbol = m.iconSymbol ?? ModelIconCatalog.fallbackSymbol
         supportsText = m.supportsText
         supportsMultimodal = m.supportsMultimodal
         supportsReasoning = m.supportsReasoning
         reasoningControllable = m.reasoningControllable
         supportsToolUse = m.supportsToolUse
         supportsImageGen = m.supportsImageGen
+        selectedScenarioRawValues = Set(m.aiScenarios)
+        selectedToolNames = m.selectedToolNames
     }
 
     private func save() {
@@ -129,8 +141,29 @@ struct EditSparkModelSheet: View {
             m.reasoningControllable = reasoningControllable
             m.supportsToolUse = supportsToolUse
             m.supportsImageGen = supportsImageGen
+            m.aiScenarios = selectedScenarioRawValues.sorted()
+            m.aiToolScenarios = selectedToolNames.sorted()
         }
-        viewModel.replaceModel(m)
-        dismiss()
+        Task {
+            let didSave = await viewModel.replaceModelAndPersist(m)
+            if didSave {
+                await MainActor.run { dismiss() }
+            }
+        }
+    }
+
+    private var selectedScenarioSummary: String {
+        if selectedScenarioRawValues.isEmpty {
+            return L10n.text("ai_settings.models.online.selection.none")
+        }
+        return "\(selectedScenarioRawValues.count)"
+    }
+
+    private var selectedToolsSummary: String {
+        let total = SparkToolName.all.count
+        if selectedToolNames.count == total {
+            return L10n.text("ai_settings.models.online.selection.all")
+        }
+        return "\(selectedToolNames.count)/\(total)"
     }
 }

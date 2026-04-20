@@ -174,12 +174,14 @@ final class AISettingsViewModel: ObservableObject {
         supportsReasoning: Bool,
         reasoningControllable: Bool,
         supportsToolUse: Bool,
-        supportsImageGen: Bool
-    ) {
+        supportsImageGen: Bool,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
+    ) -> AllModels? {
         let baseName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let baseDisplay = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let co = company.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard baseName.isEmpty == false, baseDisplay.isEmpty == false, co.isEmpty == false else { return }
+        guard baseName.isEmpty == false, baseDisplay.isEmpty == false, co.isEmpty == false else { return nil }
         var uniqueName = baseName
         if snapshot.allModels.contains(where: { $0.name == uniqueName }) {
             uniqueName = baseName + "_" + UUID().uuidString.prefix(8).lowercased()
@@ -190,6 +192,7 @@ final class AISettingsViewModel: ObservableObject {
         }
         let position = (snapshot.allModels.map(\.position).max() ?? 0) + 1
         let tier = min(max(priceTier, 0), 3)
+        let normalizedToolScenarios = aiToolScenarios.isEmpty ? SparkToolName.all : aiToolScenarios
         let model = AllModels(
             name: uniqueName,
             displayName: uniqueDisplay,
@@ -207,9 +210,12 @@ final class AISettingsViewModel: ObservableObject {
             timestamp: Date(),
             priceTier: tier,
             supportsText: supportsText,
-            reasoningControllable: reasoningControllable
+            reasoningControllable: reasoningControllable,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: normalizedToolScenarios
         )
         snapshot.allModels.append(model)
+        return model
     }
 
     @discardableResult
@@ -229,7 +235,7 @@ final class AISettingsViewModel: ObservableObject {
             return false
         }
 
-        appendOnlineModel(
+        _ = appendOnlineModel(
             name: remoteModel.name,
             displayName: remoteModel.displayName,
             company: company,
@@ -253,6 +259,74 @@ final class AISettingsViewModel: ObservableObject {
     func replaceModel(_ model: AllModels) {
         guard let idx = snapshot.allModels.firstIndex(where: { $0.id == model.id }) else { return }
         snapshot.allModels[idx] = model
+    }
+
+    func upsertProvider(_ provider: APIKeys) {
+        if let idx = snapshot.apiKeys.firstIndex(where: { $0.id == provider.id }) {
+            snapshot.apiKeys[idx] = provider
+        } else {
+            snapshot.apiKeys.append(provider)
+        }
+    }
+
+    /// 保存按钮触发：先改缓存，再单条落库（模型）。
+    @discardableResult
+    func replaceModelAndPersist(_ model: AllModels) async -> Bool {
+        replaceModel(model)
+        return await persistModelNow(modelID: model.id)
+    }
+
+    /// 显隐切换：先改缓存，再单条落库（模型）。
+    @discardableResult
+    func setModelVisibilityAndPersist(modelID: UUID, visible: Bool) async -> Bool {
+        guard let index = snapshot.allModels.firstIndex(where: { $0.id == modelID }) else { return false }
+        var model = snapshot.allModels[index]
+        model.isHidden = !visible
+        return await replaceModelAndPersist(model)
+    }
+
+    /// 保存按钮触发：先改缓存，再单条落库（厂商）。
+    @discardableResult
+    func upsertProviderAndPersist(_ provider: APIKeys) async -> Bool {
+        upsertProvider(provider)
+        return await persistProviderNow(providerID: provider.id)
+    }
+
+    /// 新增模型并单条落库（新增时会是 upsert-insert）。
+    @discardableResult
+    func appendOnlineModelAndPersist(
+        name: String,
+        displayName: String,
+        company: String,
+        priceTier: Int,
+        isHidden: Bool,
+        supportsText: Bool,
+        supportsMultimodal: Bool,
+        supportsReasoning: Bool,
+        reasoningControllable: Bool,
+        supportsToolUse: Bool,
+        supportsImageGen: Bool,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
+    ) async -> Bool {
+        guard let model = appendOnlineModel(
+            name: name,
+            displayName: displayName,
+            company: company,
+            priceTier: priceTier,
+            isHidden: isHidden,
+            supportsText: supportsText,
+            supportsMultimodal: supportsMultimodal,
+            supportsReasoning: supportsReasoning,
+            reasoningControllable: reasoningControllable,
+            supportsToolUse: supportsToolUse,
+            supportsImageGen: supportsImageGen,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios
+        ) else {
+            return false
+        }
+        return await persistModelNow(modelID: model.id)
     }
 
     /// 更新本地智能体（编辑 Sheet 保存）。
@@ -311,6 +385,20 @@ final class AISettingsViewModel: ObservableObject {
 
     func setChatModel(_ model: AllModels) {
         snapshot.scenarioDefaultModels[AIScenario.chat.rawValue] = model.name
+    }
+
+    func hasValidAPIKey(for model: AllModels) -> Bool {
+        let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let localCompany = LocalModelService.localCompany.uppercased()
+        if company == localCompany {
+            return true
+        }
+        guard company.isEmpty == false else { return false }
+        return snapshot.apiKeys.contains { key in
+            key.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company &&
+            key.isHidden == false &&
+            key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
     }
 
     func createLocalAgent(
@@ -426,5 +514,61 @@ final class AISettingsViewModel: ObservableObject {
                 Task { await self.aiConfigCenter?.applyDraftSnapshot(latest) }
             }
             .store(in: &cancellables)
+    }
+
+    @discardableResult
+    private func persistModelNow(modelID: UUID) async -> Bool {
+        guard let model = snapshot.allModels.first(where: { $0.id == modelID }) else { return false }
+        isSaving = true
+        errorMessage = nil
+        saveSucceeded = false
+        defer { isSaving = false }
+        do {
+            try await saveUseCase.execute(model: model)
+            markPersistedModel(model)
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            saveSucceeded = true
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func persistProviderNow(providerID: UUID) async -> Bool {
+        guard let provider = snapshot.apiKeys.first(where: { $0.id == providerID }) else { return false }
+        isSaving = true
+        errorMessage = nil
+        saveSucceeded = false
+        defer { isSaving = false }
+        do {
+            try await saveUseCase.execute(provider: provider)
+            markPersistedProvider(provider)
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            saveSucceeded = true
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func markPersistedModel(_ model: AllModels) {
+        if let index = lastPersistedSnapshot.allModels.firstIndex(where: { $0.id == model.id }) {
+            lastPersistedSnapshot.allModels[index] = model
+        } else {
+            lastPersistedSnapshot.allModels.append(model)
+        }
+    }
+
+    private func markPersistedProvider(_ provider: APIKeys) {
+        if let index = lastPersistedSnapshot.apiKeys.firstIndex(where: { $0.id == provider.id }) {
+            lastPersistedSnapshot.apiKeys[index] = provider
+        } else {
+            lastPersistedSnapshot.apiKeys.append(provider)
+        }
     }
 }

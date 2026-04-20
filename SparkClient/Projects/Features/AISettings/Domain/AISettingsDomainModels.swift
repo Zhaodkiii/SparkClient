@@ -198,6 +198,24 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         set { systemProvision = newValue ?? "" }
     }
 
+    /// 场景选择：可为空，表示不限定场景。
+    var selectedAIScenarios: Set<AIScenario> {
+        get { Set(aiScenarios.compactMap(AIScenario.init(rawValue:))) }
+        set { aiScenarios = newValue.map(\.rawValue).sorted() }
+    }
+
+    /// 工具选择：空数组视为“默认全选”。
+    var selectedToolNames: Set<String> {
+        get {
+            let normalized = Set(aiToolScenarios.filter { $0.isEmpty == false })
+            return normalized.isEmpty ? Set(SparkToolName.all) : normalized
+        }
+        set {
+            let normalized = newValue.intersection(Set(SparkToolName.all))
+            aiToolScenarios = normalized.isEmpty ? [] : normalized.sorted()
+        }
+    }
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -276,7 +294,9 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         timestamp: Date = Date(),
         priceTier: Int = 0,
         supportsText: Bool = true,
-        reasoningControllable: Bool = false
+        reasoningControllable: Bool = false,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
     ) {
         self.init(
             id: id,
@@ -299,8 +319,8 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
             icon: iconSymbol ?? "",
             briefDescription: "",
             characterDesign: "",
-            aiScenarios: [],
-            aiToolScenarios: [],
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios,
             baseModelName: baseModelName,
             localFilename: localFilename,
             source: source,

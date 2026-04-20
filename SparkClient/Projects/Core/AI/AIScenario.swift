@@ -31,3 +31,32 @@ enum AIScenario: String, Codable, CaseIterable, Sendable {
     /// 报告解读场景（对医疗报告进行解释、说明或风险提示）。
     case reportInterpretation = "report_interpretation"
 }
+
+extension AIScenario {
+    var localizedTitle: String {
+        switch self {
+        case .chat:
+            return L10n.text("ai_settings.scenario.chat")
+        case .medicalStructuredExtraction,
+             .medicalDocumentTypeRecognition,
+             .medicalCaseExtraction,
+             .healthExamExtraction,
+             .medicalReportExtraction,
+             .prescriptionExtraction,
+             .medicationExtraction:
+            return L10n.text("ai_settings.scenario.medical_extraction")
+        case .optimizationText:
+            return L10n.text("ai_settings.scenario.optimization_text")
+        case .optimizationVisual:
+            return L10n.text("ai_settings.scenario.optimization_visual")
+        case .contextFolding:
+            return L10n.text("ai_settings.scenario.context_folding")
+        case .router:
+            return L10n.text("ai_settings.scenario.router")
+        case .modelConfig:
+            return L10n.text("ai_settings.scenario.model_config")
+        case .reportInterpretation:
+            return L10n.text("ai_settings.scenario.report_interpretation")
+        }
+    }
+}

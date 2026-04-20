@@ -56,7 +56,7 @@ struct APIKeysSettingsView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 24, height: 24)
-                            Text(localizedProviderName(provider))
+                            Text(provider.localizedDisplayName)
                                 .font(.body)
                             Spacer()
                             Text("试用")
@@ -254,14 +254,6 @@ struct APIKeysSettingsView: View {
                     onDeleteModel: { modelID in
                         deleteModel(modelID: modelID)
                     },
-                    onToggleModelVisibility: { modelID, visible in
-                        guard let index = snapshot.allModels.firstIndex(where: { $0.id == modelID }) else { return }
-                        snapshot.allModels[index].isHidden = !visible
-                        Task { await viewModel.persistSnapshotNow() }
-                    },
-                    hasValidAPIKeyForModel: { model in
-                        hasValidAPIKey(for: model)
-                    },
                     onSave: { updated in
                         saveProvider(updated)
                     },
@@ -275,7 +267,7 @@ struct APIKeysSettingsView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 24, height: 24)
-                    Text(localizedProviderName(provider))
+                    Text(provider.localizedDisplayName)
                         .font(.body)
                     Spacer()
                     if provider.source == .custom {
@@ -302,16 +294,6 @@ struct APIKeysSettingsView: View {
         }
     }
 
-    private func hasValidAPIKey(for model: AllModels) -> Bool {
-        let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard company.isEmpty == false else { return false }
-        return snapshot.apiKeys.contains { key in
-            key.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company &&
-            key.isHidden == false &&
-            key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        }
-    }
-
     private func deleteModel(modelID: UUID) {
         guard let index = snapshot.allModels.firstIndex(where: { $0.id == modelID }) else { return }
         if snapshot.allModels[index].source == .system {
@@ -327,7 +309,7 @@ struct APIKeysSettingsView: View {
         let provider = snapshot.apiKeys[index]
 
         if enabled && provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            showError("\(localizedProviderName(provider)) 需要先配置有效 API Key")
+            showError("\(provider.localizedDisplayName) 需要先配置有效 API Key")
             return
         }
 
@@ -339,13 +321,18 @@ struct APIKeysSettingsView: View {
     }
 
     private func saveProvider(_ provider: APIKeys) {
-        guard let index = snapshot.apiKeys.firstIndex(where: { $0.id == provider.id }) else { return }
-        snapshot.apiKeys[index] = provider
-        snapshot.apiKeys[index].timestamp = Date()
-        snapshot.apiKeys[index].isHidden = provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        updateModelVisibility(company: provider.company, hidden: snapshot.apiKeys[index].isHidden)
+        var updated = provider
+        updated.timestamp = Date()
+        updated.isHidden = provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
+        if let index = snapshot.apiKeys.firstIndex(where: { $0.id == updated.id }) {
+            snapshot.apiKeys[index] = updated
+        } else {
+            snapshot.apiKeys.append(updated)
+        }
+        updateModelVisibility(company: updated.company, hidden: updated.isHidden)
         impact(.medium)
-        Task { await viewModel.persistSnapshotNow() }
+        Task { _ = await viewModel.upsertProviderAndPersist(updated) }
     }
 
     private func testProvider(_ provider: APIKeys) async -> Bool {
@@ -386,15 +373,6 @@ struct APIKeysSettingsView: View {
         for index in snapshot.allModels.indices where snapshot.allModels[index].company.uppercased() == company.uppercased() {
             snapshot.allModels[index].isHidden = hidden
         }
-    }
-
-    private func localizedProviderName(_ provider: APIKeys) -> String {
-        if provider.source == .custom {
-            return provider.displayName
-        }
-        let key = "company_\(provider.company.uppercased())"
-        let localized = L10n.text(key)
-        return localized == key ? provider.displayName : localized
     }
 
     private func showError(_ message: String) {

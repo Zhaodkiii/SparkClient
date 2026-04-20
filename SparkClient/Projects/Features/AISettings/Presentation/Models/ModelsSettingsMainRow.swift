@@ -3,14 +3,18 @@ import SwiftUI
 /// 与 Health `ModelRowView` 对齐的主列表行：图标、标题、能力/价格胶囊、info、显隐 Toggle、侧滑编辑/删除。
 struct ModelsSettingsMainRow: View {
     let model: AllModels
+    let viewModel: AISettingsViewModel
     let isEditing: Bool
     let priceLabel: String
     let priceColor: Color
-    let hasValidAPIKey: Bool
-    let onInfo: () -> Void
     let onDelete: () -> Void
-    let onToggleInvalid: () -> Void
-    var visible: Binding<Bool>
+    var trailingAccessory: AnyView? = nil
+    var showsInfoButton: Bool = true
+    var showsVisibilityToggle: Bool = true
+    var showsLeadingSwipeAction: Bool = true
+    var showsTrailingSwipeAction: Bool = true
+    @State private var showEditSheet = false
+    @State private var showToggleKeyError = false
 
     private var isLocal: Bool {
         model.company.uppercased() == LocalModelService.localCompany.uppercased()
@@ -77,45 +81,61 @@ struct ModelsSettingsMainRow: View {
 
             Spacer(minLength: 4)
 
-            if isEditing == false {
-                Button(action: onInfo) {
-                    Image(systemName: "info.circle")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-
-                Toggle("", isOn: Binding(
-                    get: { visible.wrappedValue },
-                    set: { newValue in
-                        if newValue {
-                            if hasValidAPIKey {
-                                visible.wrappedValue = true
-                            } else {
-                                onToggleInvalid()
-                            }
-                        } else {
-                            visible.wrappedValue = false
-                        }
+            if let trailingAccessory {
+                trailingAccessory
+            } else if isEditing == false {
+                if showsInfoButton {
+                    Button(action: openEditor) {
+                        Image(systemName: "info.circle")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
                     }
-                ))
-                .labelsHidden()
-                .tint(.blue)
+                    .buttonStyle(.plain)
+                }
+
+                if showsVisibilityToggle {
+                    Toggle("", isOn: Binding(
+                        get: { model.isHidden == false },
+                        set: { newValue in
+                            if newValue {
+                                if viewModel.hasValidAPIKey(for: model) {
+                                    Task { _ = await viewModel.setModelVisibilityAndPersist(modelID: model.id, visible: true) }
+                                } else {
+                                    showToggleKeyError = true
+                                }
+                            } else {
+                                Task { _ = await viewModel.setModelVisibilityAndPersist(modelID: model.id, visible: false) }
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .tint(.blue)
+                }
             }
         }
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if model.source != .system {
+            if showsTrailingSwipeAction, model.source != .system {
                 Button(role: .destructive, action: onDelete) {
                     Label(L10n.text("ai_settings.models.action.delete"), systemImage: "trash")
                 }
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button(action: onInfo) {
-                Label(L10n.text("ai_settings.models.action.edit"), systemImage: "square.and.pencil")
+            if showsLeadingSwipeAction {
+                Button(action: openEditor) {
+                    Label(L10n.text("ai_settings.models.action.edit"), systemImage: "square.and.pencil")
+                }
+                .tint(.blue)
             }
-            .tint(.blue)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditSparkModelSheet(viewModel: viewModel, modelID: model.id)
+        }
+        .alert(L10n.text("ai_settings.models.alert.need_api_key_title"), isPresented: $showToggleKeyError) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("ai_settings.models.alert.need_api_key_message"))
         }
     }
 
@@ -128,33 +148,19 @@ struct ModelsSettingsMainRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 30, height: 30)
         } else {
-            Image(systemName: ModelsSettingsRowChrome.iconSystemName(for: model.company))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tint)
-                .font(.title2)
+            Image(companyIconName(for: model.company))
+                .resizable()
+                .scaledToFit()
                 .frame(width: 30, height: 30)
         }
+    }
+
+    private func openEditor() {
+        showEditSheet = true
     }
 }
 
 enum ModelsSettingsRowChrome {
-    static func iconSystemName(for company: String) -> String {
-        switch company.uppercased() {
-        case "OPENAI":
-            return "circle.hexagongrid.fill"
-        case "ANTHROPIC":
-            return "triangle.fill"
-        case "GOOGLE", "GEMINI":
-            return "sparkles"
-        case "DEEPSEEK":
-            return "wave.3.forward.circle.fill"
-        case "SPARK":
-            return "bolt.horizontal.circle.fill"
-        default:
-            return "building.2.crop.circle"
-        }
-    }
-
     static func priceTierLabel(_ tier: Int) -> String {
         switch min(max(tier, 0), 3) {
         case 0: return L10n.text("ai_settings.field.price_tier.free")

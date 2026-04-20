@@ -11,22 +11,8 @@ struct ModelsSettingsAgentSheet: View {
     @State private var iconSymbol = "stethoscope"
     @State private var selectedBaseModelName = ""
     @State private var systemPrompt = ""
+    @State private var showIconPicker = false
     @Environment(\.dismiss) private var dismiss
-
-    private let iconCandidates = [
-        "stethoscope",
-        "heart.text.square",
-        "cross.case",
-        "brain.head.profile",
-        "person.text.rectangle",
-        "waveform.path.ecg",
-        "bandage",
-        "bolt.heart",
-        "leaf",
-        "cpu",
-        "person.badge.shield.checkmark",
-        "sparkles"
-    ]
 
     private var isEditing: Bool { editingAgent != nil }
 
@@ -45,20 +31,20 @@ struct ModelsSettingsAgentSheet: View {
             }
 
             Section(L10n.text("ai_settings.models.agent.section.icons")) {
-                LazyVGrid(columns: [.init(.adaptive(minimum: 42))], spacing: 10) {
-                    ForEach(iconCandidates, id: \.self) { icon in
-                        Button {
-                            iconSymbol = icon
-                        } label: {
-                            Image(systemName: icon)
-                                .frame(width: 34, height: 34)
-                                .padding(6)
-                                .background(iconSymbol == icon ? Color.blue.opacity(0.2) : Color.gray.opacity(0.1))
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
+                HStack {
+                    Spacer()
+                    Button {
+                        showIconPicker = true
+                    } label: {
+                        Image(systemName: iconSymbol)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 56, height: 56)
+                            .foregroundStyle(.tint)
                     }
+                    Spacer()
                 }
+                .listRowBackground(Color.clear)
             }
 
             Section(L10n.text("ai_settings.models.agent.section.system_prompt")) {
@@ -84,6 +70,9 @@ struct ModelsSettingsAgentSheet: View {
                 }
                 .disabled(canSave == false)
             }
+        }
+        .sheet(isPresented: $showIconPicker) {
+            ModelIconPickerSheet(selectedIcon: $iconSymbol)
         }
         .onAppear {
             if let agent = editingAgent {

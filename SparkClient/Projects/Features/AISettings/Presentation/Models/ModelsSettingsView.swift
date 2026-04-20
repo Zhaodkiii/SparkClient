@@ -2,11 +2,6 @@ import SwiftUI
 
 /// AI 设置「模型」子页：对齐 Health `ModelsView` — 试用区 + 单一主列表（`unifiedModels`）、菜单添加在线/本地/智能体、高级子页、行内编辑 Sheet。
 
-/// 供编辑 Sheet 绑定的可识别模型 ID。
-private struct ModelIDBox: Identifiable {
-    let id: UUID
-}
-
 struct ModelsSettingsView: View {
     @Binding var models: [AllModels]
     @ObservedObject var viewModel: AISettingsViewModel
@@ -19,12 +14,10 @@ struct ModelsSettingsView: View {
     @State private var showLocalDownload = false
     @State private var showAgentSheet = false
     @State private var editingAgent: AllModels?
-    @State private var editingModelForSheet: ModelIDBox?
 
     @State private var inlineError: String?
     @State private var modelPendingDelete: AllModels?
     @State private var showDeleteConfirm = false
-    @State private var showToggleKeyError = false
 
     private var normalizedSearch: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -183,9 +176,6 @@ struct ModelsSettingsView: View {
                 editingAgent = nil
             }
         }
-        .sheet(item: $editingModelForSheet) { box in
-            EditSparkModelSheet(viewModel: viewModel, modelID: box.id)
-        }
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { inlineError != nil },
             set: { presented in
@@ -208,11 +198,6 @@ struct ModelsSettingsView: View {
             }
         } message: { model in
             Text(String(format: L10n.text("ai_settings.models.alert.delete_confirm_message"), model.displayName))
-        }
-        .alert(L10n.text("ai_settings.models.alert.need_api_key_title"), isPresented: $showToggleKeyError) {
-            Button(L10n.text("common.ok")) {}
-        } message: {
-            Text(L10n.text("ai_settings.models.alert.need_api_key_message"))
         }
         .task {
             await viewModel.refreshTrialStatus()
@@ -245,11 +230,10 @@ struct ModelsSettingsView: View {
         let company = viewModel.snapshot.allModels.first(where: { $0.name == modelName })?.company ?? ""
         let disabled = viewModel.snapshot.trialChatPickerDisabledModelNames.contains(modelName)
         return HStack(alignment: .center, spacing: 12) {
-            Image(systemName: ModelsSettingsRowChrome.iconSystemName(for: company))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tint)
-                .font(.title3)
-                .frame(width: 28, alignment: .center)
+            Image(companyIconName(for: company))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28, alignment: .center)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(display)
@@ -283,24 +267,14 @@ struct ModelsSettingsView: View {
                 .foregroundStyle(.secondary)
             } else {
                 ForEach(unifiedModels) { model in
-                    if let binding = bindingForModel(id: model.id) {
-                        ModelsSettingsMainRow(
-                            model: model,
-                            isEditing: isEditing,
-                            priceLabel: ModelsSettingsRowChrome.priceTierLabel(model.priceTier),
-                            priceColor: ModelsSettingsRowChrome.priceTierColor(model.priceTier),
-                            hasValidAPIKey: hasValidAPIKey(for: model),
-                            onInfo: { handleEdit(model) },
-                            onDelete: { requestDelete(model) },
-                            onToggleInvalid: { showToggleKeyError = true },
-                            visible: Binding(
-                                get: { binding.wrappedValue.isHidden == false },
-                                set: { visible in
-                                    binding.wrappedValue.isHidden = !visible
-                                }
-                            )
-                        )
-                    }
+                    ModelsSettingsMainRow(
+                        model: model,
+                        viewModel: viewModel,
+                        isEditing: isEditing,
+                        priceLabel: ModelsSettingsRowChrome.priceTierLabel(model.priceTier),
+                        priceColor: ModelsSettingsRowChrome.priceTierColor(model.priceTier),
+                        onDelete: { requestDelete(model) }
+                    )
                 }
                 .onMove(perform: moveUnifiedModels)
             }
@@ -339,41 +313,12 @@ struct ModelsSettingsView: View {
         return dn.toPinyinForSearch().lowercased().contains(normalizedSearch)
     }
 
-    private func bindingForModel(id: UUID) -> Binding<AllModels>? {
-        guard let index = models.firstIndex(where: { $0.id == id }) else { return nil }
-        return $models[index]
-    }
-
-    /// 本地模型无需厂商 Key；否则需存在未隐藏且非空的对应厂商密钥。
-    private func hasValidAPIKey(for model: AllModels) -> Bool {
-        let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let localCo = LocalModelService.localCompany.uppercased()
-        if company == localCo {
-            return true
-        }
-        guard company.isEmpty == false else { return false }
-        return viewModel.snapshot.apiKeys.contains { key in
-            key.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company &&
-            key.isHidden == false &&
-            key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        }
-    }
-
     /// 首次进入：无有效 Key 的云端模型自动隐藏（对齐 Health `initializeModelStates`）。
     private func initializeModelStates() {
         for i in models.indices {
-            if hasValidAPIKey(for: models[i]) == false && models[i].isHidden == false {
+            if viewModel.hasValidAPIKey(for: models[i]) == false && models[i].isHidden == false {
                 models[i].isHidden = true
             }
-        }
-    }
-
-    private func handleEdit(_ model: AllModels) {
-        if model.isLocalAgent {
-            editingAgent = model
-            showAgentSheet = true
-        } else {
-            editingModelForSheet = ModelIDBox(id: model.id)
         }
     }
 
@@ -422,12 +367,6 @@ struct ModelsSettingsView: View {
             guard let modelIndex = models.firstIndex(where: { $0.id == model.id }) else { continue }
             models[modelIndex].position = model.identity == .agent ? index + 1000 : index
         }
-    }
-}
-
-private extension Collection {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
 

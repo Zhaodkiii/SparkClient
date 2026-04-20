@@ -250,7 +250,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
 
 /// 单个场景的远端模型集合（包含默认模型名与候选模型列表）。
 struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
-    /// 默认模型名称（来自服务端 `default_model`）。
+    /// 场景下默认模型名称。
     var defaultModelName: String
     /// 候选模型行列表。
     var models: [AIScenarioRemoteModelRow]

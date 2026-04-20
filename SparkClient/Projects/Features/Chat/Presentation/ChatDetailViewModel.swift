@@ -248,49 +248,70 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
     }
-
-    /// 刷新输入栏模型列表，并返回「当前线程/场景」下的推荐初始模型名（用于首次进入会话时恢复选择）。
-    /// 列表与校验均以 `effectiveScenarioBundles().chat.models` 为准（客户端与服务端 Pro 合并后的场景模型），不经过本地目录/试用筛选。
+    /// 刷新输入栏模型选择器列表
+    /// 并返回当前线程/场景下的推荐初始模型名（用于首次进入会话时恢复选中状态）
+    /// 列表数据源与校验规则：以客户端 + 服务端 Pro 合并后的场景模型 effectiveScenarioBundles().chat.models 为准
+    /// 不经过本地目录/试用模型筛选
     func refreshChatModelPicker(for threadID: UUID) async -> String? {
+        // 获取生效的场景模型配置，获取失败则清空模型列表并返回 nil
         guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
             chatScenarioModels = []
             return nil
         }
+        
+        // 提取聊天场景可用模型列表
         let rows = bundles.chat.models
+        
+        // 转换为界面展示用的模型选项（处理名称、图标）
         chatScenarioModels = rows.map { row in
+            // 处理模型显示名称：去除首尾空白，为空则使用原始模型名
             let trimmedTitle = row.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             let title = trimmedTitle.isEmpty ? row.name : trimmedTitle
+            
+            // 处理模型图标：去除首尾空白
             let trimmedIcon = row.icon?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let icon: String
+            
+            // 图标优先级：配置图标 > 智能代理图标 > 默认CPU图标
             if trimmedIcon.isEmpty == false {
                 icon = trimmedIcon
             } else {
                 icon = row.identity == AIModelIdentity.agent.rawValue ? "person.crop.circle" : "cpu"
             }
+            
+            // 构建界面选项模型
             return ChatComposerModelOption(
-                modelName: row.name,
-                title: title,
-                iconSystemName: icon
+                modelName: row.name,     // 原始模型唯一标识
+                title: title,            // 界面显示名称
+                iconSystemName: icon     // 系统图标名称
             )
         }
 
+        // 校验并修正当前选中的模型（确保在可选列表内）
         await validateCurrentSelection(for: threadID)
 
+        // 提取当前可选模型名称集合，为空则直接返回 nil
         let namesInPicker = Set(chatScenarioModels.map(\.modelName))
         guard namesInPicker.isEmpty == false else { return nil }
 
+        // 加载当前会话线程，获取线程保存的模型名称
         let thread = await chatRepository.loadThread(id: threadID)
         let trimmedThreadModel = thread?.currentModelName?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let threadModel = trimmedThreadModel.isEmpty ? nil : trimmedThreadModel
 
+        // 优先返回：当前会话保存的有效模型
         if let threadModel, namesInPicker.contains(threadModel) {
             return threadModel
         }
+        
+        // 其次返回：场景默认模型
         if let defaultName = bundles.resolveRow(for: .chat, preferredModelName: nil)?.name,
            namesInPicker.contains(defaultName) {
             return defaultName
         }
+        
+        // 最后返回：列表第一个模型
         return chatScenarioModels.first?.modelName
     }
 

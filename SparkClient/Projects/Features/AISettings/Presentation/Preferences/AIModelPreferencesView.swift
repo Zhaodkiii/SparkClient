@@ -370,7 +370,7 @@ struct AIModelPreferencesView: View {
 
             if let selectedTrial = options.first(where: { $0.name == selectedModelName.wrappedValue }) {
                 modelSummaryRow(
-                    icon: iconForCompany(selectedTrial.company),
+                    company: selectedTrial.company,
                     displayName: selectedTrial.displayName,
                     subtitle: selectedTrial.name
                 )
@@ -388,7 +388,7 @@ struct AIModelPreferencesView: View {
                 let pickedName = selectedModelName.wrappedValue
                 if let row = bundle.models.first(where: { $0.model == pickedName }) {
                     modelSummaryRow(
-                        icon: iconForCompany(companyLabelForBundleRow(row)),
+                        company: companyLabelForBundleRow(row),
                         displayName: bundleRowDisplayName(row),
                         subtitle: row.model
                     )
@@ -406,7 +406,7 @@ struct AIModelPreferencesView: View {
 
                 if let selectedLocal = localModels.first(where: { $0.name == selectedModelName.wrappedValue }) {
                     modelSummaryRow(
-                        icon: iconForCompany(selectedLocal.company),
+                        company: selectedLocal.company,
                         displayName: selectedLocal.displayName,
                         subtitle: selectedLocal.name
                     )
@@ -435,13 +435,12 @@ struct AIModelPreferencesView: View {
     }
 
     /// Picker 下方展示当前选中模型的摘要行。
-    private func modelSummaryRow(icon: String, displayName: String, subtitle: String) -> some View {
+    private func modelSummaryRow(company: String, displayName: String, subtitle: String) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: icon)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tint)
-                .font(.title3)
-                .frame(width: 24)
+            Image(companyIconName(for: company))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName)
                     .font(.body)
@@ -468,24 +467,6 @@ struct AIModelPreferencesView: View {
             key.company.uppercased() == company &&
             key.isHidden == false &&
             key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        }
-    }
-
-    /// 按厂商缩写选用 SF Symbol，用于摘要行左侧图标。
-    private func iconForCompany(_ company: String) -> String {
-        switch company.uppercased() {
-        case "OPENAI":
-            return "circle.hexagongrid.fill"
-        case "ANTHROPIC":
-            return "triangle.fill"
-        case "GOOGLE", "GEMINI":
-            return "sparkles"
-        case "DEEPSEEK":
-            return "wave.3.forward.circle.fill"
-        case "SPARK":
-            return "bolt.horizontal.circle.fill"
-        default:
-            return "building.2.crop.circle"
         }
     }
 

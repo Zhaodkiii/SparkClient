@@ -126,6 +126,26 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         )
     }
 
+    func saveModel(_ model: AllModels) async throws {
+        guard let ownerAccountID = await currentOwnerAccountID() else {
+            logger.info("未登录，跳过模型单条持久化", module: .aiConfig)
+            return
+        }
+        try await coreDataStack.performBackgroundTask { context in
+            try self.upsertModel(model, ownerAccountID: ownerAccountID, context: context)
+        }
+    }
+
+    func saveProvider(_ provider: APIKeys) async throws {
+        guard let ownerAccountID = await currentOwnerAccountID() else {
+            logger.info("未登录，跳过厂商单条持久化", module: .aiConfig)
+            return
+        }
+        try await coreDataStack.performBackgroundTask { context in
+            self.upsertProvider(provider, ownerAccountID: ownerAccountID, context: context)
+        }
+    }
+
     private func currentOwnerAccountID() async -> Int64? {
         await snapshotStore.load()?.accountID
     }
@@ -228,21 +248,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         try deleteAll(entityName: EntityName.provider, ownerAccountID: ownerAccountID, context: context)
 
         for apiKey in apiKeys {
-            let object = NSEntityDescription.insertNewObject(forEntityName: EntityName.provider, into: context)
-            object.setValue(apiKey.id, forKey: Field.id)
-            object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
-            object.setValue(apiKey.name, forKey: Field.name)
-            object.setValue(apiKey.company, forKey: Field.company)
-            object.setValue(apiKey.key, forKey: Field.key)
-            object.setValue(apiKey.requestURL, forKey: Field.requestURL)
-            object.setValue(apiKey.help, forKey: Field.help)
-            object.setValue(apiKey.from, forKey: Field.from)
-            object.setValue(apiKey.privacyPolicyURL, forKey: Field.privacyPolicyURL)
-            object.setValue(apiKey.isEnabled, forKey: Field.isEnabled)
-            object.setValue(apiKey.source.rawValue, forKey: Field.source)
-            object.setValue(apiKey.privacyPolicyAccepted, forKey: Field.privacyPolicyAccepted)
-            object.setValue(apiKey.privacyPolicyAcceptedAt, forKey: Field.privacyPolicyAcceptedAt)
-            object.setValue(apiKey.timestamp, forKey: Field.timestamp)
+            upsertProvider(apiKey, ownerAccountID: ownerAccountID, context: context)
         }
     }
 
@@ -255,36 +261,79 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         try deleteAll(entityName: EntityName.model, ownerAccountID: ownerAccountID, context: context)
 
         for model in allModels {
-            let object = NSEntityDescription.insertNewObject(forEntityName: EntityName.model, into: context)
-            object.setValue(model.id, forKey: Field.id)
-            object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
-            object.setValue(model.name, forKey: Field.name)
-            object.setValue(model.displayName, forKey: Field.displayName)
-            object.setValue(model.identity.rawValue, forKey: Field.identity)
-            object.setValue(Int32(model.position), forKey: Field.position)
-            object.setValue(model.company, forKey: Field.company)
-            object.setValue(Int32(model.price), forKey: Field.price)
-            object.setValue(model.isEnabled, forKey: Field.isEnabled)
-            object.setValue(model.supportsSearch, forKey: Field.supportsSearch)
-            object.setValue(model.supportsTextGen, forKey: Field.supportsTextGen)
-            object.setValue(model.supportsMultimodal, forKey: Field.supportsMultimodal)
-            object.setValue(model.supportsReasoning, forKey: Field.supportsReasoning)
-            object.setValue(model.supportReasoningChange, forKey: Field.supportReasoningChange)
-            object.setValue(model.supportsImageGen, forKey: Field.supportsImageGen)
-            object.setValue(model.supportsVoiceGen, forKey: Field.supportsVoiceGen)
-            object.setValue(model.supportsToolUse, forKey: Field.supportsToolUse)
-            object.setValue(model.systemProvision, forKey: Field.systemProvision)
-            object.setValue(model.icon, forKey: Field.icon)
-            object.setValue(model.briefDescription, forKey: Field.briefDescription)
-            object.setValue(model.characterDesign, forKey: Field.characterDesign)
-            // `[String]` 与实体中 `Data` 字段一致：统一用同一套 JSON 编解码，避免与 `AllModels` 定义分叉。
-            object.setValue(try encodeStringArray(model.aiScenarios), forKey: Field.aiScenariosData)
-            object.setValue(try encodeStringArray(model.aiToolScenarios), forKey: Field.aiToolScenariosData)
-            object.setValue(model.baseModelName, forKey: Field.baseModelName)
-            object.setValue(model.localFilename, forKey: Field.localFilename)
-            object.setValue(model.source.rawValue, forKey: Field.source)
-            object.setValue(model.timestamp, forKey: Field.timestamp)
+            try upsertModel(model, ownerAccountID: ownerAccountID, context: context)
         }
+    }
+
+    private func upsertProvider(
+        _ provider: APIKeys,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.provider)
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "\(Field.id) == %@", provider.id as CVarArg),
+        ])
+        let object = (try? context.fetch(request).first)
+            ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.provider, into: context)
+        object.setValue(provider.id, forKey: Field.id)
+        object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+        object.setValue(provider.name, forKey: Field.name)
+        object.setValue(provider.company, forKey: Field.company)
+        object.setValue(provider.key, forKey: Field.key)
+        object.setValue(provider.requestURL, forKey: Field.requestURL)
+        object.setValue(provider.help, forKey: Field.help)
+        object.setValue(provider.from, forKey: Field.from)
+        object.setValue(provider.privacyPolicyURL, forKey: Field.privacyPolicyURL)
+        object.setValue(provider.isEnabled, forKey: Field.isEnabled)
+        object.setValue(provider.source.rawValue, forKey: Field.source)
+        object.setValue(provider.privacyPolicyAccepted, forKey: Field.privacyPolicyAccepted)
+        object.setValue(provider.privacyPolicyAcceptedAt, forKey: Field.privacyPolicyAcceptedAt)
+        object.setValue(provider.timestamp, forKey: Field.timestamp)
+    }
+
+    private func upsertModel(
+        _ model: AllModels,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.model)
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "\(Field.id) == %@", model.id as CVarArg),
+        ])
+        let object = try context.fetch(request).first
+            ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.model, into: context)
+        object.setValue(model.id, forKey: Field.id)
+        object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+        object.setValue(model.name, forKey: Field.name)
+        object.setValue(model.displayName, forKey: Field.displayName)
+        object.setValue(model.identity.rawValue, forKey: Field.identity)
+        object.setValue(Int32(model.position), forKey: Field.position)
+        object.setValue(model.company, forKey: Field.company)
+        object.setValue(Int32(model.price), forKey: Field.price)
+        object.setValue(model.isEnabled, forKey: Field.isEnabled)
+        object.setValue(model.supportsSearch, forKey: Field.supportsSearch)
+        object.setValue(model.supportsTextGen, forKey: Field.supportsTextGen)
+        object.setValue(model.supportsMultimodal, forKey: Field.supportsMultimodal)
+        object.setValue(model.supportsReasoning, forKey: Field.supportsReasoning)
+        object.setValue(model.supportReasoningChange, forKey: Field.supportReasoningChange)
+        object.setValue(model.supportsImageGen, forKey: Field.supportsImageGen)
+        object.setValue(model.supportsVoiceGen, forKey: Field.supportsVoiceGen)
+        object.setValue(model.supportsToolUse, forKey: Field.supportsToolUse)
+        object.setValue(model.systemProvision, forKey: Field.systemProvision)
+        object.setValue(model.icon, forKey: Field.icon)
+        object.setValue(model.briefDescription, forKey: Field.briefDescription)
+        object.setValue(model.characterDesign, forKey: Field.characterDesign)
+        object.setValue(try encodeStringArray(model.aiScenarios), forKey: Field.aiScenariosData)
+        object.setValue(try encodeStringArray(model.aiToolScenarios), forKey: Field.aiToolScenariosData)
+        object.setValue(model.baseModelName, forKey: Field.baseModelName)
+        object.setValue(model.localFilename, forKey: Field.localFilename)
+        object.setValue(model.source.rawValue, forKey: Field.source)
+        object.setValue(model.timestamp, forKey: Field.timestamp)
     }
 
     /// 记录该账号已完成种子初始化；`catalogVersion` 仅为当前 bundle 种子版本快照，不用于触发重灌。

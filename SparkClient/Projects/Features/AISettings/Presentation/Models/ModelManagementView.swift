@@ -1,9 +1,14 @@
 import SwiftUI
 
 private enum ModelManagementSheet: Identifiable {
-    case manualAdd
+    case manualAdd(draft: AddOnlineModelDraft?)
 
-    var id: String { "manualAdd" }
+    var id: String {
+        switch self {
+        case .manualAdd(let draft):
+            return "manualAdd:\(draft?.name ?? "empty")"
+        }
+    }
 }
 
 struct ModelManagementView: View {
@@ -61,16 +66,16 @@ struct ModelManagementView: View {
                 availableModelsSection
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("\(provider.displayName) 模型")
+            .navigationTitle(String(format: L10n.text("ai_settings.models.management.nav_title"), provider.displayName))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "搜索模型")
+            .searchable(text: $searchText, prompt: L10n.text("ai_settings.models.management.search_prompt"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(L10n.text("ai_settings.models.management.action.close")) { dismiss() }
                 }
                 ToolbarItemGroup(placement: .confirmationAction) {
                     Button {
-                        presentedSheet = .manualAdd
+                        presentedSheet = .manualAdd(draft: nil)
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -98,11 +103,15 @@ struct ModelManagementView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
-            case .manualAdd:
-                AddOnlineModelSheet(viewModel: viewModel, initialCompany: provider.company)
+            case .manualAdd(let draft):
+                AddOnlineModelSheet(
+                    viewModel: viewModel,
+                    initialCompany: provider.company,
+                    initialDraft: draft
+                )
             }
         }
-        .alert("提示", isPresented: Binding(
+        .alert(L10n.text("ai_settings.models.management.alert_title"), isPresented: Binding(
             get: { errorMessage != nil },
             set: { presented in
                 if presented == false {
@@ -110,7 +119,7 @@ struct ModelManagementView: View {
                 }
             }
         )) {
-            Button("确定", role: .cancel) {}
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -118,13 +127,13 @@ struct ModelManagementView: View {
 
     @ViewBuilder
     private var providerStatusSection: some View {
-        Section("自动刷新") {
+        Section(L10n.text("ai_settings.models.management.section.auto_refresh")) {
             if provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text("当前厂商还没有可用的 API Key，暂时无法自动刷新远端模型列表。你仍然可以点右上角 + 手动添加模型。")
+                Text(L10n.text("ai_settings.models.management.auto_refresh.empty_key"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                Text("进入页面会自动拉取一次模型列表，也支持下拉或右上角按钮手动刷新。")
+                Text(L10n.text("ai_settings.models.management.auto_refresh.enabled"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -135,34 +144,29 @@ struct ModelManagementView: View {
     private var addedModelsSection: some View {
         Section {
             if filteredCompanyModels.isEmpty {
-                Text(normalizedSearchText.isEmpty ? "该厂商还没有已添加模型" : "没有匹配的已添加模型")
+                Text(
+                    normalizedSearchText.isEmpty
+                    ? L10n.text("ai_settings.models.management.added.empty")
+                    : L10n.text("ai_settings.models.management.added.empty_search")
+                )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(filteredCompanyModels.enumerated()), id: \.element.id) { _, model in
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(model.displayName)
-                                .font(.body)
-                            Text(model.name)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(model.isHidden ? "已隐藏" : "已启用")
-                            .font(.caption)
-                            .foregroundColor(model.isHidden ? .secondary : .green)
-                        if model.source != .system {
-                            Button("删除", role: .destructive) {
-                                deleteModel(model)
-                            }
-                            .font(.caption)
-                        }
-                    }
+                    ModelsSettingsMainRow(
+                        model: model,
+                        viewModel: viewModel,
+                        isEditing: false,
+                        priceLabel: ModelsSettingsRowChrome.priceTierLabel(model.priceTier),
+                        priceColor: ModelsSettingsRowChrome.priceTierColor(model.priceTier),
+                        onDelete: { deleteModel(model) },
+                        showsInfoButton: false,
+                        showsLeadingSwipeAction: true
+                    )
                 }
             }
         } header: {
-            Text("已添加 (\(filteredCompanyModels.count))")
+            Text(String(format: L10n.text("ai_settings.models.management.section.added"), filteredCompanyModels.count))
         }
     }
 
@@ -174,50 +178,39 @@ struct ModelManagementView: View {
             } else if isRefreshing && remoteModels.isEmpty {
                 HStack {
                     Spacer()
-                    ProgressView("正在刷新模型列表...")
+                    ProgressView(L10n.text("ai_settings.models.management.loading"))
                     Spacer()
                 }
             } else if filteredRemoteModels.isEmpty {
-                Text(normalizedSearchText.isEmpty ? "暂未获取到可用模型" : "没有匹配的远端模型")
+                Text(
+                    normalizedSearchText.isEmpty
+                    ? L10n.text("ai_settings.models.management.remote.empty")
+                    : L10n.text("ai_settings.models.management.remote.empty_search")
+                )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(Array(filteredRemoteModels.enumerated()), id: \.element.id) { _, model in
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(model.displayName)
-                                .font(.body)
-                            Text(model.name)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if model.ownedBy.isEmpty == false {
-                                Text(model.ownedBy)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        if isModelAdded(model) {
-                            Label("已添加", systemImage: "checkmark.circle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.green)
-                        } else {
-                            Button {
-                                addModel(model)
-                            } label: {
-                                Label("添加", systemImage: "plus.circle")
-                                    .font(.caption)
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
+                ForEach(filteredRemoteModels) { model in
+                    ModelsSettingsMainRow(
+                        model: remoteCardModel(for: model),
+                        viewModel: viewModel,
+                        isEditing: false,
+                        priceLabel: ModelsSettingsRowChrome.priceTierLabel(remotePriceTier(for: model)),
+                        priceColor: ModelsSettingsRowChrome.priceTierColor(remotePriceTier(for: model)),
+                        onDelete: {},
+                        trailingAccessory: AnyView(remoteTrailingAccessory(for: model)),
+                        showsInfoButton: false,
+                        showsVisibilityToggle: false,
+                        showsLeadingSwipeAction: false,
+                        showsTrailingSwipeAction: false
+                    )
                     .padding(.vertical, 2)
                 }
             }
         } header: {
-            Text("远端可用 (\(filteredRemoteModels.count))")
+            Text(String(format: L10n.text("ai_settings.models.management.section.remote"), filteredRemoteModels.count))
         } footer: {
-            Text("自动刷新优先按厂商官方接口返回结果展示；如果接口不支持列出模型，仍可手动添加。")
+            Text(L10n.text("ai_settings.models.management.remote.footer"))
         }
     }
 
@@ -240,14 +233,86 @@ struct ModelManagementView: View {
     }
 
     private func addModel(_ remoteModel: ProviderRemoteModel) {
-        _ = viewModel.appendOrRevealRemoteModel(remoteModel, provider: provider)
-        Task { await viewModel.persistSnapshotNow() }
+        presentedSheet = .manualAdd(
+            draft: AddOnlineModelDraft(
+                name: remoteModel.name,
+                displayName: remoteModel.displayName,
+                company: provider.company,
+                priceTier: remotePriceTier(for: remoteModel),
+                isHidden: false,
+                supportsText: remoteModel.supportsText,
+                supportsMultimodal: remoteModel.supportsMultimodal,
+                supportsReasoning: remoteModel.supportsReasoning,
+                reasoningControllable: remoteModel.supportsReasoning,
+                supportsToolUse: remoteModel.supportsToolUse,
+                supportsImageGen: remoteModel.supportsImageGen,
+                aiScenarios: [],
+                aiToolScenarios: SparkToolName.all
+            )
+        )
     }
 
     private func deleteModel(_ model: AllModels) {
         guard model.source != .system else { return }
         viewModel.deleteOnlineModel(id: model.id)
         Task { await viewModel.persistSnapshotNow() }
+    }
+
+    private func remoteCardModel(for remoteModel: ProviderRemoteModel) -> AllModels {
+        AllModels(
+            name: remoteModel.name,
+            displayName: remoteModel.displayName,
+            identity: .model,
+            position: 0,
+            company: provider.company,
+            price: remotePriceTier(for: remoteModel),
+            isEnabled: true,
+            supportsSearch: true,
+            supportsTextGen: remoteModel.supportsText,
+            supportsMultimodal: remoteModel.supportsMultimodal,
+            supportsReasoning: remoteModel.supportsReasoning,
+            supportReasoningChange: remoteModel.supportsReasoning,
+            supportsImageGen: remoteModel.supportsImageGen,
+            supportsVoiceGen: false,
+            supportsToolUse: remoteModel.supportsToolUse,
+            briefDescription: remoteModel.ownedBy,
+            source: .custom
+        )
+    }
+
+    @ViewBuilder
+    private func remoteTrailingAccessory(for remoteModel: ProviderRemoteModel) -> some View {
+        if isModelAdded(remoteModel) {
+            Label(L10n.text("ai_settings.models.management.remote.added"), systemImage: "checkmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.green)
+        } else {
+            // 可添加状态
+            Button {
+                addModel(remoteModel)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus.circle")
+                    Text(L10n.text("ai_settings.models.management.action.add"))
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func remotePriceTier(for remoteModel: ProviderRemoteModel) -> Int {
+        let name = remoteModel.name.lowercased()
+        if remoteModel.supportsImageGen {
+            return 3
+        }
+        if name.contains("nano") || name.contains("mini") || name.contains("flash") || name.contains("lite") {
+            return 1
+        }
+        if name.contains("reasoner") || name.contains("max") || name.contains("opus") || name.contains("pro") {
+            return 3
+        }
+        return 2
     }
 
     private func normalizedModelName(_ name: String) -> String {

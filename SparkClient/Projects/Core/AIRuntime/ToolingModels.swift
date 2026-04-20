@@ -149,3 +149,44 @@ enum SparkToolName {
         generateTask
     ]
 }
+
+extension SparkToolName {
+    static func displayName(for toolName: String) -> String {
+        switch toolName {
+        case fetchStepDetails: return L10n.text("ai_settings.tools.fetch_step_details")
+        case fetchEnergyDetails: return L10n.text("ai_settings.tools.fetch_energy_details")
+        case fetchNutritionDetails: return L10n.text("ai_settings.tools.fetch_nutrition_details")
+        case makeNutritionData: return L10n.text("ai_settings.tools.make_nutrition_data")
+        case fetchSleepDetails: return L10n.text("ai_settings.tools.fetch_sleep_details")
+        case fetchWorkoutDetails: return L10n.text("ai_settings.tools.fetch_workout_details")
+        case searchKnowledgeBag: return L10n.text("ai_settings.tools.search_knowledge_bag")
+        case createKnowledgeDocument: return L10n.text("ai_settings.tools.create_knowledge_document")
+        case searchCalendarAndReminders: return L10n.text("ai_settings.tools.search_calendar_and_reminders")
+        case writeSystemEvent: return L10n.text("ai_settings.tools.write_system_event")
+        case queryLocation: return L10n.text("ai_settings.tools.query_location")
+        case getCurrentLocation: return L10n.text("ai_settings.tools.get_current_location")
+        case searchNearbyLocations: return L10n.text("ai_settings.tools.search_nearby_locations")
+        case getRoute: return L10n.text("ai_settings.tools.get_route")
+        case queryWeather: return L10n.text("ai_settings.tools.query_weather")
+        case saveMemory: return L10n.text("ai_settings.tools.save_memory")
+        case retrieveMemory: return L10n.text("ai_settings.tools.retrieve_memory")
+        case updateMemory: return L10n.text("ai_settings.tools.update_memory")
+        case generateChatTitle: return L10n.text("ai_settings.tools.generate_chat_title")
+        case showCustomMessageCard: return L10n.text("ai_settings.tools.show_custom_message_card")
+        case getCurrentMember: return L10n.text("ai_settings.tools.get_current_member")
+        case switchMember: return L10n.text("ai_settings.tools.switch_member")
+        case findMember: return L10n.text("ai_settings.tools.find_member")
+        case queryMemberProfile: return L10n.text("ai_settings.tools.query_member_profile")
+        case searchOnline: return L10n.text("ai_settings.tools.search_online")
+        case readWebPage: return L10n.text("ai_settings.tools.read_web_page")
+        case searchArxivPapers: return L10n.text("ai_settings.tools.search_arxiv_papers")
+        case extractRemoteFileContent: return L10n.text("ai_settings.tools.extract_remote_file_content")
+        case createCanvas: return L10n.text("ai_settings.tools.create_canvas")
+        case editCanvas: return L10n.text("ai_settings.tools.edit_canvas")
+        case generateStructuredHealthCard: return L10n.text("ai_settings.tools.generate_structured_health_card")
+        case queryTasksByMember: return L10n.text("ai_settings.tools.query_tasks_by_member")
+        case generateTask: return L10n.text("ai_settings.tools.generate_task")
+        default: return toolName
+        }
+    }
+}

@@ -1,13 +1,10 @@
 import SwiftUI
 
 private enum ProviderSettingsSheet: Identifiable {
-    case editModel(id: UUID)
     case manageModels
 
     var id: String {
         switch self {
-        case .editModel(let id):
-            return "editModel:\(id.uuidString)"
         case .manageModels:
             return "manageModels"
         }
@@ -20,14 +17,11 @@ struct ProviderSettingsEditorView: View {
     @State var provider: APIKeys
     let viewModel: AISettingsViewModel
     let onDeleteModel: (UUID) -> Void
-    let onToggleModelVisibility: (UUID, Bool) -> Void
-    let hasValidAPIKeyForModel: (AllModels) -> Bool
     let onSave: (APIKeys) -> Void
     let onTest: (APIKeys) async -> Bool
 
     @State private var isTesting = false
     @State private var testPassed: Bool?
-    @State private var showToggleKeyError = false
     @State private var showDeleteModelAlert = false
     @State private var pendingDeleteModelID: UUID?
     @State private var presentedSheet: ProviderSettingsSheet?
@@ -44,57 +38,51 @@ struct ProviderSettingsEditorView: View {
         Form {
             Section {
                 HStack {
-                    Text("厂商")
+                    Text(L10n.text("ai_settings.providers.editor.field.provider"))
                     Spacer()
                     Text(provider.displayName)
                         .foregroundStyle(.secondary)
                 }
-                TextField("请求地址", text: $provider.requestURL)
+                TextField(L10n.text("ai_settings.providers.editor.field.request_url"), text: $provider.requestURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                SecureField("API Key", text: $provider.key)
+                SecureField(L10n.text("ai_settings.providers.editor.field.api_key"), text: $provider.key)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             }
 
             if provider.source == .custom {
-                Section("自定义供应商") {
-                    TextField("供应商名称", text: $provider.name)
+                Section(L10n.text("ai_settings.providers.editor.section.custom")) {
+                    TextField(L10n.text("ai_settings.providers.editor.field.custom_name"), text: $provider.name)
                 }
             }
 
             Section {
                 if providerModels.isEmpty {
-                    Text("该厂商暂未配置在线模型")
+                    Text(L10n.text("ai_settings.providers.editor.models.empty"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(providerModels) { model in
                         ModelsSettingsMainRow(
                             model: model,
+                            viewModel: viewModel,
                             isEditing: false,
                             priceLabel: ModelsSettingsRowChrome.priceTierLabel(model.priceTier),
                             priceColor: ModelsSettingsRowChrome.priceTierColor(model.priceTier),
-                            hasValidAPIKey: hasValidAPIKeyForModel(model),
-                            onInfo: { presentedSheet = .editModel(id: model.id) },
                             onDelete: {
                                 pendingDeleteModelID = model.id
                                 showDeleteModelAlert = true
                             },
-                            onToggleInvalid: { showToggleKeyError = true },
-                            visible: Binding(
-                                get: { model.isHidden == false },
-                                set: { visible in
-                                    onToggleModelVisibility(model.id, visible)
-                                }
-                            )
+                            showsInfoButton: true,
+                            showsLeadingSwipeAction: true
                         )
                     }
                 }
             } header: {
                 HStack {
-                    Text("该厂商模型")
+                    Text(L10n.text("ai_settings.providers.editor.section.models"))
                     Spacer()
                     Button {
                         presentedSheet = .manageModels
@@ -106,13 +94,13 @@ struct ProviderSettingsEditorView: View {
             }
 
             if provider.privacyPolicyURL.isEmpty == false {
-                Section("隐私政策") {
+                Section(L10n.text("ai_settings.providers.editor.section.privacy")) {
                     if let url = URL(string: provider.privacyPolicyURL) {
-                        Link("查看隐私政策", destination: url)
+                        Link(L10n.text("ai_settings.providers.editor.privacy.view_policy"), destination: url)
                             .font(.footnote)
                     }
                     Toggle(isOn: $provider.privacyPolicyAccepted) {
-                        Text("我已阅读并同意该厂商隐私政策")
+                        Text(L10n.text("ai_settings.providers.editor.privacy.accept"))
                             .font(.footnote)
                     }
                     .tint(.accentColor)
@@ -128,7 +116,7 @@ struct ProviderSettingsEditorView: View {
                     }
                 } label: {
                     HStack {
-                        Text("测试 API")
+                        Text(L10n.text("ai_settings.providers.editor.action.test_api"))
                         Spacer()
                         if isTesting {
                             ProgressView()
@@ -140,11 +128,11 @@ struct ProviderSettingsEditorView: View {
                 }
             }
         }
-        .navigationTitle("编辑密钥")
+        .navigationTitle(L10n.text("ai_settings.providers.editor.nav_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存") {
+                Button(L10n.text("ai_settings.providers.editor.action.save")) {
                     if provider.privacyPolicyURL.isEmpty == false, provider.privacyPolicyAccepted == false {
                         return
                     }
@@ -157,31 +145,21 @@ struct ProviderSettingsEditorView: View {
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
-            case .editModel(let id):
-                EditSparkModelSheet(viewModel: viewModel, modelID: id)
-                    .onDisappear {
-                        Task { await viewModel.persistSnapshotNow() }
-                    }
             case .manageModels:
                 ModelManagementView(provider: provider, viewModel: viewModel)
             }
         }
-        .alert("删除模型？", isPresented: $showDeleteModelAlert) {
-            Button("取消", role: .cancel) {
+        .alert(L10n.text("ai_settings.providers.editor.alert.delete_model_title"), isPresented: $showDeleteModelAlert) {
+            Button(L10n.text("common.cancel"), role: .cancel) {
                 pendingDeleteModelID = nil
             }
-            Button("删除", role: .destructive) {
+            Button(L10n.text("common.delete"), role: .destructive) {
                 guard let id = pendingDeleteModelID else { return }
                 onDeleteModel(id)
                 pendingDeleteModelID = nil
             }
         } message: {
-            Text("删除后将从当前厂商模型列表移除。")
-        }
-        .alert("提示", isPresented: $showToggleKeyError) {
-            Button("确定", role: .cancel) {}
-        } message: {
-            Text("请先配置有效 API Key")
+            Text(L10n.text("ai_settings.providers.editor.alert.delete_model_message"))
         }
     }
 }
@@ -191,5 +169,14 @@ extension APIKeys {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty == false { return trimmed }
         return company
+    }
+
+    var localizedDisplayName: String {
+        if source == .custom {
+            return displayName
+        }
+        let key = "company_\(company.uppercased())"
+        let localized = L10n.text(key)
+        return localized == key ? displayName : localized
     }
 }
