@@ -403,10 +403,16 @@
 
 "ai_settings.title" = "AI Scenario Config";
 "ai_settings.save" = "Save";
-"ai_settings.saved" = "Saved";
 "ai_settings.scenario.chat" = "Chat Scenario";
-"ai_settings.scenario.medical_extraction" = "Medical Extraction Scenario";
 "ai_settings.scenario.embedding" = "Embedding Scenario";
+"ai_settings.scenario.voice" = "Voice Scenario";
+"ai_settings.scenario.medical_structured_extraction" = "Medical Structured Extraction";
+"ai_settings.scenario.medical_document_type_recognition" = "Medical Document Type Recognition";
+"ai_settings.scenario.medical_case_extraction" = "Medical Case Extraction";
+"ai_settings.scenario.health_exam_extraction" = "Health Exam Structured Extraction";
+"ai_settings.scenario.medical_report_extraction" = "Medical Report Structured Extraction";
+"ai_settings.scenario.prescription_extraction" = "Prescription Structured Extraction";
+"ai_settings.scenario.medication_extraction" = "Medication Structured Extraction";
 "ai_settings.scenario.optimization_text" = "Text Optimization Model";
 "ai_settings.scenario.optimization_visual" = "Visual Optimization Model";
 "ai_settings.scenario.context_folding" = "Context Folding";
@@ -439,6 +445,8 @@
 "ai_settings.row.voice.subtitle" = "Speech synthesis";
 "ai_settings.row.optimization" = "Optimization Model";
 "ai_settings.row.optimization.subtitle" = "Text/visual optimization";
+"ai_settings.row.default_model_config" = "Default Model Config";
+"ai_settings.row.default_model_config.subtitle" = "Per-scenario local or Pro model";
 "ai_settings.row.search_tools" = "Search and Tools";
 "ai_settings.row.search_tools.subtitle" = "Search connector and tool routing";
 "ai_settings.row.prompt_repo" = "Prompt Repository";
@@ -485,8 +493,9 @@
 "ai_settings.memory_item" = "Memory Item";
 "ai_settings.translation_item" = "Translation Item";
 "ai_settings.prefs.source_config" = "Configuration source";
-"ai_settings.prefs.source_trial" = "Server trial";
-"ai_settings.prefs.source_local_key" = "Local API key";
+"ai_settings.prefs.source_trial" = "Pro model";
+"ai_settings.prefs.source_local_key" = "Local model";
+"ai_settings.prefs.model_unselected" = "Please select a model";
 "ai_settings.prefs.toggle.context_folding" = "Enable context folding";
 "ai_settings.prefs.max_tool_sets" = "Max tool groups: %d";
 "ai_settings.prefs.section.extraction" = "Data extraction model";
@@ -501,6 +510,17 @@
 "ai_settings.prefs.explain.context_folding" = "When a conversation gets long, older context is compressed automatically to save tokens and improve response speed.";
 "ai_settings.prefs.explain.router" = "The router model decides which tool groups to invoke before the conversation.";
 "ai_settings.prefs.explain.data_extraction" = "Used for structured medical information extraction and field normalization.";
+"ai_settings.prefs.explain.chat" = "Used for daily Q&A, content generation, and multi-turn conversation.";
+"ai_settings.prefs.explain.embedding" = "Used for knowledge indexing, similarity retrieval, and semantic recall.";
+"ai_settings.prefs.explain.voice" = "Used for text-to-speech and voice playback.";
+"ai_settings.prefs.explain.medical_structured_extraction" = "Used for medical document field extraction and structured output.";
+"ai_settings.prefs.explain.medical_document_type_recognition" = "Used to detect medical document types and route them to the right processing flow.";
+"ai_settings.prefs.explain.medical_case_extraction" = "Used for key field extraction and normalization from case documents.";
+"ai_settings.prefs.explain.health_exam_extraction" = "Used for structured extraction of key data from health exam reports.";
+"ai_settings.prefs.explain.medical_report_extraction" = "Used for field extraction and standardized organization of medical reports.";
+"ai_settings.prefs.explain.prescription_extraction" = "Used for structured prescription extraction and field validation.";
+"ai_settings.prefs.explain.medication_extraction" = "Used for medication extraction, normalization, and structured output.";
+"ai_settings.prefs.explain.model_config" = "Model configuration scenario for reading model settings and orchestration rules.";
 "ai_settings.prefs.explain.report_interpretation" = "Used for physical exam / lab report analysis and suggestions.";
 
 "company_AI302" = "302.AI";
@@ -691,12 +711,21 @@
 "ai_settings.providers.editor.privacy.view_policy" = "View privacy policy";
 "ai_settings.providers.editor.privacy.accept" = "I have read and agree to this provider's privacy policy";
 "ai_settings.providers.editor.action.test_api" = "Test API";
+"ai_settings.providers.editor.section.api_test" = "API Test";
+"ai_settings.providers.editor.field.test_model" = "Test model";
+"ai_settings.providers.editor.test.passed" = "Passed";
+"ai_settings.providers.editor.test.failed" = "Failed";
+"ai_settings.providers.editor.test.no_models" = "No available models";
 "ai_settings.providers.editor.nav_title" = "Edit key";
 "ai_settings.providers.editor.action.save" = "Save";
 "ai_settings.providers.editor.alert.delete_model_title" = "Delete model?";
 "ai_settings.providers.editor.alert.delete_model_message" = "This model will be removed from the current provider model list.";
 "ai_settings.providers.editor.alert.notice_title" = "Notice";
 "ai_settings.providers.editor.alert.need_api_key" = "Please configure a valid API key first";
+"ai_settings.providers.editor.alert.no_models" = "No testable model is available for this provider yet";
+"ai_settings.providers.editor.alert.test_failed" = "Connection test failed. Please check the URL or API key.";
+"ai_settings.providers.editor.alert.backend_network_error" = "Server-side connectivity test hit a network error. The app has automatically retried with a local direct test. If it still fails, check network, request URL, and model name.";
+"ai_settings.providers.editor.footer.auto_enable_notice" = "⚠️ Note: After configuring an API key, the provider is automatically enabled. You can disable it later from the provider menu.";
 "ai_settings.tools.fetch_step_details" = "Step Details";
 "ai_settings.tools.fetch_energy_details" = "Energy Details";
 "ai_settings.tools.fetch_nutrition_details" = "Nutrition Details";
@@ -1050,6 +1079,33 @@
 "medical.upload.result.medical_report.detail_count" = "%d detail items";
 
 "medical.upload.result.common.complete" = "Done";
+
+"ai_settings.providers.section.trial_providers" = "Available providers during trial";
+"ai_settings.providers.badge.trial" = "Trial";
+"ai_settings.providers.trial_providers.footer" = "Only providers in server-side trial policy are shown; local editing is not supported.";
+"ai_settings.providers.section.providers" = "Model providers";
+"ai_settings.providers.nav_title" = "Model API Keys";
+"ai_settings.providers.trial.card.title" = "Model API Keys / Trial Access";
+"ai_settings.providers.trial.card.subtitle" = "Configure API key to enable related model capabilities";
+"ai_settings.providers.trial.status.active" = "Trial is active";
+"ai_settings.providers.trial.status.remaining_days" = "Remaining %d days";
+"ai_settings.providers.trial.status.pending" = "Application under review";
+"ai_settings.providers.trial.status.rejected" = "Application rejected, you can apply again";
+"ai_settings.providers.trial.status.expired" = "Trial expired, you can reapply";
+"ai_settings.providers.trial.status.default" = "New users can apply for a trial";
+"ai_settings.providers.trial.consent.hint" = "Before submitting, please confirm you have read the relevant provider privacy notice.";
+"ai_settings.providers.trial.consent.toggle" = "I have read and agree to the related privacy terms";
+"ai_settings.providers.trial.error.need_consent" = "Please accept the privacy terms before submitting";
+"ai_settings.providers.trial.action.active" = "Activated";
+"ai_settings.providers.trial.action.pending" = "Pending";
+"ai_settings.providers.trial.action.reapply" = "Reapply";
+"ai_settings.providers.trial.action.apply" = "Apply";
+"ai_settings.providers.error.key_required_with_name" = "%@ requires a valid API key first";
+"ai_settings.providers.add.field.name" = "Provider name";
+"ai_settings.providers.add.action.append_completion_path" = "Append /v1/chat/completions";
+"ai_settings.providers.add.nav_title" = "Add custom provider";
+"ai_settings.providers.add.help" = "Custom OpenAI-compatible provider";
+"ai_settings.providers.add.error.invalid_url_prefix" = "Request URL must start with http:// or https://";
 
 "medical.upload.result.health_exam.nav_title" = "Health Exam";
 "medical.upload.result.health_exam.total_count" = "Item count";

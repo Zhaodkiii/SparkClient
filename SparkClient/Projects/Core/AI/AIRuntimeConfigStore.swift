@@ -21,7 +21,7 @@ actor AIRuntimeConfigStore {
         localBundles = AILocalScenarioBundleBuilder.buildCollection(
             allModels: snapshot.allModels,
             apiKeys: snapshot.apiKeys,
-            scenarioDefaults: snapshot.scenarioDefaultModels
+            scenarioDefaults: AIScenarioDefaultModelStore.allScenarioDefaults(fallback: snapshot.scenarioDefaultModels)
         )
     }
 
@@ -50,11 +50,72 @@ actor AIRuntimeConfigStore {
         cachedOwnerAccountID = nil
     }
 
+    func localScenarioBundles() -> AIScenarioRemoteBundlesCollection? {
+        localBundles
+    }
+
+    func proScenarioBundles() -> AIScenarioRemoteBundlesCollection? {
+        proBundles
+    }
+
+    /// 场景默认模型变更后，同步更新运行时缓存快照与已缓存 bundle。
+    func updateScenarioDefaultModel(_ modelName: String, for scenario: AIScenario) {
+        let trimmed = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return }
+
+        if cachedSnapshot != nil {
+            cachedSnapshot?.scenarioDefaultModels[scenario.rawValue] = trimmed
+        }
+
+        if localBundles != nil {
+            localBundles = applyingDefaultModel(trimmed, to: localBundles, for: scenario)
+        }
+        if proBundles != nil {
+            proBundles = applyingDefaultModel(trimmed, to: proBundles, for: scenario)
+        }
+    }
+
     /// 合并后的最终场景集合。
     func effectiveBundles() throws -> AIScenarioRemoteBundlesCollection {
         guard let local = localBundles else {
             throw AIConfigError.runtimeNotBootstrapped
         }
-        return AIRuntimeConfigAssembler.merge(local: local, pro: proBundles)
+        var merged = AIRuntimeConfigAssembler.merge(local: local, pro: proBundles)
+        let fallbackDefaults = cachedSnapshot?.scenarioDefaultModels ?? [:]
+        for scenario in AIScenario.allCases {
+            let preferredModelName = AIScenarioDefaultModelStore.read(for: scenario)
+                ?? fallbackDefaults[scenario.rawValue]
+            guard let preferredModelName,
+                  preferredModelName.isEmpty == false
+            else { continue }
+            var bundle = merged.bundle(for: scenario)
+            guard bundle.models.contains(where: { $0.name == preferredModelName }) else { continue }
+            bundle.defaultModelName = preferredModelName
+            bundle.models = bundle.models.map { row in
+                var normalized = row
+                normalized.isDefault = (row.name == preferredModelName)
+                return normalized
+            }
+            merged.setBundle(bundle, for: scenario)
+        }
+        return merged
+    }
+
+    private func applyingDefaultModel(
+        _ modelName: String,
+        to bundles: AIScenarioRemoteBundlesCollection?,
+        for scenario: AIScenario
+    ) -> AIScenarioRemoteBundlesCollection? {
+        guard var bundles else { return nil }
+        var bundle = bundles.bundle(for: scenario)
+        guard bundle.models.contains(where: { $0.name == modelName }) else { return bundles }
+        bundle.defaultModelName = modelName
+        bundle.models = bundle.models.map { row in
+            var copy = row
+            copy.isDefault = (row.name == modelName)
+            return copy
+        }
+        bundles.setBundle(bundle, for: scenario)
+        return bundles
     }
 }

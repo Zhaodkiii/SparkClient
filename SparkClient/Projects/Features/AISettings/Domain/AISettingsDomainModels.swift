@@ -366,193 +366,47 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct UserInfo: Codable, Equatable, Sendable {
-    var name: String
-    var userInfo: String
-    var userRequirements: String
-    var chooseEmbeddingModel: String
-    var optimizationTextModel: String
-    var optimizationVisualModel: String
-    var contextFoldingModel: String
-    var routerModel: String
-    var dataExtractionModel: String
-    var reportInterpretationModel: String
-    var optimizationTextSource: AIModelSelectionSource
-    var optimizationVisualSource: AIModelSelectionSource
-    var contextFoldingSource: AIModelSelectionSource
-    var routerSource: AIModelSelectionSource
-    var dataExtractionSource: AIModelSelectionSource
-    var reportInterpretationSource: AIModelSelectionSource
-    var useContextFolding: Bool
-    var maxToolSets: Int
-    var textToSpeechModel: String
-    var useMemory: Bool
-    var useCrossMemory: Bool
-    var useHealth: Bool
+struct AISearchToolPreferences: Codable, Equatable, Sendable {
     var useKnowledge: Bool
     var knowledgeCount: Int
     var knowledgeSimilarity: Double
     var useSearch: Bool
     var bilingualSearch: Bool
     var searchCount: Int
-    var useMap: Bool
-    var useCalendar: Bool
-    var useWeather: Bool
-    var useCanvas: Bool
-    var useCode: Bool
-    var timestamp: Date
 
     init(
-        name: String,
-        userInfo: String,
-        userRequirements: String,
-        chooseEmbeddingModel: String,
-        optimizationTextModel: String,
-        optimizationVisualModel: String,
-        contextFoldingModel: String,
-        routerModel: String,
-        dataExtractionModel: String,
-        reportInterpretationModel: String,
-        optimizationTextSource: AIModelSelectionSource,
-        optimizationVisualSource: AIModelSelectionSource,
-        contextFoldingSource: AIModelSelectionSource,
-        routerSource: AIModelSelectionSource,
-        dataExtractionSource: AIModelSelectionSource,
-        reportInterpretationSource: AIModelSelectionSource,
-        useContextFolding: Bool,
-        maxToolSets: Int,
-        textToSpeechModel: String,
-        useMemory: Bool,
-        useCrossMemory: Bool,
-        useHealth: Bool,
         useKnowledge: Bool,
         knowledgeCount: Int,
         knowledgeSimilarity: Double,
         useSearch: Bool,
         bilingualSearch: Bool,
-        searchCount: Int,
-        useMap: Bool,
-        useCalendar: Bool,
-        useWeather: Bool,
-        useCanvas: Bool,
-        useCode: Bool,
-        timestamp: Date
+        searchCount: Int
     ) {
-        self.name = name
-        self.userInfo = userInfo
-        self.userRequirements = userRequirements
-        self.chooseEmbeddingModel = chooseEmbeddingModel
-        self.optimizationTextModel = optimizationTextModel
-        self.optimizationVisualModel = optimizationVisualModel
-        self.contextFoldingModel = contextFoldingModel
-        self.routerModel = routerModel
-        self.dataExtractionModel = dataExtractionModel
-        self.reportInterpretationModel = reportInterpretationModel
-        self.optimizationTextSource = optimizationTextSource
-        self.optimizationVisualSource = optimizationVisualSource
-        self.contextFoldingSource = contextFoldingSource
-        self.routerSource = routerSource
-        self.dataExtractionSource = dataExtractionSource
-        self.reportInterpretationSource = reportInterpretationSource
-        self.useContextFolding = useContextFolding
-        self.maxToolSets = maxToolSets
-        self.textToSpeechModel = textToSpeechModel
-        self.useMemory = useMemory
-        self.useCrossMemory = useCrossMemory
-        self.useHealth = useHealth
         self.useKnowledge = useKnowledge
         self.knowledgeCount = knowledgeCount
         self.knowledgeSimilarity = knowledgeSimilarity
         self.useSearch = useSearch
         self.bilingualSearch = bilingualSearch
         self.searchCount = searchCount
-        self.useMap = useMap
-        self.useCalendar = useCalendar
-        self.useWeather = useWeather
-        self.useCanvas = useCanvas
-        self.useCode = useCode
-        self.timestamp = timestamp
     }
 
     enum CodingKeys: String, CodingKey {
-        case name
-        case userInfo
-        case userRequirements
-        case chooseEmbeddingModel
-        case optimizationTextModel
-        case optimizationVisualModel
-        case contextFoldingModel
-        case routerModel
-        case dataExtractionModel
-        case reportInterpretationModel
-        case optimizationTextSource
-        case optimizationVisualSource
-        case contextFoldingSource
-        case routerSource
-        case dataExtractionSource
-        case reportInterpretationSource
-        case useContextFolding
-        case maxToolSets
-        case textToSpeechModel
-        case useMemory
-        case useCrossMemory
-        case useHealth
         case useKnowledge
         case knowledgeCount
         case knowledgeSimilarity
         case useSearch
         case bilingualSearch
         case searchCount
-        case useMap
-        case useCalendar
-        case useWeather
-        case useCanvas
-        case useCode
-        case timestamp
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
-        userInfo = try container.decodeIfPresent(String.self, forKey: .userInfo) ?? ""
-        userRequirements = try container.decodeIfPresent(String.self, forKey: .userRequirements) ?? ""
-        chooseEmbeddingModel = try container.decodeIfPresent(String.self, forKey: .chooseEmbeddingModel) ?? "spark-embedding-default"
-        optimizationTextModel = try container.decodeIfPresent(String.self, forKey: .optimizationTextModel) ?? "spark-optimization-default"
-        optimizationVisualModel = try container.decodeIfPresent(String.self, forKey: .optimizationVisualModel) ?? "spark-optimization-default"
-        contextFoldingModel = try container.decodeIfPresent(String.self, forKey: .contextFoldingModel) ?? "spark-optimization-default"
-        routerModel = try container.decodeIfPresent(String.self, forKey: .routerModel) ?? "spark-chat-default"
-        dataExtractionModel = try container.decodeIfPresent(String.self, forKey: .dataExtractionModel) ?? "spark-medical-extraction"
-        reportInterpretationModel = try container.decodeIfPresent(String.self, forKey: .reportInterpretationModel) ?? "spark-chat-default"
-        let optimizationTextSourceRaw = try container.decodeIfPresent(String.self, forKey: .optimizationTextSource)
-        optimizationTextSource = AIModelSelectionSource(rawValue: optimizationTextSourceRaw ?? "") ?? .localKey
-        let optimizationVisualSourceRaw = try container.decodeIfPresent(String.self, forKey: .optimizationVisualSource)
-        optimizationVisualSource = AIModelSelectionSource(rawValue: optimizationVisualSourceRaw ?? "") ?? .localKey
-        let contextFoldingSourceRaw = try container.decodeIfPresent(String.self, forKey: .contextFoldingSource)
-        contextFoldingSource = AIModelSelectionSource(rawValue: contextFoldingSourceRaw ?? "") ?? .localKey
-        let routerSourceRaw = try container.decodeIfPresent(String.self, forKey: .routerSource)
-        routerSource = AIModelSelectionSource(rawValue: routerSourceRaw ?? "") ?? .localKey
-        let dataExtractionSourceRaw = try container.decodeIfPresent(String.self, forKey: .dataExtractionSource)
-        dataExtractionSource = AIModelSelectionSource(rawValue: dataExtractionSourceRaw ?? "") ?? .localKey
-        let reportInterpretationSourceRaw = try container.decodeIfPresent(String.self, forKey: .reportInterpretationSource)
-        reportInterpretationSource = AIModelSelectionSource(rawValue: reportInterpretationSourceRaw ?? "") ?? .localKey
-        useContextFolding = try container.decodeIfPresent(Bool.self, forKey: .useContextFolding) ?? true
-        maxToolSets = try container.decodeIfPresent(Int.self, forKey: .maxToolSets) ?? 3
-        textToSpeechModel = try container.decodeIfPresent(String.self, forKey: .textToSpeechModel) ?? "spark-tts-default"
-        useMemory = try container.decodeIfPresent(Bool.self, forKey: .useMemory) ?? true
-        useCrossMemory = try container.decodeIfPresent(Bool.self, forKey: .useCrossMemory) ?? true
-        useHealth = try container.decodeIfPresent(Bool.self, forKey: .useHealth) ?? true
         useKnowledge = try container.decodeIfPresent(Bool.self, forKey: .useKnowledge) ?? true
         knowledgeCount = try container.decodeIfPresent(Int.self, forKey: .knowledgeCount) ?? 12
         knowledgeSimilarity = try container.decodeIfPresent(Double.self, forKey: .knowledgeSimilarity) ?? 0.55
         useSearch = try container.decodeIfPresent(Bool.self, forKey: .useSearch) ?? true
         bilingualSearch = try container.decodeIfPresent(Bool.self, forKey: .bilingualSearch) ?? true
         searchCount = try container.decodeIfPresent(Int.self, forKey: .searchCount) ?? 8
-        useMap = try container.decodeIfPresent(Bool.self, forKey: .useMap) ?? true
-        useCalendar = try container.decodeIfPresent(Bool.self, forKey: .useCalendar) ?? true
-        useWeather = try container.decodeIfPresent(Bool.self, forKey: .useWeather) ?? true
-        useCanvas = try container.decodeIfPresent(Bool.self, forKey: .useCanvas) ?? true
-        useCode = try container.decodeIfPresent(Bool.self, forKey: .useCode) ?? true
-        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
     }
 }
 
@@ -1119,42 +973,14 @@ enum AISettingsDefaults {
         ]
     }
 
-    static var userInfo: UserInfo {
-        UserInfo(
-            name: "",
-            userInfo: "",
-            userRequirements: "",
-            chooseEmbeddingModel: "spark-embedding-default",
-            optimizationTextModel: "spark-optimization-default",
-            optimizationVisualModel: "spark-optimization-default",
-            contextFoldingModel: "spark-optimization-default",
-            routerModel: "spark-chat-default",
-            dataExtractionModel: "spark-medical-extraction",
-            reportInterpretationModel: "spark-chat-default",
-            optimizationTextSource: .localKey,
-            optimizationVisualSource: .localKey,
-            contextFoldingSource: .localKey,
-            routerSource: .localKey,
-            dataExtractionSource: .localKey,
-            reportInterpretationSource: .localKey,
-            useContextFolding: true,
-            maxToolSets: 3,
-            textToSpeechModel: "spark-tts-default",
-            useMemory: true,
-            useCrossMemory: true,
-            useHealth: true,
+    static var searchToolPreferences: AISearchToolPreferences {
+        AISearchToolPreferences(
             useKnowledge: true,
             knowledgeCount: 12,
             knowledgeSimilarity: 0.55,
             useSearch: true,
             bilingualSearch: true,
-            searchCount: 8,
-            useMap: true,
-            useCalendar: true,
-            useWeather: true,
-            useCanvas: true,
-            useCode: true,
-            timestamp: Date()
+            searchCount: 8
         )
     }
 

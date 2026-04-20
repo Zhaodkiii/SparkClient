@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private enum ProviderSettingsSheet: Identifiable {
     case manageModels
@@ -15,16 +18,18 @@ struct ProviderSettingsEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State var provider: APIKeys
-    let viewModel: AISettingsViewModel
-    let onDeleteModel: (UUID) -> Void
-    let onSave: (APIKeys) -> Void
-    let onTest: (APIKeys) async -> Bool
+    @ObservedObject var viewModel: AISettingsViewModel
 
     @State private var isTesting = false
     @State private var testPassed: Bool?
+    @State private var testErrorMessage: String?
+    @State private var selectedTestModelName = ""
     @State private var showDeleteModelAlert = false
     @State private var pendingDeleteModelID: UUID?
     @State private var presentedSheet: ProviderSettingsSheet?
+    @State private var showNoticeAlert = false
+    @State private var noticeMessage = ""
+    private let probeService = ClientModelCapabilityProbeService()
 
     private var providerModels: [AllModels] {
         let company = provider.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -34,13 +39,19 @@ struct ProviderSettingsEditorView: View {
             .sorted { $0.position < $1.position }
     }
 
+    private var testableModels: [AllModels] {
+        providerModels
+            .filter(\.supportsTextGen)
+            .filter(\.isEnabled)
+    }
+
     var body: some View {
         Form {
             Section {
                 HStack {
                     Text(L10n.text("ai_settings.providers.editor.field.provider"))
                     Spacer()
-                    Text(provider.displayName)
+                    Text(L10n.text(provider.localizedDisplayName))
                         .foregroundStyle(.secondary)
                 }
                 TextField(L10n.text("ai_settings.providers.editor.field.request_url"), text: $provider.requestURL)
@@ -50,6 +61,18 @@ struct ProviderSettingsEditorView: View {
                 SecureField(L10n.text("ai_settings.providers.editor.field.api_key"), text: $provider.key)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                
+                if provider.privacyPolicyURL.isEmpty == false {
+                    if let url = URL(string: provider.privacyPolicyURL) {
+                        Link(L10n.text("ai_settings.providers.editor.privacy.view_policy"), destination: url)
+                            .font(.footnote)
+                    }
+                    Toggle(isOn: $provider.privacyPolicyAccepted) {
+                        Text(L10n.text("ai_settings.providers.editor.privacy.accept"))
+                            .font(.footnote)
+                    }
+                    .tint(.accentColor)
+                }
             }
 
             if provider.source == .custom {
@@ -92,40 +115,47 @@ struct ProviderSettingsEditorView: View {
                     .buttonStyle(.plain)
                 }
             }
+            Section(L10n.text("ai_settings.providers.editor.section.api_test")) {
+                if testableModels.isEmpty == false {
+                    Picker(L10n.text("ai_settings.providers.editor.field.test_model"), selection: $selectedTestModelName) {
+                        ForEach(testableModels) { model in
+                            Text(model.displayName)
+                                .tag(model.name)
+                        }
+                    }
+                }
 
-            if provider.privacyPolicyURL.isEmpty == false {
-                Section(L10n.text("ai_settings.providers.editor.section.privacy")) {
-                    if let url = URL(string: provider.privacyPolicyURL) {
-                        Link(L10n.text("ai_settings.providers.editor.privacy.view_policy"), destination: url)
-                            .font(.footnote)
+                HStack {
+                    Button(L10n.text("ai_settings.providers.editor.action.test_api")) {
+                        Task {
+                            await testProvider()
+                        }
                     }
-                    Toggle(isOn: $provider.privacyPolicyAccepted) {
-                        Text(L10n.text("ai_settings.providers.editor.privacy.accept"))
-                            .font(.footnote)
+                    .disabled(isTesting || testableModels.isEmpty)
+
+                    Spacer()
+                    if isTesting {
+                        ProgressView()
+                    } else if let passed = testPassed {
+                        Text(L10n.text(passed ? "ai_settings.providers.editor.test.passed" : "ai_settings.providers.editor.test.failed"))
+                            .foregroundStyle(passed ? .green : .red)
+                    } else if testableModels.isEmpty {
+                        Text(L10n.text("ai_settings.providers.editor.test.no_models"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .tint(.accentColor)
+                }
+
+                if let testErrorMessage, testErrorMessage.isEmpty == false {
+                    Text(testErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 
             Section {
-                Button {
-                    Task {
-                        isTesting = true
-                        defer { isTesting = false }
-                        testPassed = await onTest(provider)
-                    }
-                } label: {
-                    HStack {
-                        Text(L10n.text("ai_settings.providers.editor.action.test_api"))
-                        Spacer()
-                        if isTesting {
-                            ProgressView()
-                        } else if let passed = testPassed {
-                            Image(systemName: passed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(passed ? .green : .red)
-                        }
-                    }
-                }
+                Text(L10n.text("ai_settings.providers.editor.footer.auto_enable_notice"))
+                    .font(.footnote)
             }
         }
         .navigationTitle(L10n.text("ai_settings.providers.editor.nav_title"))
@@ -136,9 +166,7 @@ struct ProviderSettingsEditorView: View {
                     if provider.privacyPolicyURL.isEmpty == false, provider.privacyPolicyAccepted == false {
                         return
                     }
-                    provider.privacyPolicyAcceptedAt = provider.privacyPolicyAccepted ? Date() : nil
-                    onSave(provider)
-                    dismiss()
+                    saveProvider()
                 }
                 .disabled(provider.privacyPolicyURL.isEmpty == false && provider.privacyPolicyAccepted == false)
             }
@@ -149,18 +177,161 @@ struct ProviderSettingsEditorView: View {
                 ModelManagementView(provider: provider, viewModel: viewModel)
             }
         }
-        .alert(L10n.text("ai_settings.providers.editor.alert.delete_model_title"), isPresented: $showDeleteModelAlert) {
-            Button(L10n.text("common.cancel"), role: .cancel) {
-                pendingDeleteModelID = nil
-            }
+        .confirmationDialog(
+            L10n.text("ai_settings.providers.editor.alert.delete_model_title"),
+            isPresented: $showDeleteModelAlert,
+            titleVisibility: .visible
+        ) {
             Button(L10n.text("common.delete"), role: .destructive) {
                 guard let id = pendingDeleteModelID else { return }
-                onDeleteModel(id)
+                deleteModel(modelID: id)
+                pendingDeleteModelID = nil
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {
                 pendingDeleteModelID = nil
             }
         } message: {
             Text(L10n.text("ai_settings.providers.editor.alert.delete_model_message"))
         }
+        .alert(L10n.text("ai_settings.providers.editor.alert.notice_title"), isPresented: $showNoticeAlert) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(noticeMessage)
+        }
+        .onAppear(perform: syncSelectedTestModel)
+        .onChange(of: testableModels) { _ in
+            syncSelectedTestModel()
+        }
+    }
+
+    private func deleteModel(modelID: UUID) {
+        guard let model = viewModel.snapshot.allModels.first(where: { $0.id == modelID }) else { return }
+        if model.source == .system {
+            showNotice("系统模型不支持删除")
+            return
+        }
+        viewModel.deleteOnlineModel(id: modelID)
+        impact(.light)
+        Task {
+            await viewModel.persistSnapshotNow()
+        }
+    }
+
+    private func saveProvider() {
+        provider.privacyPolicyAcceptedAt = provider.privacyPolicyAccepted ? Date() : nil
+        var updated = provider
+        updated.timestamp = Date()
+        updated.isHidden = provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        updateModelVisibility(company: updated.company, hidden: updated.isHidden)
+        impact(.medium)
+        Task {
+            _ = await viewModel.upsertProviderAndPersist(updated)
+        }
+        dismiss()
+    }
+
+    private func testProvider() async {
+        let key = provider.key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard key.isEmpty == false else {
+            showNotice(L10n.text("ai_settings.providers.editor.alert.need_api_key"))
+            testPassed = false
+            return
+        }
+        guard let modelName = resolvedTestModelName else {
+            let message = L10n.text("ai_settings.providers.editor.alert.no_models")
+            testPassed = false
+            testErrorMessage = message
+            showNotice(message)
+            return
+        }
+
+        isTesting = true
+        testErrorMessage = nil
+        defer { isTesting = false }
+
+        let backendResult = await viewModel.testProviderConnection(
+            requestURL: provider.requestURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            apiKey: key,
+            model: modelName
+        )
+        if backendResult.reachable {
+            testPassed = true
+            testErrorMessage = nil
+            impact(.medium)
+            return
+        }
+
+        if backendResult.message?.lowercased() == "network_error" {
+            do {
+                var localProvider = provider
+                localProvider.key = key
+                localProvider.requestURL = provider.requestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                try await probeService.testConnection(modelName: modelName, provider: localProvider)
+                testPassed = true
+                testErrorMessage = nil
+                impact(.medium)
+                return
+            } catch {
+                let message = error.localizedDescription
+                testPassed = false
+                testErrorMessage = message
+                showNotice(message)
+                return
+            }
+        }
+
+        let message = backendFailureMessage(rawMessage: backendResult.message)
+        testPassed = false
+        testErrorMessage = message
+        showNotice(message)
+    }
+
+    private var resolvedTestModelName: String? {
+        if testableModels.contains(where: { $0.name == selectedTestModelName }) {
+            return selectedTestModelName
+        }
+        return testableModels.first?.name
+    }
+
+    private func syncSelectedTestModel() {
+        guard let modelName = resolvedTestModelName else {
+            selectedTestModelName = ""
+            return
+        }
+        if selectedTestModelName != modelName {
+            selectedTestModelName = modelName
+        }
+    }
+
+    private func backendFailureMessage(rawMessage: String?) -> String {
+        let trimmed = rawMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.isEmpty == false else {
+            return L10n.text("ai_settings.providers.editor.alert.test_failed")
+        }
+        switch trimmed.lowercased() {
+        case "network_error":
+            return L10n.text("ai_settings.providers.editor.alert.backend_network_error")
+        default:
+            return trimmed
+        }
+    }
+
+    private func updateModelVisibility(company: String, hidden: Bool) {
+        let normalized = company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        for index in viewModel.snapshot.allModels.indices where viewModel.snapshot.allModels[index].company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalized {
+            viewModel.snapshot.allModels[index].isHidden = hidden
+        }
+    }
+
+    private func showNotice(_ message: String) {
+        noticeMessage = message
+        showNoticeAlert = true
+    }
+
+    private func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+#if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+#endif
     }
 }
 

@@ -8,7 +8,6 @@ final class AISettingsViewModel: ObservableObject {
     @Published private(set) var isSaving = false
     @Published private(set) var hasUnsavedChanges = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var saveSucceeded = false
     @Published private(set) var trialOperationInFlight = false
 
     private let loadUseCase: LoadAISettingsUseCase
@@ -21,6 +20,10 @@ final class AISettingsViewModel: ObservableObject {
     private let providerModelCatalogService: ProviderModelCatalogService
     private var lastPersistedSnapshot: AISettingsSnapshot = .default
     private var cancellables: Set<AnyCancellable> = []
+
+    var configCenter: AIConfigCenter? {
+        aiConfigCenter
+    }
 
     init(
         loadUseCase: LoadAISettingsUseCase,
@@ -60,14 +63,12 @@ final class AISettingsViewModel: ObservableObject {
         guard hasUnsavedChanges else { return }
         isSaving = true
         errorMessage = nil
-        saveSucceeded = false
         defer { isSaving = false }
 
         do {
             try await performPersistToRepository()
             lastPersistedSnapshot = snapshot
             hasUnsavedChanges = false
-            saveSucceeded = true
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
         } catch {
             errorMessage = error.localizedDescription
@@ -78,13 +79,11 @@ final class AISettingsViewModel: ObservableObject {
     func persistSnapshotNow() async {
         isSaving = true
         errorMessage = nil
-        saveSucceeded = false
         defer { isSaving = false }
         do {
             try await performPersistToRepository()
             lastPersistedSnapshot = snapshot
             hasUnsavedChanges = false
-            saveSucceeded = true
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
         } catch {
             errorMessage = error.localizedDescription
@@ -99,9 +98,7 @@ final class AISettingsViewModel: ObservableObject {
         errorMessage = nil
     }
 
-    func clearSaveFlag() {
-        saveSucceeded = false
-    }
+
 
     func refreshTrialStatus() async {
         guard let aiConfigAPI else { return }
@@ -130,8 +127,8 @@ final class AISettingsViewModel: ObservableObject {
         }
     }
 
-    func testProviderConnection(requestURL: String, apiKey: String, model: String) async -> Bool {
-        guard let aiConfigAPI else { return false }
+    func testProviderConnection(requestURL: String, apiKey: String, model: String) async -> ProviderConnectionTestResult {
+        guard let aiConfigAPI else { return ProviderConnectionTestResult(reachable: false, message: nil) }
         do {
             return try await aiConfigAPI.testProviderConnection(
                 requestURL: requestURL,
@@ -140,7 +137,7 @@ final class AISettingsViewModel: ObservableObject {
             )
         } catch {
             errorMessage = error.localizedDescription
-            return false
+            return ProviderConnectionTestResult(reachable: false, message: error.localizedDescription)
         }
     }
 
@@ -367,8 +364,11 @@ final class AISettingsViewModel: ObservableObject {
         snapshot.allModels.removeAll { candidate in
             candidate.id == model.id || candidate.baseModelName == model.name
         }
-        if snapshot.scenarioDefaultModels[AIScenario.chat.rawValue] == model.name {
-            snapshot.scenarioDefaultModels.removeValue(forKey: AIScenario.chat.rawValue)
+        for scenario in AIScenario.allCases {
+            if snapshot.scenarioDefaultModels[scenario.rawValue] == model.name {
+                snapshot.scenarioDefaultModels.removeValue(forKey: scenario.rawValue)
+                AIScenarioDefaultModelStore.write(nil, for: scenario)
+            }
         }
     }
 
@@ -385,6 +385,7 @@ final class AISettingsViewModel: ObservableObject {
 
     func setChatModel(_ model: AllModels) {
         snapshot.scenarioDefaultModels[AIScenario.chat.rawValue] = model.name
+        AIScenarioDefaultModelStore.write(model.name, for: .chat)
     }
 
     func hasValidAPIKey(for model: AllModels) -> Bool {
@@ -521,13 +522,11 @@ final class AISettingsViewModel: ObservableObject {
         guard let model = snapshot.allModels.first(where: { $0.id == modelID }) else { return false }
         isSaving = true
         errorMessage = nil
-        saveSucceeded = false
         defer { isSaving = false }
         do {
             try await saveUseCase.execute(model: model)
             markPersistedModel(model)
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
-            saveSucceeded = true
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             return true
         } catch {
@@ -541,13 +540,11 @@ final class AISettingsViewModel: ObservableObject {
         guard let provider = snapshot.apiKeys.first(where: { $0.id == providerID }) else { return false }
         isSaving = true
         errorMessage = nil
-        saveSucceeded = false
         defer { isSaving = false }
         do {
             try await saveUseCase.execute(provider: provider)
             markPersistedProvider(provider)
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
-            saveSucceeded = true
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             return true
         } catch {

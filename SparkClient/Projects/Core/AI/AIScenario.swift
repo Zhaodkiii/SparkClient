@@ -4,6 +4,10 @@ import Foundation
 enum AIScenario: String, Codable, CaseIterable, Sendable {
     /// 通用对话场景，通常用于主聊天能力。
     case chat
+    /// 向量模型场景（知识检索/索引等向量化链路）。
+    case embedding
+    /// 语音模型场景（TTS/语音合成链路）。
+    case voice
     /// 医疗文档结构化抽取场景（如从报告中提取字段化信息）。
     case medicalStructuredExtraction = "medical_structured_extraction"
     /// 医疗文档类型识别场景（自动识别：病例/体检/医疗报告/处方/用药）。
@@ -37,14 +41,24 @@ extension AIScenario {
         switch self {
         case .chat:
             return L10n.text("ai_settings.scenario.chat")
-        case .medicalStructuredExtraction,
-             .medicalDocumentTypeRecognition,
-             .medicalCaseExtraction,
-             .healthExamExtraction,
-             .medicalReportExtraction,
-             .prescriptionExtraction,
-             .medicationExtraction:
-            return L10n.text("ai_settings.scenario.medical_extraction")
+        case .embedding:
+            return L10n.text("ai_settings.scenario.embedding")
+        case .voice:
+            return L10n.text("ai_settings.scenario.voice")
+        case .medicalStructuredExtraction:
+            return L10n.text("ai_settings.scenario.medical_structured_extraction")
+        case .medicalDocumentTypeRecognition:
+            return L10n.text("ai_settings.scenario.medical_document_type_recognition")
+        case .medicalCaseExtraction:
+            return L10n.text("ai_settings.scenario.medical_case_extraction")
+        case .healthExamExtraction:
+            return L10n.text("ai_settings.scenario.health_exam_extraction")
+        case .medicalReportExtraction:
+            return L10n.text("ai_settings.scenario.medical_report_extraction")
+        case .prescriptionExtraction:
+            return L10n.text("ai_settings.scenario.prescription_extraction")
+        case .medicationExtraction:
+            return L10n.text("ai_settings.scenario.medication_extraction")
         case .optimizationText:
             return L10n.text("ai_settings.scenario.optimization_text")
         case .optimizationVisual:
@@ -57,6 +71,80 @@ extension AIScenario {
             return L10n.text("ai_settings.scenario.model_config")
         case .reportInterpretation:
             return L10n.text("ai_settings.scenario.report_interpretation")
+        }
+    }
+
+    var introIconSystemName: String {
+        switch self {
+        case .chat:
+            return "bubble.left.and.bubble.right"
+        case .embedding:
+            return "point.3.connected.trianglepath.dotted"
+        case .voice:
+            return "waveform"
+        case .medicalStructuredExtraction:
+            return "cross.case"
+        case .medicalDocumentTypeRecognition:
+            return "doc.text.viewfinder"
+        case .medicalCaseExtraction:
+            return "cross.vial"
+        case .healthExamExtraction:
+            return "heart.text.square"
+        case .medicalReportExtraction:
+            return "doc.text.magnifyingglass"
+        case .prescriptionExtraction:
+            return "pills"
+        case .medicationExtraction:
+            return "cross.case.circle"
+        case .optimizationText:
+            return "paintbrush.pointed"
+        case .optimizationVisual:
+            return "paintbrush"
+        case .contextFolding:
+            return "rectangle.compress.vertical"
+        case .router:
+            return "arrow.triangle.branch"
+        case .modelConfig:
+            return "slider.horizontal.3"
+        case .reportInterpretation:
+            return "stethoscope"
+        }
+    }
+
+    var localizedIntro: String {
+        switch self {
+        case .chat:
+            return L10n.text("ai_settings.prefs.explain.chat")
+        case .embedding:
+            return L10n.text("ai_settings.prefs.explain.embedding")
+        case .voice:
+            return L10n.text("ai_settings.prefs.explain.voice")
+        case .medicalStructuredExtraction:
+            return L10n.text("ai_settings.prefs.explain.medical_structured_extraction")
+        case .medicalDocumentTypeRecognition:
+            return L10n.text("ai_settings.prefs.explain.medical_document_type_recognition")
+        case .medicalCaseExtraction:
+            return L10n.text("ai_settings.prefs.explain.medical_case_extraction")
+        case .healthExamExtraction:
+            return L10n.text("ai_settings.prefs.explain.health_exam_extraction")
+        case .medicalReportExtraction:
+            return L10n.text("ai_settings.prefs.explain.medical_report_extraction")
+        case .prescriptionExtraction:
+            return L10n.text("ai_settings.prefs.explain.prescription_extraction")
+        case .medicationExtraction:
+            return L10n.text("ai_settings.prefs.explain.medication_extraction")
+        case .optimizationText:
+            return L10n.text("ai_settings.prefs.explain.optimization_text")
+        case .optimizationVisual:
+            return L10n.text("ai_settings.prefs.explain.optimization_visual")
+        case .contextFolding:
+            return L10n.text("ai_settings.prefs.explain.context_folding")
+        case .router:
+            return L10n.text("ai_settings.prefs.explain.router")
+        case .modelConfig:
+            return L10n.text("ai_settings.prefs.explain.model_config")
+        case .reportInterpretation:
+            return L10n.text("ai_settings.prefs.explain.report_interpretation")
         }
     }
 }

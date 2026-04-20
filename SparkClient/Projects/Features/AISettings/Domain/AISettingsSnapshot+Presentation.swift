@@ -7,10 +7,11 @@ extension AISettingsSnapshot {
 
     /// 由本地目录构建的场景 bundle（不含 Pro 覆盖；用于设置页与即时展示）。
     func localScenarioBundles() -> AIScenarioRemoteBundlesCollection {
-        AILocalScenarioBundleBuilder.buildCollection(
+        let scenarioDefaults = AIScenarioDefaultModelStore.allScenarioDefaults(fallback: scenarioDefaultModels)
+        return AILocalScenarioBundleBuilder.buildCollection(
             allModels: allModels,
             apiKeys: apiKeys,
-            scenarioDefaults: scenarioDefaultModels
+            scenarioDefaults: scenarioDefaults
         )
     }
 

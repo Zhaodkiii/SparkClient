@@ -10,28 +10,9 @@ struct AIScenarioConfigEditorView: View {
 
     var body: some View {
         Form {
-            scenarioSection(title: L10n.text("ai_settings.scenario.chat"), scenario: .chat)
-            scenarioSection(
-                title: L10n.text("ai_settings.scenario.optimization_text"),
-                scenario: .optimizationText
-            )
-            scenarioSection(
-                title: L10n.text("ai_settings.scenario.optimization_visual"),
-                scenario: .optimizationVisual
-            )
-            scenarioSection(
-                title: L10n.text("ai_settings.scenario.context_folding"),
-                scenario: .contextFolding
-            )
-            scenarioSection(title: L10n.text("ai_settings.scenario.router"), scenario: .router)
-            scenarioSection(
-                title: L10n.text("ai_settings.scenario.model_config"),
-                scenario: .modelConfig
-            )
-            scenarioSection(
-                title: L10n.text("ai_settings.scenario.report_interpretation"),
-                scenario: .reportInterpretation
-            )
+            ForEach(AIScenario.allCases, id: \.rawValue) { scenario in
+                scenarioSection(title: scenario.localizedTitle, scenario: scenario)
+            }
         }
         .navigationTitle(L10n.text("ai_settings.row.scenario"))
     }
@@ -85,7 +66,8 @@ struct AIScenarioConfigEditorView: View {
     private func scenarioModelSelection(for scenario: AIScenario) -> Binding<String> {
         Binding(
             get: {
-                snapshot.scenarioDefaultModels[scenario.rawValue]
+                AIScenarioDefaultModelStore.read(for: scenario)
+                    ?? snapshot.scenarioDefaultModels[scenario.rawValue]
                     ?? snapshot.resolveScenarioRow(for: scenario)?.model
                     ?? ""
             },
@@ -96,6 +78,7 @@ struct AIScenarioConfigEditorView: View {
                 } else {
                     next.scenarioDefaultModels[scenario.rawValue] = newValue
                 }
+                AIScenarioDefaultModelStore.write(newValue, for: scenario)
                 snapshot = next
             }
         )

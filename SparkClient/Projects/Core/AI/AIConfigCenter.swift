@@ -102,6 +102,18 @@ final class AIConfigCenter {
         try await runtimeConfigStore.effectiveBundles()
     }
 
+    func localScenarioBundles() async -> AIScenarioRemoteBundlesCollection? {
+        await runtimeConfigStore.localScenarioBundles()
+    }
+
+    func proScenarioBundles() async -> AIScenarioRemoteBundlesCollection? {
+        await runtimeConfigStore.proScenarioBundles()
+    }
+
+    func updateScenarioDefaultModel(_ modelName: String, for scenario: AIScenario) async {
+        await runtimeConfigStore.updateScenarioDefaultModel(modelName, for: scenario)
+    }
+
     func refreshRemoteConfig() async {
         guard let remoteProvider else { return }
         do {

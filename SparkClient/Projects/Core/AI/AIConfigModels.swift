@@ -357,11 +357,73 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     }
 }
 
+enum AIScenarioDefaultModelStore {
+    private static let keyPrefix = "spark.ai.default_model_name"
+
+    static func userDefaultsKey(for scenario: AIScenario) -> String {
+        "\(keyPrefix).\(scenario.rawValue)"
+    }
+
+    static func read(for scenario: AIScenario) -> String? {
+        let value = UserDefaults.standard.string(forKey: userDefaultsKey(for: scenario))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value, value.isEmpty == false else { return nil }
+        return value
+    }
+
+    static func write(_ modelName: String?, for scenario: AIScenario) {
+        let trimmed = modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let key = userDefaultsKey(for: scenario)
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: key)
+        }
+    }
+
+    static func allScenarioDefaults(fallback: [String: String] = [:]) -> [String: String] {
+        var out: [String: String] = fallback
+        for scenario in AIScenario.allCases {
+            if let stored = read(for: scenario) {
+                out[scenario.rawValue] = stored
+            }
+        }
+        return out
+    }
+
+    static func sync(from scenarioDefaults: [String: String]) {
+        for scenario in AIScenario.allCases {
+            write(scenarioDefaults[scenario.rawValue], for: scenario)
+        }
+    }
+}
+
+enum AIScenarioModelSourceStore {
+    private static let keyPrefix = "spark.ai.model_source"
+
+    static func userDefaultsKey(for scenario: AIScenario) -> String {
+        "\(keyPrefix).\(scenario.rawValue)"
+    }
+
+    static func read(for scenario: AIScenario) -> AIModelSelectionSource? {
+        guard let raw = UserDefaults.standard.string(forKey: userDefaultsKey(for: scenario)) else { return nil }
+        return AIModelSelectionSource(rawValue: raw)
+    }
+
+    static func write(_ source: AIModelSelectionSource, for scenario: AIScenario) {
+        UserDefaults.standard.set(source.rawValue, forKey: userDefaultsKey(for: scenario))
+    }
+}
+
 extension AIScenarioRemoteBundlesCollection {
     mutating func setBundle(_ bundle: AIScenarioRemoteBundle, for scenario: AIScenario) {
         switch scenario {
         case .chat:
             chat = bundle
+        case .embedding:
+            embedding = bundle
+        case .voice:
+            voice = bundle
         case .medicalStructuredExtraction:
             medicalStructuredExtraction = bundle
         case .medicalDocumentTypeRecognition:
@@ -396,6 +458,10 @@ extension AIScenarioRemoteBundlesCollection {
 struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     /// 对话场景模型集合。
     var chat: AIScenarioRemoteBundle
+    /// 向量场景模型集合。
+    var embedding: AIScenarioRemoteBundle
+    /// 语音场景模型集合。
+    var voice: AIScenarioRemoteBundle
     /// 医疗文档结构化抽取场景模型集合。
     var medicalStructuredExtraction: AIScenarioRemoteBundle
     /// 医疗文档类型识别场景模型集合。
@@ -425,6 +491,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
 
     init(
         chat: AIScenarioRemoteBundle,
+        embedding: AIScenarioRemoteBundle,
+        voice: AIScenarioRemoteBundle,
         medicalStructuredExtraction: AIScenarioRemoteBundle,
         medicalDocumentTypeRecognition: AIScenarioRemoteBundle,
         medicalCaseExtraction: AIScenarioRemoteBundle,
@@ -440,6 +508,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         reportInterpretation: AIScenarioRemoteBundle
     ) {
         self.chat = chat
+        self.embedding = embedding
+        self.voice = voice
         self.medicalStructuredExtraction = medicalStructuredExtraction
         self.medicalDocumentTypeRecognition = medicalDocumentTypeRecognition
         self.medicalCaseExtraction = medicalCaseExtraction
@@ -458,6 +528,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     /// 与服务端字段命名的映射。
     enum CodingKeys: String, CodingKey {
         case chat
+        case embedding
+        case voice
         case medicalStructuredExtraction = "medical_structured_extraction"
         case medicalDocumentTypeRecognition = "medical_document_type_recognition"
         case medicalCaseExtraction = "medical_case_extraction"
@@ -476,6 +548,10 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         chat = try c.decode(AIScenarioRemoteBundle.self, forKey: .chat)
+        embedding = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .embedding)
+            ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
+        voice = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .voice)
+            ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
         optimizationText = try c.decode(AIScenarioRemoteBundle.self, forKey: .optimizationText)
         optimizationVisual = try c.decode(AIScenarioRemoteBundle.self, forKey: .optimizationVisual)
         contextFolding = try c.decode(AIScenarioRemoteBundle.self, forKey: .contextFolding)
@@ -497,6 +573,10 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         switch scenario {
         case .chat:
             return chat
+        case .embedding:
+            return embedding
+        case .voice:
+            return voice
         case .medicalStructuredExtraction:
             return medicalStructuredExtraction
         case .medicalDocumentTypeRecognition:

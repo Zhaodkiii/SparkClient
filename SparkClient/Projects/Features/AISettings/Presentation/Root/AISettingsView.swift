@@ -27,41 +27,12 @@ struct AISettingsView: View {
                 }
 
                 NavigationLink {
-                    AIModelPreferencesView(
-                        snapshot: $viewModel.snapshot,
-                        focus: .embedding
-                    )
+                    AIModelPreferencesView(aiConfigCenter: viewModel.configCenter)
                 } label: {
                     SettingNavRow(
-                        title: L10n.text("ai_settings.row.embedding"),
-                        subtitle: L10n.text("ai_settings.row.embedding.subtitle"),
-                        icon: "compass.drawing"
-                    )
-                }
-
-                NavigationLink {
-                    AIModelPreferencesView(
-                        snapshot: $viewModel.snapshot,
-                        focus: .voice
-                    )
-                } label: {
-                    SettingNavRow(
-                        title: L10n.text("ai_settings.row.voice"),
-                        subtitle: L10n.text("ai_settings.row.voice.subtitle"),
-                        icon: "waveform"
-                    )
-                }
-
-                NavigationLink {
-                    AIModelPreferencesView(
-                        snapshot: $viewModel.snapshot,
-                        focus: .optimization
-                    )
-                } label: {
-                    SettingNavRow(
-                        title: L10n.text("ai_settings.row.optimization"),
-                        subtitle: L10n.text("ai_settings.row.optimization.subtitle"),
-                        icon: "paintbrush.pointed"
+                        title: L10n.text("ai_settings.row.default_model_config"),
+                        subtitle: L10n.text("ai_settings.row.default_model_config.subtitle"),
+                        icon: "slider.horizontal.3"
                     )
                 }
             }
@@ -69,7 +40,7 @@ struct AISettingsView: View {
             Section(L10n.text("ai_settings.section.tools")) {
                 NavigationLink {
                     AISearchToolSettingsView(
-                        userInfo: $viewModel.snapshot.userInfo,
+                        preferences: $viewModel.snapshot.searchToolPreferences,
                         searchKeys: $viewModel.snapshot.searchKeys,
                         toolKeys: $viewModel.snapshot.toolKeys
                     )
@@ -115,20 +86,7 @@ struct AISettingsView: View {
             }
         }
         .navigationTitle(L10n.text("ai_settings.title"))
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button {
-                    Task { await viewModel.save() }
-                } label: {
-                    if viewModel.isSaving {
-                        ProgressView()
-                    } else {
-                        Text(L10n.text("ai_settings.save"))
-                    }
-                }
-                .disabled(viewModel.isLoading || viewModel.isSaving || viewModel.hasUnsavedChanges == false)
-            }
-        }
+    
         .task {
             await viewModel.load()
         }
@@ -144,16 +102,7 @@ struct AISettingsView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .alert(L10n.text("ai_settings.saved"), isPresented: Binding(
-            get: { viewModel.saveSucceeded },
-            set: { presented in
-                if presented == false {
-                    viewModel.clearSaveFlag()
-                }
-            }
-        )) {
-            Button(L10n.text("common.ok")) {}
-        }
+     
     }
 }
 

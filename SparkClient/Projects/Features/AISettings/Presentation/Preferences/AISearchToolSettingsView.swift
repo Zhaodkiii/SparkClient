@@ -1,34 +1,34 @@
 import SwiftUI
 
 struct AISearchToolSettingsView: View {
-    @Binding var userInfo: UserInfo
+    @Binding var preferences: AISearchToolPreferences
     @Binding var searchKeys: [SearchKeys]
     @Binding var toolKeys: [ToolKeys]
 
     var body: some View {
         List {
             Section(L10n.text("ai_settings.section.search_knowledge")) {
-                Toggle(L10n.text("ai_settings.field.use_search"), isOn: $userInfo.useSearch)
-                Toggle(L10n.text("ai_settings.field.bilingual_search"), isOn: $userInfo.bilingualSearch)
-                Stepper(value: $userInfo.searchCount, in: 1...50) {
+                Toggle(L10n.text("ai_settings.field.use_search"), isOn: $preferences.useSearch)
+                Toggle(L10n.text("ai_settings.field.bilingual_search"), isOn: $preferences.bilingualSearch)
+                Stepper(value: $preferences.searchCount, in: 1...50) {
                     HStack {
                         Text(L10n.text("ai_settings.field.search_count"))
                         Spacer()
-                        Text("\(userInfo.searchCount)")
+                        Text("\(preferences.searchCount)")
                             .foregroundStyle(.secondary)
                     }
                 }
-                Toggle(L10n.text("ai_settings.field.use_knowledge"), isOn: $userInfo.useKnowledge)
-                Stepper(value: $userInfo.knowledgeCount, in: 1...50) {
+                Toggle(L10n.text("ai_settings.field.use_knowledge"), isOn: $preferences.useKnowledge)
+                Stepper(value: $preferences.knowledgeCount, in: 1...50) {
                     HStack {
                         Text(L10n.text("ai_settings.field.knowledge_count"))
                         Spacer()
-                        Text("\(userInfo.knowledgeCount)")
+                        Text("\(preferences.knowledgeCount)")
                             .foregroundStyle(.secondary)
                     }
                 }
-                Slider(value: $userInfo.knowledgeSimilarity, in: 0.1...1.0, step: 0.05)
-                Text("\(L10n.text("ai_settings.field.knowledge_similarity")): \(String(format: "%.2f", userInfo.knowledgeSimilarity))")
+                Slider(value: $preferences.knowledgeSimilarity, in: 0.1...1.0, step: 0.05)
+                Text("\(L10n.text("ai_settings.field.knowledge_similarity")): \(String(format: "%.2f", preferences.knowledgeSimilarity))")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

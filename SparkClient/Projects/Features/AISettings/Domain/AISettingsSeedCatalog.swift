@@ -23,7 +23,7 @@ enum AISettingsSeedCatalog {
         AISettingsDefaults.promptRepo
     }
 
-    static func getDefaultUserInfo() -> UserInfo {
-        AISettingsDefaults.userInfo
+    static func getDefaultSearchToolPreferences() -> AISearchToolPreferences {
+        AISettingsDefaults.searchToolPreferences
     }
 }

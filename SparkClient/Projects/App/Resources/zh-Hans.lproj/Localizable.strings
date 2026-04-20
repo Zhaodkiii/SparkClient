@@ -403,10 +403,16 @@
 
 "ai_settings.title" = "AI 场景配置";
 "ai_settings.save" = "保存";
-"ai_settings.saved" = "已保存";
-"ai_settings.scenario.chat" = "对话场景";
-"ai_settings.scenario.medical_extraction" = "医疗抽取场景";
-"ai_settings.scenario.embedding" = "向量场景";
+"ai_settings.scenario.chat" = "对话";
+"ai_settings.scenario.embedding" = "向量模型";
+"ai_settings.scenario.voice" = "语音模型";
+"ai_settings.scenario.medical_structured_extraction" = "医疗文档结构化抽取";
+"ai_settings.scenario.medical_document_type_recognition" = "医疗文档类型识别";
+"ai_settings.scenario.medical_case_extraction" = "病例结构化抽取";
+"ai_settings.scenario.health_exam_extraction" = "体检报告结构化抽取";
+"ai_settings.scenario.medical_report_extraction" = "医疗报告结构化抽取";
+"ai_settings.scenario.prescription_extraction" = "处方结构化抽取";
+"ai_settings.scenario.medication_extraction" = "用药结构化抽取";
 "ai_settings.scenario.optimization_text" = "文本优化模型";
 "ai_settings.scenario.optimization_visual" = "视觉优化模型";
 "ai_settings.scenario.context_folding" = "上下文折叠";
@@ -439,6 +445,8 @@
 "ai_settings.row.voice.subtitle" = "语音合成";
 "ai_settings.row.optimization" = "优化模型";
 "ai_settings.row.optimization.subtitle" = "文本/视觉优化";
+"ai_settings.row.default_model_config" = "默认模型配置";
+"ai_settings.row.default_model_config.subtitle" = "按场景配置本地或 Pro 模型";
 "ai_settings.row.search_tools" = "检索与工具";
 "ai_settings.row.search_tools.subtitle" = "搜索连接器与工具路由";
 "ai_settings.row.prompt_repo" = "提示词库";
@@ -485,8 +493,9 @@
 "ai_settings.memory_item" = "记忆项";
 "ai_settings.translation_item" = "词典项";
 "ai_settings.prefs.source_config" = "配置来源";
-"ai_settings.prefs.source_trial" = "服务端试用";
-"ai_settings.prefs.source_local_key" = "本地 Key";
+"ai_settings.prefs.source_trial" = "Pro 模型";
+"ai_settings.prefs.source_local_key" = "本地模型";
+"ai_settings.prefs.model_unselected" = "请选择模型";
 "ai_settings.prefs.toggle.context_folding" = "启用上下文折叠";
 "ai_settings.prefs.max_tool_sets" = "最大工具组数: %d";
 "ai_settings.prefs.section.extraction" = "抽数模型配置";
@@ -501,6 +510,17 @@
 "ai_settings.prefs.explain.context_folding" = "当对话过长时自动压缩旧上下文，减少 token 消耗并提升响应速度。";
 "ai_settings.prefs.explain.router" = "Router 模型用于在对话前判断需要调用的工具组。";
 "ai_settings.prefs.explain.data_extraction" = "抽数模型用于结构化医疗信息抽取与字段规整。";
+"ai_settings.prefs.explain.chat" = "对话模型用于日常问答、内容生成与多轮对话。";
+"ai_settings.prefs.explain.embedding" = "向量模型用于知识索引、相似度检索与语义召回。";
+"ai_settings.prefs.explain.voice" = "语音模型用于文本转语音与语音播报能力。";
+"ai_settings.prefs.explain.medical_structured_extraction" = "用于医疗文档字段抽取与结构化输出。";
+"ai_settings.prefs.explain.medical_document_type_recognition" = "用于识别医疗文档类型并自动路由到对应处理链路。";
+"ai_settings.prefs.explain.medical_case_extraction" = "用于病例文档中的关键信息抽取与字段规整。";
+"ai_settings.prefs.explain.health_exam_extraction" = "用于体检报告关键信息抽取与结构化。";
+"ai_settings.prefs.explain.medical_report_extraction" = "用于医疗报告字段提取与标准化整理。";
+"ai_settings.prefs.explain.prescription_extraction" = "用于处方信息结构化提取与字段校对。";
+"ai_settings.prefs.explain.medication_extraction" = "用于用药信息抽取、标准化与结构化输出。";
+"ai_settings.prefs.explain.model_config" = "模型配置场景用于模型配置读取与规则编排。";
 "ai_settings.prefs.explain.report_interpretation" = "报告解读模型用于体检/检验报告分析与建议生成。";
 
 "company_AI302" = "302.AI";
@@ -691,12 +711,21 @@
 "ai_settings.providers.editor.privacy.view_policy" = "查看隐私政策";
 "ai_settings.providers.editor.privacy.accept" = "我已阅读并同意该厂商隐私政策";
 "ai_settings.providers.editor.action.test_api" = "测试 API";
+"ai_settings.providers.editor.section.api_test" = "API 测试";
+"ai_settings.providers.editor.field.test_model" = "测试模型";
+"ai_settings.providers.editor.test.passed" = "测试通过";
+"ai_settings.providers.editor.test.failed" = "测试失败";
+"ai_settings.providers.editor.test.no_models" = "无可用模型";
 "ai_settings.providers.editor.nav_title" = "编辑密钥";
 "ai_settings.providers.editor.action.save" = "保存";
 "ai_settings.providers.editor.alert.delete_model_title" = "删除模型？";
 "ai_settings.providers.editor.alert.delete_model_message" = "删除后将从当前厂商模型列表移除。";
 "ai_settings.providers.editor.alert.notice_title" = "提示";
 "ai_settings.providers.editor.alert.need_api_key" = "请先配置有效 API Key";
+"ai_settings.providers.editor.alert.no_models" = "当前厂商无可测试模型，请先配置模型";
+"ai_settings.providers.editor.alert.test_failed" = "连接测试失败，请检查 URL 或密钥";
+"ai_settings.providers.editor.alert.backend_network_error" = "服务端连通性测试网络不可达，已自动改用本地直连测试。若仍失败，请检查网络、请求地址和模型名。";
+"ai_settings.providers.editor.footer.auto_enable_notice" = "⚠️ 注意：配置API后，厂商将自动开启，如需修改，可以在菜单中关闭厂商";
 "ai_settings.tools.fetch_step_details" = "步数详情";
 "ai_settings.tools.fetch_energy_details" = "能量详情";
 "ai_settings.tools.fetch_nutrition_details" = "营养详情";
@@ -1050,6 +1079,33 @@
 "medical.upload.result.medical_report.detail_count" = "明细 %d 项";
 
 "medical.upload.result.common.complete" = "完成";
+
+"ai_settings.providers.section.trial_providers" = "试用期可用厂商";
+"ai_settings.providers.badge.trial" = "试用";
+"ai_settings.providers.trial_providers.footer" = "仅展示服务端试用策略内厂商，不支持本地编辑";
+"ai_settings.providers.section.providers" = "模型厂商";
+"ai_settings.providers.nav_title" = "模型密钥";
+"ai_settings.providers.trial.card.title" = "模型密钥 / 试用权限";
+"ai_settings.providers.trial.card.subtitle" = "配置 API Key 后可启用对应模型能力";
+"ai_settings.providers.trial.status.active" = "试用已开通";
+"ai_settings.providers.trial.status.remaining_days" = "剩余 %d 天";
+"ai_settings.providers.trial.status.pending" = "申请审核中";
+"ai_settings.providers.trial.status.rejected" = "申请未通过，可再次申请";
+"ai_settings.providers.trial.status.expired" = "试用已过期，可重新申请";
+"ai_settings.providers.trial.status.default" = "新用户可申请试用";
+"ai_settings.providers.trial.consent.hint" = "提交试用申请前，请确认已阅读相关厂商隐私说明。";
+"ai_settings.providers.trial.consent.toggle" = "我已阅读并同意相关隐私条款";
+"ai_settings.providers.trial.error.need_consent" = "请先勾选隐私同意后再提交申请";
+"ai_settings.providers.trial.action.active" = "已开通";
+"ai_settings.providers.trial.action.pending" = "审核中";
+"ai_settings.providers.trial.action.reapply" = "再次申请";
+"ai_settings.providers.trial.action.apply" = "提交申请";
+"ai_settings.providers.error.key_required_with_name" = "%@ 需要先配置有效 API Key";
+"ai_settings.providers.add.field.name" = "供应商名称";
+"ai_settings.providers.add.action.append_completion_path" = "补全 /v1/chat/completions";
+"ai_settings.providers.add.nav_title" = "新增自定义供应商";
+"ai_settings.providers.add.help" = "自定义 OpenAI-compatible 供应商";
+"ai_settings.providers.add.error.invalid_url_prefix" = "请求地址必须以 http:// 或 https:// 开头";
 
 "medical.upload.result.health_exam.nav_title" = "体检报告";
 "medical.upload.result.health_exam.total_count" = "指标总数";

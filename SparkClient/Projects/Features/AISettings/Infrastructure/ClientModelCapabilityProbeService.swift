@@ -51,6 +51,25 @@ struct ClientModelCapabilityProbeService: Sendable {
         self.logger = logger
     }
 
+    func testConnection(modelName: String, provider: APIKeys) async throws {
+        let endpoint = provider.requestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = provider.key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard endpoint.isEmpty == false, apiKey.isEmpty == false, model.isEmpty == false else {
+            throw ProbeError.invalidInput
+        }
+
+        _ = try await requestChatCompletion(
+            endpoint: endpoint,
+            apiKey: apiKey,
+            body: [
+                "model": model,
+                "messages": [["role": "user", "content": "Reply only 'pong'."]],
+                "max_tokens": 16,
+            ]
+        )
+    }
+
     func probe(
         modelName: String,
         provider: APIKeys,

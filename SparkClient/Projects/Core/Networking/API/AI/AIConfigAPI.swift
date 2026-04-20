@@ -96,7 +96,7 @@ struct SparkAIConfigAPI {
         return payload.toModel()
     }
 
-    func testProviderConnection(requestURL: String, apiKey: String, model: String) async throws -> Bool {
+    func testProviderConnection(requestURL: String, apiKey: String, model: String) async throws -> ProviderConnectionTestResult {
         struct TestProviderBody: Encodable {
             let request_url: String
             let api_key: String
@@ -128,8 +128,7 @@ struct SparkAIConfigAPI {
             )
         )
         let response = try await configuration.execute(operation)
-        let payload = try APIResponseDecoder.decodeWrappedData(RemoteProviderTestPayload.self, from: response)
-        return payload.reachable
+        return try APIResponseDecoder.decodeWrappedData(ProviderConnectionTestResult.self, from: response)
     }
 }
 
@@ -175,6 +174,8 @@ private struct RemoteAIBootstrapPayload: Decodable {
 
 private struct RemoteScenarioCollection: Decodable {
     let chat: AIScenarioRemoteBundle?
+    let embedding: AIScenarioRemoteBundle?
+    let voice: AIScenarioRemoteBundle?
     let medicalStructuredExtraction: AIScenarioRemoteBundle?
     let medicalDocumentTypeRecognition: AIScenarioRemoteBundle?
     let medicalCaseExtraction: AIScenarioRemoteBundle?
@@ -191,6 +192,8 @@ private struct RemoteScenarioCollection: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case chat
+        case embedding
+        case voice
         case medicalStructuredExtraction = "medical_structured_extraction"
         case medicalDocumentTypeRecognition = "medical_document_type_recognition"
         case medicalCaseExtraction = "medical_case_extraction"
@@ -212,6 +215,8 @@ private struct RemoteScenarioCollection: Decodable {
         let empty = AIScenarioRemoteBundle(defaultModelName: "", models: [])
         return AIScenarioRemoteBundlesCollection(
             chat: markPro(chat) ?? empty,
+            embedding: markPro(embedding) ?? empty,
+            voice: markPro(voice) ?? empty,
             medicalStructuredExtraction: markPro(medicalStructuredExtraction) ?? empty,
             medicalDocumentTypeRecognition: markPro(medicalDocumentTypeRecognition) ?? empty,
             medicalCaseExtraction: markPro(medicalCaseExtraction) ?? empty,
@@ -283,6 +288,7 @@ private struct RemoteTrialStatusPayload: Decodable {
 
 // MARK: - Provider Test API Models
 
-private struct RemoteProviderTestPayload: Decodable {
+struct ProviderConnectionTestResult: Decodable, Sendable {
     let reachable: Bool
+    let message: String?
 }

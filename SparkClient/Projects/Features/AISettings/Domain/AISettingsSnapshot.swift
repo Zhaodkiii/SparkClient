@@ -5,8 +5,8 @@ import Foundation
 struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var allModels: [AllModels]
     var apiKeys: [APIKeys]
-    /// 用户偏好与其它本地选项（嵌入模型名、各场景来源等）。
-    var userInfo: UserInfo
+    /// 检索与知识相关本地偏好。
+    var searchToolPreferences: AISearchToolPreferences
     /// 场景级默认模型（`AIScenario.rawValue` -> 模型 `name`）。
     var scenarioDefaultModels: [String: String]
     /// 输入栏中隐藏的试用模型名（仅本地偏好）。
@@ -23,7 +23,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     init(
         allModels: [AllModels],
         apiKeys: [APIKeys],
-        userInfo: UserInfo = AISettingsDefaults.userInfo,
+        searchToolPreferences: AISearchToolPreferences = AISettingsDefaults.searchToolPreferences,
         scenarioDefaultModels: [String: String] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
         trial: AITrialState = .inactive,
@@ -36,7 +36,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     ) {
         self.allModels = allModels
         self.apiKeys = apiKeys
-        self.userInfo = userInfo
+        self.searchToolPreferences = searchToolPreferences
         self.scenarioDefaultModels = scenarioDefaultModels
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
         self.trial = trial
@@ -52,7 +52,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     static let `default` = AISettingsSnapshot(
         allModels: [],
         apiKeys: [],
-        userInfo: AISettingsDefaults.userInfo,
+        searchToolPreferences: AISettingsDefaults.searchToolPreferences,
         scenarioDefaultModels: [:],
         trialChatPickerDisabledModelNames: [],
         trial: .inactive,
@@ -82,7 +82,7 @@ extension AISettingsSnapshot {
     /// 与 `AISettingsSnapshot` 中除 `allModels` / `apiKeys` 外的字段一一对应，供账号级 UserDefaults 序列化；
     /// 仓储层只对该类型做 `JSONEncoder` / `JSONDecoder`，避免重复结构体与手写映射。
     struct PreferencesPayload: Codable, Equatable, Sendable {
-        var userInfo: UserInfo
+        var searchToolPreferences: AISearchToolPreferences
         var scenarioDefaultModels: [String: String]
         var trialChatPickerDisabledModelNames: [String]
         var trial: AITrialState
@@ -94,7 +94,7 @@ extension AISettingsSnapshot {
         var translationDic: [TranslationDic]
 
         static let `default` = PreferencesPayload(
-            userInfo: AISettingsDefaults.userInfo,
+            searchToolPreferences: AISettingsDefaults.searchToolPreferences,
             scenarioDefaultModels: [:],
             trialChatPickerDisabledModelNames: [],
             trial: .inactive,
@@ -105,12 +105,104 @@ extension AISettingsSnapshot {
             memoryArchive: AISettingsDefaults.memoryArchive,
             translationDic: AISettingsDefaults.translationDic
         )
+
+        init(
+            searchToolPreferences: AISearchToolPreferences,
+            scenarioDefaultModels: [String: String],
+            trialChatPickerDisabledModelNames: [String],
+            trial: AITrialState,
+            trialModelPolicy: [AITrialModelPolicyItem],
+            searchKeys: [SearchKeys],
+            toolKeys: [ToolKeys],
+            promptRepo: [PromptRepo],
+            memoryArchive: [MemoryArchive],
+            translationDic: [TranslationDic]
+        ) {
+            self.searchToolPreferences = searchToolPreferences
+            self.scenarioDefaultModels = scenarioDefaultModels
+            self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
+            self.trial = trial
+            self.trialModelPolicy = trialModelPolicy
+            self.searchKeys = searchKeys
+            self.toolKeys = toolKeys
+            self.promptRepo = promptRepo
+            self.memoryArchive = memoryArchive
+            self.translationDic = translationDic
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case searchToolPreferences
+            case userInfo
+            case scenarioDefaultModels
+            case trialChatPickerDisabledModelNames
+            case trial
+            case trialModelPolicy
+            case searchKeys
+            case toolKeys
+            case promptRepo
+            case memoryArchive
+            case translationDic
+        }
+
+        enum LegacyUserInfoKeys: String, CodingKey {
+            case useKnowledge
+            case knowledgeCount
+            case knowledgeSimilarity
+            case useSearch
+            case bilingualSearch
+            case searchCount
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+
+            if let direct = try container.decodeIfPresent(AISearchToolPreferences.self, forKey: .searchToolPreferences) {
+                searchToolPreferences = direct
+            } else if container.contains(.userInfo),
+                      let legacy = try? container.nestedContainer(keyedBy: LegacyUserInfoKeys.self, forKey: .userInfo)
+            {
+                searchToolPreferences = AISearchToolPreferences(
+                    useKnowledge: try legacy.decodeIfPresent(Bool.self, forKey: .useKnowledge) ?? AISettingsDefaults.searchToolPreferences.useKnowledge,
+                    knowledgeCount: try legacy.decodeIfPresent(Int.self, forKey: .knowledgeCount) ?? AISettingsDefaults.searchToolPreferences.knowledgeCount,
+                    knowledgeSimilarity: try legacy.decodeIfPresent(Double.self, forKey: .knowledgeSimilarity) ?? AISettingsDefaults.searchToolPreferences.knowledgeSimilarity,
+                    useSearch: try legacy.decodeIfPresent(Bool.self, forKey: .useSearch) ?? AISettingsDefaults.searchToolPreferences.useSearch,
+                    bilingualSearch: try legacy.decodeIfPresent(Bool.self, forKey: .bilingualSearch) ?? AISettingsDefaults.searchToolPreferences.bilingualSearch,
+                    searchCount: try legacy.decodeIfPresent(Int.self, forKey: .searchCount) ?? AISettingsDefaults.searchToolPreferences.searchCount
+                )
+            } else {
+                searchToolPreferences = AISettingsDefaults.searchToolPreferences
+            }
+
+            scenarioDefaultModels = try container.decodeIfPresent([String: String].self, forKey: .scenarioDefaultModels) ?? [:]
+            trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
+            trial = try container.decodeIfPresent(AITrialState.self, forKey: .trial) ?? .inactive
+            trialModelPolicy = try container.decodeIfPresent([AITrialModelPolicyItem].self, forKey: .trialModelPolicy) ?? []
+            searchKeys = try container.decodeIfPresent([SearchKeys].self, forKey: .searchKeys) ?? AISettingsDefaults.searchKeys
+            toolKeys = try container.decodeIfPresent([ToolKeys].self, forKey: .toolKeys) ?? AISettingsDefaults.toolKeys
+            promptRepo = try container.decodeIfPresent([PromptRepo].self, forKey: .promptRepo) ?? AISettingsDefaults.promptRepo
+            memoryArchive = try container.decodeIfPresent([MemoryArchive].self, forKey: .memoryArchive) ?? AISettingsDefaults.memoryArchive
+            translationDic = try container.decodeIfPresent([TranslationDic].self, forKey: .translationDic) ?? AISettingsDefaults.translationDic
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(searchToolPreferences, forKey: .searchToolPreferences)
+            try container.encode(scenarioDefaultModels, forKey: .scenarioDefaultModels)
+            try container.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
+            try container.encode(trial, forKey: .trial)
+            try container.encode(trialModelPolicy, forKey: .trialModelPolicy)
+            try container.encode(searchKeys, forKey: .searchKeys)
+            try container.encode(toolKeys, forKey: .toolKeys)
+            try container.encode(promptRepo, forKey: .promptRepo)
+            try container.encode(memoryArchive, forKey: .memoryArchive)
+            try container.encode(translationDic, forKey: .translationDic)
+        }
     }
 
     /// 从当前快照提取偏好载荷（字段与 `PreferencesPayload` 一致）。
     var preferencesPayload: PreferencesPayload {
         PreferencesPayload(
-            userInfo: userInfo,
+            searchToolPreferences: searchToolPreferences,
             scenarioDefaultModels: scenarioDefaultModels,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
             trial: trial,
@@ -128,7 +220,7 @@ extension AISettingsSnapshot {
         self.init(
             allModels: allModels,
             apiKeys: apiKeys,
-            userInfo: preferences.userInfo,
+            searchToolPreferences: preferences.searchToolPreferences,
             scenarioDefaultModels: preferences.scenarioDefaultModels,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
             trial: preferences.trial,
