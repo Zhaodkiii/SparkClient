@@ -56,11 +56,8 @@ struct SearchKnowledgeUseCase: Sendable {
         let hasVectors = try await repository.hasVectorIndexedChunks()
         if hasVectors {
             let snapshot = await aiConfigCenter.currentSnapshot()
-            let modelName = (
-                AIScenarioDefaultModelStore.read(for: .embedding)
-                ?? snapshot.scenarioDefaultModels[AIScenario.embedding.rawValue]
-                ?? ""
-            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            let modelName = (snapshot.scenarioDefaultModelName(for: .embedding) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             if modelName.isEmpty == false {
                 do {
                     let resolved = try KnowledgeEmbeddingResolution.resolve(modelName: modelName, snapshot: snapshot)

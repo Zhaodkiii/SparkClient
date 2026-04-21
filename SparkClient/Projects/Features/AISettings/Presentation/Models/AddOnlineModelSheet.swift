@@ -3,6 +3,7 @@ import SwiftUI
 struct AddOnlineModelDraft: Sendable {
     var name: String
     var displayName: String
+    var providerID: String
     var company: String
     var priceTier: Int
     var isHidden: Bool
@@ -33,7 +34,7 @@ struct AddOnlineModelSheet: View {
     @State private var reasoningControllable = false
     @State private var supportsToolUse = false
     @State private var supportsImageGen = false
-    @State private var selectedCompany = ""
+    @State private var selectedProviderID = ""
     @State private var selectedScenarioRawValues: Set<String> = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
     @State private var showAlert = false
@@ -58,27 +59,26 @@ struct AddOnlineModelSheet: View {
 
     private var apiKeyRows: [APIKeys] {
         viewModel.snapshot.apiKeys.filter {
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() != LocalModelService.localCompany.uppercased()
+            AIProviderAdapterRegistry.adapter(for: $0.providerID).isLocal == false
         }
     }
 
-    private var selectedCompanyDisplayName: String {
+    private var selectedProviderDisplayName: String {
         guard let provider = selectedProviderForProbe else {
             return L10n.text("ai_settings.models.online.field.vendor")
         }
         return provider.localizedDisplayName
     }
 
-    private var normalizedInitialCompany: String? {
-        initialCompany?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
+    private var normalizedInitialProviderID: String? {
+        guard let initialCompany else { return nil }
+        return AIProviderIdentifier.normalize(initialCompany)
     }
 
     private var isInitialCompanyAvailable: Bool {
-        guard let normalizedInitialCompany else { return false }
+        guard let normalizedInitialProviderID else { return false }
         return apiKeyRows.contains {
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedInitialCompany
+            $0.providerID == normalizedInitialProviderID
         }
     }
 
@@ -104,16 +104,16 @@ struct AddOnlineModelSheet: View {
                         text: $displayName
                     )
                     formMenuRow(icon: "building.2", title: L10n.text("ai_settings.models.online.field.vendor")) {
-                        Picker("", selection: $selectedCompany) {
+                        Picker("", selection: $selectedProviderID) {
                             ForEach(apiKeyRows, id: \.id) { key in
                                 Text(key.localizedDisplayName)
-                                    .tag(key.company)
+                                    .tag(key.providerID)
                             }
                         }
                         .pickerStyle(.menu)
                         .disabled(isCompanyLocked)
                     } label: {
-                        Text(selectedCompanyDisplayName)
+                        Text(selectedProviderDisplayName)
                             .foregroundStyle(selectedProviderForProbe == nil ? .secondary : .primary)
                     }
                 }
@@ -232,15 +232,15 @@ struct AddOnlineModelSheet: View {
             }
             .onAppear {
                 applyInitialDraftIfNeeded()
-                if let normalizedInitialCompany,
+                if let normalizedInitialProviderID,
                    let initialProvider = apiKeyRows.first(where: {
-                       $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalizedInitialCompany
+                       $0.providerID == normalizedInitialProviderID
                    })
                 {
-                    selectedCompany = initialProvider.company
+                    selectedProviderID = initialProvider.providerID
                 }
-                if selectedCompany.isEmpty, let first = apiKeyRows.first {
-                    selectedCompany = first.company
+                if selectedProviderID.isEmpty, let first = apiKeyRows.first {
+                    selectedProviderID = first.providerID
                 }
             }
         }
@@ -326,9 +326,9 @@ struct AddOnlineModelSheet: View {
     }
 
     private var selectedProviderForProbe: APIKeys? {
-        let c = selectedCompany.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let providerID = AIProviderIdentifier.normalize(selectedProviderID)
         return viewModel.snapshot.apiKeys.first(where: {
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == c
+            $0.providerID == providerID
         })
     }
 
@@ -351,7 +351,7 @@ struct AddOnlineModelSheet: View {
         guard let initialDraft else { return }
         name = initialDraft.name
         displayName = initialDraft.displayName
-        selectedCompany = initialDraft.company
+        selectedProviderID = initialDraft.providerID
         priceTier = min(max(initialDraft.priceTier, 0), 3)
         isHidden = initialDraft.isHidden
         supportsText = initialDraft.supportsText
@@ -368,7 +368,9 @@ struct AddOnlineModelSheet: View {
     private func save() {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let d = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let c = selectedCompany.trimmingCharacters(in: .whitespacesAndNewlines)
+        let providerID = AIProviderIdentifier.normalize(selectedProviderID)
+        let provider = selectedProviderForProbe
+        let company = provider?.company.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !n.isEmpty else {
             alertMessage = L10n.text("ai_settings.models.online.err.api_name")
             showAlert = true
@@ -379,7 +381,7 @@ struct AddOnlineModelSheet: View {
             showAlert = true
             return
         }
-        guard !c.isEmpty else {
+        guard !providerID.isEmpty, let provider else {
             alertMessage = L10n.text("ai_settings.models.online.err.vendor")
             showAlert = true
             return
@@ -388,7 +390,8 @@ struct AddOnlineModelSheet: View {
             let didSave = await viewModel.appendOnlineModelAndPersist(
                 name: n,
                 displayName: d,
-                company: c,
+                providerID: provider.providerID,
+                company: company,
                 priceTier: priceTier,
                 isHidden: isHidden,
                 supportsText: supportsText,

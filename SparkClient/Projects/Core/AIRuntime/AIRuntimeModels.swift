@@ -4,7 +4,7 @@ import Foundation
 /// 模型推理能力上下文（从内置模型列表 + 用户选择中解析得出）
 /// 用于统一判断模型是否支持深度思考、是否可控制思考强度
 struct ChatModelReasoningContext: Equatable, Sendable {
-    /// 模型所属厂商（大写），例如 OPENAI、QWEN
+    /// 模型所属 provider id，例如 OPENAI、QWEN、LOCAL。
     var providerCompany: String?
     /// 是否支持推理/深度思考功能
     var supportsReasoning: Bool
@@ -248,7 +248,7 @@ struct AIRuntimeTextRequest: Sendable {
     let toolChoice: AIRuntimeToolChoice          // 工具调用策略
     let reasoning: AIRuntimeReasoningOptions     // 推理控制配置
     let preferredModelName: String?              // 显式指定模型名（高于场景默认）
-    let providerCompanyUppercased: String?       // 厂商大写标识（服务内部填充）
+    let providerCompanyUppercased: String?       // provider id（服务内部填充，保留旧字段名以兼容调用链）
     let temperature: Double?                     // 线程级温度覆盖
     let topP: Double?                            // 线程级 top_p 覆盖
     let maxTokens: Int?                          // 线程级最大回复长度覆盖

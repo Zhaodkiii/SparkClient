@@ -24,10 +24,9 @@ struct ModelManagementView: View {
     @State private var presentedSheet: ModelManagementSheet?
 
     private var companyModels: [AllModels] {
-        let company = provider.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         return viewModel.snapshot.allModels
             .filter { $0.identity == .model }
-            .filter { $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company }
+            .filter { $0.providerID == provider.providerID }
             .sorted { $0.position < $1.position }
     }
 
@@ -106,7 +105,7 @@ struct ModelManagementView: View {
             case .manualAdd(let draft):
                 AddOnlineModelSheet(
                     viewModel: viewModel,
-                    initialCompany: provider.company,
+                    initialCompany: provider.providerID,
                     initialDraft: draft
                 )
             }
@@ -237,6 +236,7 @@ struct ModelManagementView: View {
             draft: AddOnlineModelDraft(
                 name: remoteModel.name,
                 displayName: remoteModel.displayName,
+                providerID: provider.providerID,
                 company: provider.company,
                 priceTier: remotePriceTier(for: remoteModel),
                 isHidden: false,
@@ -253,9 +253,12 @@ struct ModelManagementView: View {
     }
 
     private func deleteModel(_ model: AllModels) {
-        guard model.source != .system else { return }
-        viewModel.deleteOnlineModel(id: model.id)
-        Task { await viewModel.persistSnapshotNow() }
+        Task {
+            let ok = await viewModel.deleteModelAndPersist(id: model.id)
+            if ok == false {
+                errorMessage = viewModel.errorMessage
+            }
+        }
     }
 
     private func remoteCardModel(for remoteModel: ProviderRemoteModel) -> AllModels {
@@ -264,6 +267,7 @@ struct ModelManagementView: View {
             displayName: remoteModel.displayName,
             identity: .model,
             position: 0,
+            providerID: provider.providerID,
             company: provider.company,
             price: remotePriceTier(for: remoteModel),
             isEnabled: true,

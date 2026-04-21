@@ -209,6 +209,8 @@ final class AppContainer {
     private var cachedHomeViewModel: HomeViewModel?
     private var cachedMedicalDocumentUploadViewModel: MedicalDocumentUploadViewModel?
     private var cachedSettingsViewModel: SettingsViewModel?
+    private var cachedAISettingsViewModel: AISettingsViewModel?
+    private var cachedAISettingsViewModelOwnerAccountID: Int64?
 
     init(
         coreDataStack: CoreDataStack,
@@ -750,6 +752,8 @@ final class AppContainer {
         cachedHomeViewModel = nil
         cachedMedicalDocumentUploadViewModel = nil
         cachedSettingsViewModel = nil
+        cachedAISettingsViewModel = nil
+        cachedAISettingsViewModelOwnerAccountID = nil
     }
 
     /// 进入新账号会话前：清空 AI 运行时（本地 bundle 缓存 + Pro overlay + `AIRuntimeStore` 覆盖），避免沿用上一登录用户。
@@ -779,7 +783,11 @@ final class AppContainer {
 
     /// AI 设置：本地偏好读写 + 可选远程模型列表（`backend.aiConfig`）。
     func makeAISettingsViewModel(ownerAccountID: Int64) -> AISettingsViewModel {
-        AISettingsViewModel(
+        if let cachedAISettingsViewModel, cachedAISettingsViewModelOwnerAccountID == ownerAccountID {
+            return cachedAISettingsViewModel
+        }
+
+        let created = AISettingsViewModel(
             loadUseCase: LoadAISettingsUseCase(repository: aiSettingsRepository),
             saveUseCase: SaveAISettingsUseCase(repository: aiSettingsRepository),
             localModelService: localModelService,
@@ -787,6 +795,9 @@ final class AppContainer {
             aiConfigAPI: backend.aiConfig,
             aiConfigCenter: aiConfigCenter
         )
+        cachedAISettingsViewModel = created
+        cachedAISettingsViewModelOwnerAccountID = ownerAccountID
+        return created
     }
 
     /// 向需要单独注入 `ChatStateStore` 的界面暴露同一实例（与列表/详情共享选中态）。

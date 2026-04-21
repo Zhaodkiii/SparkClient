@@ -17,7 +17,7 @@ struct ModelsSettingsMainRow: View {
     @State private var showToggleKeyError = false
 
     private var isLocal: Bool {
-        model.company.uppercased() == LocalModelService.localCompany.uppercased()
+        AIProviderAdapterRegistry.adapter(for: model.providerID).isLocal
     }
 
     private var isAgent: Bool {

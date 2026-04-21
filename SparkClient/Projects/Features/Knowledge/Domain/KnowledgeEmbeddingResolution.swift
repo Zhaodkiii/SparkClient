@@ -13,7 +13,7 @@ enum KnowledgeEmbeddingResolution {
     static func visibleEmbeddingModels(in snapshot: AISettingsSnapshot) -> [AllModels] {
         snapshot.allModels.filter { model in
             guard isEmbeddingCandidateName(model.name) else { return false }
-            return apiKeyEntry(for: model.company, in: snapshot) != nil
+            return apiKeyEntry(for: model.providerID, in: snapshot) != nil
         }
         .sorted { $0.position < $1.position }
     }
@@ -26,7 +26,7 @@ enum KnowledgeEmbeddingResolution {
         guard let model = snapshot.allModels.first(where: { $0.name == trimmed }) else {
             throw ResolutionError.modelNotFound(trimmed)
         }
-        guard let keyEntry = apiKeyEntry(for: model.company, in: snapshot) else {
+        guard let keyEntry = apiKeyEntry(for: model.providerID, in: snapshot) else {
             throw ResolutionError.missingAPIKey(model.company)
         }
 
@@ -39,9 +39,9 @@ enum KnowledgeEmbeddingResolution {
         return Resolved(apiModelName: apiModel, apiKey: keyEntry.key, embeddingsURL: embeddingsURL)
     }
 
-    private static func apiKeyEntry(for company: String, in snapshot: AISettingsSnapshot) -> APIKeys? {
-        let upper = company.uppercased()
-        let candidates = snapshot.apiKeys.filter { $0.company.uppercased() == upper }
+    private static func apiKeyEntry(for providerID: String, in snapshot: AISettingsSnapshot) -> APIKeys? {
+        let normalized = AIProviderIdentifier.normalize(providerID)
+        let candidates = snapshot.apiKeys.filter { $0.providerID == normalized }
         let nonEmpty = candidates.filter { $0.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
         if let preferred = nonEmpty.first(where: { $0.requestURL.lowercased().contains("embedding") }) {
             return preferred

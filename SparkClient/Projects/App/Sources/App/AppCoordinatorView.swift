@@ -15,16 +15,21 @@ struct AppCoordinatorView: View {
     }
 
     var body: some View {
-        Group {
+        ZStack {
+            sessionContent
+
             if networkMonitor.hasEvaluatedPath == false {
                 ProgressView(L10n.text("app.loading.preparing"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground).ignoresSafeArea())
             } else if networkMonitor.isSatisfied == false {
                 NetworkGateView(monitor: networkMonitor)
-            } else {
-                sessionContent
+                    .transition(.opacity)
             }
         }
         .animation(.easeInOut, value: sessionStore.state)
+        .animation(.easeInOut, value: networkMonitor.hasEvaluatedPath)
+        .animation(.easeInOut, value: networkMonitor.isSatisfied)
         .onAppear {
             networkMonitor.start()
         }
@@ -47,7 +52,8 @@ struct AppCoordinatorView: View {
             switch sessionStore.state {
             case .loading:
                 ProgressView(L10n.text("app.loading.preparing"))
-                    .task {
+                    .task(id: networkMonitor.hasEvaluatedPath) {
+                        guard networkMonitor.hasEvaluatedPath else { return }
                         await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
                         await sessionStore.restoreIfNeeded()
                         if case .signedIn(let session) = sessionStore.state {

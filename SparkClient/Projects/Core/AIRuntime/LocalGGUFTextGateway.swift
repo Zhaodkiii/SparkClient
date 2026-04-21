@@ -1,32 +1,8 @@
 import Foundation
 import LLM
 
-actor LocalModelRuntimePool {
-    private var instances: [String: LLM] = [:]
-
-    func model(
-        for fileName: String,
-        modelURL: URL,
-        maxTokens: Int32,
-        temperature: Float
-    ) throws -> LLM {
-        if let existing = instances[fileName] {
-            existing.temp = temperature
-            return existing
-        }
-
-        guard let model = LLM(from: modelURL, template: .chatML(), maxTokenCount: maxTokens) else {
-            throw LocalModelServiceError.modelLoadFailed
-        }
-        model.temp = temperature
-        instances[fileName] = model
-        return model
-    }
-}
-
 final class LocalGGUFTextGateway: @unchecked Sendable {
     private let localModelService: LocalModelService
-    private let runtimePool = LocalModelRuntimePool()
     private let logger: Logger
 
     init(
@@ -45,12 +21,10 @@ final class LocalGGUFTextGateway: @unchecked Sendable {
         temperature: Double
     ) async throws -> AIRuntimeTextResponse {
         let modelURL = try await localModelService.localModelFileURL(fileName: fileName)
-        let llm = try await runtimePool.model(
-            for: fileName,
-            modelURL: modelURL,
-            maxTokens: Int32(max(maxTokens, 512)),
-            temperature: Float(temperature)
-        )
+        guard let llm = LLM(from: modelURL, template: .chatML(), maxTokenCount: Int32(max(maxTokens, 512))) else {
+            throw LocalModelServiceError.modelLoadFailed
+        }
+        llm.temp = Float(temperature)
 
         let promptData = makePromptData(from: messages)
         llm.history = promptData.history

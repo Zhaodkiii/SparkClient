@@ -25,7 +25,7 @@ struct EditSparkModelSheet: View {
 
     private var canEditCapabilities: Bool {
         guard let m = model else { return false }
-        return m.company.uppercased() != LocalModelService.localCompany.uppercased()
+        return AIProviderAdapterRegistry.adapter(for: m.providerID).isLocal == false
     }
 
     var body: some View {

@@ -66,19 +66,13 @@ struct AIScenarioConfigEditorView: View {
     private func scenarioModelSelection(for scenario: AIScenario) -> Binding<String> {
         Binding(
             get: {
-                AIScenarioDefaultModelStore.read(for: scenario)
-                    ?? snapshot.scenarioDefaultModels[scenario.rawValue]
+                snapshot.scenarioDefaultModelName(for: scenario)
                     ?? snapshot.resolveScenarioRow(for: scenario)?.model
                     ?? ""
             },
             set: { newValue in
                 var next = snapshot
-                if newValue.isEmpty {
-                    next.scenarioDefaultModels.removeValue(forKey: scenario.rawValue)
-                } else {
-                    next.scenarioDefaultModels[scenario.rawValue] = newValue
-                }
-                AIScenarioDefaultModelStore.write(newValue, for: scenario)
+                next.setScenarioDefaultModelName(newValue, for: scenario)
                 snapshot = next
             }
         )

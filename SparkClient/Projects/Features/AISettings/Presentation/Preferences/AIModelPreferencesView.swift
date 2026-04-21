@@ -2,12 +2,11 @@ import SwiftUI
 
 /// 默认模型配置页：按场景统一展示，支持本地模型与 Pro 模型切换。
 struct AIModelPreferencesView: View {
-    let aiConfigCenter: AIConfigCenter?
+    @StateObject private var viewModel: ScenarioModelPreferencesViewModel
 
-    @State private var localBundles: AIScenarioRemoteBundlesCollection?
-    @State private var proBundles: AIScenarioRemoteBundlesCollection?
-    @State private var mergedBundles: AIScenarioRemoteBundlesCollection?
-    @State private var pendingSelections: [String: String] = [:]
+    init(viewModel: ScenarioModelPreferencesViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
 
     var body: some View {
         Form {
@@ -17,14 +16,14 @@ struct AIModelPreferencesView: View {
         }
         .navigationTitle(L10n.text("ai_settings.row.default_model_config"))
         .task {
-            await reloadBundles()
+            await viewModel.reloadBundles()
         }
     }
 
     @ViewBuilder
     private func scenarioSection(_ scenario: AIScenario) -> some View {
         let source = sourceBinding(for: scenario).wrappedValue
-        let proBundle = proBundles?.bundle(for: scenario)
+        let proBundle = viewModel.proBundles?.bundle(for: scenario)
         let hasProModels = (proBundle?.models.isEmpty == false)
         let activeBundle = bundle(for: scenario, source: source)
 
@@ -64,82 +63,25 @@ struct AIModelPreferencesView: View {
     }
 
     private func bundle(for scenario: AIScenario, source: AIModelSelectionSource) -> AIScenarioRemoteBundle? {
-        switch source {
-        case .localKey:
-            return localBundles?.bundle(for: scenario)
-        case .trial:
-            return proBundles?.bundle(for: scenario)
-        }
+        viewModel.bundle(for: scenario, source: source)
     }
 
     private func sourceBinding(for scenario: AIScenario) -> Binding<AIModelSelectionSource> {
         Binding(
-            get: {
-                let stored = AIScenarioModelSourceStore.read(for: scenario) ?? .localKey
-                if stored == .trial,
-                   proBundles?.bundle(for: scenario).models.isEmpty != false
-                {
-                    return .localKey
-                }
-                return stored
-            },
+            get: { viewModel.source(for: scenario) },
             set: { newValue in
-                AIScenarioModelSourceStore.write(newValue, for: scenario)
-                pendingSelections[scenario.rawValue] = ""
+                viewModel.setSource(newValue, for: scenario)
             }
         )
     }
 
     private func modelSelectionBinding(for scenario: AIScenario, sourceBundle: AIScenarioRemoteBundle) -> Binding<String> {
         Binding(
-            get: {
-                if let pending = pendingSelections[scenario.rawValue] {
-                    return pending
-                }
-                if let stored = AIScenarioDefaultModelStore.read(for: scenario),
-                   sourceBundle.models.contains(where: { $0.model == stored })
-                {
-                    return stored
-                }
-                let mergedDefault = mergedBundles?.bundle(for: scenario).defaultModelName ?? ""
-                if mergedDefault.isEmpty == false,
-                   sourceBundle.models.contains(where: { $0.model == mergedDefault })
-                {
-                    return mergedDefault
-                }
-                if sourceBundle.defaultModelName.isEmpty == false,
-                   sourceBundle.models.contains(where: { $0.model == sourceBundle.defaultModelName })
-                {
-                    return sourceBundle.defaultModelName
-                }
-                return sourceBundle.models.first?.model ?? ""
-            },
+            get: { viewModel.selectedModel(for: scenario, sourceBundle: sourceBundle) },
             set: { newValue in
-                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                pendingSelections[scenario.rawValue] = trimmed
-                guard trimmed.isEmpty == false else { return }
-                AIScenarioDefaultModelStore.write(trimmed, for: scenario)
-                Task {
-                    await aiConfigCenter?.updateScenarioDefaultModel(trimmed, for: scenario)
-                    await reloadBundles()
-                }
+                viewModel.setSelectedModel(newValue, for: scenario)
             }
         )
-    }
-
-    private func reloadBundles() async {
-        guard let aiConfigCenter else {
-            localBundles = nil
-            proBundles = nil
-            mergedBundles = nil
-            return
-        }
-        async let local = aiConfigCenter.localScenarioBundles()
-        async let pro = aiConfigCenter.proScenarioBundles()
-        async let merged = try? aiConfigCenter.effectiveScenarioBundles()
-        localBundles = await local
-        proBundles = await pro
-        mergedBundles = await merged
     }
 
     private func bundleRowDisplayName(_ row: AIScenarioRemoteModelRow) -> String {
@@ -194,7 +136,7 @@ struct AIModelPreferencesView: View {
 private struct AIModelPreferencesViewPreviewHost: View {
     var body: some View {
         NavigationView {
-            AIModelPreferencesView(aiConfigCenter: nil)
+            AIModelPreferencesView(viewModel: ScenarioModelPreferencesViewModel(aiConfigCenter: nil))
         }
     }
 }

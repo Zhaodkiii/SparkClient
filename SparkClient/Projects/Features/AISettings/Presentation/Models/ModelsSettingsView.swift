@@ -3,7 +3,6 @@ import SwiftUI
 /// AI 设置「模型」子页：对齐 Health `ModelsView` — 试用区 + 单一主列表（`unifiedModels`）、菜单添加在线/本地/智能体、高级子页、行内编辑 Sheet。
 
 struct ModelsSettingsView: View {
-    @Binding var models: [AllModels]
     @ObservedObject var viewModel: AISettingsViewModel
 
     @State private var searchText = ""
@@ -23,29 +22,29 @@ struct ModelsSettingsView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    /// 与 Health 一致：未隐藏且 `company` 非空的密钥，按大写厂商参与可见性（与 Key 行一致）。
-    private var visibleProviderCompanies: Set<String> {
+    /// 未隐藏且已配置密钥的 provider，按稳定 `providerID` 参与模型可见性。
+    private var visibleProviderIDs: Set<String> {
         Set(
             viewModel.snapshot.apiKeys
                 .filter {
                     $0.isHidden == false &&
                     $0.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 }
-                .map { $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+                .map(\.providerID)
                 .filter { !$0.isEmpty }
         )
     }
 
     /// 供智能体表单选择基座：已安装的本地 GGUF 模型。
     private var localBaseModelsForAgent: [AllModels] {
-        models
+        viewModel.snapshot.allModels
             .filter { $0.isLocalModel }
             .sorted { $0.position < $1.position }
     }
 
     /// 主列表：身份 + API Key 可见性 + 仅 `displayName` 搜索（含拼音），按 `position` 排序。
     private var unifiedModels: [AllModels] {
-        models
+        viewModel.snapshot.allModels
             .filter(matchesIdentity)
             .filter(matchesApiKeyVisibility)
             .filter(matchesSearchUnified)
@@ -125,7 +124,10 @@ struct ModelsSettingsView: View {
 
                         NavigationLink {
                             ModelsAdvancedEditorView(
-                                models: $models,
+                                models: Binding(
+                                    get: { viewModel.snapshot.allModels },
+                                    set: { viewModel.replaceAllModels($0) }
+                                ),
                                 selectedIdentity: $selectedIdentity,
                                 searchText: $searchText
                             )
@@ -140,7 +142,9 @@ struct ModelsSettingsView: View {
         }
         .environment(\.editMode, .constant(isEditing ? .active : .inactive))
         .onAppear {
-            initializeModelStates()
+            Task {
+                await viewModel.initializeModelVisibilityAndPersistIfNeeded()
+            }
         }
         .sheet(isPresented: $showAddOnline) {
             AddOnlineModelSheet(viewModel: viewModel)
@@ -294,14 +298,13 @@ struct ModelsSettingsView: View {
         }
     }
 
-    /// 与 Health `filteredModels`：非智能体且非本地目录行时，厂商须在可见密钥集合中。
+    /// 非本地目录行时，模型 provider 须在可见密钥集合中。
     private func matchesApiKeyVisibility(_ model: AllModels) -> Bool {
-        if model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == LocalModelService.localCompany.uppercased() {
+        if AIProviderAdapterRegistry.adapter(for: model.providerID).isLocal {
             return true
         }
-        let c = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard c.isEmpty == false else { return false }
-        return visibleProviderCompanies.contains(c)
+        guard model.providerID.isEmpty == false else { return false }
+        return visibleProviderIDs.contains(model.providerID)
     }
 
     /// 有搜索词时仅匹配非空 `displayName`（原文 + 拼音）。
@@ -313,35 +316,22 @@ struct ModelsSettingsView: View {
         return dn.toPinyinForSearch().lowercased().contains(normalizedSearch)
     }
 
-    /// 首次进入：无有效 Key 的云端模型自动隐藏（对齐 Health `initializeModelStates`）。
-    private func initializeModelStates() {
-        for i in models.indices {
-            if viewModel.hasValidAPIKey(for: models[i]) == false && models[i].isHidden == false {
-                models[i].isHidden = true
-            }
-        }
-    }
-
     private func requestDelete(_ model: AllModels) {
         modelPendingDelete = model
         showDeleteConfirm = true
     }
 
     private func performDelete(_ model: AllModels) {
-        if model.source == .system {
-            inlineError = L10n.text("ai_settings.models.alert.cannot_delete_system")
-            return
-        }
-        if model.isLocalModel {
-            Task {
-                do {
-                    try await viewModel.removeLocalModel(model)
-                } catch {
-                    inlineError = error.localizedDescription
-                }
+        Task {
+            let ok: Bool
+            if model.isLocalModel {
+                ok = await viewModel.removeLocalModelAndPersist(model)
+            } else {
+                ok = await viewModel.deleteModelAndPersist(id: model.id)
             }
-        } else {
-            models.removeAll { $0.id == model.id }
+            if ok == false {
+                inlineError = viewModel.errorMessage
+            }
         }
     }
 
@@ -349,24 +339,26 @@ struct ModelsSettingsView: View {
     private func moveUnifiedModels(from source: IndexSet, to destination: Int) {
         var reordered = unifiedModels
         reordered.move(fromOffsets: source, toOffset: destination)
+        var positions: [UUID: Int] = [:]
         for (index, model) in reordered.enumerated() {
             var positionIndex = index
             if model.identity == .agent {
                 positionIndex = index + 1000
             }
-            guard let modelIndex = models.firstIndex(where: { $0.id == model.id }) else { continue }
-            models[modelIndex].position = positionIndex
+            positions[model.id] = positionIndex
         }
+        viewModel.updateModelPositions(positions)
     }
 
     private func resetModelPositionToDefault() {
-        let sortedByName = models.sorted {
+        let sortedByName = viewModel.snapshot.allModels.sorted {
             $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
         }
+        var positions: [UUID: Int] = [:]
         for (index, model) in sortedByName.enumerated() {
-            guard let modelIndex = models.firstIndex(where: { $0.id == model.id }) else { continue }
-            models[modelIndex].position = model.identity == .agent ? index + 1000 : index
+            positions[model.id] = model.identity == .agent ? index + 1000 : index
         }
+        viewModel.updateModelPositions(positions)
     }
 }
 
@@ -391,10 +383,6 @@ private struct ModelsSettingsPreviewHost: View {
     var body: some View {
         NavigationView {
             ModelsSettingsView(
-                models: Binding(
-                    get: { viewModel.snapshot.allModels },
-                    set: { viewModel.snapshot.allModels = $0 }
-                ),
                 viewModel: viewModel
             )
         }
@@ -407,6 +395,7 @@ private struct ModelsSettingsPreviewHost: View {
                 displayName: "Qwen2.5 1.5B",
                 identity: .model,
                 position: 1,
+                providerID: LocalModelService.localProviderID,
                 company: LocalModelService.localCompany,
                 isHidden: false,
                 supportsSearch: true,
@@ -427,6 +416,7 @@ private struct ModelsSettingsPreviewHost: View {
                 displayName: "健康问答助手",
                 identity: .agent,
                 position: 1000,
+                providerID: LocalModelService.localProviderID,
                 company: LocalModelService.localCompany,
                 isHidden: false,
                 supportsSearch: true,

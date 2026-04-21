@@ -76,7 +76,7 @@ final class AISettingsAndResolverTests: XCTestCase {
 
     func testScenarioDefaultModelOverridesChatPicker() {
         var snapshot = AISettingsSnapshot.default
-        snapshot.scenarioDefaultModels[AIScenario.chat.rawValue] = "trial-a"
+        snapshot.setScenarioDefaultModelName("trial-a", for: .chat)
         snapshot.trial = AITrialState(
             status: "active",
             isActive: true,
@@ -110,6 +110,88 @@ final class AISettingsAndResolverTests: XCTestCase {
             ),
         ]
         XCTAssertEqual(snapshot.trialPolicyConfig(for: .chat)?.model, "trial-b")
+    }
+
+    func testResolverPreservesProOverlaySourceForPreferredModel() async throws {
+        let runtimeStore = AIRuntimeStore()
+        let resolver = ScenarioPolicyResolver()
+        let proBundle = AIScenarioRemoteBundle(
+            defaultModelName: "pro-chat",
+            models: [
+                AIScenarioRemoteModelRow(
+                    name: "pro-chat",
+                    displayName: "Pro Chat",
+                    identity: "model",
+                    company: "SPARK",
+                    endpoint: "https://pro.example/v1/chat/completions",
+                    apiKey: nil,
+                    supportsSearch: true,
+                    supportsMultimodal: true,
+                    supportsReasoning: true,
+                    supportsToolUse: true,
+                    supportsVoiceGen: false,
+                    supportsImageGen: false,
+                    supportsText: true,
+                    supportsDeepReasoning: true,
+                    reasoningControllable: false,
+                    priceTier: 2,
+                    systemProvision: nil,
+                    icon: nil,
+                    briefDescription: nil,
+                    source: AIRecordSource.pro.rawValue,
+                    aiScenarios: [AIScenario.chat.rawValue],
+                    aiToolScenarios: [],
+                    isDefault: true,
+                    temperature: 0.2,
+                    maxTokens: 4096
+                )
+            ]
+        )
+        var bundles = emptyScenarioBundles()
+        bundles.setBundle(proBundle, for: .chat)
+
+        let resolved = try await resolver.resolve(
+            scenario: .chat,
+            bundles: bundles,
+            runtimeStore: runtimeStore,
+            preferredModelName: "pro-chat"
+        )
+
+        XCTAssertEqual(resolved.model, "pro-chat")
+        XCTAssertEqual(resolved.source, .proOverlay)
+    }
+
+    func testScenarioModelSourcesRoundTripThroughPreferencesPayload() throws {
+        var snapshot = AISettingsSnapshot.default
+        snapshot.setScenarioModelSource(.trial, for: .chat)
+
+        let data = try JSONEncoder().encode(snapshot.preferencesPayload)
+        let decoded = try JSONDecoder().decode(AISettingsSnapshot.PreferencesPayload.self, from: data)
+        let restored = AISettingsSnapshot(allModels: [], apiKeys: [], preferences: decoded)
+
+        XCTAssertEqual(restored.scenarioModelSource(for: .chat), .trial)
+    }
+
+    private func emptyScenarioBundles() -> AIScenarioRemoteBundlesCollection {
+        let empty = AIScenarioRemoteBundle(defaultModelName: "", models: [])
+        return AIScenarioRemoteBundlesCollection(
+            chat: empty,
+            embedding: empty,
+            voice: empty,
+            medicalStructuredExtraction: empty,
+            medicalDocumentTypeRecognition: empty,
+            medicalCaseExtraction: empty,
+            healthExamExtraction: empty,
+            medicalReportExtraction: empty,
+            prescriptionExtraction: empty,
+            medicationExtraction: empty,
+            optimizationText: empty,
+            optimizationVisual: empty,
+            contextFolding: empty,
+            router: empty,
+            modelConfig: empty,
+            reportInterpretation: empty
+        )
     }
 }
 #endif

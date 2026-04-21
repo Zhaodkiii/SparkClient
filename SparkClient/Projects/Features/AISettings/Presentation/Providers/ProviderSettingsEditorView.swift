@@ -32,10 +32,9 @@ struct ProviderSettingsEditorView: View {
     private let probeService = ClientModelCapabilityProbeService()
 
     private var providerModels: [AllModels] {
-        let company = provider.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         return viewModel.snapshot.allModels
             .filter { $0.identity == .model }
-            .filter { $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company }
+            .filter { $0.providerID == provider.providerID }
             .sorted { $0.position < $1.position }
     }
 
@@ -205,27 +204,19 @@ struct ProviderSettingsEditorView: View {
     }
 
     private func deleteModel(modelID: UUID) {
-        guard let model = viewModel.snapshot.allModels.first(where: { $0.id == modelID }) else { return }
-        if model.source == .system {
-            showNotice("系统模型不支持删除")
-            return
-        }
-        viewModel.deleteOnlineModel(id: modelID)
         impact(.light)
         Task {
-            await viewModel.persistSnapshotNow()
+            let ok = await viewModel.deleteModelAndPersist(id: modelID)
+            if ok == false, let message = viewModel.errorMessage {
+                showNotice(message)
+            }
         }
     }
 
     private func saveProvider() {
-        provider.privacyPolicyAcceptedAt = provider.privacyPolicyAccepted ? Date() : nil
-        var updated = provider
-        updated.timestamp = Date()
-        updated.isHidden = provider.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        updateModelVisibility(company: updated.company, hidden: updated.isHidden)
         impact(.medium)
         Task {
-            _ = await viewModel.upsertProviderAndPersist(updated)
+            _ = await viewModel.saveProviderFromEditorAndPersist(provider)
         }
         dismiss()
     }
@@ -313,13 +304,6 @@ struct ProviderSettingsEditorView: View {
             return L10n.text("ai_settings.providers.editor.alert.backend_network_error")
         default:
             return trimmed
-        }
-    }
-
-    private func updateModelVisibility(company: String, hidden: Bool) {
-        let normalized = company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        for index in viewModel.snapshot.allModels.indices where viewModel.snapshot.allModels[index].company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == normalized {
-            viewModel.snapshot.allModels[index].isHidden = hidden
         }
     }
 

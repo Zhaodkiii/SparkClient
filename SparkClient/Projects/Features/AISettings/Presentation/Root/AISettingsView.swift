@@ -7,7 +7,7 @@ struct AISettingsView: View {
         List {
             Section(L10n.text("ai_settings.section.model")) {
                 NavigationLink {
-                    APIKeysSettingsView(snapshot: $viewModel.snapshot, viewModel: viewModel)
+                    APIKeysSettingsView(viewModel: viewModel)
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.api_keys"),
@@ -17,7 +17,7 @@ struct AISettingsView: View {
                 }
 
                 NavigationLink {
-                    ModelsSettingsView(models: $viewModel.snapshot.allModels, viewModel: viewModel)
+                    ModelsSettingsView(viewModel: viewModel)
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.models"),
@@ -27,7 +27,9 @@ struct AISettingsView: View {
                 }
 
                 NavigationLink {
-                    AIModelPreferencesView(aiConfigCenter: viewModel.configCenter)
+                    AIModelPreferencesView(
+                        viewModel: viewModel.makeScenarioModelPreferencesViewModel()
+                    )
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.default_model_config"),

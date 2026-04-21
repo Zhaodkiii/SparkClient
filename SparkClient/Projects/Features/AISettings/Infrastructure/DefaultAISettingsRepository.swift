@@ -14,6 +14,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     private enum Field {
         static let id = "id"
         static let ownerAccountID = "ownerAccountID"
+        static let providerID = "providerID"
         static let name = "name"
         static let company = "company"
         static let key = "key"
@@ -114,7 +115,17 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
     /// 持久化：目录数据进 Core Data；其余偏好与 `AISettingsSnapshot` 字段一致，整包编码进 UserDefaults。
     func save(snapshot: AISettingsSnapshot) async throws {
-        guard let ownerAccountID = await currentOwnerAccountID() else {
+        try await save(snapshot: snapshot, ownerAccountID: nil)
+    }
+
+    func save(snapshot: AISettingsSnapshot, ownerAccountID explicitAccountID: Int64?) async throws {
+        let ownerAccountID: Int64?
+        if let explicitAccountID {
+            ownerAccountID = explicitAccountID
+        } else {
+            ownerAccountID = await currentOwnerAccountID()
+        }
+        guard let ownerAccountID else {
             logger.info("未登录，跳过 AI 设置持久化", module: .aiConfig)
             return
         }
@@ -182,7 +193,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             return false
         }
         logger.debug(
-            "AI 首次登录灌库：Core Data performBackgroundTask → replaceProviders / replaceModels / upsertSeedState",
+            "AI 首次登录灌库：Core Data performBackgroundTask → syncProviders / syncModels / upsertSeedState",
             module: .aiConfig
         )
         try await persist(snapshot: seedSnapshot, ownerAccountID: ownerAccountID)
@@ -231,35 +242,47 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
     /// 整包解码 `PreferencesPayload`；缺失或损坏时使用与 `PreferencesPayload.default` 对齐的默认值。
     private func loadDecodedPreferencesPayload(ownerAccountID: Int64) -> AISettingsSnapshot.PreferencesPayload {
-        guard let data = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)),
-              let decoded = try? decoder.decode(AISettingsSnapshot.PreferencesPayload.self, from: data)
-        else {
-            return .default
+        let decoded: AISettingsSnapshot.PreferencesPayload
+        if let data = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)),
+           let payload = try? decoder.decode(AISettingsSnapshot.PreferencesPayload.self, from: data) {
+            decoded = payload
+        } else {
+            decoded = .default
         }
         return decoded
     }
 
-    /// 全量替换当前账号的厂商 Key 行（与 `APIKeys` 属性名一一写入实体字段）。
+    /// 增量同步当前账号的厂商 Key 行：upsert 快照内条目，仅删除快照已移除的旧 id。
     private func replaceProviders(
         _ apiKeys: [APIKeys],
         ownerAccountID: Int64,
         context: NSManagedObjectContext
     ) throws {
-        try deleteAll(entityName: EntityName.provider, ownerAccountID: ownerAccountID, context: context)
-
+        let desiredIDs = Set(apiKeys.map(\.id))
+        try deleteObjectsMissingFromSnapshot(
+            entityName: EntityName.provider,
+            desiredIDs: desiredIDs,
+            ownerAccountID: ownerAccountID,
+            context: context
+        )
         for apiKey in apiKeys {
             upsertProvider(apiKey, ownerAccountID: ownerAccountID, context: context)
         }
     }
 
-    /// 全量替换当前账号的模型目录行（与 `AllModels` 属性名一一写入实体字段）。
+    /// 增量同步当前账号的模型目录行：upsert 快照内条目，仅删除快照已移除的旧 id。
     private func replaceModels(
         _ allModels: [AllModels],
         ownerAccountID: Int64,
         context: NSManagedObjectContext
     ) throws {
-        try deleteAll(entityName: EntityName.model, ownerAccountID: ownerAccountID, context: context)
-
+        let desiredIDs = Set(allModels.map(\.id))
+        try deleteObjectsMissingFromSnapshot(
+            entityName: EntityName.model,
+            desiredIDs: desiredIDs,
+            ownerAccountID: ownerAccountID,
+            context: context
+        )
         for model in allModels {
             try upsertModel(model, ownerAccountID: ownerAccountID, context: context)
         }
@@ -280,6 +303,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.provider, into: context)
         object.setValue(provider.id, forKey: Field.id)
         object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+        object.setValue(provider.providerID, forKey: Field.providerID)
         object.setValue(provider.name, forKey: Field.name)
         object.setValue(provider.company, forKey: Field.company)
         object.setValue(provider.key, forKey: Field.key)
@@ -313,6 +337,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         object.setValue(model.displayName, forKey: Field.displayName)
         object.setValue(model.identity.rawValue, forKey: Field.identity)
         object.setValue(Int32(model.position), forKey: Field.position)
+        object.setValue(model.providerID, forKey: Field.providerID)
         object.setValue(model.company, forKey: Field.company)
         object.setValue(Int32(model.price), forKey: Field.price)
         object.setValue(model.isEnabled, forKey: Field.isEnabled)
@@ -363,6 +388,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         return try context.fetch(request).map { object in
             APIKeys(
                 id: object.value(forKey: Field.id) as? UUID ?? UUID(),
+                providerID: object.value(forKey: Field.providerID) as? String,
                 name: object.value(forKey: Field.name) as? String ?? "",
                 company: object.value(forKey: Field.company) as? String ?? "",
                 key: object.value(forKey: Field.key) as? String ?? "",
@@ -398,6 +424,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
                 displayName: object.value(forKey: Field.displayName) as? String ?? "",
                 identity: AIModelIdentity(rawValue: object.value(forKey: Field.identity) as? String ?? "") ?? .model,
                 position: Int(object.value(forKey: Field.position) as? Int32 ?? 0),
+                providerID: object.value(forKey: Field.providerID) as? String,
                 company: object.value(forKey: Field.company) as? String ?? "",
                 price: Int(object.value(forKey: Field.price) as? Int32 ?? 0),
                 isEnabled: object.value(forKey: Field.isEnabled) as? Bool ?? true,
@@ -423,14 +450,23 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         }
     }
 
-    private func deleteAll(
+    private func deleteObjectsMissingFromSnapshot(
         entityName: String,
+        desiredIDs: Set<UUID>,
         ownerAccountID: Int64,
         context: NSManagedObjectContext
     ) throws {
         let request = NSFetchRequest<NSManagedObject>(entityName: entityName)
         request.predicate = ownerPredicate(ownerAccountID)
-        try context.fetch(request).forEach(context.delete)
+        for object in try context.fetch(request) {
+            guard let id = object.value(forKey: Field.id) as? UUID else {
+                context.delete(object)
+                continue
+            }
+            if desiredIDs.contains(id) == false {
+                context.delete(object)
+            }
+        }
     }
 
     private func ownerPredicate(_ ownerAccountID: Int64) -> NSPredicate {

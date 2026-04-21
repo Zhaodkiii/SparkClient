@@ -8,7 +8,7 @@ extension AIScenarioRemoteBundlesCollection {
             return .unknown
         }
         return ChatModelReasoningContext(
-            providerCompany: row.company.uppercased(),
+            providerCompany: row.providerID,
             supportsReasoning: row.supportsReasoning,
             reasoningControllable: row.reasoningControllable
         )
@@ -20,8 +20,7 @@ extension AIScenarioRemoteBundlesCollection {
         guard let row = resolveRow(for: .chat, preferredModelName: preferred) else {
             return (false, nil)
         }
-        let company = row.company.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (row.supportsMultimodal, company.isEmpty ? nil : company.uppercased())
+        return (row.supportsMultimodal, row.providerID.isEmpty ? nil : row.providerID)
     }
 }
 

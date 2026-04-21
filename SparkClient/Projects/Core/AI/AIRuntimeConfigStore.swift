@@ -21,7 +21,7 @@ actor AIRuntimeConfigStore {
         localBundles = AILocalScenarioBundleBuilder.buildCollection(
             allModels: snapshot.allModels,
             apiKeys: snapshot.apiKeys,
-            scenarioDefaults: AIScenarioDefaultModelStore.allScenarioDefaults(fallback: snapshot.scenarioDefaultModels)
+            scenarioDefaults: snapshot.scenarioDefaultModels
         )
     }
 
@@ -64,7 +64,7 @@ actor AIRuntimeConfigStore {
         guard trimmed.isEmpty == false else { return }
 
         if cachedSnapshot != nil {
-            cachedSnapshot?.scenarioDefaultModels[scenario.rawValue] = trimmed
+            cachedSnapshot?.setScenarioDefaultModelName(trimmed, for: scenario)
         }
 
         if localBundles != nil {
@@ -75,6 +75,10 @@ actor AIRuntimeConfigStore {
         }
     }
 
+    func updateScenarioModelSource(_ source: AIModelSelectionSource, for scenario: AIScenario) {
+        cachedSnapshot?.setScenarioModelSource(source, for: scenario)
+    }
+
     /// 合并后的最终场景集合。
     func effectiveBundles() throws -> AIScenarioRemoteBundlesCollection {
         guard let local = localBundles else {
@@ -83,8 +87,7 @@ actor AIRuntimeConfigStore {
         var merged = AIRuntimeConfigAssembler.merge(local: local, pro: proBundles)
         let fallbackDefaults = cachedSnapshot?.scenarioDefaultModels ?? [:]
         for scenario in AIScenario.allCases {
-            let preferredModelName = AIScenarioDefaultModelStore.read(for: scenario)
-                ?? fallbackDefaults[scenario.rawValue]
+            let preferredModelName = fallbackDefaults[scenario.rawValue]
             guard let preferredModelName,
                   preferredModelName.isEmpty == false
             else { continue }

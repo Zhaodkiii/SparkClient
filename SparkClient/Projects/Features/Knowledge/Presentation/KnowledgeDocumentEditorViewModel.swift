@@ -130,11 +130,8 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
 
     private func refreshEmbeddingModels(from snapshot: AISettingsSnapshot) {
         embeddingModels = KnowledgeEmbeddingResolution.visibleEmbeddingModels(in: snapshot)
-        let preferred = (
-            AIScenarioDefaultModelStore.read(for: .embedding)
-            ?? snapshot.scenarioDefaultModels[AIScenario.embedding.rawValue]
-            ?? ""
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferred = (snapshot.scenarioDefaultModelName(for: .embedding) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if let match = embeddingModels.first(where: { $0.name == preferred }) {
             selectedEmbeddingModelName = match.name
         } else if let first = embeddingModels.first {

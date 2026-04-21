@@ -47,6 +47,7 @@ enum AISettingsSeedLoader {
 
 private struct APIKeySeedRow: Decodable {
     let name: String
+    let providerID: String?
     let company: String
     let key: String
     let requestURL: String
@@ -58,6 +59,7 @@ private struct APIKeySeedRow: Decodable {
 
     var model: APIKeys {
         APIKeys(
+            providerID: providerID,
             name: name,
             company: company,
             key: key,
@@ -75,6 +77,7 @@ private struct AllModelSeedRow: Decodable {
     let name: String
     let displayName: String
     let identity: AIModelIdentity
+    let providerID: String?
     let company: String
     let price: Int
     let isEnabled: Bool
@@ -100,6 +103,7 @@ private struct AllModelSeedRow: Decodable {
             displayName: displayName,
             identity: identity,
             position: position,
+            providerID: providerID,
             company: company,
             price: price,
             isEnabled: isEnabled,

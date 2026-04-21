@@ -16,8 +16,19 @@ enum AIModelSelectionSource: String, Codable, CaseIterable, Sendable {
     case trial
 }
 
+enum AIProviderIdentifier {
+    static func normalize(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+            .replacingOccurrences(of: "[^A-Z0-9_\\-]+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_-"))
+    }
+}
+
 struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
+    var providerID: String
     var name: String
     var company: String
     var key: String
@@ -38,6 +49,7 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
 
     init(
         id: UUID = UUID(),
+        providerID: String? = nil,
         name: String,
         company: String,
         key: String,
@@ -52,6 +64,7 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
         timestamp: Date = Date()
     ) {
         self.id = id
+        self.providerID = AIProviderIdentifier.normalize(providerID ?? company)
         self.name = name
         self.company = company
         self.key = key
@@ -68,6 +81,7 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
 
     init(
         id: UUID = UUID(),
+        providerID: String? = nil,
         name: String,
         company: String,
         key: String,
@@ -82,6 +96,7 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     ) {
         self.init(
             id: id,
+            providerID: providerID,
             name: name,
             company: company,
             key: key,
@@ -99,6 +114,7 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case providerID
         case name
         case company
         case key
@@ -111,6 +127,26 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
         case privacyPolicyAccepted
         case privacyPolicyAcceptedAt
         case timestamp
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        company = try container.decode(String.self, forKey: .company)
+        providerID = AIProviderIdentifier.normalize(
+            try container.decodeIfPresent(String.self, forKey: .providerID) ?? company
+        )
+        key = try container.decode(String.self, forKey: .key)
+        requestURL = try container.decode(String.self, forKey: .requestURL)
+        help = try container.decodeIfPresent(String.self, forKey: .help) ?? ""
+        from = try container.decodeIfPresent(String.self, forKey: .from) ?? AIRecordSource.system.rawValue
+        privacyPolicyURL = try container.decodeIfPresent(String.self, forKey: .privacyPolicyURL) ?? ""
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? AIRecordSource(rawValue: from.lowercased()) ?? .system
+        privacyPolicyAccepted = try container.decodeIfPresent(Bool.self, forKey: .privacyPolicyAccepted) ?? false
+        privacyPolicyAcceptedAt = try container.decodeIfPresent(Date.self, forKey: .privacyPolicyAcceptedAt)
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
     }
 }
 
@@ -146,6 +182,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     var displayName: String
     var identity: AIModelIdentity
     var position: Int
+    var providerID: String
     var company: String
     var price: Int
     var isEnabled: Bool
@@ -222,6 +259,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         displayName: String,
         identity: AIModelIdentity,
         position: Int,
+        providerID: String? = nil,
         company: String,
         price: Int = 0,
         isEnabled: Bool = true,
@@ -249,6 +287,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         self.displayName = displayName
         self.identity = identity
         self.position = position
+        self.providerID = AIProviderIdentifier.normalize(providerID ?? company)
         self.company = company
         self.price = price
         self.isEnabled = isEnabled
@@ -278,6 +317,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         displayName: String,
         identity: AIModelIdentity,
         position: Int,
+        providerID: String? = nil,
         company: String,
         isHidden: Bool,
         supportsSearch: Bool,
@@ -304,6 +344,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
             displayName: displayName,
             identity: identity,
             position: position,
+            providerID: providerID,
             company: company,
             price: priceTier,
             isEnabled: !isHidden,
@@ -334,6 +375,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         case displayName
         case identity
         case position
+        case providerID
         case company
         case price
         case isEnabled
@@ -357,12 +399,45 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         case timestamp
     }
 
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        identity = try container.decodeIfPresent(AIModelIdentity.self, forKey: .identity) ?? .model
+        position = try container.decodeIfPresent(Int.self, forKey: .position) ?? 0
+        company = try container.decode(String.self, forKey: .company)
+        providerID = AIProviderIdentifier.normalize(
+            try container.decodeIfPresent(String.self, forKey: .providerID) ?? company
+        )
+        price = try container.decodeIfPresent(Int.self, forKey: .price) ?? 0
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        supportsSearch = try container.decodeIfPresent(Bool.self, forKey: .supportsSearch) ?? true
+        supportsTextGen = try container.decodeIfPresent(Bool.self, forKey: .supportsTextGen) ?? true
+        supportsMultimodal = try container.decodeIfPresent(Bool.self, forKey: .supportsMultimodal) ?? false
+        supportsReasoning = try container.decodeIfPresent(Bool.self, forKey: .supportsReasoning) ?? false
+        supportReasoningChange = try container.decodeIfPresent(Bool.self, forKey: .supportReasoningChange) ?? false
+        supportsImageGen = try container.decodeIfPresent(Bool.self, forKey: .supportsImageGen) ?? false
+        supportsVoiceGen = try container.decodeIfPresent(Bool.self, forKey: .supportsVoiceGen) ?? false
+        supportsToolUse = try container.decodeIfPresent(Bool.self, forKey: .supportsToolUse) ?? false
+        systemProvision = try container.decodeIfPresent(String.self, forKey: .systemProvision) ?? ""
+        icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? ""
+        briefDescription = try container.decodeIfPresent(String.self, forKey: .briefDescription) ?? ""
+        characterDesign = try container.decodeIfPresent(String.self, forKey: .characterDesign) ?? ""
+        aiScenarios = try container.decodeIfPresent([String].self, forKey: .aiScenarios) ?? []
+        aiToolScenarios = try container.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
+        baseModelName = try container.decodeIfPresent(String.self, forKey: .baseModelName)
+        localFilename = try container.decodeIfPresent(String.self, forKey: .localFilename)
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+    }
+
     var isLocalModel: Bool {
-        company.uppercased() == LocalModelService.localCompany && identity == .model
+        providerID == LocalModelService.localProviderID && identity == .model
     }
 
     var isLocalAgent: Bool {
-        company.uppercased() == LocalModelService.localCompany && identity == .agent
+        providerID == LocalModelService.localProviderID && identity == .agent
     }
 }
 

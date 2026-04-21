@@ -112,6 +112,16 @@ final class AIConfigCenter {
 
     func updateScenarioDefaultModel(_ modelName: String, for scenario: AIScenario) async {
         await runtimeConfigStore.updateScenarioDefaultModel(modelName, for: scenario)
+        await persistScenarioPreferenceMutation { snapshot in
+            snapshot.setScenarioDefaultModelName(modelName, for: scenario)
+        }
+    }
+
+    func updateScenarioModelSource(_ source: AIModelSelectionSource, for scenario: AIScenario) async {
+        await runtimeConfigStore.updateScenarioModelSource(source, for: scenario)
+        await persistScenarioPreferenceMutation { snapshot in
+            snapshot.setScenarioModelSource(source, for: scenario)
+        }
     }
 
     func refreshRemoteConfig() async {
@@ -144,5 +154,19 @@ final class AIConfigCenter {
     func resetRuntimeCaches() async {
         await runtimeConfigStore.reset()
         await runtimeStore.clearAll()
+    }
+
+    private func persistScenarioPreferenceMutation(
+        _ mutate: @Sendable (inout AISettingsSnapshot) -> Void
+    ) async {
+        let ownerAccountID = await resolvedOwnerAccountID(explicit: nil)
+        var snapshot = await currentSnapshot(ownerAccountID: ownerAccountID)
+        mutate(&snapshot)
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: ownerAccountID)
+        do {
+            try await repository.save(snapshot: snapshot, ownerAccountID: ownerAccountID)
+        } catch {
+            logger.error("AI 场景偏好持久化失败：\(error.localizedDescription)", module: .aiConfig)
+        }
     }
 }

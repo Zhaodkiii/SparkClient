@@ -1,13 +1,43 @@
 import Foundation
 
 /// AI 配置来源。
-/// - localDefault: 客户端内置默认值（兜底配置）。
+/// - localDefault: 兼容旧日志名；新解析链优先使用 `localCatalog` / `proOverlay`。
+/// - localCatalog: 用户本地目录（system/custom/LOCAL）合成的配置。
+/// - proOverlay: 后端 Pro bootstrap overlay 下发的配置。
 /// - runtimeOverride: 运行期覆盖（如动态实验、调试开关或远端热更新映射后的本地覆盖）。
 /// - trialPolicy: 试用策略下发的配置（例如限时试用期间指定的模型与参数）。
 enum AIConfigSource: String, Codable, Sendable {
     case localDefault
+    case localCatalog
+    case proOverlay
+    case userOverride
     case runtimeOverride
     case trialPolicy
+}
+
+enum AIProviderAPIStyle: String, Codable, Sendable {
+    case openAICompatible
+    case localGGUF
+}
+
+struct AIProviderAdapter: Equatable, Sendable {
+    let providerID: String
+    let displayName: String
+    let apiStyle: AIProviderAPIStyle
+
+    var isLocal: Bool {
+        apiStyle == .localGGUF
+    }
+}
+
+enum AIProviderAdapterRegistry {
+    static func adapter(for providerID: String) -> AIProviderAdapter {
+        let normalized = AIProviderIdentifier.normalize(providerID)
+        if normalized == LocalModelService.localProviderID {
+            return AIProviderAdapter(providerID: normalized, displayName: LocalModelService.localCompany, apiStyle: .localGGUF)
+        }
+        return AIProviderAdapter(providerID: normalized, displayName: normalized, apiStyle: .openAICompatible)
+    }
 }
 
 /// 单个场景下“可序列化/可存储”的原始配置快照。
@@ -177,6 +207,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
     var name: String
     var displayName: String
     var identity: String
+    var providerID: String
     var company: String
     var endpoint: String
     var apiKey: String?
@@ -214,6 +245,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
         case displayName = "display_name"
         case isDefault = "is_default"
         case identity
+        case providerID = "provider_id"
         case company
         case supportsSearch = "supports_search"
         case supportsMultimodal = "supports_multimodal"
@@ -245,6 +277,103 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
             temperature: temperature,
             maxTokens: maxTokens
         )
+    }
+
+    init(
+        name: String,
+        displayName: String,
+        identity: String,
+        providerID: String? = nil,
+        company: String,
+        endpoint: String,
+        apiKey: String?,
+        supportsSearch: Bool,
+        supportsMultimodal: Bool,
+        supportsReasoning: Bool,
+        supportsToolUse: Bool,
+        supportsVoiceGen: Bool,
+        supportsImageGen: Bool,
+        supportsText: Bool,
+        supportsDeepReasoning: Bool,
+        reasoningControllable: Bool,
+        priceTier: Int,
+        systemProvision: String?,
+        icon: String?,
+        briefDescription: String?,
+        source: String,
+        aiScenarios: [String],
+        aiToolScenarios: [String],
+        isDefault: Bool = false,
+        temperature: Double = 0.2,
+        maxTokens: Int = 4096
+    ) {
+        self.name = name
+        self.displayName = displayName
+        self.identity = identity
+        self.providerID = AIProviderIdentifier.normalize(providerID ?? company)
+        self.company = company
+        self.endpoint = endpoint
+        self.apiKey = apiKey
+        self.supportsSearch = supportsSearch
+        self.supportsMultimodal = supportsMultimodal
+        self.supportsReasoning = supportsReasoning
+        self.supportsToolUse = supportsToolUse
+        self.supportsVoiceGen = supportsVoiceGen
+        self.supportsImageGen = supportsImageGen
+        self.supportsText = supportsText
+        self.supportsDeepReasoning = supportsDeepReasoning
+        self.reasoningControllable = reasoningControllable
+        self.priceTier = priceTier
+        self.systemProvision = systemProvision
+        self.icon = icon
+        self.briefDescription = briefDescription
+        self.source = source
+        self.aiScenarios = aiScenarios
+        self.aiToolScenarios = aiToolScenarios
+        self.isDefault = isDefault
+        self.temperature = temperature
+        self.maxTokens = maxTokens
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        identity = try c.decode(String.self, forKey: .identity)
+        company = try c.decode(String.self, forKey: .company)
+        providerID = AIProviderIdentifier.normalize(try c.decodeIfPresent(String.self, forKey: .providerID) ?? company)
+        endpoint = try c.decode(String.self, forKey: .endpoint)
+        apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey)
+        supportsSearch = try c.decode(Bool.self, forKey: .supportsSearch)
+        supportsMultimodal = try c.decode(Bool.self, forKey: .supportsMultimodal)
+        supportsReasoning = try c.decode(Bool.self, forKey: .supportsReasoning)
+        supportsToolUse = try c.decode(Bool.self, forKey: .supportsToolUse)
+        supportsVoiceGen = try c.decode(Bool.self, forKey: .supportsVoiceGen)
+        supportsImageGen = try c.decode(Bool.self, forKey: .supportsImageGen)
+        supportsText = try c.decode(Bool.self, forKey: .supportsText)
+        supportsDeepReasoning = try c.decode(Bool.self, forKey: .supportsDeepReasoning)
+        reasoningControllable = try c.decode(Bool.self, forKey: .reasoningControllable)
+        priceTier = try c.decode(Int.self, forKey: .priceTier)
+        systemProvision = try c.decodeIfPresent(String.self, forKey: .systemProvision)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        briefDescription = try c.decodeIfPresent(String.self, forKey: .briefDescription)
+        source = try c.decode(String.self, forKey: .source)
+        aiScenarios = try c.decodeIfPresent([String].self, forKey: .aiScenarios) ?? []
+        aiToolScenarios = try c.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
+        isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
+        temperature = try c.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.2
+        maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 4096
+    }
+
+    var configSource: AIConfigSource {
+        switch AIRecordSource(rawValue: source) {
+        case .pro:
+            return .proOverlay
+        case .system, .custom:
+            return .localCatalog
+        case .none:
+            return .localDefault
+        }
     }
 }
 
@@ -304,6 +433,7 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
             name: config.model,
             displayName: config.model,
             identity: "model",
+            providerID: "SPARK",
             company: "SPARK",
             endpoint: config.endpoint,
             apiKey: config.apiKey,
@@ -354,64 +484,6 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
 
     func resolveConfig(preferredModelName: String?) -> AIScenarioConfig? {
         resolveRow(preferredModelName: preferredModelName)?.asScenarioConfig()
-    }
-}
-
-enum AIScenarioDefaultModelStore {
-    private static let keyPrefix = "spark.ai.default_model_name"
-
-    static func userDefaultsKey(for scenario: AIScenario) -> String {
-        "\(keyPrefix).\(scenario.rawValue)"
-    }
-
-    static func read(for scenario: AIScenario) -> String? {
-        let value = UserDefaults.standard.string(forKey: userDefaultsKey(for: scenario))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let value, value.isEmpty == false else { return nil }
-        return value
-    }
-
-    static func write(_ modelName: String?, for scenario: AIScenario) {
-        let trimmed = modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let key = userDefaultsKey(for: scenario)
-        if trimmed.isEmpty {
-            UserDefaults.standard.removeObject(forKey: key)
-        } else {
-            UserDefaults.standard.set(trimmed, forKey: key)
-        }
-    }
-
-    static func allScenarioDefaults(fallback: [String: String] = [:]) -> [String: String] {
-        var out: [String: String] = fallback
-        for scenario in AIScenario.allCases {
-            if let stored = read(for: scenario) {
-                out[scenario.rawValue] = stored
-            }
-        }
-        return out
-    }
-
-    static func sync(from scenarioDefaults: [String: String]) {
-        for scenario in AIScenario.allCases {
-            write(scenarioDefaults[scenario.rawValue], for: scenario)
-        }
-    }
-}
-
-enum AIScenarioModelSourceStore {
-    private static let keyPrefix = "spark.ai.model_source"
-
-    static func userDefaultsKey(for scenario: AIScenario) -> String {
-        "\(keyPrefix).\(scenario.rawValue)"
-    }
-
-    static func read(for scenario: AIScenario) -> AIModelSelectionSource? {
-        guard let raw = UserDefaults.standard.string(forKey: userDefaultsKey(for: scenario)) else { return nil }
-        return AIModelSelectionSource(rawValue: raw)
-    }
-
-    static func write(_ source: AIModelSelectionSource, for scenario: AIScenario) {
-        UserDefaults.standard.set(source.rawValue, forKey: userDefaultsKey(for: scenario))
     }
 }
 

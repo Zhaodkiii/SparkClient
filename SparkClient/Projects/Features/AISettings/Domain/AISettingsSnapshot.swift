@@ -9,6 +9,8 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var searchToolPreferences: AISearchToolPreferences
     /// 场景级默认模型（`AIScenario.rawValue` -> 模型 `name`）。
     var scenarioDefaultModels: [String: String]
+    /// 场景级模型来源选择（`AIScenario.rawValue` -> `AIModelSelectionSource.rawValue`）。
+    var scenarioModelSources: [String: AIModelSelectionSource]
     /// 输入栏中隐藏的试用模型名（仅本地偏好）。
     var trialChatPickerDisabledModelNames: [String]
     /// 试用状态（内存偏好，持久化于 UserDefaults payload）。
@@ -25,6 +27,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         apiKeys: [APIKeys],
         searchToolPreferences: AISearchToolPreferences = AISettingsDefaults.searchToolPreferences,
         scenarioDefaultModels: [String: String] = [:],
+        scenarioModelSources: [String: AIModelSelectionSource] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
         trial: AITrialState = .inactive,
         trialModelPolicy: [AITrialModelPolicyItem] = [],
@@ -38,6 +41,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.apiKeys = apiKeys
         self.searchToolPreferences = searchToolPreferences
         self.scenarioDefaultModels = scenarioDefaultModels
+        self.scenarioModelSources = scenarioModelSources
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
         self.trial = trial
         self.trialModelPolicy = trialModelPolicy
@@ -54,6 +58,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         apiKeys: [],
         searchToolPreferences: AISettingsDefaults.searchToolPreferences,
         scenarioDefaultModels: [:],
+        scenarioModelSources: [:],
         trialChatPickerDisabledModelNames: [],
         trial: .inactive,
         trialModelPolicy: [],
@@ -74,6 +79,29 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         trialModelPolicy.first(where: { $0.scenario == scenario && $0.isDefault })?.config
             ?? trialModelPolicy.first(where: { $0.scenario == scenario })?.config
     }
+
+    func scenarioDefaultModelName(for scenario: AIScenario) -> String? {
+        let value = scenarioDefaultModels[scenario.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value, value.isEmpty == false else { return nil }
+        return value
+    }
+
+    func scenarioModelSource(for scenario: AIScenario) -> AIModelSelectionSource {
+        scenarioModelSources[scenario.rawValue] ?? .localKey
+    }
+
+    mutating func setScenarioDefaultModelName(_ modelName: String?, for scenario: AIScenario) {
+        let trimmed = modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            scenarioDefaultModels.removeValue(forKey: scenario.rawValue)
+        } else {
+            scenarioDefaultModels[scenario.rawValue] = trimmed
+        }
+    }
+
+    mutating func setScenarioModelSource(_ source: AIModelSelectionSource, for scenario: AIScenario) {
+        scenarioModelSources[scenario.rawValue] = source
+    }
 }
 
 // MARK: - 偏好持久化载荷（与快照非目录字段一致）
@@ -84,6 +112,7 @@ extension AISettingsSnapshot {
     struct PreferencesPayload: Codable, Equatable, Sendable {
         var searchToolPreferences: AISearchToolPreferences
         var scenarioDefaultModels: [String: String]
+        var scenarioModelSources: [String: AIModelSelectionSource]
         var trialChatPickerDisabledModelNames: [String]
         var trial: AITrialState
         var trialModelPolicy: [AITrialModelPolicyItem]
@@ -96,6 +125,7 @@ extension AISettingsSnapshot {
         static let `default` = PreferencesPayload(
             searchToolPreferences: AISettingsDefaults.searchToolPreferences,
             scenarioDefaultModels: [:],
+            scenarioModelSources: [:],
             trialChatPickerDisabledModelNames: [],
             trial: .inactive,
             trialModelPolicy: [],
@@ -109,6 +139,7 @@ extension AISettingsSnapshot {
         init(
             searchToolPreferences: AISearchToolPreferences,
             scenarioDefaultModels: [String: String],
+            scenarioModelSources: [String: AIModelSelectionSource],
             trialChatPickerDisabledModelNames: [String],
             trial: AITrialState,
             trialModelPolicy: [AITrialModelPolicyItem],
@@ -120,6 +151,7 @@ extension AISettingsSnapshot {
         ) {
             self.searchToolPreferences = searchToolPreferences
             self.scenarioDefaultModels = scenarioDefaultModels
+            self.scenarioModelSources = scenarioModelSources
             self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
             self.trial = trial
             self.trialModelPolicy = trialModelPolicy
@@ -134,6 +166,7 @@ extension AISettingsSnapshot {
             case searchToolPreferences
             case userInfo
             case scenarioDefaultModels
+            case scenarioModelSources
             case trialChatPickerDisabledModelNames
             case trial
             case trialModelPolicy
@@ -174,6 +207,7 @@ extension AISettingsSnapshot {
             }
 
             scenarioDefaultModels = try container.decodeIfPresent([String: String].self, forKey: .scenarioDefaultModels) ?? [:]
+            scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .scenarioModelSources) ?? [:]
             trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
             trial = try container.decodeIfPresent(AITrialState.self, forKey: .trial) ?? .inactive
             trialModelPolicy = try container.decodeIfPresent([AITrialModelPolicyItem].self, forKey: .trialModelPolicy) ?? []
@@ -188,6 +222,7 @@ extension AISettingsSnapshot {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(searchToolPreferences, forKey: .searchToolPreferences)
             try container.encode(scenarioDefaultModels, forKey: .scenarioDefaultModels)
+            try container.encode(scenarioModelSources, forKey: .scenarioModelSources)
             try container.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
             try container.encode(trial, forKey: .trial)
             try container.encode(trialModelPolicy, forKey: .trialModelPolicy)
@@ -204,6 +239,7 @@ extension AISettingsSnapshot {
         PreferencesPayload(
             searchToolPreferences: searchToolPreferences,
             scenarioDefaultModels: scenarioDefaultModels,
+            scenarioModelSources: scenarioModelSources,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
             trial: trial,
             trialModelPolicy: trialModelPolicy,
@@ -222,6 +258,7 @@ extension AISettingsSnapshot {
             apiKeys: apiKeys,
             searchToolPreferences: preferences.searchToolPreferences,
             scenarioDefaultModels: preferences.scenarioDefaultModels,
+            scenarioModelSources: preferences.scenarioModelSources,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
             trial: preferences.trial,
             trialModelPolicy: preferences.trialModelPolicy,

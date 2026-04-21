@@ -3,8 +3,8 @@ import Foundation
 struct SaveAISettingsUseCase: Sendable {
     let repository: any AISettingsRepository
 
-    func execute(snapshot: AISettingsSnapshot) async throws {
-        try await repository.save(snapshot: snapshot)
+    func execute(snapshot: AISettingsSnapshot, ownerAccountID: Int64? = nil) async throws {
+        try await repository.save(snapshot: snapshot, ownerAccountID: ownerAccountID)
     }
 
     func execute(model: AllModels) async throws {

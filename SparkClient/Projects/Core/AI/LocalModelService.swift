@@ -51,6 +51,7 @@ enum LocalModelServiceError: LocalizedError {
 
 actor LocalModelService {
     static let localCompany = "LOCAL"
+    static let localProviderID = "LOCAL"
 
     private let fileManager: FileManager
     private let session: URLSession

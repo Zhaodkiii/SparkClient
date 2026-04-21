@@ -59,7 +59,8 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         // 判断模型是否支持工具调用（Function Call）
         let supportsToolUse = modelSupportsTools(modelName: resolved.model, snapshot: snapshot)
         // 从模型目录获取厂商名称（大写）
-        let providerFromCatalog = snapshot.allModels.first(where: { $0.name == resolved.model })?.company.uppercased()
+        let selectedCatalogModel = snapshot.allModels.first(where: { $0.name == resolved.model })
+        let providerFromCatalog = selectedCatalogModel?.providerID
         let providerFromRequest = request.providerCompanyUppercased
         let mergedProvider = providerFromRequest ?? providerFromCatalog
         logger.debug(
@@ -238,7 +239,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             return nil
         }
         // 仅本地厂商模型处理
-        guard selected.company.uppercased() == LocalModelService.localCompany else {
+        guard AIProviderAdapterRegistry.adapter(for: selected.providerID).isLocal else {
             return nil
         }
         // 基础本地模型

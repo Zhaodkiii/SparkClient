@@ -4,7 +4,7 @@ import Foundation
 enum AILocalScenarioBundleBuilder {
     /// - Parameters:
     ///   - allModels: 用户模型目录（已启用条目参与组合）。
-    ///   - apiKeys: 厂商密钥（按 `company` 匹配）。
+    ///   - apiKeys: 厂商密钥（按稳定 `providerID` 匹配）。
     ///   - scenarioDefaults: 场景级用户默认模型名（scenario rawValue -> model name）；不存在或无效时回退到本场景列表首条。
     static func buildCollection(
         allModels: [AllModels],
@@ -117,8 +117,7 @@ enum AILocalScenarioBundleBuilder {
 
         return modelsToUse.compactMap { model in
             let provider = apiKeys.first {
-                $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-                    == model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                $0.providerID == model.providerID
                     && $0.isEnabled
             }
             let endpoint = provider?.requestURL ?? (model.isLocalModel ? "local://chat/completions" : "")
@@ -127,6 +126,7 @@ enum AILocalScenarioBundleBuilder {
                 name: model.name,
                 displayName: model.displayName,
                 identity: model.identity.rawValue,
+                providerID: model.providerID,
                 company: model.company,
                 endpoint: endpoint,
                 apiKey: blankToNil(provider?.key),

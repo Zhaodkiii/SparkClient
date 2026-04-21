@@ -18,11 +18,13 @@ final class AISettingsViewModel: ObservableObject {
     private let aiConfigCenter: AIConfigCenter?
     private let localModelService: LocalModelService
     private let providerModelCatalogService: ProviderModelCatalogService
+    private let providerCoordinator: ProviderSettingsCoordinator
+    private let modelCoordinator: ModelCatalogCoordinator
     private var lastPersistedSnapshot: AISettingsSnapshot = .default
     private var cancellables: Set<AnyCancellable> = []
 
-    var configCenter: AIConfigCenter? {
-        aiConfigCenter
+    func makeScenarioModelPreferencesViewModel() -> ScenarioModelPreferencesViewModel {
+        ScenarioModelPreferencesViewModel(aiConfigCenter: aiConfigCenter)
     }
 
     init(
@@ -30,6 +32,8 @@ final class AISettingsViewModel: ObservableObject {
         saveUseCase: SaveAISettingsUseCase,
         localModelService: LocalModelService = LocalModelService(),
         providerModelCatalogService: ProviderModelCatalogService = ProviderModelCatalogService(),
+        providerCoordinator: ProviderSettingsCoordinator = ProviderSettingsCoordinator(),
+        modelCoordinator: ModelCatalogCoordinator = ModelCatalogCoordinator(),
         ownerAccountIDForLoad: Int64? = nil,
         aiConfigAPI: SparkAIConfigAPI? = nil,
         aiConfigCenter: AIConfigCenter? = nil
@@ -39,9 +43,11 @@ final class AISettingsViewModel: ObservableObject {
         self.ownerAccountIDForLoad = ownerAccountIDForLoad
         self.localModelService = localModelService
         self.providerModelCatalogService = providerModelCatalogService
+        self.providerCoordinator = providerCoordinator
+        self.modelCoordinator = modelCoordinator
         self.aiConfigAPI = aiConfigAPI
         self.aiConfigCenter = aiConfigCenter
-//        bindSnapshotChanges()
+        bindSnapshotChanges()
     }
 
     func load() async {
@@ -77,21 +83,11 @@ final class AISettingsViewModel: ObservableObject {
 
     /// 厂商密钥编辑 Sheet 点「保存」后立即落盘（不等设置页工具栏「保存」）。
     func persistSnapshotNow() async {
-        isSaving = true
-        errorMessage = nil
-        defer { isSaving = false }
-        do {
-            try await performPersistToRepository()
-            lastPersistedSnapshot = snapshot
-            hasUnsavedChanges = false
-            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        await persistSnapshotNowReturningBool()
     }
 
     private func performPersistToRepository() async throws {
-        try await saveUseCase.execute(snapshot: snapshot)
+        try await saveUseCase.execute(snapshot: snapshot, ownerAccountID: ownerAccountIDForLoad)
     }
 
     func clearError() {
@@ -106,7 +102,9 @@ final class AISettingsViewModel: ObservableObject {
         defer { trialOperationInFlight = false }
         do {
             let state = try await aiConfigAPI.fetchTrialStatus()
-            snapshot.trial = state
+            if snapshot.trial != state {
+                snapshot.trial = state
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -163,6 +161,7 @@ final class AISettingsViewModel: ObservableObject {
     func appendOnlineModel(
         name: String,
         displayName: String,
+        providerID: String? = nil,
         company: String,
         priceTier: Int,
         isHidden: Bool,
@@ -178,13 +177,14 @@ final class AISettingsViewModel: ObservableObject {
         let baseName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let baseDisplay = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         let co = company.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedProviderID = AIProviderIdentifier.normalize(providerID ?? co)
         guard baseName.isEmpty == false, baseDisplay.isEmpty == false, co.isEmpty == false else { return nil }
         var uniqueName = baseName
         if snapshot.allModels.contains(where: { $0.name == uniqueName }) {
             uniqueName = baseName + "_" + UUID().uuidString.prefix(8).lowercased()
         }
         var uniqueDisplay = baseDisplay
-        if snapshot.allModels.contains(where: { $0.displayName == uniqueDisplay && $0.company == co }) {
+        if snapshot.allModels.contains(where: { $0.displayName == uniqueDisplay && $0.providerID == resolvedProviderID }) {
             uniqueDisplay = baseDisplay + " (\(UUID().uuidString.prefix(4)))"
         }
         let position = (snapshot.allModels.map(\.position).max() ?? 0) + 1
@@ -195,6 +195,7 @@ final class AISettingsViewModel: ObservableObject {
             displayName: uniqueDisplay,
             identity: .model,
             position: position,
+            providerID: resolvedProviderID,
             company: co,
             isHidden: isHidden,
             supportsSearch: true,
@@ -217,13 +218,14 @@ final class AISettingsViewModel: ObservableObject {
 
     @discardableResult
     func appendOrRevealRemoteModel(_ remoteModel: ProviderRemoteModel, provider: APIKeys) -> Bool {
-        let company = provider.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard company.isEmpty == false else { return false }
+        let company = provider.company.trimmingCharacters(in: .whitespacesAndNewlines)
+        let providerID = provider.providerID
+        guard company.isEmpty == false, providerID.isEmpty == false else { return false }
 
         let incomingKey = normalizedRemoteModelKey(remoteModel.name)
         if let index = snapshot.allModels.firstIndex(where: {
             $0.identity == .model &&
-            $0.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company &&
+            $0.providerID == providerID &&
             normalizedRemoteModelKey($0.name) == incomingKey
         }) {
             snapshot.allModels[index].displayName = remoteModel.displayName
@@ -235,6 +237,7 @@ final class AISettingsViewModel: ObservableObject {
         _ = appendOnlineModel(
             name: remoteModel.name,
             displayName: remoteModel.displayName,
+            providerID: providerID,
             company: company,
             priceTier: inferredPriceTier(for: remoteModel),
             isHidden: false,
@@ -248,8 +251,15 @@ final class AISettingsViewModel: ObservableObject {
         return true
     }
 
-    func deleteOnlineModel(id: UUID) {
-        snapshot.allModels.removeAll { $0.id == id }
+    @discardableResult
+    func deleteModelAndPersist(id: UUID) async -> Bool {
+        do {
+            try modelCoordinator.deleteModel(id: id, in: &snapshot)
+            return await persistSnapshotNowReturningBool()
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     /// 替换目录中一条模型（触发 `snapshot` 更新）。
@@ -258,12 +268,46 @@ final class AISettingsViewModel: ObservableObject {
         snapshot.allModels[idx] = model
     }
 
+    func replaceAllModels(_ models: [AllModels]) {
+        snapshot.allModels = models
+    }
+
+    func updateModelPositions(_ positions: [UUID: Int]) {
+        for index in snapshot.allModels.indices {
+            guard let position = positions[snapshot.allModels[index].id] else { continue }
+            snapshot.allModels[index].position = position
+        }
+    }
+
     func upsertProvider(_ provider: APIKeys) {
         if let idx = snapshot.apiKeys.firstIndex(where: { $0.id == provider.id }) {
             snapshot.apiKeys[idx] = provider
         } else {
             snapshot.apiKeys.append(provider)
         }
+    }
+
+    @discardableResult
+    func addProviderAndPersist(_ provider: APIKeys) async -> Bool {
+        providerCoordinator.appendProvider(provider, in: &snapshot)
+        return await persistSnapshotNowReturningBool()
+    }
+
+    @discardableResult
+    func setProviderEnabledAndPersist(providerID: UUID, enabled: Bool) async -> Bool {
+        do {
+            _ = try providerCoordinator.setProviderEnabled(recordID: providerID, enabled: enabled, in: &snapshot)
+            return await persistSnapshotNowReturningBool()
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func saveProviderFromEditorAndPersist(_ provider: APIKeys) async -> Bool {
+        _ = providerCoordinator.saveProviderFromEditor(provider, in: &snapshot)
+        return await persistSnapshotNowReturningBool()
     }
 
     /// 保存按钮触发：先改缓存，再单条落库（模型）。
@@ -294,6 +338,7 @@ final class AISettingsViewModel: ObservableObject {
     func appendOnlineModelAndPersist(
         name: String,
         displayName: String,
+        providerID: String? = nil,
         company: String,
         priceTier: Int,
         isHidden: Bool,
@@ -309,6 +354,7 @@ final class AISettingsViewModel: ObservableObject {
         guard let model = appendOnlineModel(
             name: name,
             displayName: displayName,
+            providerID: providerID,
             company: company,
             priceTier: priceTier,
             isHidden: isHidden,
@@ -334,25 +380,14 @@ final class AISettingsViewModel: ObservableObject {
         baseModelName: String,
         systemPrompt: String
     ) {
-        guard let index = snapshot.allModels.firstIndex(where: { $0.id == id }) else { return }
-        var m = snapshot.allModels[index]
-        guard m.isLocalAgent else { return }
-        m.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        m.iconSymbol = iconSymbol
-        m.baseModelName = baseModelName
-        m.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let base = snapshot.allModels.first(where: { $0.name == baseModelName && $0.isLocalModel }) {
-            m.supportsSearch = base.supportsSearch
-            m.supportsMultimodal = base.supportsMultimodal
-            m.supportsReasoning = base.supportsReasoning
-            m.supportsToolUse = base.supportsToolUse
-            m.supportsVoiceGen = base.supportsVoiceGen
-            m.supportsImageGen = base.supportsImageGen
-            m.supportsText = base.supportsText
-            m.reasoningControllable = base.reasoningControllable
-            m.priceTier = base.priceTier
-        }
-        snapshot.allModels[index] = m
+        modelCoordinator.updateLocalAgent(
+            id: id,
+            displayName: displayName,
+            iconSymbol: iconSymbol,
+            baseModelName: baseModelName,
+            systemPrompt: systemPrompt,
+            in: &snapshot
+        )
     }
 
     func removeLocalModel(_ model: AllModels) async throws {
@@ -365,10 +400,20 @@ final class AISettingsViewModel: ObservableObject {
             candidate.id == model.id || candidate.baseModelName == model.name
         }
         for scenario in AIScenario.allCases {
-            if snapshot.scenarioDefaultModels[scenario.rawValue] == model.name {
-                snapshot.scenarioDefaultModels.removeValue(forKey: scenario.rawValue)
-                AIScenarioDefaultModelStore.write(nil, for: scenario)
+            if snapshot.scenarioDefaultModelName(for: scenario) == model.name {
+                snapshot.setScenarioDefaultModelName(nil, for: scenario)
             }
+        }
+    }
+
+    @discardableResult
+    func removeLocalModelAndPersist(_ model: AllModels) async -> Bool {
+        do {
+            try await removeLocalModel(model)
+            return await persistSnapshotNowReturningBool()
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -384,22 +429,11 @@ final class AISettingsViewModel: ObservableObject {
     }
 
     func setChatModel(_ model: AllModels) {
-        snapshot.scenarioDefaultModels[AIScenario.chat.rawValue] = model.name
-        AIScenarioDefaultModelStore.write(model.name, for: .chat)
+        snapshot.setScenarioDefaultModelName(model.name, for: .chat)
     }
 
     func hasValidAPIKey(for model: AllModels) -> Bool {
-        let company = model.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let localCompany = LocalModelService.localCompany.uppercased()
-        if company == localCompany {
-            return true
-        }
-        guard company.isEmpty == false else { return false }
-        return snapshot.apiKeys.contains { key in
-            key.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == company &&
-            key.isHidden == false &&
-            key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        }
+        modelCoordinator.hasValidAPIKey(for: model, in: snapshot)
     }
 
     func createLocalAgent(
@@ -408,36 +442,19 @@ final class AISettingsViewModel: ObservableObject {
         baseModelName: String,
         systemPrompt: String
     ) {
-        guard let baseModel = snapshot.allModels.first(where: { $0.name == baseModelName }) else { return }
-        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedName.isEmpty == false else { return }
-
-        let agentPositions = snapshot.allModels.filter { $0.identity == .agent }.map(\.position)
-        let position = (agentPositions.max() ?? 999) + 1
-        let agent = AllModels(
-            name: "local-agent-\(UUID().uuidString.lowercased())",
-            displayName: trimmedName,
-            identity: .agent,
-            position: position,
-            company: LocalModelService.localCompany,
-            isHidden: false,
-            supportsSearch: baseModel.supportsSearch,
-            supportsMultimodal: baseModel.supportsMultimodal,
-            supportsReasoning: baseModel.supportsReasoning,
-            supportsToolUse: baseModel.supportsToolUse,
-            supportsVoiceGen: baseModel.supportsVoiceGen,
-            supportsImageGen: baseModel.supportsImageGen,
+        modelCoordinator.createLocalAgent(
+            displayName: displayName,
             iconSymbol: iconSymbol,
-            baseModelName: baseModel.name,
-            localFilename: nil,
-            systemPrompt: systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines),
-            source: .custom,
-            timestamp: Date(),
-            priceTier: baseModel.priceTier,
-            supportsText: baseModel.supportsText,
-            reasoningControllable: baseModel.reasoningControllable
+            baseModelName: baseModelName,
+            systemPrompt: systemPrompt,
+            in: &snapshot
         )
-        snapshot.allModels.append(agent)
+    }
+
+    @discardableResult
+    func initializeModelVisibilityAndPersistIfNeeded() async -> Bool {
+        guard modelCoordinator.initializeModelVisibility(in: &snapshot) else { return true }
+        return await persistSnapshotNowReturningBool()
     }
 
     private func upsertLocalBaseModel(_ installed: LocalModelInstalled) {
@@ -445,6 +462,7 @@ final class AISettingsViewModel: ObservableObject {
         if let index = snapshot.allModels.firstIndex(where: { $0.localFilename == installed.fileName && $0.identity == .model }) {
             snapshot.allModels[index].displayName = installed.displayName
             snapshot.allModels[index].name = installed.modelName
+            snapshot.allModels[index].providerID = LocalModelService.localProviderID
             snapshot.allModels[index].company = localCompany
             snapshot.allModels[index].isHidden = false
             snapshot.allModels[index].source = .custom
@@ -459,6 +477,7 @@ final class AISettingsViewModel: ObservableObject {
                 displayName: installed.displayName,
                 identity: .model,
                 position: position,
+                providerID: LocalModelService.localProviderID,
                 company: localCompany,
                 isHidden: false,
                 supportsSearch: true,
@@ -515,6 +534,23 @@ final class AISettingsViewModel: ObservableObject {
                 Task { await self.aiConfigCenter?.applyDraftSnapshot(latest) }
             }
             .store(in: &cancellables)
+    }
+
+    @discardableResult
+    private func persistSnapshotNowReturningBool() async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            try await performPersistToRepository()
+            lastPersistedSnapshot = snapshot
+            hasUnsavedChanges = false
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     @discardableResult

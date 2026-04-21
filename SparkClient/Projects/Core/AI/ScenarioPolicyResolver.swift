@@ -12,8 +12,8 @@ struct ScenarioPolicyResolver {
     ) async throws -> AIResolvedConfig {
         let trimmedPreferred = preferredModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmedPreferred, trimmedPreferred.isEmpty == false {
-            if let config = bundles.resolveConfig(for: scenario, preferredModelName: trimmedPreferred) {
-                return try config.toResolvedConfig(source: .localDefault)
+            if let row = bundles.resolveRow(for: scenario, preferredModelName: trimmedPreferred) {
+                return try row.asScenarioConfig().toResolvedConfig(source: row.configSource)
             }
             throw AIConfigError.missingModelForScenario(scenario)
         }
@@ -22,9 +22,9 @@ struct ScenarioPolicyResolver {
             return try runtimeConfig.toResolvedConfig(source: .runtimeOverride)
         }
 
-        guard let defaultConfig = bundles.resolveConfig(for: scenario, preferredModelName: nil) else {
+        guard let defaultRow = bundles.resolveRow(for: scenario, preferredModelName: nil) else {
             throw AIConfigError.missingModelForScenario(scenario)
         }
-        return try defaultConfig.toResolvedConfig(source: .localDefault)
+        return try defaultRow.asScenarioConfig().toResolvedConfig(source: defaultRow.configSource)
     }
 }
