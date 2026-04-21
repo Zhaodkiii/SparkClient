@@ -3,6 +3,14 @@ import UIKit
 import Combine
 
 struct ChatView: View {
+    private enum ParameterCardKind: Hashable {
+        case temperature
+        case topP
+        case maxTokens
+        case maxMessages
+        case imageDeliveryMode
+    }
+
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
@@ -18,6 +26,17 @@ struct ChatView: View {
     @StateObject private var taskManager = TaskManager.shared
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
+    static let inlineErrorClientMessageID = UUID(uuidString: "00000000-0000-0000-0000-000000000999")!
+    @State private var activeParameterCard: ParameterCardKind?
+    @State private var overlaySettings = ChatThreadGenerationSettings(
+        currentModelName: nil,
+        temperature: 0.6,
+        topP: 1.0,
+        maxTokens: 4096,
+        maxMessages: 20,
+        rolePrompt: "",
+        imageDeliveryMode: .directMultimodal
+    )
 
     private var reasoningRefreshId: String {
         let name = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName ?? "-"
@@ -29,7 +48,11 @@ struct ChatView: View {
     }
 
     private var visibleMessages: [ChatMessage] {
-        stateStore.selectedMessages.filter { uiStateStore.isDeleted($0.id) == false }
+        let messages = stateStore.selectedMessages.filter { uiStateStore.isDeleted($0.id) == false }
+        if let inlineErrorMessage {
+            return messages + [inlineErrorMessage]
+        }
+        return messages
     }
 
     private var hasMoreMessages: Bool {
@@ -43,13 +66,14 @@ struct ChatView: View {
     var body: some View {
         AnyView(configuredLayout)
     }
-
+    
     private var baseLayout: some View {
         messageList
     }
 
     @ViewBuilder
     private var composerChrome: some View {
+        
         switch composerStyle {
         case .signal:
             ChatComposerView(
@@ -87,10 +111,37 @@ struct ChatView: View {
                 }
             )
         }
+
     }
 
     private var configuredLayout: some View {
         lifecycleLayout
+    }
+
+    private var inlineErrorMessage: ChatMessage? {
+        guard let errorText = stateStore.errorMessage(for: threadID)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              errorText.isEmpty == false,
+              stateStore.selectedThreadID == threadID else {
+            return nil
+        }
+        let anchorDate = stateStore.selectedMessages.last?.createdAt ?? Date()
+        return ChatMessage(
+            id: Self.inlineErrorClientMessageID,
+            threadID: threadID,
+            role: .assistant,
+            kind: .system,
+            content: errorText,
+            attachments: [
+                ChatAttachment(type: .operationalState, text: L10n.text("chat.error_card.title")),
+                ChatAttachment(type: .operationalDescription, text: errorText)
+            ],
+            clientMessageID: Self.inlineErrorClientMessageID,
+            serverMessageID: nil,
+            deliveryState: .failed,
+            createdAt: anchorDate.addingTimeInterval(0.001),
+            serverUpdatedAt: nil,
+            isTombstone: false
+        )
     }
 
     private var navigationDecoratedLayout: some View {
@@ -100,7 +151,43 @@ struct ChatView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerChrome
             }
+            .overlay(alignment: .bottom) {
+                parameterOverlay
+            }
             .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Menu(L10n.text("chat.settings.menu"), systemImage: "slider.horizontal.3") {
+                            Button {
+                                presentParameterCard(.temperature)
+                            } label: {
+                                Label(L10n.text("chat.settings.temperature.title"), systemImage: "thermometer.variable")
+                            }
+                            Button {
+                                presentParameterCard(.topP)
+                            } label: {
+                                Label(L10n.text("chat.settings.top_p.title"), systemImage: "percent")
+                            }
+                            Button {
+                                presentParameterCard(.maxTokens)
+                            } label: {
+                                Label(L10n.text("chat.settings.max_tokens.title"), systemImage: "textformat.size")
+                            }
+                            Button {
+                                presentParameterCard(.maxMessages)
+                            } label: {
+                                Label(L10n.text("chat.settings.max_messages.title"), systemImage: "message.badge")
+                            }
+                            Button {
+                                presentParameterCard(.imageDeliveryMode)
+                            } label: {
+                                Label(L10n.text("chat.settings.image_delivery.title"), systemImage: "photo.on.rectangle.angled")
+                            }
+                        }
+                    } label: {
+                        Label(L10n.text("chat.settings.menu"), systemImage: "slider.horizontal.3")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Picker(L10n.text("chat.composer.style.title"), selection: $composerStyleRaw) {
@@ -108,28 +195,7 @@ struct ChatView: View {
                             Text(L10n.text("chat.composer.style.hanlin")).tag(ChatComposerStyle.hanlin.rawValue)
                         }
                     } label: {
-                        Label(L10n.text("chat.composer.style.title"), systemImage: "rectangle.split.2x1")
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button {
-                            Task {
-                                await detailViewModel.setThreadImageDeliveryMode(.directMultimodal, for: threadID)
-                            }
-                        } label: {
-                            Label(L10n.text("chat.image_delivery.direct"), systemImage: "photo.on.rectangle")
-                        }
-                        .disabled(detailViewModel.currentModelSupportsMultimodal == false)
-                        Button {
-                            Task {
-                                await detailViewModel.setThreadImageDeliveryMode(.localOCR, for: threadID)
-                            }
-                        } label: {
-                            Label(L10n.text("chat.image_delivery.ocr_only"), systemImage: "text.viewfinder")
-                        }
-                    } label: {
-                        Label(L10n.text("chat.image_delivery.menu"), systemImage: "photo.on.rectangle.angled")
+                        Label(L10n.text("chat.management.menu"), systemImage: "ellipsis.bubble")
                     }
                 }
             }
@@ -145,6 +211,7 @@ struct ChatView: View {
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
             }
             .onChange(of: threadID) { _ in
+                activeParameterCard = nil
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
             }
     }
@@ -251,5 +318,187 @@ struct ChatView: View {
         let snapshot = uiStateStore.makeCardActionSnapshot()
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: cardActionSnapshotStorageKey)
+    }
+
+    @ViewBuilder
+    private var parameterOverlay: some View {
+        if let card = activeParameterCard {
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(0.08)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        activeParameterCard = nil
+                    }
+
+                parameterCard(for: card)
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            .animation(.spring(response: 0.28, dampingFraction: 0.9), value: card)
+        }
+    }
+
+    @ViewBuilder
+    private func parameterCard(for kind: ParameterCardKind) -> some View {
+        switch kind {
+        case .temperature:
+            ChatThreadSettingCard(
+                title: L10n.text("chat.settings.temperature.title"),
+                subtitle: L10n.text("chat.settings.temperature.subtitle"),
+                systemImage: "thermometer.variable",
+                options: temperatureOptions,
+                selection: Binding(
+                    get: { overlaySettings.temperature },
+                    set: { updateOverlaySetting(temperature: $0) }
+                )
+            )
+        case .topP:
+            ChatThreadSettingCard(
+                title: L10n.text("chat.settings.top_p.title"),
+                subtitle: L10n.text("chat.settings.top_p.subtitle"),
+                systemImage: "percent",
+                options: topPOptions,
+                selection: Binding(
+                    get: { overlaySettings.topP },
+                    set: { updateOverlaySetting(topP: $0) }
+                )
+            )
+        case .maxTokens:
+            ChatThreadSettingCard(
+                title: L10n.text("chat.settings.max_tokens.title"),
+                subtitle: L10n.text("chat.settings.max_tokens.subtitle"),
+                systemImage: "textformat.size",
+                options: maxTokenOptions,
+                selection: Binding(
+                    get: { overlaySettings.maxTokens },
+                    set: { updateOverlaySetting(maxTokens: $0) }
+                )
+            )
+        case .maxMessages:
+            ChatThreadSettingCard(
+                title: L10n.text("chat.settings.max_messages.title"),
+                subtitle: L10n.text("chat.settings.max_messages.subtitle"),
+                systemImage: "message.badge",
+                options: maxMessageOptions,
+                selection: Binding(
+                    get: { overlaySettings.maxMessages },
+                    set: { updateOverlaySetting(maxMessages: $0) }
+                )
+            )
+        case .imageDeliveryMode:
+            ChatThreadSettingCard(
+                title: L10n.text("chat.settings.image_delivery.title"),
+                subtitle: L10n.text("chat.settings.image_delivery.subtitle"),
+                systemImage: "photo.on.rectangle.angled",
+                options: imageDeliveryOptions,
+                selection: Binding(
+                    get: { overlaySettings.imageDeliveryMode },
+                    set: { updateOverlaySetting(imageDeliveryMode: $0) }
+                )
+            )
+        }
+    }
+
+    private var temperatureOptions: [ChatThreadSettingOption<Double>] {
+        stride(from: 0.1, through: 2.0, by: 0.1).map { raw in
+            let value = Double(round(raw * 10) / 10)
+            return ChatThreadSettingOption(
+                id: String(format: "temp-%.1f", value),
+                value: value,
+                title: String(format: "%.1f", value),
+                detail: value < 0.7
+                    ? L10n.text("chat.settings.temperature.detail.low")
+                    : (value > 1.2 ? L10n.text("chat.settings.temperature.detail.high") : L10n.text("chat.settings.temperature.detail.medium"))
+            )
+        }
+    }
+
+    private var topPOptions: [ChatThreadSettingOption<Double>] {
+        stride(from: 0.1, through: 1.0, by: 0.1).map { raw in
+            let value = Double(round(raw * 10) / 10)
+            return ChatThreadSettingOption(
+                id: String(format: "top-p-%.1f", value),
+                value: value,
+                title: String(format: "%.1f", value),
+                detail: value < 0.5
+                    ? L10n.text("chat.settings.top_p.detail.low")
+                    : (value > 0.8 ? L10n.text("chat.settings.top_p.detail.high") : L10n.text("chat.settings.top_p.detail.medium"))
+            )
+        }
+    }
+
+    private var maxTokenOptions: [ChatThreadSettingOption<Int>] {
+        [256, 512, 1024, 2048, 4096, 8192].map { value in
+            ChatThreadSettingOption(
+                id: "tokens-\(value)",
+                value: value,
+                title: "\(value)",
+                detail: String(format: L10n.text("chat.settings.max_tokens.detail"), locale: Locale.current, value)
+            )
+        }
+    }
+
+    private var maxMessageOptions: [ChatThreadSettingOption<Int>] {
+        [5, 10, 20, 30, 40, 50, 60].map { value in
+            ChatThreadSettingOption(
+                id: "messages-\(value)",
+                value: value,
+                title: "\(value)",
+                detail: String(format: L10n.text("chat.settings.max_messages.detail"), locale: Locale.current, value)
+            )
+        }
+    }
+
+    private var imageDeliveryOptions: [ChatThreadSettingOption<ChatThreadImageDeliveryMode>] {
+        [
+            ChatThreadSettingOption(
+                id: ChatThreadImageDeliveryMode.directMultimodal.rawValue,
+                value: .directMultimodal,
+                title: L10n.text("chat.image_delivery.direct"),
+                detail: detailViewModel.currentModelSupportsMultimodal
+                    ? L10n.text("chat.settings.image_delivery.detail.direct")
+                    : L10n.text("chat.image_delivery.unavailable_hint")
+            ),
+            ChatThreadSettingOption(
+                id: ChatThreadImageDeliveryMode.localOCR.rawValue,
+                value: .localOCR,
+                title: L10n.text("chat.image_delivery.ocr_only"),
+                detail: L10n.text("chat.settings.image_delivery.detail.ocr")
+            )
+        ]
+    }
+
+    private func presentParameterCard(_ kind: ParameterCardKind) {
+        let thread = stateStore.selectedThread ?? ChatThread(title: L10n.text("chat.default_thread_title"))
+        overlaySettings = ChatThreadGenerationSettings(thread: thread)
+        if activeParameterCard == kind {
+            activeParameterCard = nil
+        } else {
+            activeParameterCard = kind
+        }
+    }
+
+    private func updateOverlaySetting(
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        maxTokens: Int? = nil,
+        maxMessages: Int? = nil,
+        imageDeliveryMode: ChatThreadImageDeliveryMode? = nil
+    ) {
+        let next = ChatThreadGenerationSettings(
+            currentModelName: overlaySettings.currentModelName,
+            temperature: temperature ?? overlaySettings.temperature,
+            topP: topP ?? overlaySettings.topP,
+            maxTokens: maxTokens ?? overlaySettings.maxTokens,
+            maxMessages: maxMessages ?? overlaySettings.maxMessages,
+            rolePrompt: overlaySettings.rolePrompt,
+            imageDeliveryMode: imageDeliveryMode ?? overlaySettings.imageDeliveryMode
+        )
+        guard next != overlaySettings else { return }
+        overlaySettings = next
+        Task {
+            await detailViewModel.updateThreadGenerationSettings(next, for: threadID)
+        }
     }
 }

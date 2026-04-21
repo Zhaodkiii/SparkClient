@@ -18,7 +18,9 @@ protocol ChatThreadStoring: Sendable {
         threadID: UUID,
         currentModelName: String?,
         temperature: Double,
+        topP: Double,
         maxTokens: Int,
+        maxMessages: Int,
         rolePrompt: String
     ) async
     func softDeleteThread(id: UUID) async

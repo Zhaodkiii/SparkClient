@@ -24,7 +24,7 @@ final class ChatStateStore: ObservableObject {
     @Published private(set) var selectedThreadID: UUID?
     @Published private(set) var isLoading = false
     @Published private(set) var isSending = false
-    @Published private(set) var errorMessage: String?
+    @Published private(set) var threadErrorMessages: [UUID: String] = [:]
 
     @Published private var composerDrafts: [UUID: ChatComposerDraft] = [:]
     /// 待发图片上传进度（发送过程中由 `SendChatMessageUseCase` 回写）。
@@ -354,7 +354,22 @@ final class ChatStateStore: ObservableObject {
     }
 
     func setError(_ message: String?) {
-        errorMessage = message
+        setError(message, for: selectedThreadID)
+    }
+
+    func setError(_ message: String?, for threadID: UUID?) {
+        guard let threadID else { return }
+        let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmed, trimmed.isEmpty == false {
+            threadErrorMessages[threadID] = trimmed
+        } else {
+            threadErrorMessages.removeValue(forKey: threadID)
+        }
+    }
+
+    func errorMessage(for threadID: UUID?) -> String? {
+        guard let threadID else { return nil }
+        return threadErrorMessages[threadID]
     }
 
     /// 会话切换时清空内存态，避免短暂展示上一账号的会话列表与消息。
@@ -364,7 +379,7 @@ final class ChatStateStore: ObservableObject {
         selectedThreadID = nil
         isLoading = false
         isSending = false
-        errorMessage = nil
+        threadErrorMessages = [:]
         composerDrafts = [:]
         composerAttachmentUploadProgress = [:]
         composerPreparedAttachmentStates = [:]

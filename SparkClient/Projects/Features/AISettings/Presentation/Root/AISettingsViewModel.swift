@@ -41,7 +41,7 @@ final class AISettingsViewModel: ObservableObject {
         self.providerModelCatalogService = providerModelCatalogService
         self.aiConfigAPI = aiConfigAPI
         self.aiConfigCenter = aiConfigCenter
-        bindSnapshotChanges()
+//        bindSnapshotChanges()
     }
 
     func load() async {

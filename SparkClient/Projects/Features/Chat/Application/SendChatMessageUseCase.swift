@@ -79,13 +79,17 @@ struct SendChatMessageUseCase: Sendable {
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
 
-            await repository.updateThreadGenerationConfig(
-                threadID: thread.id,
-                currentModelName: persistedModelName,
-                temperature: resolvedRow.temperature,
-                maxTokens: resolvedRow.maxTokens,
-                rolePrompt: ""
-            )
+            if thread.currentModelName != persistedModelName {
+                await repository.updateThreadGenerationConfig(
+                    threadID: thread.id,
+                    currentModelName: persistedModelName,
+                    temperature: thread.temperature,
+                    topP: thread.topP,
+                    maxTokens: thread.maxTokens,
+                    maxMessages: thread.maxMessages,
+                    rolePrompt: thread.rolePrompt
+                )
+            }
 
             let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
             let effectiveMode = effectiveChatImageDeliveryMode(
@@ -207,6 +211,10 @@ struct SendChatMessageUseCase: Sendable {
                 inference: inference,
                 modelReasoning: modelReasoning,
                 preferredModelName: resolvedRow.name,
+                temperature: thread.temperature,
+                topP: thread.topP,
+                maxTokens: thread.maxTokens,
+                maxMessages: thread.maxMessages,
                 deliverMultimodalImages: deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
                 onPartial: onAssistantPartial
@@ -268,6 +276,136 @@ struct SendChatMessageUseCase: Sendable {
         } catch {
             let cost = Date().timeIntervalSince(start)
             logger.error("sendMessage 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
+            throw error
+        }
+    }
+
+    func executeRegenerateReply(
+        threadID: UUID,
+        memberID: Int? = nil,
+        selectedChatModelName: String? = nil,
+        assistantClientMessageID: UUID,
+        inference: ChatOrchestratorInferenceOptions = .default,
+        modelReasoning: ChatModelReasoningContext = .unknown,
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
+    ) async throws -> ChatThreadSnapshot {
+        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        let start = Date()
+        logger.info(
+            "regenerateReply 开始，thread=\(shortID(threadID)), member=\(shortID(memberID))",
+            module: .general
+        )
+
+        do {
+            guard let thread = await repository.loadThread(id: threadID) else {
+                throw ChatFeatureError.threadNotFound
+            }
+            let trimmedSelected = selectedChatModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            let trimmedThreadModel = thread.currentModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            let preferredName = (trimmedSelected?.isEmpty == false)
+                ? trimmedSelected
+                : ((trimmedThreadModel?.isEmpty == false) ? trimmedThreadModel : nil)
+            guard let resolvedRow = bundles.resolveRow(for: .chat, preferredModelName: preferredName) else {
+                throw AIConfigError.missingModelForScenario(.chat)
+            }
+            let persistedModelName = trimmedSelected?.isEmpty == false
+                ? trimmedSelected
+                : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+
+            if thread.currentModelName != persistedModelName {
+                await repository.updateThreadGenerationConfig(
+                    threadID: thread.id,
+                    currentModelName: persistedModelName,
+                    temperature: thread.temperature,
+                    topP: thread.topP,
+                    maxTokens: thread.maxTokens,
+                    maxMessages: thread.maxMessages,
+                    rolePrompt: thread.rolePrompt
+                )
+            }
+
+            let history = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
+            let replayHistory = history.filter { $0.deliveryState != .failed }
+            guard let latestUserMessage = replayHistory.last(where: { $0.role == .user && $0.isTombstone == false }) else {
+                throw ChatFeatureError.emptyInput
+            }
+
+            let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
+            let effectiveMode = effectiveChatImageDeliveryMode(
+                threadMode: thread.imageDeliveryMode,
+                supportsMultimodal: supportsMultimodal
+            )
+            let deliverMultimodal = effectiveMode == .directMultimodal
+                && supportsMultimodal
+                && latestUserMessage.attachments.contains(where: \.isUserImageForMultimodal)
+
+            let contextMemberID = thread.memberID ?? memberID
+            let memberContextSummary: String
+            if let contextMemberID {
+                memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
+            } else {
+                memberContextSummary = ""
+            }
+
+            let output = try await orchestrator.generateReply(
+                userInput: latestUserMessage.content,
+                history: replayHistory,
+                memberContextSummary: memberContextSummary,
+                memberID: contextMemberID,
+                threadID: thread.id,
+                assistantMessageClientID: assistantClientMessageID,
+                inference: inference,
+                modelReasoning: modelReasoning,
+                preferredModelName: resolvedRow.name,
+                temperature: thread.temperature,
+                topP: thread.topP,
+                maxTokens: thread.maxTokens,
+                maxMessages: thread.maxMessages,
+                deliverMultimodalImages: deliverMultimodal,
+                providerCompanyUppercased: providerCompany,
+                onPartial: onAssistantPartial
+            )
+
+            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            let interpreted = toolEventInterpreter.interpret(
+                kind: output.kind,
+                text: output.text,
+                toolName: output.toolName,
+                toolContent: output.toolContent
+            )
+            _ = try await repository.appendMessage(
+                threadID: thread.id,
+                role: .assistant,
+                kind: output.kind,
+                content: output.text,
+                attachments: interpreted.attachments,
+                reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
+                reasoningDurationMs: output.reasoningDurationMs,
+                reasoningExpanded: false,
+                reasoningVisibility: .full,
+                clientMessageID: assistantClientMessageID,
+                serverMessageID: nil,
+                deliveryState: .pending
+            )
+
+            await OutboxCoordinator.pushPendingMessages(
+                chatSyncSupervisor: chatSyncSupervisor,
+                logger: logger
+            )
+
+            guard let latestThread = await repository.loadThread(id: thread.id) else {
+                throw ChatFeatureError.threadNotFound
+            }
+            let latestHistory = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
+            let cost = Date().timeIntervalSince(start)
+            logger.info(
+                "regenerateReply 完成，thread=\(shortID(thread.id)), messages=\(latestHistory.count), cost=\(format(cost))s",
+                module: .general
+            )
+            return ChatThreadSnapshot(thread: latestThread, messages: latestHistory)
+        } catch {
+            let cost = Date().timeIntervalSince(start)
+            logger.error("regenerateReply 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
             throw error
         }
     }

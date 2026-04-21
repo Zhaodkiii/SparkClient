@@ -36,7 +36,9 @@
         <attribute name="imageDeliveryModeRaw" optional="YES" attributeType="String"/>
         <attribute name="currentModelName" optional="YES" attributeType="String"/>
         <attribute name="temperature" optional="NO" attributeType="Double" defaultValueString="0.6" usesScalarValueType="YES"/>
+        <attribute name="topP" optional="NO" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
         <attribute name="maxTokens" optional="NO" attributeType="Integer 32" defaultValueString="4096" usesScalarValueType="YES"/>
+        <attribute name="maxMessages" optional="NO" attributeType="Integer 32" defaultValueString="20" usesScalarValueType="YES"/>
         <attribute name="rolePrompt" optional="NO" attributeType="String" defaultValueString=""/>
     </entity>
     <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">

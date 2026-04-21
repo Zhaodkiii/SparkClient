@@ -18,6 +18,10 @@ struct ChatConversationMessageRow: View {
         DefaultChatMessageActionUseCase(taskManager: taskManager, logger: logger)
     }
 
+    private var shouldUseUnifiedRetryFlow: Bool {
+        message.clientMessageID == ChatView.inlineErrorClientMessageID || message.role != .user
+    }
+
     var body: some View {
         HStack {
             if message.role == .assistant || message.role == .system {
@@ -52,7 +56,14 @@ struct ChatConversationMessageRow: View {
             showActions: message.id == visibleMessages.last?.id,
             onRetry: {
                 Task {
-                    await detailViewModel.retryFailedMessage(clientMessageID: message.clientMessageID)
+                    if shouldUseUnifiedRetryFlow {
+                        await detailViewModel.retryLatestConversationFailure(
+                            for: threadID,
+                            preferredClientMessageID: message.clientMessageID == ChatView.inlineErrorClientMessageID ? nil : message.clientMessageID
+                        )
+                    } else {
+                        await detailViewModel.retryFailedMessage(clientMessageID: message.clientMessageID)
+                    }
                 }
             },
             onCopy: {

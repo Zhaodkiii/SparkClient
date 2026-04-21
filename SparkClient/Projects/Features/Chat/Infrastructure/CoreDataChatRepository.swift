@@ -113,14 +113,18 @@ actor CoreDataChatRepository: ChatRepository {
         threadID: UUID,
         currentModelName: String?,
         temperature: Double,
+        topP: Double,
         maxTokens: Int,
+        maxMessages: Int,
         rolePrompt: String
     ) async {
         await store.updateThreadGenerationConfig(
             threadID: threadID,
             currentModelName: currentModelName,
             temperature: temperature,
+            topP: topP,
             maxTokens: maxTokens,
+            maxMessages: maxMessages,
             rolePrompt: rolePrompt
         )
     }

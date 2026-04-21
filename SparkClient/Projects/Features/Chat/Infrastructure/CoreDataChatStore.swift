@@ -138,7 +138,9 @@ actor CoreDataChatStore {
         imageDeliveryModeRaw: String? = nil,
         currentModelName: String? = nil,
         temperature: Double = 0.6,
+        topP: Double = 1.0,
         maxTokens: Int = 4096,
+        maxMessages: Int = 20,
         rolePrompt: String = ""
     ) async -> ChatThread {
         guard let accountID = await activeAccountID() else {
@@ -148,7 +150,9 @@ actor CoreDataChatStore {
                 scenario: .chat,
                 currentModelName: currentModelName,
                 temperature: temperature,
+                topP: topP,
                 maxTokens: maxTokens,
+                maxMessages: maxMessages,
                 rolePrompt: rolePrompt,
                 imageDeliveryModeRaw: imageDeliveryModeRaw,
                 isDeleted: false,
@@ -165,7 +169,9 @@ actor CoreDataChatStore {
             scenario: .chat,
             currentModelName: currentModelName,
             temperature: temperature,
+            topP: topP,
             maxTokens: maxTokens,
+            maxMessages: maxMessages,
             rolePrompt: rolePrompt,
             imageDeliveryModeRaw: imageDeliveryModeRaw,
             isDeleted: false,
@@ -199,7 +205,9 @@ actor CoreDataChatStore {
             object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
             object.setValue(thread.currentModelName, forKey: "currentModelName")
             object.setValue(thread.temperature, forKey: "temperature")
+            object.setValue(thread.topP, forKey: "topP")
             object.setValue(thread.maxTokens, forKey: "maxTokens")
+            object.setValue(thread.maxMessages, forKey: "maxMessages")
             object.setValue(thread.rolePrompt, forKey: "rolePrompt")
             object.setValue(true, forKey: "isActive")
         }
@@ -255,7 +263,9 @@ actor CoreDataChatStore {
         threadID: UUID,
         currentModelName: String?,
         temperature: Double,
+        topP: Double,
         maxTokens: Int,
+        maxMessages: Int,
         rolePrompt: String
     ) async {
         _ = try? await kernel.writeWithoutNotification { context, accountID in
@@ -264,7 +274,9 @@ actor CoreDataChatStore {
             }
             object.setValue(currentModelName, forKey: "currentModelName")
             object.setValue(temperature, forKey: "temperature")
+            object.setValue(min(max(topP, 0), 1), forKey: "topP")
             object.setValue(max(maxTokens, 1), forKey: "maxTokens")
+            object.setValue(max(maxMessages, 1), forKey: "maxMessages")
             object.setValue(rolePrompt, forKey: "rolePrompt")
             object.setValue(Date(), forKey: "updatedAt")
         }
@@ -600,7 +612,9 @@ actor CoreDataChatStore {
                 object.setValue(thread.imageDeliveryModeRaw, forKey: "imageDeliveryModeRaw")
                 object.setValue(thread.currentModelName, forKey: "currentModelName")
                 object.setValue(thread.temperature, forKey: "temperature")
+                object.setValue(thread.topP, forKey: "topP")
                 object.setValue(thread.maxTokens, forKey: "maxTokens")
+                object.setValue(thread.maxMessages, forKey: "maxMessages")
                 object.setValue(thread.rolePrompt, forKey: "rolePrompt")
 
                 if thread.isDeleted {
@@ -947,7 +961,9 @@ actor CoreDataChatStore {
             scenario: scenario,
             currentModelName: object.value(forKey: "currentModelName") as? String,
             temperature: object.value(forKey: "temperature") as? Double ?? 0.6,
+            topP: object.value(forKey: "topP") as? Double ?? 1.0,
             maxTokens: object.value(forKey: "maxTokens") as? Int ?? 4096,
+            maxMessages: object.value(forKey: "maxMessages") as? Int ?? 20,
             rolePrompt: object.value(forKey: "rolePrompt") as? String ?? "",
             imageDeliveryModeRaw: object.value(forKey: "imageDeliveryModeRaw") as? String,
             isDeleted: object.value(forKey: "isSoftDeleted") as? Bool ?? false,

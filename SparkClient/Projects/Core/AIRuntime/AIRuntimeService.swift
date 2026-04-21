@@ -77,7 +77,10 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     toolChoice: request.toolChoice,
                     reasoning: request.reasoning,
                     preferredModelName: request.preferredModelName,
-                    providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog
+                    providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog,
+                    temperature: request.temperature,
+                    topP: request.topP,
+                    maxTokens: request.maxTokens
                 )
             }
             logger.info(
@@ -91,7 +94,10 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 toolChoice: .none,
                 reasoning: request.reasoning,
                 preferredModelName: request.preferredModelName,
-                providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog
+                providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog,
+                temperature: request.temperature,
+                topP: request.topP,
+                maxTokens: request.maxTokens
             )
         }()
 
@@ -120,8 +126,8 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 fileName: localSelection.fileName,
                 modelName: resolved.model,
                 messages: effectiveMessages,
-                maxTokens: resolved.maxTokens,
-                temperature: resolved.temperature
+                maxTokens: effectiveRequest.maxTokens ?? resolved.maxTokens,
+                temperature: effectiveRequest.temperature ?? resolved.temperature
             )
             
             let cost = Date().timeIntervalSince(start)
@@ -147,7 +153,12 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         }
 
         // MARK: - 调用云端模型
-        let client = AIClientFactory.makeClient(from: resolved)
+        let client = AIClientFactory.makeClient(
+            from: resolved,
+            temperatureOverride: effectiveRequest.temperature,
+            topPOverride: effectiveRequest.topP,
+            maxTokensOverride: effectiveRequest.maxTokens
+        )
         logger.debug(
             "准备调用 AI 流式推理，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), provider=\(effectiveRequest.providerCompanyUppercased ?? "<nil>"), messages=\(effectiveMessages.count), tools=\(effectiveRequest.tools.count)",
             module: .aiConfig
@@ -163,7 +174,10 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 toolChoice: effectiveRequest.toolChoice,
                 reasoning: effectiveRequest.reasoning,
                 preferredModelName: effectiveRequest.preferredModelName,
-                providerCompanyUppercased: effectiveRequest.providerCompanyUppercased
+                providerCompanyUppercased: effectiveRequest.providerCompanyUppercased,
+                temperature: effectiveRequest.temperature,
+                topP: effectiveRequest.topP,
+                maxTokens: effectiveRequest.maxTokens
             )
         )
         

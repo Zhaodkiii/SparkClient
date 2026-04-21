@@ -51,6 +51,10 @@ struct ChatOrchestrator: Sendable {
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
         preferredModelName: String? = nil,
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        maxTokens: Int? = nil,
+        maxMessages: Int? = nil,
         /// 为 `true` 时，用户消息中的 `image_url` 附件编码为多模态 `content` 数组；否则仅使用 `ChatMessage.content` 字符串。
         deliverMultimodalImages: Bool = false,
         /// 网关单点编码（如厂商对 `image_url` 形式的差异）。
@@ -98,7 +102,8 @@ struct ChatOrchestrator: Sendable {
             from: history,
             memberContextSummary: memberContextSummary,
             reasoning: reasoningOpts,
-            deliverMultimodalImages: deliverMultimodalImages
+            deliverMultimodalImages: deliverMultimodalImages,
+            maxMessages: maxMessages
         )
         let toolDefinitions = filteredToolDefinitions(inference: inference)
         let toolChoice: AIRuntimeToolChoice = inference.useTools && toolDefinitions.isEmpty == false ? .auto : .none
@@ -124,7 +129,10 @@ struct ChatOrchestrator: Sendable {
                             toolChoice: toolChoice,
                             reasoning: reasoningOpts,
                             preferredModelName: preferredModelName,
-                            providerCompanyUppercased: providerCompanyUppercased
+                            providerCompanyUppercased: providerCompanyUppercased,
+                            temperature: temperature,
+                            topP: topP,
+                            maxTokens: maxTokens
                         )
                     ),
                     onPartial: onPartial
@@ -265,7 +273,8 @@ struct ChatOrchestrator: Sendable {
         from history: [ChatMessage],
         memberContextSummary: String,
         reasoning: AIRuntimeReasoningOptions,
-        deliverMultimodalImages: Bool
+        deliverMultimodalImages: Bool,
+        maxMessages: Int?
     ) async -> [AIRuntimeMessage] {
         let promptLocalizer = PromptLocalizer()
         var runtimeMessages: [AIRuntimeMessage] = [
@@ -284,7 +293,14 @@ struct ChatOrchestrator: Sendable {
             )
         }
 
-        for chatMessage in history {
+        let effectiveHistory: ArraySlice<ChatMessage>
+        if let maxMessages, maxMessages > 0 {
+            effectiveHistory = history.suffix(maxMessages)
+        } else {
+            effectiveHistory = history[history.startIndex..<history.endIndex]
+        }
+
+        for chatMessage in effectiveHistory {
             let msg = await runtimeMessage(from: chatMessage, deliverMultimodalImages: deliverMultimodalImages)
             runtimeMessages.append(msg)
         }

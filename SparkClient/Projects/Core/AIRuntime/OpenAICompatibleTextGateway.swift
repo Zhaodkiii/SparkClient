@@ -71,6 +71,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                 )
             },
             temperature: client.temperature,
+            topP: client.topP,
             maxTokens: client.maxTokens,
             stream: true, // 开启流式响应
             tools: runtimeRequest.tools.map {
@@ -544,6 +545,7 @@ private struct ChatCompletionRequest: Encodable {
     let model: String
     let messages: [RequestMessage]
     let temperature: Double
+    let topP: Double?
     let maxTokens: Int
     let stream: Bool
     let tools: [RequestTool]?
@@ -553,6 +555,7 @@ private struct ChatCompletionRequest: Encodable {
         case model
         case messages
         case temperature
+        case topP = "top_p"
         case maxTokens = "max_tokens"
         case stream
         case tools

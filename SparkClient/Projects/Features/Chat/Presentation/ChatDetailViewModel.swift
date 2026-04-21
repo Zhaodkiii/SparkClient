@@ -333,18 +333,18 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         guard let thread = await chatRepository.loadThread(id: threadID) else { return }
-        if thread.currentModelName == persistedModelName,
-           thread.temperature == row.temperature,
-           thread.maxTokens == row.maxTokens {
+        if thread.currentModelName == persistedModelName {
             return
         }
 
         await chatRepository.updateThreadGenerationConfig(
             threadID: threadID,
             currentModelName: persistedModelName,
-            temperature: row.temperature,
-            maxTokens: row.maxTokens,
-            rolePrompt: ""
+            temperature: thread.temperature,
+            topP: thread.topP,
+            maxTokens: thread.maxTokens,
+            maxMessages: thread.maxMessages,
+            rolePrompt: thread.rolePrompt
         )
 
         if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
@@ -419,6 +419,49 @@ final class ChatDetailViewModel: ObservableObject {
             await MainActor.run {
                 threadImageDeliveryMode = mode
             }
+        }
+    }
+
+    func updateThreadGenerationSettings(_ settings: ChatThreadGenerationSettings, for threadID: UUID) async {
+        guard let existing = await chatRepository.loadThread(id: threadID) else { return }
+        let next = ChatThreadGenerationSettings(
+            currentModelName: settings.currentModelName,
+            temperature: settings.temperature,
+            topP: settings.topP,
+            maxTokens: settings.maxTokens,
+            maxMessages: settings.maxMessages,
+            rolePrompt: settings.rolePrompt,
+            imageDeliveryMode: settings.imageDeliveryMode
+        )
+        let current = ChatThreadGenerationSettings(thread: existing)
+        guard current != next else { return }
+
+        await chatRepository.updateThreadGenerationConfig(
+            threadID: threadID,
+            currentModelName: next.currentModelName,
+            temperature: next.temperature,
+            topP: next.topP,
+            maxTokens: next.maxTokens,
+            maxMessages: next.maxMessages,
+            rolePrompt: next.rolePrompt
+        )
+        if existing.imageDeliveryMode != next.imageDeliveryMode {
+            await chatRepository.updateThreadImageDeliveryMode(
+                threadID: threadID,
+                imageDeliveryModeRaw: next.imageDeliveryMode.rawValue
+            )
+        }
+
+        await MainActor.run {
+            stateStore.setSelectedChatModelName(next.currentModelName, for: threadID)
+            threadImageDeliveryMode = next.imageDeliveryMode
+        }
+        await refreshReasoningToolbarContext(for: threadID)
+
+        do {
+            try await syncChatUseCase.pushOutboxOnly()
+        } catch {
+            logger.warning("线程参数上送失败，稍后重试：\(error.localizedDescription)", module: .general)
         }
     }
 
@@ -500,10 +543,11 @@ final class ChatDetailViewModel: ObservableObject {
                     let latestHasMore = latestTotal > latestMessages.count
                     await MainActor.run {
                         self.stateStore.setMessages(latestMessages, for: threadID, hasMore: latestHasMore)
+                        self.stateStore.setError(nil, for: threadID)
                     }
                 } catch {
                     await MainActor.run {
-                        self.stateStore.setError(error.localizedDescription)
+                        self.stateStore.setError(error.localizedDescription, for: threadID)
                     }
                     self.logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
                 }
@@ -596,14 +640,14 @@ final class ChatDetailViewModel: ObservableObject {
             }
             stateStore.setMessages(snapshot.messages, for: snapshot.thread.id)
             stateStore.clearDraft(for: snapshot.thread.id)
-            stateStore.setError(nil)
+            stateStore.setError(nil, for: snapshot.thread.id)
             logger.info(
                 "发送对话完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
                 module: .general
             )
         } catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
-            stateStore.setError(error.localizedDescription)
+            stateStore.setError(error.localizedDescription, for: threadID)
             logger.error("发送对话失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.send")
         }
@@ -625,6 +669,20 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    func retryLatestConversationFailure(for threadID: UUID, preferredClientMessageID: UUID? = nil) async {
+        let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
+        if let preferredClientMessageID,
+           messages.contains(where: { $0.clientMessageID == preferredClientMessageID && $0.deliveryState == .failed && $0.role == .user }) {
+            await retryFailedMessage(clientMessageID: preferredClientMessageID)
+            return
+        }
+        if let latestFailed = messages.last(where: { $0.deliveryState == .failed && $0.role == .user }) {
+            await retryFailedMessage(clientMessageID: latestFailed.clientMessageID)
+            return
+        }
+        await regenerateLatestAssistantReply(for: threadID)
+    }
+
     func sync() async {
         logger.debug("手动聊天同步开始", module: .general)
         do {
@@ -637,6 +695,64 @@ final class ChatDetailViewModel: ObservableObject {
         } catch {
             stateStore.setError(error.localizedDescription)
             logger.error("手动聊天同步失败：\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    func regenerateLatestAssistantReply(for threadID: UUID) async {
+        guard stateStore.isSending == false else { return }
+
+        let flags = stateStore.composerDraft(for: threadID).runtimeFlags
+        let inference = ChatOrchestratorInferenceOptions(
+            useTools: flags.useTools,
+            useKnowledgeBag: flags.useKnowledgeBag,
+            useWebSearch: flags.useWebSearch,
+            reasoningEnabled: flags.reasoningEnabled,
+            reasoningEffortTier: flags.reasoningEffortTier
+        )
+
+        stateStore.setSending(true)
+        defer { stateStore.setSending(false) }
+
+        do {
+            await aiConfigCenter.clearRuntimeOverride(for: .chat)
+            let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
+                .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
+            let streamingMessageID = UUID()
+            stateStore.setError(nil, for: threadID)
+            stateStore.startStreamingAssistant(
+                threadID: threadID,
+                clientMessageID: streamingMessageID,
+                kind: .text
+            )
+
+            let snapshot = try await sendMessageUseCase.executeRegenerateReply(
+                threadID: threadID,
+                memberID: memberContextStore.context.selectedMemberID,
+                selectedChatModelName: flags.selectedChatModelName,
+                assistantClientMessageID: streamingMessageID,
+                inference: inference,
+                modelReasoning: modelReasoning,
+                onAssistantPartial: { delta in
+                    await MainActor.run {
+                        self.stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
+                    }
+                }
+            )
+
+            if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
+                stateStore.upsertThreadListItem(finalRow)
+            }
+            stateStore.setMessages(snapshot.messages, for: snapshot.thread.id)
+            stateStore.setError(nil, for: snapshot.thread.id)
+            logger.info(
+                "重新生成回答完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
+                module: .general
+            )
+        } catch {
+            stateStore.finishStreamingAssistant(threadID: threadID)
+            stateStore.setError(error.localizedDescription, for: threadID)
+            logger.error("重新生成回答失败：\(error.localizedDescription)", module: .general)
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.retry")
         }
     }
 

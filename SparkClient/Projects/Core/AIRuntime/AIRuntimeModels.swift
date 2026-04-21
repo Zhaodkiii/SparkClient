@@ -249,6 +249,9 @@ struct AIRuntimeTextRequest: Sendable {
     let reasoning: AIRuntimeReasoningOptions     // 推理控制配置
     let preferredModelName: String?              // 显式指定模型名（高于场景默认）
     let providerCompanyUppercased: String?       // 厂商大写标识（服务内部填充）
+    let temperature: Double?                     // 线程级温度覆盖
+    let topP: Double?                            // 线程级 top_p 覆盖
+    let maxTokens: Int?                          // 线程级最大回复长度覆盖
 
     /// 构造方法（提供默认值）
     init(
@@ -258,7 +261,10 @@ struct AIRuntimeTextRequest: Sendable {
         toolChoice: AIRuntimeToolChoice = .auto,
         reasoning: AIRuntimeReasoningOptions = .disabled,
         preferredModelName: String? = nil,
-        providerCompanyUppercased: String? = nil
+        providerCompanyUppercased: String? = nil,
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        maxTokens: Int? = nil
     ) {
         self.scenario = scenario
         self.messages = messages
@@ -267,6 +273,9 @@ struct AIRuntimeTextRequest: Sendable {
         self.reasoning = reasoning
         self.preferredModelName = preferredModelName
         self.providerCompanyUppercased = providerCompanyUppercased
+        self.temperature = temperature
+        self.topP = topP
+        self.maxTokens = maxTokens
     }
 }
 

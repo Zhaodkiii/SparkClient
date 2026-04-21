@@ -16,7 +16,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let isTombstone: Bool
     let threadCurrentModelName: String?
     let threadTemperature: Double?
+    let threadTopP: Double?
     let threadMaxTokens: Int?
+    let threadMaxMessages: Int?
     let threadRolePrompt: String?
     let reasoningContent: String?
     let reasoningDurationMs: Int64?
@@ -37,7 +39,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case isTombstone = "tombstone"
         case threadCurrentModelName = "thread_current_model_name"
         case threadTemperature = "thread_temperature"
+        case threadTopP = "thread_top_p"
         case threadMaxTokens = "thread_max_tokens"
+        case threadMaxMessages = "thread_max_messages"
         case threadRolePrompt = "thread_role_prompt"
         case reasoningContent = "reasoning_content"
         case reasoningDurationMs = "reasoning_duration_ms"
@@ -59,7 +63,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         isTombstone: Bool,
         threadCurrentModelName: String? = nil,
         threadTemperature: Double? = nil,
+        threadTopP: Double? = nil,
         threadMaxTokens: Int? = nil,
+        threadMaxMessages: Int? = nil,
         threadRolePrompt: String? = nil,
         reasoningContent: String? = nil,
         reasoningDurationMs: Int64? = nil,
@@ -79,7 +85,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.isTombstone = isTombstone
         self.threadCurrentModelName = threadCurrentModelName
         self.threadTemperature = threadTemperature
+        self.threadTopP = threadTopP
         self.threadMaxTokens = threadMaxTokens
+        self.threadMaxMessages = threadMaxMessages
         self.threadRolePrompt = threadRolePrompt
         self.reasoningContent = reasoningContent
         self.reasoningDurationMs = reasoningDurationMs
@@ -102,7 +110,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
         threadCurrentModelName = try c.decodeIfPresent(String.self, forKey: .threadCurrentModelName)
         threadTemperature = try c.decodeIfPresent(Double.self, forKey: .threadTemperature)
+        threadTopP = try c.decodeIfPresent(Double.self, forKey: .threadTopP)
         threadMaxTokens = try c.decodeIfPresent(Int.self, forKey: .threadMaxTokens)
+        threadMaxMessages = try c.decodeIfPresent(Int.self, forKey: .threadMaxMessages)
         threadRolePrompt = try c.decodeIfPresent(String.self, forKey: .threadRolePrompt)
         reasoningContent = try c.decodeIfPresent(String.self, forKey: .reasoningContent)
         reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
@@ -125,7 +135,9 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encode(isTombstone, forKey: .isTombstone)
         try c.encodeIfPresent(threadCurrentModelName, forKey: .threadCurrentModelName)
         try c.encodeIfPresent(threadTemperature, forKey: .threadTemperature)
+        try c.encodeIfPresent(threadTopP, forKey: .threadTopP)
         try c.encodeIfPresent(threadMaxTokens, forKey: .threadMaxTokens)
+        try c.encodeIfPresent(threadMaxMessages, forKey: .threadMaxMessages)
         try c.encodeIfPresent(threadRolePrompt, forKey: .threadRolePrompt)
         try c.encodeIfPresent(reasoningContent, forKey: .reasoningContent)
         try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
@@ -152,7 +164,9 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let imageDeliveryModeRaw: String?
     let currentModelName: String?
     let temperature: Double?
+    let topP: Double?
     let maxTokens: Int?
+    let maxMessages: Int?
     let rolePrompt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -167,7 +181,9 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         case imageDeliveryModeRaw = "image_delivery_mode"
         case currentModelName = "current_model_name"
         case temperature
+        case topP = "top_p"
         case maxTokens = "max_tokens"
+        case maxMessages = "max_messages"
         case rolePrompt = "role_prompt"
     }
 }

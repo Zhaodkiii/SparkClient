@@ -45,6 +45,15 @@ struct ChatMessageBubbleContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if shouldRenderErrorCard {
+                ChatMessageErrorCard(
+                    title: L10n.text("chat.error_card.title"),
+                    message: errorCardBodyText,
+                    retryTitle: L10n.text("chat.error_card.retry"),
+                    onRetry: onRetry
+                )
+            }
+
             if message.role == .assistant {
                 let payloads = imagePayloads(from: message)
                 if payloads.isEmpty == false {
@@ -181,7 +190,7 @@ struct ChatMessageBubbleContentView: View {
                 }
             }
 
-            if message.deliveryState == .failed {
+            if message.deliveryState == .failed, shouldRenderErrorCard == false {
                 Button(action: onRetry) {
                     Text(L10n.text("common.retry"))
                         .font(.caption)
@@ -266,6 +275,9 @@ struct ChatMessageBubbleContentView: View {
     }
 
     private var shouldRenderMainMarkdown: Bool {
+        if shouldRenderErrorCard {
+            return false
+        }
         if message.role == .user {
             let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty == false
@@ -278,6 +290,22 @@ struct ChatMessageBubbleContentView: View {
         let toolContent = metadata.toolContent ?? ""
         if toolContent.isEmpty { return true }
         return trimmedContent != toolContent
+    }
+
+    private var shouldRenderErrorCard: Bool {
+        message.deliveryState == .failed && message.role != .user
+    }
+
+    private var errorCardBodyText: String {
+        let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty == false {
+            return trimmed
+        }
+        if let description = metadata.operationalDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
+           description.isEmpty == false {
+            return description
+        }
+        return L10n.text("chat.error_card.generic_body")
     }
 
     private func toolMeta() -> (name: String, content: String)? {
@@ -327,5 +355,42 @@ struct ChatMessageBubbleContentView: View {
 
     private func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
         ChatImagePayloadBuilder.imagePayloads(from: message)
+    }
+}
+
+private struct ChatMessageErrorCard: View {
+    let title: String
+    let message: String
+    let retryTitle: String
+    let onRetry: () -> Void
+
+    var bodyView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(action: onRetry) {
+                Label(retryTitle, systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+        .padding(14)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    var body: some View {
+        bodyView
     }
 }
