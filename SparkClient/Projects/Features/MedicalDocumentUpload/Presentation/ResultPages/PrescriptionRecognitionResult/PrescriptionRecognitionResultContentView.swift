@@ -96,7 +96,7 @@ struct PrescriptionRecognitionResultContentView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: batch.medications?.count ?? 0)
         .fullScreenCover(item: $localEditor) { editor in
-            NavigationView {
+            CompatibleNavigationContainer {
                 editorDestination(editor)
             }
         }

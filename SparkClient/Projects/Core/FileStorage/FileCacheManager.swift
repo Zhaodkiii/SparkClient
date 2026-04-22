@@ -7,6 +7,7 @@ actor FileCacheManager {
     private let fileManager: FileManager
     private let logger: Logger
     private let baseDirectory: URL
+    private var accountNamespace: String = "guest"
 
     init(fileManager: FileManager = .default, logger: Logger = ConsoleLogger()) {
         self.fileManager = fileManager
@@ -33,6 +34,18 @@ actor FileCacheManager {
             return nil
         }
         return destination
+    }
+
+    /// 切换文件缓存账号命名空间。新项目不做旧缓存迁移，账号切换后自然读写新目录。
+    func activateAccountContext(_ accountID: Int64) {
+        accountNamespace = "account-\(accountID)"
+        logger.info("文件缓存已切换到账号命名空间 accountID=\(accountID)", module: .cache)
+    }
+
+    /// 登出后回到访客命名空间，避免未登录态继续读写上一账号目录。
+    func activateGuestContext() {
+        accountNamespace = "guest"
+        logger.info("文件缓存已切换到访客命名空间", module: .cache)
     }
 
     /// 将二进制数据保存到缓存
@@ -116,7 +129,9 @@ actor FileCacheManager {
 
     /// 每个文件根据 UUID 拥有独立的子目录，防止同名文件冲突
     private func directoryURL(for fileUUID: String) -> URL {
-        baseDirectory.appendingPathComponent(fileUUID, isDirectory: true)
+        baseDirectory
+            .appendingPathComponent(accountNamespace, isDirectory: true)
+            .appendingPathComponent(fileUUID, isDirectory: true)
     }
 
     /// 构建最终的文件保存路径

@@ -9,32 +9,43 @@ struct RemoteNotificationPayload: Sendable {
     var title: String?
     var body: String
     var type: String?
-    var routeTab: AppRouteStore.RootTab?
+    var route: AppRoute?
     var source: String
 
     static func from(userInfo: [AnyHashable: Any], fallbackTitle: String?, fallbackBody: String) -> RemoteNotificationPayload {
         let type = userInfo["type"] as? String
-        let routeTab = (userInfo["route_tab"] as? String).flatMap(Self.mapRouteTab)
+        let route = Self.mapRoute(userInfo)
 
         return RemoteNotificationPayload(
             title: fallbackTitle,
             body: fallbackBody,
             type: type,
-            routeTab: routeTab,
+            route: route,
             source: "push"
         )
     }
 
-    private static func mapRouteTab(_ raw: String) -> AppRouteStore.RootTab? {
-        switch raw.lowercased() {
-        case "home":
+    private static func mapRoute(_ userInfo: [AnyHashable: Any]) -> AppRoute? {
+        let rawRoute = (userInfo["route"] as? String)?.lowercased()
+        let rawTab = (userInfo["route_tab"] as? String)?.lowercased()
+        let threadID = (userInfo["thread_id"] as? String)
+            .flatMap(UUID.init(uuidString:))
+            ?? (userInfo["threadID"] as? String).flatMap(UUID.init(uuidString:))
+
+        switch rawRoute ?? rawTab {
+        case "home", "health":
             return .home
-        case "health":
-            return .home
+        case "knowledge":
+            return .knowledge
         case "chat":
-            return .chat
+            if let threadID {
+                return .chatThread(threadID)
+            }
+            return .chatList
         case "settings":
             return .settings
+        case "ai_settings", "ai-settings", "settings/ai":
+            return .aiSettings
         default:
             return nil
         }
@@ -43,18 +54,16 @@ struct RemoteNotificationPayload: Sendable {
 
 @MainActor
 struct HandleRemoteNotificationUseCase {
-    private let routeStore: AppRouteStore
+    private let routeCoordinator: any RouteCoordinating
     private let notificationClient: any NotificationClient
 
-    init(routeStore: AppRouteStore, notificationClient: any NotificationClient) {
-        self.routeStore = routeStore
+    init(routeCoordinator: any RouteCoordinating, notificationClient: any NotificationClient) {
+        self.routeCoordinator = routeCoordinator
         self.notificationClient = notificationClient
     }
 
     func execute(payload: RemoteNotificationPayload, entryPoint: RemoteNotificationEntryPoint) {
-        if case .interaction = entryPoint, let tab = payload.routeTab {
-            routeStore.selectedTab = tab
-        }
+        routeCoordinator.routeRemoteNotification(payload, entryPoint: entryPoint)
 
         switch payload.type {
         case "success":

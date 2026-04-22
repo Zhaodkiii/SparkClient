@@ -1,12 +1,25 @@
 import CryptoKit
 import Foundation
 
+protocol OSSRuntimeConfiguring: AnyObject {
+    func updateConfiguration(endpoint: String, bucket: String, region: String)
+    func resetRuntimeCredentials()
+}
+
+extension OSSManager: OSSRuntimeConfiguring {}
+
+final class NoopOSSRuntimeConfigurator: OSSRuntimeConfiguring {
+    func updateConfiguration(endpoint: String, bucket: String, region: String) {}
+    func resetRuntimeCredentials() {}
+}
+
 /// 文件传输服务：负责文件的上传、下载、缓存管理及 MD5 校验
 /// 使用 Actor 保证并发环境下状态访问的线程安全
 actor FileTransferService {
     private let api: SparkFileAPI            // 远程 API 接口
     private let ossAPI: SparkOSSAPI
     private let ossClient: OSSClientWrapper
+    private let ossRuntimeConfigurator: any OSSRuntimeConfiguring
     private let ossConfigurationStore: SparkOSSConfigurationStore
     private let cacheManager: FileCacheManager // 本地缓存管理器
     private let logger: Logger               // 日志记录器
@@ -15,6 +28,7 @@ actor FileTransferService {
         api: SparkFileAPI,
         ossAPI: SparkOSSAPI,
         ossClient: OSSClientWrapper,
+        ossRuntimeConfigurator: any OSSRuntimeConfiguring,
         ossConfigurationStore: SparkOSSConfigurationStore,
         cacheManager: FileCacheManager,
         logger: Logger = ConsoleLogger()
@@ -22,9 +36,19 @@ actor FileTransferService {
         self.api = api
         self.ossAPI = ossAPI
         self.ossClient = ossClient
+        self.ossRuntimeConfigurator = ossRuntimeConfigurator
         self.ossConfigurationStore = ossConfigurationStore
         self.cacheManager = cacheManager
         self.logger = logger
+    }
+
+    /// 账号切换/登出时统一清理 STS 与运行时 OSS client，防止跨账号复用旧临时凭证。
+    func resetRuntimeCredentials() async {
+        await MainActor.run {
+            ossConfigurationStore.clear()
+            ossRuntimeConfigurator.resetRuntimeCredentials()
+        }
+        logger.info("文件传输运行时凭证已清理", module: .oss)
     }
 
     /// 上传文件
@@ -53,7 +77,7 @@ actor FileTransferService {
 
         let runtimeConfig = try await ossConfigurationStore.configurationForUpload(using: ossAPI)
         await MainActor.run {
-            OSSManager.shared.updateConfiguration(
+            ossRuntimeConfigurator.updateConfiguration(
                 endpoint: runtimeConfig.endpointURL,
                 bucket: runtimeConfig.bucketName,
                 region: runtimeConfig.region
@@ -182,7 +206,7 @@ actor FileTransferService {
         }
         let runtimeConfig = try await ossConfigurationStore.configurationForUpload(using: ossAPI)
         await MainActor.run {
-            OSSManager.shared.updateConfiguration(
+            ossRuntimeConfigurator.updateConfiguration(
                 endpoint: runtimeConfig.endpointURL,
                 bucket: runtimeConfig.bucketName,
                 region: runtimeConfig.region

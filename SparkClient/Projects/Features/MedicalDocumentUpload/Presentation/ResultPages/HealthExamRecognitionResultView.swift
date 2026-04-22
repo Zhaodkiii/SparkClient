@@ -22,7 +22,7 @@ struct HealthExamRecognitionResultView: View {
 }
 
 #Preview("Health exam result - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
             output: .previewHealthExamOutput,
             isSaving: false,
@@ -35,7 +35,7 @@ struct HealthExamRecognitionResultView: View {
 }
 
 #Preview("Health exam result - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
             output: .previewHealthExamOutput,
             isSaving: false,

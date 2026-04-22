@@ -84,7 +84,7 @@ private struct AIScenarioConfigEditorViewPreviewHost: View {
     @State private var snapshot = AISettingsSnapshot.default
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             AIScenarioConfigEditorView(snapshot: $snapshot)
         }
     }

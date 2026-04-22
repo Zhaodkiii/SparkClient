@@ -21,7 +21,7 @@ struct ChatThreadSettingsSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     modelPickerCard
@@ -79,7 +79,6 @@ struct ChatThreadSettingsSheet: View {
                 }
             }
         }
-        .navigationViewStyle(.stack)
         .onChange(of: settings) { value in
             let snapshot = value
             Task { @MainActor in

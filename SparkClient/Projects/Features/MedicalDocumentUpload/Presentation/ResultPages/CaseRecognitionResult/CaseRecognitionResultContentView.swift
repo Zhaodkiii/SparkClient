@@ -107,7 +107,7 @@ struct CaseRecognitionResultContentView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: draft.infoDensityCount)
         .fullScreenCover(item: $localEditor) { editor in
-            NavigationView {
+            CompatibleNavigationContainer {
                 localEditorDestination(editor)
             }
         }

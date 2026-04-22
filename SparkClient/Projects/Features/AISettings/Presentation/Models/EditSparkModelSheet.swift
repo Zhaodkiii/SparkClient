@@ -29,7 +29,7 @@ struct EditSparkModelSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             Form {
                 Section(L10n.text("ai_settings.models.edit.section.name")) {
                     TextField(L10n.text("ai_settings.models.edit.field.display_name"), text: $displayName)

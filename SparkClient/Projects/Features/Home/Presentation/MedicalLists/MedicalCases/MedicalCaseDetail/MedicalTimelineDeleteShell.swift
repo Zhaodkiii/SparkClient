@@ -62,7 +62,7 @@ struct MedicalTimelineDeleteShell<Content: View>: View {
 }
 
 #Preview("Delete shell — Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalTimelineDeleteShell(
             resourceKind: .medications,
             resourceID: 1,
@@ -77,7 +77,7 @@ struct MedicalTimelineDeleteShell<Content: View>: View {
 }
 
 #Preview("Delete shell — Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalTimelineDeleteShell(
             resourceKind: .prescriptionBatches,
             resourceID: 1,

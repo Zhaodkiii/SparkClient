@@ -3,7 +3,31 @@ import UIKit
 import UserNotifications
 
 @MainActor
+protocol RemoteNotificationCenterClient: AnyObject {
+    func install(delegate: UNUserNotificationCenterDelegate)
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
+}
+
+@MainActor
+final class SystemRemoteNotificationCenterClient: RemoteNotificationCenterClient {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter = .current()) {
+        self.center = center
+    }
+
+    func install(delegate: UNUserNotificationCenterDelegate) {
+        center.delegate = delegate
+    }
+
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
+        try await center.requestAuthorization(options: options)
+    }
+}
+
+@MainActor
 final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
+    private let notificationCenter: any RemoteNotificationCenterClient
     private let handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase
     private let logger: Logger
     private let onApnsTokenHex: (@Sendable (String) async -> Void)?
@@ -12,10 +36,12 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
 
     init(
         handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase,
+        notificationCenter: any RemoteNotificationCenterClient,
         logger: Logger = ConsoleLogger(),
         onApnsTokenHex: (@Sendable (String) async -> Void)? = nil,
         onRemoteNotificationAuthorizationResolved: (@Sendable (_ granted: Bool) async -> Void)? = nil
     ) {
+        self.notificationCenter = notificationCenter
         self.handleRemoteNotificationUseCase = handleRemoteNotificationUseCase
         self.logger = logger
         self.onApnsTokenHex = onApnsTokenHex
@@ -23,7 +49,7 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func installAsNotificationCenterDelegate() {
-        UNUserNotificationCenter.current().delegate = self
+        notificationCenter.install(delegate: self)
     }
 
     func requestAuthorizationIfNeeded() {
@@ -34,9 +60,8 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
 
     /// 请求系统通知权限；同意则向 APNs 注册（token 在 `handleDeviceToken` 中上送），拒绝则同步后端关闭推送并清空 token。
     private func requestRemoteNotificationAuthorizationAndRegister() async {
-        let center = UNUserNotificationCenter.current()
         do {
-            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
             logger.info("业务=远程推送 请求系统通知权限 granted=\(granted)", module: .push)
             if granted {
                 UIApplication.shared.registerForRemoteNotifications()

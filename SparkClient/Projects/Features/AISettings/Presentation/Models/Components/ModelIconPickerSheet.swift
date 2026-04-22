@@ -15,7 +15,7 @@ struct ModelIconPickerSheet: View {
     }
 
     var body: some View {
-        compatibleNavigationContainer {
+        CompatibleNavigationContainer {
             pickerContent
         }
     }
@@ -42,21 +42,6 @@ struct ModelIconPickerSheet: View {
                 Button(L10n.text("common.cancel")) {
                     dismiss()
                 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func compatibleNavigationContainer<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        if #available(iOS 16.0, *) {
-            NavigationStack {
-                content()
-            }
-        } else {
-            NavigationView {
-                content()
             }
         }
     }

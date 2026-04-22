@@ -164,7 +164,7 @@ struct HealthExamRecognitionResultContentView: View {
             }
         }
         .fullScreenCover(item: $localEditor) { editor in
-            NavigationView {
+            CompatibleNavigationContainer {
                 editorDestination(editor)
             }
         }

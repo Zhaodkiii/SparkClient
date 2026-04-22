@@ -22,7 +22,7 @@ struct MedicalReportRecognitionResultView: View {
 }
 
 #Preview("Medical report result - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalReportRecognitionResultView(
             output: .previewMedicalReportOutput,
             isSaving: false,
@@ -35,7 +35,7 @@ struct MedicalReportRecognitionResultView: View {
 }
 
 #Preview("Medical report result - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalReportRecognitionResultView(
             output: .previewMedicalReportOutput,
             isSaving: false,

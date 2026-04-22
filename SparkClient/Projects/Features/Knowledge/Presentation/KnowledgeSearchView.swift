@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 知识库全文检索页：与 `SearchKnowledgeUseCase` 共用仓库检索逻辑。
 struct KnowledgeSearchView: View {
-    let appContainer: AppContainer
+    let dependencies: KnowledgeFeatureDependencies
     @ObservedObject var viewModel: KnowledgeLibraryViewModel
     @State private var query = ""
 
@@ -25,7 +25,7 @@ struct KnowledgeSearchView: View {
             } else {
                 ForEach(viewModel.searchResults) { result in
                     NavigationLink {
-                        KnowledgeDocumentDetailView(appContainer: appContainer, viewModel: viewModel, documentID: result.documentID)
+                        KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: result.documentID)
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(result.title)

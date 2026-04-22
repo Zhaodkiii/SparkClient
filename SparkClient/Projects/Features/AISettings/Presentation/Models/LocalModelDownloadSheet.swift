@@ -15,7 +15,7 @@ struct LocalModelDownloadSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             List {
                 Section {
                     Text(L10n.text("ai_settings.models.local_download.explain"))

@@ -25,7 +25,7 @@ struct AddLabItemSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             ScrollView {
                 SparkFormCard(title: L10n.text("medical_record.forms.lab_item.card_title")) {
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.category"), text: $draft.category)

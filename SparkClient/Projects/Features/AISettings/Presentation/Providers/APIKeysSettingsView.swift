@@ -129,7 +129,7 @@ private struct AddCustomProviderSheet: View {
     let onSave: (APIKeys) -> Void
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             Form {
                 Section {
                     TextField(L10n.text("ai_settings.providers.add.field.name"), text: $name)

@@ -254,14 +254,14 @@ struct MedicationsListPage: View {
 }
 
 #Preview("Medication List Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicationsListPage(completeData: nil, fileTransferService: AppContainer.preview.fileTransferService)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medication List Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicationsListPage(completeData: nil, fileTransferService: AppContainer.preview.fileTransferService)
     }
     .preferredColorScheme(.dark)

@@ -91,7 +91,7 @@ struct MedicalDocumentUploadHostView: View {
 }
 
 #Preview {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalDocumentUploadHostView(viewModel: .preview())
     }
 }

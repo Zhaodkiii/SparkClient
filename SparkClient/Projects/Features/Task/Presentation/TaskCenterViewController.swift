@@ -26,7 +26,7 @@ struct TaskCenterViewController: View {
 
     let memberID: Int?
 
-    @StateObject private var taskManager = TaskManager.shared
+    @ObservedObject var taskManager: TaskManager
     @State private var filter: Filter = .all
     @State private var isCreating = false
     @State private var editingTask: HealthTask?
@@ -95,7 +95,7 @@ struct TaskCenterViewController: View {
             }
         }
         .sheet(isPresented: $isCreating) {
-            NavigationView {
+            CompatibleNavigationContainer {
                 TaskFormView(
                     title: NSLocalizedString("task.create.title", comment: "创建任务"),
                     draft: $createDraft,
@@ -135,7 +135,7 @@ struct TaskCenterViewController: View {
             }
         }
         .sheet(item: $editingTask) { task in
-            NavigationView {
+            CompatibleNavigationContainer {
                 TaskFormView(
                     title: NSLocalizedString("task.edit.title", comment: "修改任务"),
                     draft: Binding(

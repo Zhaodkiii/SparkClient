@@ -536,17 +536,8 @@ extension MedicalDocumentUploadViewModel {
         let previewCombinedAPI = SparkCombinedMedicalCreateAPI(configuration: previewBackendConfig)
         let saver = DefaultTypedMedicalDocumentSaver(workflowAPI: previewWorkflowAPI, combinedAPI: previewCombinedAPI)
         let dummyFileAPI = SparkFileAPI(engine: previewEngine)
-        let dummyOSSAPI = SparkOSSAPI(configuration: SparkBackendConfiguration(engine: previewEngine))
-        let dummyOSSStore = SparkOSSConfigurationStore()
-        let dummyOSSClient = OSSClientWrapper()
         let binder = DefaultMedicalDocumentAttachmentBinder(fileAPI: dummyFileAPI)
-        let dummyFileTransfer = FileTransferService(
-            api: dummyFileAPI,
-            ossAPI: dummyOSSAPI,
-            ossClient: dummyOSSClient,
-            ossConfigurationStore: dummyOSSStore,
-            cacheManager: FileCacheManager()
-        )
+        let dummyFileTransfer = AppContainer.preview.fileTransferService
         return MedicalDocumentUploadViewModel(
             memberContextStore: previewMemberContextStore,
             uploadFilesUseCase: UploadMedicalDocumentFilesUseCase(fileTransferService: dummyFileTransfer),

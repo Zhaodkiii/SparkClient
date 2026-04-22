@@ -397,7 +397,7 @@ struct ChatHTMLPreviewBlockView: View {
             .padding(8)
         }
         .sheet(isPresented: $showSource) {
-            NavigationView {
+            CompatibleNavigationContainer(legacyStackStyle: true) {
                 ScrollView {
                     Text(htmlContent)
                         .font(.footnote.monospaced())
@@ -414,10 +414,9 @@ struct ChatHTMLPreviewBlockView: View {
                     }
                 }
             }
-            .navigationViewStyle(.stack)
         }
         .fullScreenCover(isPresented: $showFull) {
-            NavigationView {
+            CompatibleNavigationContainer(legacyStackStyle: true) {
                 ChatHTMLWebView(htmlContent: htmlContent)
                     .ignoresSafeArea()
                     .toolbar {
@@ -428,7 +427,6 @@ struct ChatHTMLPreviewBlockView: View {
                         }
                     }
             }
-            .navigationViewStyle(.stack)
         }
     }
 }

@@ -171,7 +171,7 @@ struct HanlinChatInputView: View {
     }
 
     private var hanlinExpandedEditorSheet: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             TextEditor(
                 text: Binding(
                     get: { stateStore.draft(for: threadID) },
@@ -386,7 +386,7 @@ private struct HanlinAttachmentSheet: View {
     let onFiles: () -> Void
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
             VStack(spacing: 12) {
                 Text(L10n.text("chat.attachments.title"))
                     .font(.headline)
@@ -426,7 +426,6 @@ private struct HanlinAttachmentSheet: View {
             .padding(20)
             .navigationBarHidden(true)
         }
-        .navigationViewStyle(.stack)
     }
 
     private func attachmentRow(

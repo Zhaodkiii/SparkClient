@@ -4,7 +4,9 @@ import SwiftUI
 struct MainTabCoordinatorView: View {
     let session: UserSession
     @ObservedObject var routeStore: AppRouteStore
-    let appContainer: AppContainer
+    let homeDependencies: HomeFeatureDependencies
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
@@ -16,50 +18,92 @@ struct MainTabCoordinatorView: View {
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
-            NavigationView {
+            CompatibleRouteNavigationContainer(path: routePath(.home)) {
                 HomeView(
-                    appContainer: appContainer,
+                    dependencies: homeDependencies,
                     viewModel: homeViewModel,
                     medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                     session: session
                 )
+            } destination: { route in
+                routeDestination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.home"), systemImage: "house.fill")
             }
             .tag(AppRouteStore.RootTab.home)
 
-            NavigationView {
-                KnowledgeLibraryView(appContainer: appContainer, viewModel: knowledgeViewModel)
+            CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
+                KnowledgeLibraryView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
+            } destination: { route in
+                routeDestination(route)
             }
             .tabItem {
                 Label("Knowledge", systemImage: "books.vertical.fill")
             }
             .tag(AppRouteStore.RootTab.knowledge)
 
-            NavigationView {
+            CompatibleRouteNavigationContainer(path: routePath(.chat)) {
                 ChatConversationListPage(
                     stateStore: chatStateStore,
                     listViewModel: chatListViewModel,
-                    detailViewModel: chatDetailViewModel
+                    detailViewModel: chatDetailViewModel,
+                    taskManager: taskManager
                 )
+            } destination: { route in
+                routeDestination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
             }
             .tag(AppRouteStore.RootTab.chat)
 
-            NavigationView {
+            CompatibleRouteNavigationContainer(path: routePath(.settings)) {
                 SettingsView(
                     viewModel: settingsViewModel,
                     aiSettingsViewModel: aiSettingsViewModel,
                     session: session
                 )
+            } destination: { route in
+                routeDestination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.settings"), systemImage: "gearshape.fill")
             }
             .tag(AppRouteStore.RootTab.settings)
+        }
+    }
+
+    private func routePath(_ tab: AppRouteStore.RootTab) -> Binding<[AppRoute]> {
+        Binding(
+            get: {
+                routeStore.routes(for: tab)
+            },
+            set: { routes in
+                routeStore.replaceStack(routes, for: tab)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func routeDestination(_ route: AppRoute) -> some View {
+        switch route {
+        case .chatThread(let threadID):
+            ChatView(
+                threadID: threadID,
+                stateStore: chatStateStore,
+                listViewModel: chatListViewModel,
+                detailViewModel: chatDetailViewModel,
+                taskManager: taskManager
+            )
+            .task(id: threadID) {
+                await chatListViewModel.selectAndPrepare(threadID: threadID)
+                await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
+            }
+        case .aiSettings:
+            AISettingsView(viewModel: aiSettingsViewModel)
+        case .home, .knowledge, .chatList, .settings:
+            EmptyView()
         }
     }
 }

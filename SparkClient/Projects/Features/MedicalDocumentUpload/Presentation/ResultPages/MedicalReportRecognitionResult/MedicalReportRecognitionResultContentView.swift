@@ -76,7 +76,7 @@ struct MedicalReportRecognitionResultContentView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: reports.count)
         .fullScreenCover(item: $localEditor) { editor in
-            NavigationView {
+            CompatibleNavigationContainer {
                 editorDestination(editor)
             }
         }

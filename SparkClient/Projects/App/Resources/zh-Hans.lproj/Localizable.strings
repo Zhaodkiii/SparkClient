@@ -921,7 +921,6 @@
 "medical.upload.action.cancel" = "取消";
 "medical.upload.action.return_to_picker" = "返回选择";
 "medical.upload.action.restart" = "重新识别";
-"medical.upload.action.retry" = "重试";
 
 // MARK: - 时间显示
 "medical.upload.time.elapsed.seconds" = "当前已用时 %d 秒";

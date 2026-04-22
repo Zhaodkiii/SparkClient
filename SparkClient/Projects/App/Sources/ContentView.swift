@@ -1,14 +1,18 @@
 import SwiftUI
 
 struct ContentView: View {
-    let container: AppContainer
+    let dependencies: AppContentDependencies
 
     var body: some View {
-        NotificationHostView(store: container.notificationStore) {
-            AppCoordinatorView(container: container)
+        NotificationHostView(store: dependencies.notificationStore) {
+            AppCoordinatorView(dependencies: dependencies.coordinator)
         }
         .task {
-            await container.notificationDeliveryCoordinator.refreshDashboard()
+            dependencies.routeCoordinator.startSystemEventRouting()
+            await dependencies.notificationDeliveryCoordinator.refreshDashboard()
+        }
+        .onOpenURL { url in
+            dependencies.routeCoordinator.handleDeepLink(url)
         }
     }
 }

@@ -377,7 +377,7 @@ private struct ChatComposerAttachmentSheet: View {
     let onFiles: () -> Void
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
             VStack(spacing: 12) {
                 Text(L10n.text("chat.attachments.title"))
                     .font(.headline)
@@ -417,7 +417,6 @@ private struct ChatComposerAttachmentSheet: View {
             .padding(20)
             .navigationBarHidden(true)
         }
-        .navigationViewStyle(.stack)
     }
 
     private func attachmentAction(

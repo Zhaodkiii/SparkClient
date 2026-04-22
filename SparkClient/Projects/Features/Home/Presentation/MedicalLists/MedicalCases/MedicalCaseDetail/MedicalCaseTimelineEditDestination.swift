@@ -132,7 +132,7 @@ struct MedicalCaseTimelineEditDestination: View {
 }
 
 #Preview("Edit destination — medication — Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalCaseTimelineEditDestination(
             route: .standaloneMedication(
                 SparkMedicalSyncAPI.RemoteMedication(
@@ -172,7 +172,7 @@ struct MedicalCaseTimelineEditDestination: View {
 }
 
 #Preview("Edit destination — medication — Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalCaseTimelineEditDestination(
             route: .standaloneMedication(
                 SparkMedicalSyncAPI.RemoteMedication(
@@ -212,7 +212,7 @@ struct MedicalCaseTimelineEditDestination: View {
 }
 
 #Preview("Edit destination — examination — Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalCaseTimelineEditDestination(
             route: .examination(
                 SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments(
@@ -250,7 +250,7 @@ struct MedicalCaseTimelineEditDestination: View {
 }
 
 #Preview("Edit destination — symptom — Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalCaseTimelineEditDestination(
             route: .symptom(
                 SparkMedicalSyncAPI.RemoteSymptom(

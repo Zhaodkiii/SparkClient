@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 // MARK: - 知识写作页（对齐 Health `KnowledgeWritingView` 布局：ZStack + 底部毛玻璃工具区）
 
 /// 单篇知识文档主界面：编辑/预览切换、底部工具栏、网页内联导入、预览态向量化。
-/// 依赖注入：`AppContainer.makeKnowledgeDocumentEditorViewModel`；不在 View 内直接访问 Core Data / URLSession。
+/// 依赖注入：由 KnowledgeFeatureDependencies 创建编辑页 ViewModel；不在 View 内直接访问 Core Data / URLSession。
 struct KnowledgeDocumentDetailView: View {
     @ObservedObject var libraryViewModel: KnowledgeLibraryViewModel
     let documentID: UUID
@@ -25,10 +25,14 @@ struct KnowledgeDocumentDetailView: View {
     @FocusState private var titleFieldFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    init(appContainer: AppContainer, viewModel: KnowledgeLibraryViewModel, documentID: UUID) {
+    init(
+        dependencies: KnowledgeFeatureDependencies,
+        viewModel: KnowledgeLibraryViewModel,
+        documentID: UUID
+    ) {
         self.libraryViewModel = viewModel
         self.documentID = documentID
-        _editor = StateObject(wrappedValue: appContainer.makeKnowledgeDocumentEditorViewModel(documentID: documentID))
+        _editor = StateObject(wrappedValue: dependencies.makeEditorViewModel(documentID))
     }
 
     var body: some View {

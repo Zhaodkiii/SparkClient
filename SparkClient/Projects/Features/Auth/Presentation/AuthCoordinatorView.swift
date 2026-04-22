@@ -4,7 +4,7 @@ struct AuthCoordinatorView: View {
     @ObservedObject var viewModel: LoginViewModel
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             LoginView(viewModel: viewModel)
         }
     }

@@ -285,21 +285,21 @@ struct OTPVerifyView: View {
 }
 
 #Preview("Phone Login - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         PhoneLoginView(viewModel: AppContainer.preview.makeLoginViewModel())
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Phone Login - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         PhoneLoginView(viewModel: AppContainer.preview.makeLoginViewModel())
     }
     .preferredColorScheme(.dark)
 }
 
 #Preview("OTP Verify - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         OTPVerifyView(
             viewModel: AppContainer.preview.makeLoginViewModel(),
             region: defaultRegions.first ?? .init(name: "CN", dial: "+86", flag: "🇨🇳"),
@@ -311,7 +311,7 @@ struct OTPVerifyView: View {
 }
 
 #Preview("OTP Verify - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         OTPVerifyView(
             viewModel: AppContainer.preview.makeLoginViewModel(),
             region: defaultRegions.first ?? .init(name: "CN", dial: "+86", flag: "🇨🇳"),

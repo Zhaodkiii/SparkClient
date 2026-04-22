@@ -35,6 +35,15 @@ final class OSSManager {
         client = OSSClient(endpoint: OSSConfiguration.endpoint, credentialProvider: credentialProvider)
     }
 
+    func resetRuntimeCredentials() {
+        lock.lock()
+        currentCredentials = nil
+        client = nil
+        refreshingTask?.cancel()
+        refreshingTask = nil
+        lock.unlock()
+    }
+
     func getValidCredentials() async throws -> OSSCredentials {
         lock.lock()
         if let credentials = currentCredentials, !credentials.isExpired {

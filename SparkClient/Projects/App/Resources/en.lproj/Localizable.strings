@@ -921,7 +921,6 @@
 "medical.upload.action.cancel" = "Cancel";
 "medical.upload.action.return_to_picker" = "Back to selection";
 "medical.upload.action.restart" = "Retry recognition";
-"medical.upload.action.retry" = "Retry";
 
 // MARK: - Time Display
 "medical.upload.time.elapsed.seconds" = "Elapsed: %d seconds";

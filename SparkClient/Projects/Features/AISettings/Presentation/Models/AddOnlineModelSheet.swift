@@ -37,6 +37,7 @@ struct AddOnlineModelSheet: View {
     @State private var selectedProviderID = ""
     @State private var selectedScenarioRawValues: Set<String> = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
+    @State private var hasAppliedInitialDraft = false
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var showProbeSheet = false
@@ -87,7 +88,7 @@ struct AddOnlineModelSheet: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             Form {
 
                 Section(L10n.text("ai_settings.models.online.section.basic")) {
@@ -348,7 +349,8 @@ struct AddOnlineModelSheet: View {
     }
 
     private func applyInitialDraftIfNeeded() {
-        guard let initialDraft else { return }
+        guard hasAppliedInitialDraft == false, let initialDraft else { return }
+        hasAppliedInitialDraft = true
         name = initialDraft.name
         displayName = initialDraft.displayName
         selectedProviderID = initialDraft.providerID
@@ -488,7 +490,7 @@ private struct ModelCapabilityProbeSheet: View {
     let items: [ModelCapabilityProbeProgressItem]
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             List(items) { item in
                 HStack(spacing: 12) {
                     icon(for: item.status)

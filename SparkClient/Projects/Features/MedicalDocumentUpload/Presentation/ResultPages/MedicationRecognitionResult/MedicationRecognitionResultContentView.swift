@@ -100,7 +100,7 @@ struct MedicationRecognitionResultContentView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: medications.count)
         .fullScreenCover(item: $localEditor) { editor in
-            NavigationView {
+            CompatibleNavigationContainer {
                 editorDestination(editor)
             }
         }

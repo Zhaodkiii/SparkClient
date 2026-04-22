@@ -179,14 +179,14 @@ struct LoginView: View {
 }
 
 #Preview("Login - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         LoginView(viewModel: AppContainer.preview.makeLoginViewModel())
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Login - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         LoginView(viewModel: AppContainer.preview.makeLoginViewModel())
     }
     .preferredColorScheme(.dark)

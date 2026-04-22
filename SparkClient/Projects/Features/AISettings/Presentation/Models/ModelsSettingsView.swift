@@ -153,7 +153,7 @@ struct ModelsSettingsView: View {
             LocalModelDownloadSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $showAgentSheet) {
-            NavigationView {
+            CompatibleNavigationContainer {
                 ModelsSettingsAgentSheet(
                     localBaseModels: localBaseModelsForAgent,
                     editingAgent: editingAgent,
@@ -381,7 +381,7 @@ private struct ModelsSettingsPreviewHost: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             ModelsSettingsView(
                 viewModel: viewModel
             )

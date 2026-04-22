@@ -510,7 +510,7 @@ private struct ExaminationReportDetailHostPage: View {
                 }
             }
             .sheet(isPresented: $isShowingEditSheet) {
-                NavigationView {
+                CompatibleNavigationContainer(legacyStackStyle: true) {
                     ExamReportFormView(
                         mode: .serverEdit(existing: existingDraft),
                         onServerSubmit: { draft in
@@ -519,7 +519,6 @@ private struct ExaminationReportDetailHostPage: View {
                         }
                     )
                 }
-                .navigationViewStyle(.stack)
             }
             .alert("确认删除该检查报告？", isPresented: $isShowingDeleteAlert) {
                 Button("取消", role: .cancel) {}

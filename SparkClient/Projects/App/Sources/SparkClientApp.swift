@@ -15,7 +15,7 @@ struct SparkClientApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(container: container)
+            ContentView(dependencies: container.contentDependencies)
                 .environment(\.managedObjectContext, container.coreDataStack.viewContext)
                 .task {
                     appDelegate.pushAdapter = container.pushAdapter

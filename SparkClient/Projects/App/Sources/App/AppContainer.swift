@@ -1,21 +1,20 @@
 import Foundation
 
-/// 应用的**组合根（Composition Root）**：在单一位置创建并持有几乎全部跨模块依赖，避免 Feature 层互相 `import` 具体实现。
+/// 应用的**组合根（Composition Root）**：负责确定 Assembly 装配顺序、持有 facade 与共享运行时。
 ///
 /// ### 设计要点
 /// - 使用 `@MainActor` 与 SwiftUI 生命周期对齐，工厂方法创建的 ViewModel 可在主线程安全使用。
-/// - **依赖方向**：UI → ViewModel → UseCase → Repository / API；容器负责把「接口」绑到「默认实现」（如 `DefaultAuthRepository`）。
+/// - **依赖方向**：UI → FeatureFacade / ViewModel → UseCase → Repository / API；具体实现由各领域 Assembly 绑定。
+/// - **薄容器原则**：`init` 只组合 `AppAssembly`、`AuthAssembly`、`AIAssembly`、`MedicalAssembly`、`NotificationAssembly`、`ChatAssembly` 的产物。
 /// - **单例式 ViewModel**（聊天列表/详情、知识库）：跨界面共享状态，故在 `init` 末尾直接挂到属性上，而不是每次 `make*` 新建。
 /// - **预览与生产**：`live()` 读 `AppEnvironment`；`preview` 使用独立子系统与占位 URL，避免污染真机数据。
 ///
 /// ### 初始化顺序（阅读 `init` 时可参考）
-/// 1. 基础设施（Core Data、Backend、日志、文件缓存与上传）。
-/// 2. 各 Repository 与「纯数据访问」依赖。
-/// 3. AI 配置中心、OCR 编排、大模型运行时。
-/// 4. 知识库 / 患者 / 病历草稿 / 结构化病历上传 等用例链。
-/// 5. 聊天仓库、同步引擎、发送编排。
-/// 6. 应用内通知、医疗后台同步、推送适配、冷启动 `AppBootstrapper`（含登录后 OSS STS 预拉取）。
-/// 7. 将局部变量赋给 `self` 属性，再构造会话 Store 与共享 ViewModel。
+/// 1. 基础设施与认证 Assembly。
+/// 2. AI 运行时，再装配依赖 AI 的医疗/OCR 与知识库。
+/// 3. 通知/路由与聊天 Assembly。
+/// 4. 创建 `AppBootstrapper`，再把 Assembly product 写回容器属性。
+/// 5. 构造会话 Store 与跨界面共享 ViewModel。
 @MainActor
 final class AppContainer {
     // MARK: - 基础设施（Core Data、网络、日志、文件）
@@ -36,6 +35,12 @@ final class AppContainer {
     let fileTransferService: FileTransferService
     /// 登录后预拉取的 OSS STS 与桶信息；直传前可调用 `configurationForUpload(using:)` 自动续期。
     let ossConfigurationStore: SparkOSSConfigurationStore
+    /// 统一存储策略登记表：集中描述各存储后端的作用域、账号隔离与清理策略。
+    let storageRegistry: StorageRegistry
+    /// 任务中心 UI 观察对象；由 Assembly 封装 `TaskManager.shared` 后注入，View 不再直接访问 singleton。
+    let taskManager: TaskManager
+    /// 任务同步 facade：根生命周期只依赖协议，不直接触碰 `TaskManager.shared`。
+    let taskRuntime: any TaskRuntimeSyncing
 
     // MARK: - 路由与启动
     //
@@ -44,6 +49,8 @@ final class AppContainer {
 
     /// 待处理导航目标（例如从通知点进某页）。
     let routeStore: AppRouteStore
+    /// 通知、深链、登录态和系统生命周期事件的 typed route 消费入口。
+    let routeCoordinator: RouteCoordinator
     /// 应用启动阶段副作用（非 UI）的集中入口。
     let appBootstrapper: AppBootstrapper
     /// 设备登记（匿名或带 JWT，与冷启动 / 登录后 / APNs token 联动）。
@@ -204,13 +211,88 @@ final class AppContainer {
     let chatListViewModel: ChatListViewModel
     /// 单会话消息与发送 UI（单例）。
     let chatDetailViewModel: ChatDetailViewModel
+    /// 账号级运行时重置入口：账号切换、登出、鉴权失效都走这里。
+    lazy var accountSessionRuntime: AccountSessionRuntime = {
+        AccountSessionRuntime(
+            routeCoordinator: routeCoordinator,
+            storageRegistry: storageRegistry,
+            memberContextStore: memberContextStore,
+            chatStateStore: chatStateStore,
+            chatListViewModel: chatListViewModel,
+            chatSyncSupervisor: chatSyncSupervisor,
+            knowledgeViewModel: knowledgeViewModel,
+            aiConfigCenter: aiConfigCenter,
+            logger: logger,
+            clearSessionScopedViewModels: { [weak self] in
+                self?.resetSessionScopedViewModels()
+            }
+        )
+    }()
+
+    /// 领域 facade 聚合：UI 层优先消费这里，而不是直接穿透整个 AppContainer。
+    lazy var featureFacades: AppFeatureFacades = AppAssembly(
+        auth: AuthAssembly(
+            sessionStore: sessionStore,
+            makeLoginViewModel: { [self] in makeLoginViewModel() },
+            logger: logger
+        ),
+        ai: AIAssembly(
+            configCenter: aiConfigCenter,
+            runtimeStore: aiRuntimeStore,
+            makeSettingsViewModel: { [self] ownerAccountID in
+                makeAISettingsViewModel(ownerAccountID: ownerAccountID)
+            },
+            logger: logger
+        ),
+        chat: ChatAssembly(
+            stateStore: chatStateStore,
+            listViewModel: chatListViewModel,
+            detailViewModel: chatDetailViewModel,
+            syncSupervisor: chatSyncSupervisor,
+            logger: logger
+        ),
+        medical: MedicalAssembly(
+            memberContextStore: memberContextStore,
+            medicalSyncService: medicalSyncService,
+            makeUploadViewModel: { [self] in makeMedicalDocumentUploadViewModel() },
+            logger: logger
+        ),
+        notifications: NotificationAssembly(
+            store: notificationStore,
+            client: notificationClient,
+            pushAdapter: pushAdapter,
+            logger: logger
+        ),
+        mainTab: MainTabAssembly(
+            makeDependencies: { [self] ownerAccountID in
+                makeMainTabDependencies(ownerAccountID: ownerAccountID)
+            },
+            logger: logger
+        ),
+        logger: logger
+    ).makeFacade()
+
+    /// 根视图依赖包：App 入口创建后传给 SwiftUI，避免 UI 拿到完整容器。
+    lazy var contentDependencies: AppContentDependencies = {
+        let lifecycle = AppLifecycleCoordinator(container: self)
+        routeCoordinator.bind(lifecycle: lifecycle, sessionStore: sessionStore)
+        return AppContentDependencies(
+            notificationStore: notificationStore,
+            notificationDeliveryCoordinator: notificationDeliveryCoordinator,
+            routeCoordinator: routeCoordinator,
+            coordinator: AppCoordinatorDependencies(
+                facades: featureFacades,
+                lifecycle: lifecycle
+            )
+        )
+    }()
 
     // MARK: - 会话级缓存 ViewModel（避免网络状态切换时被反复重建）
     private var cachedHomeViewModel: HomeViewModel?
     private var cachedMedicalDocumentUploadViewModel: MedicalDocumentUploadViewModel?
     private var cachedSettingsViewModel: SettingsViewModel?
-    private var cachedAISettingsViewModel: AISettingsViewModel?
-    private var cachedAISettingsViewModelOwnerAccountID: Int64?
+    private var aiSettingsViewModelCache = AccountScopedCache<AISettingsViewModel>()
+    private var mainTabDependenciesCache = AccountScopedCache<MainTabDependencies>()
 
     init(
         coreDataStack: CoreDataStack,
@@ -218,434 +300,186 @@ final class AppContainer {
         ocrConfiguration: OCRConfiguration = OCRConfiguration(),
         logger: Logger = ConsoleLogger()
     ) {
-        // MARK: 基础设施赋值
-        // 先完成与后续构造无关的「叶子」依赖，避免在闭包中引用未初始化的 `self`。
+        logger.info("AppContainer 开始组合各领域 Assembly", module: .general)
         self.coreDataStack = coreDataStack
         self.backend = backend
         self.logger = logger
-        let taskService = TaskService(configuration: backend.configuration, logger: logger)
-        TaskManager.shared.configure(
-            taskService: taskService,
-            logger: logger
-        )
-        self.fileCacheManager = FileCacheManager(logger: logger)
-        let ossConfigurationStore = SparkOSSConfigurationStore(logger: logger)
-        let ossManager = OSSManager.shared
-        let ossClient = OSSClientWrapper(manager: ossManager)
-        ossManager.credentialsProvider = { [weak ossConfigurationStore, backend] in
-            guard let store = ossConfigurationStore else {
-                throw SparkOSSConfigurationError.incompleteSTSResponse
-            }
-            let config = try await store.configurationForUpload(using: backend.oss)
-            return OSSCredentials(
-                accessKeyId: config.accessKeyId,
-                accessKeySecret: config.accessKeySecret,
-                securityToken: config.securityToken,
-                expiration: config.credentialExpiresAt
-            )
-        }
-        self.fileTransferService = FileTransferService(
-            api: backend.files,
-            ossAPI: backend.oss,
-            ossClient: ossClient,
-            ossConfigurationStore: ossConfigurationStore,
-            cacheManager: fileCacheManager,
-            logger: logger
-        )
 
-        // MARK: 仓库层（数据访问抽象）
-        let profileRepository = SessionBackedUserProfileRepository()
-        let selectedMemberIDPersistence = UserDefaultsSelectedMemberIDStore()
-        /// 与认证共用，保证写入会话与 AI 仓储读取同一快照源。
-        let sessionSnapshotStore = SessionSnapshotStore()
-        let authRepository = DefaultAuthRepository(
-            backend: backend,
-            userProfileRepository: profileRepository,
-            snapshotStore: sessionSnapshotStore,
-            logger: logger
-        )
-        let aiSettingsRepository = DefaultAISettingsRepository(
+        // MARK: 领域 Assembly
+        // AppContainer 只决定装配顺序；每个领域内部的真实构造逻辑下沉到对应 Assembly。
+        let infrastructure = AppAssembly.makeInfrastructure(backend: backend, logger: logger)
+        let auth = AuthAssembly.makeCore(backend: backend, logger: logger)
+        let ai = AIAssembly.makeCore(
             coreDataStack: coreDataStack,
-            snapshotStore: sessionSnapshotStore,
+            backend: backend,
+            sessionSnapshotStore: auth.sessionSnapshotStore,
             logger: logger
         )
-        // 知识库：独立 Core Data 仓库，不嵌在 AISettings 里，避免提示词仓库与文档仓库概念混淆。
-        let knowledgeRepository = CoreDataKnowledgeRepository(coreDataStack: coreDataStack, logger: logger)
-        let knowledgeEmbeddingClient = OpenAICompatibleEmbeddingClient()
-        let aiRuntimeStore = AIRuntimeStore()
-        let aiRuntimeConfigStore = AIRuntimeConfigStore()
-        let localModelService = LocalModelService()
-        let remoteConfigProvider = BackendAIRemoteConfigProvider(api: backend.aiConfig)
-        let medicalSyncPreferenceRepository = DefaultMedicalSyncPreferenceRepository()
-
-        // MARK: AI 配置与运行时网关
-        let aiConfigCenter = AIConfigCenter(
-            repository: aiSettingsRepository,
-            remoteProvider: remoteConfigProvider,
-            runtimeStore: aiRuntimeStore,
-            runtimeConfigStore: aiRuntimeConfigStore,
-            sessionSnapshotStore: sessionSnapshotStore,
+        let medical = MedicalAssembly.makeCore(
+            backend: backend,
+            fileTransferService: infrastructure.fileTransferService,
+            userProfileRepository: auth.userProfileRepository,
+            selectedMemberIDPersistence: auth.selectedMemberIDPersistence,
+            aiRuntimeService: ai.aiRuntimeService,
+            ocrConfiguration: ocrConfiguration,
             logger: logger
         )
-
-        // MARK: OCR 引擎（可选阿里云 / 可选本地 HTTP 服务）
-        let aliyunEngine: OCRTextEngine? = ocrConfiguration.enableAliyunOCR
-            ? AliyunOCREngine(credentialsProvider: BackendOCRCredentialsProvider(api: backend.ocr))
-            : nil
-        let localServerEngine: OCRTextEngine? = ocrConfiguration.enableLocalServerOCR
-            ? LocalServerOCREngine(
-                baseURL: ocrConfiguration.localServerBaseURL,
-                timeoutMs: ocrConfiguration.localServerTimeoutMs,
-                authToken: ocrConfiguration.localServerAuthToken
-            )
-            : nil
-        let ocrOrchestrator = OCROrchestrator(
-            config: ocrConfiguration,
-            aliyunEngine: aliyunEngine,
-            localServerEngine: localServerEngine,
+        let knowledge = AIAssembly.makeKnowledge(
+            coreDataStack: coreDataStack,
+            ai: ai,
+            ocrOrchestrator: medical.ocrOrchestrator,
             logger: logger
         )
-        let ocrKnowledgeImageUseCase = OCRKnowledgeImageUseCase(ocr: ocrOrchestrator)
-        let importKnowledgeFromFileUseCase = ImportKnowledgeFromFileUseCase()
-        let importKnowledgeFromWebUseCase = ImportKnowledgeFromWebUseCase()
-
-        // MARK: 大模型：云端 OpenAI 兼容 + 本机 GGUF，统一由 AIRuntimeService 按配置选型
-        let aiRuntimeGateway = OpenAICompatibleTextGateway(logger: logger)
-        let localRuntimeGateway = LocalGGUFTextGateway(
-            localModelService: localModelService,
+        let notification = NotificationAssembly.makeCore(
+            backend: backend,
+            selectedMemberIDPersistence: auth.selectedMemberIDPersistence,
+            medicalSyncPreferenceRepository: medical.medicalSyncPreferenceRepository,
             logger: logger
         )
-        let aiRuntimeService = AIRuntimeService(
-            configCenter: aiConfigCenter,
-            gateway: aiRuntimeGateway,
-            localGateway: localRuntimeGateway,
+        let chat = ChatAssembly.makeCore(
+            coreDataStack: coreDataStack,
+            backend: backend,
+            infrastructure: infrastructure,
+            ai: ai,
+            knowledge: knowledge,
+            medical: medical,
             logger: logger
         )
-        let polishKnowledgeTextUseCase = PolishKnowledgeTextUseCase(runtime: aiRuntimeService)
-        let translateKnowledgeTextUseCase = TranslateKnowledgeTextUseCase(runtime: aiRuntimeService)
-
-        // MARK: 知识库用例链（列表 → 文档 CRUD → 搜索/重索引 → 向量构建）
-        let loadKnowledgeListUseCase = LoadKnowledgeListUseCase(repository: knowledgeRepository)
-        let loadKnowledgeDocumentUseCase = LoadKnowledgeDocumentUseCase(repository: knowledgeRepository)
-        let createKnowledgeDocumentUseCase = CreateKnowledgeDocumentUseCase(repository: knowledgeRepository)
-        let updateKnowledgeDocumentUseCase = UpdateKnowledgeDocumentUseCase(repository: knowledgeRepository)
-        let deleteKnowledgeDocumentUseCase = DeleteKnowledgeDocumentUseCase(repository: knowledgeRepository)
-        let searchKnowledgeUseCase = SearchKnowledgeUseCase(
-            repository: knowledgeRepository,
-            aiConfigCenter: aiConfigCenter,
-            embeddingClient: knowledgeEmbeddingClient
-        )
-        let reindexKnowledgeDocumentUseCase = ReindexKnowledgeDocumentUseCase(repository: knowledgeRepository)
-        let buildKnowledgeEmbeddingsUseCase = BuildKnowledgeEmbeddingsUseCase(
-            repository: knowledgeRepository,
-            aiConfigCenter: aiConfigCenter,
-            embeddingClient: knowledgeEmbeddingClient
-        )
-
-        // MARK: 成员、病历记录、草稿与「结构化病历上传」流水线
-        let membersRepository = DefaultMembersRepository(medicalQueryAPI: backend.medicalQuery)
-        let medicalRecordRepository = DefaultMedicalRecordRepository(medicalQueryAPI: backend.medicalQuery)
-        let buildMemberContextSummaryUseCase = BuildMemberContextSummaryUseCase(repository: medicalRecordRepository)
-        let medicalPromptFactory = MedicalPromptFactory()
-        let medicalDocumentTypeResolver = DefaultMedicalDocumentTypeResolver(
-            runtimeService: aiRuntimeService,
-            promptFactory: medicalPromptFactory,
-            logger: logger
-        )
-        let typedMedicalDocumentExtractor = DefaultTypedMedicalDocumentExtractor(
-            ocrOrchestrator: ocrOrchestrator,
-            typeResolver: medicalDocumentTypeResolver,
-            promptFactory: medicalPromptFactory,
-            runtimeService: aiRuntimeService,
-            logger: logger
-        )
-        let typedMedicalDocumentSaver = DefaultTypedMedicalDocumentSaver(
-            workflowAPI: backend.medicalWorkflow,
-            combinedAPI: backend.medicalCombinedCreate,
-            logger: logger
-        )
-        let attachmentBinder = DefaultMedicalDocumentAttachmentBinder(
-            fileAPI: backend.files,
-            logger: logger
-        )
-        let uploadMedicalDocumentFilesUseCase = UploadMedicalDocumentFilesUseCase(
-            fileTransferService: fileTransferService,
-            logger: logger
-        )
-        let extractTypedMedicalDocumentUseCase = ExtractTypedMedicalDocumentUseCase(
-            extractor: typedMedicalDocumentExtractor
-        )
-        let saveTypedMedicalDocumentUseCase = SaveTypedMedicalDocumentUseCase(
-            saver: typedMedicalDocumentSaver
-        )
-        let bindUploadedFilesToMedicalBusinessUseCase = BindUploadedFilesToMedicalBusinessUseCase(
-            binder: attachmentBinder
-        )
-
-        // MARK: 聊天持久化仓库（供 ToolHub 内医疗卡片异步合并与后续同步共用）
-        let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
-        let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(repository: chatRepository)
-
-        // MARK: 聊天 Tool 调用：把草稿/知识库/医疗只读查询暴露给模型工具层
-        let toolAuditStore = ToolAuditStore()
-        let toolHub = ToolHub(
-            auditStore: toolAuditStore,
-            medicalQueryAPI: backend.medicalQuery,
-            aiSettingsRepository: aiSettingsRepository,
-            aiConfigCenter: aiConfigCenter,
-            runtimeService: aiRuntimeService,
-            taskService: taskService,
-            searchKnowledgeUseCase: searchKnowledgeUseCase,
-            createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
-            typedMedicalDocumentExtractor: typedMedicalDocumentExtractor,
-            structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
-            logger: logger
-        )
-
-        // MARK: 聊天持久化与同步（Core Data + Outbox + REST + WebSocket）
-        let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
-        let chatRealtimeClient = ChatRealtimeSyncClient(
-            tokenProvider: backend.tokenProvider(),
-            baseURL: backend.baseURL,
-            logger: logger
-        )
-        let chatSyncEngine = ChatSyncEngine(
-            repository: chatRepository,
-            outboxStore: chatOutboxStore,
-            remoteAPI: backend.chat,
-            realtimeClient: chatRealtimeClient,
-            mergePolicy: ChatMergePolicy(),
-            logger: logger
-        )
-        let chatAttachmentPipeline = ChatAttachmentPipeline(
-            repository: chatRepository,
-            fileTransferService: fileTransferService,
-            logger: logger
-        )
-        let chatSyncSupervisor = ChatSyncSupervisor(
-            syncEngine: chatSyncEngine,
-            attachmentPipeline: chatAttachmentPipeline
-        )
-        let chatOrchestrator = ChatOrchestrator(
-            runtimeService: aiRuntimeService,
-            toolHub: toolHub,
-            consentGate: ConsentGate(),
-            fileCacheManager: fileCacheManager,
-            logger: logger
-        )
-        let chatQueryService = ChatQueryService(repository: chatRepository)
-        let loadChatThreadsUseCase = LoadChatThreadsUseCase(queryService: chatQueryService)
-        let loadChatMessagesUseCase = LoadChatMessagesUseCase(queryService: chatQueryService)
-        let createThreadUseCase = CreateThreadUseCase(repository: chatRepository, aiConfigCenter: aiConfigCenter)
-        let retryFailedMessageUseCase = RetryFailedMessageUseCase(
-            repository: chatRepository,
-            chatSyncSupervisor: chatSyncSupervisor,
-            logger: logger
-        )
-        let updateChatMessageAttachmentsUseCase = UpdateChatMessageAttachmentsUseCase(repository: chatRepository)
-        let deleteThreadUseCase = DeleteThreadUseCase(repository: chatRepository, chatSyncSupervisor: chatSyncSupervisor)
-        let syncChatUseCase = SyncChatUseCase(supervisor: chatSyncSupervisor)
-        let chatToolEventInterpreter = ChatToolEventInterpreter(logger: logger)
-        let sendChatMessageUseCase = SendChatMessageUseCase(
-            repository: chatRepository,
-            orchestrator: chatOrchestrator,
-            chatSyncSupervisor: chatSyncSupervisor,
-            buildMemberContextSummaryUseCase: buildMemberContextSummaryUseCase,
-            toolEventInterpreter: chatToolEventInterpreter,
-            fileTransferService: fileTransferService,
-            ocrOrchestrator: ocrOrchestrator,
-            aiConfigCenter: aiConfigCenter,
-            logger: logger
-        )
-
-        // MARK: 应用内通知 + 远程推送
-        let routeStore = AppRouteStore()
-        let memberContextStore = MemberContextStore(persistence: selectedMemberIDPersistence)
-        let notificationStore = NotificationStore()
-        let notificationMetricsStore = NotificationMetricsStore()
-        let notificationInboxStore = NotificationInboxStore()
-        let notificationQueue = NotificationQueue(
-            metricsStore: notificationMetricsStore,
-            inboxStore: notificationInboxStore,
-            logger: logger
-        )
-        let notificationDeliveryCoordinator = NotificationDeliveryCoordinator(
-            queue: notificationQueue,
-            store: notificationStore,
-            inboxStore: notificationInboxStore,
-            metricsStore: notificationMetricsStore
-        )
-        let publishNotificationUseCase = PublishNotificationUseCase(
-            queue: notificationQueue,
-            deliveryCoordinator: notificationDeliveryCoordinator,
-            logger: logger
-        )
-        let notificationClient = DefaultNotificationClient(
-            publishUseCase: publishNotificationUseCase
-        )
-
-        // MARK: 医疗后台同步（可触发本地通知）与 Push 适配
-        let medicalSyncService = MedicalSyncService(
-            preferenceRepository: medicalSyncPreferenceRepository,
-            medicalQueryAPI: backend.medicalQuery,
-            notificationClient: notificationClient,
-            logger: logger
-        )
-        let handleRemoteNotificationUseCase = HandleRemoteNotificationUseCase(
-            routeStore: routeStore,
-            notificationClient: notificationClient
-        )
-        let registerDeviceUseCase = RegisterDeviceUseCase(backend: backend, logger: logger)
-        let pushAdapter = PushAdapter(
-            handleRemoteNotificationUseCase: handleRemoteNotificationUseCase,
-            logger: logger,
-            onApnsTokenHex: { hex in
-                await registerDeviceUseCase.execute(pushToken: hex, notificationsEnabled: true)
-            },
-            onRemoteNotificationAuthorizationResolved: { granted in
-                if granted {
-                    // 同意权限：先标记开启；JSON 省略 push_token 以免覆盖已有行，待 token 回调再写入 hex。
-                    await registerDeviceUseCase.execute(pushToken: nil, notificationsEnabled: true)
-                } else {
-                    // 拒绝或异常：清空服务端 push_token 并标记关闭（与 TrustedDevice 字段语义一致）。
-                    await registerDeviceUseCase.execute(pushToken: "", notificationsEnabled: false)
-                }
-            }
-        )
-
-        // MARK: 冷启动编排（不阻塞 UI 的异步任务入口，由 App 生命周期调用）
-        let appBootstrapper = AppBootstrapper(
-            aiConfigCenter: aiConfigCenter,
-            medicalSyncService: medicalSyncService,
-            syncChatUseCase: syncChatUseCase,
-            chatSyncSupervisor: chatSyncSupervisor,
-            routeStore: routeStore,
-            ossConfigurationStore: ossConfigurationStore,
-            ossAPI: backend.oss,
-            registerDevice: { await registerDeviceUseCase.execute() },
+        let appBootstrapper = AppAssembly.makeBootstrapper(
+            ai: ai,
+            notification: notification,
+            chat: chat,
+            infrastructure: infrastructure,
+            backend: backend,
             logger: logger
         )
 
         // MARK: 写回 `self`：仓库与用例（供工厂方法与外部测试/调试访问）
-        self.userProfileRepository = profileRepository
-        self.authRepository = authRepository
-        self.aiSettingsRepository = aiSettingsRepository
-        self.knowledgeRepository = knowledgeRepository
-        self.localModelService = localModelService
+        self.taskManager = infrastructure.taskManager
+        self.taskRuntime = infrastructure.taskRuntime
+        self.storageRegistry = infrastructure.storageRegistry
+        self.fileCacheManager = infrastructure.fileCacheManager
+        self.fileTransferService = infrastructure.fileTransferService
+        self.ossConfigurationStore = infrastructure.ossConfigurationStore
 
-        self.restoreSessionUseCase = RestoreSessionUseCase(authRepository: authRepository)
-        self.signInWithAppleUseCase = SignInWithAppleUseCase(authRepository: authRepository)
-        self.requestPhoneOTPUseCase = RequestPhoneOTPUseCase(authRepository: authRepository)
-        self.signInWithPhoneOTPUseCase = SignInWithPhoneOTPUseCase(authRepository: authRepository)
-        self.signOutUseCase = SignOutUseCase(authRepository: authRepository)
-        self.loadHomeMedicalOverviewUseCase = LoadHomeMedicalOverviewUseCase(
-            userProfileRepository: profileRepository,
-            medicalQueryAPI: backend.medicalQuery,
-            selectedMemberIDPersistence: selectedMemberIDPersistence,
-            logger: logger
-        )
-        self.manageHomeMemberUseCase = ManageHomeMemberUseCase(memberAPI: backend.medicalMembers)
-        self.loadKnowledgeListUseCase = loadKnowledgeListUseCase
-        self.loadKnowledgeDocumentUseCase = loadKnowledgeDocumentUseCase
-        self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
-        self.updateKnowledgeDocumentUseCase = updateKnowledgeDocumentUseCase
-        self.deleteKnowledgeDocumentUseCase = deleteKnowledgeDocumentUseCase
-        self.searchKnowledgeUseCase = searchKnowledgeUseCase
-        self.reindexKnowledgeDocumentUseCase = reindexKnowledgeDocumentUseCase
-        self.knowledgeEmbeddingClient = knowledgeEmbeddingClient
-        self.buildKnowledgeEmbeddingsUseCase = buildKnowledgeEmbeddingsUseCase
-        self.polishKnowledgeTextUseCase = polishKnowledgeTextUseCase
-        self.translateKnowledgeTextUseCase = translateKnowledgeTextUseCase
-        self.ocrKnowledgeImageUseCase = ocrKnowledgeImageUseCase
-        self.importKnowledgeFromFileUseCase = importKnowledgeFromFileUseCase
-        self.importKnowledgeFromWebUseCase = importKnowledgeFromWebUseCase
-        self.loadMembersUseCase = LoadMembersUseCase(repository: membersRepository)
-        self.selectMemberUseCase = SelectMemberUseCase()
-        self.uploadMedicalDocumentFilesUseCase = uploadMedicalDocumentFilesUseCase
-        self.extractTypedMedicalDocumentUseCase = extractTypedMedicalDocumentUseCase
-        self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
-        self.bindUploadedFilesToMedicalBusinessUseCase = bindUploadedFilesToMedicalBusinessUseCase
-        self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
-        self.loadChatThreadsUseCase = loadChatThreadsUseCase
-        self.loadChatMessagesUseCase = loadChatMessagesUseCase
-        self.chatQueryService = chatQueryService
-        self.createThreadUseCase = createThreadUseCase
-        self.retryFailedMessageUseCase = retryFailedMessageUseCase
-        self.deleteThreadUseCase = deleteThreadUseCase
-        self.syncChatUseCase = syncChatUseCase
-        self.chatSyncSupervisor = chatSyncSupervisor
-        self.sendChatMessageUseCase = sendChatMessageUseCase
+        self.userProfileRepository = auth.userProfileRepository
+        self.authRepository = auth.authRepository
+        self.restoreSessionUseCase = auth.restoreSessionUseCase
+        self.signInWithAppleUseCase = auth.signInWithAppleUseCase
+        self.requestPhoneOTPUseCase = auth.requestPhoneOTPUseCase
+        self.signInWithPhoneOTPUseCase = auth.signInWithPhoneOTPUseCase
+        self.signOutUseCase = auth.signOutUseCase
 
-        self.routeStore = routeStore
-        self.registerDeviceUseCase = registerDeviceUseCase
-        self.aiRuntimeStore = aiRuntimeStore
-        self.aiConfigCenter = aiConfigCenter
-        self.aiRuntimeService = aiRuntimeService
-        self.toolHub = toolHub
-        self.toolAuditStore = toolAuditStore
-        self.medicalSyncService = medicalSyncService
-        self.ocrOrchestrator = ocrOrchestrator
-        self.ossConfigurationStore = ossConfigurationStore
+        self.aiSettingsRepository = ai.aiSettingsRepository
+        self.knowledgeEmbeddingClient = ai.knowledgeEmbeddingClient
+        self.aiRuntimeStore = ai.aiRuntimeStore
+        self.aiConfigCenter = ai.aiConfigCenter
+        self.aiRuntimeService = ai.aiRuntimeService
+        self.localModelService = ai.localModelService
+        self.polishKnowledgeTextUseCase = ai.polishKnowledgeTextUseCase
+        self.translateKnowledgeTextUseCase = ai.translateKnowledgeTextUseCase
+
+        self.knowledgeRepository = knowledge.knowledgeRepository
+        self.loadKnowledgeListUseCase = knowledge.loadKnowledgeListUseCase
+        self.loadKnowledgeDocumentUseCase = knowledge.loadKnowledgeDocumentUseCase
+        self.createKnowledgeDocumentUseCase = knowledge.createKnowledgeDocumentUseCase
+        self.updateKnowledgeDocumentUseCase = knowledge.updateKnowledgeDocumentUseCase
+        self.deleteKnowledgeDocumentUseCase = knowledge.deleteKnowledgeDocumentUseCase
+        self.searchKnowledgeUseCase = knowledge.searchKnowledgeUseCase
+        self.reindexKnowledgeDocumentUseCase = knowledge.reindexKnowledgeDocumentUseCase
+        self.buildKnowledgeEmbeddingsUseCase = knowledge.buildKnowledgeEmbeddingsUseCase
+        self.ocrKnowledgeImageUseCase = knowledge.ocrKnowledgeImageUseCase
+        self.importKnowledgeFromFileUseCase = knowledge.importKnowledgeFromFileUseCase
+        self.importKnowledgeFromWebUseCase = knowledge.importKnowledgeFromWebUseCase
+
+        self.loadHomeMedicalOverviewUseCase = medical.loadHomeMedicalOverviewUseCase
+        self.manageHomeMemberUseCase = medical.manageHomeMemberUseCase
+        self.loadMembersUseCase = medical.loadMembersUseCase
+        self.selectMemberUseCase = medical.selectMemberUseCase
+        self.uploadMedicalDocumentFilesUseCase = medical.uploadMedicalDocumentFilesUseCase
+        self.extractTypedMedicalDocumentUseCase = medical.extractTypedMedicalDocumentUseCase
+        self.saveTypedMedicalDocumentUseCase = medical.saveTypedMedicalDocumentUseCase
+        self.bindUploadedFilesToMedicalBusinessUseCase = medical.bindUploadedFilesToMedicalBusinessUseCase
+        self.buildMemberContextSummaryUseCase = medical.buildMemberContextSummaryUseCase
+        self.ocrOrchestrator = medical.ocrOrchestrator
+
+        self.loadChatThreadsUseCase = chat.loadChatThreadsUseCase
+        self.loadChatMessagesUseCase = chat.loadChatMessagesUseCase
+        self.chatQueryService = chat.chatQueryService
+        self.createThreadUseCase = chat.createThreadUseCase
+        self.retryFailedMessageUseCase = chat.retryFailedMessageUseCase
+        self.deleteThreadUseCase = chat.deleteThreadUseCase
+        self.syncChatUseCase = chat.syncChatUseCase
+        self.chatSyncSupervisor = chat.chatSyncSupervisor
+        self.sendChatMessageUseCase = chat.sendChatMessageUseCase
+        self.toolHub = chat.toolHub
+        self.toolAuditStore = chat.toolAuditStore
+
+        self.routeStore = notification.routeStore
+        self.routeCoordinator = notification.routeCoordinator
+        self.registerDeviceUseCase = notification.registerDeviceUseCase
+        self.medicalSyncService = notification.medicalSyncService
         self.appBootstrapper = appBootstrapper
-        self.notificationStore = notificationStore
-        self.notificationMetricsStore = notificationMetricsStore
-        self.notificationInboxStore = notificationInboxStore
-        self.notificationQueue = notificationQueue
-        self.notificationDeliveryCoordinator = notificationDeliveryCoordinator
-        self.publishNotificationUseCase = publishNotificationUseCase
-        self.notificationClient = notificationClient
-        self.handleRemoteNotificationUseCase = handleRemoteNotificationUseCase
-        self.pushAdapter = pushAdapter
+        self.notificationStore = notification.notificationStore
+        self.notificationMetricsStore = notification.notificationMetricsStore
+        self.notificationInboxStore = notification.notificationInboxStore
+        self.notificationQueue = notification.notificationQueue
+        self.notificationDeliveryCoordinator = notification.notificationDeliveryCoordinator
+        self.publishNotificationUseCase = notification.publishNotificationUseCase
+        self.notificationClient = notification.notificationClient
+        self.handleRemoteNotificationUseCase = notification.handleRemoteNotificationUseCase
+        self.pushAdapter = notification.pushAdapter
 
         // MARK: 会话 Store 与跨界面共享 ViewModel
         // 注意：`sessionStore` 使用刚赋值的 `restoreSessionUseCase`，`chatListViewModel` 依赖 `sessionStore`，顺序不可颠倒。
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
-        self.memberContextStore = memberContextStore
+        self.memberContextStore = notification.memberContextStore
         self.chatStateStore = ChatStateStore()
-        structuredHealthCardMergeCoordinator.register(stateStore: chatStateStore)
+        chat.structuredHealthCardMergeCoordinator.register(stateStore: chatStateStore)
         self.knowledgeViewModel = KnowledgeLibraryViewModel(
-            loadListUseCase: loadKnowledgeListUseCase,
-            loadDocumentUseCase: loadKnowledgeDocumentUseCase,
-            createUseCase: createKnowledgeDocumentUseCase,
-            updateUseCase: updateKnowledgeDocumentUseCase,
-            deleteUseCase: deleteKnowledgeDocumentUseCase,
-            searchUseCase: searchKnowledgeUseCase,
-            reindexUseCase: reindexKnowledgeDocumentUseCase
+            loadListUseCase: knowledge.loadKnowledgeListUseCase,
+            loadDocumentUseCase: knowledge.loadKnowledgeDocumentUseCase,
+            createUseCase: knowledge.createKnowledgeDocumentUseCase,
+            updateUseCase: knowledge.updateKnowledgeDocumentUseCase,
+            deleteUseCase: knowledge.deleteKnowledgeDocumentUseCase,
+            searchUseCase: knowledge.searchKnowledgeUseCase,
+            reindexUseCase: knowledge.reindexKnowledgeDocumentUseCase
         )
         self.chatListViewModel = ChatListViewModel(
             stateStore: chatStateStore,
             sessionStore: sessionStore,
             memberContextStore: memberContextStore,
-            loadMembersUseCase: loadMembersUseCase,
-            selectMemberUseCase: selectMemberUseCase,
-            selectedMemberIDPersistence: selectedMemberIDPersistence,
-            loadChatThreadsUseCase: loadChatThreadsUseCase,
-            loadChatMessagesUseCase: loadChatMessagesUseCase,
-            createThreadUseCase: createThreadUseCase,
-            deleteThreadUseCase: deleteThreadUseCase,
-            notificationClient: notificationClient
+            loadMembersUseCase: medical.loadMembersUseCase,
+            selectMemberUseCase: medical.selectMemberUseCase,
+            selectedMemberIDPersistence: auth.selectedMemberIDPersistence,
+            loadChatThreadsUseCase: chat.loadChatThreadsUseCase,
+            loadChatMessagesUseCase: chat.loadChatMessagesUseCase,
+            createThreadUseCase: chat.createThreadUseCase,
+            deleteThreadUseCase: chat.deleteThreadUseCase,
+            notificationClient: notification.notificationClient
         )
         self.chatDetailViewModel = ChatDetailViewModel(
             stateStore: chatStateStore,
             memberContextStore: memberContextStore,
-            chatRepository: chatRepository,
-            loadChatThreadsUseCase: loadChatThreadsUseCase,
-            loadChatMessagesUseCase: loadChatMessagesUseCase,
-            sendMessageUseCase: sendChatMessageUseCase,
-            fileTransferService: fileTransferService,
-            ocrOrchestrator: ocrOrchestrator,
+            chatRepository: chat.chatRepository,
+            loadChatThreadsUseCase: chat.loadChatThreadsUseCase,
+            loadChatMessagesUseCase: chat.loadChatMessagesUseCase,
+            sendMessageUseCase: chat.sendChatMessageUseCase,
+            fileTransferService: infrastructure.fileTransferService,
+            ocrOrchestrator: medical.ocrOrchestrator,
             ocrDocumentExtractor: OCRDocumentExtractor(config: ocrConfiguration),
-            retryFailedMessageUseCase: retryFailedMessageUseCase,
-            syncChatUseCase: syncChatUseCase,
-            updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
-            notificationClient: notificationClient,
-            aiConfigCenter: aiConfigCenter,
-            aiSettingsRepository: aiSettingsRepository,
-            translateKnowledgeTextUseCase: translateKnowledgeTextUseCase,
-            createKnowledgeDocumentUseCase: createKnowledgeDocumentUseCase,
-            saveTypedMedicalDocumentUseCase: saveTypedMedicalDocumentUseCase,
+            retryFailedMessageUseCase: chat.retryFailedMessageUseCase,
+            syncChatUseCase: chat.syncChatUseCase,
+            updateChatMessageAttachmentsUseCase: chat.updateChatMessageAttachmentsUseCase,
+            notificationClient: notification.notificationClient,
+            aiConfigCenter: ai.aiConfigCenter,
+            aiSettingsRepository: ai.aiSettingsRepository,
+            translateKnowledgeTextUseCase: ai.translateKnowledgeTextUseCase,
+            createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
+            saveTypedMedicalDocumentUseCase: medical.saveTypedMedicalDocumentUseCase,
             logger: logger
         )
+        logger.info("AppContainer 组合完成：容器仅持有 Assembly facade 与共享运行时", module: .general)
     }
 
     /// 生产环境：读取当前 `AppEnvironment`，使用共享 Core Data 与真实 API 基址。
@@ -752,39 +586,58 @@ final class AppContainer {
         cachedHomeViewModel = nil
         cachedMedicalDocumentUploadViewModel = nil
         cachedSettingsViewModel = nil
-        cachedAISettingsViewModel = nil
-        cachedAISettingsViewModelOwnerAccountID = nil
+        aiSettingsViewModelCache.clear()
+        mainTabDependenciesCache.clear()
+        logger.info("账号级 ViewModel 与主 Tab 依赖缓存已清理", module: .general)
     }
 
-    /// 进入新账号会话前：清空 AI 运行时（本地 bundle 缓存 + Pro overlay + `AIRuntimeStore` 覆盖），避免沿用上一登录用户。
-    func resetAIConfigRuntimeForSessionSwitch() async {
-        await aiConfigCenter.resetRuntimeCaches()
-    }
+    /// 主 Tab 依赖包：同一账号会话期间只创建一次。
+    ///
+    /// 这里是防止网络抖动、前后台切换、SwiftUI body 重算导致首页/聊天/设置缓存重建的关键边界。
+    /// 只有 `AccountSessionRuntime` 在明确登出或切换账号时才会清掉这组缓存。
+    func makeMainTabDependencies(ownerAccountID: Int64) -> MainTabDependencies {
+        if mainTabDependenciesCache.matches(ownerAccountID),
+           let cached = mainTabDependenciesCache.value {
+            logger.debug("主 Tab 依赖命中账号级缓存 accountID=\(ownerAccountID)", module: .general)
+            return cached
+        }
 
-    /// 登录态切换（含恢复会话）后调用：按用户会话重置内存缓存。
-    func activateUserScopedLocalStore(accountID: Int64) {
-        chatStateStore.resetForSessionSwitch()
-        chatListViewModel.resetForSessionSwitch()
-        knowledgeViewModel.resetForSessionSwitch()
-        memberContextStore.activateAccountAndReset(accountID)
-        routeStore.resetForNewSession()
-        resetSessionScopedViewModels()
-    }
-
-    /// 回到未登录态时调用：重置会话相关内存状态。
-    func activateGuestLocalStore() {
-        chatStateStore.resetForSessionSwitch()
-        chatListViewModel.resetForSessionSwitch()
-        knowledgeViewModel.resetForSessionSwitch()
-        memberContextStore.resetInMemoryContext()
-        routeStore.resetForNewSession()
-        resetSessionScopedViewModels()
+        logger.info("主 Tab 依赖首次初始化 accountID=\(ownerAccountID)", module: .general)
+        let created = MainTabDependencies(
+            scope: .accountScoped,
+            routeStore: routeStore,
+            homeDependencies: HomeFeatureDependencies(
+                medicalWorkflowAPI: backend.medicalWorkflow,
+                medicalQueryAPI: backend.medicalQuery,
+                fileTransferService: fileTransferService,
+                taskManager: taskManager,
+                logger: logger
+            ),
+            knowledgeDependencies: KnowledgeFeatureDependencies(
+                makeEditorViewModel: { [self] documentID in
+                    makeKnowledgeDocumentEditorViewModel(documentID: documentID)
+                }
+            ),
+            taskManager: taskManager,
+            homeViewModel: makeHomeViewModel(),
+            medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel(),
+            knowledgeViewModel: makeKnowledgeLibraryViewModel(),
+            chatStateStore: chatStateStore,
+            chatListViewModel: chatListViewModel,
+            chatDetailViewModel: chatDetailViewModel,
+            settingsViewModel: makeSettingsViewModel(),
+            aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
+            memberContextStore: memberContextStore
+        )
+        mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
+        return created
     }
 
     /// AI 设置：本地偏好读写 + 可选远程模型列表（`backend.aiConfig`）。
     func makeAISettingsViewModel(ownerAccountID: Int64) -> AISettingsViewModel {
-        if let cachedAISettingsViewModel, cachedAISettingsViewModelOwnerAccountID == ownerAccountID {
-            return cachedAISettingsViewModel
+        if aiSettingsViewModelCache.matches(ownerAccountID),
+           let cached = aiSettingsViewModelCache.value {
+            return cached
         }
 
         let created = AISettingsViewModel(
@@ -795,8 +648,7 @@ final class AppContainer {
             aiConfigAPI: backend.aiConfig,
             aiConfigCenter: aiConfigCenter
         )
-        cachedAISettingsViewModel = created
-        cachedAISettingsViewModelOwnerAccountID = ownerAccountID
+        aiSettingsViewModelCache.store(created, ownerAccountID: ownerAccountID)
         return created
     }
 
@@ -848,8 +700,7 @@ final class AppContainer {
         } catch {
             logger.warning("强制登出执行失败，继续回收本地会话状态：\(error.localizedDescription)", module: .auth)
         }
-        memberContextStore.clearSessionPersistenceAndReset()
-        activateGuestLocalStore()
+        await accountSessionRuntime.clearSessionPersistenceAndActivateGuest()
         sessionStore.setSignedOut()
     }
 }

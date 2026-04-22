@@ -12,7 +12,7 @@ enum HomeMedicalListRoute: Hashable {
 struct HomeMedicalListView: View {
     let route: HomeMedicalListRoute
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    let appContainer: AppContainer
+    let dependencies: HomeFeatureDependencies
     let onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?
     let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
 
@@ -21,44 +21,44 @@ struct HomeMedicalListView: View {
         case .medicalCases:
             MedicalCasesListPage(
                 completeData: completeData,
-                workflowAPI: appContainer.backend.medicalWorkflow,
-                fileTransferService: appContainer.fileTransferService
+                workflowAPI: dependencies.medicalWorkflowAPI,
+                fileTransferService: dependencies.fileTransferService
             )
         case .healthExamReports:
             HealthExamReportsListPage(
                 completeData: completeData,
-                medicalQueryAPI: appContainer.backend.medicalQuery,
-                logger: appContainer.logger,
-                fileTransferService: appContainer.fileTransferService,
+                medicalQueryAPI: dependencies.medicalQueryAPI,
+                logger: dependencies.logger,
+                fileTransferService: dependencies.fileTransferService,
                 onReportsUpdated: onHealthExamReportsUpdated
             )
         case .examinationReports:
             ExaminationReportsListPage(
                 completeData: completeData,
-                medicalQueryAPI: appContainer.backend.medicalQuery,
-                logger: appContainer.logger,
-                fileTransferService: appContainer.fileTransferService,
+                medicalQueryAPI: dependencies.medicalQueryAPI,
+                logger: dependencies.logger,
+                fileTransferService: dependencies.fileTransferService,
                 onReportsUpdated: onExaminationReportsUpdated
             )
         case .medications:
             MedicationsListPage(
                 completeData: completeData,
-                fileTransferService: appContainer.fileTransferService
+                fileTransferService: dependencies.fileTransferService
             )
         }
     }
 }
 
 #Preview("Medical Lists Light") {
-    NavigationView {
-        HomeMedicalListView(route: .medicalCases, completeData: nil, appContainer: .preview, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
+    CompatibleNavigationContainer {
+        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medical Lists Dark") {
-    NavigationView {
-        HomeMedicalListView(route: .medications, completeData: nil, appContainer: .preview, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
+    CompatibleNavigationContainer {
+        HomeMedicalListView(route: .medications, completeData: nil, dependencies: .preview, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
     }
     .preferredColorScheme(.dark)
 }

@@ -7,7 +7,7 @@ final class OSSClientWrapper {
     /// 负责管理 OSS 客户端生命周期、初始化和凭证刷新的管理类
     private let manager: OSSManager
 
-    init(manager: OSSManager = .shared) {
+    init(manager: OSSManager) {
         self.manager = manager
     }
 

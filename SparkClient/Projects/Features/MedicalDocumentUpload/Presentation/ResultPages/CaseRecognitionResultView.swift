@@ -22,7 +22,7 @@ struct CaseRecognitionResultView: View {
 }
 
 #Preview("Case result - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         CaseRecognitionResultView(
             output: .previewCase,
             isSaving: false,
@@ -35,7 +35,7 @@ struct CaseRecognitionResultView: View {
 }
 
 #Preview("Case result - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         CaseRecognitionResultView(
             output: .previewCase,
             isSaving: false,

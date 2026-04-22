@@ -15,6 +15,7 @@ struct ChatView: View {
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var taskManager: TaskManager
 
     @State private var hasLoaded = false
     @State private var conversationListLayoutNonce: UInt64 = 0
@@ -23,7 +24,6 @@ struct ChatView: View {
     @State private var selectedTextSheet: ChatSelectableTextPayload?
     @StateObject private var speechHelper = ChatSpeechHelper()
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
-    @StateObject private var taskManager = TaskManager.shared
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
     static let inlineErrorClientMessageID = UUID(uuidString: "00000000-0000-0000-0000-000000000999")!
@@ -250,7 +250,7 @@ struct ChatView: View {
                 await detailViewModel.refreshReasoningToolbarContext(for: threadID)
             }
             .sheet(item: $selectedTextSheet) { payload in
-                NavigationView {
+                CompatibleNavigationContainer(legacyStackStyle: true) {
                     ScrollView {
                         Text(payload.text)
                             .textSelection(.enabled)
@@ -259,7 +259,6 @@ struct ChatView: View {
                     }
                     .navigationTitle(payload.title)
                 }
-                .navigationViewStyle(.stack)
             }
             .onAppear {
                 Task { await detailViewModel.chatPageDidAppear() }

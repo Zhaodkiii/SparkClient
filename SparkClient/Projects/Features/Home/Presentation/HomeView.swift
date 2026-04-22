@@ -4,7 +4,7 @@ import UIKit
 #endif
 
 struct HomeView: View {
-    let appContainer: AppContainer
+    let dependencies: HomeFeatureDependencies
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let session: UserSession
@@ -37,7 +37,7 @@ struct HomeView: View {
                 .background(.regularMaterial)
         }
         .sheet(item: $addMemberMode) { mode in
-            NavigationView {
+            CompatibleNavigationContainer {
                 AddFamilyMemberView(mode: mode, viewModel: viewModel)
             }
         }
@@ -68,13 +68,16 @@ struct HomeView: View {
             await viewModel.loadInitialIfNeeded(syncRemote: true)
         }
         .fullScreenCover(isPresented: $showMedicalDocumentUpload) {
-            NavigationView {
+            CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
         }
         .sheet(isPresented: $showTaskCenter) {
-            NavigationView {
-                TaskCenterViewController(memberID: viewModel.selectedMemberID)
+            CompatibleNavigationContainer {
+                TaskCenterViewController(
+                    memberID: viewModel.selectedMemberID,
+                    taskManager: dependencies.taskManager
+                )
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
@@ -197,7 +200,7 @@ struct HomeView: View {
                         HomeMedicalListView(
                             route: medicalRoute(for: card.id),
                             completeData: viewModel.dashboard?.medical.completeData,
-                            appContainer: appContainer,
+                            dependencies: dependencies,
                             onHealthExamReportsUpdated: { reports in
                                 viewModel.updateMedicalCompleteData { completeData in
                                     completeData.healthExamReports = reports
@@ -397,9 +400,9 @@ private struct MemberSelectorChip: View {
 
 
 #Preview("Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         HomeView(
-            appContainer: .preview,
+            dependencies: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             session: UserSession(
@@ -415,9 +418,9 @@ private struct MemberSelectorChip: View {
 }
 
 #Preview("Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         HomeView(
-            appContainer: .preview,
+            dependencies: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             session: UserSession(

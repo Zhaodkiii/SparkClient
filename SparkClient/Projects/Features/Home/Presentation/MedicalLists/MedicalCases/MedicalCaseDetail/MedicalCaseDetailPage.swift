@@ -95,7 +95,7 @@ struct MedicalCaseDetailPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingAttachments)
         .fullScreenCover(item: $addRecordSheet) { kind in
-            NavigationView {
+            CompatibleNavigationContainer {
                 medicalCaseAddRecordDestination(kind)
             }
         }
@@ -494,7 +494,7 @@ private extension SparkMedicalSyncAPI.RemoteMedicalCaseSummary {
 }
 
 #Preview("Medical case detail — Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalCaseDetailPage(
             item: .previewSample,
             completeData: nil,
@@ -506,7 +506,7 @@ private extension SparkMedicalSyncAPI.RemoteMedicalCaseSummary {
 }
 
 #Preview("Medical case detail — Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         MedicalCaseDetailPage(
             item: .previewSample,
             completeData: nil,

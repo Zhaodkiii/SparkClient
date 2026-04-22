@@ -8,7 +8,7 @@ struct UnifiedFilePreview: View {
     var onClose: (() -> Void)?
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
             content
                 .navigationTitle(input.resolvedDisplayName)
                 .navigationBarTitleDisplayMode(.inline)
@@ -20,7 +20,6 @@ struct UnifiedFilePreview: View {
                     }
                 }
         }
-        .navigationViewStyle(.stack)
     }
 
     @ViewBuilder

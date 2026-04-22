@@ -4,6 +4,7 @@ struct ChatConversationListPage: View {
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var taskManager: TaskManager
 
     @State private var searchText = ""
     @State private var navigationSelection: UUID?
@@ -103,7 +104,8 @@ struct ChatConversationListPage: View {
                     threadID: item.id,
                     stateStore: stateStore,
                     listViewModel: listViewModel,
-                    detailViewModel: detailViewModel
+                    detailViewModel: detailViewModel,
+                    taskManager: taskManager
                 ),
                 tag: item.id,
                 selection: $navigationSelection

@@ -135,7 +135,7 @@ struct AIModelPreferencesView: View {
 @MainActor
 private struct AIModelPreferencesViewPreviewHost: View {
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             AIModelPreferencesView(viewModel: ScenarioModelPreferencesViewModel(aiConfigCenter: nil))
         }
     }

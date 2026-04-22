@@ -58,7 +58,7 @@ struct ModelManagementView: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             List {
                 providerStatusSection
                 addedModelsSection

@@ -1,17 +1,13 @@
 import SwiftUI
-import UIKit
 
 struct AppCoordinatorView: View {
-    let container: AppContainer
-    @StateObject private var sessionStore: AppSessionStore
+    private let facades: AppFeatureFacades
     @StateObject private var networkMonitor = NetworkPathMonitor()
-    @State private var isHandlingServerAuthInvalidation = false
-    @State private var preparedAccountID: Int64?
-    @State private var preparingAccountID: Int64?
+    @StateObject private var lifecycle: AppLifecycleCoordinator
 
-    init(container: AppContainer) {
-        self.container = container
-        _sessionStore = StateObject(wrappedValue: container.sessionStore)
+    init(dependencies: AppCoordinatorDependencies) {
+        self.facades = dependencies.facades
+        _lifecycle = StateObject(wrappedValue: dependencies.lifecycle)
     }
 
     var body: some View {
@@ -27,101 +23,61 @@ struct AppCoordinatorView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut, value: sessionStore.state)
+        .animation(.easeInOut, value: lifecycle.sessionStore.state)
         .animation(.easeInOut, value: networkMonitor.hasEvaluatedPath)
         .animation(.easeInOut, value: networkMonitor.isSatisfied)
         .onAppear {
             networkMonitor.start()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: AuthSessionInvalidation.notificationName)) { _ in
-            Task { @MainActor in
-                await handleServerAuthInvalidationIfNeeded()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            Task { @MainActor in
-                guard case .signedIn = sessionStore.state else { return }
-                await TaskManager.shared.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
-            }
         }
     }
 
     @ViewBuilder
     private var sessionContent: some View {
         Group {
-            switch sessionStore.state {
+            switch lifecycle.sessionStore.state {
             case .loading:
                 ProgressView(L10n.text("app.loading.preparing"))
                     .task(id: networkMonitor.hasEvaluatedPath) {
-                        guard networkMonitor.hasEvaluatedPath else { return }
-                        await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
-                        await sessionStore.restoreIfNeeded()
-                        if case .signedIn(let session) = sessionStore.state {
-                            await prepareSignedInSessionIfNeeded(session)
-                        }
+                        await lifecycle.bootstrapLaunchAfterNetworkEvaluation(networkMonitor.hasEvaluatedPath)
                     }
 
             case .signedOut:
-                AuthCoordinatorView(viewModel: container.makeLoginViewModel())
+                AuthCoordinatorView(viewModel: facades.auth.makeLoginViewModel())
                     .task {
-                        preparedAccountID = nil
-                        preparingAccountID = nil
-                        await container.appBootstrapper.reset()
-                        container.activateGuestLocalStore()
+                        await lifecycle.handleSignedOutTask()
                     }
 
             case .signedIn(let session):
-                if preparedAccountID == session.accountID {
+                if lifecycle.preparedAccountID == session.accountID {
+                    let mainTab = facades.mainTab.makeDependencies(session.accountID)
                     MainTabCoordinatorView(
                         session: session,
-                        routeStore: container.routeStore,
-                        appContainer: container,
-                        homeViewModel: container.makeHomeViewModel(),
-                        medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
-                        knowledgeViewModel: container.makeKnowledgeLibraryViewModel(),
-                        chatStateStore: container.makeChatStateStore(),
-                        chatListViewModel: container.makeChatListViewModel(),
-                        chatDetailViewModel: container.makeChatDetailViewModel(),
-                        settingsViewModel: container.makeSettingsViewModel(),
-                        aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: session.accountID)
+                        routeStore: mainTab.routeStore,
+                        homeDependencies: mainTab.homeDependencies,
+                        knowledgeDependencies: mainTab.knowledgeDependencies,
+                        taskManager: mainTab.taskManager,
+                        homeViewModel: mainTab.homeViewModel,
+                        medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
+                        knowledgeViewModel: mainTab.knowledgeViewModel,
+                        chatStateStore: mainTab.chatStateStore,
+                        chatListViewModel: mainTab.chatListViewModel,
+                        chatDetailViewModel: mainTab.chatDetailViewModel,
+                        settingsViewModel: mainTab.settingsViewModel,
+                        aiSettingsViewModel: mainTab.aiSettingsViewModel
                     )
-                    .environmentObject(container.memberContextStore)
+                    .environmentObject(mainTab.memberContextStore)
                     .id(session.accountID)
                     .task(id: session.accountID) {
                         // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-                        container.pushAdapter.requestAuthorizationIfNeeded()
+                        lifecycle.requestNotificationAuthorizationIfNeeded()
                     }
                 } else {
                     ProgressView(L10n.text("app.loading.preparing"))
                         .task(id: session.accountID) {
-                            await prepareSignedInSessionIfNeeded(session)
+                            await lifecycle.prepareSignedInSessionIfNeeded(session)
                         }
                 }
             }
         }
-    }
-
-    private func prepareSignedInSessionIfNeeded(_ session: UserSession) async {
-        guard preparedAccountID != session.accountID else { return }
-        guard preparingAccountID != session.accountID else { return }
-
-        preparingAccountID = session.accountID
-        defer { preparingAccountID = nil }
-
-        await container.resetAIConfigRuntimeForSessionSwitch()
-        container.activateUserScopedLocalStore(accountID: session.accountID)
-        await container.appBootstrapper.bootstrapIfNeeded(for: session)
-        await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)
-        await TaskManager.shared.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
-        preparedAccountID = session.accountID
-    }
-
-    private func handleServerAuthInvalidationIfNeeded() async {
-        guard case .signedIn = sessionStore.state else { return }
-        guard isHandlingServerAuthInvalidation == false else { return }
-
-        isHandlingServerAuthInvalidation = true
-        defer { isHandlingServerAuthInvalidation = false }
-        await container.forceSignOutAfterServerAuthInvalidation()
     }
 }

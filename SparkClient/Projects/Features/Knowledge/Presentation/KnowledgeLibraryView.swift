@@ -3,7 +3,7 @@ import SwiftUI
 /// 知识库首页：文档列表、下拉刷新、跳转详情与搜索。
 /// 新建：与 `AI_HLY/KnowledgeListView` 一致——插入空白文档后 **push** 到 `KnowledgeDocumentDetailView`（编辑态由详情页根据空正文决定）。
 struct KnowledgeLibraryView: View {
-    let appContainer: AppContainer
+    let dependencies: KnowledgeFeatureDependencies
     @ObservedObject var viewModel: KnowledgeLibraryViewModel
     /// 编程式导航目标（`NavigationLink(isActive:)`，兼容 `NavigationView` + iOS 15）。
     @State private var pendingDetailDocumentID: UUID?
@@ -18,7 +18,7 @@ struct KnowledgeLibraryView: View {
                 } else {
                     ForEach(viewModel.documents) { document in
                         NavigationLink {
-                            KnowledgeDocumentDetailView(appContainer: appContainer, viewModel: viewModel, documentID: document.id)
+                            KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: document.id)
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(document.title)
@@ -54,7 +54,7 @@ struct KnowledgeLibraryView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     NavigationLink {
-                        KnowledgeSearchView(appContainer: appContainer, viewModel: viewModel)
+                        KnowledgeSearchView(dependencies: dependencies, viewModel: viewModel)
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
@@ -89,7 +89,7 @@ struct KnowledgeLibraryView: View {
             NavigationLink(
                 destination: Group {
                     if let id = pendingDetailDocumentID {
-                        KnowledgeDocumentDetailView(appContainer: appContainer, viewModel: viewModel, documentID: id)
+                        KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: id)
                     }
                 },
                 isActive: Binding(

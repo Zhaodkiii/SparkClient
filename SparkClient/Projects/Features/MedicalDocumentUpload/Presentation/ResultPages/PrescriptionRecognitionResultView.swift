@@ -22,7 +22,7 @@ struct PrescriptionRecognitionResultView: View {
 }
 
 #Preview("Prescription result - Light") {
-    NavigationView {
+    CompatibleNavigationContainer {
         PrescriptionRecognitionResultView(
             output: .previewPrescriptionOutput,
             isSaving: false,
@@ -35,7 +35,7 @@ struct PrescriptionRecognitionResultView: View {
 }
 
 #Preview("Prescription result - Dark") {
-    NavigationView {
+    CompatibleNavigationContainer {
         PrescriptionRecognitionResultView(
             output: .previewPrescriptionOutput,
             isSaving: false,

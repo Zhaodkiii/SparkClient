@@ -127,7 +127,7 @@ struct  AddFamilyMemberView: View {
             }
         }
         .sheet(isPresented: $showDatePicker) {
-            NavigationView {
+            CompatibleNavigationContainer {
                 VStack {
                     DatePicker(
                         L10n.text("home.members.field.birth_date"),
