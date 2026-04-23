@@ -7,11 +7,16 @@ struct HanlinChatInputView: View {
     let threadID: UUID
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
+    @ObservedObject var memberContextStore: MemberContextStore
+    let loadMembersUseCase: LoadMembersUseCase
+    let manageMemberUseCase: ManageHomeMemberUseCase
+    let boundMemberID: Int?
     let onSend: () -> Void
     let onCancel: () -> Void
     let onRequestFileImport: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
+    let onSetMemberBinding: (Int?) -> Void
 
     @State private var inputHeight: CGFloat = 24
     @State private var inputExpandedSheet = false
@@ -154,7 +159,12 @@ struct HanlinChatInputView: View {
                     ChatComposerRuntimeTogglesRow(
                         threadID: threadID,
                         modelReasoning: modelReasoning,
-                        stateStore: stateStore
+                        stateStore: stateStore,
+                        memberContextStore: memberContextStore,
+                        loadMembersUseCase: loadMembersUseCase,
+                        manageMemberUseCase: manageMemberUseCase,
+                        boundMemberID: boundMemberID,
+                        onSetMemberBinding: onSetMemberBinding
                     )
 
                     Spacer(minLength: 0)

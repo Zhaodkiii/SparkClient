@@ -6,6 +6,11 @@ struct ChatComposerRuntimeTogglesRow: View {
     let threadID: UUID
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
+    @ObservedObject var memberContextStore: MemberContextStore
+    let loadMembersUseCase: LoadMembersUseCase
+    let manageMemberUseCase: ManageHomeMemberUseCase
+    let boundMemberID: Int?
+    let onSetMemberBinding: (Int?) -> Void
     @State private var expandedToggle: RuntimeToggleKind?
     @State private var collapseToken = UUID()
 
@@ -19,6 +24,7 @@ struct ChatComposerRuntimeTogglesRow: View {
         case knowledge
         case web
         case reasoning
+        case memberProfile
     }
 
     private let autoCollapseDelay: TimeInterval = 1
@@ -57,9 +63,23 @@ struct ChatComposerRuntimeTogglesRow: View {
         flags.reasoningEnabled ? Color(uiColor: .systemPurple).opacity(0.12) : .clear
     }
 
+    private var bgMemberProfile: Color {
+        boundMemberID != nil ? Color(uiColor: .systemGreen).opacity(0.12) : .clear
+    }
+
+    private var boundMember: Member? {
+        guard let boundMemberID else { return nil }
+        return memberContextStore.context.members.first(where: { $0.id == boundMemberID })
+    }
+
+    private var defaultMemberID: Int? {
+        memberContextStore.context.selectedMember?.id
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                memberProfileToggle
                 toolToggle
                 knowledgeToggle
                 webToggle
@@ -241,6 +261,94 @@ struct ChatComposerRuntimeTogglesRow: View {
         .accessibilityLabel(L10n.text("chat.composer.toggle.deep_thinking"))
         .animation(toggleAnimation, value: flags.reasoningEnabled)
         .animation(toggleAnimation, value: expandedToggle)
+    }
+
+    private var memberProfileToggle: some View {
+        Button {
+            if boundMemberID == nil, defaultMemberID == nil {
+                withAnimation(toggleAnimation) {
+                    expandedToggle = .memberProfile
+                }
+                scheduleAutoCollapse(for: .memberProfile)
+                return
+            }
+            let next = boundMemberID == nil ? defaultMemberID : nil
+            onSetMemberBinding(next)
+            withAnimation(toggleAnimation) {
+                expandedToggle = .memberProfile
+            }
+            scheduleAutoCollapse(for: .memberProfile)
+        } label: {
+            HStack(spacing: 0) {
+                Image(systemName: "person.circle")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .foregroundStyle(
+                        boundMemberID != nil ? Color(uiColor: .systemGreen) : Color(.systemGray)
+                    )
+                    .scaleEffect(expandedToggle == .memberProfile ? 0.86 : 1)
+                if expandedToggle == .memberProfile {
+                    Text(L10n.text("chat.composer.toggle.member_profile"))
+                        .font(.caption)
+                        .foregroundStyle(boundMemberID != nil ? Color(uiColor: .systemGreen) : Color(.systemGray))
+                        .padding(.trailing, boundMemberID == nil ? 12 : 4)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
+
+                if boundMemberID != nil || expandedToggle == .memberProfile {
+                    memberProfileMenu
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(stateStore.isSending)
+        .background(bgMemberProfile)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(bgMemberProfile, lineWidth: 1)
+        )
+        .accessibilityLabel(L10n.text("chat.composer.toggle.member_profile"))
+        .animation(toggleAnimation, value: boundMemberID)
+        .animation(toggleAnimation, value: expandedToggle)
+    }
+
+    private var memberProfileMenu: some View {
+        MemberProfileBindingMenu(
+            memberContextStore: memberContextStore,
+            loadMembersUseCase: loadMembersUseCase,
+            manageMemberUseCase: manageMemberUseCase,
+            selectedMemberID: boundMemberID,
+            onSelect: { memberID in
+                onSetMemberBinding(memberID)
+            }
+        ) {
+            HStack(spacing: 2) {
+                Image(systemName: "chevron.up.chevron.down")
+                    .foregroundStyle(Color(uiColor: .systemGreen))
+                    .imageScale(.small)
+                
+                // 核心修改：只显示名字最后两个字
+                Text(lastTwoCharacters(of: boundMember?.name) ?? L10n.text("chat.composer.member_profile.unknown"))
+                    .font(.caption)
+                    .foregroundStyle(Color(uiColor: .systemGreen))
+                    .lineLimit(1)
+                    .padding(.trailing, 8)
+            }
+        }
+    }
+    // 获取字符串最后两个字符，通用工具方法
+    private func lastTwoCharacters(of text: String?) -> String? {
+        guard let text = text, !text.isEmpty else { return nil }
+        // 如果名字只有1个字，直接返回
+        if text.count <= 2 {
+            return text
+        }
+        // 截取最后两个字
+        let endIndex = text.endIndex
+        let startIndex = text.index(endIndex, offsetBy: -2)
+        return String(text[startIndex..<endIndex])
     }
 
     private var reasoningEffortMenu: some View {

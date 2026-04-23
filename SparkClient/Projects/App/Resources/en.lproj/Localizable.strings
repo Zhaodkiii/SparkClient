@@ -1262,6 +1262,9 @@
 "common.retry" = "Retry";
 
 "chat.settings.current" = "Current";
+"chat.composer.toggle.member_profile" = "Use member profile";
+"chat.composer.member_profile.none" = "Do not use member profile";
+"chat.composer.member_profile.unknown" = "Selected member";
 
 "health.tool.metric.steps" = "Steps";
 "health.tool.metric.distance" = "Distance";

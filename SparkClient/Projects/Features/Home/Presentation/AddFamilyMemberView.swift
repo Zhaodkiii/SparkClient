@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct  AddFamilyMemberView: View {
+struct AddFamilyMemberView: View {
     enum Mode: Identifiable {
         case create
         case edit(Member)
@@ -25,7 +25,8 @@ struct  AddFamilyMemberView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    @ObservedObject var viewModel: HomeViewModel
+    private let saveAction: (Mode, String, String, String, Date?) async throws -> Void
+    private let onSaved: () async -> Void
 
     @State private var name: String
     @State private var relationshipCode: String
@@ -33,10 +34,71 @@ struct  AddFamilyMemberView: View {
     @State private var birthDate: Date?
     @State private var isSaving = false
     @State private var showDatePicker = false
+    @State private var errorMessage: String?
+
+    init(
+        mode: Mode,
+        manageMemberUseCase: ManageHomeMemberUseCase,
+        onSaved: @escaping () async -> Void = {}
+    ) {
+        self.mode = mode
+        self.saveAction = { mode, name, relationship, gender, birthDate in
+            switch mode {
+            case .create:
+                try await manageMemberUseCase.create(
+                    name: name,
+                    relationship: relationship,
+                    gender: gender,
+                    birthDate: birthDate
+                )
+            case .edit(let member):
+                try await manageMemberUseCase.update(
+                    member: member,
+                    name: name,
+                    relationship: relationship,
+                    gender: gender,
+                    birthDate: birthDate
+                )
+            }
+        }
+        self.onSaved = onSaved
+
+        switch mode {
+        case .create:
+            _name = State(initialValue: "")
+            _relationshipCode = State(initialValue: MemberRelationshipCatalog.defaultCode)
+            _gender = State(initialValue: MemberRelationshipCatalog.defaultGender)
+            _birthDate = State(initialValue: nil)
+        case .edit(let member):
+            _name = State(initialValue: member.name)
+            _relationshipCode = State(initialValue: MemberRelationshipCatalog.compatibleCode(from: member.relationship))
+            _gender = State(initialValue: member.gender)
+            _birthDate = State(initialValue: member.birthDate)
+        }
+    }
 
     init(mode: Mode, viewModel: HomeViewModel) {
         self.mode = mode
-        self.viewModel = viewModel
+        self.saveAction = { mode, name, relationship, gender, birthDate in
+            switch mode {
+            case .create:
+                await viewModel.addMember(
+                    name: name,
+                    relationship: relationship,
+                    gender: gender,
+                    birthDate: birthDate
+                )
+            case .edit(let member):
+                await viewModel.updateMember(
+                    member,
+                    name: name,
+                    relationship: relationship,
+                    gender: gender,
+                    birthDate: birthDate
+                )
+            }
+        }
+        self.onSaved = {}
 
         switch mode {
         case .create:
@@ -153,6 +215,16 @@ struct  AddFamilyMemberView: View {
                     }
                 }
             }
+        }
+        .alert(L10n.text("common.error"), isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if $0 == false { errorMessage = nil } }
+        )) {
+            Button(L10n.text("common.ok"), role: .cancel) {
+                errorMessage = nil
+            }
+        } message: {
+            Text(errorMessage ?? "")
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: relationshipCode)
     }
@@ -307,25 +379,13 @@ struct  AddFamilyMemberView: View {
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        switch mode {
-        case .create:
-            await viewModel.addMember(
-                name: trimmedName,
-                relationship: relationshipCode,
-                gender: gender,
-                birthDate: birthDate
-            )
-        case .edit(let member):
-            await viewModel.updateMember(
-                member,
-                name: trimmedName,
-                relationship: relationshipCode,
-                gender: gender,
-                birthDate: birthDate
-            )
+        do {
+            try await saveAction(mode, trimmedName, relationshipCode, gender, birthDate)
+            await onSaved()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
         }
-
-        dismiss()
     }
 
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {

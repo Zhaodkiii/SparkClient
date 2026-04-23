@@ -6,11 +6,16 @@ struct HanlinChatComposerView: View {
     let threadID: UUID
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
+    @ObservedObject var memberContextStore: MemberContextStore
+    let loadMembersUseCase: LoadMembersUseCase
+    let manageMemberUseCase: ManageHomeMemberUseCase
+    let boundMemberID: Int?
     let modelRows: [ChatComposerModelOption]
     let onSend: () -> Void
     let onCancel: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
+    let onSetMemberBinding: (Int?) -> Void
     /// 模型选择变更时立即持久化到线程并触发同步（由 `ChatDetailViewModel.updateThreadModel` 承担）。
     let onPersistSelectedChatModel: (String?) -> Void
 
@@ -33,11 +38,16 @@ struct HanlinChatComposerView: View {
                     threadID: threadID,
                     modelReasoning: modelReasoning,
                     stateStore: stateStore,
+                    memberContextStore: memberContextStore,
+                    loadMembersUseCase: loadMembersUseCase,
+                    manageMemberUseCase: manageMemberUseCase,
+                    boundMemberID: boundMemberID,
                     onSend: onSend,
                     onCancel: onCancel,
                     onRequestFileImport: { showFileImporter = true },
                     onAttachmentsPicked: onAttachmentsPicked,
-                    onRemoveAttachment: onRemoveAttachment
+                    onRemoveAttachment: onRemoveAttachment,
+                    onSetMemberBinding: onSetMemberBinding
                 )
 
                 ChatComposerModelPickerRow(

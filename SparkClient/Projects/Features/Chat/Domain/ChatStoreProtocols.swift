@@ -12,6 +12,7 @@ protocol ChatThreadStoring: Sendable {
     func loadThreadListItem(threadID: UUID) async -> ChatThreadListItem?
     func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread
     func setActiveThread(id: UUID) async
+    func updateThreadMemberBinding(threadID: UUID, memberID: Int?) async
     func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async
     func updateThreadCurrentModelName(threadID: UUID, currentModelName: String?) async
     func updateThreadGenerationConfig(

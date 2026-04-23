@@ -82,7 +82,7 @@ final class ChatListViewModel: ObservableObject {
     func createThread() async {
         let title = L10n.text("chat.default_thread_title")
         let thread = await createThreadUseCase.execute(
-            memberID: memberContextStore.context.selectedMemberID,
+            memberID: nil,
             title: title
         )
         await reloadThreads(selectFirstIfNeeded: false)

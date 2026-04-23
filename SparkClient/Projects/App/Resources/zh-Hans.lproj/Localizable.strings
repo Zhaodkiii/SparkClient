@@ -1262,6 +1262,9 @@
 "common.retry" = "重试";
 
 "chat.settings.current" = "当前";
+"chat.composer.toggle.member_profile" = "结合成员档案";
+"chat.composer.member_profile.none" = "不结合成员档案";
+"chat.composer.member_profile.unknown" = "已选成员";
 
 "health.tool.metric.steps" = "步数";
 "health.tool.metric.distance" = "距离";

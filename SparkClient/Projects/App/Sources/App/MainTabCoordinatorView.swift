@@ -15,6 +15,9 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    @ObservedObject var memberContextStore: MemberContextStore
+    let loadMembersUseCase: LoadMembersUseCase
+    let manageHomeMemberUseCase: ManageHomeMemberUseCase
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
@@ -48,7 +51,10 @@ struct MainTabCoordinatorView: View {
                     stateStore: chatStateStore,
                     listViewModel: chatListViewModel,
                     detailViewModel: chatDetailViewModel,
-                    taskManager: taskManager
+                    taskManager: taskManager,
+                    memberContextStore: memberContextStore,
+                    loadMembersUseCase: loadMembersUseCase,
+                    manageMemberUseCase: manageHomeMemberUseCase
                 )
             } destination: { route in
                 routeDestination(route)
@@ -94,7 +100,10 @@ struct MainTabCoordinatorView: View {
                 stateStore: chatStateStore,
                 listViewModel: chatListViewModel,
                 detailViewModel: chatDetailViewModel,
-                taskManager: taskManager
+                taskManager: taskManager,
+                memberContextStore: memberContextStore,
+                loadMembersUseCase: loadMembersUseCase,
+                manageMemberUseCase: manageHomeMemberUseCase
             )
             .hidesMainTabBarWhenPushed()
             .task(id: threadID) {

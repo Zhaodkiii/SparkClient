@@ -1484,7 +1484,7 @@ final class ToolHub: @unchecked Sendable {
             similarityPayload: [
                 "queried_first": "true",
                 "similar_count": "0",
-                "member_source": invocation.arguments["member_id"] == nil ? "current_member_default" : "explicit_member"
+                "member_source": invocation.arguments["member_id"] == nil ? "thread_member_binding" : "explicit_member"
             ],
             ignoredReason: "",
             confirmedTask: nil,
@@ -1742,17 +1742,13 @@ final class ToolHub: @unchecked Sendable {
         return formatter.string(from: date)
     }
 
-    /// 解析任务归属成员：优先显式 member_id，其次当前成员；都没有时回退首个成员。
+    /// 解析任务归属成员：优先显式 member_id，其次当前会话绑定成员；未绑定时不隐式结合任何成员。
     private func resolveTargetMemberID(invocation: ToolInvocation, context: ToolExecutionContext) async -> Int? {
         if let value = invocation.arguments["member_id"], let explicit = Int(value) {
             return explicit
         }
         if let current = context.memberID {
             return current
-        }
-        if let members = try? await medicalQueryAPI.listMembers(),
-           let first = members.first {
-            return first.id
         }
         return nil
     }

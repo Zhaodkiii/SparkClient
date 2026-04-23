@@ -63,7 +63,10 @@ struct AppCoordinatorView: View {
                         chatListViewModel: mainTab.chatListViewModel,
                         chatDetailViewModel: mainTab.chatDetailViewModel,
                         settingsViewModel: mainTab.settingsViewModel,
-                        aiSettingsViewModel: mainTab.aiSettingsViewModel
+                        aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                        memberContextStore: mainTab.memberContextStore,
+                        loadMembersUseCase: mainTab.loadMembersUseCase,
+                        manageHomeMemberUseCase: mainTab.manageHomeMemberUseCase
                     )
                     .environmentObject(mainTab.memberContextStore)
                     .id(session.accountID)

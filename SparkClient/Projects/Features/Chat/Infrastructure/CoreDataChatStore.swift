@@ -302,6 +302,24 @@ actor CoreDataChatStore {
         }
     }
 
+    func updateThreadMemberBinding(threadID: UUID, memberID: Int?) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(memberID.map { Int64($0) }, forKey: "memberID")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
+    }
+
     func loadMessages(threadID: UUID, limit: Int? = nil, before: Date? = nil) async -> [ChatMessage] {
         (try? await kernel.read { context, accountID in
             guard let accountID else { return [] }

@@ -426,6 +426,27 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    func updateThreadMemberBinding(_ memberID: Int?, for threadID: UUID) async {
+        let current = await chatRepository.loadThread(id: threadID)
+        guard current?.memberID != memberID else { return }
+
+        logger.info(
+            "会话成员档案绑定变更，thread=\(shortID(threadID)), member=\(shortID(memberID))",
+            module: .general
+        )
+        await chatRepository.updateThreadMemberBinding(threadID: threadID, memberID: memberID)
+
+        if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
+            stateStore.upsertThreadListItem(item)
+        }
+
+        do {
+            try await syncChatUseCase.pushOutboxOnly()
+        } catch {
+            logger.warning("会话成员档案绑定上送失败，稍后重试：\(error.localizedDescription)", module: .general)
+        }
+    }
+
     func updateThreadGenerationSettings(_ settings: ChatThreadGenerationSettings, for threadID: UUID) async {
         guard let existing = await chatRepository.loadThread(id: threadID) else { return }
         let next = ChatThreadGenerationSettings(

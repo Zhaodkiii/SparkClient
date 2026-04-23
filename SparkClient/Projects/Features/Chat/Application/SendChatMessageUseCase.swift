@@ -189,7 +189,7 @@ struct SendChatMessageUseCase: Sendable {
                     ChatThreadSnapshot(thread: thread, messages: history)
                 )
             }
-            let contextMemberID = thread.memberID ?? memberID
+            let contextMemberID = thread.memberID
             let memberContextSummary: String
             if let contextMemberID {
                 memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
@@ -370,7 +370,7 @@ struct SendChatMessageUseCase: Sendable {
                 && supportsMultimodal
                 && latestUserMessage.attachments.contains(where: \.isUserImageForMultimodal)
 
-            let contextMemberID = thread.memberID ?? memberID
+            let contextMemberID = thread.memberID
             let memberContextSummary: String
             if let contextMemberID {
                 memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
@@ -476,22 +476,12 @@ struct SendChatMessageUseCase: Sendable {
         }
 
         if let active = await repository.loadActiveThread() {
-            if let memberID, active.memberID != memberID {
-                let title = String(firstUserInput.prefix(18))
-                let created = await repository.createThread(
-                    memberID: memberID,
-                    title: title.isEmpty ? promptLocalizer.newThreadTitle() : title,
-                    imageDeliveryModeRaw: defaultImageDeliveryRaw
-                )
-                await repository.setActiveThread(id: created.id)
-                return created
-            }
             return active
         }
 
         let title = String(firstUserInput.prefix(18))
         let created = await repository.createThread(
-            memberID: memberID,
+            memberID: nil,
             title: title.isEmpty ? promptLocalizer.newThreadTitle() : title,
             imageDeliveryModeRaw: defaultImageDeliveryRaw
         )

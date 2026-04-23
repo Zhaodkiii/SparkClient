@@ -35,6 +35,10 @@ actor CoreDataChatRepository: ChatRepository {
         await store.setActiveThread(id: id)
     }
 
+    func updateThreadMemberBinding(threadID: UUID, memberID: Int?) async {
+        await store.updateThreadMemberBinding(threadID: threadID, memberID: memberID)
+    }
+
     func loadMessages(threadID: UUID, limit: Int? = nil, before: Date? = nil) async -> [ChatMessage] {
         await store.loadMessages(threadID: threadID, limit: limit, before: before)
     }

@@ -16,6 +16,9 @@ struct ChatView: View {
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
     @ObservedObject var taskManager: TaskManager
+    @ObservedObject var memberContextStore: MemberContextStore
+    let loadMembersUseCase: LoadMembersUseCase
+    let manageMemberUseCase: ManageHomeMemberUseCase
 
     @State private var hasLoaded = false
     @State private var conversationListLayoutNonce: UInt64 = 0
@@ -99,6 +102,10 @@ struct ChatView: View {
                 threadID: threadID,
                 modelReasoning: detailViewModel.reasoningToolbarContext,
                 stateStore: stateStore,
+                memberContextStore: memberContextStore,
+                loadMembersUseCase: loadMembersUseCase,
+                manageMemberUseCase: manageMemberUseCase,
+                boundMemberID: stateStore.selectedThread?.memberID,
                 modelRows: detailViewModel.chatScenarioModels,
                 onSend: {
                     KeyboardDismissHelper.dismissKeyboard()
@@ -113,6 +120,9 @@ struct ChatView: View {
                 },
                 onRemoveAttachment: { attachmentID in
                     detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
+                },
+                onSetMemberBinding: { memberID in
+                    Task { await detailViewModel.updateThreadMemberBinding(memberID, for: threadID) }
                 },
                 onPersistSelectedChatModel: { modelName in
                     Task { await detailViewModel.updateThreadModel(modelName, for: threadID) }

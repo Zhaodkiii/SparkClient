@@ -70,6 +70,7 @@ actor ChatSyncEngine {
     func pushOutboxOnly() async throws {
         logger.debug("聊天仅上送 outbox", module: .general)
         try await pushPendingThreadDeletions()
+        try await pushThreads()
         try await pushOutbox()
     }
 
@@ -104,6 +105,7 @@ actor ChatSyncEngine {
         let start = Date()
         logger.debug("聊天同步开始", module: .general)
         try await pushPendingThreadDeletions()
+        try await pushThreads()
         try await pushOutbox()
         let cost = Date().timeIntervalSince(start)
         logger.info("聊天同步完成（仅上送），cost=\(format(cost))s", module: .general)
@@ -113,6 +115,7 @@ actor ChatSyncEngine {
         let start = Date()
         logger.debug("聊天手动刷新同步开始", module: .general)
         try await pushPendingThreadDeletions()
+        try await pushThreads()
         try await pushOutbox()
         let changedThreads = try await pullThreadDeltas(cursor: await repository.loadThreadSyncCursor()?.value)
         try await pullMessagesForChangedThreads(changedThreads)
@@ -127,6 +130,7 @@ actor ChatSyncEngine {
         _ = cursor
         // 按当前策略：realtime 后续拉取链路已移除，仅保留本地待同步数据上送。
         try await pushPendingThreadDeletions()
+        try await pushThreads()
         try await pushOutbox()
         logger.debug("realtime 提示处理完成：仅上送，不执行拉取", module: .general)
     }
@@ -143,6 +147,7 @@ actor ChatSyncEngine {
             let localMessageCount = await repository.countMessages(threadID: threadID)
             if localMessageCount > 0 {
                 try await pushPendingThreadDeletions()
+                try await pushThreads()
                 try await pushOutbox()
                 logger.debug(
                     "会话打开同步完成：本地新建会话仅上送，不执行拉取，thread=\(shortID(threadID))",
@@ -159,6 +164,7 @@ actor ChatSyncEngine {
 
         // 存量会话打开：只拉取该会话的未同步消息（thread_id + cursor），不做全局拉取。
         try await pushPendingThreadDeletions()
+        try await pushThreads()
         try await pushOutbox()
         let persistedCursor = await repository.loadMessageSyncCursor(for: threadID)?.value
         let cursor = if let persistedCursor {
@@ -179,6 +185,10 @@ actor ChatSyncEngine {
         try await outboxPipeline.pushOutbox()
     }
 
+    private func pushThreads() async throws {
+        try await outboxPipeline.pushThreads()
+    }
+
     /// 拉线程增量（会话列表），并落本地。
     @discardableResult
     private func pullThreadDeltas(cursor: String?) async throws -> [ChatThread] {
@@ -189,7 +199,7 @@ actor ChatSyncEngine {
         while true {
             page += 1
             let result = try await remoteAPI.pullThreads(cursor: nextCursor, limit: SyncPaging.threadPageLimit)
-            let threads = result.threads.compactMap(Self.toDomainThread)
+            let threads = result.threads.compactMap(ChatSyncEngineDTOMapper.toDomainThread)
             if threads.isEmpty == false {
                 await repository.upsertRemoteThreads(threads)
                 allThreads.append(contentsOf: threads)
@@ -283,28 +293,6 @@ actor ChatSyncEngine {
         logger.debug(
             "拉取对话增量完成，messages=\(totalMessages), threads=\(touchedThreads.count), pages=\(page), nextCursor=\(nextCursor ?? "-")",
             module: .general
-        )
-    }
-
-    private static func toDomainThread(_ remote: ChatRemoteThreadDTO) -> ChatThread? {
-        guard let scenario = AIScenario(rawValue: remote.scenario) else { return nil }
-        return ChatThread(
-            id: remote.threadID,
-            memberID: nil,
-            title: remote.title,
-            scenario: scenario,
-            currentModelName: remote.currentModelName,
-            temperature: remote.temperature ?? 0.6,
-            topP: remote.topP ?? 1.0,
-            maxTokens: remote.maxTokens ?? 4096,
-            maxMessages: remote.maxMessages ?? 20,
-            rolePrompt: remote.rolePrompt ?? "",
-            imageDeliveryModeRaw: remote.imageDeliveryModeRaw,
-            isDeleted: remote.isDeleted,
-            deletedAt: remote.deletedAt,
-            createdAt: remote.updatedAt,
-            updatedAt: remote.updatedAt,
-            serverUpdatedAt: remote.serverUpdatedAt
         )
     }
 

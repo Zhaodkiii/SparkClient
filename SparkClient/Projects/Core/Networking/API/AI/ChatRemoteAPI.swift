@@ -157,6 +157,7 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let title: String
     let scenario: String
     let patientID: UUID?
+    let memberID: Int?
     let isDeleted: Bool
     let deletedAt: Date?
     let updatedAt: Date
@@ -174,6 +175,7 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         case title
         case scenario
         case patientID = "patient_id"
+        case memberID = "member_id"
         case isDeleted = "is_deleted"
         case deletedAt = "deleted_at"
         case updatedAt = "updated_at"
@@ -260,6 +262,37 @@ struct SparkChatRemoteAPI {
             decoder: ChatRemoteCoding.decoder
         )
         return payload.messages
+    }
+
+    func pushThreads(_ threads: [ChatRemoteThreadDTO]) async throws -> [ChatRemoteThreadDTO] {
+        guard threads.isEmpty == false else { return [] }
+        let requestBody = try ChatRemoteCoding.encoder.encode(ChatThreadPushRequest(threads: threads))
+
+        let operation = CacheableSparkNetworkOperation(
+            name: "Chat.Sync.ThreadPush",
+            apiName: "ChatRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/ai/chat/sync/thread-push/",
+                body: .raw(requestBody, contentType: "application/json"),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "chat.sync.threadPush",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(
+            ChatThreadPushResponse.self,
+            from: response,
+            decoder: ChatRemoteCoding.decoder
+        )
+        return payload.threads
     }
 
     /// - Parameters:
@@ -380,6 +413,14 @@ struct SparkChatRemoteAPI {
 
 private struct ChatPushRequest: Encodable {
     let messages: [ChatRemoteMessageDTO]
+}
+
+private struct ChatThreadPushRequest: Encodable {
+    let threads: [ChatRemoteThreadDTO]
+}
+
+private struct ChatThreadPushResponse: Decodable {
+    let threads: [ChatRemoteThreadDTO]
 }
 
 private struct ChatPushResponse: Decodable {

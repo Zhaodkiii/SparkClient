@@ -36,6 +36,19 @@ struct ChatOutboxPipeline: Sendable {
         }
     }
 
+    func pushThreads() async throws {
+        let threads = await repository.loadThreads().filter { $0.isDeleted == false }
+        guard threads.isEmpty == false else { return }
+        let payload = threads.map(Self.toRemoteThread)
+        logger.debug("准备上送会话元数据，count=\(payload.count)", module: .general)
+        let accepted = try await remoteAPI.pushThreads(payload)
+        let domainThreads = accepted.compactMap(ChatSyncEngineDTOMapper.toDomainThread)
+        if domainThreads.isEmpty == false {
+            await repository.upsertRemoteThreads(domainThreads)
+        }
+        logger.debug("会话元数据上送完成，requested=\(payload.count), accepted=\(accepted.count)", module: .general)
+    }
+
     func pushOutbox() async throws {
         let pending = await outboxStore.pending(limit: 50)
         guard pending.isEmpty == false else { return }
@@ -130,5 +143,26 @@ struct ChatOutboxPipeline: Sendable {
         case (.some, nil): return a
         default: return a.id.uuidString >= b.id.uuidString ? a : b
         }
+    }
+
+    private static func toRemoteThread(_ thread: ChatThread) -> ChatRemoteThreadDTO {
+        ChatRemoteThreadDTO(
+            threadID: thread.id,
+            title: thread.title,
+            scenario: thread.scenario.rawValue,
+            patientID: nil,
+            memberID: thread.memberID,
+            isDeleted: thread.isDeleted,
+            deletedAt: thread.deletedAt,
+            updatedAt: thread.updatedAt,
+            serverUpdatedAt: thread.serverUpdatedAt ?? thread.updatedAt,
+            imageDeliveryModeRaw: thread.imageDeliveryModeRaw,
+            currentModelName: thread.currentModelName,
+            temperature: thread.temperature,
+            topP: thread.topP,
+            maxTokens: thread.maxTokens,
+            maxMessages: thread.maxMessages,
+            rolePrompt: thread.rolePrompt
+        )
     }
 }

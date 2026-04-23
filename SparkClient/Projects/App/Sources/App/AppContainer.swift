@@ -627,7 +627,9 @@ final class AppContainer {
             chatDetailViewModel: chatDetailViewModel,
             settingsViewModel: makeSettingsViewModel(),
             aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
-            memberContextStore: memberContextStore
+            memberContextStore: memberContextStore,
+            loadMembersUseCase: loadMembersUseCase,
+            manageHomeMemberUseCase: manageHomeMemberUseCase
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
         return created
