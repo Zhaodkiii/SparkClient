@@ -6,11 +6,26 @@ struct ChatComposerRuntimeTogglesRow: View {
     let threadID: UUID
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
+    @State private var expandedToggle: RuntimeToggleKind?
+    @State private var collapseToken = UUID()
 
     /// 与 HealthClient `ActionButtonsView` 中展示思考深度菜单的厂商列表一致（支持 `reasoning_effort` / `thinking_budget` 调节的云端模型）。
     private static let providersShowingReasoningDepthMenu: Set<String> = [
         "OPENAI", "GOOGLE", "XAI", "QWEN", "MODELSCOPE", "SILICONCLOUD", "WENXIN", "DOUBAO"
     ]
+
+    private enum RuntimeToggleKind {
+        case tools
+        case knowledge
+        case web
+        case reasoning
+    }
+
+    private let autoCollapseDelay: TimeInterval = 1
+
+    private var toggleAnimation: Animation {
+        .spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.5)
+    }
 
     private var flags: ChatComposerRuntimeFlags {
         stateStore.composerDraft(for: threadID).runtimeFlags
@@ -86,7 +101,7 @@ struct ChatComposerRuntimeTogglesRow: View {
 
     private var toolToggle: some View {
         Button {
-            stateStore.updateRuntimeFlags(for: threadID) { $0.useTools.toggle() }
+            updateRuntimeToggle(.tools) { $0.useTools.toggle() }
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: "hammer.circle")
@@ -96,10 +111,11 @@ struct ChatComposerRuntimeTogglesRow: View {
                     .foregroundStyle(
                         flags.useTools ? Color(uiColor: .systemBrown) : Color(.systemGray)
                     )
-                if flags.useTools {
+                    .scaleEffect(expandedToggle == .tools ? 0.86 : 1)
+                if expandedToggle == .tools {
                     Text(L10n.text("chat.composer.toggle.tools"))
                         .font(.caption)
-                        .foregroundStyle(Color(uiColor: .systemBrown))
+                        .foregroundStyle(flags.useTools ? Color(uiColor: .systemBrown) : Color(.systemGray))
                         .padding(.trailing, 12)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
@@ -114,11 +130,13 @@ struct ChatComposerRuntimeTogglesRow: View {
                 .strokeBorder(bgTool, lineWidth: 1)
         )
         .accessibilityLabel(L10n.text("chat.composer.toggle.tools"))
+        .animation(toggleAnimation, value: flags.useTools)
+        .animation(toggleAnimation, value: expandedToggle)
     }
 
     private var knowledgeToggle: some View {
         Button {
-            stateStore.updateRuntimeFlags(for: threadID) { $0.useKnowledgeBag.toggle() }
+            updateRuntimeToggle(.knowledge) { $0.useKnowledgeBag.toggle() }
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: "backpack.circle")
@@ -128,10 +146,11 @@ struct ChatComposerRuntimeTogglesRow: View {
                     .foregroundStyle(
                         flags.useKnowledgeBag ? Color(uiColor: .systemBlue) : Color(.systemGray)
                     )
-                if flags.useKnowledgeBag {
+                    .scaleEffect(expandedToggle == .knowledge ? 0.86 : 1)
+                if expandedToggle == .knowledge {
                     Text(L10n.text("chat.composer.toggle.knowledge"))
                         .font(.caption)
-                        .foregroundStyle(Color(uiColor: .systemBlue))
+                        .foregroundStyle(flags.useKnowledgeBag ? Color(uiColor: .systemBlue) : Color(.systemGray))
                         .padding(.trailing, 12)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
@@ -146,11 +165,13 @@ struct ChatComposerRuntimeTogglesRow: View {
                 .strokeBorder(bgKnowledge, lineWidth: 1)
         )
         .accessibilityLabel(L10n.text("chat.composer.toggle.knowledge"))
+        .animation(toggleAnimation, value: flags.useKnowledgeBag)
+        .animation(toggleAnimation, value: expandedToggle)
     }
 
     private var webToggle: some View {
         Button {
-            stateStore.updateRuntimeFlags(for: threadID) { $0.useWebSearch.toggle() }
+            updateRuntimeToggle(.web) { $0.useWebSearch.toggle() }
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: "network")
@@ -160,10 +181,11 @@ struct ChatComposerRuntimeTogglesRow: View {
                     .foregroundStyle(
                         flags.useWebSearch ? Color(uiColor: .systemCyan) : Color(.systemGray)
                     )
-                if flags.useWebSearch {
+                    .scaleEffect(expandedToggle == .web ? 0.86 : 1)
+                if expandedToggle == .web {
                     Text(L10n.text("chat.composer.toggle.web"))
                         .font(.caption)
-                        .foregroundStyle(Color(uiColor: .systemCyan))
+                        .foregroundStyle(flags.useWebSearch ? Color(uiColor: .systemCyan) : Color(.systemGray))
                         .padding(.trailing, 12)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
@@ -178,11 +200,13 @@ struct ChatComposerRuntimeTogglesRow: View {
                 .strokeBorder(bgSearch, lineWidth: 1)
         )
         .accessibilityLabel(L10n.text("chat.composer.toggle.web"))
+        .animation(toggleAnimation, value: flags.useWebSearch)
+        .animation(toggleAnimation, value: expandedToggle)
     }
 
     private var thinkingToggle: some View {
         Button {
-            stateStore.updateRuntimeFlags(for: threadID) { $0.reasoningEnabled.toggle() }
+            updateRuntimeToggle(.reasoning) { $0.reasoningEnabled.toggle() }
         } label: {
             HStack(spacing: 0) {
                 Image(systemName: "lightbulb.circle")
@@ -192,16 +216,17 @@ struct ChatComposerRuntimeTogglesRow: View {
                     .foregroundStyle(
                         flags.reasoningEnabled ? Color(uiColor: .systemPurple) : Color(.systemGray)
                     )
-                if flags.reasoningEnabled {
+                    .scaleEffect(expandedToggle == .reasoning ? 0.86 : 1)
+                if expandedToggle == .reasoning {
                     Text(L10n.text("chat.composer.toggle.deep_thinking"))
                         .font(.caption)
-                        .foregroundStyle(Color(uiColor: .systemPurple))
+                        .foregroundStyle(flags.reasoningEnabled ? Color(uiColor: .systemPurple) : Color(.systemGray))
                         .padding(.trailing, 4)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
 
-                    if showsReasoningDepthMenu {
-                        reasoningEffortMenu
-                    }
+                if flags.reasoningEnabled && showsReasoningDepthMenu {
+                    reasoningEffortMenu
                 }
             }
         }
@@ -214,11 +239,13 @@ struct ChatComposerRuntimeTogglesRow: View {
                 .strokeBorder(bgReasoning, lineWidth: 1)
         )
         .accessibilityLabel(L10n.text("chat.composer.toggle.deep_thinking"))
+        .animation(toggleAnimation, value: flags.reasoningEnabled)
+        .animation(toggleAnimation, value: expandedToggle)
     }
 
     private var reasoningEffortMenu: some View {
         Menu {
-            ForEach(0 ... 3, id: \.self) { tier in
+            ForEach(1 ... 3, id: \.self) { tier in
                 Button {
                     stateStore.updateRuntimeFlags(for: threadID) { $0.reasoningEffortTier = tier }
                 } label: {
@@ -237,6 +264,29 @@ struct ChatComposerRuntimeTogglesRow: View {
                     .font(.caption)
                     .foregroundStyle(Color(uiColor: .systemPurple))
                     .padding(.trailing, 8)
+            }
+        }
+    }
+
+    private func updateRuntimeToggle(
+        _ kind: RuntimeToggleKind,
+        update: (inout ChatComposerRuntimeFlags) -> Void
+    ) {
+        withAnimation(toggleAnimation) {
+            stateStore.updateRuntimeFlags(for: threadID, update: update)
+            expandedToggle = kind
+        }
+        scheduleAutoCollapse(for: kind)
+    }
+
+    private func scheduleAutoCollapse(for kind: RuntimeToggleKind) {
+        let token = UUID()
+        collapseToken = token
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + autoCollapseDelay) {
+            guard collapseToken == token, expandedToggle == kind else { return }
+            withAnimation(toggleAnimation) {
+                expandedToggle = nil
             }
         }
     }

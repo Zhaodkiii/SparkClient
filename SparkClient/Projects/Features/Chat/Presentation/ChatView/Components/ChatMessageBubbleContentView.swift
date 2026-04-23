@@ -146,7 +146,7 @@ struct ChatMessageBubbleContentView: View {
             }
             if message.role == .assistant,
                let sleep = metadata.sleepVisualization {
-                ChatSleepCardView(model: sleep)
+                ChatSleepVisualizationMessageCard(model: sleep)
             }
 
             if message.role == .assistant,

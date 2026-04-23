@@ -1233,6 +1233,23 @@
 "chat.medical_card.case.title" = "Medical case";
 "chat.medical_card.extraction_failed.title" = "Extraction incomplete";
 "chat.medical_card.extraction_failed.body" = "Please edit the record manually or retry.";
+"chat.sleep.visualization.title" = "Sleep Data";
+"chat.sleep.timeline.title" = "Sleep";
+"chat.sleep.comparison.title" = "Sleep Comparison";
+"chat.sleep.comparison.subtitle" = "Last %d days";
+"chat.sleep.comparison.mode.structure" = "Structure";
+"chat.sleep.comparison.mode.duration" = "Duration";
+"chat.sleep.average.title" = "Average Sleep";
+"chat.sleep.average.date_range" = "%@ to %@";
+"chat.sleep.unit.hour" = "h";
+"chat.sleep.unit.minute" = "m";
+"chat.sleep.legend.hours_minutes" = "%dh %dm";
+"chat.sleep.legend.minutes" = "%dm";
+"chat.sleep.stage.deep" = "Deep";
+"chat.sleep.stage.core" = "Core";
+"chat.sleep.stage.rem" = "REM";
+"chat.sleep.stage.awake" = "Awake";
+"chat.sleep.stage.unspecified" = "Other";
 "common.error" = "Error";
 "common.retry" = "Retry";
 

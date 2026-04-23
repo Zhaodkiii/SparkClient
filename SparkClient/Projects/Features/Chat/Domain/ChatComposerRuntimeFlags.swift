@@ -7,7 +7,7 @@ struct ChatComposerRuntimeFlags: Equatable, Sendable {
     var useWebSearch: Bool = true
     var reasoningEnabled: Bool = false
     /// 0 = minimal（不思考），1 = low，2 = medium，3 = high（与豆包/OpenAI 等 `reasoning_effort` 对齐）。
-    var reasoningEffortTier: Int = 0
+    var reasoningEffortTier: Int = 1
     /// `nil` 表示使用配置解析的默认模型（不强制 runtime override）。
     var selectedChatModelName: String?
 }

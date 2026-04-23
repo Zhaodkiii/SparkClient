@@ -13,7 +13,7 @@ struct ChatToolContentBlockView: View {
         VStack(alignment: .leading) {
             ToggleButton(
                 title: L10n.text("chat.bubble.tool.title"),
-                timeText: toolName,
+                timeText: SparkToolName.displayName(for: toolName),
                 isExpanded: $expanded
             )
 

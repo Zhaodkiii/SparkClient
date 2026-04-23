@@ -8,27 +8,24 @@ enum ChatAttachmentFileDownload {
         fileTransferService: FileTransferService,
         logger: Logger
     ) async throws -> URL {
-        guard let remoteURL = attachment.url else {
-            throw SparkNetworkError.decoding(
-                NSError(
-                    domain: "ChatAttachmentDownload",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "附件缺少可下载地址"]
-                )
-            )
-        }
-        let resolvedPath = remoteURL.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
         let parsed = attachment.sparkClientOSSFileUUIDAndFileName()
         let fileUUID = parsed?.fileUUID ?? attachment.id.uuidString
+        let remoteURL = attachment.url
         let originalName =
             parsed?.fileName
-            ?? remoteURL.lastPathComponent.removingPercentEncoding
+            ?? remoteURL?.lastPathComponent.removingPercentEncoding
             ?? "image.jpg"
         let mimeType = FileUtilities.mimeType(forName: originalName)
+
+        // OSS objectKey 从 URL 路径反推（去掉首尾斜杠），供预签名 URL 生成与缓存命中判断。
+        let objectKey: String? = remoteURL.map { url in
+            url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        }
+
         let managedFile = ManagedFileRecord(
             id: attachment.fileId ?? 0,
             fileUUID: fileUUID,
-            filePath: resolvedPath,
+            filePath: remoteURL?.absoluteString ?? "",
             originalName: originalName,
             fileSize: 0,
             mimeType: mimeType,
@@ -37,13 +34,52 @@ enum ChatAttachmentFileDownload {
             businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
             businessID: "",
             createdAt: "",
-            objectKey: nil,
+            objectKey: objectKey,
             storageType: nil
         )
+
+        // 优先命中本地缓存（上传时已落盘），避免不必要的网络请求。
         if let cached = await fileTransferService.cachedURL(file: managedFile) {
             return cached
         }
-        logger.debug("聊天附件触发公共下载，fileID=\(managedFile.id)", module: .general)
+
+        guard remoteURL != nil else {
+            throw SparkNetworkError.decoding(
+                NSError(
+                    domain: "ChatAttachmentDownload",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "附件缺少可下载地址且本地无缓存"]
+                )
+            )
+        }
+
+        logger.debug("聊天附件触发远端下载，fileID=\(managedFile.id)", module: .general)
+
+        // 私有 OSS bucket 需用预签名 URL；获取失败则回退到直链（公开桶或调试场景）。
+        if let key = objectKey, key.isEmpty == false {
+            do {
+                let presignedURL = try await fileTransferService.makePresignedDownloadURL(objectKey: key)
+                let presignedRecord = ManagedFileRecord(
+                    id: managedFile.id,
+                    fileUUID: managedFile.fileUUID,
+                    filePath: presignedURL.absoluteString,
+                    originalName: managedFile.originalName,
+                    fileSize: managedFile.fileSize,
+                    mimeType: managedFile.mimeType,
+                    fileMd5: managedFile.fileMd5,
+                    isPublic: managedFile.isPublic,
+                    businessType: managedFile.businessType,
+                    businessID: managedFile.businessID,
+                    createdAt: managedFile.createdAt,
+                    objectKey: managedFile.objectKey,
+                    storageType: managedFile.storageType
+                )
+                return try await fileTransferService.download(file: presignedRecord)
+            } catch {
+                logger.debug("预签名 URL 生成失败，回退直链下载: \(error.localizedDescription)", module: .general)
+            }
+        }
+
         return try await fileTransferService.download(file: managedFile)
     }
 }

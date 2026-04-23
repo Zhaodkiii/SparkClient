@@ -44,11 +44,11 @@ struct ChatHealthSleepModel: Codable, Equatable, Sendable {
 
         var displayName: String {
             switch self {
-            case .deep: return "深度"
-            case .core: return "核心"
-            case .rem: return "REM"
-            case .awake: return "清醒"
-            case .unspecified: return "其他"
+            case .deep: return L10n.text("chat.sleep.stage.deep")
+            case .core: return L10n.text("chat.sleep.stage.core")
+            case .rem: return L10n.text("chat.sleep.stage.rem")
+            case .awake: return L10n.text("chat.sleep.stage.awake")
+            case .unspecified: return L10n.text("chat.sleep.stage.unspecified")
             }
         }
     }
