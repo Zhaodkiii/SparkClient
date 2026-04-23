@@ -43,6 +43,7 @@ struct SendChatMessageUseCase: Sendable {
         assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        cancellationToken: AIRuntimeCancellationToken? = nil,
         onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
         onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
@@ -61,6 +62,7 @@ struct SendChatMessageUseCase: Sendable {
         )
 
         do {
+            try cancellationToken?.checkCancellation()
             let thread = try await resolveThread(
                 existingThreadID: threadID,
                 memberID: memberID,
@@ -215,6 +217,7 @@ struct SendChatMessageUseCase: Sendable {
                 topP: thread.topP,
                 maxTokens: thread.maxTokens,
                 maxMessages: thread.maxMessages,
+                cancellationToken: cancellationToken,
                 deliverMultimodalImages: deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
                 onPartial: onAssistantPartial
@@ -258,6 +261,24 @@ struct SendChatMessageUseCase: Sendable {
                 deliveryState: .pending
             )
 
+            if let notice = finishReasonNoticeText(output.finishReason) {
+                _ = try await repository.appendMessage(
+                    threadID: thread.id,
+                    role: .system,
+                    kind: .system,
+                    content: notice,
+                    attachments: [],
+                    reasoningContent: nil,
+                    reasoningDurationMs: nil,
+                    reasoningExpanded: false,
+                    reasoningVisibility: .full,
+                    clientMessageID: UUID(),
+                    serverMessageID: nil,
+                    deliveryState: .pending
+                )
+                logger.warning("AI 完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
+            }
+
             await OutboxCoordinator.pushPendingMessages(
                 chatSyncSupervisor: chatSyncSupervisor,
                 logger: logger
@@ -280,6 +301,14 @@ struct SendChatMessageUseCase: Sendable {
         }
     }
 
+    func pushPendingMessages(source: String) async {
+        logger.debug("触发对话待推送消息同步，source=\(source)", module: .general)
+        await OutboxCoordinator.pushPendingMessages(
+            chatSyncSupervisor: chatSyncSupervisor,
+            logger: logger
+        )
+    }
+
     func executeRegenerateReply(
         threadID: UUID,
         memberID: Int? = nil,
@@ -287,6 +316,7 @@ struct SendChatMessageUseCase: Sendable {
         assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        cancellationToken: AIRuntimeCancellationToken? = nil,
         onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatThreadSnapshot {
         let bundles = try await aiConfigCenter.effectiveScenarioBundles()
@@ -297,6 +327,7 @@ struct SendChatMessageUseCase: Sendable {
         )
 
         do {
+            try cancellationToken?.checkCancellation()
             guard let thread = await repository.loadThread(id: threadID) else {
                 throw ChatFeatureError.threadNotFound
             }
@@ -361,6 +392,7 @@ struct SendChatMessageUseCase: Sendable {
                 topP: thread.topP,
                 maxTokens: thread.maxTokens,
                 maxMessages: thread.maxMessages,
+                cancellationToken: cancellationToken,
                 deliverMultimodalImages: deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
                 onPartial: onAssistantPartial
@@ -387,6 +419,24 @@ struct SendChatMessageUseCase: Sendable {
                 serverMessageID: nil,
                 deliveryState: .pending
             )
+
+            if let notice = finishReasonNoticeText(output.finishReason) {
+                _ = try await repository.appendMessage(
+                    threadID: thread.id,
+                    role: .system,
+                    kind: .system,
+                    content: notice,
+                    attachments: [],
+                    reasoningContent: nil,
+                    reasoningDurationMs: nil,
+                    reasoningExpanded: false,
+                    reasoningVisibility: .full,
+                    clientMessageID: UUID(),
+                    serverMessageID: nil,
+                    deliveryState: .pending
+                )
+                logger.warning("重新生成完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
+            }
 
             await OutboxCoordinator.pushPendingMessages(
                 chatSyncSupervisor: chatSyncSupervisor,
@@ -447,6 +497,21 @@ struct SendChatMessageUseCase: Sendable {
         )
         await repository.setActiveThread(id: created.id)
         return created
+    }
+
+    private func finishReasonNoticeText(_ rawReason: String?) -> String? {
+        let reason = rawReason?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        guard reason.isEmpty == false else { return nil }
+
+        if reason == "length" || reason.contains("max_token") {
+            return L10n.text("chat.finish_reason.length")
+        }
+        if reason == "sensitive" || reason == "content_filter" || reason.contains("safety") {
+            return L10n.text("chat.finish_reason.sensitive")
+        }
+        return nil
     }
 
     private func shortID(_ value: Int?) -> String {

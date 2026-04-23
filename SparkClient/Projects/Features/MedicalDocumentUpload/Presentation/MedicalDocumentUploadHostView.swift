@@ -27,16 +27,13 @@ struct MedicalDocumentUploadHostView: View {
                     progress: $viewModel.progress,
                     needsManualModeSelection: $viewModel.needsManualModeSelection,
                     onCancel: {
-                        // 取消识别流程，重置到选择状态但保留文件
-                        viewModel.resetRecognitionState()
-                        viewModel.stage = .picking
+                        // 取消识别流程，重置到选择状态但保留文件，并停止后台 AI 抽取。
+                        viewModel.cancelRecognition()
                     },
                     onRestart: {
                         // 重新识别，保留已选文件
                         viewModel.resetRecognitionState()
-                        Task {
-                            await viewModel.startRecognition()
-                        }
+                        viewModel.startRecognitionTask()
                     },
                     onReturnToPicker: {
                         // 返回文件选择界面
@@ -48,9 +45,7 @@ struct MedicalDocumentUploadHostView: View {
                         viewModel.selectedKind = kind
                         viewModel.needsManualModeSelection = false
                         // 继续识别流程
-                        Task {
-                            await viewModel.startRecognition()
-                        }
+                        viewModel.startRecognitionTask()
                     }
                 )
             case .result:

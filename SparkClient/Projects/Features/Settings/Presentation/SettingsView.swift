@@ -29,6 +29,7 @@ struct SettingsView: View {
             Section(L10n.text("settings.section.ai")) {
                 NavigationLink {
                     AISettingsView(viewModel: aiSettingsViewModel)
+                        .hidesMainTabBarWhenPushed()
                 } label: {
                     HStack {
                         Label(

@@ -252,6 +252,7 @@ struct AIRuntimeTextRequest: Sendable {
     let temperature: Double?                     // 线程级温度覆盖
     let topP: Double?                            // 线程级 top_p 覆盖
     let maxTokens: Int?                          // 线程级最大回复长度覆盖
+    let cancellationToken: AIRuntimeCancellationToken? // 当前 AI 生成/抽取流程的协作式取消令牌
 
     /// 构造方法（提供默认值）
     init(
@@ -264,7 +265,8 @@ struct AIRuntimeTextRequest: Sendable {
         providerCompanyUppercased: String? = nil,
         temperature: Double? = nil,
         topP: Double? = nil,
-        maxTokens: Int? = nil
+        maxTokens: Int? = nil,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) {
         self.scenario = scenario
         self.messages = messages
@@ -276,6 +278,7 @@ struct AIRuntimeTextRequest: Sendable {
         self.temperature = temperature
         self.topP = topP
         self.maxTokens = maxTokens
+        self.cancellationToken = cancellationToken
     }
 }
 
@@ -340,18 +343,21 @@ enum AIRuntimeError: LocalizedError {
     case invalidResponse             // 响应格式非法无法解析
     case transport(URLError)          // 网络传输错误
     case server(statusCode: Int, message: String)  // 服务器返回错误
+    case emptyOutput                  // 模型完成但没有返回可展示内容
 
     /// 错误本地化描述
     var errorDescription: String? {
         switch self {
         case .emptyMessages:
-            return "消息为空，无法调用 AI 推理。"
+            return L10n.text("ai.error.empty_messages")
         case .invalidResponse:
-            return "AI 返回结果不可解析。"
+            return L10n.text("ai.error.invalid_response")
         case .transport(let error):
             return error.localizedDescription
         case .server(_, let message):
             return message
+        case .emptyOutput:
+            return L10n.text("chat.error.empty_output")
         }
     }
 }

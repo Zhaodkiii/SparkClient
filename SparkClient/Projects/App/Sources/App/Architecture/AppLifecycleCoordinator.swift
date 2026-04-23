@@ -6,10 +6,16 @@ import Foundation
 final class AppLifecycleCoordinator: ObservableObject {
     let sessionStore: AppSessionStore
 
+    /// 根视图直接观察的会话状态。
+    ///
+    /// 不让 SwiftUI 直接读取嵌套的 `sessionStore.state`，否则 `AppSessionStore` 变化不会触发
+    /// `AppLifecycleCoordinator.objectWillChange`，登录成功后根视图可能停留在 signedOut。
+    @Published private(set) var sessionState: AppSessionStore.State = .loading
     @Published private(set) var preparedAccountID: Int64?
 
     private let container: AppContainer
     private let logger: Logger
+    private var cancellables: Set<AnyCancellable> = []
     private var isHandlingServerAuthInvalidation = false
     private var preparingAccountID: Int64?
     private var didHandleSignedOutState = false
@@ -18,6 +24,14 @@ final class AppLifecycleCoordinator: ObservableObject {
         self.container = container
         self.logger = container.logger
         self.sessionStore = container.sessionStore
+        self.sessionState = container.sessionStore.state
+        container.sessionStore.$state
+            .removeDuplicates()
+            .sink { [weak self] state in
+                self?.sessionState = state
+                self?.logger.debug("根生命周期：会话状态已同步到根视图 state=\(state.logValue)", module: .auth)
+            }
+            .store(in: &cancellables)
         logger.info("AppLifecycleCoordinator 已初始化", module: .general)
     }
 
@@ -81,5 +95,18 @@ final class AppLifecycleCoordinator: ObservableObject {
         isHandlingServerAuthInvalidation = true
         defer { isHandlingServerAuthInvalidation = false }
         await container.forceSignOutAfterServerAuthInvalidation()
+    }
+}
+
+private extension AppSessionStore.State {
+    var logValue: String {
+        switch self {
+        case .loading:
+            return "loading"
+        case .signedOut:
+            return "signedOut"
+        case .signedIn(let session):
+            return "signedIn(\(session.accountID))"
+        }
     }
 }

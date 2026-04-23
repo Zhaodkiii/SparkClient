@@ -19,6 +19,7 @@ struct KnowledgeLibraryView: View {
                     ForEach(viewModel.documents) { document in
                         NavigationLink {
                             KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: document.id)
+                                .hidesMainTabBarWhenPushed()
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(document.title)
@@ -55,6 +56,7 @@ struct KnowledgeLibraryView: View {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     NavigationLink {
                         KnowledgeSearchView(dependencies: dependencies, viewModel: viewModel)
+                            .hidesMainTabBarWhenPushed()
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
@@ -90,6 +92,7 @@ struct KnowledgeLibraryView: View {
                 destination: Group {
                     if let id = pendingDetailDocumentID {
                         KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: id)
+                            .hidesMainTabBarWhenPushed()
                     }
                 },
                 isActive: Binding(

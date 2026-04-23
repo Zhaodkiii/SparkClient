@@ -8,6 +8,7 @@ struct HanlinChatInputView: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     let onSend: () -> Void
+    let onCancel: () -> Void
     let onRequestFileImport: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
@@ -245,11 +246,15 @@ struct HanlinChatInputView: View {
     private var trailingSendControl: some View {
         Group {
             if stateStore.isSending {
-                Image(systemName: "stop.circle.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-                    .foregroundStyle(Color(uiColor: .systemRed))
+                Button(action: onCancel) {
+                    Image(systemName: "stop.circle.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 32, height: 32)
+                        .foregroundStyle(Color(uiColor: .systemRed))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("chat.input.stop"))
             } else if canSendPayload {
                 Button(action: onSend) {
                     Image(systemName: "arrowtriangle.up.circle.fill")

@@ -81,7 +81,11 @@ struct ChatView: View {
                 stateStore: stateStore,
                 onSend: {
                     KeyboardDismissHelper.dismissKeyboard()
-                    Task { await detailViewModel.sendCurrentDraft() }
+                    detailViewModel.startSendingCurrentDraft()
+                },
+                onCancel: {
+                    KeyboardDismissHelper.dismissKeyboard()
+                    detailViewModel.cancelCurrentGeneration()
                 },
                 onAttachmentsPicked: { attachments in
                     detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
@@ -98,7 +102,11 @@ struct ChatView: View {
                 modelRows: detailViewModel.chatScenarioModels,
                 onSend: {
                     KeyboardDismissHelper.dismissKeyboard()
-                    Task { await detailViewModel.sendCurrentDraft() }
+                    detailViewModel.startSendingCurrentDraft()
+                },
+                onCancel: {
+                    KeyboardDismissHelper.dismissKeyboard()
+                    detailViewModel.cancelCurrentGeneration()
                 },
                 onAttachmentsPicked: { attachments in
                     detailViewModel.enqueueComposerAttachments(attachments, for: threadID)

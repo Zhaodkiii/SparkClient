@@ -38,6 +38,7 @@ struct PrescriptionBatchDetailPage: View {
                     ForEach(medications, id: \.id) { medication in
                         NavigationLink {
                             MedicationDetailPage(item: medication)
+                                .hidesMainTabBarWhenPushed()
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(medication.drugName.nonEmpty ?? medication.genericName.nonEmpty ?? "")

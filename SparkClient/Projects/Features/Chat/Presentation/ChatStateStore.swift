@@ -80,6 +80,11 @@ final class ChatStateStore: ObservableObject {
         )
     }
 
+    /// 当前流式助手占位的消息快照。用于用户主动中断时，把已生成内容固化为正式消息。
+    func activeStreamingAssistantMessage(for threadID: UUID) -> ChatMessage? {
+        streamingTailMessage(for: threadID)
+    }
+
     func isStreamingAssistantActive(for threadID: UUID) -> Bool {
         streamingAssistants[threadID] != nil
     }

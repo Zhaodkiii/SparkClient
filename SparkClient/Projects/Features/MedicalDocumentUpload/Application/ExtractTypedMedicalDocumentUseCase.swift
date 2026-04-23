@@ -6,8 +6,15 @@ struct ExtractTypedMedicalDocumentUseCase: Sendable {
     func execute(
         memberID: Int,
         files: [MedicalUploadLocalFile],
-        selectedKind: MedicalDocumentKind
+        selectedKind: MedicalDocumentKind,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
-        try await extractor.extract(memberID: memberID, files: files, selectedKind: selectedKind)
+        try cancellationToken?.checkCancellation()
+        return try await extractor.extract(
+            memberID: memberID,
+            files: files,
+            selectedKind: selectedKind,
+            cancellationToken: cancellationToken
+        )
     }
 }

@@ -26,6 +26,7 @@ struct KnowledgeSearchView: View {
                 ForEach(viewModel.searchResults) { result in
                     NavigationLink {
                         KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: result.documentID)
+                            .hidesMainTabBarWhenPushed()
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(result.title)

@@ -112,6 +112,7 @@ struct MedicationPrescriptionBatchCard: View {
                         item: item,
                         fileTransferService: fileTransferService
                     )
+                    .hidesMainTabBarWhenPushed()
                 } label: {
                     HStack(spacing: 4) {
                         Text(L10n.text("home.medical.list.medications.view_detail"))

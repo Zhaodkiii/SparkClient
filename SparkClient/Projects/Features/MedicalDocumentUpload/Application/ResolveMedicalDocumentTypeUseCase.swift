@@ -5,8 +5,14 @@ struct ResolveMedicalDocumentTypeUseCase: Sendable {
 
     func execute(
         selectedKind: MedicalDocumentKind,
-        mergedOCRText: String
+        mergedOCRText: String,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypeResolution {
-        try await resolver.resolve(selectedKind: selectedKind, mergedOCRText: mergedOCRText)
+        try cancellationToken?.checkCancellation()
+        return try await resolver.resolve(
+            selectedKind: selectedKind,
+            mergedOCRText: mergedOCRText,
+            cancellationToken: cancellationToken
+        )
     }
 }

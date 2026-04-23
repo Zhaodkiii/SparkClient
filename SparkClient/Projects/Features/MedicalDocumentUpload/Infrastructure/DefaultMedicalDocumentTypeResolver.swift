@@ -215,8 +215,10 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
     /// - Throws: 调用AI服务失败时抛出异常
     func resolve(
         selectedKind: MedicalDocumentKind,
-        mergedOCRText: String
+        mergedOCRText: String,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypeResolution {
+        try cancellationToken?.checkCancellation()
         logger.info("开始解析医疗文档类型, 预选值: \(selectedKind.rawValue)", module: .medical)
         // 1. 优先逻辑：用户手动选择了类型，直接返回结果，置信度100%
         if selectedKind != .auto {
@@ -235,6 +237,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
             return rules
         }
 
+        try cancellationToken?.checkCancellation()
         // 3. 兜底逻辑：规则匹配失败，调用AI大模型进行智能识别
         logger.info("本地规则未命中，触发 AI 大模型识别", module: .medical)
         // 构建AI识别文档类型的提示词
@@ -245,9 +248,11 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
                 request: AIRuntimeTextRequest(
                     scenario: .medicalDocumentTypeRecognition, // 场景：医疗文档类型识别
                     messages: [AIRuntimeMessage(role: .user, content: prompt)], // 传入用户提示词
-                    reasoning: .disabled // 关闭AI推理步骤，仅输出结果
+                    reasoning: .disabled, // 关闭AI推理步骤，仅输出结果
+                    cancellationToken: cancellationToken
                 )
-            )
+            ),
+            cancellationToken: cancellationToken
         )
         
         // 解析AI返回的结果，解析失败则使用默认值
@@ -387,13 +392,15 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
     /// - Parameter stream: AI异步抛出流
     /// - Returns: 拼接后的完整响应文本
     private func collectResponseText(
-        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
+        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> String {
         var bufferedText = ""  // 缓存流式增量文本
         var completedText: String? // 最终完整响应文本
         
         // 遍历异步流，处理每一个事件
         for try await event in stream {
+            try cancellationToken?.checkCancellation()
             switch event {
             case .textDelta(let delta):
                 // 增量文本：追加到缓存
@@ -407,6 +414,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
             }
         }
         
+        try cancellationToken?.checkCancellation()
         // 优先返回完整响应，无则返回缓存的增量文本
         return completedText ?? bufferedText
     }

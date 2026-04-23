@@ -296,7 +296,7 @@ struct MedicalDocumentUploadPickingView: View {
                 .frame(width: (geometry.size.width - 12 - 32) / 3)
 
                 Button {
-                    Task { await viewModel.startRecognition() }
+                    viewModel.startRecognitionTask()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")

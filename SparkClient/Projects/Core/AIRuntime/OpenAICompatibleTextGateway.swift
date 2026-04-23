@@ -37,6 +37,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         client: AIClient,
         request runtimeRequest: AIRuntimeTextRequest
     ) async throws -> AsyncThrowingStream<AIRuntimeStreamEvent, Error> {
+        try runtimeRequest.cancellationToken?.checkCancellation()
         // 记录请求开始时间
         let start = Date()
         // 构建推理相关的额外参数、后缀开关、思考开关
@@ -116,10 +117,12 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
 
         // 返回异步抛出流，处理流式响应
         return AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 do {
+                    try runtimeRequest.cancellationToken?.checkCancellation()
                     // 发送网络请求，获取异步字节流
                     let (bytes, response) = try await session.bytes(for: request)
+                    try runtimeRequest.cancellationToken?.checkCancellation()
                     
                     // 校验响应类型
                     guard let httpResponse = response as? HTTPURLResponse else {
@@ -145,9 +148,13 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     }
 
                     // 解析流式/非流式响应，持续推送事件
-                    let completion = try await parseStreamingOrSingleResponse(bytes: bytes) { event in
+                    let completion = try await parseStreamingOrSingleResponse(
+                        bytes: bytes,
+                        cancellationToken: runtimeRequest.cancellationToken
+                    ) { event in
                         continuation.yield(event)
                     }
+                    try runtimeRequest.cancellationToken?.checkCancellation()
                     
                     // 解析最终响应数据
                     let usage = completion.usage
@@ -180,12 +187,35 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                         module: .aiConfig
                     )
                     continuation.finish()
+                } catch is CancellationError {
+                    logger.info(
+                        "AI 流式网关请求已取消，model=\(client.model), cost=\(format(Date().timeIntervalSince(start)))s",
+                        module: .aiConfig
+                    )
+                    continuation.finish(throwing: CancellationError())
+                } catch let urlError as URLError where urlError.code == .cancelled || runtimeRequest.cancellationToken?.isCancelled == true || Task.isCancelled {
+                    logger.info(
+                        "AI 流式网关网络任务已取消，model=\(client.model), cost=\(format(Date().timeIntervalSince(start)))s",
+                        module: .aiConfig
+                    )
+                    continuation.finish(throwing: CancellationError())
                 } catch let urlError as URLError {
                     // 网络传输错误
                     continuation.finish(throwing: AIRuntimeError.transport(urlError))
                 } catch {
                     // 其他未知错误
                     continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { termination in
+                self.logger.debug(
+                    "AI 流式网关流结束，termination=\(termination), model=\(client.model)",
+                    module: .aiConfig
+                )
+                // `.finished` 是服务端正常结束；只在下游取消订阅时取消 URLSession 任务。
+                if case .cancelled = termination {
+                    runtimeRequest.cancellationToken?.cancel()
+                    task.cancel()
                 }
             }
         }
@@ -230,6 +260,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
     /// - Returns: 解析完成的响应结果
     private func parseStreamingOrSingleResponse(
         bytes: URLSession.AsyncBytes,
+        cancellationToken: AIRuntimeCancellationToken?,
         onEvent: ((AIRuntimeStreamEvent) -> Void)? = nil
     ) async throws -> ParsedCompletion {
         var sawStreamFrame = false // 是否识别到流式帧
@@ -243,6 +274,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
 
         // 逐行读取流式响应
         for try await line in bytes.lines {
+            try cancellationToken?.checkCancellation()
             bufferedLines.append(line)
             // 只处理data:开头的流式数据行
             guard line.hasPrefix("data: ") else { continue }

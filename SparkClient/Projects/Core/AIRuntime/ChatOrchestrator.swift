@@ -5,6 +5,7 @@ struct ChatOrchestratorOutput: Sendable {
     let text: String
     let reasoningText: String?
     let reasoningDurationMs: Int64?
+    let finishReason: String?
     let kind: ChatMessageKind
     let toolName: String?
     let toolContent: String?
@@ -55,12 +56,14 @@ struct ChatOrchestrator: Sendable {
         topP: Double? = nil,
         maxTokens: Int? = nil,
         maxMessages: Int? = nil,
+        cancellationToken: AIRuntimeCancellationToken? = nil,
         /// 为 `true` 时，用户消息中的 `image_url` 附件编码为多模态 `content` 数组；否则仅使用 `ChatMessage.content` 字符串。
         deliverMultimodalImages: Bool = false,
         /// 网关单点编码（如厂商对 `image_url` 形式的差异）。
         providerCompanyUppercased: String? = nil,
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatOrchestratorOutput {
+        try cancellationToken?.checkCancellation()
         let promptLocalizer = PromptLocalizer()
         let reasoningOpts = buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
         logger.debug(
@@ -70,10 +73,12 @@ struct ChatOrchestrator: Sendable {
 
         let toolResult: ToolHubResult
         if inference.useTools {
+            try cancellationToken?.checkCancellation()
             toolResult = await toolHub.runIfNeeded(userInput: userInput, memberID: memberID)
         } else {
             toolResult = .none
         }
+        try cancellationToken?.checkCancellation()
         if case .executed(let result) = toolResult {
             let modelConsent = consentGate.evaluate(result: result, destination: .model)
             logger.info(
@@ -91,6 +96,7 @@ struct ChatOrchestrator: Sendable {
                 text: output,
                 reasoningText: nil,
                 reasoningDurationMs: nil,
+                finishReason: nil,
                 kind: .tool,
                 toolName: result.toolName,
                 toolContent: result.outputText
@@ -118,6 +124,7 @@ struct ChatOrchestrator: Sendable {
 
         while round < maxToolRounds {
             round += 1
+            try cancellationToken?.checkCancellation()
             let collected: CollectedRuntimeResponse
             do {
                 collected = try await collectRuntimeResponse(
@@ -132,9 +139,11 @@ struct ChatOrchestrator: Sendable {
                             providerCompanyUppercased: providerCompanyUppercased,
                             temperature: temperature,
                             topP: topP,
-                            maxTokens: maxTokens
+                            maxTokens: maxTokens,
+                            cancellationToken: cancellationToken
                         )
                     ),
+                    cancellationToken: cancellationToken,
                     onPartial: onPartial
                 )
             } catch {
@@ -147,13 +156,15 @@ struct ChatOrchestrator: Sendable {
             if response.hasToolCalls == false {
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
-                    logger.warning("AI 返回空文本，已回退到默认兜底文案", module: .aiConfig)
+                    logger.warning("AI 返回空文本，转为可见错误气泡", module: .aiConfig)
+                    throw AIRuntimeError.emptyOutput
                 }
                 let reasoning = response.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
                 return ChatOrchestratorOutput(
-                    text: text.isEmpty ? promptLocalizer.fallbackAssistantText() : text,
+                    text: text,
                     reasoningText: reasoning.flatMap { $0.isEmpty ? nil : $0 },
                     reasoningDurationMs: collected.reasoningDurationMs,
+                    finishReason: response.finishReason,
                     kind: .text,
                     toolName: toolTrace?.name,
                     toolContent: toolTrace?.content
@@ -162,11 +173,16 @@ struct ChatOrchestrator: Sendable {
 
             if inference.useTools == false || toolDefinitions.isEmpty {
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if text.isEmpty {
+                    logger.warning("AI 返回空文本（工具禁用分支），转为可见错误气泡", module: .aiConfig)
+                    throw AIRuntimeError.emptyOutput
+                }
                 let reasoning = response.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
                 return ChatOrchestratorOutput(
-                    text: text.isEmpty ? promptLocalizer.fallbackAssistantText() : text,
+                    text: text,
                     reasoningText: reasoning.flatMap { $0.isEmpty ? nil : $0 },
                     reasoningDurationMs: collected.reasoningDurationMs,
+                    finishReason: response.finishReason,
                     kind: .text,
                     toolName: toolTrace?.name,
                     toolContent: toolTrace?.content
@@ -181,6 +197,7 @@ struct ChatOrchestrator: Sendable {
                 AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls)
             )
             for call in response.toolCalls {
+                try cancellationToken?.checkCancellation()
                 let roundReasoning = response.reasoningText?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .nilIfEmpty
@@ -236,6 +253,7 @@ struct ChatOrchestrator: Sendable {
             text: promptLocalizer.fallbackAssistantText(),
             reasoningText: nil,
             reasoningDurationMs: nil,
+            finishReason: "length",
             kind: .text,
             toolName: nil,
             toolContent: nil
@@ -430,6 +448,7 @@ struct ChatOrchestrator: Sendable {
 
     private func collectRuntimeResponse(
         from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>,
+        cancellationToken: AIRuntimeCancellationToken?,
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)?
     ) async throws -> CollectedRuntimeResponse {
         var bufferedText = ""
@@ -440,6 +459,7 @@ struct ChatOrchestrator: Sendable {
         var lastReasoningAt: Date?
 
         for try await event in stream {
+            try cancellationToken?.checkCancellation()
             switch event {
             case .textDelta(let delta):
                 bufferedText.append(delta)

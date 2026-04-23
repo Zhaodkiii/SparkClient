@@ -48,6 +48,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     private let logger: Logger
     /// 最近一次识别流程中已上传的文件，供保存成功后与业务单据绑定。
     private var uploadedFiles: [UploadedMedicalDocumentFile] = []
+    /// 当前上传/OCR/AI 抽取任务；取消时同时中断外层 Task 与 Runtime 取消令牌。
+    private var recognitionTask: Task<Void, Never>?
+    private var recognitionCancellationToken: AIRuntimeCancellationToken?
 
     // MARK: - Initialization
 
@@ -96,6 +99,29 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     // MARK: - Recognition pipeline
 
+    /// 从 UI 启动识别流程，并保存任务句柄以支持真正取消后台抽取。
+    func startRecognitionTask() {
+        guard recognitionTask == nil else {
+            logger.debug("忽略重复识别请求：已有识别任务运行中", module: .medical)
+            return
+        }
+
+        recognitionTask = Task { [weak self] in
+            await self?.startRecognition()
+        }
+    }
+
+    /// 用户主动取消识别：停止外层任务、通知 AI Runtime 结束流式生成，并回到文件选择页。
+    func cancelRecognition() {
+        logger.info("用户取消医疗识别流程", module: .medical)
+        recognitionCancellationToken?.cancel()
+        recognitionCancellationToken = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        resetRecognitionState()
+        stage = .picking
+    }
+
     /// 执行上传 + Typed 抽取；成功则进入 `.result`，失败时标记当前步骤为 `.failed` 并写入 `errorMessage`。
     /// 开始【医疗文档上传 + OCR + AI 抽取】全流程
     /// 作用：触发整个上传识别流水线（上传文件 → OCR → 类型判定 → AI 抽取 → 展示结果）
@@ -125,6 +151,14 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         progress = createProgress()
         // 关闭“手动选择模式”标记
         needsManualModeSelection = false
+        let cancellationToken = AIRuntimeCancellationToken()
+        recognitionCancellationToken = cancellationToken
+        defer {
+            if recognitionCancellationToken === cancellationToken {
+                recognitionCancellationToken = nil
+                recognitionTask = nil
+            }
+        }
 
         // MARK: 3. 打印关键日志：开始流程
         logger.info(
@@ -141,6 +175,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 memberID: member.id,
                 files: selectedFiles
             )
+            try cancellationToken.checkCancellation()
             logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", module: .medical)
 
             // 标记：上传步骤完成 → 成功
@@ -154,8 +189,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             let output = try await extractUseCase.execute(
                 memberID: member.id,
                 files: selectedFiles,
-                selectedKind: selectedKind
+                selectedKind: selectedKind,
+                cancellationToken: cancellationToken
             )
+            try cancellationToken.checkCancellation()
 
             // ------------------------------
             // 步骤3：标记所有子流程完成
@@ -173,10 +210,21 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 "Typed 识别流程完成，resolvedKind=\(output.envelope.typeResolution.kind.rawValue)",
                 module: .medical
             )
+        } catch is CancellationError {
+            // 用户主动中断不作为失败展示；UI 回到 picking，底层 AI 流已通过取消令牌结束。
+            if recognitionCancellationToken === cancellationToken {
+                resetRecognitionState()
+                stage = .picking
+            }
+            logger.info("Typed 识别流程已取消", module: .medical)
         } catch {
             // ------------------------------
             // 任意步骤失败 → 进入失败处理
             // ------------------------------
+            if recognitionCancellationToken !== cancellationToken {
+                logger.debug("忽略过期识别任务错误：\(error.localizedDescription)", module: .medical)
+                return
+            }
             fail(.extract) // 标记抽取流程失败
             errorMessage = error.localizedDescription // 给 UI 展示错误信息
             logger.error("Typed 识别流程失败：\(error.localizedDescription)", module: .medical)
@@ -255,6 +303,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     /// 将界面与中间态恢复为初始：清空文件、结果、进度与上传缓存，就诊人名称回读当前上下文。
     func reset() {
+        recognitionCancellationToken?.cancel()
+        recognitionCancellationToken = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
         stage = .picking
         selectedFiles = []
         previewItems = []

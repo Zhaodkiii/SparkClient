@@ -4,14 +4,16 @@ protocol MedicalDocumentRecognizer: Sendable {
     func recognize(
         memberID: Int,
         files: [MedicalUploadLocalFile],
-        mode: MedicalDocumentUploadMode?
+        mode: MedicalDocumentUploadMode?,
+        cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> MedicalDocumentRecognitionResult
 }
 
 protocol MedicalDocumentTypeResolving: Sendable {
     func resolve(
         selectedKind: MedicalDocumentKind,
-        mergedOCRText: String
+        mergedOCRText: String,
+        cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> MedicalDocumentTypeResolution
 }
 
@@ -19,7 +21,8 @@ protocol TypedMedicalDocumentExtracting: Sendable {
     func extract(
         memberID: Int,
         files: [MedicalUploadLocalFile],
-        selectedKind: MedicalDocumentKind
+        selectedKind: MedicalDocumentKind,
+        cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> MedicalDocumentTypedExtractionOutput
 }
 

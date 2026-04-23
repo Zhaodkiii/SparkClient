@@ -15,6 +15,7 @@ final class ToolHub: @unchecked Sendable {
     private let typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor
     /// 异步将卡片合并回当前助手消息（Core Data + `ChatStateStore`）。
     private let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
+    private let healthTool: SparkHealthTool
     private let logger: Logger
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
@@ -31,6 +32,7 @@ final class ToolHub: @unchecked Sendable {
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor,
         structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator,
+        healthTool: SparkHealthTool = .shared,
         logger: Logger = ConsoleLogger()
     ) {
         self.auditStore = auditStore
@@ -43,6 +45,7 @@ final class ToolHub: @unchecked Sendable {
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.typedMedicalDocumentExtractor = typedMedicalDocumentExtractor
         self.structuredHealthCardMergeCoordinator = structuredHealthCardMergeCoordinator
+        self.healthTool = healthTool
         self.logger = logger
     }
 
@@ -574,17 +577,17 @@ final class ToolHub: @unchecked Sendable {
             )
 
         case SparkToolName.fetchStepDetails:
-            return await runFetchSteps(context: context)
+            return await runFetchSteps(invocation: invocation)
         case SparkToolName.fetchSleepDetails:
-            return await runFetchSleep(invocation: invocation, context: context)
-        case SparkToolName.fetchEnergyDetails,
-             SparkToolName.fetchNutritionDetails,
-             SparkToolName.fetchWorkoutDetails,
-             SparkToolName.makeNutritionData:
-            return placeholder(
-                tool: invocation.name,
-                text: "当前仓库尚无该类原始数据源，工具入口已接通。"
-            )
+            return await runFetchSleep(invocation: invocation)
+        case SparkToolName.fetchEnergyDetails:
+            return await runFetchEnergy(invocation: invocation)
+        case SparkToolName.fetchNutritionDetails:
+            return await runFetchNutrition(invocation: invocation)
+        case SparkToolName.fetchWorkoutDetails:
+            return await runFetchWorkout(invocation: invocation)
+        case SparkToolName.makeNutritionData:
+            return runMakeNutritionData(invocation: invocation)
 
         case SparkToolName.searchKnowledgeBag:
             return await runSearchKnowledgeBag(invocation: invocation)
@@ -651,59 +654,110 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 从健康指标仓库汇总最近步数记录。
-    private func runFetchSteps(context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let memberID = context.memberID else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.fetchStepDetails,
-                outputText: "未选择成员，无法查询步数。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-
+    /// 从 HealthKit 查询真实步数和步行/跑步距离。
+    private func runFetchSteps(invocation: ToolInvocation) async -> ToolExecutionResult {
+        let range = resolveHealthRange(arguments: invocation.arguments)
         return ToolExecutionResult(
             toolName: SparkToolName.fetchStepDetails,
-            outputText: "成员ID=\(memberID)；当前版本步数数据按档案维度存储，成员维度查询暂未启用。",
+            outputText: await healthTool.fetchStepDetails(from: range.start, to: range.end),
             sensitive: false,
             shouldBypassModel: true
         )
     }
 
-    /// 从健康指标仓库汇总最近睡眠时长记录。
-    private func runFetchSleep(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let memberID = context.memberID else {
+    /// 从 HealthKit 查询真实睡眠阶段，并返回聊天卡片可解析的 `sleep_model`。
+    private func runFetchSleep(invocation: ToolInvocation) async -> ToolExecutionResult {
+        let range = resolveHealthRange(arguments: invocation.arguments, fallbackDays: 2)
+        do {
+            let model = try await healthTool.fetchSleepDetails(from: range.start, to: range.end)
+            let json = (try? JSONEncoder().encode(model))
+                .flatMap { String(data: $0, encoding: .utf8) }
+                ?? "{}"
+            let output = """
+            sleep_model=\(json)
+            \(model.toReadableText())
+            """
+
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchSleepDetails,
-                outputText: "未选择成员，无法查询睡眠。",
+                outputText: output,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.fetchSleepDetails,
+                outputText: "睡眠查询失败：\(error.localizedDescription)",
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
+    }
 
-        let range = resolveSleepRange(arguments: invocation.arguments)
-        let model = buildSleepModel(from: range.start, to: range.end)
-        let json = (try? JSONEncoder().encode(model))
-            .flatMap { String(data: $0, encoding: .utf8) }
-            ?? "{}"
-        let output = """
-        sleep_model=\(json)
-        \(model.toReadableText())
-        """
-
+    private func runFetchEnergy(invocation: ToolInvocation) async -> ToolExecutionResult {
+        let range = resolveHealthRange(arguments: invocation.arguments)
         return ToolExecutionResult(
-            toolName: SparkToolName.fetchSleepDetails,
-            outputText: "member_id=\(memberID)\n\(output)",
+            toolName: SparkToolName.fetchEnergyDetails,
+            outputText: await healthTool.fetchEnergyDetails(from: range.start, to: range.end),
             sensitive: false,
             shouldBypassModel: true
         )
     }
 
-    private func resolveSleepRange(arguments: [String: String]) -> (start: Date, end: Date) {
+    private func runFetchNutrition(invocation: ToolInvocation) async -> ToolExecutionResult {
+        let range = resolveHealthRange(arguments: invocation.arguments)
+        return ToolExecutionResult(
+            toolName: SparkToolName.fetchNutritionDetails,
+            outputText: await healthTool.fetchNutritionDetails(from: range.start, to: range.end),
+            sensitive: false,
+            shouldBypassModel: true
+        )
+    }
+
+    private func runFetchWorkout(invocation: ToolInvocation) async -> ToolExecutionResult {
+        let range = resolveHealthRange(arguments: invocation.arguments)
+        let types = parseStringList(invocation.arguments["types"])
+        let maxItems = parseIntValue(invocation.arguments["max_items"] ?? "") ?? 100
+        do {
+            return ToolExecutionResult(
+                toolName: SparkToolName.fetchWorkoutDetails,
+                outputText: try await healthTool.fetchWorkoutDetails(from: range.start, to: range.end, types: types, maxItems: maxItems),
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.fetchWorkoutDetails,
+                outputText: "运动记录查询失败：\(error.localizedDescription)",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+    }
+
+    private func runMakeNutritionData(invocation: ToolInvocation) -> ToolExecutionResult {
+        let card = healthTool.makeNutritionData(
+            protein: parseDoubleValue(invocation.arguments["protein"]),
+            carbohydrates: parseDoubleValue(invocation.arguments["carbohydrates"]),
+            fat: parseDoubleValue(invocation.arguments["fat"]),
+            energy: parseDoubleValue(invocation.arguments["energy"])
+        )
+        let json = (try? JSONEncoder().encode(card))
+            .flatMap { String(data: $0, encoding: .utf8) }
+            ?? "{}"
+        return ToolExecutionResult(
+            toolName: SparkToolName.makeNutritionData,
+            outputText: "nutrition_card=\(json)",
+            sensitive: false,
+            shouldBypassModel: true
+        )
+    }
+
+    private func resolveHealthRange(arguments: [String: String], fallbackDays: Int = 0) -> (start: Date, end: Date) {
         let now = Date()
         let end = min(parseDate(arguments["end_date"]) ?? now, now)
         let start = parseDate(arguments["start_date"])
-            ?? Calendar.current.date(byAdding: .day, value: -2, to: end)
+            ?? Calendar.current.date(byAdding: .day, value: -fallbackDays, to: end)
             ?? end
         if start > end {
             return (end, end)
@@ -718,6 +772,25 @@ final class ToolHub: @unchecked Sendable {
         fmt.timeZone = Calendar.current.timeZone
         fmt.dateFormat = "yyyy-MM-dd"
         return fmt.date(from: value)
+    }
+
+    private func parseDoubleValue(_ text: String?) -> Double? {
+        guard let text else { return nil }
+        return Double(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func parseStringList(_ raw: String?) -> [String] {
+        guard let raw else { return [] }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return [] }
+        if let data = trimmed.data(using: .utf8),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [String] {
+            return array
+        }
+        return trimmed
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
     }
 
     private func buildSleepModel(from startDate: Date, to endDate: Date) -> ChatHealthSleepModel {

@@ -206,6 +206,7 @@ struct ExamReportCard: View {
                     item: item,
                     fileTransferService: fileTransferService
                 )
+                .hidesMainTabBarWhenPushed()
             } label: {
                 HStack(spacing: 4) {
                     Text(L10n.text("home.medical.list.health_exam.view_detail"))

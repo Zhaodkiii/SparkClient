@@ -28,13 +28,16 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
     }
 
     func collect(
-        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
+        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> StructuredJSONStreamFinal<T> {
         var rawText = ""
         var latestDecoded: T?
         var fallbackFinalText = ""
 
         for try await event in stream {
+            // 结构化 JSON 解析可能持续较久，逐帧检查取消可避免 UI 已返回但仍继续解析。
+            try cancellationToken?.checkCancellation()
             switch event {
             case .textDelta(let delta):
                 rawText.append(delta)
@@ -46,6 +49,7 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
             }
         }
 
+        try cancellationToken?.checkCancellation()
         if rawText.isEmpty {
             rawText = fallbackFinalText
         }

@@ -106,7 +106,8 @@ struct ChatConversationListPage: View {
                     listViewModel: listViewModel,
                     detailViewModel: detailViewModel,
                     taskManager: taskManager
-                ),
+                )
+                .hidesMainTabBarWhenPushed(),
                 tag: item.id,
                 selection: $navigationSelection
             ) {

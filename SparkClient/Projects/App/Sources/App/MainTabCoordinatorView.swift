@@ -96,12 +96,14 @@ struct MainTabCoordinatorView: View {
                 detailViewModel: chatDetailViewModel,
                 taskManager: taskManager
             )
+            .hidesMainTabBarWhenPushed()
             .task(id: threadID) {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)
                 await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
             }
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
+                .hidesMainTabBarWhenPushed()
         case .home, .knowledge, .chatList, .settings:
             EmptyView()
         }

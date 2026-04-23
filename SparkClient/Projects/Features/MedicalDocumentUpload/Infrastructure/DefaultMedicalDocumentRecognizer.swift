@@ -33,17 +33,20 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
     func recognize(
         memberID: Int,
         files: [MedicalUploadLocalFile],
-        mode: MedicalDocumentUploadMode?
+        mode: MedicalDocumentUploadMode?,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentRecognitionResult {
         guard files.isEmpty == false else {
             throw MedicalDocumentRecognizerError.emptyFiles
         }
+        try cancellationToken?.checkCancellation()
         logger.info(
             "开始医疗文档识别，memberID=\(memberID), fileCount=\(files.count), mode=\(mode?.rawValue ?? "general")",
             module: .medical
         )
 
-        let rawText = try await buildMergedOCRText(files: files)
+        let rawText = try await buildMergedOCRText(files: files, cancellationToken: cancellationToken)
+        try cancellationToken?.checkCancellation()
         let prompt = promptBuilder.extractionPrompt(
             for: MedicalPromptInput(
                 kind: mapModeToKind(mode),
@@ -55,9 +58,11 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
                 request: AIRuntimeTextRequest(
                     scenario: .medicalStructuredExtraction,
                     messages: [AIRuntimeMessage(role: .user, content: prompt)],
-                    reasoning: .disabled
+                    reasoning: .disabled,
+                    cancellationToken: cancellationToken
                 )
-            )
+            ),
+            cancellationToken: cancellationToken
         )
         let extractedJSON = normalizeJSONEnvelope(responseText)
         let summary = extractedJSON.count > 300 ? String(extractedJSON.prefix(300)) + "..." : extractedJSON
@@ -78,11 +83,16 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
         return result
     }
 
-    private func buildMergedOCRText(files: [MedicalUploadLocalFile]) async throws -> String {
+    private func buildMergedOCRText(
+        files: [MedicalUploadLocalFile],
+        cancellationToken: AIRuntimeCancellationToken?
+    ) async throws -> String {
         // 多文件识别时加分隔头，便于后续模型区分来源，降低跨文件信息串扰风险。
         var chunks: [String] = []
         for (index, file) in files.enumerated() {
+            try cancellationToken?.checkCancellation()
             let ocr = try await recognize(file: file)
+            try cancellationToken?.checkCancellation()
             let header = "=== File \(index + 1): \(file.displayName) ==="
             chunks.append([header, ocr.text].joined(separator: "\n"))
         }
@@ -146,11 +156,13 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
     }
 
     private func collectResponseText(
-        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>
+        from stream: AsyncThrowingStream<AIRuntimeStreamEvent, Error>,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> String {
         var bufferedText = ""
         var completedText: String?
         for try await event in stream {
+            try cancellationToken?.checkCancellation()
             switch event {
             case .textDelta(let delta):
                 bufferedText.append(delta)
@@ -160,6 +172,7 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
                 continue
             }
         }
+        try cancellationToken?.checkCancellation()
         return completedText ?? bufferedText
     }
 }

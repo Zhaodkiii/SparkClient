@@ -38,6 +38,10 @@ final class ChatDetailViewModel: ObservableObject {
     private let logger: Logger
     private var isRealtimeActive = false
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
+    private var currentGenerationTask: Task<Void, Never>?
+    private var currentGenerationCancellationToken: AIRuntimeCancellationToken?
+    private var cancellationNoticeThreadIDs: Set<UUID> = []
+    private var finalizedInterruptedAssistantMessageIDs: Set<UUID> = []
     private var cancellables = Set<AnyCancellable>()
     private let chatLoadCoordinator = ChatLoadCoordinator()
 
@@ -564,6 +568,27 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    func startSendingCurrentDraft() {
+        guard currentGenerationTask == nil else { return }
+        currentGenerationTask = Task { [weak self] in
+            await self?.sendCurrentDraft()
+        }
+    }
+
+    func cancelCurrentGeneration() {
+        guard let threadID = stateStore.selectedThreadID else { return }
+        guard stateStore.isSending || currentGenerationCancellationToken != nil || currentGenerationTask != nil else { return }
+
+        logger.info("用户中断 AI 生成，thread=\(shortID(threadID))", module: .general)
+        persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.cancel.tap")
+        currentGenerationCancellationToken?.cancel()
+        currentGenerationTask?.cancel()
+        stateStore.finishStreamingAssistant(threadID: threadID)
+        stateStore.setSending(false)
+        stateStore.setError(nil, for: threadID)
+        appendCancellationNoticeIfNeeded(threadID: threadID)
+    }
+
     func sendCurrentDraft() async {
         guard stateStore.isSending == false else { return }
         guard let threadID = stateStore.selectedThreadID else { return }
@@ -586,14 +611,24 @@ final class ChatDetailViewModel: ObservableObject {
             "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), textLen=\(draft.count), attachments=\(composer.attachments.count)",
             module: .general
         )
+        let cancellationToken = AIRuntimeCancellationToken()
+        currentGenerationCancellationToken = cancellationToken
+        let streamingMessageID = UUID()
+        cancellationNoticeThreadIDs.remove(threadID)
+        finalizedInterruptedAssistantMessageIDs.remove(streamingMessageID)
         stateStore.setSending(true)
-        defer { stateStore.setSending(false) }
+        defer {
+            stateStore.setSending(false)
+            if currentGenerationCancellationToken === cancellationToken {
+                currentGenerationCancellationToken = nil
+            }
+            currentGenerationTask = nil
+        }
 
         do {
             await aiConfigCenter.clearRuntimeOverride(for: .chat)
             let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
                 .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
-            let streamingMessageID = UUID()
             let stateStore = self.stateStore
             stateStore.clearComposerAttachmentUploadProgress()
             stateStore.startStreamingAssistant(
@@ -612,6 +647,7 @@ final class ChatDetailViewModel: ObservableObject {
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                cancellationToken: cancellationToken,
                 onImageUploadProgress: { id, progress in
                     Task { @MainActor in
                         stateStore.setComposerAttachmentUploadProgress(id: id, progress: progress)
@@ -645,9 +681,20 @@ final class ChatDetailViewModel: ObservableObject {
                 "发送对话完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
                 module: .general
             )
+        } catch is CancellationError {
+            persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.cancel.catch")
+            stateStore.finishStreamingAssistant(threadID: threadID)
+            stateStore.setError(nil, for: threadID)
+            appendCancellationNoticeIfNeeded(threadID: threadID)
+            logger.info("发送对话已中断，thread=\(shortID(threadID))", module: .general)
         } catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
-            stateStore.setError(error.localizedDescription, for: threadID)
+            stateStore.setError(nil, for: threadID)
+            appendAssistantErrorMessage(
+                threadID: threadID,
+                assistantClientMessageID: streamingMessageID,
+                error: error
+            )
             logger.error("发送对话失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.send")
         }
@@ -710,14 +757,24 @@ final class ChatDetailViewModel: ObservableObject {
             reasoningEffortTier: flags.reasoningEffortTier
         )
 
+        let cancellationToken = AIRuntimeCancellationToken()
+        currentGenerationCancellationToken = cancellationToken
+        let streamingMessageID = UUID()
+        cancellationNoticeThreadIDs.remove(threadID)
+        finalizedInterruptedAssistantMessageIDs.remove(streamingMessageID)
         stateStore.setSending(true)
-        defer { stateStore.setSending(false) }
+        defer {
+            stateStore.setSending(false)
+            if currentGenerationCancellationToken === cancellationToken {
+                currentGenerationCancellationToken = nil
+            }
+            currentGenerationTask = nil
+        }
 
         do {
             await aiConfigCenter.clearRuntimeOverride(for: .chat)
             let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
                 .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
-            let streamingMessageID = UUID()
             stateStore.setError(nil, for: threadID)
             stateStore.startStreamingAssistant(
                 threadID: threadID,
@@ -732,6 +789,7 @@ final class ChatDetailViewModel: ObservableObject {
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                cancellationToken: cancellationToken,
                 onAssistantPartial: { delta in
                     await MainActor.run {
                         self.stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
@@ -748,11 +806,192 @@ final class ChatDetailViewModel: ObservableObject {
                 "重新生成回答完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
                 module: .general
             )
+        } catch is CancellationError {
+            persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.regenerate.cancel.catch")
+            stateStore.finishStreamingAssistant(threadID: threadID)
+            stateStore.setError(nil, for: threadID)
+            appendCancellationNoticeIfNeeded(threadID: threadID)
+            logger.info("重新生成回答已中断，thread=\(shortID(threadID))", module: .general)
         } catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
-            stateStore.setError(error.localizedDescription, for: threadID)
+            stateStore.setError(nil, for: threadID)
+            appendAssistantErrorMessage(
+                threadID: threadID,
+                assistantClientMessageID: streamingMessageID,
+                error: error
+            )
             logger.error("重新生成回答失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.retry")
+        }
+    }
+
+    private func appendCancellationNoticeIfNeeded(threadID: UUID) {
+        guard cancellationNoticeThreadIDs.contains(threadID) == false else { return }
+        cancellationNoticeThreadIDs.insert(threadID)
+        appendLocalMessage(
+            threadID: threadID,
+            role: .system,
+            kind: .system,
+            content: L10n.text("chat.generation.interrupted"),
+            deliveryState: .pending,
+            source: "chat.cancel"
+        )
+    }
+
+    @discardableResult
+    private func persistInterruptedAssistantIfNeeded(threadID: UUID, source: String) -> Bool {
+        guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID) else {
+            logger.debug("中断固化跳过：无流式助手消息，source=\(source), thread=\(shortID(threadID))", module: .general)
+            return false
+        }
+
+        let content = streaming.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let reasoning = streaming.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard content.isEmpty == false || reasoning?.isEmpty == false || streaming.attachments.isEmpty == false else {
+            logger.debug("中断固化跳过：已生成内容为空，source=\(source), thread=\(shortID(threadID))", module: .general)
+            return false
+        }
+
+        guard finalizedInterruptedAssistantMessageIDs.insert(streaming.clientMessageID).inserted else {
+            logger.debug("中断固化跳过：assistant 已固化，source=\(source), clientMessageID=\(shortID(streaming.clientMessageID))", module: .general)
+            return false
+        }
+
+        let finalized = ChatMessage(
+            id: streaming.id,
+            threadID: threadID,
+            role: .assistant,
+            kind: streaming.kind,
+            content: streaming.content,
+            attachments: streaming.attachments,
+            reasoningContent: reasoning.flatMap { $0.isEmpty ? nil : $0 },
+            reasoningDurationMs: streaming.reasoningDurationMs,
+            reasoningExpanded: false,
+            reasoningVisibility: streaming.reasoningVisibility,
+            clientMessageID: streaming.clientMessageID,
+            serverMessageID: nil,
+            deliveryState: .pending,
+            createdAt: streaming.createdAt,
+            serverUpdatedAt: nil,
+            isTombstone: false
+        )
+
+        var messages = stateStore.persistedMessages(for: threadID)
+        if messages.contains(where: { $0.clientMessageID == finalized.clientMessageID }) == false {
+            messages.append(finalized)
+            stateStore.setMessages(messages, for: threadID, clearStreamingAssistant: false)
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.chatRepository.appendMessage(
+                    threadID: threadID,
+                    role: .assistant,
+                    kind: finalized.kind,
+                    content: finalized.content,
+                    attachments: finalized.attachments,
+                    reasoningContent: finalized.reasoningContent,
+                    reasoningDurationMs: finalized.reasoningDurationMs,
+                    reasoningExpanded: finalized.reasoningExpanded,
+                    reasoningVisibility: finalized.reasoningVisibility,
+                    clientMessageID: finalized.clientMessageID,
+                    serverMessageID: nil,
+                    deliveryState: .pending
+                )
+                await self.sendMessageUseCase.pushPendingMessages(source: source)
+                let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
+                await MainActor.run {
+                    self.stateStore.setMessages(latest, for: threadID)
+                }
+                self.logger.info(
+                    "中断时已固化 AI 已生成内容，source=\(source), thread=\(self.shortID(threadID)), clientMessageID=\(self.shortID(finalized.clientMessageID)), contentLength=\(finalized.content.count)",
+                    module: .general
+                )
+            } catch {
+                self.logger.error(
+                    "中断时固化 AI 已生成内容失败，source=\(source), thread=\(self.shortID(threadID)), error=\(error.localizedDescription)",
+                    module: .general
+                )
+            }
+        }
+
+        logger.info(
+            "中断时保留 AI 已生成内容到本地列表，source=\(source), thread=\(shortID(threadID)), clientMessageID=\(shortID(finalized.clientMessageID)), contentLength=\(finalized.content.count)",
+            module: .general
+        )
+        return true
+    }
+
+    private func appendAssistantErrorMessage(
+        threadID: UUID,
+        assistantClientMessageID: UUID,
+        error: Error
+    ) {
+        let message = String(
+            format: L10n.text("chat.error.response_format"),
+            locale: Locale.current,
+            error.localizedDescription
+        )
+        appendLocalMessage(
+            threadID: threadID,
+            role: .assistant,
+            kind: .system,
+            content: message,
+            deliveryState: .failed,
+            clientMessageID: assistantClientMessageID,
+            source: "chat.error"
+        )
+    }
+
+    private func appendLocalMessage(
+        threadID: UUID,
+        role: ChatMessageRole,
+        kind: ChatMessageKind,
+        content: String,
+        deliveryState: ChatDeliveryState,
+        clientMessageID: UUID = UUID(),
+        source: String
+    ) {
+        let local = ChatMessage(
+            threadID: threadID,
+            role: role,
+            kind: kind,
+            content: content,
+            clientMessageID: clientMessageID,
+            deliveryState: deliveryState
+        )
+        var messages = stateStore.persistedMessages(for: threadID)
+        if messages.contains(where: { $0.clientMessageID == clientMessageID }) == false {
+            messages.append(local)
+            stateStore.setMessages(messages, for: threadID)
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.chatRepository.appendMessage(
+                    threadID: threadID,
+                    role: role,
+                    kind: kind,
+                    content: content,
+                    attachments: [],
+                    reasoningContent: nil,
+                    reasoningDurationMs: nil,
+                    reasoningExpanded: false,
+                    reasoningVisibility: .full,
+                    clientMessageID: clientMessageID,
+                    serverMessageID: nil,
+                    deliveryState: deliveryState
+                )
+                let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
+                await MainActor.run {
+                    self.stateStore.setMessages(latest, for: threadID)
+                }
+                self.logger.info("本地对话状态消息已落库，source=\(source), thread=\(self.shortID(threadID))", module: .general)
+            } catch {
+                self.logger.error("本地对话状态消息落库失败，source=\(source), error=\(error.localizedDescription)", module: .general)
+            }
         }
     }
 

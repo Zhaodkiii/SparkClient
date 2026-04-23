@@ -47,6 +47,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         guard request.messages.isEmpty == false else {
             throw AIRuntimeError.emptyMessages
         }
+        try request.cancellationToken?.checkCancellation()
 
         let start = Date()
         // 解析当前场景对应的模型配置
@@ -81,7 +82,8 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog,
                     temperature: request.temperature,
                     topP: request.topP,
-                    maxTokens: request.maxTokens
+                    maxTokens: request.maxTokens,
+                    cancellationToken: request.cancellationToken
                 )
             }
             logger.info(
@@ -98,7 +100,8 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 providerCompanyUppercased: request.providerCompanyUppercased ?? providerFromCatalog,
                 temperature: request.temperature,
                 topP: request.topP,
-                maxTokens: request.maxTokens
+                maxTokens: request.maxTokens,
+                cancellationToken: request.cancellationToken
             )
         }()
 
@@ -122,34 +125,63 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 module: .aiConfig
             )
             
-            // 调用本地模型
-            let response = try await localGateway.generateText(
+            // 调用本地模型。这里返回真正的流，取消时会向下触发 `llm.stop()`。
+            let responseStream = try await localGateway.generateTextStream(
                 fileName: localSelection.fileName,
                 modelName: resolved.model,
                 messages: effectiveMessages,
                 maxTokens: effectiveRequest.maxTokens ?? resolved.maxTokens,
-                temperature: effectiveRequest.temperature ?? resolved.temperature
+                temperature: effectiveRequest.temperature ?? resolved.temperature,
+                cancellationToken: effectiveRequest.cancellationToken
             )
-            
-            let cost = Date().timeIntervalSince(start)
-            logger.info(
-                "本地模型推理完成（流式封装），scenario=\(request.scenario.rawValue), model=\(response.model), cost=\(format(cost))s",
-                module: .aiConfig
-            )
-            
-            // 记录输出日志
-            AIRuntimeOutputLog.recordFinalModelOutput(
-                scenario: request.scenario,
-                inferenceSource: resolved.source.rawValue,
-                response: response,
-                logger: logger
-            )
-            
-            // 包装为流式返回
+
             return AsyncThrowingStream { continuation in
-                continuation.yield(.textDelta(response.text))
-                continuation.yield(.completed(response))
-                continuation.finish()
+                let task = Task {
+                    do {
+                        var finalResponse: AIRuntimeTextResponse?
+                        for try await event in responseStream {
+                            try effectiveRequest.cancellationToken?.checkCancellation()
+                            if case .completed(let response) = event {
+                                finalResponse = response
+                            }
+                            continuation.yield(event)
+                        }
+
+                        let cost = Date().timeIntervalSince(start)
+                        if let finalResponse {
+                            logger.info(
+                                "本地模型流式推理完成，scenario=\(request.scenario.rawValue), model=\(finalResponse.model), cost=\(format(cost))s",
+                                module: .aiConfig
+                            )
+                            AIRuntimeOutputLog.recordFinalModelOutput(
+                                scenario: request.scenario,
+                                inferenceSource: resolved.source.rawValue,
+                                response: finalResponse,
+                                logger: logger
+                            )
+                        }
+                        continuation.finish()
+                    } catch is CancellationError {
+                        logger.info(
+                            "本地模型流式推理已取消，scenario=\(request.scenario.rawValue), model=\(resolved.model)",
+                            module: .aiConfig
+                        )
+                        continuation.finish(throwing: CancellationError())
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                }
+                continuation.onTermination = { termination in
+                    self.logger.debug(
+                        "本地模型 Runtime 流结束，termination=\(termination), scenario=\(request.scenario.rawValue), model=\(resolved.model)",
+                        module: .aiConfig
+                    )
+                    // `onTermination` 在正常 finish 时也会触发；只有消费者主动取消时才向下传播取消信号。
+                    if case .cancelled = termination {
+                        effectiveRequest.cancellationToken?.cancel()
+                        task.cancel()
+                    }
+                }
             }
         }
 
@@ -178,17 +210,19 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 providerCompanyUppercased: effectiveRequest.providerCompanyUppercased,
                 temperature: effectiveRequest.temperature,
                 topP: effectiveRequest.topP,
-                maxTokens: effectiveRequest.maxTokens
+                maxTokens: effectiveRequest.maxTokens,
+                cancellationToken: effectiveRequest.cancellationToken
             )
         )
         
         // 包装并返回上流事件流
         return AsyncThrowingStream { continuation in
-            Task {
+            let task = Task {
                 do {
                     var finalResponse: AIRuntimeTextResponse?
                     // 转发流式事件
                     for try await event in upstream {
+                        try effectiveRequest.cancellationToken?.checkCancellation()
                         if case .completed(let response) = event {
                             finalResponse = response
                         }
@@ -215,6 +249,13 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                         )
                     }
                     continuation.finish()
+                } catch is CancellationError {
+                    let cost = Date().timeIntervalSince(start)
+                    logger.info(
+                        "AI 流式推理已取消，scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model), cost=\(format(cost))s",
+                        module: .aiConfig
+                    )
+                    continuation.finish(throwing: CancellationError())
                 } catch {
                     let cost = Date().timeIntervalSince(start)
                     logger.error(
@@ -222,6 +263,17 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                         module: .aiConfig
                     )
                     continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { termination in
+                self.logger.debug(
+                    "AI Runtime 流结束，termination=\(termination), scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model)",
+                    module: .aiConfig
+                )
+                // 正常完成也会回调 onTermination，不能把 `.finished` 误当用户停止。
+                if case .cancelled = termination {
+                    effectiveRequest.cancellationToken?.cancel()
+                    task.cancel()
                 }
             }
         }

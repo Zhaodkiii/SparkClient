@@ -8,6 +8,7 @@ struct AISettingsView: View {
             Section(L10n.text("ai_settings.section.model")) {
                 NavigationLink {
                     APIKeysSettingsView(viewModel: viewModel)
+                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.api_keys"),
@@ -18,6 +19,7 @@ struct AISettingsView: View {
 
                 NavigationLink {
                     ModelsSettingsView(viewModel: viewModel)
+                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.models"),
@@ -30,6 +32,7 @@ struct AISettingsView: View {
                     AIModelPreferencesView(
                         viewModel: viewModel.makeScenarioModelPreferencesViewModel()
                     )
+                    .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.default_model_config"),
@@ -46,6 +49,7 @@ struct AISettingsView: View {
                         searchKeys: $viewModel.snapshot.searchKeys,
                         toolKeys: $viewModel.snapshot.toolKeys
                     )
+                    .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.search_tools"),
@@ -58,6 +62,7 @@ struct AISettingsView: View {
             Section(L10n.text("ai_settings.section.personalization")) {
                 NavigationLink {
                     PromptRepoSettingsView(promptRepo: $viewModel.snapshot.promptRepo)
+                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.prompt_repo"),
@@ -68,6 +73,7 @@ struct AISettingsView: View {
 
                 NavigationLink {
                     MemoryArchiveSettingsView(memoryArchive: $viewModel.snapshot.memoryArchive)
+                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.memory_archive"),
@@ -78,6 +84,7 @@ struct AISettingsView: View {
 
                 NavigationLink {
                     TranslationDicSettingsView(translationDic: $viewModel.snapshot.translationDic)
+                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.translation_dic"),

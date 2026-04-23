@@ -131,6 +131,7 @@ struct ModelsSettingsView: View {
                                 selectedIdentity: $selectedIdentity,
                                 searchText: $searchText
                             )
+                            .hidesMainTabBarWhenPushed()
                         } label: {
                             Label(L10n.text("ai_settings.models.menu.advanced"), systemImage: "slider.horizontal.3")
                         }

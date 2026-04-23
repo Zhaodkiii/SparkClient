@@ -6,8 +6,15 @@ struct StartMedicalDocumentRecognitionUseCase: Sendable {
     func execute(
         memberID: Int,
         files: [MedicalUploadLocalFile],
-        mode: MedicalDocumentUploadMode? = nil
+        mode: MedicalDocumentUploadMode? = nil,
+        cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentRecognitionResult {
-        try await recognizer.recognize(memberID: memberID, files: files, mode: mode)
+        try cancellationToken?.checkCancellation()
+        return try await recognizer.recognize(
+            memberID: memberID,
+            files: files,
+            mode: mode,
+            cancellationToken: cancellationToken
+        )
     }
 }

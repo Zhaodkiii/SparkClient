@@ -75,6 +75,7 @@ struct MedicalCaseTimelineRow: View {
                                     onTimelineEventRemoved?(id)
                                 }
                             )
+                            .hidesMainTabBarWhenPushed()
                         } label: {
                             Image(systemName: "pencil")
                                 .font(.caption)

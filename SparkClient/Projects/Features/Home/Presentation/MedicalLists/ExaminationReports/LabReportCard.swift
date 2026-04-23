@@ -137,7 +137,10 @@ struct LabReportCard: View {
             }
             .foregroundStyle(Color.accentColor)
         } else if canNavigateToDetail {
-            NavigationLink(destination: detailDestination) {
+            NavigationLink {
+                detailDestination
+                    .hidesMainTabBarWhenPushed()
+            } label: {
                 HStack(spacing: 4) {
                     Text(L10n.text("home.medical.list.examination.card.view_detail"))
                         .font(.subheadline.weight(.medium))

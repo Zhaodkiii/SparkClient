@@ -63,6 +63,7 @@ struct MedicalRecordCard: View {
                 workflowAPI: workflowAPI,
                 fileTransferService: fileTransferService
             )
+            .hidesMainTabBarWhenPushed()
         } label: {
             VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 6) {

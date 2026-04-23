@@ -23,7 +23,7 @@ struct AppCoordinatorView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut, value: lifecycle.sessionStore.state)
+        .animation(.easeInOut, value: lifecycle.sessionState)
         .animation(.easeInOut, value: networkMonitor.hasEvaluatedPath)
         .animation(.easeInOut, value: networkMonitor.isSatisfied)
         .onAppear {
@@ -34,7 +34,7 @@ struct AppCoordinatorView: View {
     @ViewBuilder
     private var sessionContent: some View {
         Group {
-            switch lifecycle.sessionStore.state {
+            switch lifecycle.sessionState {
             case .loading:
                 ProgressView(L10n.text("app.loading.preparing"))
                     .task(id: networkMonitor.hasEvaluatedPath) {

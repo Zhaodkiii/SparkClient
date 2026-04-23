@@ -67,6 +67,7 @@ struct APIKeysSettingsView: View {
                     provider: provider,
                     viewModel: viewModel
                 )
+                .hidesMainTabBarWhenPushed()
             } label: {
                 HStack(spacing: 12) {
                     Image(companyIconName(for: provider.company))

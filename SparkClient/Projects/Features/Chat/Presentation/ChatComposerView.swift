@@ -8,6 +8,7 @@ struct ChatComposerView: View {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     let onSend: () -> Void
+    let onCancel: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
 
@@ -21,7 +22,6 @@ struct ChatComposerView: View {
 
     private var canSendText: Bool {
         (composerDraft.trimmedText.isEmpty == false || composerDraft.hasVisualContent)
-            && stateStore.isSending == false
             && stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false
     }
 
@@ -183,16 +183,16 @@ struct ChatComposerView: View {
     }
 
     private var sendButton: some View {
-        Button(action: onSend) {
-            Image(systemName: "paperplane.fill")
+        Button(action: stateStore.isSending ? onCancel : onSend) {
+            Image(systemName: stateStore.isSending ? "stop.circle.fill" : "paperplane.fill")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(canSendText ? .white : .secondary)
+                .foregroundStyle(sendButtonForegroundColor)
                 .frame(width: 42, height: 42)
                 .background(Circle().fill(sendButtonBackgroundColor))
         }
         .buttonStyle(.plain)
-        .disabled(canSendText == false)
-        .accessibilityLabel(L10n.text("chat.input.send"))
+        .disabled(stateStore.isSending == false && canSendText == false)
+        .accessibilityLabel(stateStore.isSending ? L10n.text("chat.input.stop") : L10n.text("chat.input.send"))
     }
 
     private var attachmentStrip: some View {
@@ -220,6 +220,9 @@ struct ChatComposerView: View {
     }
 
     private var sendButtonBackgroundColor: Color {
+        if stateStore.isSending {
+            return Color(uiColor: .systemRed)
+        }
         if canSendText {
             return .accentColor
         }
@@ -227,6 +230,13 @@ struct ChatComposerView: View {
             return Color.accentColor.opacity(0.3)
         }
         return Color(uiColor: .secondarySystemFill)
+    }
+
+    private var sendButtonForegroundColor: Color {
+        if stateStore.isSending || canSendText {
+            return .white
+        }
+        return .secondary
     }
 
     private var attachmentMenuBinding: Binding<Bool> {

@@ -212,6 +212,7 @@ struct HomeView: View {
                                 }
                             }
                         )
+                        .hidesMainTabBarWhenPushed()
                     } label: {
                         medicalCard(card)
                     }

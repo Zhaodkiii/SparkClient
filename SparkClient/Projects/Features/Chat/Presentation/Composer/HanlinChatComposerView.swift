@@ -8,6 +8,7 @@ struct HanlinChatComposerView: View {
     @ObservedObject var stateStore: ChatStateStore
     let modelRows: [ChatComposerModelOption]
     let onSend: () -> Void
+    let onCancel: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
     /// 模型选择变更时立即持久化到线程并触发同步（由 `ChatDetailViewModel.updateThreadModel` 承担）。
@@ -33,6 +34,7 @@ struct HanlinChatComposerView: View {
                     modelReasoning: modelReasoning,
                     stateStore: stateStore,
                     onSend: onSend,
+                    onCancel: onCancel,
                     onRequestFileImport: { showFileImporter = true },
                     onAttachmentsPicked: onAttachmentsPicked,
                     onRemoveAttachment: onRemoveAttachment
