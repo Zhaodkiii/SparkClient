@@ -98,26 +98,29 @@ struct ModelCatalogCoordinator: Sendable {
         snapshot.allModels.removeAll { $0.id == id }
     }
 
+    @discardableResult
     func createLocalAgent(
         displayName: String,
         iconSymbol: String,
         baseModelName: String,
         systemPrompt: String,
         in snapshot: inout AISettingsSnapshot
-    ) {
-        guard let baseModel = snapshot.allModels.first(where: { $0.name == baseModelName }) else { return }
+    ) -> AllModels? {
+        guard let baseModel = snapshot.allModels.first(where: { $0.name == baseModelName }) else { return nil }
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedName.isEmpty == false else { return }
+        guard trimmedName.isEmpty == false else { return nil }
 
         let agentPositions = snapshot.allModels.filter { $0.identity == .agent }.map(\.position)
         let position = (agentPositions.max() ?? 999) + 1
+        // Use a unique name so the agent never collides with its base model in scenario bundles
+        let uniqueName = "agent-\(UUID().uuidString)"
         let agent = AllModels(
-            name: "local-agent-\(UUID().uuidString.lowercased())",
+            name: uniqueName,
             displayName: trimmedName,
             identity: .agent,
             position: position,
-            providerID: LocalModelService.localProviderID,
-            company: LocalModelService.localCompany,
+            providerID: baseModel.providerID,
+            company: baseModel.company,
             isHidden: false,
             supportsSearch: baseModel.supportsSearch,
             supportsMultimodal: baseModel.supportsMultimodal,
@@ -136,6 +139,7 @@ struct ModelCatalogCoordinator: Sendable {
             reasoningControllable: baseModel.reasoningControllable
         )
         snapshot.allModels.append(agent)
+        return agent
     }
 
     func updateLocalAgent(
@@ -148,12 +152,14 @@ struct ModelCatalogCoordinator: Sendable {
     ) {
         guard let index = snapshot.allModels.firstIndex(where: { $0.id == id }) else { return }
         var model = snapshot.allModels[index]
-        guard model.isLocalAgent else { return }
+        guard model.identity == .agent, model.source != .system else { return }
         model.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         model.iconSymbol = iconSymbol
         model.baseModelName = baseModelName
         model.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let base = snapshot.allModels.first(where: { $0.name == baseModelName && $0.isLocalModel }) {
+        if let base = snapshot.allModels.first(where: { $0.name == baseModelName && $0.identity == .model }) {
+            model.providerID = base.providerID
+            model.company = base.company
             model.supportsSearch = base.supportsSearch
             model.supportsMultimodal = base.supportsMultimodal
             model.supportsReasoning = base.supportsReasoning

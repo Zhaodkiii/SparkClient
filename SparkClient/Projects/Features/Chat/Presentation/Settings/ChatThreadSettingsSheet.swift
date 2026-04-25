@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChatThreadSettingsSheet: View {
-    let modelOptions: [ChatComposerModelOption]
+    let modelOptions: [AIScenarioRemoteModelRow]
     let currentModelSupportsMultimodal: Bool
     let onUpdate: @Sendable (ChatThreadGenerationSettings) async -> Void
 
@@ -9,7 +9,7 @@ struct ChatThreadSettingsSheet: View {
     @State private var settings: ChatThreadGenerationSettings
 
     init(
-        modelOptions: [ChatComposerModelOption],
+        modelOptions: [AIScenarioRemoteModelRow],
         initialSettings: ChatThreadGenerationSettings,
         currentModelSupportsMultimodal: Bool,
         onUpdate: @escaping @Sendable (ChatThreadGenerationSettings) async -> Void
@@ -99,7 +99,7 @@ struct ChatThreadSettingsSheet: View {
             Picker(L10n.text("chat.settings.model.title"), selection: $settings.currentModelName) {
                 Text(L10n.text("chat.composer.model.default")).tag(String?.none)
                 ForEach(modelOptions) { option in
-                    Text(option.title).tag(Optional(option.modelName))
+                    Text(option.displayTitle).tag(Optional(option.name))
                 }
             }
             .pickerStyle(.menu)

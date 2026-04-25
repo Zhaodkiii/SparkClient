@@ -7,8 +7,6 @@ struct ChatComposerRuntimeTogglesRow: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageMemberUseCase: ManageHomeMemberUseCase
     let boundMemberID: Int?
     let onSetMemberBinding: (Int?) -> Void
     @State private var expandedToggle: RuntimeToggleKind?
@@ -265,15 +263,12 @@ struct ChatComposerRuntimeTogglesRow: View {
 
     private var memberProfileToggle: some View {
         Button {
-            if boundMemberID == nil, defaultMemberID == nil {
-                withAnimation(toggleAnimation) {
-                    expandedToggle = .memberProfile
-                }
-                scheduleAutoCollapse(for: .memberProfile)
-                return
-            }
             let next = boundMemberID == nil ? defaultMemberID : nil
-            onSetMemberBinding(next)
+            if let next {
+                onSetMemberBinding(next)
+            } else {
+                onSetMemberBinding(nil)
+            }
             withAnimation(toggleAnimation) {
                 expandedToggle = .memberProfile
             }
@@ -317,8 +312,6 @@ struct ChatComposerRuntimeTogglesRow: View {
     private var memberProfileMenu: some View {
         MemberProfileBindingMenu(
             memberContextStore: memberContextStore,
-            loadMembersUseCase: loadMembersUseCase,
-            manageMemberUseCase: manageMemberUseCase,
             selectedMemberID: boundMemberID,
             onSelect: { memberID in
                 onSetMemberBinding(memberID)

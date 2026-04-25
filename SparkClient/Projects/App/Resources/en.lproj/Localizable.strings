@@ -639,8 +639,10 @@
 "ai_settings.models.agent.field.name" = "Agent name";
 "ai_settings.models.agent.field.base_model" = "Base model";
 "ai_settings.models.agent.section.icons" = "Icon";
-"ai_settings.models.agent.section.system_prompt" = "System prompt (optional)";
-"ai_settings.models.agent.nav.new_title" = "New local agent";
+"ai_settings.models.agent.section.system_prompt" = "Agent instructions";
+"ai_settings.models.agent.section.base_model" = "Base model";
+"ai_settings.models.agent.empty.base_models" = "No available base models. Install a local model or configure a visible service model key first.";
+"ai_settings.models.agent.nav.new_title" = "New agent";
 "ai_settings.models.agent.action.create" = "Create";
 "ai_settings.models.section.trial_models" = "Trial models";
 "ai_settings.models.trial.explain" = "When enabled, the model can be selected in the chat composer (server allowlist).";
@@ -656,6 +658,7 @@
 "ai_settings.models.capability.image_gen_short" = "Image";
 "ai_settings.models.capability.voice_short" = "Voice";
 "ai_settings.models.badge.local" = "Local";
+"ai_settings.models.badge.service" = "Service";
 "ai_settings.models.row.based_on_format" = "Based on %@";
 "ai_settings.models.menu.add_online_model" = "Add online model";
 "ai_settings.models.menu.advanced" = "Advanced…";
@@ -715,11 +718,28 @@
 "ai_settings.models.local_download.explain" = "Download from the catalog or import a .gguf file.";
 "ai_settings.models.local_download.nav_title" = "Add local model";
 
-"ai_settings.models.agent.nav.edit_title" = "Edit local agent";
+"ai_settings.models.agent.nav.edit_title" = "Edit agent";
 
 "common.load_failed" = "Load failed";
 "common.operation_failed" = "Operation failed";
 "common.ok" = "OK";
+"common.close" = "Close";
+"common.done" = "Done";
+
+"prompt_input.tools" = "Input tools";
+"prompt_input.drawer.title" = "Multiline input";
+"prompt_input.voice.title" = "Voice input";
+"prompt_input.voice.record" = "Record";
+"prompt_input.voice.permission_denied" = "Speech recognition is not permitted. Allow Speech Recognition and Microphone access in Settings.";
+"prompt_input.voice.unavailable" = "Speech recognition is currently unavailable on this device.";
+"prompt_input.toolbar.autofill" = "Auto fill";
+"prompt_input.toolbar.autofilling" = "Filling";
+"prompt_input.toolbar.undo_autofill" = "Undo fill";
+"prompt_input.toolbar.add_link" = "Add link";
+"prompt_input.toolbar.link_placeholder" = "Paste link";
+"prompt_input.ocr.camera" = "Take photo";
+"prompt_input.ocr.photo_library" = "Photo library";
+"prompt_input.ocr.camera_unavailable" = "Camera is unavailable";
 "common.cancel" = "Cancel";
 "ai_settings.models.management.nav_title" = "%@ Models";
 "ai_settings.models.management.search_prompt" = "Search models";

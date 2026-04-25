@@ -49,6 +49,22 @@ struct ChatOutboxPipeline: Sendable {
         logger.debug("会话元数据上送完成，requested=\(payload.count), accepted=\(accepted.count)", module: .general)
     }
 
+    func pushThread(threadID: UUID) async throws {
+        guard let thread = await repository.loadThread(id: threadID), thread.isDeleted == false else { return }
+        let payload = [Self.toRemoteThread(thread)]
+        logger.debug("准备上送会话元数据（单会话），thread=\(shortID(threadID))", module: .general)
+        let accepted = try await remoteAPI.pushThreads(payload)
+        let domainThreads = accepted.compactMap(ChatSyncEngineDTOMapper.toDomainThread)
+        if domainThreads.isEmpty == false {
+            await repository.upsertRemoteThreads(domainThreads)
+        }
+        logger.debug("会话元数据上送完成（单会话），accepted=\(accepted.count)", module: .general)
+    }
+
+    private func shortID(_ id: UUID) -> String {
+        String(id.uuidString.prefix(8))
+    }
+
     func pushOutbox() async throws {
         let pending = await outboxStore.pending(limit: 50)
         guard pending.isEmpty == false else { return }
@@ -88,7 +104,8 @@ struct ChatOutboxPipeline: Sendable {
                     reasoningContent: message.reasoningContent,
                     reasoningDurationMs: message.reasoningDurationMs,
                     reasoningExpanded: message.reasoningExpanded,
-                    reasoningVisibility: message.reasoningVisibility.rawValue
+                    reasoningVisibility: message.reasoningVisibility.rawValue,
+                    modelName: message.modelName
                 )
             }
 
@@ -109,6 +126,18 @@ struct ChatOutboxPipeline: Sendable {
                     mergeEngine.resolve(local: localByClient[remote.clientMessageID], remote: remote)
                 }
                 await repository.upsertRemoteMessages(merged, in: threadID, enqueueAttachmentDownloadJobs: false)
+                
+                // 将游标推进到刚上送消息的最新 server_updated_at 之后，避免下次 syncThreadOnOpen 重复拉取这些消息。
+                // 服务端以微秒精度存储时间戳（6位小数），但 ISO8601DateFormatter 解码后只能保留毫秒精度（3位），
+                // 导致游标与实际时间戳之间存在不超过 1ms 的负偏差，服务端判定 server_updated_at > cursor 为真而重复返回。
+                // 加 1ms epsilon 可确保游标严格大于同批次所有消息的实际微秒时间戳。
+                if let latestDate = remoteMessages.compactMap(\.serverUpdatedAt).max() {
+                    let exclusiveDate = latestDate.addingTimeInterval(0.001)
+                    await repository.saveMessageSyncCursor(
+                        ChatSyncCursor(value: Self.formatSyncCursor(exclusiveDate)),
+                        for: threadID
+                    )
+                }
             }
         } catch {
             for message in pending {
@@ -121,7 +150,14 @@ struct ChatOutboxPipeline: Sendable {
             throw error
         }
     }
-
+    private static let syncCursorFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static func formatSyncCursor(_ date: Date) -> String {
+        syncCursorFormatter.string(from: date)
+    }
     private static func indexByClientMessageID(_ messages: [ChatMessage]) -> [UUID: ChatMessage] {
         var map: [UUID: ChatMessage] = [:]
         for message in messages {

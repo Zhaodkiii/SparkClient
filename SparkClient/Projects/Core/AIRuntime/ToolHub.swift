@@ -184,95 +184,28 @@ final class ToolHub: @unchecked Sendable {
         ]
     }
 
+    /// key 规则统一为 `"tool.summary.<tool_name>"`，直接插值，无需逐 case 列举。
     private func toolSummary(for toolName: String) -> String {
-        switch toolName {
-        case SparkToolName.fetchStepDetails:
-            return td("tool.summary.fetch_step_details")
-        case SparkToolName.fetchEnergyDetails:
-            return td("tool.summary.fetch_energy_details")
-        case SparkToolName.fetchNutritionDetails:
-            return td("tool.summary.fetch_nutrition_details")
-        case SparkToolName.makeNutritionData:
-            return td("tool.summary.make_nutrition_data")
-        case SparkToolName.fetchSleepDetails:
-            return td("tool.summary.fetch_sleep_details")
-        case SparkToolName.fetchWorkoutDetails:
-            return td("tool.summary.fetch_workout_details")
-        case SparkToolName.generateStructuredHealthCard:
-            return td("tool.summary.generate_structured_health_card")
-        case SparkToolName.queryTasksByMember:
-            return td("tool.summary.query_tasks_by_member")
-        case SparkToolName.generateTask:
-            return td("tool.summary.generate_task")
-        case SparkToolName.searchKnowledgeBag:
-            return td("tool.summary.search_knowledge_bag")
-        case SparkToolName.createKnowledgeDocument:
-            return td("tool.summary.create_knowledge_document")
-        case SparkToolName.searchCalendarAndReminders:
-            return td("tool.summary.search_calendar_and_reminders")
-        case SparkToolName.writeSystemEvent:
-            return td("tool.summary.write_system_event")
-        case SparkToolName.queryLocation:
-            return td("tool.summary.query_location")
-        case SparkToolName.getCurrentLocation:
-            return td("tool.summary.get_current_location")
-        case SparkToolName.searchNearbyLocations:
-            return td("tool.summary.search_nearby_locations")
-        case SparkToolName.getRoute:
-            return td("tool.summary.get_route")
-        case SparkToolName.queryWeather:
-            return td("tool.summary.query_weather")
-        case SparkToolName.saveMemory:
-            return td("tool.summary.save_memory")
-        case SparkToolName.retrieveMemory:
-            return td("tool.summary.retrieve_memory")
-        case SparkToolName.updateMemory:
-            return td("tool.summary.update_memory")
-        case SparkToolName.generateChatTitle:
-            return td("tool.summary.generate_chat_title")
-        case SparkToolName.showCustomMessageCard:
-            return td("tool.summary.show_custom_message_card")
-        case SparkToolName.getCurrentMember:
-            return td("tool.summary.get_current_member")
-        case SparkToolName.switchMember:
-            return td("tool.summary.switch_member")
-        case SparkToolName.findMember:
-            return td("tool.summary.find_member")
-        case SparkToolName.queryMemberProfile:
-            return td("tool.summary.query_member_profile")
-        case SparkToolName.searchOnline:
-            return td("tool.summary.search_online")
-        case SparkToolName.readWebPage:
-            return td("tool.summary.read_web_page")
-        case SparkToolName.searchArxivPapers:
-            return td("tool.summary.search_arxiv_papers")
-        case SparkToolName.extractRemoteFileContent:
-            return td("tool.summary.extract_remote_file_content")
-        case SparkToolName.createCanvas:
-            return td("tool.summary.create_canvas")
-        case SparkToolName.editCanvas:
-            return td("tool.summary.edit_canvas")
-        default:
-            return toolFormat("tool.summary.generic", toolName)
-        }
+        td("tool.summary.\(toolName)")
     }
 
+    /// 穷举 switch，新增工具时编译器会强制要求补全此处，无 default 兜底。
     private func toolProperties(for toolName: String) -> [String: AIRuntimeToolProperty] {
+        guard let tool = SparkToolName(rawValue: toolName) else {
+            return ["query": AIRuntimeToolProperty(type: "string", description: td("tool.param.tool_query_generic"))]
+        }
         let coord = coordPropertySchema()
-        switch toolName {
-        case SparkToolName.fetchStepDetails,
-             SparkToolName.fetchEnergyDetails,
-             SparkToolName.fetchNutritionDetails,
-             SparkToolName.fetchSleepDetails:
+        switch tool {
+        case .fetchStepDetails, .fetchEnergyDetails, .fetchNutritionDetails, .fetchSleepDetails:
             return dateRangeProperties()
-        case SparkToolName.makeNutritionData:
+        case .makeNutritionData:
             return [
                 "protein": AIRuntimeToolProperty(type: "number", description: td("tool.param.protein_g")),
                 "carbohydrates": AIRuntimeToolProperty(type: "number", description: td("tool.param.carbohydrates_g")),
                 "fat": AIRuntimeToolProperty(type: "number", description: td("tool.param.fat_g")),
                 "energy": AIRuntimeToolProperty(type: "number", description: td("tool.param.energy_kcal"))
             ]
-        case SparkToolName.fetchWorkoutDetails:
+        case .fetchWorkoutDetails:
             return [
                 "start_date": AIRuntimeToolProperty(type: "string", description: td("tool.date.start_yyyy_mm_dd"), format: "date"),
                 "end_date": AIRuntimeToolProperty(type: "string", description: td("tool.date.end_yyyy_mm_dd"), format: "date"),
@@ -283,41 +216,36 @@ final class ToolHub: @unchecked Sendable {
                 ),
                 "max_items": AIRuntimeToolProperty(type: "integer", description: td("tool.param.max_items"))
             ]
-        case SparkToolName.generateStructuredHealthCard:
+        case .generateStructuredHealthCard:
             return [
                 "report_type": AIRuntimeToolProperty(
                     type: "string",
                     description: td("tool.param.report_type_enum"),
                     enumValues: ["medication", "prescription", "exam_report", "medical_case"]
                 ),
-                "raw_text": AIRuntimeToolProperty(
-                    type: "string",
-                    description: td("tool.param.raw_text_distilled")
-                ),
+                "raw_text": AIRuntimeToolProperty(type: "string", description: td("tool.param.raw_text_distilled")),
                 "oss_file_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.oss_file_id_optional"))
             ]
-        case SparkToolName.queryTasksByMember:
+        case .queryTasksByMember:
             return [
                 "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_for_task")),
                 "include_completed": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.include_completed_optional")),
                 "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.max_items"))
             ]
-        case SparkToolName.generateTask:
+        case .generateTask:
             return [
                 "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_for_task")),
                 "user_input": AIRuntimeToolProperty(type: "string", description: td("tool.param.user_input_for_extraction")),
                 "require_query_first": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.require_query_first"))
             ]
-        case SparkToolName.searchKnowledgeBag:
-            return [
-                "query": AIRuntimeToolProperty(type: "string", description: td("tool.param.query_keyword"))
-            ]
-        case SparkToolName.createKnowledgeDocument:
+        case .searchKnowledgeBag:
+            return ["query": AIRuntimeToolProperty(type: "string", description: td("tool.param.query_keyword"))]
+        case .createKnowledgeDocument:
             return [
                 "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.doc_title")),
                 "content": AIRuntimeToolProperty(type: "string", description: td("tool.param.doc_content_markdown"))
             ]
-        case SparkToolName.searchCalendarAndReminders:
+        case .searchCalendarAndReminders:
             return [
                 "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.keyword_title_notes")),
                 "start_date": AIRuntimeToolProperty(type: "string", description: td("tool.param.start_date_inclusive"), format: "date"),
@@ -325,7 +253,7 @@ final class ToolHub: @unchecked Sendable {
                 "location": AIRuntimeToolProperty(type: "string", description: td("tool.param.location_keyword")),
                 "event_type": AIRuntimeToolProperty(type: "string", description: td("tool.param.calendar_or_reminder_enum"), enumValues: ["calendar", "reminder"])
             ]
-        case SparkToolName.writeSystemEvent:
+        case .writeSystemEvent:
             return [
                 "type": AIRuntimeToolProperty(type: "string", description: td("tool.param.calendar_or_reminder_enum")),
                 "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.title")),
@@ -337,20 +265,16 @@ final class ToolHub: @unchecked Sendable {
                 "priority": AIRuntimeToolProperty(type: "integer", description: td("tool.param.reminder_priority")),
                 "reminder_minutes": AIRuntimeToolProperty(type: "integer", description: td("tool.param.reminder_minutes"))
             ]
-        case SparkToolName.queryLocation:
-            return [
-                "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.place_keyword"))
-            ]
-        case SparkToolName.getCurrentLocation:
-            return [
-                "query": AIRuntimeToolProperty(type: "string", description: td("tool.param.query_fixed_local"), enumValues: ["local"])
-            ]
-        case SparkToolName.searchNearbyLocations:
+        case .queryLocation:
+            return ["keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.place_keyword"))]
+        case .getCurrentLocation:
+            return ["query": AIRuntimeToolProperty(type: "string", description: td("tool.param.query_fixed_local"), enumValues: ["local"])]
+        case .searchNearbyLocations:
             return [
                 "coordinate": coord,
                 "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.search_keyword_poi"))
             ]
-        case SparkToolName.getRoute:
+        case .getRoute:
             let point = AIRuntimeToolProperty(
                 type: "object",
                 description: td("tool.param.latlon_point_object"),
@@ -365,28 +289,24 @@ final class ToolHub: @unchecked Sendable {
                 "end": point,
                 "mode": AIRuntimeToolProperty(type: "string", description: td("tool.param.transport_mode"), enumValues: ["driving", "walking", "transit"])
             ]
-        case SparkToolName.queryWeather:
+        case .queryWeather:
             return [
                 "latitude": AIRuntimeToolProperty(type: "number", description: td("tool.param.latitude")),
                 "longitude": AIRuntimeToolProperty(type: "number", description: td("tool.param.longitude")),
                 "timeRange": AIRuntimeToolProperty(type: "string", description: td("tool.param.weather_time_range"))
             ]
-        case SparkToolName.saveMemory:
-            return [
-                "content": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_content"))
-            ]
-        case SparkToolName.retrieveMemory:
-            return [
-                "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_keywords"))
-            ]
-        case SparkToolName.updateMemory:
+        case .saveMemory:
+            return ["content": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_content"))]
+        case .retrieveMemory:
+            return ["keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_keywords"))]
+        case .updateMemory:
             return [
                 "originalContent": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_original")),
                 "updatedContent": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_updated"))
             ]
-        case SparkToolName.generateChatTitle:
+        case .generateChatTitle, .getCurrentMember, .switchMember:
             return [:]
-        case SparkToolName.showCustomMessageCard:
+        case .showCustomMessageCard:
             return [
                 "card_type": AIRuntimeToolProperty(
                     type: "string",
@@ -394,14 +314,12 @@ final class ToolHub: @unchecked Sendable {
                     enumValues: ["report_photo", "medicine_box_photo", "skin_photo"]
                 )
             ]
-        case SparkToolName.getCurrentMember, SparkToolName.switchMember:
-            return [:]
-        case SparkToolName.findMember:
+        case .findMember:
             return [
                 "name": AIRuntimeToolProperty(type: "string", description: td("tool.param.member_name_optional")),
                 "relationship": AIRuntimeToolProperty(type: "string", description: td("tool.param.member_relationship_optional"))
             ]
-        case SparkToolName.queryMemberProfile:
+        case .queryMemberProfile:
             return [
                 "query_type": AIRuntimeToolProperty(
                     type: "string",
@@ -412,21 +330,17 @@ final class ToolHub: @unchecked Sendable {
                 "days": AIRuntimeToolProperty(type: "integer", description: td("tool.param.days_optional")),
                 "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.limit_optional"))
             ]
-        case SparkToolName.searchOnline, SparkToolName.searchArxivPapers:
-            return [
-                "query": AIRuntimeToolProperty(type: "string", description: td("tool.param.search_query"))
-            ]
-        case SparkToolName.readWebPage, SparkToolName.extractRemoteFileContent:
-            return [
-                "url": AIRuntimeToolProperty(type: "string", description: td("tool.param.url_full"))
-            ]
-        case SparkToolName.createCanvas:
+        case .searchOnline, .searchArxivPapers:
+            return ["query": AIRuntimeToolProperty(type: "string", description: td("tool.param.search_query"))]
+        case .readWebPage, .extractRemoteFileContent:
+            return ["url": AIRuntimeToolProperty(type: "string", description: td("tool.param.url_full"))]
+        case .createCanvas:
             return [
                 "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.canvas_title")),
                 "content": AIRuntimeToolProperty(type: "string", description: td("tool.param.canvas_body")),
                 "type": AIRuntimeToolProperty(type: "string", description: td("tool.param.canvas_type_enum"), enumValues: ["text", "python", "html"])
             ]
-        case SparkToolName.editCanvas:
+        case .editCanvas:
             return [
                 "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.canvas_title_edit")),
                 "patterns": AIRuntimeToolProperty(
@@ -440,65 +354,57 @@ final class ToolHub: @unchecked Sendable {
                     arrayItems: AIRuntimeToolProperty(type: "string", description: td("tool.param.replacement_item"))
                 )
             ]
-        default:
-            return [
-                "query": AIRuntimeToolProperty(type: "string", description: td("tool.param.tool_query_generic"))
-            ]
         }
     }
 
+    /// 穷举 switch，新增工具时编译器会强制要求补全此处，无 default 兜底。
     private func toolRequiredFields(for toolName: String) -> [String] {
-        switch toolName {
-        case SparkToolName.fetchStepDetails,
-             SparkToolName.fetchEnergyDetails,
-             SparkToolName.fetchNutritionDetails,
-             SparkToolName.fetchSleepDetails,
-             SparkToolName.fetchWorkoutDetails:
+        guard let tool = SparkToolName(rawValue: toolName) else { return [] }
+        switch tool {
+        case .fetchStepDetails, .fetchEnergyDetails, .fetchNutritionDetails,
+             .fetchSleepDetails, .fetchWorkoutDetails:
             return ["start_date", "end_date"]
-        case SparkToolName.makeNutritionData:
+        case .makeNutritionData:
             return ["protein", "carbohydrates", "fat", "energy"]
-        case SparkToolName.generateStructuredHealthCard:
+        case .generateStructuredHealthCard:
             return ["report_type", "raw_text"]
-        case SparkToolName.queryTasksByMember:
-            return []
-        case SparkToolName.generateTask:
+        case .generateTask:
             return ["user_input"]
-        case SparkToolName.searchKnowledgeBag:
+        case .searchKnowledgeBag:
             return ["query"]
-        case SparkToolName.createKnowledgeDocument:
+        case .createKnowledgeDocument:
             return ["title", "content"]
-        case SparkToolName.queryLocation:
+        case .queryLocation:
             return ["keyword"]
-        case SparkToolName.getCurrentLocation:
+        case .getCurrentLocation:
             return ["query"]
-        case SparkToolName.searchNearbyLocations:
+        case .searchNearbyLocations:
             return ["coordinate", "keyword"]
-        case SparkToolName.getRoute:
+        case .getRoute:
             return ["start", "end", "mode"]
-        case SparkToolName.queryWeather:
+        case .queryWeather:
             return ["latitude", "longitude", "timeRange"]
-        case SparkToolName.saveMemory:
+        case .saveMemory:
             return ["content"]
-        case SparkToolName.retrieveMemory:
+        case .retrieveMemory:
             return ["keyword"]
-        case SparkToolName.updateMemory:
+        case .updateMemory:
             return ["originalContent", "updatedContent"]
-        case SparkToolName.showCustomMessageCard:
+        case .showCustomMessageCard:
             return ["card_type"]
-        case SparkToolName.queryMemberProfile:
+        case .queryMemberProfile:
             return ["query_type"]
-        case SparkToolName.searchOnline, SparkToolName.searchArxivPapers:
+        case .searchOnline, .searchArxivPapers:
             return ["query"]
-        case SparkToolName.readWebPage, SparkToolName.extractRemoteFileContent:
+        case .readWebPage, .extractRemoteFileContent:
             return ["url"]
-        case SparkToolName.createCanvas:
+        case .createCanvas:
             return ["title", "content", "type"]
-        case SparkToolName.editCanvas:
+        case .editCanvas:
             return ["patterns", "replacements"]
-        case SparkToolName.searchCalendarAndReminders,
-             SparkToolName.writeSystemEvent:
-            return []
-        default:
+        case .searchCalendarAndReminders, .writeSystemEvent,
+             .queryTasksByMember, .generateChatTitle,
+             .getCurrentMember, .switchMember, .findMember:
             return []
         }
     }
@@ -567,61 +473,71 @@ final class ToolHub: @unchecked Sendable {
 
     /// 按工具名分发到具体 `run*` 实现；多数结果 `shouldBypassModel: true` 由聊天层直接展示。
     private func execute(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
-        switch invocation.name {
-        case "tool_list":
+        if invocation.name == "tool_list" {
             return ToolExecutionResult(
                 toolName: "tool_list",
                 outputText: "已接入工具（\(SparkToolName.all.count)）：\n\(SparkToolName.all.joined(separator: "\n"))",
                 sensitive: false,
                 shouldBypassModel: true
             )
+        }
 
-        case SparkToolName.fetchStepDetails:
+        guard let tool = SparkToolName(rawValue: invocation.name) else {
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: "未识别工具：\(invocation.name)",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        switch tool {
+        case .fetchStepDetails:
             return await runFetchSteps(invocation: invocation)
-        case SparkToolName.fetchSleepDetails:
+        case .fetchSleepDetails:
             return await runFetchSleep(invocation: invocation)
-        case SparkToolName.fetchEnergyDetails:
+        case .fetchEnergyDetails:
             return await runFetchEnergy(invocation: invocation)
-        case SparkToolName.fetchNutritionDetails:
+        case .fetchNutritionDetails:
             return await runFetchNutrition(invocation: invocation)
-        case SparkToolName.fetchWorkoutDetails:
+        case .fetchWorkoutDetails:
             return await runFetchWorkout(invocation: invocation)
-        case SparkToolName.makeNutritionData:
+        case .makeNutritionData:
             return runMakeNutritionData(invocation: invocation)
 
-        case SparkToolName.searchKnowledgeBag:
+        case .searchKnowledgeBag:
             return await runSearchKnowledgeBag(invocation: invocation)
-        case SparkToolName.createKnowledgeDocument:
+        case .createKnowledgeDocument:
             return await runCreateKnowledgeDocument(invocation: invocation)
 
-        case SparkToolName.saveMemory:
+        case .saveMemory:
             return await runSaveMemory(invocation: invocation)
-        case SparkToolName.retrieveMemory:
+        case .retrieveMemory:
             return await runRetrieveMemory(invocation: invocation)
-        case SparkToolName.updateMemory:
+        case .updateMemory:
             return await runUpdateMemory(invocation: invocation)
 
-        case SparkToolName.getCurrentMember:
+        case .getCurrentMember:
             return await runGetCurrentMember(context: context)
-        case SparkToolName.switchMember, SparkToolName.findMember:
+        case .switchMember, .findMember:
             return await runFindMember(invocation: invocation)
-        case SparkToolName.queryMemberProfile:
+        case .queryMemberProfile:
             return await runQueryMemberProfile(invocation: invocation, context: context)
 
-        case SparkToolName.generateStructuredHealthCard:
+        case .generateStructuredHealthCard:
             return await runGenerateStructuredHealthCard(invocation: invocation, context: context)
-        case SparkToolName.queryTasksByMember:
+        case .queryTasksByMember:
             return await runQueryTasksByMember(invocation: invocation, context: context)
-        case SparkToolName.generateTask:
+        case .generateTask:
             return await runGenerateTask(invocation: invocation, context: context)
-        case SparkToolName.generateChatTitle:
+        case .generateChatTitle:
             return runGenerateChatTitle(invocation: invocation)
-        case SparkToolName.createCanvas:
+        case .createCanvas:
             return runCreateCanvas(invocation: invocation)
-        case SparkToolName.editCanvas:
+        case .editCanvas:
             return runEditCanvas(invocation: invocation)
 
-        case SparkToolName.showCustomMessageCard:
+        case .showCustomMessageCard:
             let cardType = (invocation.arguments["card_type"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let hint = cardType.isEmpty ? "" : "（\(cardType)）"
             return ToolExecutionResult(
@@ -631,26 +547,18 @@ final class ToolHub: @unchecked Sendable {
                 shouldBypassModel: true
             )
 
-        case SparkToolName.searchOnline,
-             SparkToolName.readWebPage,
-             SparkToolName.searchArxivPapers,
-             SparkToolName.extractRemoteFileContent,
-             SparkToolName.queryLocation,
-             SparkToolName.getCurrentLocation,
-             SparkToolName.searchNearbyLocations,
-             SparkToolName.getRoute,
-             SparkToolName.queryWeather,
-             SparkToolName.searchCalendarAndReminders,
-             SparkToolName.writeSystemEvent:
+        case .searchOnline,
+             .readWebPage,
+             .searchArxivPapers,
+             .extractRemoteFileContent,
+             .queryLocation,
+             .getCurrentLocation,
+             .searchNearbyLocations,
+             .getRoute,
+             .queryWeather,
+             .searchCalendarAndReminders,
+             .writeSystemEvent:
             return await runExternalConnectorTool(invocation: invocation)
-
-        default:
-            return ToolExecutionResult(
-                toolName: invocation.name,
-                outputText: "未识别工具：\(invocation.name)",
-                sensitive: false,
-                shouldBypassModel: true
-            )
         }
     }
 
@@ -1870,18 +1778,24 @@ final class ToolHub: @unchecked Sendable {
     /// 将工具名映射到配置里的 `toolClass`（weather/map/calendar/code/tool），再取可用 `requestURL`。
     private func resolveEndpoint(for toolName: String, toolKeys: [ToolKeys]) -> String? {
         let toolClass: String
-        switch toolName {
-        case SparkToolName.queryWeather:
+        guard let tool = SparkToolName(rawValue: toolName) else {
+            toolClass = "tool"
+            return toolKeys.first(where: { $0.toolClass == toolClass && $0.isUsing })?.requestURL
+                ?? toolKeys.first(where: { $0.toolClass == toolClass })?.requestURL
+        }
+
+        switch tool {
+        case .queryWeather:
             toolClass = "weather"
-        case SparkToolName.queryLocation,
-             SparkToolName.getCurrentLocation,
-             SparkToolName.searchNearbyLocations,
-             SparkToolName.getRoute:
+        case .queryLocation,
+             .getCurrentLocation,
+             .searchNearbyLocations,
+             .getRoute:
             toolClass = "map"
-        case SparkToolName.searchCalendarAndReminders,
-             SparkToolName.writeSystemEvent:
+        case .searchCalendarAndReminders,
+             .writeSystemEvent:
             toolClass = "calendar"
-        case SparkToolName.searchArxivPapers:
+        case .searchArxivPapers:
             toolClass = "code"
         default:
             toolClass = "tool"

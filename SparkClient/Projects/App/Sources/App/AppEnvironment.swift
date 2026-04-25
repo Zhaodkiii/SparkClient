@@ -19,7 +19,7 @@ enum AppEnvironment: String, CaseIterable, Sendable {
     var apiBaseURL: URL {
         switch self {
         case .debug:
-            return URL(string: "http://localhost:8000")! // localhost //172.20.10.2 //192.168.31.39  //172.169.5.114
+            return URL(string: "http://172.169.4.62:8000")! // localhost //172.20.10.2 //192.168.31.39  //172.169.5.114
         case .staging:
             return URL(string: "https://api-staging.sparkclient.local")!
         case .production:

@@ -24,6 +24,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let reasoningDurationMs: Int64?
     let reasoningExpanded: Bool?
     let reasoningVisibility: String?
+    let modelName: String?
 
     enum CodingKeys: String, CodingKey {
         case threadID = "thread_id"
@@ -47,6 +48,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case reasoningDurationMs = "reasoning_duration_ms"
         case reasoningExpanded = "reasoning_expanded"
         case reasoningVisibility = "reasoning_visibility"
+        case modelName = "model_name"
     }
 
     nonisolated init(
@@ -70,7 +72,8 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         reasoningContent: String? = nil,
         reasoningDurationMs: Int64? = nil,
         reasoningExpanded: Bool? = nil,
-        reasoningVisibility: String? = nil
+        reasoningVisibility: String? = nil,
+        modelName: String? = nil
     ) {
         self.threadID = threadID
         self.role = role
@@ -93,6 +96,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.reasoningDurationMs = reasoningDurationMs
         self.reasoningExpanded = reasoningExpanded
         self.reasoningVisibility = reasoningVisibility
+        self.modelName = modelName
     }
 
     init(from decoder: Decoder) throws {
@@ -118,6 +122,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
         reasoningExpanded = try c.decodeIfPresent(Bool.self, forKey: .reasoningExpanded)
         reasoningVisibility = try c.decodeIfPresent(String.self, forKey: .reasoningVisibility)
+        modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -143,6 +148,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
         try c.encodeIfPresent(reasoningExpanded, forKey: .reasoningExpanded)
         try c.encodeIfPresent(reasoningVisibility, forKey: .reasoningVisibility)
+        try c.encodeIfPresent(modelName, forKey: .modelName)
     }
 }
 

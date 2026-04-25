@@ -41,6 +41,35 @@ struct TranslateKnowledgeTextUseCase: Sendable {
     }
 }
 
+/// 使用 `AIScenario.optimizationText` 为本地智能体自动生成 system prompt。
+struct AutoFillAgentPromptUseCase: Sendable {
+    let runtime: AIRuntimeServing
+
+    func execute(displayName: String, baseModelName: String) async throws -> String {
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = baseModelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = """
+        请为一个本地智能体生成可直接保存的 system prompt。
+        智能体名称：\(name.isEmpty ? "未命名智能体" : name)
+        基座模型：\(model.isEmpty ? "未指定" : model)
+
+        要求：
+        1. 使用中文。
+        2. 明确角色定位、能力边界、交流风格、输出规则和安全约束。
+        3. 适合作为系统提示词直接注入模型。
+        4. 不要输出解释、标题、引号或 Markdown 包装。
+        """
+
+        let request = AIRuntimeTextRequest(
+            scenario: .optimizationText,
+            messages: [AIRuntimeMessage(role: .user, content: prompt)]
+        )
+        return try await collectResponseText(
+            from: try await runtime.generateTextStream(request: request)
+        )
+    }
+}
+
 /// 从相册/相机图片识别文字并供编辑器追加（与 `OCROrchestrator` 病历能力同源）。
 struct OCRKnowledgeImageUseCase: Sendable {
     let ocr: OCROrchestrator

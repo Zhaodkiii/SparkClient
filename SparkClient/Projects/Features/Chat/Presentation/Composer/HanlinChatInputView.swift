@@ -8,8 +8,6 @@ struct HanlinChatInputView: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageMemberUseCase: ManageHomeMemberUseCase
     let boundMemberID: Int?
     let onSend: () -> Void
     let onCancel: () -> Void
@@ -20,6 +18,7 @@ struct HanlinChatInputView: View {
 
     @State private var inputHeight: CGFloat = 24
     @State private var inputExpandedSheet = false
+    @State private var voiceInputSheet = false
     @State private var unifiedFilePreview: FilePreviewInput?
 
     private var composerDraft: ChatComposerDraft {
@@ -101,7 +100,18 @@ struct HanlinChatInputView: View {
                 .ignoresSafeArea()
             }
             .sheet(isPresented: $inputExpandedSheet) {
-                hanlinExpandedEditorSheet
+                SparkPromptInputDrawerSheet(
+                    text: draftBinding,
+                    isPresented: $inputExpandedSheet
+                )
+                .sparkInputPresentationChromeIfAvailable()
+            }
+            .sheet(isPresented: $voiceInputSheet) {
+                SparkVoiceInputSheet(
+                    text: draftBinding,
+                    isPresented: $voiceInputSheet
+                )
+                .sparkInputPresentationChromeIfAvailable()
             }
             .unifiedFilePreview(selection: $unifiedFilePreview)
     }
@@ -136,8 +146,9 @@ struct HanlinChatInputView: View {
                     .padding(.leading, 12)
 
                     Button {
+                        voiceInputSheet = true
                     } label: {
-                        Image(systemName: "microphone")
+                        Image(systemName: "microphone.circle")
                             .foregroundStyle(Color(.systemGray))
                             .padding(.trailing, 3)
                     }
@@ -161,8 +172,6 @@ struct HanlinChatInputView: View {
                         modelReasoning: modelReasoning,
                         stateStore: stateStore,
                         memberContextStore: memberContextStore,
-                        loadMembersUseCase: loadMembersUseCase,
-                        manageMemberUseCase: manageMemberUseCase,
                         boundMemberID: boundMemberID,
                         onSetMemberBinding: onSetMemberBinding
                     )
@@ -178,27 +187,6 @@ struct HanlinChatInputView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 12)
             .padding(.top, composerDraft.attachments.isEmpty ? 12 : 6)
-        }
-    }
-
-    private var hanlinExpandedEditorSheet: some View {
-        CompatibleNavigationContainer {
-            TextEditor(
-                text: Binding(
-                    get: { stateStore.draft(for: threadID) },
-                    set: { stateStore.setDraft($0, for: threadID) }
-                )
-            )
-            .padding(12)
-            .navigationTitle(L10n.text("chat.composer.expanded.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("common.ok")) {
-                        inputExpandedSheet = false
-                    }
-                }
-            }
         }
     }
 
@@ -302,6 +290,13 @@ struct HanlinChatInputView: View {
         Binding(
             get: { composerDraft.isShowingCamera },
             set: { stateStore.setCameraPresented($0, for: threadID) }
+        )
+    }
+
+    private var draftBinding: Binding<String> {
+        Binding(
+            get: { stateStore.draft(for: threadID) },
+            set: { stateStore.setDraft($0, for: threadID) }
         )
     }
 

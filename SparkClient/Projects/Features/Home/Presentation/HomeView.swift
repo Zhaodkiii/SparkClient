@@ -38,7 +38,7 @@ struct HomeView: View {
         }
         .sheet(item: $addMemberMode) { mode in
             CompatibleNavigationContainer {
-                AddFamilyMemberView(mode: mode, viewModel: viewModel)
+                AddFamilyMemberView(mode: mode, store: viewModel.memberContextStoreForBinding)
             }
         }
         .alert(
@@ -480,6 +480,9 @@ extension HomeViewModel {
 
         let previewLogger = ConsoleLogger()
         let previewBackend = Backend(baseURL: URL(string: "。.local")!, logger: previewLogger)
+        let memberContextStore = MemberContextStore(persistence: previewPersistence)
+        memberContextStore.configure(manage: ManageHomeMemberUseCase(memberAPI: previewBackend.medicalMembers))
+
         let viewModel = HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase(
@@ -488,8 +491,7 @@ extension HomeViewModel {
                 selectedMemberIDPersistence: previewPersistence,
                 logger: previewLogger
             ),
-            manageHomeMemberUseCase: ManageHomeMemberUseCase(memberAPI: previewBackend.medicalMembers),
-            memberContextStore: MemberContextStore(persistence: previewPersistence),
+            memberContextStore: memberContextStore,
             notificationClient: PreviewNotificationClient(),
             logger: previewLogger
         )

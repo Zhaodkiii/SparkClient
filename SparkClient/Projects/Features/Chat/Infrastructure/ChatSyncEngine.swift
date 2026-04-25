@@ -70,8 +70,14 @@ actor ChatSyncEngine {
     func pushOutboxOnly() async throws {
         logger.debug("聊天仅上送 outbox", module: .general)
         try await pushPendingThreadDeletions()
-        try await pushThreads()
+//        try await pushThreads()
         try await pushOutbox()
+    }
+
+    /// 仅上送指定会话的元数据（单会话变更路径，避免全量推送）。
+    func pushSingleThread(threadID: UUID) async throws {
+        logger.debug("上送单会话元数据，thread=\(shortID(threadID))", module: .general)
+        try await outboxPipeline.pushThread(threadID: threadID)
     }
 
     /// 打开会话时：仅同步该会话，减少带宽。
@@ -105,7 +111,7 @@ actor ChatSyncEngine {
         let start = Date()
         logger.debug("聊天同步开始", module: .general)
         try await pushPendingThreadDeletions()
-        try await pushThreads()
+//        try await pushThreads()
         try await pushOutbox()
         let cost = Date().timeIntervalSince(start)
         logger.info("聊天同步完成（仅上送），cost=\(format(cost))s", module: .general)
@@ -115,7 +121,7 @@ actor ChatSyncEngine {
         let start = Date()
         logger.debug("聊天手动刷新同步开始", module: .general)
         try await pushPendingThreadDeletions()
-        try await pushThreads()
+//        try await pushThreads()
         try await pushOutbox()
         let changedThreads = try await pullThreadDeltas(cursor: await repository.loadThreadSyncCursor()?.value)
         try await pullMessagesForChangedThreads(changedThreads)
@@ -130,7 +136,7 @@ actor ChatSyncEngine {
         _ = cursor
         // 按当前策略：realtime 后续拉取链路已移除，仅保留本地待同步数据上送。
         try await pushPendingThreadDeletions()
-        try await pushThreads()
+//        try await pushThreads()
         try await pushOutbox()
         logger.debug("realtime 提示处理完成：仅上送，不执行拉取", module: .general)
     }
@@ -147,7 +153,7 @@ actor ChatSyncEngine {
             let localMessageCount = await repository.countMessages(threadID: threadID)
             if localMessageCount > 0 {
                 try await pushPendingThreadDeletions()
-                try await pushThreads()
+//                try await pushThreads()
                 try await pushOutbox()
                 logger.debug(
                     "会话打开同步完成：本地新建会话仅上送，不执行拉取，thread=\(shortID(threadID))",
@@ -164,7 +170,7 @@ actor ChatSyncEngine {
 
         // 存量会话打开：只拉取该会话的未同步消息（thread_id + cursor），不做全局拉取。
         try await pushPendingThreadDeletions()
-        try await pushThreads()
+//        try await pushThreads()
         try await pushOutbox()
         let persistedCursor = await repository.loadMessageSyncCursor(for: threadID)?.value
         let cursor = if let persistedCursor {

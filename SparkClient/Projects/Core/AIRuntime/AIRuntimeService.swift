@@ -55,12 +55,12 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             for: request.scenario,
             preferredModelName: request.preferredModelName
         )
-        // 获取当前模型配置快照
-        let snapshot = await configCenter.currentSnapshot()
+        let bundles = try await configCenter.effectiveScenarioBundles()
+        let allRows = bundles.allRows
         // 判断模型是否支持工具调用（Function Call）
-        let supportsToolUse = modelSupportsTools(modelName: resolved.model, snapshot: snapshot)
+        let supportsToolUse = modelSupportsTools(modelName: resolved.model, allRows: allRows)
         // 从模型目录获取厂商名称（大写）
-        let selectedCatalogModel = snapshot.allModels.first(where: { $0.name == resolved.model })
+        let selectedCatalogModel = allRows.first(where: { $0.name == resolved.model })
         let providerFromCatalog = selectedCatalogModel?.providerID
         let providerFromRequest = request.providerCompanyUppercased
         let mergedProvider = providerFromRequest ?? providerFromCatalog
@@ -106,15 +106,15 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
         }()
 
         var effectiveMessages = effectiveRequest.messages
-        if let selectedModel = snapshot.allModels.first(where: { $0.name == resolved.model }),
-           selectedModel.identity == .agent,
+        if let selectedModel = allRows.first(where: { $0.name == resolved.model }),
+           selectedModel.identity == AIModelIdentity.agent.rawValue,
            let prompt = selectedModel.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
            prompt.isEmpty == false {
             effectiveMessages.insert(AIRuntimeMessage(role: .system, content: prompt), at: 0)
         }
 
         // MARK: - 优先使用本地模型
-        if let localSelection = resolveLocalModelSelection(modelName: resolved.model, snapshot: snapshot) {
+        if let localSelection = resolveLocalModelSelection(modelName: resolved.model, allRows: allRows) {
             // 必须有本地网关实例
             guard let localGateway else {
                 throw LocalModelServiceError.modelLoadFailed
@@ -185,9 +185,38 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             }
         }
 
+        // 对「智能体（agent）」类型模型做特殊处理：
+        // - 对外调用厂商 API 时：使用其绑定的「基座模型名」（baseModelName）
+        // - 对内系统逻辑：仍然使用 agent 名称（用于目录查找、Prompt 注入、策略控制等）
+        //
+        // 目的：实现「Agent 抽象层」与「底层模型调用」解耦
+        // 例如：agent = 写作助手 → 实际调用 qwen / gpt 等具体模型
+        let resolvedForAPI: AIResolvedConfig = {
+            // 条件：当前选择的模型是 agent，并且存在合法的 baseModelName
+            guard let selectedCatalogModel,
+                  selectedCatalogModel.identity == AIModelIdentity.agent.rawValue,
+                  let baseModelName = selectedCatalogModel.baseModelName?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                  baseModelName.isEmpty == false
+            else {
+                // 非 agent 或未配置基座模型 → 直接使用原始配置
+                return resolved
+            }
+
+            // 构造新的配置：仅替换 model 字段，其它保持不变
+            return AIResolvedConfig(
+                endpoint: resolved.endpoint,
+                model: baseModelName,   // ⚠️ 关键：这里替换为真实调用的底层模型
+                apiKey: resolved.apiKey,
+                temperature: resolved.temperature,
+                maxTokens: resolved.maxTokens,
+                source: resolved.source
+            )
+        }()
+        
         // MARK: - 调用云端模型
         let client = AIClientFactory.makeClient(
-            from: resolved,
+            from: resolvedForAPI,
             temperatureOverride: effectiveRequest.temperature,
             topPOverride: effectiveRequest.topP,
             maxTokensOverride: effectiveRequest.maxTokens
@@ -284,10 +313,10 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
     /// - 返回：模型文件名 + 模型对象（如果是本地模型）
     private func resolveLocalModelSelection(
         modelName: String,
-        snapshot: AISettingsSnapshot
-    ) -> (fileName: String, model: AllModels)? {
+        allRows: [AIScenarioRemoteModelRow]
+    ) -> (fileName: String, row: AIScenarioRemoteModelRow)? {
         // 查找对应模型
-        guard let selected = snapshot.allModels.first(where: { $0.name == modelName }) else {
+        guard let selected = allRows.first(where: { $0.name == modelName }) else {
             return nil
         }
         // 仅本地厂商模型处理
@@ -295,13 +324,16 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             return nil
         }
         // 基础本地模型
-        if selected.identity == .model, let fileName = selected.localFilename, fileName.isEmpty == false {
+        if selected.identity == AIModelIdentity.model.rawValue,
+           let fileName = selected.localFilename,
+           fileName.isEmpty == false
+        {
             return (fileName, selected)
         }
         // Agent 模型（使用基础模型文件）
-        if selected.identity == .agent,
+        if selected.identity == AIModelIdentity.agent.rawValue,
            let baseModelName = selected.baseModelName,
-           let base = snapshot.allModels.first(where: { $0.name == baseModelName }),
+           let base = allRows.first(where: { $0.name == baseModelName }),
            let fileName = base.localFilename,
            fileName.isEmpty == false {
             return (fileName, selected)
@@ -311,14 +343,14 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
     }
 
     /// 判断模型是否支持工具调用（支持代理模型）
-    private func modelSupportsTools(modelName: String, snapshot: AISettingsSnapshot) -> Bool {
-        guard let selected = snapshot.allModels.first(where: { $0.name == modelName }) else {
+    private func modelSupportsTools(modelName: String, allRows: [AIScenarioRemoteModelRow]) -> Bool {
+        guard let selected = allRows.first(where: { $0.name == modelName }) else {
             return false
         }
         // 代理模型检查自身 + 基础模型
-        if selected.identity == .agent,
+        if selected.identity == AIModelIdentity.agent.rawValue,
            let baseModelName = selected.baseModelName,
-           let base = snapshot.allModels.first(where: { $0.name == baseModelName }) {
+           let base = allRows.first(where: { $0.name == baseModelName }) {
             return selected.supportsToolUse || base.supportsToolUse
         }
         return selected.supportsToolUse

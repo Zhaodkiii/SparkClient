@@ -5,9 +5,7 @@ struct ChatConversationListPage: View {
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
     @ObservedObject var taskManager: TaskManager
-    @ObservedObject var memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageMemberUseCase: ManageHomeMemberUseCase
+    @ObservedObject var homeViewModel: HomeViewModel
 
     @State private var searchText = ""
     @State private var navigationSelection: UUID?
@@ -109,9 +107,7 @@ struct ChatConversationListPage: View {
                     listViewModel: listViewModel,
                     detailViewModel: detailViewModel,
                     taskManager: taskManager,
-                    memberContextStore: memberContextStore,
-                    loadMembersUseCase: loadMembersUseCase,
-                    manageMemberUseCase: manageMemberUseCase
+                    homeViewModel: homeViewModel
                 )
                 .hidesMainTabBarWhenPushed(),
                 tag: item.id,

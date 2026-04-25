@@ -639,8 +639,10 @@
 "ai_settings.models.agent.field.name" = "智能体名称";
 "ai_settings.models.agent.field.base_model" = "基座模型";
 "ai_settings.models.agent.section.icons" = "图标选择";
-"ai_settings.models.agent.section.system_prompt" = "系统提示词（可选）";
-"ai_settings.models.agent.nav.new_title" = "新建本地智能体";
+"ai_settings.models.agent.section.system_prompt" = "智能体设定";
+"ai_settings.models.agent.section.base_model" = "基础模型";
+"ai_settings.models.agent.empty.base_models" = "暂无可用基础模型。请先安装本地模型或配置可见的服务模型密钥。";
+"ai_settings.models.agent.nav.new_title" = "新建智能体";
 "ai_settings.models.agent.action.create" = "创建";
 "ai_settings.models.section.trial_models" = "试用模型";
 "ai_settings.models.trial.explain" = "开启后可在对话输入栏选择该模型（由服务端试用白名单控制）。";
@@ -656,6 +658,7 @@
 "ai_settings.models.capability.image_gen_short" = "生图";
 "ai_settings.models.capability.voice_short" = "语音";
 "ai_settings.models.badge.local" = "本地";
+"ai_settings.models.badge.service" = "服务";
 "ai_settings.models.row.based_on_format" = "基于 %@";
 "ai_settings.models.menu.add_online_model" = "添加在线模型";
 "ai_settings.models.menu.advanced" = "高级…";
@@ -715,11 +718,28 @@
 "ai_settings.models.local_download.explain" = "从目录下载模型，或导入本地 .gguf 文件。";
 "ai_settings.models.local_download.nav_title" = "添加本地模型";
 
-"ai_settings.models.agent.nav.edit_title" = "编辑本地智能体";
+"ai_settings.models.agent.nav.edit_title" = "编辑智能体";
 
 "common.load_failed" = "加载失败";
 "common.operation_failed" = "操作失败";
 "common.ok" = "确定";
+"common.close" = "关闭";
+"common.done" = "完成";
+
+"prompt_input.tools" = "输入工具";
+"prompt_input.drawer.title" = "多行输入";
+"prompt_input.voice.title" = "语音输入";
+"prompt_input.voice.record" = "录音";
+"prompt_input.voice.permission_denied" = "未获得语音识别权限。请在系统设置中允许语音识别与麦克风访问。";
+"prompt_input.voice.unavailable" = "当前设备暂不可用语音识别。";
+"prompt_input.toolbar.autofill" = "自动填写";
+"prompt_input.toolbar.autofilling" = "正在填写";
+"prompt_input.toolbar.undo_autofill" = "撤销填写";
+"prompt_input.toolbar.add_link" = "添加链接";
+"prompt_input.toolbar.link_placeholder" = "粘贴链接";
+"prompt_input.ocr.camera" = "拍摄照片";
+"prompt_input.ocr.photo_library" = "相册选择";
+"prompt_input.ocr.camera_unavailable" = "无法打开相机";
 "common.cancel" = "取消";
 "ai_settings.models.management.nav_title" = "%@ 模型";
 "ai_settings.models.management.search_prompt" = "搜索模型";

@@ -17,28 +17,38 @@ final class HomeViewModel: ObservableObject {
 
     private let sessionStore: AppSessionStore
     private let loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase
-    private let manageHomeMemberUseCase: ManageHomeMemberUseCase
     private let memberContextStore: MemberContextStore
     private let notificationClient: any NotificationClient
     private let logger: Logger
 
     private let logModule = LogModule.home
     private var isInitialLoadInFlight = false
+    private var cancellables: Set<AnyCancellable> = []
+
+    var memberContextStoreForBinding: MemberContextStore {
+        memberContextStore
+    }
 
     init(
         sessionStore: AppSessionStore,
         loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase,
-        manageHomeMemberUseCase: ManageHomeMemberUseCase,
         memberContextStore: MemberContextStore,
         notificationClient: any NotificationClient,
         logger: Logger
     ) {
         self.sessionStore = sessionStore
         self.loadHomeMedicalOverviewUseCase = loadHomeMedicalOverviewUseCase
-        self.manageHomeMemberUseCase = manageHomeMemberUseCase
         self.memberContextStore = memberContextStore
         self.notificationClient = notificationClient
         self.logger = logger
+        memberContextStore.membersDidChange
+            .sink { [weak self] in
+                guard let self else { return }
+                Task {
+                    await self.load(syncRemote: true)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Loading
@@ -132,62 +142,21 @@ final class HomeViewModel: ObservableObject {
         self.dashboard = dashboard
     }
 
-    // MARK: - Member CRUD
-
-    func addMember(
-        name: String,
-        relationship: String,
-        gender: String,
-        birthDate: Date?
-    ) async {
-        do {
-            try await manageHomeMemberUseCase.create(
-                name: name,
-                relationship: relationship,
-                gender: gender,
-                birthDate: birthDate
-            )
-            await load(syncRemote: true)
-        } catch {
-            errorMessage = nil
-            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.member.create")
-        }
-    }
-
-    func updateMember(
-        _ member: Member,
-        name: String,
-        relationship: String,
-        gender: String,
-        birthDate: Date?
-    ) async {
-        do {
-            try await manageHomeMemberUseCase.update(
-                member: member,
-                name: name,
-                relationship: relationship,
-                gender: gender,
-                birthDate: birthDate
-            )
-            await load(syncRemote: true)
-        } catch {
-            errorMessage = nil
-            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.member.update")
-        }
-    }
-
     func deleteMember(_ member: Member) async {
-        do {
-            try await manageHomeMemberUseCase.delete(member: member)
-            if selectedMemberID == member.id {
-                selectedMemberID = nil
-                memberContextStore.select(memberID: nil)
-            }
-            await load(syncRemote: true)
-        } catch {
-            errorMessage = nil
-            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.member.delete")
+        let didDelete = await memberContextStore.deleteMember(member)
+        guard didDelete else {
+            notificationClient.error(
+                L10n.text("common.error"),
+                title: L10n.text("common.error"),
+                source: "home.member.delete"
+            )
+            return
         }
+        if selectedMemberID == member.id {
+            selectedMemberID = nil
+            memberContextStore.select(memberID: nil)
+        }
+        await load(syncRemote: true)
     }
 
 #if DEBUG

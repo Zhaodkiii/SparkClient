@@ -405,7 +405,8 @@ actor CoreDataChatStore {
         reasoningVisibility: ChatReasoningVisibility,
         clientMessageID: UUID,
         serverMessageID: String?,
-        deliveryState: ChatDeliveryState
+        deliveryState: ChatDeliveryState,
+        modelName: String?
     ) async throws -> ChatMessage {
         guard await activeAccountID() != nil else {
             throw ChatFeatureError.threadNotFound
@@ -425,7 +426,8 @@ actor CoreDataChatStore {
             deliveryState: deliveryState,
             createdAt: Date(),
             serverUpdatedAt: nil,
-            isTombstone: false
+            isTombstone: false,
+            modelName: modelName
         )
 
         try await kernel.writeWithoutNotification { context, accountID in
@@ -482,6 +484,32 @@ actor CoreDataChatStore {
                     kind: .messagesUpdated,
                     affectedClientMessageIDs: [clientMessageID],
                     affectsThreadList: change.1
+                )
+            )
+        }
+    }
+
+    func softDeleteMessage(clientMessageID: UUID) async {
+        let change = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchMessage(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: clientMessageID,
+                serverMessageID: nil
+            ) else {
+                return nil as UUID?
+            }
+            object.setValue(true, forKey: "isTombstone")
+            object.setValue(Date(), forKey: "serverUpdatedAt")
+            return object.value(forKey: "threadID") as? UUID
+        }
+        if let threadID = change {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: threadID,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [clientMessageID],
+                    affectsThreadList: true
                 )
             )
         }
@@ -943,6 +971,7 @@ actor CoreDataChatStore {
         object.setValue(message.reasoningDurationMs.map { NSNumber(value: $0) }, forKey: "reasoningDurationMs")
         object.setValue(message.reasoningExpanded, forKey: "reasoningExpanded")
         object.setValue(message.reasoningVisibility.rawValue, forKey: "reasoningVisibility")
+        object.setValue(message.modelName, forKey: "modelName")
         object.setValue(message.clientMessageID, forKey: "clientMessageID")
         object.setValue(message.serverMessageID, forKey: "serverMessageID")
         object.setValue(message.deliveryState.rawValue, forKey: "deliveryState")
@@ -1054,7 +1083,8 @@ actor CoreDataChatStore {
             deliveryState: deliveryState,
             createdAt: createdAt,
             serverUpdatedAt: object.value(forKey: "serverUpdatedAt") as? Date,
-            isTombstone: object.value(forKey: "isTombstone") as? Bool ?? false
+            isTombstone: object.value(forKey: "isTombstone") as? Bool ?? false,
+            modelName: object.value(forKey: "modelName") as? String
         )
     }
 

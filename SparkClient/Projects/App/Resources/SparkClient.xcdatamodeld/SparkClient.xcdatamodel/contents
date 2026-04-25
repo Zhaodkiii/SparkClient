@@ -52,6 +52,7 @@
         <attribute name="reasoningDurationMs" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="reasoningExpanded" optional="NO" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="reasoningVisibility" optional="NO" attributeType="String" defaultValueString="full"/>
+        <attribute name="modelName" optional="YES" attributeType="String"/>
         <attribute name="attachmentsData" optional="YES" attributeType="Binary"/>
         <attribute name="clientMessageID" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="serverMessageID" optional="YES" attributeType="String"/>

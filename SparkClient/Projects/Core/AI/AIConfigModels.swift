@@ -203,7 +203,7 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
 // MARK: - 多模型场景启动配置（对应 `/api/v1/ai/config/bootstrap/` 的 `scenarios` 对象）
 
 /// 场景下的一条模型配置（由 bootstrap 的 `default_model` 与 `models[]` 组成）。
-struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
+struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
     var name: String
     var displayName: String
     var identity: String
@@ -230,6 +230,12 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
     var isDefault: Bool = false
     var temperature: Double = 0.2
     var maxTokens: Int = 4096
+    var baseModelName: String?
+    var localFilename: String?
+
+    var id: String {
+        name
+    }
 
     var model: String {
         get { name }
@@ -238,6 +244,28 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
 
     var providerCompany: String? {
         company.isEmpty ? nil : company
+    }
+
+    var displayTitle: String {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? name : trimmed
+    }
+
+    var composerIconSystemName: String {
+        let trimmed = icon?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty == false {
+            return trimmed
+        }
+        return identity == AIModelIdentity.agent.rawValue ? "person.crop.circle" : "cpu"
+    }
+
+    var systemPrompt: String? {
+        guard let trimmed = systemProvision?.trimmingCharacters(in: .whitespacesAndNewlines),
+              trimmed.isEmpty == false
+        else {
+            return nil
+        }
+        return trimmed
     }
 
     enum CodingKeys: String, CodingKey {
@@ -265,6 +293,8 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
         case aiToolScenarios
         case temperature
         case maxTokens = "max_tokens"
+        case baseModelName = "base_model_name"
+        case localFilename = "local_filename"
         case endpoint
         case apiKey = "api_key"
     }
@@ -305,7 +335,9 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
         aiToolScenarios: [String],
         isDefault: Bool = false,
         temperature: Double = 0.2,
-        maxTokens: Int = 4096
+        maxTokens: Int = 4096,
+        baseModelName: String? = nil,
+        localFilename: String? = nil
     ) {
         self.name = name
         self.displayName = displayName
@@ -333,6 +365,8 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
         self.isDefault = isDefault
         self.temperature = temperature
         self.maxTokens = maxTokens
+        self.baseModelName = baseModelName
+        self.localFilename = localFilename
     }
 
     init(from decoder: Decoder) throws {
@@ -363,6 +397,8 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable {
         isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
         temperature = try c.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.2
         maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 4096
+        baseModelName = try c.decodeIfPresent(String.self, forKey: .baseModelName)
+        localFilename = try c.decodeIfPresent(String.self, forKey: .localFilename)
     }
 
     var configSource: AIConfigSource {
@@ -684,6 +720,32 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
 
     func resolveConfig(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioConfig? {
         bundle(for: scenario).resolveConfig(preferredModelName: preferredModelName)
+    }
+
+    var allRows: [AIScenarioRemoteModelRow] {
+        let bundles = [
+            chat,
+            embedding,
+            voice,
+            medicalStructuredExtraction,
+            medicalDocumentTypeRecognition,
+            medicalCaseExtraction,
+            healthExamExtraction,
+            medicalReportExtraction,
+            prescriptionExtraction,
+            medicationExtraction,
+            optimizationText,
+            optimizationVisual,
+            contextFolding,
+            router,
+            modelConfig,
+            reportInterpretation
+        ]
+
+        var seen = Set<String>()
+        return bundles
+            .flatMap(\.models)
+            .filter { seen.insert($0.name).inserted }
     }
 
 }

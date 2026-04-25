@@ -46,8 +46,10 @@ protocol ChatMessageStoring: Sendable {
         reasoningVisibility: ChatReasoningVisibility,
         clientMessageID: UUID,
         serverMessageID: String?,
-        deliveryState: ChatDeliveryState
+        deliveryState: ChatDeliveryState,
+        modelName: String?
     ) async throws -> ChatMessage
+    func softDeleteMessage(clientMessageID: UUID) async
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async
     func updateMessageAttachments(
         clientMessageID: UUID,

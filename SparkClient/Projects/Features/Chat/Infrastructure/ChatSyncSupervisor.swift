@@ -30,6 +30,10 @@ actor ChatSyncSupervisor {
         await attachmentPipeline.processPendingJobs(limit: 8)
     }
 
+    func pushSingleThread(threadID: UUID) async throws {
+        try await syncEngine.pushSingleThread(threadID: threadID)
+    }
+
     func startRealtimeSync() async {
         await syncEngine.startRealtimeSync()
     }

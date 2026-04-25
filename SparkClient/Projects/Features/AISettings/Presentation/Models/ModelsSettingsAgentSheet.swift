@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// 新建或编辑本地智能体（对齐 Health `AddAgentView` 的基础字段）。
+/// 新建或编辑智能体（对齐 Health `AddAgentView` 的基础字段）。
 struct ModelsSettingsAgentSheet: View {
-    let localBaseModels: [AllModels]
+    let baseModels: [AllModels]
     var editingAgent: AllModels?
+    var promptTooling: AISettingsPromptTooling = .unavailable
     let onCreate: (String, String, String, String) -> Void
     let onUpdate: ((UUID, String, String, String, String) -> Void)?
 
@@ -12,24 +13,18 @@ struct ModelsSettingsAgentSheet: View {
     @State private var selectedBaseModelName = ""
     @State private var systemPrompt = ""
     @State private var showIconPicker = false
+    @State private var showTextInputDrawer = false
+    @State private var showVoiceInput = false
+    @State private var autoFillInProgress = false
+    @State private var autoFilled = false
+    @State private var autoFillOriginalText = ""
+    @State private var actionError: String?
     @Environment(\.dismiss) private var dismiss
 
     private var isEditing: Bool { editingAgent != nil }
 
     var body: some View {
         List {
-            Section(L10n.text("ai_settings.models.agent.section.basic")) {
-                TextField(L10n.text("ai_settings.models.agent.field.name"), text: $displayName)
-                Picker(L10n.text("ai_settings.models.agent.field.base_model"), selection: $selectedBaseModelName) {
-                    ForEach(localBaseModels) { model in
-                        Text(model.displayName).tag(model.name)
-                    }
-                }
-                if let selectedModel = localBaseModels.first(where: { $0.name == selectedBaseModelName }) {
-                    AgentBaseModelPreview(model: selectedModel)
-                }
-            }
-
             Section(L10n.text("ai_settings.models.agent.section.icons")) {
                 HStack {
                     Spacer()
@@ -47,9 +42,63 @@ struct ModelsSettingsAgentSheet: View {
                 .listRowBackground(Color.clear)
             }
 
+            Section(L10n.text("ai_settings.models.agent.section.basic")) {
+                TextField(L10n.text("ai_settings.models.agent.field.name"), text: $displayName)
+            }
+
             Section(L10n.text("ai_settings.models.agent.section.system_prompt")) {
-                TextEditor(text: $systemPrompt)
-                    .frame(minHeight: 96)
+                VStack(alignment: .leading, spacing: 10) {
+                    TextEditor(text: $systemPrompt)
+                        .scrollContentBackgroundIfAvailable(.hidden)
+                        .frame(minHeight: 150)
+
+                    HStack(spacing: 10) {
+                        autoFillButton
+
+                        Spacer()
+                        Text(L10n.text("prompt_input.tools"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Button {
+                            showVoiceInput = true
+                        } label: {
+                            Image(systemName: "microphone.circle")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 25, height: 25)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.text("prompt_input.voice.title"))
+
+                        Button {
+                            showTextInputDrawer = true
+                        } label: {
+                            Image(systemName: "chevron.up.circle")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 25, height: 25)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.text("prompt_input.drawer.title"))
+                    }
+                    .foregroundStyle(.tint)
+                }
+            }
+
+            Section(L10n.text("ai_settings.models.agent.section.base_model")) {
+                Picker(L10n.text("ai_settings.models.agent.field.base_model"), selection: $selectedBaseModelName) {
+                    ForEach(baseModels) { model in
+                        Text(model.displayName).tag(model.name)
+                    }
+                }
+                if let selectedModel = baseModels.first(where: { $0.name == selectedBaseModelName }) {
+                    AgentBaseModelPreview(model: selectedModel)
+                } else if baseModels.isEmpty {
+                    Text(L10n.text("ai_settings.models.agent.empty.base_models"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle(isEditing ? L10n.text("ai_settings.models.agent.nav.edit_title") : L10n.text("ai_settings.models.agent.nav.new_title"))
@@ -74,21 +123,112 @@ struct ModelsSettingsAgentSheet: View {
         .sheet(isPresented: $showIconPicker) {
             ModelIconPickerSheet(selectedIcon: $iconSymbol)
         }
+        .sheet(isPresented: $showTextInputDrawer) {
+            SparkPromptInputDrawerSheet(
+                text: $systemPrompt,
+                isPresented: $showTextInputDrawer,
+                onAutoFill: {
+                    try await promptTooling.autoFillAgentPrompt(displayName, selectedBaseModelName)
+                },
+                onTranslate: {
+                    try await promptTooling.translate(systemPrompt)
+                },
+                onOCRImage: { image in
+                    try await promptTooling.ocrImage(image)
+                }
+            )
+                .sparkInputPresentationChromeIfAvailable()
+        }
+        .sheet(isPresented: $showVoiceInput) {
+            SparkVoiceInputSheet(
+                text: $systemPrompt,
+                isPresented: $showVoiceInput,
+                onPolish: {
+                    try await promptTooling.autoFillAgentPrompt(displayName, selectedBaseModelName)
+                }
+            )
+                .sparkInputPresentationChromeIfAvailable()
+        }
+        .alert(L10n.text("common.operation_failed"), isPresented: Binding(
+            get: { actionError != nil },
+            set: { if $0 == false { actionError = nil } }
+        )) {
+            Button(L10n.text("common.ok")) {}
+        } message: {
+            Text(actionError ?? "")
+        }
         .onAppear {
             if let agent = editingAgent {
                 displayName = agent.displayName
                 iconSymbol = agent.iconSymbol ?? "stethoscope"
                 selectedBaseModelName = agent.baseModelName ?? ""
                 systemPrompt = agent.systemPrompt ?? ""
-            } else if selectedBaseModelName.isEmpty, let first = localBaseModels.first {
+            } else if selectedBaseModelName.isEmpty, let first = baseModels.first {
                 selectedBaseModelName = first.name
             }
         }
     }
 
+    private var autoFillButton: some View {
+        Button {
+            runAutoFill()
+        } label: {
+            HStack(spacing: 5) {
+                if autoFillInProgress {
+                    ProgressView()
+                        .frame(width: 25, height: 25)
+                    Text(L10n.text("prompt_input.toolbar.autofilling"))
+                        .font(.caption)
+                } else if autoFilled {
+                    Image(systemName: "arrow.uturn.backward.circle")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 25, height: 25)
+                    Text(L10n.text("prompt_input.toolbar.undo_autofill"))
+                        .font(.caption)
+                } else {
+                    Image(systemName: "pencil.circle")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 25, height: 25)
+                    Text(L10n.text("prompt_input.toolbar.autofill"))
+                        .font(.caption)
+                }
+            }
+            .foregroundStyle(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color(.systemGray) : Color.accentColor)
+        }
+        .buttonStyle(.plain)
+        .disabled(autoFillInProgress || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private func runAutoFill() {
+        if autoFilled {
+            systemPrompt = autoFillOriginalText
+            autoFilled = false
+            autoFillOriginalText = ""
+            return
+        }
+        autoFillOriginalText = systemPrompt
+        autoFillInProgress = true
+        Task {
+            do {
+                let raw = try await promptTooling.autoFillAgentPrompt(displayName, selectedBaseModelName)
+                let result = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if result.isEmpty == false {
+                    systemPrompt = result
+                    autoFilled = true
+                }
+            } catch {
+                actionError = error.localizedDescription
+            }
+            autoFillInProgress = false
+        }
+    }
+
     private var canSave: Bool {
         displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
-        selectedBaseModelName.isEmpty == false
+        selectedBaseModelName.isEmpty == false &&
+        systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 }
 
@@ -104,6 +244,7 @@ private struct AgentBaseModelPreview: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
+                capabilityChip(model.isLocalModel ? L10n.text("ai_settings.models.badge.local") : L10n.text("ai_settings.models.badge.service"), enabled: true)
                 capabilityChip(L10n.text("ai_settings.models.capability.reasoning"), enabled: model.supportsReasoning)
                 capabilityChip(L10n.text("ai_settings.models.capability.tools"), enabled: model.supportsToolUse)
                 capabilityChip(L10n.text("ai_settings.models.capability.multimodal"), enabled: model.supportsMultimodal)

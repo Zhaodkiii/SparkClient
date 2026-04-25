@@ -356,6 +356,8 @@ struct ChatMessageBubbleContentView: View {
     private func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
         ChatImagePayloadBuilder.imagePayloads(from: message)
     }
+    
+    
 }
 
 private struct ChatMessageErrorCard: View {

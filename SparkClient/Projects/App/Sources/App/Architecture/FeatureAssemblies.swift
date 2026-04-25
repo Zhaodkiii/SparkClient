@@ -94,8 +94,6 @@ struct MainTabDependencies {
     let settingsViewModel: SettingsViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageHomeMemberUseCase: ManageHomeMemberUseCase
 }
 
 struct MainTabFeatureDependencies {

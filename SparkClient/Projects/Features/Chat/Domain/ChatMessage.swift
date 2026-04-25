@@ -40,6 +40,8 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     let createdAt: Date
     let serverUpdatedAt: Date?
     let isTombstone: Bool
+    /// 模型名称（最终消费时按名称匹配模型信息与头像）。
+    let modelName: String?
 
     nonisolated init(
         id: UUID = UUID(),
@@ -57,7 +59,8 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         deliveryState: ChatDeliveryState = .pending,
         createdAt: Date = Date(),
         serverUpdatedAt: Date? = nil,
-        isTombstone: Bool = false
+        isTombstone: Bool = false,
+        modelName: String? = nil
     ) {
         self.id = id
         self.threadID = threadID
@@ -75,6 +78,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.serverUpdatedAt = serverUpdatedAt
         self.isTombstone = isTombstone
+        self.modelName = modelName
     }
 
     enum CodingKeys: String, CodingKey {
@@ -94,6 +98,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         case createdAt
         case serverUpdatedAt
         case isTombstone
+        case modelName
     }
 
     init(from decoder: Decoder) throws {
@@ -114,6 +119,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         serverUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .serverUpdatedAt)
         isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
+        modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -134,6 +140,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         try c.encode(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
         try c.encode(isTombstone, forKey: .isTombstone)
+        try c.encodeIfPresent(modelName, forKey: .modelName)
     }
 }
 

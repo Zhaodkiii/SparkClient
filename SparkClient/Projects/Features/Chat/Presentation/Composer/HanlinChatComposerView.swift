@@ -7,10 +7,8 @@ struct HanlinChatComposerView: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageMemberUseCase: ManageHomeMemberUseCase
     let boundMemberID: Int?
-    let modelRows: [ChatComposerModelOption]
+    let modelRows: [AIScenarioRemoteModelRow]
     let onSend: () -> Void
     let onCancel: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
@@ -39,8 +37,6 @@ struct HanlinChatComposerView: View {
                     modelReasoning: modelReasoning,
                     stateStore: stateStore,
                     memberContextStore: memberContextStore,
-                    loadMembersUseCase: loadMembersUseCase,
-                    manageMemberUseCase: manageMemberUseCase,
                     boundMemberID: boundMemberID,
                     onSend: onSend,
                     onCancel: onCancel,

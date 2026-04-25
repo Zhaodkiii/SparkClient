@@ -76,7 +76,8 @@ final class ChatStateStore: ObservableObject {
             deliveryState: .sending,
             createdAt: streaming.createdAt,
             serverUpdatedAt: nil,
-            isTombstone: false
+            isTombstone: false,
+            modelName: selectedThread?.currentModelName
         )
     }
 
@@ -176,7 +177,8 @@ final class ChatStateStore: ObservableObject {
             deliveryState: old.deliveryState,
             createdAt: old.createdAt,
             serverUpdatedAt: old.serverUpdatedAt,
-            isTombstone: old.isTombstone
+            isTombstone: old.isTombstone,
+            modelName: old.modelName
         )
         messagesByThread[threadID] = messages
     }

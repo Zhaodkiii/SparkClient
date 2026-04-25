@@ -98,6 +98,7 @@ final class AIConfigCenter {
         return snapshot
     }
 
+
     func effectiveScenarioBundles() async throws -> AIScenarioRemoteBundlesCollection {
         try await runtimeConfigStore.effectiveBundles()
     }

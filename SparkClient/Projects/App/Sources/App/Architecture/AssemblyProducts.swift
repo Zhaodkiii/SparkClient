@@ -34,6 +34,7 @@ struct AIAssemblyProduct {
     let localModelService: LocalModelService
     let polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase
     let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
+    let autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase
 }
 
 /// 知识库领域装配产物。
@@ -254,7 +255,8 @@ extension AIAssembly {
             aiRuntimeService: aiRuntimeService,
             localModelService: localModelService,
             polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase(runtime: aiRuntimeService),
-            translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase(runtime: aiRuntimeService)
+            translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase(runtime: aiRuntimeService),
+            autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase(runtime: aiRuntimeService)
         )
     }
 }
@@ -537,7 +539,7 @@ extension ChatAssembly {
             chatQueryService: chatQueryService,
             loadChatThreadsUseCase: LoadChatThreadsUseCase(queryService: chatQueryService),
             loadChatMessagesUseCase: LoadChatMessagesUseCase(queryService: chatQueryService),
-            createThreadUseCase: CreateThreadUseCase(repository: chatRepository, aiConfigCenter: ai.aiConfigCenter),
+            createThreadUseCase: CreateThreadUseCase(repository: chatRepository, aiConfigCenter: ai.aiConfigCenter, syncChatUseCase: syncChatUseCase),
             retryFailedMessageUseCase: RetryFailedMessageUseCase(
                 repository: chatRepository,
                 chatSyncSupervisor: chatSyncSupervisor,

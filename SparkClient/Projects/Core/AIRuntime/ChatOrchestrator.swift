@@ -426,15 +426,15 @@ struct ChatOrchestrator: Sendable {
         var definitions = toolHub.toolDefinitions()
         if inference.useKnowledgeBag == false {
             definitions.removeAll {
-                $0.name == SparkToolName.searchKnowledgeBag || $0.name == SparkToolName.createKnowledgeDocument
+                $0.name == SparkToolName.searchKnowledgeBag.rawValue || $0.name == SparkToolName.createKnowledgeDocument.rawValue
             }
         }
         if inference.useWebSearch == false {
             let web: Set<String> = [
-                SparkToolName.searchOnline,
-                SparkToolName.readWebPage,
-                SparkToolName.searchArxivPapers,
-                SparkToolName.extractRemoteFileContent
+                SparkToolName.searchOnline.rawValue,
+                SparkToolName.readWebPage.rawValue,
+                SparkToolName.searchArxivPapers.rawValue,
+                SparkToolName.extractRemoteFileContent.rawValue
             ]
             definitions.removeAll { web.contains($0.name) }
         }

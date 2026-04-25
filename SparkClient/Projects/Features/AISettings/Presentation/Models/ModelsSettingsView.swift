@@ -35,10 +35,11 @@ struct ModelsSettingsView: View {
         )
     }
 
-    /// 供智能体表单选择基座：已安装的本地 GGUF 模型。
-    private var localBaseModelsForAgent: [AllModels] {
+    /// 供智能体表单选择基座：本地 GGUF + 已配置密钥的服务模型。
+    private var baseModelsForAgent: [AllModels] {
         viewModel.snapshot.allModels
-            .filter { $0.isLocalModel }
+            .filter { $0.identity == .model && $0.supportsTextGen && $0.isEnabled }
+            .filter { $0.isLocalModel || viewModel.hasValidAPIKey(for: $0) }
             .sorted { $0.position < $1.position }
     }
 
@@ -156,24 +157,29 @@ struct ModelsSettingsView: View {
         .sheet(isPresented: $showAgentSheet) {
             CompatibleNavigationContainer {
                 ModelsSettingsAgentSheet(
-                    localBaseModels: localBaseModelsForAgent,
+                    baseModels: baseModelsForAgent,
                     editingAgent: editingAgent,
+                    promptTooling: viewModel.promptTooling,
                     onCreate: { displayName, iconSymbol, baseModelName, systemPrompt in
-                        viewModel.createLocalAgent(
-                            displayName: displayName,
-                            iconSymbol: iconSymbol,
-                            baseModelName: baseModelName,
-                            systemPrompt: systemPrompt
-                        )
+                        Task {
+                            await viewModel.createLocalAgentAndPersist(
+                                displayName: displayName,
+                                iconSymbol: iconSymbol,
+                                baseModelName: baseModelName,
+                                systemPrompt: systemPrompt
+                            )
+                        }
                     },
                     onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt in
-                        viewModel.updateLocalAgent(
-                            id: id,
-                            displayName: displayName,
-                            iconSymbol: iconSymbol,
-                            baseModelName: baseModelName,
-                            systemPrompt: systemPrompt
-                        )
+                        Task {
+                            await viewModel.updateLocalAgentAndPersist(
+                                id: id,
+                                displayName: displayName,
+                                iconSymbol: iconSymbol,
+                                baseModelName: baseModelName,
+                                systemPrompt: systemPrompt
+                            )
+                        }
                     }
                 )
             }

@@ -49,7 +49,8 @@ enum ChatSyncEngineDTOMapper: Sendable {
             deliveryState: deliveryState,
             createdAt: remote.createdAt,
             serverUpdatedAt: remote.serverUpdatedAt,
-            isTombstone: remote.isTombstone
+            isTombstone: remote.isTombstone,
+            modelName: remote.modelName
         )
     }
 }

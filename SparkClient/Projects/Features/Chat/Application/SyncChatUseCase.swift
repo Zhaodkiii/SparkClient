@@ -15,6 +15,10 @@ struct SyncChatUseCase: Sendable {
         try await supervisor.pushOutboxOnly()
     }
 
+    func pushSingleThread(threadID: UUID) async throws {
+        try await supervisor.pushSingleThread(threadID: threadID)
+    }
+
     func startRealtime() async {
         await supervisor.startRealtimeSync()
     }

@@ -1,20 +1,6 @@
 import Combine
 import Foundation
 
-struct ChatComposerModelOption: Identifiable, Equatable, Sendable {
-    let id: String
-    let modelName: String
-    let title: String
-    let iconSystemName: String
-
-    init(modelName: String, title: String, iconSystemName: String = "cpu") {
-        self.id = modelName
-        self.modelName = modelName
-        self.title = title
-        self.iconSystemName = iconSystemName
-    }
-}
-
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
     private let stateStore: ChatStateStore
@@ -49,7 +35,7 @@ final class ChatDetailViewModel: ObservableObject {
     @Published private(set) var savingStructuredHealthCardIDs: Set<UUID> = []
 
     /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
-    @Published private(set) var chatScenarioModels: [ChatComposerModelOption] = []
+    @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
     /// 当前会话输入栏关联模型的推理能力（用于思考开关展示策略）。
     @Published private(set) var reasoningToolbarContext: ChatModelReasoningContext = .unknown
     /// 当前会话在列表中的图片送达方式（用于工具栏菜单展示）。
@@ -264,38 +250,13 @@ final class ChatDetailViewModel: ObservableObject {
         }
         
         // 提取聊天场景可用模型列表
-        let rows = bundles.chat.models
-        
-        // 转换为界面展示用的模型选项（处理名称、图标）
-        chatScenarioModels = rows.map { row in
-            // 处理模型显示名称：去除首尾空白，为空则使用原始模型名
-            let trimmedTitle = row.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let title = trimmedTitle.isEmpty ? row.name : trimmedTitle
-            
-            // 处理模型图标：去除首尾空白
-            let trimmedIcon = row.icon?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let icon: String
-            
-            // 图标优先级：配置图标 > 智能代理图标 > 默认CPU图标
-            if trimmedIcon.isEmpty == false {
-                icon = trimmedIcon
-            } else {
-                icon = row.identity == AIModelIdentity.agent.rawValue ? "person.crop.circle" : "cpu"
-            }
-            
-            // 构建界面选项模型
-            return ChatComposerModelOption(
-                modelName: row.name,     // 原始模型唯一标识
-                title: title,            // 界面显示名称
-                iconSystemName: icon     // 系统图标名称
-            )
-        }
+        chatScenarioModels = bundles.chat.models
 
         // 校验并修正当前选中的模型（确保在可选列表内）
         await validateCurrentSelection(for: threadID)
 
         // 提取当前可选模型名称集合，为空则直接返回 nil
-        let namesInPicker = Set(chatScenarioModels.map(\.modelName))
+        let namesInPicker = Set(chatScenarioModels.map(\.name))
         guard namesInPicker.isEmpty == false else { return nil }
 
         // 加载当前会话线程，获取线程保存的模型名称
@@ -316,8 +277,9 @@ final class ChatDetailViewModel: ObservableObject {
         }
         
         // 最后返回：列表第一个模型
-        return chatScenarioModels.first?.modelName
+        return chatScenarioModels.first?.name
     }
+
 
     /// 将所选模型立即写入线程并尝试上送同步（不等待发送消息）。
     func updateThreadModel(_ preferredModelName: String?, for threadID: UUID) async {
@@ -364,7 +326,7 @@ final class ChatDetailViewModel: ObservableObject {
 
     /// 当远程模型列表变化时，丢弃已不在可选列表中的选择并回退为场景默认。
     func validateCurrentSelection(for threadID: UUID) async {
-        let namesInPicker = Set(chatScenarioModels.map(\.modelName))
+        let namesInPicker = Set(chatScenarioModels.map(\.name))
         let trimmed = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let selected = trimmed.isEmpty ? nil : trimmed
@@ -441,7 +403,7 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         do {
-            try await syncChatUseCase.pushOutboxOnly()
+            try await syncChatUseCase.pushSingleThread(threadID: threadID)
         } catch {
             logger.warning("会话成员档案绑定上送失败，稍后重试：\(error.localizedDescription)", module: .general)
         }
@@ -484,7 +446,7 @@ final class ChatDetailViewModel: ObservableObject {
         await refreshReasoningToolbarContext(for: threadID)
 
         do {
-            try await syncChatUseCase.pushOutboxOnly()
+            try await syncChatUseCase.pushSingleThread(threadID: threadID)
         } catch {
             logger.warning("线程参数上送失败，稍后重试：\(error.localizedDescription)", module: .general)
         }
@@ -575,6 +537,11 @@ final class ChatDetailViewModel: ObservableObject {
                         self.stateStore.setError(error.localizedDescription, for: threadID)
                     }
                     self.logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
+                    self.notificationClient.error(
+                        error.localizedDescription,
+                        title: L10n.text("common.error"),
+                        source: "chat.sync.open"
+                    )
                 }
             }
 
@@ -711,11 +678,13 @@ final class ChatDetailViewModel: ObservableObject {
         } catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
-            appendAssistantErrorMessage(
-                threadID: threadID,
-                assistantClientMessageID: streamingMessageID,
-                error: error
-            )
+            if shouldRenderAssistantErrorCard(for: error) {
+                appendAssistantErrorMessage(
+                    threadID: threadID,
+                    assistantClientMessageID: streamingMessageID,
+                    error: error
+                )
+            }
             logger.error("发送对话失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.send")
         }
@@ -744,6 +713,11 @@ final class ChatDetailViewModel: ObservableObject {
             await retryFailedMessage(clientMessageID: preferredClientMessageID)
             return
         }
+        await clearAssistantErrorMessageIfNeeded(
+            threadID: threadID,
+            messages: messages,
+            preferredClientMessageID: preferredClientMessageID
+        )
         if let latestFailed = messages.last(where: { $0.deliveryState == .failed && $0.role == .user }) {
             await retryFailedMessage(clientMessageID: latestFailed.clientMessageID)
             return
@@ -763,6 +737,7 @@ final class ChatDetailViewModel: ObservableObject {
         } catch {
             stateStore.setError(error.localizedDescription)
             logger.error("手动聊天同步失败：\(error.localizedDescription)", module: .general)
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.sync")
         }
     }
 
@@ -836,13 +811,44 @@ final class ChatDetailViewModel: ObservableObject {
         } catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
-            appendAssistantErrorMessage(
-                threadID: threadID,
-                assistantClientMessageID: streamingMessageID,
-                error: error
-            )
+            if shouldRenderAssistantErrorCard(for: error) {
+                appendAssistantErrorMessage(
+                    threadID: threadID,
+                    assistantClientMessageID: streamingMessageID,
+                    error: error
+                )
+            }
             logger.error("重新生成回答失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.retry")
+        }
+    }
+
+    private func clearAssistantErrorMessageIfNeeded(
+        threadID: UUID,
+        messages: [ChatMessage],
+        preferredClientMessageID: UUID?
+    ) async {
+        let targetMessage: ChatMessage?
+        if let preferredClientMessageID,
+           preferredClientMessageID != ChatView.inlineErrorClientMessageID {
+            targetMessage = messages.first(where: { $0.clientMessageID == preferredClientMessageID })
+        } else {
+            targetMessage = messages.last(where: { message in
+                message.role == .assistant
+                    && message.deliveryState == .failed
+                    && message.kind == .system
+            })
+        }
+        guard let targetMessage,
+              targetMessage.role == .assistant,
+              targetMessage.deliveryState == .failed else {
+            return
+        }
+
+        await chatRepository.softDeleteMessage(clientMessageID: targetMessage.clientMessageID)
+        let refreshed = await loadChatMessagesUseCase.execute(threadID: threadID)
+        await MainActor.run {
+            self.stateStore.setMessages(refreshed, for: threadID)
         }
     }
 
@@ -894,7 +900,8 @@ final class ChatDetailViewModel: ObservableObject {
             deliveryState: .pending,
             createdAt: streaming.createdAt,
             serverUpdatedAt: nil,
-            isTombstone: false
+            isTombstone: false,
+            modelName: streaming.modelName
         )
 
         var messages = stateStore.persistedMessages(for: threadID)
@@ -918,7 +925,8 @@ final class ChatDetailViewModel: ObservableObject {
                     reasoningVisibility: finalized.reasoningVisibility,
                     clientMessageID: finalized.clientMessageID,
                     serverMessageID: nil,
-                    deliveryState: .pending
+                    deliveryState: .pending,
+                    modelName: finalized.modelName
                 )
                 await self.sendMessageUseCase.pushPendingMessages(source: source)
                 let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
@@ -980,7 +988,8 @@ final class ChatDetailViewModel: ObservableObject {
             kind: kind,
             content: content,
             clientMessageID: clientMessageID,
-            deliveryState: deliveryState
+            deliveryState: deliveryState,
+            modelName: role.rawValue
         )
         var messages = stateStore.persistedMessages(for: threadID)
         if messages.contains(where: { $0.clientMessageID == clientMessageID }) == false {
@@ -1003,7 +1012,8 @@ final class ChatDetailViewModel: ObservableObject {
                     reasoningVisibility: .full,
                     clientMessageID: clientMessageID,
                     serverMessageID: nil,
-                    deliveryState: deliveryState
+                    deliveryState: deliveryState,
+                    modelName: local.modelName
                 )
                 let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
                 await MainActor.run {
@@ -1014,6 +1024,28 @@ final class ChatDetailViewModel: ObservableObject {
                 self.logger.error("本地对话状态消息落库失败，source=\(source), error=\(error.localizedDescription)", module: .general)
             }
         }
+    }
+
+    private func shouldRenderAssistantErrorCard(for error: Error) -> Bool {
+        unwrapAIRuntimeError(from: error).map {
+            if case .server = $0 {
+                return true
+            }
+            return false
+        } ?? false
+    }
+
+    private func unwrapAIRuntimeError(from error: Error) -> AIRuntimeError? {
+        if let runtimeError = error as? AIRuntimeError {
+            return runtimeError
+        }
+
+        let nsError = error as NSError
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            return unwrapAIRuntimeError(from: underlying)
+        }
+
+        return nil
     }
 
     func chatPageDidAppear() async {

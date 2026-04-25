@@ -40,17 +40,13 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         try runtimeRequest.cancellationToken?.checkCancellation()
         // 记录请求开始时间
         let start = Date()
-        // 构建推理相关的额外参数、后缀开关、思考开关
-        let (reasoningExtras, useSuffix, thinkOn) = OpenAIReasoningPayload.build(
-            providerUppercased: runtimeRequest.providerCompanyUppercased,
+        // 构建推理相关的额外参数
+        let reasoning = OpenAIReasoningBuilder.build(
+            provider: runtimeRequest.providerCompanyUppercased,
             options: runtimeRequest.reasoning
         )
         
-        // 处理消息列表（根据开关添加思考后缀）
         var runtimeMessages = runtimeRequest.messages
-        if useSuffix {
-            runtimeMessages = OpenAIReasoningPayload.patchMessagesThinkSuffix(runtimeMessages, thinkSuffixEnabled: thinkOn)
-        }
         
         // 构建OpenAI规范的聊天完成请求体
         let providerUpper = runtimeRequest.providerCompanyUppercased
@@ -104,7 +100,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         }
         
         // 合并基础请求体和推理额外参数，并编码为Data
-        let requestBodyData = try encodeMergedRequestBody(base: payload, reasoningExtras: reasoningExtras)
+        let requestBodyData = try encodeMergedRequestBody(base: payload, reasoningExtras: reasoning.extras)
         request.httpBody = requestBodyData
         
         // 日志：打印请求信息（截断超长报文）
@@ -229,7 +225,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
     /// - Returns: 合并后的JSON数据
     private func encodeMergedRequestBody(
         base: ChatCompletionRequest,
-        reasoningExtras: OpenAIReasoningPayload.Extras?
+        reasoningExtras: OpenAIReasoningExtras?
     ) throws -> Data {
         let baseData = try encoder.encode(base)
         // 无扩展参数直接返回基础数据

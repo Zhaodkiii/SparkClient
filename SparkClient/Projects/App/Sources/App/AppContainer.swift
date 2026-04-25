@@ -135,6 +135,8 @@ final class AppContainer {
     let polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase
     /// 翻译选中段落或全文摘要。
     let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
+    /// 使用文本优化场景自动生成智能体 system prompt。
+    let autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase
     /// 对知识库内图片附件做 OCR 回填正文。
     let ocrKnowledgeImageUseCase: OCRKnowledgeImageUseCase
     /// 从本地文件导入为知识文档。
@@ -378,6 +380,7 @@ final class AppContainer {
         self.localModelService = ai.localModelService
         self.polishKnowledgeTextUseCase = ai.polishKnowledgeTextUseCase
         self.translateKnowledgeTextUseCase = ai.translateKnowledgeTextUseCase
+        self.autoFillAgentPromptUseCase = ai.autoFillAgentPromptUseCase
 
         self.knowledgeRepository = knowledge.knowledgeRepository
         self.loadKnowledgeListUseCase = knowledge.loadKnowledgeListUseCase
@@ -434,6 +437,7 @@ final class AppContainer {
         // 注意：`sessionStore` 使用刚赋值的 `restoreSessionUseCase`，`chatListViewModel` 依赖 `sessionStore`，顺序不可颠倒。
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
         self.memberContextStore = notification.memberContextStore
+        self.memberContextStore.configure(manage: manageHomeMemberUseCase)
         self.chatStateStore = ChatStateStore()
         chat.structuredHealthCardMergeCoordinator.register(stateStore: chatStateStore)
         self.knowledgeViewModel = KnowledgeLibraryViewModel(
@@ -538,7 +542,6 @@ final class AppContainer {
         let created = HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
-            manageHomeMemberUseCase: manageHomeMemberUseCase,
             memberContextStore: memberContextStore,
             notificationClient: notificationClient,
             logger: logger
@@ -627,9 +630,7 @@ final class AppContainer {
             chatDetailViewModel: chatDetailViewModel,
             settingsViewModel: makeSettingsViewModel(),
             aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
-            memberContextStore: memberContextStore,
-            loadMembersUseCase: loadMembersUseCase,
-            manageHomeMemberUseCase: manageHomeMemberUseCase
+            memberContextStore: memberContextStore
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
         return created
@@ -642,13 +643,27 @@ final class AppContainer {
             return cached
         }
 
+        let autoFillAgentPromptUseCase = self.autoFillAgentPromptUseCase
+        let translateKnowledgeTextUseCase = self.translateKnowledgeTextUseCase
+        let ocrKnowledgeImageUseCase = self.ocrKnowledgeImageUseCase
         let created = AISettingsViewModel(
             loadUseCase: LoadAISettingsUseCase(repository: aiSettingsRepository),
             saveUseCase: SaveAISettingsUseCase(repository: aiSettingsRepository),
             localModelService: localModelService,
             ownerAccountIDForLoad: ownerAccountID,
             aiConfigAPI: backend.aiConfig,
-            aiConfigCenter: aiConfigCenter
+            aiConfigCenter: aiConfigCenter,
+            promptTooling: AISettingsPromptTooling(
+                autoFillAgentPrompt: { displayName, baseModelName in
+                    try await autoFillAgentPromptUseCase.execute(displayName: displayName, baseModelName: baseModelName)
+                },
+                translate: { text in
+                    try await translateKnowledgeTextUseCase.execute(text: text)
+                },
+                ocrImage: { image in
+                    try await ocrKnowledgeImageUseCase.execute(image: image)
+                }
+            )
         )
         aiSettingsViewModelCache.store(created, ownerAccountID: ownerAccountID)
         return created

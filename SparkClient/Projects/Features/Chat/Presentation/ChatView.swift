@@ -16,9 +16,7 @@ struct ChatView: View {
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
     @ObservedObject var taskManager: TaskManager
-    @ObservedObject var memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageMemberUseCase: ManageHomeMemberUseCase
+    @ObservedObject var homeViewModel: HomeViewModel
 
     @State private var hasLoaded = false
     @State private var conversationListLayoutNonce: UInt64 = 0
@@ -51,11 +49,7 @@ struct ChatView: View {
     }
 
     private var visibleMessages: [ChatMessage] {
-        let messages = stateStore.selectedMessages.filter { uiStateStore.isDeleted($0.id) == false }
-        if let inlineErrorMessage {
-            return messages + [inlineErrorMessage]
-        }
-        return messages
+        stateStore.selectedMessages.filter { uiStateStore.isDeleted($0.id) == false }
     }
 
     private var hasMoreMessages: Bool {
@@ -102,9 +96,7 @@ struct ChatView: View {
                 threadID: threadID,
                 modelReasoning: detailViewModel.reasoningToolbarContext,
                 stateStore: stateStore,
-                memberContextStore: memberContextStore,
-                loadMembersUseCase: loadMembersUseCase,
-                manageMemberUseCase: manageMemberUseCase,
+                memberContextStore: homeViewModel.memberContextStoreForBinding,
                 boundMemberID: stateStore.selectedThread?.memberID,
                 modelRows: detailViewModel.chatScenarioModels,
                 onSend: {
@@ -134,32 +126,6 @@ struct ChatView: View {
 
     private var configuredLayout: some View {
         lifecycleLayout
-    }
-
-    private var inlineErrorMessage: ChatMessage? {
-        guard let errorText = stateStore.errorMessage(for: threadID)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              errorText.isEmpty == false,
-              stateStore.selectedThreadID == threadID else {
-            return nil
-        }
-        let anchorDate = stateStore.selectedMessages.last?.createdAt ?? Date()
-        return ChatMessage(
-            id: Self.inlineErrorClientMessageID,
-            threadID: threadID,
-            role: .assistant,
-            kind: .system,
-            content: errorText,
-            attachments: [
-                ChatAttachment(type: .operationalState, text: L10n.text("chat.error_card.title")),
-                ChatAttachment(type: .operationalDescription, text: errorText)
-            ],
-            clientMessageID: Self.inlineErrorClientMessageID,
-            serverMessageID: nil,
-            deliveryState: .failed,
-            createdAt: anchorDate.addingTimeInterval(0.001),
-            serverUpdatedAt: nil,
-            isTombstone: false
-        )
     }
 
     private var navigationDecoratedLayout: some View {

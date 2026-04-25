@@ -63,7 +63,8 @@ actor CoreDataChatRepository: ChatRepository {
         reasoningVisibility: ChatReasoningVisibility,
         clientMessageID: UUID,
         serverMessageID: String?,
-        deliveryState: ChatDeliveryState
+        deliveryState: ChatDeliveryState,
+        modelName: String?
     ) async throws -> ChatMessage {
         try await store.appendMessage(
             threadID: threadID,
@@ -77,8 +78,13 @@ actor CoreDataChatRepository: ChatRepository {
             reasoningVisibility: reasoningVisibility,
             clientMessageID: clientMessageID,
             serverMessageID: serverMessageID,
-            deliveryState: deliveryState
+            deliveryState: deliveryState,
+            modelName: modelName
         )
+    }
+
+    func softDeleteMessage(clientMessageID: UUID) async {
+        await store.softDeleteMessage(clientMessageID: clientMessageID)
     }
 
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async {

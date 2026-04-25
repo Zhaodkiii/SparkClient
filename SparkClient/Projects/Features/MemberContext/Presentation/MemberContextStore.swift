@@ -4,12 +4,18 @@ import Foundation
 @MainActor
 final class MemberContextStore: ObservableObject {
     @Published private(set) var context = MemberContext(members: [], selectedMemberID: nil)
+    let membersDidChange = PassthroughSubject<Void, Never>()
 
     private let persistence: any SelectedMemberIDPersisting
     private var activeAccountID: Int64?
+    private var manageUseCase: ManageHomeMemberUseCase?
 
     init(persistence: any SelectedMemberIDPersisting = UserDefaultsSelectedMemberIDStore()) {
         self.persistence = persistence
+    }
+
+    func configure(manage: ManageHomeMemberUseCase) {
+        manageUseCase = manage
     }
 
     /// 当前登录档案变化时由 App 层调用；用于将会员选择与 `accountID` 关联并持久化。
@@ -47,6 +53,64 @@ final class MemberContextStore: ObservableObject {
     func resetInMemoryContext() {
         activeAccountID = nil
         context = MemberContext(members: [], selectedMemberID: nil)
+    }
+
+    @discardableResult
+    func addMember(
+        name: String,
+        relationship: String,
+        gender: String,
+        birthDate: Date?
+    ) async -> Bool {
+        guard let manageUseCase else { return false }
+        do {
+            try await manageUseCase.create(
+                name: name,
+                relationship: relationship,
+                gender: gender,
+                birthDate: birthDate
+            )
+            membersDidChange.send()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    func updateMember(
+        _ member: Member,
+        name: String,
+        relationship: String,
+        gender: String,
+        birthDate: Date?
+    ) async -> Bool {
+        guard let manageUseCase else { return false }
+        do {
+            try await manageUseCase.update(
+                member: member,
+                name: name,
+                relationship: relationship,
+                gender: gender,
+                birthDate: birthDate
+            )
+            membersDidChange.send()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    func deleteMember(_ member: Member) async -> Bool {
+        guard let manageUseCase else { return false }
+        do {
+            try await manageUseCase.delete(member: member)
+            membersDidChange.send()
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func persistSelection(_ memberID: Int?) {

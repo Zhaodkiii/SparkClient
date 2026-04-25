@@ -78,115 +78,60 @@ struct ToolDefinition: Sendable {
     let usage: String
 }
 
-enum SparkToolName {
-    static let fetchStepDetails = "fetch_step_details"
-    static let fetchEnergyDetails = "fetch_energy_details"
-    static let fetchNutritionDetails = "fetch_nutrition_details"
-    static let makeNutritionData = "make_nutrition_data"
-    static let fetchSleepDetails = "fetch_sleep_details"
-    static let fetchWorkoutDetails = "fetch_workout_details"
-    static let searchKnowledgeBag = "search_knowledge_bag"
-    static let createKnowledgeDocument = "create_knowledge_document"
-    static let searchCalendarAndReminders = "search_calendar_and_reminders"
-    static let writeSystemEvent = "write_system_event"
-    static let queryLocation = "query_location"
-    static let getCurrentLocation = "get_current_location"
-    static let searchNearbyLocations = "search_nearby_locations"
-    static let getRoute = "get_route"
-    static let queryWeather = "query_weather"
-    static let saveMemory = "save_memory"
-    static let retrieveMemory = "retrieve_memory"
-    static let updateMemory = "update_memory"
-    static let generateChatTitle = "generate_chat_title"
-    static let showCustomMessageCard = "show_custom_message_card"
-    static let getCurrentMember = "get_current_member"
-    static let switchMember = "switch_member"
-    static let findMember = "find_member"
-    static let queryMemberProfile = "query_member_profile"
-    static let searchOnline = "search_online"
-    static let readWebPage = "read_web_page"
-    static let searchArxivPapers = "search_arxiv_papers"
-    static let extractRemoteFileContent = "extract_remote_file_content"
-    static let createCanvas = "create_canvas"
-    static let editCanvas = "edit_canvas"
-    static let generateStructuredHealthCard = "generate_structured_health_card"
-    static let queryTasksByMember = "query_tasks_by_member"
-    static let generateTask = "generate_task"
+enum SparkToolName: String, CaseIterable {
+    case fetchStepDetails            = "fetch_step_details"
+    case fetchEnergyDetails          = "fetch_energy_details"
+    case fetchNutritionDetails       = "fetch_nutrition_details"
+    case makeNutritionData           = "make_nutrition_data"
+    case fetchSleepDetails           = "fetch_sleep_details"
+    case fetchWorkoutDetails         = "fetch_workout_details"
+    case searchKnowledgeBag          = "search_knowledge_bag"
+    case createKnowledgeDocument     = "create_knowledge_document"
+    case searchCalendarAndReminders  = "search_calendar_and_reminders"
+    case writeSystemEvent            = "write_system_event"
+    case queryLocation               = "query_location"
+    case getCurrentLocation          = "get_current_location"
+    case searchNearbyLocations       = "search_nearby_locations"
+    case getRoute                    = "get_route"
+    case queryWeather                = "query_weather"
+    case saveMemory                  = "save_memory"
+    case retrieveMemory              = "retrieve_memory"
+    case updateMemory                = "update_memory"
+    case generateChatTitle           = "generate_chat_title"
+    case showCustomMessageCard       = "show_custom_message_card"
+    case getCurrentMember            = "get_current_member"
+    case switchMember                = "switch_member"
+    case findMember                  = "find_member"
+    case queryMemberProfile          = "query_member_profile"
+    case searchOnline                = "search_online"
+    case readWebPage                 = "read_web_page"
+    case searchArxivPapers           = "search_arxiv_papers"
+    case extractRemoteFileContent    = "extract_remote_file_content"
+    case createCanvas                = "create_canvas"
+    case editCanvas                  = "edit_canvas"
+    case generateStructuredHealthCard = "generate_structured_health_card"
+    case queryTasksByMember          = "query_tasks_by_member"
+    case generateTask                = "generate_task"
 
-    static let all: [String] = [
-        fetchStepDetails,
-        fetchEnergyDetails,
-        fetchNutritionDetails,
-        makeNutritionData,
-        fetchSleepDetails,
-        fetchWorkoutDetails,
-        searchKnowledgeBag,
-        createKnowledgeDocument,
-        searchCalendarAndReminders,
-        writeSystemEvent,
-        queryLocation,
-        getCurrentLocation,
-        searchNearbyLocations,
-        getRoute,
-        queryWeather,
-        saveMemory,
-        retrieveMemory,
-        updateMemory,
-        generateChatTitle,
-        showCustomMessageCard,
-        getCurrentMember,
-        switchMember,
-        findMember,
-        queryMemberProfile,
-        searchOnline,
-        readWebPage,
-        searchArxivPapers,
-        extractRemoteFileContent,
-        createCanvas,
-        editCanvas,
-        generateStructuredHealthCard,
-        queryTasksByMember,
-        generateTask
-    ]
+    /// 自动派生，新增 case 后无需手动维护。
+    static var all: [String] { allCases.map(\.rawValue) }
+}
+
+/// 允许在 `switch aString { case SparkToolName.xxx: }` 中使用枚举值做模式匹配，无需改动已有 switch。
+func ~=(pattern: SparkToolName, value: String) -> Bool {
+    pattern.rawValue == value
 }
 
 extension SparkToolName {
+    /// L10n key 规则统一为 `"ai_settings.tools.<tool_name>"`，直接插值即可，无需 switch。
     static func displayName(for toolName: String) -> String {
-        switch toolName {
-        case fetchStepDetails: return L10n.text("ai_settings.tools.fetch_step_details")
-        case fetchEnergyDetails: return L10n.text("ai_settings.tools.fetch_energy_details")
-        case fetchNutritionDetails: return L10n.text("ai_settings.tools.fetch_nutrition_details")
-        case makeNutritionData: return L10n.text("ai_settings.tools.make_nutrition_data")
-        case fetchSleepDetails: return L10n.text("ai_settings.tools.fetch_sleep_details")
-        case fetchWorkoutDetails: return L10n.text("ai_settings.tools.fetch_workout_details")
-        case searchKnowledgeBag: return L10n.text("ai_settings.tools.search_knowledge_bag")
-        case createKnowledgeDocument: return L10n.text("ai_settings.tools.create_knowledge_document")
-        case searchCalendarAndReminders: return L10n.text("ai_settings.tools.search_calendar_and_reminders")
-        case writeSystemEvent: return L10n.text("ai_settings.tools.write_system_event")
-        case queryLocation: return L10n.text("ai_settings.tools.query_location")
-        case getCurrentLocation: return L10n.text("ai_settings.tools.get_current_location")
-        case searchNearbyLocations: return L10n.text("ai_settings.tools.search_nearby_locations")
-        case getRoute: return L10n.text("ai_settings.tools.get_route")
-        case queryWeather: return L10n.text("ai_settings.tools.query_weather")
-        case saveMemory: return L10n.text("ai_settings.tools.save_memory")
-        case retrieveMemory: return L10n.text("ai_settings.tools.retrieve_memory")
-        case updateMemory: return L10n.text("ai_settings.tools.update_memory")
-        case generateChatTitle: return L10n.text("ai_settings.tools.generate_chat_title")
-        case showCustomMessageCard: return L10n.text("ai_settings.tools.show_custom_message_card")
-        case getCurrentMember: return L10n.text("ai_settings.tools.get_current_member")
-        case switchMember: return L10n.text("ai_settings.tools.switch_member")
-        case findMember: return L10n.text("ai_settings.tools.find_member")
-        case queryMemberProfile: return L10n.text("ai_settings.tools.query_member_profile")
-        case searchOnline: return L10n.text("ai_settings.tools.search_online")
-        case readWebPage: return L10n.text("ai_settings.tools.read_web_page")
-        case searchArxivPapers: return L10n.text("ai_settings.tools.search_arxiv_papers")
-        case extractRemoteFileContent: return L10n.text("ai_settings.tools.extract_remote_file_content")
-        case createCanvas: return L10n.text("ai_settings.tools.create_canvas")
-        case editCanvas: return L10n.text("ai_settings.tools.edit_canvas")
-        case generateStructuredHealthCard: return L10n.text("ai_settings.tools.generate_structured_health_card")
-        case queryTasksByMember: return L10n.text("ai_settings.tools.query_tasks_by_member")
-        case generateTask: return L10n.text("ai_settings.tools.generate_task")
-        default: return toolName
-        }
+        L10n.text("ai_settings.tools.\(toolName)")
+    }
+}
+
+extension ToolExecutionResult {
+    /// 接受 `SparkToolName` 枚举值，避免调用处写 `.rawValue`。
+    init(toolName: SparkToolName, outputText: String, sensitive: Bool, shouldBypassModel: Bool) {
+        self.init(toolName: toolName.rawValue, outputText: outputText, sensitive: sensitive, shouldBypassModel: shouldBypassModel)
     }
 }

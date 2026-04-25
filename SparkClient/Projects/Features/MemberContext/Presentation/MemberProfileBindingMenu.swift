@@ -1,14 +1,11 @@
 import SwiftUI
 
-/// 会话/业务场景复用的成员选择菜单；内部直接承载新增成员 sheet，避免业务页面串长回调链。
 struct MemberProfileBindingMenu<Content: View>: View {
     @ObservedObject var memberContextStore: MemberContextStore
-    let loadMembersUseCase: LoadMembersUseCase
-    let manageMemberUseCase: ManageHomeMemberUseCase
     let selectedMemberID: Int?
     let onSelect: (Int?) -> Void
+    @State private var showAddMemberSheet = false
     @ViewBuilder let label: () -> Content
-    @State private var addMemberMode: AddFamilyMemberView.Mode?
 
     private var members: [Member] {
         memberContextStore.context.members
@@ -48,35 +45,17 @@ struct MemberProfileBindingMenu<Content: View>: View {
             Divider()
 
             Button {
-                addMemberMode = .create
+                showAddMemberSheet = true
             } label: {
                 Label(L10n.text("home.members.create"), systemImage: "plus.circle")
             }
         } label: {
             label()
         }
-        .sheet(item: $addMemberMode) { mode in
+        .sheet(isPresented: $showAddMemberSheet) {
             CompatibleNavigationContainer {
-                AddFamilyMemberView(
-                    mode: mode,
-                    manageMemberUseCase: manageMemberUseCase,
-                    onSaved: refreshMembersAfterCreate
-                )
+                AddFamilyMemberView(mode: .create, store: memberContextStore)
             }
-        }
-    }
-
-    private func refreshMembersAfterCreate() async {
-        let existingIDs = Set(memberContextStore.context.members.map(\.id))
-        let refreshed = await loadMembersUseCase.execute()
-        let created = refreshed
-            .filter { existingIDs.contains($0.id) == false }
-            .sorted { $0.updatedAt > $1.updatedAt }
-            .first
-        let selectedID = created?.id ?? memberContextStore.context.selectedMemberID ?? refreshed.first?.id
-        memberContextStore.update(members: refreshed, selectedMemberID: selectedID)
-        if let created {
-            onSelect(created.id)
         }
     }
 }

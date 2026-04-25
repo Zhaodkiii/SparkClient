@@ -14,6 +14,7 @@ struct ModelsSettingsMainRow: View {
     var showsLeadingSwipeAction: Bool = true
     var showsTrailingSwipeAction: Bool = true
     @State private var showEditSheet = false
+    @State private var showAgentEditSheet = false
     @State private var showToggleKeyError = false
 
     private var isLocal: Bool {
@@ -115,7 +116,7 @@ struct ModelsSettingsMainRow: View {
         }
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if showsTrailingSwipeAction, model.source != .system {
+            if showsTrailingSwipeAction {
                 Button(role: .destructive, action: onDelete) {
                     Label(L10n.text("ai_settings.models.action.delete"), systemImage: "trash")
                 }
@@ -131,6 +132,27 @@ struct ModelsSettingsMainRow: View {
         }
         .sheet(isPresented: $showEditSheet) {
             EditSparkModelSheet(viewModel: viewModel, modelID: model.id)
+        }
+        .sheet(isPresented: $showAgentEditSheet) {
+            CompatibleNavigationContainer {
+                ModelsSettingsAgentSheet(
+                    baseModels: viewModel.snapshot.allModels.filter { $0.identity == .model && $0.isHidden == false },
+                    editingAgent: model,
+                    promptTooling: viewModel.promptTooling,
+                    onCreate: { _, _, _, _ in },
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt in
+                        Task {
+                            await viewModel.updateLocalAgentAndPersist(
+                                id: id,
+                                displayName: displayName,
+                                iconSymbol: iconSymbol,
+                                baseModelName: baseModelName,
+                                systemPrompt: systemPrompt
+                            )
+                        }
+                    }
+                )
+            }
         }
         .alert(L10n.text("ai_settings.models.alert.need_api_key_title"), isPresented: $showToggleKeyError) {
             Button(L10n.text("common.ok"), role: .cancel) {}
@@ -156,7 +178,11 @@ struct ModelsSettingsMainRow: View {
     }
 
     private func openEditor() {
-        showEditSheet = true
+        if isAgent {
+            showAgentEditSheet = true
+        } else {
+            showEditSheet = true
+        }
     }
 }
 

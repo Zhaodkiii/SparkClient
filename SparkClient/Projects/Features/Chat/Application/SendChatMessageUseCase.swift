@@ -169,7 +169,8 @@ struct SendChatMessageUseCase: Sendable {
                 reasoningVisibility: .full,
                 clientMessageID: clientMessageID,
                 serverMessageID: nil,
-                deliveryState: .pending
+                deliveryState: .pending,
+                modelName: "user"
             )
             logger.debug(
                 "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID))",
@@ -258,7 +259,8 @@ struct SendChatMessageUseCase: Sendable {
                 reasoningVisibility: .full,
                 clientMessageID: assistantClientMessageID,
                 serverMessageID: nil,
-                deliveryState: .pending
+                deliveryState: .pending,
+                modelName: resolvedRow.name
             )
 
             if let notice = finishReasonNoticeText(output.finishReason) {
@@ -274,7 +276,8 @@ struct SendChatMessageUseCase: Sendable {
                     reasoningVisibility: .full,
                     clientMessageID: UUID(),
                     serverMessageID: nil,
-                    deliveryState: .pending
+                    deliveryState: .pending,
+                    modelName: "system"
                 )
                 logger.warning("AI 完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
@@ -417,7 +420,8 @@ struct SendChatMessageUseCase: Sendable {
                 reasoningVisibility: .full,
                 clientMessageID: assistantClientMessageID,
                 serverMessageID: nil,
-                deliveryState: .pending
+                deliveryState: .pending,
+                modelName: resolvedRow.name
             )
 
             if let notice = finishReasonNoticeText(output.finishReason) {
@@ -433,7 +437,8 @@ struct SendChatMessageUseCase: Sendable {
                     reasoningVisibility: .full,
                     clientMessageID: UUID(),
                     serverMessageID: nil,
-                    deliveryState: .pending
+                    deliveryState: .pending,
+                    modelName: "system"
                 )
                 logger.warning("重新生成完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
@@ -486,6 +491,9 @@ struct SendChatMessageUseCase: Sendable {
             imageDeliveryModeRaw: defaultImageDeliveryRaw
         )
         await repository.setActiveThread(id: created.id)
+        Task {
+            try? await chatSyncSupervisor.pushSingleThread(threadID: created.id)
+        }
         return created
     }
 

@@ -33,53 +33,48 @@ struct AppCoordinatorView: View {
 
     @ViewBuilder
     private var sessionContent: some View {
-        Group {
-            switch lifecycle.sessionState {
-            case .loading:
-                ProgressView(L10n.text("app.loading.preparing"))
-                    .task(id: networkMonitor.hasEvaluatedPath) {
-                        await lifecycle.bootstrapLaunchAfterNetworkEvaluation(networkMonitor.hasEvaluatedPath)
-                    }
-
-            case .signedOut:
-                AuthCoordinatorView(viewModel: facades.auth.makeLoginViewModel())
-                    .task {
-                        await lifecycle.handleSignedOutTask()
-                    }
-
-            case .signedIn(let session):
-                if lifecycle.preparedAccountID == session.accountID {
-                    let mainTab = facades.mainTab.makeDependencies(session.accountID)
-                    MainTabCoordinatorView(
-                        session: session,
-                        routeStore: mainTab.routeStore,
-                        homeDependencies: mainTab.homeDependencies,
-                        knowledgeDependencies: mainTab.knowledgeDependencies,
-                        taskManager: mainTab.taskManager,
-                        homeViewModel: mainTab.homeViewModel,
-                        medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
-                        knowledgeViewModel: mainTab.knowledgeViewModel,
-                        chatStateStore: mainTab.chatStateStore,
-                        chatListViewModel: mainTab.chatListViewModel,
-                        chatDetailViewModel: mainTab.chatDetailViewModel,
-                        settingsViewModel: mainTab.settingsViewModel,
-                        aiSettingsViewModel: mainTab.aiSettingsViewModel,
-                        memberContextStore: mainTab.memberContextStore,
-                        loadMembersUseCase: mainTab.loadMembersUseCase,
-                        manageHomeMemberUseCase: mainTab.manageHomeMemberUseCase
-                    )
-                    .environmentObject(mainTab.memberContextStore)
-                    .id(session.accountID)
-                    .task(id: session.accountID) {
-                        // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-                        lifecycle.requestNotificationAuthorizationIfNeeded()
-                    }
-                } else {
-                    ProgressView(L10n.text("app.loading.preparing"))
-                        .task(id: session.accountID) {
-                            await lifecycle.prepareSignedInSessionIfNeeded(session)
-                        }
+        switch lifecycle.sessionState {
+        case .loading:
+            ProgressView(L10n.text("app.loading.preparing"))
+                .task(id: networkMonitor.hasEvaluatedPath) {
+                    await lifecycle.bootstrapLaunchAfterNetworkEvaluation(networkMonitor.hasEvaluatedPath)
                 }
+
+        case .signedOut:
+            AuthCoordinatorView(viewModel: facades.auth.makeLoginViewModel())
+                .task {
+                    await lifecycle.handleSignedOutTask()
+                }
+
+        case .signedIn(let session):
+            if lifecycle.preparedAccountID == session.accountID {
+                let mainTab = facades.mainTab.makeDependencies(session.accountID)
+                MainTabCoordinatorView(
+                    session: session,
+                    routeStore: mainTab.routeStore,
+                    homeDependencies: mainTab.homeDependencies,
+                    knowledgeDependencies: mainTab.knowledgeDependencies,
+                    taskManager: mainTab.taskManager,
+                    homeViewModel: mainTab.homeViewModel,
+                    medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
+                    knowledgeViewModel: mainTab.knowledgeViewModel,
+                    chatStateStore: mainTab.chatStateStore,
+                    chatListViewModel: mainTab.chatListViewModel,
+                    chatDetailViewModel: mainTab.chatDetailViewModel,
+                    settingsViewModel: mainTab.settingsViewModel,
+                    aiSettingsViewModel: mainTab.aiSettingsViewModel
+                )
+                .environmentObject(mainTab.memberContextStore)
+                .id(session.accountID)
+                .task(id: session.accountID) {
+                    // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
+                    lifecycle.requestNotificationAuthorizationIfNeeded()
+                }
+            } else {
+                ProgressView(L10n.text("app.loading.preparing"))
+                    .task(id: session.accountID) {
+                        await lifecycle.prepareSignedInSessionIfNeeded(session)
+                    }
             }
         }
     }
