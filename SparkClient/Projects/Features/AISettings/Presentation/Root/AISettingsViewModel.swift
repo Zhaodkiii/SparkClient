@@ -494,7 +494,9 @@ final class AISettingsViewModel: ObservableObject {
         displayName: String,
         iconSymbol: String,
         baseModelName: String,
-        systemPrompt: String
+        systemPrompt: String,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
     ) {
         modelCoordinator.updateLocalAgent(
             id: id,
@@ -502,6 +504,8 @@ final class AISettingsViewModel: ObservableObject {
             iconSymbol: iconSymbol,
             baseModelName: baseModelName,
             systemPrompt: systemPrompt,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios,
             in: &snapshot
         )
     }
@@ -513,7 +517,9 @@ final class AISettingsViewModel: ObservableObject {
         displayName: String,
         iconSymbol: String,
         baseModelName: String,
-        systemPrompt: String
+        systemPrompt: String,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
     ) async -> Bool {
         modelCoordinator.updateLocalAgent(
             id: id,
@@ -521,6 +527,8 @@ final class AISettingsViewModel: ObservableObject {
             iconSymbol: iconSymbol,
             baseModelName: baseModelName,
             systemPrompt: systemPrompt,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios,
             in: &snapshot
         )
         return await persistModelNow(modelID: id)
@@ -587,13 +595,17 @@ final class AISettingsViewModel: ObservableObject {
         displayName: String,
         iconSymbol: String,
         baseModelName: String,
-        systemPrompt: String
+        systemPrompt: String,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
     ) {
         modelCoordinator.createLocalAgent(
             displayName: displayName,
             iconSymbol: iconSymbol,
             baseModelName: baseModelName,
             systemPrompt: systemPrompt,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios,
             in: &snapshot
         )
     }
@@ -604,13 +616,17 @@ final class AISettingsViewModel: ObservableObject {
         displayName: String,
         iconSymbol: String,
         baseModelName: String,
-        systemPrompt: String
+        systemPrompt: String,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = []
     ) async -> Bool {
         guard let agent = modelCoordinator.createLocalAgent(
             displayName: displayName,
             iconSymbol: iconSymbol,
             baseModelName: baseModelName,
             systemPrompt: systemPrompt,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios,
             in: &snapshot
         ) else { return false }
         return await persistModelNow(modelID: agent.id)

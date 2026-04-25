@@ -153,9 +153,8 @@ struct AddOnlineModelSheet: View {
                     }
 
                     NavigationLink {
-                        MultiSelectOptionsView(
+                        GroupedToolSelectionView(
                             title: L10n.text("ai_settings.models.online.field.tools"),
-                            options: SparkToolName.all.map { ($0, SparkToolName.displayName(for: $0)) },
                             selectedValues: $selectedToolNames
                         )
                     } label: {
@@ -363,8 +362,7 @@ struct AddOnlineModelSheet: View {
         supportsToolUse = initialDraft.supportsToolUse
         supportsImageGen = initialDraft.supportsImageGen
         selectedScenarioRawValues = Set(initialDraft.aiScenarios)
-        let toolSet = Set(initialDraft.aiToolScenarios.filter { $0.isEmpty == false })
-        selectedToolNames = toolSet.isEmpty ? Set(SparkToolName.all) : toolSet
+        selectedToolNames = SparkToolName.selectedSet(fromStoredToolNames: initialDraft.aiToolScenarios)
     }
 
     private func save() {
@@ -403,7 +401,7 @@ struct AddOnlineModelSheet: View {
                 supportsToolUse: supportsToolUse,
                 supportsImageGen: supportsImageGen,
                 aiScenarios: selectedScenarioRawValues.sorted(),
-                aiToolScenarios: selectedToolNames.sorted()
+                aiToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
             )
             if didSave {
                 await MainActor.run { dismiss() }
@@ -483,6 +481,92 @@ struct MultiSelectOptionsView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct GroupedToolSelectionView: View {
+    let title: String
+    @Binding var selectedValues: Set<String>
+
+    var body: some View {
+        List {
+            ForEach(SparkToolGroup.allCases, id: \.self) { group in
+                Section {
+                    Toggle(isOn: groupBinding(group)) {
+                        Label(group.localizedTitle, systemImage: group.iconSystemName)
+                    }
+
+                    if isGroupEnabled(group) {
+                        ForEach(group.tools, id: \.rawValue) { tool in
+                            Button {
+                                toggleTool(tool)
+                            } label: {
+                                HStack {
+                                    Text(SparkToolName.displayName(for: tool.rawValue))
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if selectedValues.contains(tool.rawValue) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.tint)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text(group.localizedTitle)
+                        Spacer()
+                        Text(groupSummary(group))
+                            .foregroundStyle(.secondary)
+                    }
+                } footer: {
+                    Text(group.localizedDescription)
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func groupBinding(_ group: SparkToolGroup) -> Binding<Bool> {
+        Binding(
+            get: {
+                isGroupEnabled(group)
+            },
+            set: { isOn in
+                if isOn {
+                    selectedValues.formUnion(group.toolRawValues)
+                } else {
+                    selectedValues.subtract(group.toolRawValues)
+                }
+            }
+        )
+    }
+
+    private func isGroupEnabled(_ group: SparkToolGroup) -> Bool {
+        selectedValues.isDisjoint(with: group.toolRawValues) == false
+    }
+
+    private func toggleTool(_ tool: SparkToolName) {
+        if selectedValues.contains(tool.rawValue) {
+            selectedValues.remove(tool.rawValue)
+        } else {
+            selectedValues.insert(tool.rawValue)
+        }
+    }
+
+    private func groupSummary(_ group: SparkToolGroup) -> String {
+        let selectedCount = group.toolRawValues.filter { selectedValues.contains($0) }.count
+        let total = group.tools.count
+        if selectedCount == 0 {
+            return L10n.text("ai_settings.models.online.selection.none")
+        }
+        if selectedCount == total {
+            return L10n.text("ai_settings.models.online.selection.all")
+        }
+        return "\(selectedCount)/\(total)"
     }
 }
 

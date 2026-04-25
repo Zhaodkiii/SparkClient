@@ -68,9 +68,8 @@ struct EditSparkModelSheet: View {
                         }
 
                         NavigationLink {
-                            MultiSelectOptionsView(
+                            GroupedToolSelectionView(
                                 title: L10n.text("ai_settings.models.online.field.tools"),
-                                options: SparkToolName.all.map { ($0, SparkToolName.displayName(for: $0)) },
                                 selectedValues: $selectedToolNames
                             )
                         } label: {
@@ -142,7 +141,7 @@ struct EditSparkModelSheet: View {
             m.supportsToolUse = supportsToolUse
             m.supportsImageGen = supportsImageGen
             m.aiScenarios = selectedScenarioRawValues.sorted()
-            m.aiToolScenarios = selectedToolNames.sorted()
+            m.aiToolScenarios = SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
         }
         Task {
             let didSave = await viewModel.replaceModelAndPersist(m)

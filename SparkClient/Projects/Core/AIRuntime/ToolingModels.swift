@@ -123,9 +123,118 @@ func ~=(pattern: SparkToolName, value: String) -> Bool {
 }
 
 extension SparkToolName {
+    static let noSelectionSentinel = "__spark_tools_none__"
+
     /// L10n key 规则统一为 `"ai_settings.tools.<tool_name>"`，直接插值即可，无需 switch。
     static func displayName(for toolName: String) -> String {
         L10n.text("ai_settings.tools.\(toolName)")
+    }
+
+    static func selectedSet(fromStoredToolNames toolNames: [String]) -> Set<String> {
+        if toolNames.contains(noSelectionSentinel) {
+            return []
+        }
+        let normalized = Set(toolNames).intersection(Set(all))
+        return normalized.isEmpty ? Set(all) : normalized
+    }
+
+    static func storageValues(forSelectedToolNames selectedToolNames: Set<String>) -> [String] {
+        let normalized = selectedToolNames.intersection(Set(all))
+        return normalized.isEmpty ? [noSelectionSentinel] : normalized.sorted()
+    }
+}
+
+enum SparkToolGroup: String, CaseIterable {
+    case health
+    case member
+    case location
+    case memory
+    case knowledge
+    case system
+
+    var localizedTitle: String {
+        L10n.text("ai_settings.tool_groups.\(rawValue)")
+    }
+
+    var localizedDescription: String {
+        L10n.text("ai_settings.tool_groups.\(rawValue).description")
+    }
+
+    var iconSystemName: String {
+        switch self {
+        case .health:
+            return "heart.text.square"
+        case .member:
+            return "person.2"
+        case .location:
+            return "location"
+        case .memory:
+            return "brain.head.profile"
+        case .knowledge:
+            return "books.vertical"
+        case .system:
+            return "calendar.badge.clock"
+        }
+    }
+
+    var tools: [SparkToolName] {
+        switch self {
+        case .health:
+            return [
+                .fetchStepDetails,
+                .fetchEnergyDetails,
+                .fetchNutritionDetails,
+                .makeNutritionData,
+                .fetchSleepDetails,
+                .fetchWorkoutDetails,
+                .generateStructuredHealthCard
+            ]
+        case .member:
+            return [
+                .getCurrentMember,
+                .switchMember,
+                .findMember,
+                .queryMemberProfile
+            ]
+        case .location:
+            return [
+                .queryLocation,
+                .getCurrentLocation,
+                .searchNearbyLocations,
+                .getRoute,
+                .queryWeather
+            ]
+        case .memory:
+            return [
+                .saveMemory,
+                .retrieveMemory,
+                .updateMemory,
+                .generateChatTitle
+            ]
+        case .knowledge:
+            return [
+                .searchKnowledgeBag,
+                .createKnowledgeDocument,
+                .searchOnline,
+                .readWebPage,
+                .searchArxivPapers,
+                .extractRemoteFileContent
+            ]
+        case .system:
+            return [
+                .searchCalendarAndReminders,
+                .writeSystemEvent,
+                .showCustomMessageCard,
+                .createCanvas,
+                .editCanvas,
+                .queryTasksByMember,
+                .generateTask
+            ]
+        }
+    }
+
+    var toolRawValues: [String] {
+        tools.map(\.rawValue)
     }
 }
 

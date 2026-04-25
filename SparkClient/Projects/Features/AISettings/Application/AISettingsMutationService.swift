@@ -104,6 +104,8 @@ struct ModelCatalogCoordinator: Sendable {
         iconSymbol: String,
         baseModelName: String,
         systemPrompt: String,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = [],
         in snapshot: inout AISettingsSnapshot
     ) -> AllModels? {
         guard let baseModel = snapshot.allModels.first(where: { $0.name == baseModelName }) else { return nil }
@@ -136,7 +138,9 @@ struct ModelCatalogCoordinator: Sendable {
             timestamp: Date(),
             priceTier: baseModel.priceTier,
             supportsText: baseModel.supportsText,
-            reasoningControllable: baseModel.reasoningControllable
+            reasoningControllable: baseModel.reasoningControllable,
+            aiScenarios: aiScenarios,
+            aiToolScenarios: aiToolScenarios
         )
         snapshot.allModels.append(agent)
         return agent
@@ -148,6 +152,8 @@ struct ModelCatalogCoordinator: Sendable {
         iconSymbol: String,
         baseModelName: String,
         systemPrompt: String,
+        aiScenarios: [String] = [],
+        aiToolScenarios: [String] = [],
         in snapshot: inout AISettingsSnapshot
     ) {
         guard let index = snapshot.allModels.firstIndex(where: { $0.id == id }) else { return }
@@ -157,6 +163,8 @@ struct ModelCatalogCoordinator: Sendable {
         model.iconSymbol = iconSymbol
         model.baseModelName = baseModelName
         model.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        model.aiScenarios = aiScenarios.sorted()
+        model.selectedToolNames = Set(aiToolScenarios)
         if let base = snapshot.allModels.first(where: { $0.name == baseModelName && $0.identity == .model }) {
             model.providerID = base.providerID
             model.company = base.company

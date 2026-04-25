@@ -139,15 +139,17 @@ struct ModelsSettingsMainRow: View {
                     baseModels: viewModel.snapshot.allModels.filter { $0.identity == .model && $0.isHidden == false },
                     editingAgent: model,
                     promptTooling: viewModel.promptTooling,
-                    onCreate: { _, _, _, _ in },
-                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt in
+                    onCreate: { _, _, _, _, _, _ in },
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios in
                         Task {
                             await viewModel.updateLocalAgentAndPersist(
                                 id: id,
                                 displayName: displayName,
                                 iconSymbol: iconSymbol,
                                 baseModelName: baseModelName,
-                                systemPrompt: systemPrompt
+                                systemPrompt: systemPrompt,
+                                aiScenarios: aiScenarios,
+                                aiToolScenarios: aiToolScenarios
                             )
                         }
                     }

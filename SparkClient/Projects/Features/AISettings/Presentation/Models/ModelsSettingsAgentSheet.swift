@@ -5,13 +5,15 @@ struct ModelsSettingsAgentSheet: View {
     let baseModels: [AllModels]
     var editingAgent: AllModels?
     var promptTooling: AISettingsPromptTooling = .unavailable
-    let onCreate: (String, String, String, String) -> Void
-    let onUpdate: ((UUID, String, String, String, String) -> Void)?
+    let onCreate: (String, String, String, String, [String], [String]) -> Void
+    let onUpdate: ((UUID, String, String, String, String, [String], [String]) -> Void)?
 
     @State private var displayName = ""
     @State private var iconSymbol = "stethoscope"
     @State private var selectedBaseModelName = ""
     @State private var systemPrompt = ""
+    @State private var selectedScenarioRawValues: Set<String> = []
+    @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
     @State private var showIconPicker = false
     @State private var showTextInputDrawer = false
     @State private var showVoiceInput = false
@@ -20,6 +22,7 @@ struct ModelsSettingsAgentSheet: View {
     @State private var autoFillOriginalText = ""
     @State private var actionError: String?
     @Environment(\.dismiss) private var dismiss
+    @State private var hasSyncedFromModel = false
 
     private var isEditing: Bool { editingAgent != nil }
 
@@ -100,6 +103,37 @@ struct ModelsSettingsAgentSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section(L10n.text("ai_settings.models.online.section.usage")) {
+                NavigationLink {
+                    MultiSelectOptionsView(
+                        title: L10n.text("ai_settings.models.online.field.scenarios"),
+                        options: AIScenario.allCases.map { ($0.rawValue, $0.localizedTitle) },
+                        selectedValues: $selectedScenarioRawValues
+                    )
+                } label: {
+                    HStack {
+                        Text(L10n.text("ai_settings.models.online.field.scenarios"))
+                        Spacer()
+                        Text(selectedScenarioSummary)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                NavigationLink {
+                    GroupedToolSelectionView(
+                        title: L10n.text("ai_settings.models.online.field.tools"),
+                        selectedValues: $selectedToolNames
+                    )
+                } label: {
+                    HStack {
+                        Text(L10n.text("ai_settings.models.online.field.tools"))
+                        Spacer()
+                        Text(selectedToolsSummary)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
         .navigationTitle(isEditing ? L10n.text("ai_settings.models.agent.nav.edit_title") : L10n.text("ai_settings.models.agent.nav.new_title"))
         .toolbar {
@@ -111,9 +145,24 @@ struct ModelsSettingsAgentSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button(isEditing ? L10n.text("ai_settings.save") : L10n.text("ai_settings.models.agent.action.create")) {
                     if isEditing, let agent = editingAgent {
-                        onUpdate?(agent.id, displayName, iconSymbol, selectedBaseModelName, systemPrompt)
+                        onUpdate?(
+                            agent.id,
+                            displayName,
+                            iconSymbol,
+                            selectedBaseModelName,
+                            systemPrompt,
+                            selectedScenarioRawValues.sorted(),
+                            SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
+                        )
                     } else {
-                        onCreate(displayName, iconSymbol, selectedBaseModelName, systemPrompt)
+                        onCreate(
+                            displayName,
+                            iconSymbol,
+                            selectedBaseModelName,
+                            systemPrompt,
+                            selectedScenarioRawValues.sorted(),
+                            SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
+                        )
                     }
                     dismiss()
                 }
@@ -158,14 +207,19 @@ struct ModelsSettingsAgentSheet: View {
             Text(actionError ?? "")
         }
         .onAppear {
+            guard hasSyncedFromModel == false else { return }
+
             if let agent = editingAgent {
                 displayName = agent.displayName
                 iconSymbol = agent.iconSymbol ?? "stethoscope"
                 selectedBaseModelName = agent.baseModelName ?? ""
                 systemPrompt = agent.systemPrompt ?? ""
+                selectedScenarioRawValues = Set(agent.aiScenarios)
+                selectedToolNames = agent.selectedToolNames
             } else if selectedBaseModelName.isEmpty, let first = baseModels.first {
                 selectedBaseModelName = first.name
             }
+            hasSyncedFromModel = true
         }
     }
 
@@ -229,6 +283,21 @@ struct ModelsSettingsAgentSheet: View {
         displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
         selectedBaseModelName.isEmpty == false &&
         systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private var selectedScenarioSummary: String {
+        if selectedScenarioRawValues.isEmpty {
+            return L10n.text("ai_settings.models.online.selection.none")
+        }
+        return "\(selectedScenarioRawValues.count)"
+    }
+
+    private var selectedToolsSummary: String {
+        let total = SparkToolName.all.count
+        if selectedToolNames.count == total {
+            return L10n.text("ai_settings.models.online.selection.all")
+        }
+        return "\(selectedToolNames.count)/\(total)"
     }
 }
 

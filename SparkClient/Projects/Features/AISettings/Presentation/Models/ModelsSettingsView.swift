@@ -160,24 +160,28 @@ struct ModelsSettingsView: View {
                     baseModels: baseModelsForAgent,
                     editingAgent: editingAgent,
                     promptTooling: viewModel.promptTooling,
-                    onCreate: { displayName, iconSymbol, baseModelName, systemPrompt in
+                    onCreate: { displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios in
                         Task {
                             await viewModel.createLocalAgentAndPersist(
                                 displayName: displayName,
                                 iconSymbol: iconSymbol,
                                 baseModelName: baseModelName,
-                                systemPrompt: systemPrompt
+                                systemPrompt: systemPrompt,
+                                aiScenarios: aiScenarios,
+                                aiToolScenarios: aiToolScenarios
                             )
                         }
                     },
-                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt in
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios in
                         Task {
                             await viewModel.updateLocalAgentAndPersist(
                                 id: id,
                                 displayName: displayName,
                                 iconSymbol: iconSymbol,
                                 baseModelName: baseModelName,
-                                systemPrompt: systemPrompt
+                                systemPrompt: systemPrompt,
+                                aiScenarios: aiScenarios,
+                                aiToolScenarios: aiToolScenarios
                             )
                         }
                     }

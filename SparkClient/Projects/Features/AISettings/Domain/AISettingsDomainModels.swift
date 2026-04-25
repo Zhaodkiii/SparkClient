@@ -241,15 +241,13 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         set { aiScenarios = newValue.map(\.rawValue).sorted() }
     }
 
-    /// 工具选择：空数组视为“默认全选”。
+    /// 工具选择：空数组视为“默认全选”，哨兵值视为“明确全不选”。
     var selectedToolNames: Set<String> {
         get {
-            let normalized = Set(aiToolScenarios.filter { $0.isEmpty == false })
-            return normalized.isEmpty ? Set(SparkToolName.all) : normalized
+            SparkToolName.selectedSet(fromStoredToolNames: aiToolScenarios)
         }
         set {
-            let normalized = newValue.intersection(Set(SparkToolName.all))
-            aiToolScenarios = normalized.isEmpty ? [] : normalized.sorted()
+            aiToolScenarios = SparkToolName.storageValues(forSelectedToolNames: newValue)
         }
     }
 
