@@ -8,6 +8,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     private enum EntityName {
         static let provider = "AIProviderEntity"
         static let model = "AIModelEntity"
+        static let smallTask = "AISmallTaskEntity"
         static let seedState = "AISettingsSeedStateEntity"
     }
 
@@ -45,8 +46,13 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         static let characterDesign = "characterDesign"
         static let aiScenariosData = "aiScenariosData"
         static let aiToolScenariosData = "aiToolScenariosData"
+        static let relatedTaskCodesData = "relatedTaskCodesData"
         static let baseModelName = "baseModelName"
         static let localFilename = "localFilename"
+        static let code = "code"
+        static let brief = "brief"
+        static let prompt = "prompt"
+        static let toolListData = "toolListData"
         static let catalogVersion = "catalogVersion"
         static let updatedAt = "updatedAt"
     }
@@ -77,7 +83,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         self.logger = logger
     }
 
-    /// 加载当前账号的完整快照：Core Data 中的 `AllModels` / `APIKeys` + UserDefaults 中的偏好载荷。
+    /// 加载当前账号的完整快照：Core Data 中的 `AllModels` / `APIKeys` / `SmallTask` + UserDefaults 中的偏好载荷。
     /// `ownerAccountID` 由登录引导显式传入时，不依赖会话快照读取顺序，保证「首次登录即灌种子」。
     func loadSnapshot(ownerAccountID explicitAccountID: Int64?) async -> AISettingsSnapshot {
         let ownerAccountID: Int64?
@@ -177,7 +183,8 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
         let seedSnapshot = AISettingsSnapshot(
             allModels: AISettingsSeedCatalog.getModelList(),
-            apiKeys: AISettingsSeedCatalog.getAPIKeyList()
+            apiKeys: AISettingsSeedCatalog.getAPIKeyList(),
+            smallTasks: []
         )
         let keyCount = seedSnapshot.apiKeys.count
         let modelCount = seedSnapshot.allModels.count
@@ -210,6 +217,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         try await coreDataStack.performBackgroundTask { context in
             try self.replaceProviders(snapshot.apiKeys, ownerAccountID: ownerAccountID, context: context)
             try self.replaceModels(snapshot.allModels, ownerAccountID: ownerAccountID, context: context)
+            try self.replaceSmallTasks(snapshot.smallTasks, ownerAccountID: ownerAccountID, context: context)
             try self.upsertSeedState(ownerAccountID: ownerAccountID, context: context)
         }
     }
@@ -219,18 +227,19 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             "AI loadSnapshot 读链路：Core Data fetch AIProviderEntity + AIModelEntity ownerAccountID=\(ownerAccountID)",
             module: .aiConfig
         )
-        let pair = try await coreDataStack.performBackgroundTask { context -> ([APIKeys], [AllModels]) in
+        let stored = try await coreDataStack.performBackgroundTask { context -> ([APIKeys], [AllModels], [SmallTask]) in
             let apiKeys = try self.fetchProviders(ownerAccountID: ownerAccountID, context: context)
             let allModels = try self.fetchModels(ownerAccountID: ownerAccountID, context: context)
-            return (apiKeys, allModels)
+            let smallTasks = try self.fetchSmallTasks(ownerAccountID: ownerAccountID, context: context)
+            return (apiKeys, allModels, smallTasks)
         }
         let preferences = loadDecodedPreferencesPayload(ownerAccountID: ownerAccountID)
         let prefsSource = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)) != nil ? "UserDefaults 已存在载荷" : "UserDefaults 使用默认偏好"
         logger.debug(
-            "AI loadSnapshot 读链路完成 ownerAccountID=\(ownerAccountID) 读到 厂商Key=\(pair.0.count) 模型=\(pair.1.count)；偏好：\(prefsSource)",
+            "AI loadSnapshot 读链路完成 ownerAccountID=\(ownerAccountID) 读到 厂商Key=\(stored.0.count) 模型=\(stored.1.count) 小任务=\(stored.2.count)；偏好：\(prefsSource)",
             module: .aiConfig
         )
-        return AISettingsSnapshot(allModels: pair.1, apiKeys: pair.0, preferences: preferences)
+        return AISettingsSnapshot(allModels: stored.1, apiKeys: stored.0, smallTasks: stored.2, preferences: preferences)
     }
 
     /// 将 `PreferencesPayload` 编码写入 UserDefaults（结构与 `AISettingsSnapshot` 非目录字段一致）。
@@ -285,6 +294,25 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         )
         for model in allModels {
             try upsertModel(model, ownerAccountID: ownerAccountID, context: context)
+        }
+    }
+
+    private func replaceSmallTasks(
+        _ smallTasks: [SmallTask],
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
+        let desiredCodes = Set(smallTasks.map(\.code))
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.smallTask)
+        request.predicate = ownerPredicate(ownerAccountID)
+        for object in try context.fetch(request) {
+            guard let code = object.value(forKey: Field.code) as? String, desiredCodes.contains(code) else {
+                context.delete(object)
+                continue
+            }
+        }
+        for task in smallTasks {
+            upsertSmallTask(task, ownerAccountID: ownerAccountID, context: context)
         }
     }
 
@@ -355,10 +383,36 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         object.setValue(model.characterDesign, forKey: Field.characterDesign)
         object.setValue(try encodeStringArray(model.aiScenarios), forKey: Field.aiScenariosData)
         object.setValue(try encodeStringArray(model.aiToolScenarios), forKey: Field.aiToolScenariosData)
+        object.setValue(try encodeStringArray(model.relatedTaskCodes), forKey: Field.relatedTaskCodesData)
         object.setValue(model.baseModelName, forKey: Field.baseModelName)
         object.setValue(model.localFilename, forKey: Field.localFilename)
         object.setValue(model.source.rawValue, forKey: Field.source)
         object.setValue(model.timestamp, forKey: Field.timestamp)
+    }
+
+    private func upsertSmallTask(
+        _ task: SmallTask,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.smallTask)
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "\(Field.code) == %@", task.code),
+        ])
+        let object = (try? context.fetch(request).first)
+            ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.smallTask, into: context)
+        object.setValue(Int64(task.sourceID), forKey: Field.id)
+        object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+        object.setValue(task.name, forKey: Field.name)
+        object.setValue(task.code, forKey: Field.code)
+        object.setValue(task.brief, forKey: Field.brief)
+        object.setValue(task.prompt, forKey: Field.prompt)
+        object.setValue(task.icon, forKey: Field.icon)
+        object.setValue(try? encodeStringArray(task.toolList), forKey: Field.toolListData)
+        object.setValue(task.source.rawValue, forKey: Field.source)
+        object.setValue(Date(), forKey: Field.timestamp)
     }
 
     /// 记录该账号已完成种子初始化；`catalogVersion` 仅为当前 bundle 种子版本快照，不用于触发重灌。
@@ -442,10 +496,34 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
                 characterDesign: object.value(forKey: Field.characterDesign) as? String ?? "",
                 aiScenarios: try decodeStringArray(object.value(forKey: Field.aiScenariosData) as? Data),
                 aiToolScenarios: try decodeStringArray(object.value(forKey: Field.aiToolScenariosData) as? Data),
+                relatedTaskCodes: try decodeStringArray(object.value(forKey: Field.relatedTaskCodesData) as? Data),
                 baseModelName: object.value(forKey: Field.baseModelName) as? String,
                 localFilename: object.value(forKey: Field.localFilename) as? String,
                 source: AIRecordSource(rawValue: object.value(forKey: Field.source) as? String ?? "") ?? .system,
                 timestamp: object.value(forKey: Field.timestamp) as? Date ?? Date()
+            )
+        }
+    }
+
+    private func fetchSmallTasks(
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws -> [SmallTask] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.smallTask)
+        request.predicate = ownerPredicate(ownerAccountID)
+        request.sortDescriptors = [NSSortDescriptor(key: Field.code, ascending: true)]
+        return try context.fetch(request).compactMap { object in
+            let code = object.value(forKey: Field.code) as? String ?? ""
+            guard code.isEmpty == false else { return nil }
+            return SmallTask(
+                sourceID: Int(object.value(forKey: Field.id) as? Int64 ?? 0),
+                name: object.value(forKey: Field.name) as? String ?? "",
+                code: code,
+                brief: object.value(forKey: Field.brief) as? String ?? "",
+                prompt: object.value(forKey: Field.prompt) as? String ?? "",
+                icon: object.value(forKey: Field.icon) as? String ?? "",
+                toolList: (try? decodeStringArray(object.value(forKey: Field.toolListData) as? Data)) ?? [],
+                source: TaskSource(rawValue: object.value(forKey: Field.source) as? String ?? "") ?? .local
             )
         }
     }

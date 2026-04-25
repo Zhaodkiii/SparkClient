@@ -40,6 +40,9 @@ struct ChatMessageBubbleContentView: View {
     let onSavePrescriptionCard: (PrescriptionChatCardPayload) -> Void
     let onSaveExamReportCard: (ExamReportChatCardPayload) -> Void
     let onSaveMedicalCaseCard: (MedicalCaseChatCardPayload) -> Void
+    let onCaptureOpenCamera: () -> Void
+    let onCaptureOpenPhotoLibrary: () -> Void
+    let onCaptureOpenFiles: () -> Void
     let onCachedChatAttachmentLocalURL: (ChatAttachment) async -> URL?
     let onDownloadChatAttachmentToLocalFile: (ChatAttachment) async throws -> URL
 
@@ -147,6 +150,16 @@ struct ChatMessageBubbleContentView: View {
             if message.role == .assistant,
                let sleep = metadata.sleepVisualization {
                 ChatSleepVisualizationMessageCard(model: sleep)
+            }
+
+            if message.role == .assistant,
+               let captureCard = metadata.captureMessageCard {
+                ChatCaptureTypeMessageCard(
+                    cardType: captureCard.cardType,
+                    onOpenCamera: onCaptureOpenCamera,
+                    onOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
+                    onOpenFiles: onCaptureOpenFiles
+                )
             }
 
             if message.role == .assistant,
@@ -310,6 +323,10 @@ struct ChatMessageBubbleContentView: View {
 
     private func toolMeta() -> (name: String, content: String)? {
         let name = metadata.toolName ?? ""
+        if metadata.captureMessageCard != nil,
+           name.lowercased().contains("show_custom_message_card") {
+            return nil
+        }
         let rawContent = metadata.toolContent ?? ""
         guard rawContent.isEmpty == false else { return nil }
         return (

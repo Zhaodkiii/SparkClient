@@ -5,6 +5,7 @@ import Foundation
 struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var allModels: [AllModels]
     var apiKeys: [APIKeys]
+    var smallTasks: [SmallTask]
     /// 检索与知识相关本地偏好。
     var searchToolPreferences: AISearchToolPreferences
     /// 场景级默认模型（`AIScenario.rawValue` -> 模型 `name`）。
@@ -25,6 +26,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     init(
         allModels: [AllModels],
         apiKeys: [APIKeys],
+        smallTasks: [SmallTask] = [],
         searchToolPreferences: AISearchToolPreferences = AISettingsDefaults.searchToolPreferences,
         scenarioDefaultModels: [String: String] = [:],
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
@@ -39,6 +41,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     ) {
         self.allModels = allModels
         self.apiKeys = apiKeys
+        self.smallTasks = smallTasks
         self.searchToolPreferences = searchToolPreferences
         self.scenarioDefaultModels = scenarioDefaultModels
         self.scenarioModelSources = scenarioModelSources
@@ -56,6 +59,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     static let `default` = AISettingsSnapshot(
         allModels: [],
         apiKeys: [],
+        smallTasks: [],
         searchToolPreferences: AISettingsDefaults.searchToolPreferences,
         scenarioDefaultModels: [:],
         scenarioModelSources: [:],
@@ -252,10 +256,11 @@ extension AISettingsSnapshot {
     }
 
     /// 用 Core Data 中的目录数据与已解码的偏好载荷组装完整快照。
-    init(allModels: [AllModels], apiKeys: [APIKeys], preferences: PreferencesPayload) {
+    init(allModels: [AllModels], apiKeys: [APIKeys], smallTasks: [SmallTask] = [], preferences: PreferencesPayload) {
         self.init(
             allModels: allModels,
             apiKeys: apiKeys,
+            smallTasks: smallTasks,
             searchToolPreferences: preferences.searchToolPreferences,
             scenarioDefaultModels: preferences.scenarioDefaultModels,
             scenarioModelSources: preferences.scenarioModelSources,

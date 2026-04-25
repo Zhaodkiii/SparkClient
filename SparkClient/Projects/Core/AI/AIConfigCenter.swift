@@ -111,6 +111,10 @@ final class AIConfigCenter {
         await runtimeConfigStore.proScenarioBundles()
     }
 
+    func effectiveSmallTasks() async -> [SmallTask] {
+        await runtimeConfigStore.effectiveSmallTasks()
+    }
+
     func updateScenarioDefaultModel(_ modelName: String, for scenario: AIScenario) async {
         await runtimeConfigStore.updateScenarioDefaultModel(modelName, for: scenario)
         await persistScenarioPreferenceMutation { snapshot in
@@ -129,7 +133,7 @@ final class AIConfigCenter {
         guard let remoteProvider else { return }
         do {
             let patch = try await remoteProvider.fetchRemotePatch()
-            await runtimeConfigStore.setProOverlay(patch.scenarioRemoteBundles, revision: patch.revision)
+            await runtimeConfigStore.setProOverlay(patch.scenarioRemoteBundles, revision: patch.revision, smallTasks: patch.smallTasks)
             logger.info(
                 "远程 AI 场景模型已载入内存，revision=\(patch.revision ?? "unknown")",
                 module: .aiConfig

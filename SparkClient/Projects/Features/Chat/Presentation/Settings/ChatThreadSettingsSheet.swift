@@ -140,7 +140,7 @@ struct ChatThreadSettingsSheet: View {
     }
 
     private var maxTokenOptions: [ChatThreadSettingOption<Int>] {
-        [256, 512, 1024, 2048, 4096, 8192].map { value in
+        [256, 512, 1024, 2048, 4096, 8192, 16384, 32768].map { value in
             ChatThreadSettingOption(
                 id: "tokens-\(value)",
                 value: value,

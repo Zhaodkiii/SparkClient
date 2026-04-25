@@ -19,6 +19,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
 
     var onLoadMore: () -> Void
     var onRefresh: () async -> Void
+    var onCaptureOpenFiles: () -> Void
     /// 递增时下一帧列表按 ``ConversationListApplyPayload/forceFullListRediff`` 全量重 diff（如下拉刷新）。
     var conversationListLayoutNonce: UInt64
 
@@ -74,5 +75,6 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
         vc.taskManager = taskManager
         vc.logger = logger
         vc.actionState = actionState
+        vc.onCaptureOpenFiles = onCaptureOpenFiles
     }
 }

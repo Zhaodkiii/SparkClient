@@ -3,12 +3,8 @@ import Foundation
 import XCTest
 
 final class ChatToolEventInterpreterTests: XCTestCase {
-    private struct KnowledgeCardDraft: Decodable, Equatable {
-        let title: String
-        let content: String
-    }
-
-    func testCreateKnowledgeDocumentTraceGeneratesKnowledgeCardAttachment() throws {
+    /// 知识卡由 `ToolHub` + `StructuredHealthCardMergeCoordinator` 异步合并，解释器不生成 `knowledge_card` 附件。
+    func testCreateKnowledgeDocumentTraceDoesNotEmitKnowledgeCardFromInterpreter() {
         let interpreter = ChatToolEventInterpreter(logger: ConsoleLogger())
         let toolTrace = """
         [1] create_knowledge_document
@@ -22,14 +18,8 @@ final class ChatToolEventInterpreterTests: XCTestCase {
             toolContent: toolTrace
         )
 
-        XCTAssertEqual(result.knowledgeCardAttachmentCount, 1)
-        let attachment = try XCTUnwrap(result.attachments.first(where: { $0.type == .knowledgeCard }))
-        let raw = try XCTUnwrap(attachment.text)
-        let data = try XCTUnwrap(raw.data(using: .utf8))
-        let cards = try JSONDecoder().decode([KnowledgeCardDraft].self, from: data)
-        XCTAssertEqual(cards.count, 1)
-        XCTAssertEqual(cards.first?.title, "慢病随访总结")
-        XCTAssertEqual(cards.first?.content, "## 随访计划\n- 两周后复诊")
+        XCTAssertEqual(result.knowledgeCardAttachmentCount, 0)
+        XCTAssertNil(result.attachments.first(where: { $0.type == .knowledgeCard }))
     }
 
     func testToolContentGeneratesOperationalAttachments() {

@@ -4,6 +4,8 @@ import Foundation
 actor AIRuntimeConfigStore {
     private var localBundles: AIScenarioRemoteBundlesCollection?
     private var proBundles: AIScenarioRemoteBundlesCollection?
+    private var localSmallTasks: [SmallTask] = []
+    private var proSmallTasks: [SmallTask] = []
     private(set) var proRevision: String?
 
     /// 与 `localBundles` 同源的上次快照；供设置页与推理侧避免重复读库。
@@ -23,6 +25,7 @@ actor AIRuntimeConfigStore {
             apiKeys: snapshot.apiKeys,
             scenarioDefaults: snapshot.scenarioDefaultModels
         )
+        localSmallTasks = snapshot.smallTasks.filter { $0.source == .local }
     }
 
     /// 仅当缓存存在且账号与当前解析一致时返回，避免跨账号误用。
@@ -32,14 +35,16 @@ actor AIRuntimeConfigStore {
         return cached
     }
 
-    func setProOverlay(_ bundles: AIScenarioRemoteBundlesCollection?, revision: String?) {
+    func setProOverlay(_ bundles: AIScenarioRemoteBundlesCollection?, revision: String?, smallTasks: [SmallTask] = []) {
         proBundles = bundles
         proRevision = revision
+        proSmallTasks = smallTasks.filter { $0.source == .service }
     }
 
     func clearProOverlay() {
         proBundles = nil
         proRevision = nil
+        proSmallTasks = []
     }
 
     func reset() {
@@ -48,6 +53,8 @@ actor AIRuntimeConfigStore {
         proRevision = nil
         cachedSnapshot = nil
         cachedOwnerAccountID = nil
+        localSmallTasks = []
+        proSmallTasks = []
     }
 
     func localScenarioBundles() -> AIScenarioRemoteBundlesCollection? {
@@ -56,6 +63,17 @@ actor AIRuntimeConfigStore {
 
     func proScenarioBundles() -> AIScenarioRemoteBundlesCollection? {
         proBundles
+    }
+
+    func effectiveSmallTasks() -> [SmallTask] {
+        var merged: [String: SmallTask] = [:]
+        for task in proSmallTasks {
+            merged[task.id] = task
+        }
+        for task in localSmallTasks {
+            merged[task.id] = task
+        }
+        return merged.values.sorted { $0.id < $1.id }
     }
 
     /// 场景默认模型变更后，同步更新运行时缓存快照与已缓存 bundle。
@@ -85,22 +103,22 @@ actor AIRuntimeConfigStore {
             throw AIConfigError.runtimeNotBootstrapped
         }
         var merged = AIRuntimeConfigAssembler.merge(local: local, pro: proBundles)
-        let fallbackDefaults = cachedSnapshot?.scenarioDefaultModels ?? [:]
-        for scenario in AIScenario.allCases {
-            let preferredModelName = fallbackDefaults[scenario.rawValue]
-            guard let preferredModelName,
-                  preferredModelName.isEmpty == false
-            else { continue }
-            var bundle = merged.bundle(for: scenario)
-            guard bundle.models.contains(where: { $0.name == preferredModelName }) else { continue }
-            bundle.defaultModelName = preferredModelName
-            bundle.models = bundle.models.map { row in
-                var normalized = row
-                normalized.isDefault = (row.name == preferredModelName)
-                return normalized
-            }
-            merged.setBundle(bundle, for: scenario)
-        }
+//        let fallbackDefaults = cachedSnapshot?.scenarioDefaultModels ?? [:]
+//        for scenario in AIScenario.allCases {
+//            let preferredModelName = fallbackDefaults[scenario.rawValue]
+//            guard let preferredModelName,
+//                  preferredModelName.isEmpty == false
+//            else { continue }
+//            var bundle = merged.bundle(for: scenario)
+//            guard bundle.models.contains(where: { $0.name == preferredModelName }) else { continue }
+//            bundle.defaultModelName = preferredModelName
+//            bundle.models = bundle.models.map { row in
+//                var normalized = row
+//                normalized.isDefault = (row.name == preferredModelName)
+//                return normalized
+//            }
+//            merged.setBundle(bundle, for: scenario)
+//        }
         return merged
     }
 

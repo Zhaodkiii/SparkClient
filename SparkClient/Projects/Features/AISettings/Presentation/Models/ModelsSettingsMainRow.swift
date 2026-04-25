@@ -138,9 +138,10 @@ struct ModelsSettingsMainRow: View {
                 ModelsSettingsAgentSheet(
                     baseModels: viewModel.snapshot.allModels.filter { $0.identity == .model && $0.isHidden == false },
                     editingAgent: model,
+                    smallTasks: viewModel.effectiveSmallTasks,
                     promptTooling: viewModel.promptTooling,
-                    onCreate: { _, _, _, _, _, _ in },
-                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios in
+                    onCreate: { _, _, _, _, _, _, _ in },
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
                         Task {
                             await viewModel.updateLocalAgentAndPersist(
                                 id: id,
@@ -149,7 +150,8 @@ struct ModelsSettingsMainRow: View {
                                 baseModelName: baseModelName,
                                 systemPrompt: systemPrompt,
                                 aiScenarios: aiScenarios,
-                                aiToolScenarios: aiToolScenarios
+                                aiToolScenarios: aiToolScenarios,
+                                relatedTaskCodes: relatedTaskCodes
                             )
                         }
                     }

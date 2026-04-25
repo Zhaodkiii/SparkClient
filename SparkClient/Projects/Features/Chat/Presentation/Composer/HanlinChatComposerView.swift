@@ -67,43 +67,11 @@ struct HanlinChatComposerView: View {
         ) { result in
             guard case .success(let urls) = result else { return }
             Task {
-                await importFiles(urls: urls)
-            }
-        }
-    }
-
-    private func importFiles(urls: [URL]) async {
-        var previews: [ChatComposerAttachmentPreview] = []
-        for url in urls {
-            let gotAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if gotAccess {
-                    url.stopAccessingSecurityScopedResource()
+                let previews = await ChatComposerAttachmentImporter.importFiles(urls: urls)
+                await MainActor.run {
+                    onAttachmentsPicked(previews)
                 }
             }
-            guard let data = try? Data(contentsOf: url), data.isEmpty == false else { continue }
-            previews.append(
-                ChatComposerAttachmentPreview(
-                    source: .document,
-                    kind: {
-                        let inferredType = UTType(filenameExtension: url.pathExtension)
-                        if inferredType?.conforms(to: .pdf) == true || url.pathExtension.lowercased() == "pdf" {
-                            return .pdf
-                        }
-                        if inferredType?.conforms(to: .image) == true {
-                            return .image
-                        }
-                        return .file
-                    }(),
-                    data: data,
-                    displayName: url.lastPathComponent,
-                    mimeType: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType,
-                    utTypeIdentifier: UTType(filenameExtension: url.pathExtension)?.identifier
-                )
-            )
-        }
-        await MainActor.run {
-            onAttachmentsPicked(previews)
         }
     }
 }

@@ -44,6 +44,17 @@ struct AISettingsView: View {
 
             Section(L10n.text("ai_settings.section.tools")) {
                 NavigationLink {
+                    SmallTasksSettingsView(viewModel: viewModel)
+                        .hidesMainTabBarWhenPushed()
+                } label: {
+                    SettingNavRow(
+                        title: "小任务",
+                        subtitle: "维护本地小任务并关联到模型",
+                        icon: "checklist"
+                    )
+                }
+
+                NavigationLink {
                     AISearchToolSettingsView(
                         preferences: $viewModel.snapshot.searchToolPreferences,
                         searchKeys: $viewModel.snapshot.searchKeys,

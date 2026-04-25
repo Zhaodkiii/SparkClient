@@ -155,19 +155,29 @@ struct BackendAIRemoteConfigProvider: AIRemoteConfigProvider, @unchecked Sendabl
 private struct RemoteAIBootstrapPayload: Decodable {
     let revision: String?
     let scenarios: RemoteScenarioCollection?
+    let smallTasks: [SmallTask]
 
     enum CodingKeys: String, CodingKey {
         case revision
         case scenarios
+        case smallTasks
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        revision = try c.decodeIfPresent(String.self, forKey: .revision)
+        scenarios = try c.decodeIfPresent(RemoteScenarioCollection.self, forKey: .scenarios)
+        smallTasks = try c.decodeIfPresent([SmallTask].self, forKey: .smallTasks) ?? []
     }
 
     func toPatch() -> AIRemoteSettingsPatch {
         guard let scenarios else {
-            return AIRemoteSettingsPatch(revision: revision, scenarioRemoteBundles: nil)
+            return AIRemoteSettingsPatch(revision: revision, scenarioRemoteBundles: nil, smallTasks: smallTasks)
         }
         return AIRemoteSettingsPatch(
             revision: revision,
-            scenarioRemoteBundles: scenarios.asProScenarioCollection()
+            scenarioRemoteBundles: scenarios.asProScenarioCollection(),
+            smallTasks: smallTasks
         )
     }
 }

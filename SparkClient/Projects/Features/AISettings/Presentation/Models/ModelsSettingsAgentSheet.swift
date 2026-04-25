@@ -4,9 +4,10 @@ import SwiftUI
 struct ModelsSettingsAgentSheet: View {
     let baseModels: [AllModels]
     var editingAgent: AllModels?
+    var smallTasks: [SmallTask] = []
     var promptTooling: AISettingsPromptTooling = .unavailable
-    let onCreate: (String, String, String, String, [String], [String]) -> Void
-    let onUpdate: ((UUID, String, String, String, String, [String], [String]) -> Void)?
+    let onCreate: (String, String, String, String, [String], [String], [String]) -> Void
+    let onUpdate: ((UUID, String, String, String, String, [String], [String], [String]) -> Void)?
 
     @State private var displayName = ""
     @State private var iconSymbol = "stethoscope"
@@ -14,6 +15,7 @@ struct ModelsSettingsAgentSheet: View {
     @State private var systemPrompt = ""
     @State private var selectedScenarioRawValues: Set<String> = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
+    @State private var selectedTaskCodes: Set<String> = []
     @State private var showIconPicker = false
     @State private var showTextInputDrawer = false
     @State private var showVoiceInput = false
@@ -87,6 +89,21 @@ struct ModelsSettingsAgentSheet: View {
                     }
                     .foregroundStyle(.tint)
                 }
+
+                NavigationLink {
+                    MultiSelectOptionsView(
+                        title: "关联小任务",
+                        options: smallTasks.map { ($0.code, "\($0.name)（\($0.code)）") },
+                        selectedValues: $selectedTaskCodes
+                    )
+                } label: {
+                    HStack {
+                        Text("关联小任务")
+                        Spacer()
+                        Text("\(selectedTaskCodes.count)")
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             Section(L10n.text("ai_settings.models.agent.section.base_model")) {
@@ -152,17 +169,19 @@ struct ModelsSettingsAgentSheet: View {
                             selectedBaseModelName,
                             systemPrompt,
                             selectedScenarioRawValues.sorted(),
-                            SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
+                            SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
+                            selectedTaskCodes.sorted()
                         )
                     } else {
                         onCreate(
                             displayName,
                             iconSymbol,
                             selectedBaseModelName,
-                            systemPrompt,
-                            selectedScenarioRawValues.sorted(),
-                            SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
-                        )
+                        systemPrompt,
+                        selectedScenarioRawValues.sorted(),
+                        SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
+                        selectedTaskCodes.sorted()
+                    )
                     }
                     dismiss()
                 }
@@ -216,6 +235,7 @@ struct ModelsSettingsAgentSheet: View {
                 systemPrompt = agent.systemPrompt ?? ""
                 selectedScenarioRawValues = Set(agent.aiScenarios)
                 selectedToolNames = agent.selectedToolNames
+                selectedTaskCodes = Set(agent.relatedTaskCodes)
             } else if selectedBaseModelName.isEmpty, let first = baseModels.first {
                 selectedBaseModelName = first.name
             }

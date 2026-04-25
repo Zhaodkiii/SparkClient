@@ -32,6 +32,8 @@ final class AISettingsViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// 试用功能操作中
     @Published private(set) var trialOperationInFlight = false
+    /// 本地与服务合并后的有效小任务列表（local 覆盖 service）
+    @Published private(set) var effectiveSmallTasks: [SmallTask] = []
 
     // MARK: - 依赖服务
     /// 加载AI设置用例
@@ -115,6 +117,7 @@ final class AISettingsViewModel: ObservableObject {
         lastPersistedSnapshot = loaded
         snapshot = loaded
         hasUnsavedChanges = false
+        await refreshEffectiveSmallTasks()
     }
 
     /// 保存所有修改的设置
@@ -496,7 +499,8 @@ final class AISettingsViewModel: ObservableObject {
         baseModelName: String,
         systemPrompt: String,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = []
     ) {
         modelCoordinator.updateLocalAgent(
             id: id,
@@ -506,6 +510,7 @@ final class AISettingsViewModel: ObservableObject {
             systemPrompt: systemPrompt,
             aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
+            relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         )
     }
@@ -519,7 +524,8 @@ final class AISettingsViewModel: ObservableObject {
         baseModelName: String,
         systemPrompt: String,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = []
     ) async -> Bool {
         modelCoordinator.updateLocalAgent(
             id: id,
@@ -529,6 +535,7 @@ final class AISettingsViewModel: ObservableObject {
             systemPrompt: systemPrompt,
             aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
+            relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         )
         return await persistModelNow(modelID: id)
@@ -597,7 +604,8 @@ final class AISettingsViewModel: ObservableObject {
         baseModelName: String,
         systemPrompt: String,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = []
     ) {
         modelCoordinator.createLocalAgent(
             displayName: displayName,
@@ -606,6 +614,7 @@ final class AISettingsViewModel: ObservableObject {
             systemPrompt: systemPrompt,
             aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
+            relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         )
     }
@@ -618,7 +627,8 @@ final class AISettingsViewModel: ObservableObject {
         baseModelName: String,
         systemPrompt: String,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = []
     ) async -> Bool {
         guard let agent = modelCoordinator.createLocalAgent(
             displayName: displayName,
@@ -627,9 +637,33 @@ final class AISettingsViewModel: ObservableObject {
             systemPrompt: systemPrompt,
             aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
+            relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         ) else { return false }
         return await persistModelNow(modelID: agent.id)
+    }
+
+    func upsertLocalSmallTaskAndPersist(_ task: SmallTask) async -> Bool {
+        var normalized = task
+        normalized.source = .local
+        if let index = snapshot.smallTasks.firstIndex(where: { $0.code == normalized.code }) {
+            snapshot.smallTasks[index] = normalized
+        } else {
+            snapshot.smallTasks.append(normalized)
+        }
+        return await persistSnapshotNowReturningBool()
+    }
+
+    func deleteLocalSmallTaskAndPersist(code: String) async -> Bool {
+        snapshot.smallTasks.removeAll { $0.code == code && $0.source == .local }
+        for index in snapshot.allModels.indices {
+            snapshot.allModels[index].relatedTaskCodes.removeAll { $0 == code }
+        }
+        return await persistSnapshotNowReturningBool()
+    }
+
+    func nextLocalSmallTaskID() -> Int {
+        (snapshot.smallTasks.filter { $0.source == .local }.map(\.sourceID).max() ?? 0) + 1
     }
 
     /// 初始化模型可见性（如需要则持久化）
@@ -746,6 +780,7 @@ final class AISettingsViewModel: ObservableObject {
             lastPersistedSnapshot = snapshot
             hasUnsavedChanges = false
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            await refreshEffectiveSmallTasks()
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -767,6 +802,7 @@ final class AISettingsViewModel: ObservableObject {
             markPersistedModel(model)
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            await refreshEffectiveSmallTasks()
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -788,6 +824,7 @@ final class AISettingsViewModel: ObservableObject {
             markPersistedProvider(provider)
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            await refreshEffectiveSmallTasks()
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -810,6 +847,15 @@ final class AISettingsViewModel: ObservableObject {
             lastPersistedSnapshot.apiKeys[index] = provider
         } else {
             lastPersistedSnapshot.apiKeys.append(provider)
+        }
+    }
+
+    /// 从 aiConfigCenter 刷新合并后的有效小任务（local 覆盖 service）；无 center 时退化为本地列表。
+    func refreshEffectiveSmallTasks() async {
+        if let center = aiConfigCenter {
+            effectiveSmallTasks = await center.effectiveSmallTasks()
+        } else {
+            effectiveSmallTasks = snapshot.smallTasks
         }
     }
 }

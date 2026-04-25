@@ -16,7 +16,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "67"
             endingLineNumber = "67"
-            landmarkName = "extract(memberID:files:selectedKind:)"
+            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -32,7 +32,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "68"
             endingLineNumber = "68"
-            landmarkName = "extract(memberID:files:selectedKind:)"
+            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -48,7 +48,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "69"
             endingLineNumber = "69"
-            landmarkName = "extract(memberID:files:selectedKind:)"
+            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -130,6 +130,68 @@
             endingLineNumber = "5"
             landmarkName = "unknown"
             landmarkType = "0">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "56090FB2-B83E-4871-9E17-4C3A98B268AF"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SparkClient/Projects/Features/AISettings/Presentation/Root/AISettingsViewModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "801"
+            endingLineNumber = "801"
+            landmarkName = "persistModelNow(modelID:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "56090FB2-B83E-4871-9E17-4C3A98B268AF - 5d46ed22776781e1"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for SparkClient.AISettingsViewModel.persistModelNow(modelID: Foundation.UUID) async -&gt; Swift.Bool"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Features/AISettings/Presentation/Root/AISettingsViewModel.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "801"
+                  endingLineNumber = "801">
+               </Location>
+               <Location
+                  uuid = "56090FB2-B83E-4871-9E17-4C3A98B268AF - e5a761323e52cf2d"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(2) await resume partial function for SparkClient.AISettingsViewModel.persistModelNow(modelID: Foundation.UUID) async -&gt; Swift.Bool"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Features/AISettings/Presentation/Root/AISettingsViewModel.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "801"
+                  endingLineNumber = "801">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "30F69BD5-6CD8-461B-A859-E1DC677A7E12"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SparkClient/Projects/Features/AISettings/Infrastructure/DefaultAISettingsRepository.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "388"
+            endingLineNumber = "388"
+            landmarkName = "upsertModel(_:ownerAccountID:context:)"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

@@ -16,6 +16,7 @@ struct EditSparkModelSheet: View {
     @State private var supportsImageGen = false
     @State private var selectedScenarioRawValues: Set<String> = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
+    @State private var selectedTaskCodes: Set<String> = []
     @State private var showIconPicker = false
     @State private var hasSyncedFromModel = false
 
@@ -80,6 +81,21 @@ struct EditSparkModelSheet: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+
+                        NavigationLink {
+                            MultiSelectOptionsView(
+                                title: "关联小任务",
+                                options: viewModel.snapshot.smallTasks.map { ($0.code, "\($0.name)（\($0.code)）") },
+                                selectedValues: $selectedTaskCodes
+                            )
+                        } label: {
+                            HStack {
+                                Text("关联小任务")
+                                Spacer()
+                                Text("\(selectedTaskCodes.count)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
 
                     Section(L10n.text("ai_settings.models.edit.section.capabilities")) {
@@ -124,6 +140,7 @@ struct EditSparkModelSheet: View {
         supportsImageGen = m.supportsImageGen
         selectedScenarioRawValues = Set(m.aiScenarios)
         selectedToolNames = m.selectedToolNames
+        selectedTaskCodes = Set(m.relatedTaskCodes)
     }
 
     private func save() {
@@ -142,6 +159,7 @@ struct EditSparkModelSheet: View {
             m.supportsImageGen = supportsImageGen
             m.aiScenarios = selectedScenarioRawValues.sorted()
             m.aiToolScenarios = SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
+            m.relatedTaskCodes = selectedTaskCodes.sorted()
         }
         Task {
             let didSave = await viewModel.replaceModelAndPersist(m)

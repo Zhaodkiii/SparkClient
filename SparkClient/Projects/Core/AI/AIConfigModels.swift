@@ -227,6 +227,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
     var source: String
     var aiScenarios: [String]
     var aiToolScenarios: [String]
+    var relatedTaskCodes: [String]
     var isDefault: Bool = false
     var temperature: Double = 0.2
     var maxTokens: Int = 4096
@@ -291,6 +292,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         case source
         case aiScenarios
         case aiToolScenarios
+        case relatedTaskCodes
         case temperature
         case maxTokens = "max_tokens"
         case baseModelName = "base_model_name"
@@ -333,6 +335,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         source: String,
         aiScenarios: [String],
         aiToolScenarios: [String],
+        relatedTaskCodes: [String] = [],
         isDefault: Bool = false,
         temperature: Double = 0.2,
         maxTokens: Int = 4096,
@@ -362,6 +365,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         self.source = source
         self.aiScenarios = aiScenarios
         self.aiToolScenarios = aiToolScenarios
+        self.relatedTaskCodes = relatedTaskCodes
         self.isDefault = isDefault
         self.temperature = temperature
         self.maxTokens = maxTokens
@@ -394,6 +398,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         source = try c.decode(String.self, forKey: .source)
         aiScenarios = try c.decodeIfPresent([String].self, forKey: .aiScenarios) ?? []
         aiToolScenarios = try c.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
+        relatedTaskCodes = try c.decodeIfPresent([String].self, forKey: .relatedTaskCodes) ?? []
         isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
         temperature = try c.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.2
         maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 4096

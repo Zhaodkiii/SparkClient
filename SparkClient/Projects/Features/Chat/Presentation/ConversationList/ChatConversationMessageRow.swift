@@ -13,6 +13,7 @@ struct ChatConversationMessageRow: View {
     let actionState: ChatMessageActionState
     let taskManager: TaskManager
     let logger: Logger
+    let onCaptureOpenFiles: () -> Void
 
     private var messageActionUseCase: any ChatMessageActionUseCase {
         DefaultChatMessageActionUseCase(taskManager: taskManager, logger: logger)
@@ -32,7 +33,7 @@ struct ChatConversationMessageRow: View {
                 bubbleContent
             }
         }
-        .padding(.trailing, 16)
+        .padding(8)
     }
 
     private var bubbleContent: some View {
@@ -117,6 +118,13 @@ struct ChatConversationMessageRow: View {
                     await detailViewModel.saveMedicalCaseStructuredCard(threadID: threadID, message: message, card: card)
                 }
             },
+            onCaptureOpenCamera: {
+                stateStore.setCameraPresented(true, for: threadID)
+            },
+            onCaptureOpenPhotoLibrary: {
+                stateStore.setPhotoPickerPresented(true, for: threadID)
+            },
+            onCaptureOpenFiles: onCaptureOpenFiles,
             onCachedChatAttachmentLocalURL: { attachment in
                 await detailViewModel.cachedLocalURLForChatAttachment(attachment)
             },

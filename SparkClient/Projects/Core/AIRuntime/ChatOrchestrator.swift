@@ -1,16 +1,30 @@
 import Foundation
 import UIKit
 
+/// 对话编排模块的输出结果
+/// 承载模型最终返回的文本、推理内容、结束原因、工具调用等完整输出信息
 struct ChatOrchestratorOutput: Sendable {
+    /// 最终返回给用户的消息主体文本
     let text: String
+    
+    /// 模型思考/推理过程文本（Chain-of-Thought / Reasoning）
     let reasoningText: String?
+    
+    /// 模型推理耗时（单位：毫秒）
     let reasoningDurationMs: Int64?
+    
+    /// 模型生成结束原因（如：stop / length / tool_calls 等）
     let finishReason: String?
+    
+    /// 消息类型（文本/图片/卡片/结构化数据等）
     let kind: ChatMessageKind
+    
+    /// 调用的工具名称（如果当前输出由工具执行产生）
     let toolName: String?
+    
+    /// 工具执行的内容/参数（JSON 或结构化文本）
     let toolContent: String?
 }
-
 /// 助手流式回调的标准增量模型。
 /// 统一承载“正文 / 推理 / 工具链路”字段，避免多参数回调扩散。
 struct ChatAssistantPartialDelta: Sendable {

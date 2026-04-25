@@ -29,6 +29,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     var actionState: ChatMessageActionState?
     var onLoadMore: (() -> Void)?
     var onRefresh: (() async -> Void)?
+    var onCaptureOpenFiles: (() -> Void)?
 
     private var refreshControl: UIRefreshControl?
     private var isLoadingMoreFlag: Bool = false
@@ -281,7 +282,10 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     speechHelper: speechHelper,
                     actionState: actionState,
                     taskManager: taskManager,
-                    logger: logger
+                    logger: logger,
+                    onCaptureOpenFiles: { [weak self] in
+                        self?.onCaptureOpenFiles?()
+                    }
                 )
             } else {
                 Color.clear.frame(height: 1)

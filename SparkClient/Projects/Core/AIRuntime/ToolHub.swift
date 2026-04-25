@@ -495,7 +495,7 @@ final class ToolHub: @unchecked Sendable {
         case .fetchStepDetails:
             return await runFetchSteps(invocation: invocation)
         case .fetchSleepDetails:
-            return await runFetchSleep(invocation: invocation)
+            return await runFetchSleep(invocation: invocation, context: context)
         case .fetchEnergyDetails:
             return await runFetchEnergy(invocation: invocation)
         case .fetchNutritionDetails:
@@ -506,9 +506,9 @@ final class ToolHub: @unchecked Sendable {
             return runMakeNutritionData(invocation: invocation)
 
         case .searchKnowledgeBag:
-            return await runSearchKnowledgeBag(invocation: invocation)
+            return await runSearchKnowledgeBag(invocation: invocation, context: context)
         case .createKnowledgeDocument:
-            return await runCreateKnowledgeDocument(invocation: invocation)
+            return await runCreateKnowledgeDocument(invocation: invocation, context: context)
 
         case .saveMemory:
             return await runSaveMemory(invocation: invocation)
@@ -538,14 +538,7 @@ final class ToolHub: @unchecked Sendable {
             return runEditCanvas(invocation: invocation)
 
         case .showCustomMessageCard:
-            let cardType = (invocation.arguments["card_type"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let hint = cardType.isEmpty ? "" : "（\(cardType)）"
-            return ToolExecutionResult(
-                toolName: invocation.name,
-                outputText: "已展示上传/拍照卡片入口\(hint)，请继续引导用户上传材料。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
+            return await runShowCustomMessageCard(invocation: invocation, context: context)
 
         case .searchOnline,
              .readWebPage,
@@ -558,7 +551,7 @@ final class ToolHub: @unchecked Sendable {
              .queryWeather,
              .searchCalendarAndReminders,
              .writeSystemEvent:
-            return await runExternalConnectorTool(invocation: invocation)
+            return await runExternalConnectorTool(invocation: invocation, context: context)
         }
     }
 
@@ -574,21 +567,26 @@ final class ToolHub: @unchecked Sendable {
     }
 
     /// 从 HealthKit 查询真实睡眠阶段，并返回聊天卡片可解析的 `sleep_model`。
-    private func runFetchSleep(invocation: ToolInvocation) async -> ToolExecutionResult {
+    private func runFetchSleep(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let range = resolveHealthRange(arguments: invocation.arguments, fallbackDays: 2)
         do {
             let model = try await healthTool.fetchSleepDetails(from: range.start, to: range.end)
-            let json = (try? JSONEncoder().encode(model))
-                .flatMap { String(data: $0, encoding: .utf8) }
-                ?? "{}"
-            let output = """
-            sleep_model=\(json)
-            \(model.toReadableText())
-            """
-
+            // 仅向模型提供可读摘要；完整结构由协调器异步写入 `healthSleepVisualization`，不经工具输出再解码。
+            let outputText = model.toReadableText()
+            if let threadID = context.threadID,
+               let assistantID = context.assistantMessageClientID {
+                let merge = structuredHealthCardMergeCoordinator
+                Task {
+                    await merge.insertHealthSleepVisualizationWhenAssistantMessageReady(
+                        threadID: threadID,
+                        assistantClientMessageID: assistantID,
+                        model: model
+                    )
+                }
+            }
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchSleepDetails,
-                outputText: output,
+                outputText: outputText,
                 sensitive: false,
                 shouldBypassModel: true
             )
@@ -807,8 +805,8 @@ final class ToolHub: @unchecked Sendable {
         return segments
     }
 
-    /// 在本地知识库中按标题、正文和切块检索知识片段。
-    private func runSearchKnowledgeBag(invocation: ToolInvocation) async -> ToolExecutionResult {
+    /// 在本地知识库中按标题、正文和切块检索知识片段；知识卡预览由协调器异步写入，不经 `ChatToolEventInterpreter`。
+    private func runSearchKnowledgeBag(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let query = invocation.arguments["query"] ?? invocation.arguments["content"] ?? ""
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
@@ -835,11 +833,19 @@ final class ToolHub: @unchecked Sendable {
                 let prefix = "[\(index + 1)] \(result.title)"
                 return "\(prefix)\n\(result.excerpt)"
             }
-            return ToolExecutionResult(
-                toolName: SparkToolName.searchKnowledgeBag,
-                outputText: lines.joined(separator: "\n\n"),
-                sensitive: false,
-                shouldBypassModel: true
+            let body = lines.joined(separator: "\n\n")
+            let l10n = AIPromptL10n(locale: .current)
+            let title = l10n.tool("tool.ui.knowledge.search_title", fallback: "Knowledge Search")
+            let kc = encodeKnowledgeCardPreviewAttachment(title: title, content: body).map { [$0] } ?? []
+            return returnWithScheduledRichMerge(
+                context: context,
+                result: ToolExecutionResult(
+                    toolName: SparkToolName.searchKnowledgeBag,
+                    outputText: body,
+                    sensitive: false,
+                    shouldBypassModel: true
+                ),
+                richAttachments: kc
             )
         } catch {
             return ToolExecutionResult(
@@ -851,9 +857,8 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 生成知识文档草稿（用于消息内知识卡预览），不在工具阶段直接落库。
-    /// 真正保存由聊天气泡中的“保存到知识库”按钮触发，保持 AI_Hanlin 一致的确认式交互。
-    private func runCreateKnowledgeDocument(invocation: ToolInvocation) async -> ToolExecutionResult {
+    /// 生成知识文档草稿（消息内知识卡由协调器异步合并）；向模型仅返回可读说明，不依赖发送链路解析 `knowledge_card`。
+    private func runCreateKnowledgeDocument(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let title = (invocation.arguments["title"] ?? "未命名文档").trimmingCharacters(in: .whitespacesAndNewlines)
         let content = (invocation.arguments["content"] ?? invocation.arguments["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else {
@@ -864,33 +869,23 @@ final class ToolHub: @unchecked Sendable {
                 shouldBypassModel: true
             )
         }
+        let resolvedTitle = title.isEmpty ? "未命名文档" : title
         logger.info(
-            "create_knowledge_document 生成预览草稿，title=\(title.isEmpty ? "未命名文档" : title), contentLength=\(content.count)",
+            "create_knowledge_document 生成预览草稿，title=\(resolvedTitle), contentLength=\(content.count)",
             module: .aiConfig
         )
 
-        // 统一输出为 JSON，便于聊天发送链路稳定解析为 knowledge_card。
-        let payload: [String: String] = [
-            "status": "preview",
-            "title": title.isEmpty ? "未命名文档" : title,
-            "content": content
-        ]
-        let outputText: String
-        if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
-           let text = String(data: data, encoding: .utf8) {
-            outputText = text
-        } else {
-            outputText = """
-            status=preview
-            title=\(title.isEmpty ? "未命名文档" : title)
-            content=\(content)
-            """
-        }
-        return ToolExecutionResult(
-            toolName: SparkToolName.createKnowledgeDocument,
-            outputText: outputText,
-            sensitive: false,
-            shouldBypassModel: true
+        let userFacing = "已生成知识库文档草稿「\(resolvedTitle)」，内容已附在消息内知识卡中，用户可点击保存到知识库。"
+        let kc = encodeKnowledgeCardPreviewAttachment(title: resolvedTitle, content: content).map { [$0] } ?? []
+        return returnWithScheduledRichMerge(
+            context: context,
+            result: ToolExecutionResult(
+                toolName: SparkToolName.createKnowledgeDocument,
+                outputText: userFacing,
+                sensitive: false,
+                shouldBypassModel: true
+            ),
+            richAttachments: kc
         )
     }
 
@@ -1156,88 +1151,114 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// 对齐 HealthClient：同步返回系统提示，结构化卡片在后台抽取完成后合并到当前助手消息。
+    /// 对齐 HealthClient 规范：同步返回系统提示语，结构化健康卡片在后台抽取完成后，合并到当前助手消息中
     private func runGenerateStructuredHealthCard(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        // 获取对应语言的本地化文案
         let l10n = AIPromptL10n(locale: context.locale)
+        
+        // 生成模型提示文案：告知用户结构化卡片正在后台生成，无需等待，可继续对话
         let hintTemplate = l10n.tool(
             "tool.async.structured_health_card.model_hint",
             fallback: """
-            [System] Structured save cards are generating in the background. Continue interpreting from the user message without waiting; cards appear below this reply.
-            """
+                [系统] 结构化健康卡片正在后台生成中。无需等待，可继续根据用户消息进行回复；卡片将展示在本条回复下方。
+                """
         )
+        
+        // 校验：未获取到当前成员ID，直接返回错误结果
         guard let memberID = context.memberID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
                 outputText: l10n.tool(
                     "tool.error.structured_health_card.no_member",
-                    fallback: "No member selected; cannot generate structured health cards."
+                    fallback: "未选择成员，无法生成结构化健康卡片。"
                 ),
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-
+        
+        // 解析报告类型：支持 report_type / category 两个参数名，统一做小写、去空格处理
         let reportType = (invocation.arguments["report_type"] ?? invocation.arguments["category"] ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+        
+        // 解析原始文本：支持 raw_text / content 两个参数名，去空格处理
         let rawText = (invocation.arguments["raw_text"] ?? invocation.arguments["content"] ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // 校验：原始文本为空，返回错误
         guard rawText.isEmpty == false else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
                 outputText: l10n.tool(
                     "tool.error.structured_health_card.empty_raw_text",
-                    fallback: "Missing raw_text (distilled excerpt)."
+                    fallback: "缺少原始文本（摘要内容）。"
                 ),
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-
+        
+        // 校验：缺少会话ID 或 助手消息客户端ID，返回内部错误
         guard let threadID = context.threadID, let assistantID = context.assistantMessageClientID else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
                 outputText: l10n.tool(
                     "tool.error.structured_health_card.no_message_binding",
-                    fallback: "[System] Internal error: assistant message not bound."
+                    fallback: "[系统] 内部错误：未绑定助手消息。"
                 ),
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-
+        
+        // 确定最终使用的报告类型，未传参则默认使用 medical_case
         let effectiveReportType = reportType.isEmpty ? "medical_case" : reportType
+        
+        // 解析 OSS 文件ID（转为整型，可选）
         let ossFileId = invocation.arguments["oss_file_id"].flatMap { Int($0) }
+        
+        // 依赖的协程管理器与文档抽取器
         let merge = structuredHealthCardMergeCoordinator
         let extractor = typedMedicalDocumentExtractor
-
+        
+        // 开启后台任务：执行结构化健康卡片抽取与合并（不阻塞当前方法返回）
         Task {
             do {
+                // 1. 从聊天摘要文本中抽取结构化健康数据
                 let output = try await extractor.extractFromChatDistilledText(
                     memberID: memberID,
                     reportType: effectiveReportType,
                     rawText: rawText
                 )
+                
+                // 2. 构建卡片数据增量更新 payload
                 let delta = ChatStructuredHealthCardsPayloadBuilder.appendPayloads(
                     from: output,
                     memberID: memberID,
                     ossFileId: ossFileId
                 )
+                
+                // 3. 等待助手消息就绪后，合并并追加结构化卡片
                 await merge.mergeAppendWhenAssistantMessageReady(
                     threadID: threadID,
                     assistantClientMessageID: assistantID,
                     delta: delta
                 )
             } catch {
+                // 抽取失败：打印警告日志，并生成失败状态的卡片占位数据
                 logger.warning(
                     "generate_structured_health_card 抽取失败：\(error.localizedDescription)",
                     module: .aiConfig
                 )
+                
                 let delta = ChatStructuredHealthCardsPayloadBuilder.extractionFailureBlob(
                     memberID: memberID,
                     reportType: effectiveReportType,
                     ossFileId: ossFileId
                 )
+                
+                // 合并失败占位信息到助手消息
                 await merge.mergeAppendWhenAssistantMessageReady(
                     threadID: threadID,
                     assistantClientMessageID: assistantID,
@@ -1245,12 +1266,48 @@ final class ToolHub: @unchecked Sendable {
                 )
             }
         }
-
+        
+        // 同步返回：立即告诉模型“后台正在生成”，不等待异步任务完成
         return ToolExecutionResult(
             toolName: SparkToolName.generateStructuredHealthCard,
             outputText: hintTemplate,
             sensitive: false,
             shouldBypassModel: false
+        )
+    }
+
+    /// 拍照/上传卡片工具：解析 card_type，异步将 captureMessageCard 附件合并回助手消息。
+    private func runShowCustomMessageCard(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let cardType = (invocation.arguments["card_type"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hint = cardType.isEmpty ? "" : "（\(cardType)）"
+        let outputText = "已展示上传/拍照卡片入口\(hint)，请继续引导用户上传材料。"
+
+        guard let type = ChatCaptureCardType(rawValue: cardType),
+              let threadID = context.threadID,
+              let assistantID = context.assistantMessageClientID else {
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: outputText,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        let payload = ChatCaptureMessageCardPayload(cardType: type)
+        let merge = structuredHealthCardMergeCoordinator
+        Task {
+            await merge.insertCaptureCardWhenAssistantMessageReady(
+                threadID: threadID,
+                assistantClientMessageID: assistantID,
+                payload: payload
+            )
+        }
+
+        return ToolExecutionResult(
+            toolName: invocation.name,
+            outputText: outputText,
+            sensitive: false,
+            shouldBypassModel: true
         )
     }
 
@@ -1297,7 +1354,7 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 任务生成工具：先查询任务，再执行抽取与相似度判断，最后只输出任务卡片 JSON（待用户确认）。
+    /// 任务生成工具：先查询任务，再执行抽取与相似度判断；成功时在消息内异步合并任务卡附件，向模型只返回简短可读说明（不经输出字符串解析 JSON）。
     private func runGenerateTask(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
         guard let memberID else {
@@ -1399,12 +1456,18 @@ final class ToolHub: @unchecked Sendable {
             createdAt: iso8601(now),
             updatedAt: iso8601(now)
         )
-        let wrapper = TaskCardToolWrapper(taskCards: [card])
-        return ToolExecutionResult(
-            toolName: SparkToolName.generateTask,
-            outputText: encodeJSON(wrapper) ?? #"{"ok":false,"error":"encode_failed"}"#,
-            sensitive: true,
-            shouldBypassModel: true
+        let titleLine = makeTaskTitle(extracted: extracted, type: taskType)
+        let userFacing = "已根据描述生成 1 条待确认任务「\(titleLine)」。请在消息内任务卡片中确认或忽略。"
+        let cardRich = makeTaskCardAttachments(cards: [card])
+        return returnWithScheduledRichMerge(
+            context: context,
+            result: ToolExecutionResult(
+                toolName: SparkToolName.generateTask,
+                outputText: userFacing,
+                sensitive: true,
+                shouldBypassModel: true
+            ),
+            richAttachments: cardRich
         )
     }
 
@@ -1751,8 +1814,123 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
+    /// 在助手消息落库后合并富 UI 附件；附件须由 `ToolInvocation` 等结构化入参在调用处构建，不从工具返回字符串再解析。
+    private func returnWithScheduledRichMerge(
+        context: ToolExecutionContext,
+        result: ToolExecutionResult,
+        richAttachments: [ChatAttachment]
+    ) -> ToolExecutionResult {
+        guard richAttachments.isEmpty == false,
+              let threadID = context.threadID,
+              let assistantID = context.assistantMessageClientID
+        else {
+            return result
+        }
+        let merge = structuredHealthCardMergeCoordinator
+        Task {
+            await merge.mergeAppendRichAttachmentsWhenAssistantMessageReady(
+                threadID: threadID,
+                assistantClientMessageID: assistantID,
+                attachments: richAttachments
+            )
+        }
+        return result
+    }
+
+    /// 与 `ChatMessageMetadata` 中 `knowledgeCard` 解码格式一致（`[{ title, content }]`）。
+    private func encodeKnowledgeCardPreviewAttachment(title: String, content: String) -> ChatAttachment? {
+        struct Row: Codable {
+            let title: String
+            let content: String
+        }
+        guard let data = try? JSONEncoder().encode([Row(title: title, content: content)]),
+              let json = String(data: data, encoding: .utf8) else { return nil }
+        return ChatAttachment(type: .knowledgeCard, text: json)
+    }
+
+    /// 从 `ToolInvocation.arguments` 构建地图/日历/HTML 等富 UI 附件（与 `fetch_sleep_details` 不用输出解码的路径一致）。
+    private func makeExternalConnectorRichAttachments(
+        invocation: ToolInvocation,
+        toolOutputForWebPreview: String
+    ) -> [ChatAttachment] {
+        let a = invocation.arguments
+        var attachments: [ChatAttachment] = []
+        let l10n = AIPromptL10n(locale: .current)
+        let locDefault = l10n.tool("tool.ui.rich.location.default_name", fallback: "Location")
+        let eventDefault = l10n.tool("tool.ui.rich.event.default_title", fallback: "Event")
+
+        if let tool = SparkToolName(rawValue: invocation.name) {
+            switch tool {
+            case .queryLocation, .getCurrentLocation, .searchNearbyLocations, .getRoute:
+                if let lat = Double(a["latitude"] ?? ""),
+                   let lon = Double(a["longitude"] ?? "") {
+                    let loc = [
+                        RichLocation(
+                            name: a["keyword"] ?? a["query"] ?? locDefault,
+                            latitude: lat,
+                            longitude: lon
+                        )
+                    ]
+                    if let text = jsonStringForRich(loc) {
+                        attachments.append(ChatAttachment(type: .locationsInfo, text: text))
+                    }
+                }
+                if let sLat = Double(a["start.latitude"] ?? ""),
+                   let sLng = Double(a["start.longitude"] ?? ""),
+                   let eLat = Double(a["end.latitude"] ?? ""),
+                   let eLng = Double(a["end.longitude"] ?? "") {
+                    let loc = [
+                        RichLocation(name: "Start", latitude: sLat, longitude: sLng),
+                        RichLocation(name: "End", latitude: eLat, longitude: eLng)
+                    ]
+                    if let text = jsonStringForRich(loc) {
+                        attachments.append(ChatAttachment(type: .locationsInfo, text: text))
+                    }
+                    let routes = [RichRoute(
+                        summary: "Route",
+                        distance: a["distance"],
+                        duration: a["duration"],
+                        mode: a["mode"]
+                    )]
+                    if let text = jsonStringForRich(routes) {
+                        attachments.append(ChatAttachment(type: .routeInfo, text: text))
+                    }
+                }
+            case .searchCalendarAndReminders, .writeSystemEvent:
+                let events = [RichEvent(
+                    type: a["event_type"] ?? a["type"] ?? "calendar",
+                    title: a["title"] ?? a["keyword"] ?? eventDefault,
+                    dateText: a["start_date"] ?? a["due_date"] ?? a["end_date"],
+                    location: a["location"],
+                    notes: a["notes"]
+                )]
+                if let text = jsonStringForRich(events) {
+                    attachments.append(ChatAttachment(type: .events, text: text))
+                }
+            case .readWebPage:
+                if toolOutputForWebPreview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    attachments.append(ChatAttachment(type: .htmlContent, text: toolOutputForWebPreview))
+                }
+            default:
+                break
+            }
+        }
+
+        return attachments
+    }
+
+    private func jsonStringForRich<T: Encodable>(_ value: T) -> String? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func makeTaskCardAttachments(cards: [TaskToolCardPayload]) -> [ChatAttachment] {
+        guard cards.isEmpty == false, let data = try? JSONEncoder().encode(cards), let text = String(data: data, encoding: .utf8) else { return [] }
+        return [ChatAttachment(type: .taskCards, text: text)]
+    }
+
     /// 联网/地图/日历等外部工具：根据 `toolKeys` 解析 endpoint，当前仅返回路由占位说明。
-    private func runExternalConnectorTool(invocation: ToolInvocation) async -> ToolExecutionResult {
+    private func runExternalConnectorTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let snapshot = await aiConfigCenter.currentSnapshot()
         let endpoint = resolveEndpoint(for: invocation.name, toolKeys: snapshot.toolKeys)
         let payloadSummary = invocation.arguments
@@ -1766,12 +1944,19 @@ final class ToolHub: @unchecked Sendable {
         args=\(payloadSummary.isEmpty ? "<empty>" : payloadSummary)
         当前为本地执行占位；如需真实联网调用，请在对应 toolClass 网关实现 HTTP 适配。
         """
-
-        return ToolExecutionResult(
-            toolName: invocation.name,
-            outputText: output,
-            sensitive: false,
-            shouldBypassModel: true
+        let rich = makeExternalConnectorRichAttachments(
+            invocation: invocation,
+            toolOutputForWebPreview: output
+        )
+        return returnWithScheduledRichMerge(
+            context: context,
+            result: ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: output,
+                sensitive: false,
+                shouldBypassModel: true
+            ),
+            richAttachments: rich
         )
     }
 
@@ -1843,6 +2028,56 @@ final class ToolHub: @unchecked Sendable {
     }
 }
 
+// MARK: - 富 UI JSON 行（与消息附件 `locationsInfo` / `routeInfo` / `events` 一致）
+
+private struct RichLocation: Codable, Sendable {
+    let id: UUID
+    let name: String
+    let latitude: Double
+    let longitude: Double
+
+    init(name: String, latitude: Double, longitude: Double) {
+        self.id = UUID()
+        self.name = name
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+}
+
+private struct RichRoute: Codable, Sendable {
+    let id: UUID
+    let summary: String
+    let distance: String?
+    let duration: String?
+    let mode: String?
+
+    init(summary: String, distance: String?, duration: String?, mode: String?) {
+        self.id = UUID()
+        self.summary = summary
+        self.distance = distance
+        self.duration = duration
+        self.mode = mode
+    }
+}
+
+private struct RichEvent: Codable, Sendable {
+    let id: UUID
+    let type: String
+    let title: String
+    let dateText: String?
+    let location: String?
+    let notes: String?
+
+    init(type: String, title: String, dateText: String?, location: String?, notes: String?) {
+        self.id = UUID()
+        self.type = type
+        self.title = title
+        self.dateText = dateText
+        self.location = location
+        self.notes = notes
+    }
+}
+
 private struct TaskQueryToolPayload: Encodable {
     let ok: Bool
     let memberID: Int
@@ -1892,14 +2127,6 @@ private struct TaskSimilarityItem: Encodable {
         case type
         case status
         case updatedAt = "updated_at"
-    }
-}
-
-private struct TaskCardToolWrapper: Encodable {
-    let taskCards: [TaskToolCardPayload]
-
-    enum CodingKeys: String, CodingKey {
-        case taskCards = "task_cards"
     }
 }
 

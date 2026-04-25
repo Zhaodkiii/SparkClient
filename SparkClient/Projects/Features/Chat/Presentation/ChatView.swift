@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Combine
+import UniformTypeIdentifiers
 
 struct ChatView: View {
     private enum ParameterCardKind: Hashable {
@@ -24,6 +25,7 @@ struct ChatView: View {
     private let actionState = ChatMessageActionState()
     @State private var selectedTextSheet: ChatSelectableTextPayload?
     @StateObject private var speechHelper = ChatSpeechHelper()
+    @State private var showCaptureFileImporter = false
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
@@ -278,10 +280,26 @@ struct ChatView: View {
                     conversationListLayoutNonce += 1
                 }
             },
+            onCaptureOpenFiles: {
+                showCaptureFileImporter = true
+            },
             conversationListLayoutNonce: conversationListLayoutNonce
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .chatScrollDismissesKeyboardInteractively()
+        .fileImporter(
+            isPresented: $showCaptureFileImporter,
+            allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result else { return }
+            Task {
+                let attachments = await ChatComposerAttachmentImporter.importFiles(urls: urls)
+                await MainActor.run {
+                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
+                }
+            }
+        }
     }
 
     private var cardActionSnapshotStorageKey: String {
@@ -412,7 +430,7 @@ struct ChatView: View {
     }
 
     private var maxTokenOptions: [ChatThreadSettingOption<Int>] {
-        [256, 512, 1024, 2048, 4096, 8192].map { value in
+        [256, 512, 1024, 2048, 4096, 8192, 16384, 32768].map { value in
             ChatThreadSettingOption(
                 id: "tokens-\(value)",
                 value: value,

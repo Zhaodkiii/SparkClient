@@ -159,8 +159,9 @@ struct ModelsSettingsView: View {
                 ModelsSettingsAgentSheet(
                     baseModels: baseModelsForAgent,
                     editingAgent: editingAgent,
+                    smallTasks: viewModel.effectiveSmallTasks,
                     promptTooling: viewModel.promptTooling,
-                    onCreate: { displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios in
+                    onCreate: { displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
                         Task {
                             await viewModel.createLocalAgentAndPersist(
                                 displayName: displayName,
@@ -168,11 +169,12 @@ struct ModelsSettingsView: View {
                                 baseModelName: baseModelName,
                                 systemPrompt: systemPrompt,
                                 aiScenarios: aiScenarios,
-                                aiToolScenarios: aiToolScenarios
+                                aiToolScenarios: aiToolScenarios,
+                                relatedTaskCodes: relatedTaskCodes
                             )
                         }
                     },
-                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios in
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
                         Task {
                             await viewModel.updateLocalAgentAndPersist(
                                 id: id,
@@ -181,7 +183,8 @@ struct ModelsSettingsView: View {
                                 baseModelName: baseModelName,
                                 systemPrompt: systemPrompt,
                                 aiScenarios: aiScenarios,
-                                aiToolScenarios: aiToolScenarios
+                                aiToolScenarios: aiToolScenarios,
+                                relatedTaskCodes: relatedTaskCodes
                             )
                         }
                     }

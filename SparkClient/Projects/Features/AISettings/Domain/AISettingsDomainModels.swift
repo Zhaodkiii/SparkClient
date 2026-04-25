@@ -200,6 +200,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     var characterDesign: String
     var aiScenarios: [String]
     var aiToolScenarios: [String]
+    var relatedTaskCodes: [String]
     var baseModelName: String?
     var localFilename: String?
     var source: AIRecordSource
@@ -275,6 +276,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         characterDesign: String = "",
         aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = [],
         baseModelName: String? = nil,
         localFilename: String? = nil,
         source: AIRecordSource,
@@ -303,6 +305,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         self.characterDesign = characterDesign
         self.aiScenarios = aiScenarios
         self.aiToolScenarios = aiToolScenarios
+        self.relatedTaskCodes = relatedTaskCodes
         self.baseModelName = baseModelName
         self.localFilename = localFilename
         self.source = source
@@ -334,7 +337,8 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         supportsText: Bool = true,
         reasoningControllable: Bool = false,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = []
     ) {
         self.init(
             id: id,
@@ -360,6 +364,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
             characterDesign: "",
             aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
+            relatedTaskCodes: relatedTaskCodes,
             baseModelName: baseModelName,
             localFilename: localFilename,
             source: source,
@@ -391,6 +396,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         case characterDesign
         case aiScenarios
         case aiToolScenarios
+        case relatedTaskCodes
         case baseModelName
         case localFilename
         case source
@@ -424,6 +430,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         characterDesign = try container.decodeIfPresent(String.self, forKey: .characterDesign) ?? ""
         aiScenarios = try container.decodeIfPresent([String].self, forKey: .aiScenarios) ?? []
         aiToolScenarios = try container.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
+        relatedTaskCodes = try container.decodeIfPresent([String].self, forKey: .relatedTaskCodes) ?? []
         baseModelName = try container.decodeIfPresent(String.self, forKey: .baseModelName)
         localFilename = try container.decodeIfPresent(String.self, forKey: .localFilename)
         source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system

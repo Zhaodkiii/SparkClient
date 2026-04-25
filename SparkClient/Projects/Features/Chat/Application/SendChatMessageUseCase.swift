@@ -235,18 +235,6 @@ struct SendChatMessageUseCase: Sendable {
                 toolName: output.toolName,
                 toolContent: output.toolContent
             )
-            if interpreted.knowledgeCardAttachmentCount > 0 {
-                logger.debug(
-                    "已生成知识卡预览附件，thread=\(shortID(thread.id)), count=\(interpreted.knowledgeCardAttachmentCount)",
-                    module: .general
-                )
-            }
-            if interpreted.richAttachmentCount > 0 {
-                logger.debug(
-                    "已生成富卡片附件，thread=\(shortID(thread.id)), count=\(interpreted.richAttachmentCount)",
-                    module: .general
-                )
-            }
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .assistant,
