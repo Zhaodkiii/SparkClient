@@ -127,7 +127,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     /// 供 `generate_structured_health_card` 调用：无 OCR、无本地文件，`raw_text` 即模型提炼后的医学摘录。
     /// - `report_type` 与 HealthClient/OpenAI 工具约定一致：`medication` / `prescription` / `exam_report` / `medical_case`。
     func extractFromChatDistilledText(
-        memberID: Int,
+        memberID: Int?,
         reportType: String,
         rawText: String
     ) async throws -> MedicalDocumentTypedExtractionOutput {

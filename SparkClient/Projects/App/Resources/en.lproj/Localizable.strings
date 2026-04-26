@@ -1292,7 +1292,7 @@
 "chat.medical_card.saved" = "Saved";
 "chat.medical_card.saved.toast" = "Saved to health records.";
 "chat.medical_card.error.decode" = "Could not read card data.";
-"chat.medical_card.error.no_member" = "Select a family member on Home first.";
+"chat.medical_card.error.no_member" = "Select a member first.";
 "chat.medical_card.medication.untitled" = "Medication";
 "chat.medical_card.prescription.title" = "Prescription";
 "chat.medical_card.exam.title" = "Exam report";

@@ -7,7 +7,6 @@ protocol ChatMessageActionUseCase {
     func translate(_ text: String, detailViewModel: ChatDetailViewModel) async throws -> String
     func saveMessageToKnowledge(content: String, detailViewModel: ChatDetailViewModel) async throws
     func saveKnowledgeCard(_ card: ChatKnowledgeCard, detailViewModel: ChatDetailViewModel) async throws
-    func createTask(from card: TaskCard) async throws
     func buildKnowledgePreviewCard(message: ChatMessage, metadata: ChatMessageMetadata) -> ChatKnowledgeCard
 }
 
@@ -34,12 +33,6 @@ final class DefaultChatMessageActionUseCase: ChatMessageActionUseCase {
 
     func saveKnowledgeCard(_ card: ChatKnowledgeCard, detailViewModel: ChatDetailViewModel) async throws {
         _ = try await detailViewModel.saveKnowledgeCard(title: card.title, content: card.content)
-    }
-
-    func createTask(from card: TaskCard) async throws {
-        let payload = ChatTaskPayloadBuilder.build(from: card)
-        try await taskManager.createTask(payload: payload)
-        logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
     }
 
     /// 使用轻量本地规则先生成可预览知识卡，再由用户决定是否保存到知识库。

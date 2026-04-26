@@ -21,27 +21,45 @@ struct StructuredHealthCardsBlob: Codable, Equatable, Sendable {
         )
     }
 
-    mutating func markMedicationSaved(id: UUID) {
-        if let i = medications.firstIndex(where: { $0.id == id }) {
-            medications[i].isSaved = true
+    mutating func markSaved(_ item: ChatStructuredHealthCardItem) {
+        switch item {
+        case .medication:
+            if let i = medications.firstIndex(where: { $0.id == item.id }) {
+                medications[i].isSaved = true
+            }
+        case .prescription:
+            if let i = prescriptions.firstIndex(where: { $0.id == item.id }) {
+                prescriptions[i].isSaved = true
+            }
+        case .examReport:
+            if let i = examReports.firstIndex(where: { $0.id == item.id }) {
+                examReports[i].isSaved = true
+            }
+        case .medicalCase:
+            if let i = medicalCases.firstIndex(where: { $0.id == item.id }) {
+                medicalCases[i].isSaved = true
+            }
         }
     }
 
-    mutating func markPrescriptionSaved(id: UUID) {
-        if let i = prescriptions.firstIndex(where: { $0.id == id }) {
-            prescriptions[i].isSaved = true
-        }
-    }
-
-    mutating func markExamReportSaved(id: UUID) {
-        if let i = examReports.firstIndex(where: { $0.id == id }) {
-            examReports[i].isSaved = true
-        }
-    }
-
-    mutating func markMedicalCaseSaved(id: UUID) {
-        if let i = medicalCases.firstIndex(where: { $0.id == id }) {
-            medicalCases[i].isSaved = true
+    mutating func updateMember(_ item: ChatStructuredHealthCardItem, memberID: Int?) {
+        switch item {
+        case .medication:
+            if let i = medications.firstIndex(where: { $0.id == item.id }) {
+                medications[i].memberID = memberID
+            }
+        case .prescription:
+            if let i = prescriptions.firstIndex(where: { $0.id == item.id }) {
+                prescriptions[i].memberID = memberID
+            }
+        case .examReport:
+            if let i = examReports.firstIndex(where: { $0.id == item.id }) {
+                examReports[i].memberID = memberID
+            }
+        case .medicalCase:
+            if let i = medicalCases.firstIndex(where: { $0.id == item.id }) {
+                medicalCases[i].memberID = memberID
+            }
         }
     }
 }
@@ -53,7 +71,7 @@ struct MedicationChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     /// 单行药品草稿，与 ``SaveTypedMedicalDocumentUseCase`` / 组合 API 一致。
     let draftJSON: String
     var isSaved: Bool
-    let memberID: Int
+    var memberID: Int?
     let ossFileId: Int?
     let displayName: String
     let specification: String?
@@ -63,7 +81,7 @@ struct MedicationChatCardPayload: Codable, Equatable, Identifiable, Sendable {
         id: UUID = UUID(),
         draftJSON: String,
         isSaved: Bool,
-        memberID: Int,
+        memberID: Int?,
         ossFileId: Int?,
         displayName: String,
         specification: String?,
@@ -84,7 +102,7 @@ struct PrescriptionChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJSON: String
     var isSaved: Bool
-    let memberID: Int
+    var memberID: Int?
     let ossFileId: Int?
     let title: String
     let subtitle: String?
@@ -93,7 +111,7 @@ struct PrescriptionChatCardPayload: Codable, Equatable, Identifiable, Sendable {
         id: UUID = UUID(),
         draftJSON: String,
         isSaved: Bool,
-        memberID: Int,
+        memberID: Int?,
         ossFileId: Int?,
         title: String,
         subtitle: String?
@@ -112,7 +130,7 @@ struct ExamReportChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJSON: String
     var isSaved: Bool
-    let memberID: Int
+    var memberID: Int?
     let ossFileId: Int?
     let title: String
     let hospital: String?
@@ -122,7 +140,7 @@ struct ExamReportChatCardPayload: Codable, Equatable, Identifiable, Sendable {
         id: UUID = UUID(),
         draftJSON: String,
         isSaved: Bool,
-        memberID: Int,
+        memberID: Int?,
         ossFileId: Int?,
         title: String,
         hospital: String?,
@@ -143,7 +161,7 @@ struct MedicalCaseChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJSON: String
     var isSaved: Bool
-    let memberID: Int
+    var memberID: Int?
     let ossFileId: Int?
     let title: String
     let diagnosisLine: String?
@@ -152,7 +170,7 @@ struct MedicalCaseChatCardPayload: Codable, Equatable, Identifiable, Sendable {
         id: UUID = UUID(),
         draftJSON: String,
         isSaved: Bool,
-        memberID: Int,
+        memberID: Int?,
         ossFileId: Int?,
         title: String,
         diagnosisLine: String?
@@ -165,6 +183,63 @@ struct MedicalCaseChatCardPayload: Codable, Equatable, Identifiable, Sendable {
         self.title = title
         self.diagnosisLine = diagnosisLine
     }
+}
+
+enum ChatStructuredHealthCardItem: Equatable, Identifiable, Sendable {
+    case medication(MedicationChatCardPayload)
+    case prescription(PrescriptionChatCardPayload)
+    case examReport(ExamReportChatCardPayload)
+    case medicalCase(MedicalCaseChatCardPayload)
+
+    var id: UUID {
+        switch self {
+        case .medication(let card): card.id
+        case .prescription(let card): card.id
+        case .examReport(let card): card.id
+        case .medicalCase(let card): card.id
+        }
+    }
+
+    var memberID: Int? {
+        switch self {
+        case .medication(let card): card.memberID
+        case .prescription(let card): card.memberID
+        case .examReport(let card): card.memberID
+        case .medicalCase(let card): card.memberID
+        }
+    }
+
+    var isSaved: Bool {
+        switch self {
+        case .medication(let card): card.isSaved
+        case .prescription(let card): card.isSaved
+        case .examReport(let card): card.isSaved
+        case .medicalCase(let card): card.isSaved
+        }
+    }
+
+    var draftJSON: String {
+        switch self {
+        case .medication(let card): card.draftJSON
+        case .prescription(let card): card.draftJSON
+        case .examReport(let card): card.draftJSON
+        case .medicalCase(let card): card.draftJSON
+        }
+    }
+
+    var rawTrace: String {
+        switch self {
+        case .medication(let card): card.displayName
+        case .prescription(let card): card.title
+        case .examReport(let card): card.title
+        case .medicalCase(let card): card.title
+        }
+    }
+}
+
+enum ChatStructuredHealthCardAction: Equatable, Sendable {
+    case save(ChatStructuredHealthCardItem)
+    case setMember(ChatStructuredHealthCardItem, Int?)
 }
 
 // MARK: - 从抽取输出构建卡片载荷
@@ -186,7 +261,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
     ///   - reportType: 报告类型（用于错误提示）
     ///   - ossFileId: 上传的文件ID
     /// - Returns: 结构化卡片Blob数据
-    static func extractionFailureBlob(memberID: Int, reportType: String, ossFileId: Int?) -> StructuredHealthCardsBlob {
+    static func extractionFailureBlob(memberID: Int?, reportType: String, ossFileId: Int?) -> StructuredHealthCardsBlob {
         // 多语言：抽取失败标题/说明
         let title = L10n.text("chat.medical_card.extraction_failed.title")
         let summary = L10n.text("chat.medical_card.extraction_failed.body")
@@ -241,7 +316,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
     /// - Returns: 聊天界面可用的结构化卡片Blob
     static func appendPayloads(
         from output: MedicalDocumentTypedExtractionOutput,
-        memberID: Int,
+        memberID: Int?,
         ossFileId: Int?
     ) -> StructuredHealthCardsBlob {
         // JSON编码器配置：按键排序，保证输出稳定

@@ -1177,19 +1177,6 @@ final class ToolHub: @unchecked Sendable {
                 """
         )
         
-        // 校验：未获取到当前成员ID，直接返回错误结果
-        guard let memberID = context.memberID else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.generateStructuredHealthCard,
-                outputText: l10n.tool(
-                    "tool.error.structured_health_card.no_member",
-                    fallback: "未选择成员，无法生成结构化健康卡片。"
-                ),
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-        
         // 解析报告类型：支持 report_type / category 两个参数名，统一做小写、去空格处理
         let reportType = (invocation.arguments["report_type"] ?? invocation.arguments["category"] ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1230,6 +1217,7 @@ final class ToolHub: @unchecked Sendable {
         
         // 解析 OSS 文件ID（转为整型，可选）
         let ossFileId = invocation.arguments["oss_file_id"].flatMap { Int($0) }
+        let boundMemberID = context.memberID
         
         // 依赖的协程管理器与文档抽取器
         let merge = structuredHealthCardMergeCoordinator
@@ -1240,7 +1228,7 @@ final class ToolHub: @unchecked Sendable {
             do {
                 // 1. 从聊天摘要文本中抽取结构化健康数据
                 let output = try await extractor.extractFromChatDistilledText(
-                    memberID: memberID,
+                    memberID: boundMemberID,
                     reportType: effectiveReportType,
                     rawText: rawText
                 )
@@ -1248,7 +1236,7 @@ final class ToolHub: @unchecked Sendable {
                 // 2. 构建卡片数据增量更新 payload
                 let delta = ChatStructuredHealthCardsPayloadBuilder.appendPayloads(
                     from: output,
-                    memberID: memberID,
+                    memberID: boundMemberID,
                     ossFileId: ossFileId
                 )
                 
@@ -1266,7 +1254,7 @@ final class ToolHub: @unchecked Sendable {
                 )
                 
                 let delta = ChatStructuredHealthCardsPayloadBuilder.extractionFailureBlob(
-                    memberID: memberID,
+                    memberID: boundMemberID,
                     reportType: effectiveReportType,
                     ossFileId: ossFileId
                 )
@@ -1329,7 +1317,7 @@ final class ToolHub: @unchecked Sendable {
         let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
         guard let memberID else {
             return ToolExecutionResult(
-                toolName: SparkToolName.queryTasksByMember,
+                toolName: .queryTasksByMember,
                 outputText: #"{"ok":false,"error":"no_available_member"}"#,
                 sensitive: false,
                 shouldBypassModel: true
@@ -1370,14 +1358,6 @@ final class ToolHub: @unchecked Sendable {
     /// 任务生成工具：先查询任务，再执行抽取与相似度判断；成功时在消息内异步合并任务卡附件，向模型只返回简短可读说明（不经输出字符串解析 JSON）。
     private func runGenerateTask(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
-        guard let memberID else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.generateTask,
-                outputText: #"{"ok":false,"error":"no_available_member"}"#,
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
         let userInput = (
             invocation.arguments["user_input"]
             ?? invocation.arguments["query"]
@@ -1396,15 +1376,19 @@ final class ToolHub: @unchecked Sendable {
 
         // 规则：生成前必须先查任务。这里在工具内部强制执行，确保流程不被模型跳过。
         let existingTasks: [HealthTask]
-        do {
-            existingTasks = try await taskService.fetchTasks(memberID: memberID, since: nil)
-        } catch {
-            return ToolExecutionResult(
-                toolName: SparkToolName.generateTask,
-                outputText: #"{"ok":false,"error":"query_tasks_before_generate_failed"}"#,
-                sensitive: false,
-                shouldBypassModel: true
-            )
+        if let memberID {
+            do {
+                existingTasks = try await taskService.fetchTasks(memberID: memberID, since: nil)
+            } catch {
+                return ToolExecutionResult(
+                    toolName: SparkToolName.generateTask,
+                    outputText: #"{"ok":false,"error":"query_tasks_before_generate_failed"}"#,
+                    sensitive: false,
+                    shouldBypassModel: true
+                )
+            }
+        } else {
+            existingTasks = []
         }
 
         let extracted = await extractTaskIntent(from: userInput)
@@ -1622,7 +1606,7 @@ final class ToolHub: @unchecked Sendable {
     }
 
     private func buildTaskPayloadStrings(
-        memberID: Int,
+        memberID: Int?,
         type: HealthTask.TaskType,
         extracted: TaskIntentExtraction,
         startAt: Date,
@@ -1630,8 +1614,7 @@ final class ToolHub: @unchecked Sendable {
         repeatType: HealthTask.RepeatType,
         priority: HealthTask.Priority
     ) -> [String: String] {
-        let base: [String: Any] = [
-            "member_id": memberID,
+        var base: [String: Any] = [
             "creator_id": "current_user",
             "type": type.rawValue,
             "status": HealthTask.TaskStatus.pending.rawValue,
@@ -1641,6 +1624,9 @@ final class ToolHub: @unchecked Sendable {
             "start_time": iso8601(startAt),
             "due_time": dueAt.map(iso8601) ?? ""
         ]
+        if let memberID {
+            base["member_id"] = memberID
+        }
         var payload: [String: String] = [
             "task": jsonString(from: base) ?? "{}"
         ]
@@ -2112,7 +2098,7 @@ private struct TaskNoCreateToolPayload: Encodable {
     let action: String
     let reason: String
     let queriedFirst: Bool
-    let memberID: Int
+    let memberID: Int?
     let extracted: TaskIntentExtraction
     let similarTasks: [TaskSimilarityItem]
 
@@ -2145,7 +2131,7 @@ private struct TaskSimilarityItem: Encodable {
 
 private struct TaskToolCardPayload: Encodable {
     let id: Int
-    let member: Int
+    let member: Int?
     let creator: Int?
     let title: String
     let description: String

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CaseMemberInfoSectionView: View {
-    let memberID: Int
+    let memberID: Int?
     let draft: CaseRecognitionDraft
 
     var body: some View {
@@ -12,7 +12,7 @@ struct CaseMemberInfoSectionView: View {
             badgeText: "\(draft.infoDensityCount)项"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                CaseInfoLine(title: "成员 ID", value: "\(memberID)")
+                CaseInfoLine(title: "成员 ID", value: memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected"))
                 CaseInfoLine(title: "病例标题", value: draft.title)
                 CaseInfoLine(title: "就诊医院", value: draft.hospitalName ?? "")
                 CaseInfoLine(title: "就诊年龄", value: draft.ageAtVisit ?? "")

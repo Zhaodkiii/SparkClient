@@ -10,6 +10,7 @@ struct ChatConversationMessageRow: View {
     @ObservedObject var detailViewModel: ChatDetailViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
+    @ObservedObject var memberContextStore: MemberContextStore
     let actionState: ChatMessageActionState
     let taskManager: TaskManager
     let logger: Logger
@@ -55,6 +56,7 @@ struct ChatConversationMessageRow: View {
             savingKnowledgeCardIDs: uiStateStore.savingKnowledgeCardIDs,
             savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
             showActions: message.id == visibleMessages.last?.id,
+            memberContextStore: memberContextStore,
             onRetry: {
                 Task {
                     if shouldUseUnifiedRetryFlow {
@@ -91,33 +93,9 @@ struct ChatConversationMessageRow: View {
             onSaveKnowledgeCard: { card in
                 saveKnowledgeCard(card, from: message)
             },
-            onConfirmTaskCard: { card in
-                confirmTaskCard(card)
-            },
-            onIgnoreTaskCard: { card in
-                ignoreTaskCard(card)
-            },
+            onTaskCardAction: handleTaskCardAction,
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
-            onSaveMedicationCard: { card in
-                Task {
-                    await detailViewModel.saveMedicationStructuredCard(threadID: threadID, message: message, card: card)
-                }
-            },
-            onSavePrescriptionCard: { card in
-                Task {
-                    await detailViewModel.savePrescriptionStructuredCard(threadID: threadID, message: message, card: card)
-                }
-            },
-            onSaveExamReportCard: { card in
-                Task {
-                    await detailViewModel.saveExamReportStructuredCard(threadID: threadID, message: message, card: card)
-                }
-            },
-            onSaveMedicalCaseCard: { card in
-                Task {
-                    await detailViewModel.saveMedicalCaseStructuredCard(threadID: threadID, message: message, card: card)
-                }
-            },
+            onStructuredHealthCardAction: handleStructuredHealthCardAction,
             onCaptureOpenCamera: {
                 stateStore.setCameraPresented(true, for: threadID)
             },
@@ -132,6 +110,16 @@ struct ChatConversationMessageRow: View {
                 try await detailViewModel.downloadChatAttachmentToLocalFile(attachment: attachment)
             }
         )
+    }
+
+    private func handleStructuredHealthCardAction(_ action: ChatStructuredHealthCardAction) {
+        Task {
+            await detailViewModel.handleStructuredHealthCardAction(
+                threadID: threadID,
+                message: message,
+                action: action
+            )
+        }
     }
 
     private func isLastAssistantMessage(_ message: ChatMessage) -> Bool {
@@ -270,7 +258,19 @@ struct ChatConversationMessageRow: View {
         }
     }
 
-    private func confirmTaskCard(_ card: TaskCard) {
+    private func handleTaskCardAction(_ action: TaskCard.Action) {
+        switch action {
+        case .confirm(let card):
+            confirmTaskCard(card, action: action)
+        case .ignore(let card), .setMember(let card, _):
+            guard let message = messageContainingTaskCard(cardID: card.id) else { return }
+            Task {
+                await detailViewModel.handleTaskCardAction(threadID: threadID, message: message, action: action)
+            }
+        }
+    }
+
+    private func confirmTaskCard(_ card: TaskCard, action: TaskCard.Action) {
         guard uiStateStore.isTaskCardLoading(card.id) == false else { return }
         guard let message = messageContainingTaskCard(cardID: card.id) else { return }
         Task {
@@ -286,31 +286,12 @@ struct ChatConversationMessageRow: View {
                     }
                 }
             }
-            do {
-                try await messageActionUseCase.createTask(from: card)
-                await detailViewModel.updateTaskCardStatus(
+            await detailViewModel.handleTaskCardAction(
                     threadID: threadID,
                     message: message,
-                    cardID: card.id,
-                    status: .confirmed
-                )
-            } catch {
-                logger.error("任务卡片直接创建任务失败 card_id=\(card.id) error=\(error.localizedDescription)", module: .general)
-            }
-        }
-    }
-
-    private func ignoreTaskCard(_ card: TaskCard) {
-        guard let message = messageContainingTaskCard(cardID: card.id) else { return }
-        Task {
-            await detailViewModel.updateTaskCardStatus(
-                threadID: threadID,
-                message: message,
-                cardID: card.id,
-                status: .ignored
+                    action: action
             )
         }
-        logger.info("任务卡片本地忽略 card_id=\(card.id)", module: .general)
     }
 
     private func messageContainingTaskCard(cardID: Int) -> ChatMessage? {

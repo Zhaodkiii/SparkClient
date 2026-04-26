@@ -23,6 +23,7 @@ struct ChatMessageBubbleContentView: View {
     let savingKnowledgeCardIDs: Set<UUID>
     let savedKnowledgeCardIDs: Set<UUID>
     let showActions: Bool
+    @ObservedObject var memberContextStore: MemberContextStore
 
     let onRetry: () -> Void
     let onCopy: () -> Void
@@ -33,13 +34,9 @@ struct ChatMessageBubbleContentView: View {
     let onSaveMessageToKnowledge: () -> Void
     let onGenerateKnowledgeCardsPreview: () -> Void
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void
-    let onConfirmTaskCard: (TaskCard) -> Void
-    let onIgnoreTaskCard: (TaskCard) -> Void
+    let onTaskCardAction: (TaskCard.Action) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
-    let onSaveMedicationCard: (MedicationChatCardPayload) -> Void
-    let onSavePrescriptionCard: (PrescriptionChatCardPayload) -> Void
-    let onSaveExamReportCard: (ExamReportChatCardPayload) -> Void
-    let onSaveMedicalCaseCard: (MedicalCaseChatCardPayload) -> Void
+    let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
     let onCaptureOpenCamera: () -> Void
     let onCaptureOpenPhotoLibrary: () -> Void
     let onCaptureOpenFiles: () -> Void
@@ -140,11 +137,9 @@ struct ChatMessageBubbleContentView: View {
                 || blob.medicalCases.isEmpty == false {
                 ChatStructuredHealthCardsBlockView(
                     blob: blob,
+                    memberContextStore: memberContextStore,
                     isSavingIDs: savingStructuredHealthCardIDs,
-                    onSaveMedication: onSaveMedicationCard,
-                    onSavePrescription: onSavePrescriptionCard,
-                    onSaveExamReport: onSaveExamReportCard,
-                    onSaveMedicalCase: onSaveMedicalCaseCard
+                    onAction: onStructuredHealthCardAction
                 )
             }
             if message.role == .assistant,
@@ -214,59 +209,13 @@ struct ChatMessageBubbleContentView: View {
                 }
             }
 
-            if showActions {
-                if message.role == .assistant, message.deliveryState == .sending {
-                    EmptyView()
-                } else {
-                    HStack(spacing: 10) {
-                        Button(action: onCopy) {
-                            Image(systemName: "square.on.square")
-                        }
-                        .font(.caption)
-
-                        Button(role: .destructive, action: onDelete) {
-                            Image(systemName: "trash")
-                        }
-                        .font(.caption)
-
-                        if message.role == .assistant {
-                            Button(action: onToggleSpeech) {
-                                Image(systemName: isSpeaking ? "pause.circle" : "waveform")
-                            }
-                            .font(.caption)
-
-                            Button(action: onToggleTranslate) {
-                                if isTranslating {
-                                    ProgressView().scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: translatedText?.isEmpty == false ? "trash" : "globe")
-                                }
-                            }
-                            .font(.caption)
-
-                            Button(action: onOpenNetworkSearch) {
-                                Image(systemName: "network")
-                            }
-                            .font(.caption)
-
-                            Button(action: onSaveMessageToKnowledge) {
-                                if isSavingMessage {
-                                    ProgressView().scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: isSavedMessage ? "checkmark.circle.fill" : "square.and.arrow.down")
-                                }
-                            }
-                            .font(.caption)
-
-                            Button(action: onGenerateKnowledgeCardsPreview) {
-                                Image(systemName: combinedKnowledgeCards.isEmpty ? "backpack" : "backpack.fill")
-                            }
-                            .font(.caption)
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-                }
-            }
+//            if showActions {
+//                if message.role == .assistant, message.deliveryState == .sending {
+//                    EmptyView()
+//                } else {
+//                    actionButtonsHStack
+//                }
+//            }
 
             if message.role == .assistant {
                 let cards = metadata.taskCards
@@ -274,8 +223,8 @@ struct ChatMessageBubbleContentView: View {
                     ForEach(cards) { card in
                         TaskCardCell(
                             card: card,
-                            onConfirm: { onConfirmTaskCard(card) },
-                            onIgnore: { onIgnoreTaskCard(card) },
+                            memberContextStore: memberContextStore,
+                            onAction: onTaskCardAction,
                             isLoading: taskCardLoadingIDs.contains(card.id)
                         )
                     }
@@ -291,6 +240,58 @@ struct ChatMessageBubbleContentView: View {
         .unifiedFilePreview(selection: $unifiedFilePreview)
     }
 
+    
+    var actionButtonsHStack: some View {
+        
+        HStack(spacing: 10) {
+            Button(action: onCopy) {
+                Image(systemName: "square.on.square")
+            }
+            .font(.caption)
+            
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .font(.caption)
+            
+            if message.role == .assistant {
+                Button(action: onToggleSpeech) {
+                    Image(systemName: isSpeaking ? "pause.circle" : "waveform")
+                }
+                .font(.caption)
+                
+                Button(action: onToggleTranslate) {
+                    if isTranslating {
+                        ProgressView().scaleEffect(0.8)
+                    } else {
+                        Image(systemName: translatedText?.isEmpty == false ? "trash" : "globe")
+                    }
+                }
+                .font(.caption)
+                
+                Button(action: onOpenNetworkSearch) {
+                    Image(systemName: "network")
+                }
+                .font(.caption)
+                
+                Button(action: onSaveMessageToKnowledge) {
+                    if isSavingMessage {
+                        ProgressView().scaleEffect(0.8)
+                    } else {
+                        Image(systemName: isSavedMessage ? "checkmark.circle.fill" : "square.and.arrow.down")
+                    }
+                }
+                .font(.caption)
+                
+                Button(action: onGenerateKnowledgeCardsPreview) {
+                    Image(systemName: combinedKnowledgeCards.isEmpty ? "backpack" : "backpack.fill")
+                }
+                .font(.caption)
+            }
+        }
+        .foregroundStyle(.secondary)
+        
+    }
     private var shouldRenderMainMarkdown: Bool {
         if shouldRenderErrorCard {
             return false

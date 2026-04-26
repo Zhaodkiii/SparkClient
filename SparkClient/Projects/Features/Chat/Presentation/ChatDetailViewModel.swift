@@ -21,6 +21,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
     private let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
+    private let taskManager: TaskManager
     private let logger: Logger
     private var isRealtimeActive = false
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
@@ -64,6 +65,7 @@ final class ChatDetailViewModel: ObservableObject {
         translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase,
+        taskManager: TaskManager = .shared,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -84,6 +86,7 @@ final class ChatDetailViewModel: ObservableObject {
         self.translateKnowledgeTextUseCase = translateKnowledgeTextUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
+        self.taskManager = taskManager
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -1130,18 +1133,97 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    func updateTaskCardStatus(
+    func handleTaskCardAction(
+        threadID: UUID,
+        message: ChatMessage,
+        action: TaskCard.Action
+    ) async {
+        switch action {
+        case .confirm(let card):
+            await confirmTaskCard(threadID: threadID, message: message, card: card)
+        case .ignore(let card):
+            await updateTaskCard(threadID: threadID, message: message, cardID: card.id) {
+                $0.status = .ignored
+                $0.updatedAt = Date()
+            }
+            logger.info("任务卡片本地忽略 card_id=\(card.id)", module: .general)
+        case .setMember(let card, let memberID):
+            await updateTaskCard(threadID: threadID, message: message, cardID: card.id) {
+                $0.member = memberID
+                $0.taskPayload = Self.taskPayload($0.taskPayload, settingMemberID: memberID)
+                $0.updatedAt = Date()
+            }
+        }
+    }
+
+    private func confirmTaskCard(threadID: UUID, message: ChatMessage, card: TaskCard) async {
+        guard let memberID = validatedTaskCardMemberID(card.member) else { return }
+        var cardToCreate = card
+        cardToCreate.member = memberID
+        cardToCreate.taskPayload = Self.taskPayload(card.taskPayload, settingMemberID: memberID)
+
+        do {
+            let payload = ChatTaskPayloadBuilder.build(from: cardToCreate)
+            try await taskManager.createTask(payload: payload)
+            logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
+            await updateTaskCard(threadID: threadID, message: message, cardID: card.id) {
+                $0.member = memberID
+                $0.taskPayload = cardToCreate.taskPayload
+                $0.status = .confirmed
+                $0.updatedAt = Date()
+            }
+        } catch {
+            logger.error("任务卡片直接创建任务失败 card_id=\(card.id) error=\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    private func validatedTaskCardMemberID(_ memberID: Int?) -> Int? {
+        guard let memberID, memberID > 0 else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.task_card.create")
+            return nil
+        }
+        return memberID
+    }
+
+    private static func taskPayload(_ payload: [String: String], settingMemberID memberID: Int?) -> [String: String] {
+        var next = payload
+        var taskJSON = jsonObject(from: payload["task"])
+        if let memberID {
+            taskJSON["member_id"] = memberID
+            taskJSON["member"] = memberID
+        } else {
+            taskJSON.removeValue(forKey: "member_id")
+            taskJSON.removeValue(forKey: "member")
+        }
+        next["task"] = jsonString(from: taskJSON) ?? payload["task"] ?? "{}"
+        return next
+    }
+
+    private static func jsonObject(from text: String?) -> [String: Any] {
+        guard let text,
+              let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let dict = object as? [String: Any] else {
+            return [:]
+        }
+        return dict
+    }
+
+    private static func jsonString(from object: [String: Any]) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func updateTaskCard(
         threadID: UUID,
         message: ChatMessage,
         cardID: Int,
-        status: TaskCard.CardStatus
+        mutate: (inout TaskCard) -> Void
     ) async {
-        guard let updatedAttachments = replacingTaskCardStatus(
-            in: message.attachments,
-            cardID: cardID,
-            status: status
-        ) else { return }
-
+        guard let updatedAttachments = replacingTaskCard(in: message.attachments, cardID: cardID, mutate: mutate) else { return }
         await updateChatMessageAttachmentsUseCase.execute(
             clientMessageID: message.clientMessageID,
             attachments: updatedAttachments,
@@ -1161,10 +1243,10 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    private func replacingTaskCardStatus(
+    private func replacingTaskCard(
         in attachments: [ChatAttachment],
         cardID: Int,
-        status: TaskCard.CardStatus
+        mutate: (inout TaskCard) -> Void
     ) -> [ChatAttachment]? {
         guard let index = attachments.firstIndex(where: { $0.type == .taskCards }),
               let raw = attachments[index].text,
@@ -1176,8 +1258,7 @@ final class ChatDetailViewModel: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
         guard var cards = try? decoder.decode([TaskCard].self, from: data) else { return nil }
         guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { return nil }
-        cards[cardIndex].status = status
-        cards[cardIndex].updatedAt = Date()
+        mutate(&cards[cardIndex])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -1230,198 +1311,27 @@ final class ChatDetailViewModel: ObservableObject {
 
     // MARK: - 对话内结构化医疗卡片保存
 
-    /// 保存用药结构化医疗卡片
-    /// - Parameters:
-    ///   - threadID: 对话ID
-    ///   - message: 所属聊天消息
-    ///   - card: 用药卡片数据载体
-    func saveMedicationStructuredCard(threadID: UUID, message: ChatMessage, card: MedicationChatCardPayload) async {
-        // 将卡片JSON字符串解码为用药识别草稿模型，解码失败则提示错误
-        guard let data = card.draftJSON.data(using: .utf8),
-              let draft = try? JSONDecoder().decode(MedicationRecognitionDraft.self, from: data) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
-            return
-        }
-        // 获取当前有效的成员ID，无有效成员则提示错误
-        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
-            return
-        }
-        
-        // 执行卡片保存逻辑
-        await saveWithCardId(card.id, rawTrace: card.displayName) {
-            // 构建医疗文档识别信封
-            let envelope = MedicalDocumentRecognitionEnvelope(
-                memberID: memberID,
-                sourceFiles: [],
-                rawOCRText: card.displayName,
-                typeResolution: MedicalDocumentTypeResolution(
-                    kind: .medication,
-                    confidence: 1,
-                    source: .manual,
-                    reason: "chat_save"
-                )
-            )
-            // 返回结构化医疗文档提取结果
-            return MedicalDocumentTypedExtractionOutput(
-                envelope: envelope,
-                typedResult: .medication([draft]),
-                extractedJSON: card.draftJSON,
-                payloadPreview: ""
-            )
-        } onSuccess: {
-            // 保存成功后标记用药卡片为已保存状态
-            await markMedicationSaved(threadID: threadID, message: message, cardID: card.id)
+    func handleStructuredHealthCardAction(
+        threadID: UUID,
+        message: ChatMessage,
+        action: ChatStructuredHealthCardAction
+    ) async {
+        switch action {
+        case .save(let item):
+            await saveStructuredHealthCard(threadID: threadID, message: message, item: item)
+        case .setMember(let item, let memberID):
+            await updateStructuredHealthCardMember(threadID: threadID, message: message, item: item, memberID: memberID)
         }
     }
 
-    /// 保存处方结构化医疗卡片
-    /// - Parameters:
-    ///   - threadID: 对话ID
-    ///   - message: 所属聊天消息
-    ///   - card: 处方卡片数据载体
-    func savePrescriptionStructuredCard(threadID: UUID, message: ChatMessage, card: PrescriptionChatCardPayload) async {
-        // JSON解码处方草稿模型，失败提示错误
-        guard let data = card.draftJSON.data(using: .utf8),
-              let draft = try? JSONDecoder().decode(PrescriptionRecognitionDraft.self, from: data) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
-            return
-        }
-        // 获取有效成员ID
-        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
-            return
-        }
-        
-        await saveWithCardId(card.id, rawTrace: card.title) {
-            let envelope = MedicalDocumentRecognitionEnvelope(
-                memberID: memberID,
-                sourceFiles: [],
-                rawOCRText: card.title,
-                typeResolution: MedicalDocumentTypeResolution(
-                    kind: .prescription,
-                    confidence: 1,
-                    source: .manual,
-                    reason: "chat_save"
-                )
-            )
-            return MedicalDocumentTypedExtractionOutput(
-                envelope: envelope,
-                typedResult: .prescription(draft),
-                extractedJSON: card.draftJSON,
-                payloadPreview: ""
-            )
+    private func saveStructuredHealthCard(threadID: UUID, message: ChatMessage, item: ChatStructuredHealthCardItem) async {
+        guard let output = makeStructuredHealthCardSaveOutput(for: item) else { return }
+        await saveWithCardId(item.id, rawTrace: item.rawTrace) {
+            output
         } onSuccess: {
-            // 标记处方卡片已保存
-            await markPrescriptionSaved(threadID: threadID, message: message, cardID: card.id)
-        }
-    }
-
-    /// 保存检查报告结构化医疗卡片（支持体检报告/病历报告两种类型）
-    /// - Parameters:
-    ///   - threadID: 对话ID
-    ///   - message: 所属聊天消息
-    ///   - card: 检查报告卡片数据载体
-    func saveExamReportStructuredCard(threadID: UUID, message: ChatMessage, card: ExamReportChatCardPayload) async {
-        // 转换JSON字符串为数据，失败直接返回
-        guard let data = card.draftJSON.data(using: .utf8) else { return }
-        // 获取有效成员ID
-        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
-            return
-        }
-        
-        // 尝试解码为病历报告模型
-        if let report = try? JSONDecoder().decode(MedicalReportRecognitionDraft.self, from: data) {
-            await saveWithCardId(card.id, rawTrace: card.title) {
-                let envelope = MedicalDocumentRecognitionEnvelope(
-                    memberID: memberID,
-                    sourceFiles: [],
-                    rawOCRText: card.title,
-                    typeResolution: MedicalDocumentTypeResolution(
-                        kind: .medicalReport,
-                        confidence: 1,
-                        source: .manual,
-                        reason: "chat_save"
-                    )
-                )
-                return MedicalDocumentTypedExtractionOutput(
-                    envelope: envelope,
-                    typedResult: .medicalReport([report]),
-                    extractedJSON: card.draftJSON,
-                    payloadPreview: ""
-                )
-            } onSuccess: {
-                await markExamReportSaved(threadID: threadID, message: message, cardID: card.id)
+            await updateStructuredHealthCardsBlob(threadID: threadID, message: message) {
+                $0.markSaved(item)
             }
-            return
-        }
-        
-        // 尝试解码为健康体检报告模型
-        if let health = try? JSONDecoder().decode(HealthExamRecognitionDraft.self, from: data) {
-            await saveWithCardId(card.id, rawTrace: card.title) {
-                let envelope = MedicalDocumentRecognitionEnvelope(
-                    memberID: memberID,
-                    sourceFiles: [],
-                    rawOCRText: card.title,
-                    typeResolution: MedicalDocumentTypeResolution(
-                        kind: .healthExamReport,
-                        confidence: 1,
-                        source: .manual,
-                        reason: "chat_save"
-                    )
-                )
-                return MedicalDocumentTypedExtractionOutput(
-                    envelope: envelope,
-                    typedResult: .healthExamReport(health),
-                    extractedJSON: card.draftJSON,
-                    payloadPreview: ""
-                )
-            } onSuccess: {
-                await markExamReportSaved(threadID: threadID, message: message, cardID: card.id)
-            }
-        }
-    }
-
-    /// 保存病历结构化医疗卡片
-    /// - Parameters:
-    ///   - threadID: 对话ID
-    ///   - message: 所属聊天消息
-    ///   - card: 病历卡片数据载体
-    func saveMedicalCaseStructuredCard(threadID: UUID, message: ChatMessage, card: MedicalCaseChatCardPayload) async {
-        // JSON解码病历草稿模型
-        guard let data = card.draftJSON.data(using: .utf8),
-              let draft = try? JSONDecoder().decode(CaseRecognitionDraft.self, from: data) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
-            return
-        }
-        // 获取有效成员ID
-        guard let memberID = resolvedMemberID(fallback: card.memberID) else {
-            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
-            return
-        }
-        
-        await saveWithCardId(card.id, rawTrace: card.title) {
-            let envelope = MedicalDocumentRecognitionEnvelope(
-                memberID: memberID,
-                sourceFiles: [],
-                rawOCRText: card.title,
-                typeResolution: MedicalDocumentTypeResolution(
-                    kind: .caseDocument,
-                    confidence: 1,
-                    source: .manual,
-                    reason: "chat_save"
-                )
-            )
-            return MedicalDocumentTypedExtractionOutput(
-                envelope: envelope,
-                typedResult: .caseDocument(draft),
-                extractedJSON: card.draftJSON,
-                payloadPreview: ""
-            )
-        } onSuccess: {
-            // 标记病历卡片已保存
-            await markMedicalCaseSaved(threadID: threadID, message: message, cardID: card.id)
         }
     }
 
@@ -1463,43 +1373,128 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    /// 解析最终有效的成员ID
-    /// - Parameter fallback: 备用成员ID
-    /// - Returns: 有效成员ID（nil表示无有效成员）
-    private func resolvedMemberID(fallback: Int) -> Int? {
-        // 优先使用上下文选中的成员ID
-        if let id = memberContextStore.context.selectedMemberID {
-            return id
+    private func makeStructuredHealthCardSaveOutput(for item: ChatStructuredHealthCardItem) -> MedicalDocumentTypedExtractionOutput? {
+        guard let memberID = validatedCardMemberID(item.memberID) else {
+            return nil
         }
-        // 无选中成员时，使用备用ID（必须大于0才有效）
-        return fallback > 0 ? fallback : nil
+        guard let data = item.draftJSON.data(using: .utf8) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
+            return nil
+        }
+
+        switch item {
+        case .medication:
+            guard let draft = decodeStructuredHealthCardDraft(MedicationRecognitionDraft.self, from: data) else { return nil }
+            return makeStructuredHealthCardSaveOutput(
+                memberID: memberID,
+                kind: .medication,
+                rawText: item.rawTrace,
+                typedResult: .medication([draft]),
+                extractedJSON: item.draftJSON
+            )
+        case .prescription:
+            guard let draft = decodeStructuredHealthCardDraft(PrescriptionRecognitionDraft.self, from: data) else { return nil }
+            return makeStructuredHealthCardSaveOutput(
+                memberID: memberID,
+                kind: .prescription,
+                rawText: item.rawTrace,
+                typedResult: .prescription(draft),
+                extractedJSON: item.draftJSON
+            )
+        case .examReport:
+            if let report = try? JSONDecoder().decode(MedicalReportRecognitionDraft.self, from: data) {
+                return makeStructuredHealthCardSaveOutput(
+                    memberID: memberID,
+                    kind: .medicalReport,
+                    rawText: item.rawTrace,
+                    typedResult: .medicalReport([report]),
+                    extractedJSON: item.draftJSON
+                )
+            }
+            if let health = try? JSONDecoder().decode(HealthExamRecognitionDraft.self, from: data) {
+                return makeStructuredHealthCardSaveOutput(
+                    memberID: memberID,
+                    kind: .healthExamReport,
+                    rawText: item.rawTrace,
+                    typedResult: .healthExamReport(health),
+                    extractedJSON: item.draftJSON
+                )
+            }
+            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
+            return nil
+        case .medicalCase:
+            guard let draft = decodeStructuredHealthCardDraft(CaseRecognitionDraft.self, from: data) else { return nil }
+            return makeStructuredHealthCardSaveOutput(
+                memberID: memberID,
+                kind: .caseDocument,
+                rawText: item.rawTrace,
+                typedResult: .caseDocument(draft),
+                extractedJSON: item.draftJSON
+            )
+        }
+    }
+
+    private func decodeStructuredHealthCardDraft<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
+        guard let draft = try? JSONDecoder().decode(type, from: data) else {
+            notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
+            return nil
+        }
+        return draft
+    }
+
+    private func makeStructuredHealthCardSaveOutput(
+        memberID: Int,
+        kind: MedicalDocumentKind,
+        rawText: String,
+        typedResult: MedicalDocumentTypedResult,
+        extractedJSON: String
+    ) -> MedicalDocumentTypedExtractionOutput {
+        let envelope = MedicalDocumentRecognitionEnvelope(
+            memberID: memberID,
+            sourceFiles: [],
+            rawOCRText: rawText,
+            typeResolution: MedicalDocumentTypeResolution(
+                kind: kind,
+                confidence: 1,
+                source: .manual,
+                reason: "chat_save"
+            )
+        )
+        return MedicalDocumentTypedExtractionOutput(
+            envelope: envelope,
+            typedResult: typedResult,
+            extractedJSON: extractedJSON,
+            payloadPreview: ""
+        )
+    }
+
+    private func validatedCardMemberID(_ memberID: Int?) -> Int? {
+        guard let memberID, memberID > 0 else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
+            return nil
+        }
+        return memberID
+    }
+
+    private func updateStructuredHealthCardMember(
+        threadID: UUID,
+        message: ChatMessage,
+        item: ChatStructuredHealthCardItem,
+        memberID: Int?
+    ) async {
+        await updateStructuredHealthCardsBlob(threadID: threadID, message: message) {
+            $0.updateMember(item, memberID: memberID)
+        }
     }
 
     // MARK: - 卡片状态标记（更新消息附件中卡片的保存状态）
 
-    /// 标记用药卡片为已保存
-    private func markMedicationSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
-        // 修改附件中的结构化卡片数据
-        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markMedicationSaved(id: cardID) }) else { return }
-        // 持久化更新后的附件
-        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
-    }
-
-    /// 标记处方卡片为已保存
-    private func markPrescriptionSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
-        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markPrescriptionSaved(id: cardID) }) else { return }
-        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
-    }
-
-    /// 标记检查报告卡片为已保存
-    private func markExamReportSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
-        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markExamReportSaved(id: cardID) }) else { return }
-        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
-    }
-
-    /// 标记病历卡片为已保存
-    private func markMedicalCaseSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
-        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markMedicalCaseSaved(id: cardID) }) else { return }
+    private func updateStructuredHealthCardsBlob(
+        threadID: UUID,
+        message: ChatMessage,
+        mutate: (inout StructuredHealthCardsBlob) -> Void
+    ) async {
+        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: mutate) else { return }
         await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
     }
 

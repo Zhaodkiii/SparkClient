@@ -184,7 +184,7 @@ struct TaskCard: Identifiable, Codable, Equatable, Sendable {
     }
 
     let id: Int
-    let member: Int
+    var member: Int?
     let creator: Int?
     var title: String
     var description: String
@@ -206,6 +206,12 @@ struct TaskCard: Identifiable, Codable, Equatable, Sendable {
     var updatedAt: Date
 
     var localState: HealthTask.LocalState?
+
+    enum Action: Equatable, Sendable {
+        case confirm(TaskCard)
+        case ignore(TaskCard)
+        case setMember(TaskCard, Int?)
+    }
 
     enum CodingKeys: String, CodingKey {
         case id

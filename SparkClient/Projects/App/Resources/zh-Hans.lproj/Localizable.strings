@@ -1292,7 +1292,7 @@
 "chat.medical_card.saved" = "已保存";
 "chat.medical_card.saved.toast" = "已保存到健康档案。";
 "chat.medical_card.error.decode" = "无法解析卡片数据。";
-"chat.medical_card.error.no_member" = "请先在首页选择家庭成员。";
+"chat.medical_card.error.no_member" = "请先选择成员。";
 "chat.medical_card.medication.untitled" = "用药";
 "chat.medical_card.prescription.title" = "处方";
 "chat.medical_card.exam.title" = "检查报告";

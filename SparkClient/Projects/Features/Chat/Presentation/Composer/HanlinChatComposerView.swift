@@ -53,10 +53,10 @@ struct HanlinChatComposerView: View {
                     onSetMemberBinding: onSetMemberBinding
                 )
 
-//                ChatComposerModelPickerRow(
-//                    models: modelRows,
-//                    selectedModelName: selectedModelBinding
-//                )
+                ChatComposerModelPickerRow(
+                    models: modelRows,
+                    selectedModelName: selectedModelBinding
+                )
             }
             .padding(.bottom, 12)
             .background {

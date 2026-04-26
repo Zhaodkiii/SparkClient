@@ -317,6 +317,7 @@ struct ChatView: View {
             detailViewModel: detailViewModel,
             uiStateStore: uiStateStore,
             speechHelper: speechHelper,
+            memberContextStore: homeViewModel.memberContextStoreForBinding,
             taskManager: taskManager,
             logger: logger,
             actionState: actionState,

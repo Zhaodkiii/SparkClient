@@ -3,64 +3,78 @@ import SwiftUI
 /// 对话内四类结构化医疗卡片容器（保存按钮 + 摘要展示），数据来自 `structured_health_cards` 附件。
 struct ChatStructuredHealthCardsBlockView: View {
     let blob: StructuredHealthCardsBlob
+    @ObservedObject var memberContextStore: MemberContextStore
     let isSavingIDs: Set<UUID>
-    let onSaveMedication: (MedicationChatCardPayload) -> Void
-    let onSavePrescription: (PrescriptionChatCardPayload) -> Void
-    let onSaveExamReport: (ExamReportChatCardPayload) -> Void
-    let onSaveMedicalCase: (MedicalCaseChatCardPayload) -> Void
+    let onAction: (ChatStructuredHealthCardAction) -> Void
+
+    private var members: [Member] {
+        memberContextStore.context.members
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if blob.medications.isEmpty == false {
                 sectionHeader("chat.medical_card.section.medications", systemImage: "pills.fill", tint: .green)
                 ForEach(blob.medications) { card in
+                    let item = ChatStructuredHealthCardItem.medication(card)
                     medicalRow(
                         title: card.displayName,
                         subtitle: [card.specification, card.dosageLine].compactMap { $0 }.joined(separator: "\n"),
-                        isSaved: card.isSaved,
-                        isSaving: isSavingIDs.contains(card.id)
-                    ) {
-                        onSaveMedication(card)
-                    }
+                        item: item,
+                        isSaving: isSavingIDs.contains(item.id),
+                        onSetMember: { memberID in
+                            onAction(.setMember(item, memberID))
+                        },
+                        action: { onAction(.save(item)) }
+                    )
                 }
             }
             if blob.prescriptions.isEmpty == false {
                 sectionHeader("chat.medical_card.section.prescriptions", systemImage: "doc.text.fill", tint: .blue)
                 ForEach(blob.prescriptions) { card in
+                    let item = ChatStructuredHealthCardItem.prescription(card)
                     medicalRow(
                         title: card.title,
                         subtitle: card.subtitle,
-                        isSaved: card.isSaved,
-                        isSaving: isSavingIDs.contains(card.id)
-                    ) {
-                        onSavePrescription(card)
-                    }
+                        item: item,
+                        isSaving: isSavingIDs.contains(item.id),
+                        onSetMember: { memberID in
+                            onAction(.setMember(item, memberID))
+                        },
+                        action: { onAction(.save(item)) }
+                    )
                 }
             }
             if blob.examReports.isEmpty == false {
                 sectionHeader("chat.medical_card.section.exam_reports", systemImage: "cross.case.fill", tint: .orange)
                 ForEach(blob.examReports) { card in
+                    let item = ChatStructuredHealthCardItem.examReport(card)
                     medicalRow(
                         title: card.title,
                         subtitle: [card.hospital, card.dateText].compactMap { $0 }.joined(separator: " · "),
-                        isSaved: card.isSaved,
-                        isSaving: isSavingIDs.contains(card.id)
-                    ) {
-                        onSaveExamReport(card)
-                    }
+                        item: item,
+                        isSaving: isSavingIDs.contains(item.id),
+                        onSetMember: { memberID in
+                            onAction(.setMember(item, memberID))
+                        },
+                        action: { onAction(.save(item)) }
+                    )
                 }
             }
             if blob.medicalCases.isEmpty == false {
                 sectionHeader("chat.medical_card.section.cases", systemImage: "heart.text.square.fill", tint: .purple)
                 ForEach(blob.medicalCases) { card in
+                    let item = ChatStructuredHealthCardItem.medicalCase(card)
                     medicalRow(
                         title: card.title,
                         subtitle: card.diagnosisLine,
-                        isSaved: card.isSaved,
-                        isSaving: isSavingIDs.contains(card.id)
-                    ) {
-                        onSaveMedicalCase(card)
-                    }
+                        item: item,
+                        isSaving: isSavingIDs.contains(item.id),
+                        onSetMember: { memberID in
+                            onAction(.setMember(item, memberID))
+                        },
+                        action: { onAction(.save(item)) }
+                    )
                 }
             }
         }
@@ -80,21 +94,26 @@ struct ChatStructuredHealthCardsBlockView: View {
     private func medicalRow(
         title: String,
         subtitle: String?,
-        isSaved: Bool,
+        item: ChatStructuredHealthCardItem,
         isSaving: Bool,
+        onSetMember: @escaping (Int?) -> Void,
         action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
+            HStack(alignment: .top, spacing: 8) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                memberMenu(memberID: item.memberID, onSelect: onSetMember)
+            }
             if let subtitle, subtitle.isEmpty == false {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             HStack {
-                if isSaved {
+                if item.isSaved {
                     Label(L10n.text("chat.medical_card.saved"), systemImage: "checkmark.circle.fill")
                         .font(.caption)
                         .foregroundStyle(.green)
@@ -123,5 +142,38 @@ struct ChatStructuredHealthCardsBlockView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
         )
+    }
+
+    private func memberMenu(memberID: Int?, onSelect: @escaping (Int?) -> Void) -> some View {
+        MemberProfileBindingMenu(
+            memberContextStore: memberContextStore,
+            selectedMemberID: memberID,
+            onSelect: onSelect
+        ) {
+            HStack(spacing: 4) {
+                Image(systemName: "person.crop.circle")
+                    .imageScale(.small)
+                Text(memberName(for: memberID))
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .imageScale(.small)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(memberID == nil ? .secondary : Color(uiColor: .systemGreen))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.secondary.opacity(0.12))
+            )
+        }
+    }
+
+    private func memberName(for memberID: Int?) -> String {
+        guard let memberID else {
+            return L10n.text("medical.upload.member.not_selected")
+        }
+        return members.first(where: { $0.id == memberID })?.name
+            ?? L10n.text("chat.composer.member_profile.unknown")
     }
 }

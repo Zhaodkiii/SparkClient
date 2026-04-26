@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct HealthExamMemberSectionView: View {
-    let memberID: Int
+    let memberID: Int?
     let draft: HealthExamRecognitionDraft
 
     var body: some View {
@@ -14,7 +14,7 @@ struct HealthExamMemberSectionView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HealthExamResultInfoLine(
                     title: L10n.text("medical.upload.result.member.id"),
-                    value: "\(memberID)"
+                    value: memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
                 )
                 HealthExamResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.total_count"),

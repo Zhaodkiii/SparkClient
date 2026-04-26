@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PrescriptionMemberConfirmSectionView: View {
-    let memberID: Int
+    let memberID: Int?
     let batch: PrescriptionRecognitionDraft
 
     var body: some View {
@@ -13,7 +13,7 @@ struct PrescriptionMemberConfirmSectionView: View {
             VStack(alignment: .leading, spacing: 10) {
                 PrescriptionResultInfoLine(
                     title: L10n.text("medical.upload.result.member.id"),
-                    value: "\(memberID)"
+                    value: memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
                 )
                 PrescriptionResultInfoLine(
                     title: L10n.text("medical.upload.result.prescription.batch_no"),

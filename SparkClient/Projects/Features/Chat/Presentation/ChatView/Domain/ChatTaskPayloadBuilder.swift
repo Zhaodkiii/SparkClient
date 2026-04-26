@@ -15,7 +15,7 @@ enum ChatTaskPayloadBuilder {
         let priorityRaw = intValue(base["priority"]) ?? card.priority.rawValue
 
         return TaskCreatePayload(
-            member: intValue(base["member"]) ?? intValue(base["member_id"]) ?? card.member,
+            member: intValue(base["member"]) ?? intValue(base["member_id"]) ?? card.member ?? 0,
             title: stringValue(base["title"]) ?? card.title,
             description: stringValue(base["description"]) ?? card.description,
             type: card.type,

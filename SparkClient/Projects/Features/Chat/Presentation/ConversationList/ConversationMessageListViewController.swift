@@ -24,6 +24,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     weak var detailViewModel: ChatDetailViewModel?
     weak var uiStateStore: ChatMessageUIStateStore?
     weak var speechHelper: ChatSpeechHelper?
+    weak var memberContextStore: MemberContextStore?
     var taskManager: TaskManager?
     var logger: Logger?
     var actionState: ChatMessageActionState?
@@ -267,6 +268,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                let detailViewModel,
                let uiStateStore,
                let speechHelper,
+               let memberContextStore,
                let actionState,
                let taskManager,
                let logger {
@@ -280,6 +282,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     detailViewModel: detailViewModel,
                     uiStateStore: uiStateStore,
                     speechHelper: speechHelper,
+                    memberContextStore: memberContextStore,
                     actionState: actionState,
                     taskManager: taskManager,
                     logger: logger,

@@ -35,7 +35,13 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
     /// - Throws: API 调用失败、参数错误
     func save(output: MedicalDocumentTypedExtractionOutput) async throws -> MedicalDocumentSaveReceipt {
         // 会员ID（用户归属）
-        let memberID = output.envelope.memberID
+        guard let memberID = output.envelope.memberID else {
+            throw NSError(
+                domain: "DefaultTypedMedicalDocumentSaver",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: L10n.text("chat.medical_card.error.no_member")]
+            )
+        }
         // 当前时间（用于兜底日期）
         let now = Date()
 

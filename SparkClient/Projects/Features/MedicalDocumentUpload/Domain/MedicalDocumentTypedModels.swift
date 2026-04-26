@@ -83,7 +83,7 @@ struct MedicalDocumentTypeResolution: Sendable, Equatable, Codable {
 /// 它携带了从原始文件到 OCR 文本，再到类型判定的所有中间产物。
 /// 注：不含 `Codable`（`MedicalUploadLocalFile` / `ManagedFileRecord` 非 JSON 持久化模型）。
 struct MedicalDocumentRecognitionEnvelope: Sendable, Equatable {
-    let memberID: Int                          // 归属于哪位家庭成员
+    let memberID: Int?                         // 归属于哪位家庭成员；对话抽取场景可先为空，保存时再绑定。
     let sourceFiles: [MedicalUploadLocalFile]   // 原始本地文件引用
     let rawOCRText: String                      // OCR 识别出的全部原始文本
     let typeResolution: MedicalDocumentTypeResolution // 类型判定结论

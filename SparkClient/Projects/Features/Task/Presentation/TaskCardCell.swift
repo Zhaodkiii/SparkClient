@@ -2,9 +2,14 @@ import SwiftUI
 
 struct TaskCardCell: View {
     let card: TaskCard
-    let onConfirm: () -> Void
-    let onIgnore: () -> Void
+    @ObservedObject var memberContextStore: MemberContextStore
+    let onAction: (TaskCard.Action) -> Void
     var isLoading: Bool = false
+
+    private var members: [Member] {
+        memberContextStore.context.members
+    }
+
     private var canOperate: Bool {
         card.status == .pending && isLoading == false
     }
@@ -21,9 +26,7 @@ struct TaskCardCell: View {
 
                 Spacer()
 
-                Text(cardTimeText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                memberMenu
             }
 
             HStack(spacing: 6) {
@@ -34,6 +37,9 @@ struct TaskCardCell: View {
                     .padding(.vertical, 3)
                     .background(statusColor.opacity(0.14), in: Capsule())
                 Spacer()
+                Text(cardTimeText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Text(displayTitle)
@@ -49,7 +55,9 @@ struct TaskCardCell: View {
 
             if card.status == .pending {
                 HStack(spacing: 12) {
-                    Button(action: onConfirm) {
+                    Button {
+                        onAction(.confirm(card))
+                    } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark.circle.fill")
                             Text(NSLocalizedString("task.card.create", comment: "创建任务"))
@@ -59,7 +67,9 @@ struct TaskCardCell: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(canOperate == false)
 
-                    Button(role: .destructive, action: onIgnore) {
+                    Button(role: .destructive) {
+                        onAction(.ignore(card))
+                    } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark.circle")
                             Text(NSLocalizedString("task.card.ignore", comment: "忽略"))
@@ -84,6 +94,35 @@ struct TaskCardCell: View {
 
     private var typeTagText: String {
         card.type.displayName
+    }
+
+    private var memberMenu: some View {
+        MemberProfileBindingMenu(
+            memberContextStore: memberContextStore,
+            selectedMemberID: card.member,
+            onSelect: { memberID in
+                onAction(.setMember(card, memberID))
+            }
+        ) {
+            HStack(spacing: 4) {
+                Image(systemName: "person.crop.circle")
+                    .imageScale(.small)
+                Text(memberName(for: card.member))
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .imageScale(.small)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(card.member == nil ? .secondary : Color(uiColor: .systemGreen))
+        }
+    }
+
+    private func memberName(for memberID: Int?) -> String {
+        guard let memberID else {
+            return L10n.text("medical.upload.member.not_selected")
+        }
+        return members.first(where: { $0.id == memberID })?.name
+            ?? L10n.text("chat.composer.member_profile.unknown")
     }
 
     private var displayTitle: String {
