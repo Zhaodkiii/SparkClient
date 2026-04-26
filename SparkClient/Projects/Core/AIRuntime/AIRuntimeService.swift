@@ -105,13 +105,7 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
             )
         }()
 
-        var effectiveMessages = effectiveRequest.messages
-        if let selectedModel = allRows.first(where: { $0.name == resolved.model }),
-           selectedModel.identity == AIModelIdentity.agent.rawValue,
-           let prompt = selectedModel.systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
-           prompt.isEmpty == false {
-            effectiveMessages.insert(AIRuntimeMessage(role: .system, content: prompt), at: 0)
-        }
+        let effectiveMessages = effectiveRequest.messages
 
         // MARK: - 优先使用本地模型
         if let localSelection = resolveLocalModelSelection(modelName: resolved.model, allRows: allRows) {

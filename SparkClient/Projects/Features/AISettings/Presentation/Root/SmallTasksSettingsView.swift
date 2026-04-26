@@ -2,10 +2,14 @@ import SwiftUI
 
 struct SmallTasksSettingsView: View {
     @ObservedObject var viewModel: AISettingsViewModel
+
+    /// 当前正在编辑的任务（nil = 不展示 sheet）
     @State private var editingTask: SmallTask?
-    @State private var showingEditor = false
+
+    /// 删除确认
     @State private var pendingDelete: SmallTask?
 
+    /// 本地任务列表
     private var localTasks: [SmallTask] {
         viewModel.snapshot.smallTasks
             .filter { $0.source == .local }
@@ -16,14 +20,20 @@ struct SmallTasksSettingsView: View {
         List {
             Section {
                 if localTasks.isEmpty {
-                    Text("暂无小任务")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text(
+                        L10n.text(
+                            "ai_settings.small_tasks.empty",
+                            fallback: "No small tasks",
+                            comment: "Empty small tasks list"
+                        )
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 } else {
                     ForEach(localTasks) { task in
                         Button {
+                            /// ✅ 直接赋值，驱动 sheet
                             editingTask = task
-                            showingEditor = true
                         } label: {
                             SmallTaskRow(task: task)
                         }
@@ -32,44 +42,81 @@ struct SmallTasksSettingsView: View {
                             Button(role: .destructive) {
                                 pendingDelete = task
                             } label: {
-                                Label("删除", systemImage: "trash")
+                                Label(
+                                    L10n.text("common.delete", fallback: "Delete", comment: "Delete action"),
+                                    systemImage: "trash"
+                                )
                             }
                         }
                     }
                 }
             }
         }
-        .navigationTitle("小任务")
+        .navigationTitle(
+            L10n.text(
+                "ai_settings.small_tasks.nav.title",
+                fallback: "Small tasks",
+                comment: "Small tasks settings title"
+            )
+        )
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
+                    /// ✅ 新建任务（传 nil 表示创建）
                     editingTask = nil
-                    showingEditor = true
+                    /// ⚠️ 这里不能触发 sheet，所以需要一个“占位对象”
+                    /// 推荐方式：用一个 dummy task
+                    editingTask = SmallTask.newDraft(id: viewModel.nextLocalSmallTaskID())
                 } label: {
                     Image(systemName: "plus")
                 }
             }
         }
-        .sheet(isPresented: $showingEditor) {
+
+        /// ✅ 核心：用 item sheet（彻底解决 nil 问题）
+        .sheet(item: $editingTask) { task in
             CompatibleNavigationContainer {
                 SmallTaskEditorView(
-                    task: editingTask,
-                    nextID: viewModel.nextLocalSmallTaskID()
-                ) { task in
+                    task: task,
+                    nextID: viewModel.nextLocalSmallTaskID(),
+                    promptTooling: viewModel.promptTooling
+                ) { updatedTask in
                     Task {
-                        await viewModel.upsertLocalSmallTaskAndPersist(task)
+                        await viewModel.upsertLocalSmallTaskAndPersist(updatedTask)
                     }
+                    /// 关闭 sheet
+                    editingTask = nil
                 }
             }
         }
-        .alert("删除小任务？", isPresented: Binding(
-            get: { pendingDelete != nil },
-            set: { if $0 == false { pendingDelete = nil } }
-        )) {
-            Button("取消", role: .cancel) { pendingDelete = nil }
-            Button("删除", role: .destructive) {
+
+        /// 删除确认
+        .alert(
+            L10n.text(
+                "ai_settings.small_tasks.delete.title",
+                fallback: "Delete small task?",
+                comment: "Delete small task alert title"
+            ),
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if $0 == false { pendingDelete = nil } }
+            )
+        ) {
+            Button(
+                L10n.text("common.cancel", fallback: "Cancel", comment: "Cancel action"),
+                role: .cancel
+            ) {
+                pendingDelete = nil
+            }
+
+            Button(
+                L10n.text("common.delete", fallback: "Delete", comment: "Delete action"),
+                role: .destructive
+            ) {
                 if let task = pendingDelete {
-                    Task { await viewModel.deleteLocalSmallTaskAndPersist(code: task.code) }
+                    Task {
+                        await viewModel.deleteLocalSmallTaskAndPersist(code: task.code)
+                    }
                 }
                 pendingDelete = nil
             }
@@ -84,8 +131,10 @@ private struct SmallTaskRow: View {
         HStack(spacing: 12) {
             Image(systemName: task.icon.isEmpty ? "checklist" : task.icon)
                 .foregroundStyle(.blue)
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.name)
+
                 Text(task.brief.isEmpty ? task.code : task.brief)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -93,63 +142,19 @@ private struct SmallTaskRow: View {
         }
     }
 }
+extension SmallTask {
 
-private struct SmallTaskEditorView: View {
-    let task: SmallTask?
-    let nextID: Int
-    let onSave: (SmallTask) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var brief = ""
-    @State private var prompt = ""
-    @State private var icon = "checklist"
-    @State private var toolsText = ""
-
-    var body: some View {
-        Form {
-            Section("基础") {
-                TextField("名称", text: $name)
-                TextField("简介", text: $brief)
-                TextField("图标", text: $icon)
-            }
-            Section("Prompt") {
-                TextEditor(text: $prompt)
-                    .frame(minHeight: 160)
-            }
-            Section("工具") {
-                TextField("逗号分隔", text: $toolsText)
-            }
-        }
-        .navigationTitle(task == nil ? "新建小任务" : "编辑小任务")
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("保存") {
-                    let id = task?.sourceID ?? nextID
-                    let saved = SmallTask.createLocalTask(
-                        id: id,
-                        name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                        brief: brief.trimmingCharacters(in: .whitespacesAndNewlines),
-                        prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
-                        icon: icon.trimmingCharacters(in: .whitespacesAndNewlines),
-                        toolList: toolsText.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { $0.isEmpty == false }
-                    )
-                    onSave(saved)
-                    dismiss()
-                }
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .onAppear {
-            guard let task else { return }
-            name = task.name
-            brief = task.brief
-            prompt = task.prompt
-            icon = task.icon
-            toolsText = task.toolList.joined(separator: ", ")
-        }
+    /// 创建一个“草稿任务”（用于 UI 编辑）
+    static func newDraft(id: Int) -> SmallTask {
+        SmallTask(
+            sourceID: id,
+            name: "",
+            code: "Local_\(id)",   // ⚠️ 提前生成 code，保证 id 稳定
+            brief: "",
+            prompt: "",
+            icon: "checklist",
+            toolList: [],
+            source: .local
+        )
     }
 }

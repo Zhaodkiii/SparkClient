@@ -11,6 +11,8 @@ struct ChatComposerView: View {
     let onCancel: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
+    let smallTasks: [SmallTask]
+    let onSmallTaskTapped: (SmallTask) -> Void
 
     @State private var inputHeight: CGFloat = 24
     @State private var showFileImporter = false
@@ -107,7 +109,12 @@ struct ChatComposerView: View {
     }
 
     private var signalComposerContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
+            ChatComposerContextTaskBar(
+                smallTasks: smallTasks,
+                onSmallTaskTapped: onSmallTaskTapped
+            )
+
             if composerDraft.attachments.isEmpty == false {
                 attachmentStrip
             }

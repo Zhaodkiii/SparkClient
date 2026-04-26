@@ -1,0 +1,141 @@
+import SwiftUI
+
+struct SmallTaskEditorView: View {
+    let task: SmallTask?
+    let nextID: Int
+    var promptTooling: AISettingsPromptTooling = .unavailable
+    let onSave: (SmallTask) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var brief = ""
+    @State private var prompt = ""
+    @State private var icon = "checklist"
+    @State private var selectedToolNames: Set<String> = []
+    @State private var showIconPicker = false
+    @State private var showTextInputDrawer = false
+    @State private var showVoiceInput = false
+
+    var body: some View {
+        Form {
+            Section(L10n.text("ai_settings.small_tasks.section.icon", fallback: "Icon", comment: "Small task icon section")) {
+                HStack {
+                    Spacer()
+                    Button {
+                        showIconPicker = true
+                    } label: {
+                        Image(systemName: icon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 56, height: 56)
+                            .foregroundStyle(.tint)
+                    }
+                    Spacer()
+                }
+                .listRowBackground(Color.clear)
+            }
+
+            Section(L10n.text("ai_settings.small_tasks.section.basic", fallback: "Basic info", comment: "Small task basic section")) {
+                TextField(L10n.text("ai_settings.small_tasks.field.name", fallback: "Name", comment: "Small task name field"), text: $name)
+                TextField(L10n.text("ai_settings.small_tasks.field.brief", fallback: "Brief", comment: "Small task brief field"), text: $brief)
+            }
+
+            Section(L10n.text("ai_settings.small_tasks.section.prompt", fallback: "Prompt", comment: "Small task prompt section")) {
+                PromptInputEditorView(
+                    text: $prompt,
+                    onVoiceInput: { showVoiceInput = true },
+                    onTextInput: { showTextInputDrawer = true }
+                )
+            }
+
+            Section(L10n.text("ai_settings.small_tasks.section.tools", fallback: "Tools", comment: "Small task tools section")) {
+                NavigationLink {
+                    GroupedToolSelectionView(
+                        title: L10n.text("ai_settings.models.online.field.tools", fallback: "Tools", comment: "Tool selection title"),
+                        selectedValues: $selectedToolNames
+                    )
+                } label: {
+                    HStack {
+                        Text(L10n.text("ai_settings.models.online.field.tools", fallback: "Tools", comment: "Tool selection label"))
+                        Spacer()
+                        Text(selectedToolsSummary)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .navigationTitle(task == nil ? L10n.text("ai_settings.small_tasks.nav.new_title", fallback: "New small task", comment: "New small task title") : L10n.text("ai_settings.small_tasks.nav.edit_title", fallback: "Edit small task", comment: "Edit small task title"))
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(L10n.text("common.cancel", fallback: "Cancel", comment: "Cancel action")) { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(L10n.text("ai_settings.save", fallback: "Save", comment: "Save action")) {
+                    save()
+                }
+                .disabled(canSave == false)
+            }
+        }
+        .sheet(isPresented: $showIconPicker) {
+            ModelIconPickerSheet(selectedIcon: $icon)
+        }
+        .sheet(isPresented: $showTextInputDrawer) {
+            SparkPromptInputDrawerSheet(
+                text: $prompt,
+                isPresented: $showTextInputDrawer,
+                onTranslate: {
+                    try await promptTooling.translate(prompt)
+                },
+                onOCRImage: { image in
+                    try await promptTooling.ocrImage(image)
+                }
+            )
+            .sparkInputPresentationChromeIfAvailable()
+        }
+        .sheet(isPresented: $showVoiceInput) {
+            SparkVoiceInputSheet(
+                text: $prompt,
+                isPresented: $showVoiceInput
+            )
+            .sparkInputPresentationChromeIfAvailable()
+        }
+        .onAppear {
+            guard let task else { return }
+            name = task.name
+            brief = task.brief
+            prompt = task.prompt
+            icon = task.icon.isEmpty ? "checklist" : task.icon
+            selectedToolNames = Set(task.toolList).intersection(Set(SparkToolName.all))
+        }
+    }
+
+    private var canSave: Bool {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
+        prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private var selectedToolsSummary: String {
+        let total = SparkToolName.all.count
+        if selectedToolNames.count == total {
+            return L10n.text("ai_settings.models.online.selection.all", fallback: "All", comment: "All tools selected")
+        }
+        if selectedToolNames.isEmpty {
+            return L10n.text("ai_settings.models.online.selection.none", fallback: "None", comment: "No tools selected")
+        }
+        return "\(selectedToolNames.count)/\(total)"
+    }
+
+    private func save() {
+        let id = task?.sourceID ?? nextID
+        let saved = SmallTask.createLocalTask(
+            id: id,
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            brief: brief.trimmingCharacters(in: .whitespacesAndNewlines),
+            prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+            icon: icon.trimmingCharacters(in: .whitespacesAndNewlines),
+            toolList: selectedToolNames.sorted()
+        )
+        onSave(saved)
+        dismiss()
+    }
+}

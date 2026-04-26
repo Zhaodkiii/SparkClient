@@ -52,53 +52,25 @@ struct ModelsSettingsAgentSheet: View {
             }
 
             Section(L10n.text("ai_settings.models.agent.section.system_prompt")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    TextEditor(text: $systemPrompt)
-                        .scrollContentBackgroundIfAvailable(.hidden)
-                        .frame(minHeight: 150)
-
-                    HStack(spacing: 10) {
-                        autoFillButton
-
-                        Spacer()
-                        Text(L10n.text("prompt_input.tools"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Button {
-                            showVoiceInput = true
-                        } label: {
-                            Image(systemName: "microphone.circle")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 25, height: 25)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L10n.text("prompt_input.voice.title"))
-
-                        Button {
-                            showTextInputDrawer = true
-                        } label: {
-                            Image(systemName: "chevron.up.circle")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 25, height: 25)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L10n.text("prompt_input.drawer.title"))
-                    }
-                    .foregroundStyle(.tint)
-                }
+                PromptInputEditorView(
+                    text: $systemPrompt,
+                    isAutoFillInProgress: autoFillInProgress,
+                    isAutoFilled: autoFilled,
+                    isAutoFillDisabled: displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    onAutoFill: runAutoFill,
+                    onVoiceInput: { showVoiceInput = true },
+                    onTextInput: { showTextInputDrawer = true }
+                )
 
                 NavigationLink {
                     MultiSelectOptionsView(
-                        title: "关联小任务",
-                        options: smallTasks.map { ($0.code, "\($0.name)（\($0.code)）") },
+                        title: L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "Related small tasks selector title"),
+                        options: smallTasks.map { ($0.code, String(format: L10n.text("ai_settings.models.agent.related_tasks.option_format", fallback: "%@ (%@)", comment: "Related small task option format"), locale: Locale.current, $0.name, $0.code)) },
                         selectedValues: $selectedTaskCodes
                     )
                 } label: {
                     HStack {
-                        Text("关联小任务")
+                        Text(L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "Related small tasks row title"))
                         Spacer()
                         Text("\(selectedTaskCodes.count)")
                             .foregroundStyle(.secondary)
@@ -241,38 +213,6 @@ struct ModelsSettingsAgentSheet: View {
             }
             hasSyncedFromModel = true
         }
-    }
-
-    private var autoFillButton: some View {
-        Button {
-            runAutoFill()
-        } label: {
-            HStack(spacing: 5) {
-                if autoFillInProgress {
-                    ProgressView()
-                        .frame(width: 25, height: 25)
-                    Text(L10n.text("prompt_input.toolbar.autofilling"))
-                        .font(.caption)
-                } else if autoFilled {
-                    Image(systemName: "arrow.uturn.backward.circle")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 25, height: 25)
-                    Text(L10n.text("prompt_input.toolbar.undo_autofill"))
-                        .font(.caption)
-                } else {
-                    Image(systemName: "pencil.circle")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 25, height: 25)
-                    Text(L10n.text("prompt_input.toolbar.autofill"))
-                        .font(.caption)
-                }
-            }
-            .foregroundStyle(displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color(.systemGray) : Color.accentColor)
-        }
-        .buttonStyle(.plain)
-        .disabled(autoFillInProgress || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private func runAutoFill() {

@@ -50,7 +50,11 @@ final class ToolHub: @unchecked Sendable {
     }
 
     /// 显式调试命令路由：`/audit_tools` 与 `/tool ...`。
-    func runIfNeeded(userInput: String, memberID: Int?) async -> ToolHubResult {
+    func runIfNeeded(
+        userInput: String,
+        memberID: Int?,
+        allowedToolNames: Set<String>? = nil
+    ) async -> ToolHubResult {
         let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return .none }
         logger.debug(
@@ -68,11 +72,20 @@ final class ToolHub: @unchecked Sendable {
             logger.debug("工具路由未命中，转入 AI 推理", module: .aiConfig)
             return .none
         }
+        if let allowedToolNames,
+           allowedToolNames.map(Self.normalizeToolName).contains(Self.normalizeToolName(invocation.name)) == false {
+            logger.info("工具路由命中但不在当前允许列表内，tool=\(invocation.name)", module: .aiConfig)
+            return .none
+        }
 
         let context = ToolExecutionContext(memberID: memberID, locale: .current)
         let result = await execute(invocation: invocation, context: context)
         await appendAudit(invocation: invocation, context: context, result: result)
         return .executed(result)
+    }
+
+    private static func normalizeToolName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     /// 向模型暴露可调用工具定义（OpenAI tools schema 简化版）。

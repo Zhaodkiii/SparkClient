@@ -29,6 +29,7 @@ enum ChatAttachmentType: String, Equatable, Sendable, CaseIterable {
     case taskCards = "task_cards"
     case structuredHealthCards = "structured_health_cards"
     case captureMessageCard = "capture_message_card"
+    case smallTaskCard = "small_task_card"
 }
 
 /// 单条聊天消息的结构化附件。

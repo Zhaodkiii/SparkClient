@@ -65,6 +65,7 @@ struct ChatOrchestrator: Sendable {
         assistantMessageClientID: UUID? = nil,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        systemPrompt: String? = nil,
         preferredModelName: String? = nil,
         temperature: Double? = nil,
         topP: Double? = nil,
@@ -88,7 +89,11 @@ struct ChatOrchestrator: Sendable {
         let toolResult: ToolHubResult
         if inference.useTools {
             try cancellationToken?.checkCancellation()
-            toolResult = await toolHub.runIfNeeded(userInput: userInput, memberID: memberID)
+            toolResult = await toolHub.runIfNeeded(
+                userInput: userInput,
+                memberID: memberID,
+                allowedToolNames: inference.allowedToolNames
+            )
         } else {
             toolResult = .none
         }
@@ -120,6 +125,7 @@ struct ChatOrchestrator: Sendable {
         // 无工具命中时转入模型推理路径，显式记录入参规模，便于排查上下文膨胀问题。
         let runtimeMessages = await makeRuntimeMessages(
             from: history,
+            systemPrompt: systemPrompt,
             memberContextSummary: memberContextSummary,
             reasoning: reasoningOpts,
             deliverMultimodalImages: deliverMultimodalImages,
@@ -303,27 +309,29 @@ struct ChatOrchestrator: Sendable {
 
     private func makeRuntimeMessages(
         from history: [ChatMessage],
+        systemPrompt: String?,
         memberContextSummary: String,
         reasoning: AIRuntimeReasoningOptions,
         deliverMultimodalImages: Bool,
         maxMessages: Int?
     ) async -> [AIRuntimeMessage] {
         let promptLocalizer = PromptLocalizer()
-        var runtimeMessages: [AIRuntimeMessage] = [
-            AIRuntimeMessage(role: .system, content: promptLocalizer.chatSystemPrompt())
+        var systemBlocks = [
+            (systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
+                ?? promptLocalizer.chatSystemPrompt()
         ]
 
         if memberContextSummary.isEmpty == false {
-            runtimeMessages.append(
-                AIRuntimeMessage(role: .system, content: memberContextSummary)
-            )
+            systemBlocks.append(memberContextSummary)
         }
 
         if reasoning.usePromptFallback {
-            runtimeMessages.append(
-                AIRuntimeMessage(role: .system, content: promptLocalizer.deepThinkingInstruction())
-            )
+            systemBlocks.append(promptLocalizer.deepThinkingInstruction())
         }
+
+        var runtimeMessages: [AIRuntimeMessage] = [
+            AIRuntimeMessage(role: .system, content: systemBlocks.joined(separator: "\n\n"))
+        ]
 
         let effectiveHistory: ArraySlice<ChatMessage>
         if let maxMessages, maxMessages > 0 {
@@ -332,7 +340,7 @@ struct ChatOrchestrator: Sendable {
             effectiveHistory = history[history.startIndex..<history.endIndex]
         }
 
-        for chatMessage in effectiveHistory {
+        for chatMessage in effectiveHistory where chatMessage.role != .system {
             let msg = await runtimeMessage(from: chatMessage, deliverMultimodalImages: deliverMultimodalImages)
             runtimeMessages.append(msg)
         }
@@ -452,7 +460,17 @@ struct ChatOrchestrator: Sendable {
             ]
             definitions.removeAll { web.contains($0.name) }
         }
+        if let allowed = inference.allowedToolNames {
+            let normalizedAllowed = Set(allowed.map(Self.normalizeToolName))
+            definitions.removeAll { normalizedAllowed.contains(Self.normalizeToolName($0.name)) == false }
+        }
         return definitions
+    }
+
+    private static func normalizeToolName(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
     }
 
     private func shortID(_ value: Int?) -> String {

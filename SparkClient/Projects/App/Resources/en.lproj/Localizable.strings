@@ -846,6 +846,19 @@
 "ai_settings.tools.generate_task" = "Generate Task";
 "common.delete" = "Delete";
 "common.placeholder" = "--";
+"ai_settings.small_tasks.nav.title" = "Small tasks";
+"ai_settings.small_tasks.nav.new_title" = "New small task";
+"ai_settings.small_tasks.nav.edit_title" = "Edit small task";
+"ai_settings.small_tasks.empty" = "No small tasks";
+"ai_settings.small_tasks.delete.title" = "Delete small task?";
+"ai_settings.small_tasks.section.icon" = "Icon";
+"ai_settings.small_tasks.section.basic" = "Basic info";
+"ai_settings.small_tasks.section.prompt" = "Prompt";
+"ai_settings.small_tasks.section.tools" = "Tools";
+"ai_settings.small_tasks.field.name" = "Name";
+"ai_settings.small_tasks.field.brief" = "Brief";
+"ai_settings.models.agent.related_tasks.title" = "Related small tasks";
+"ai_settings.models.agent.related_tasks.option_format" = "%@ (%@)";
 
 "knowledge.library.title" = "Knowledge";
 "knowledge.library.empty.title" = "No knowledge documents yet";

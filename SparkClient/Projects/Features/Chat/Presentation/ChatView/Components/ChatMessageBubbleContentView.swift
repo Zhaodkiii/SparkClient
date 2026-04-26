@@ -169,6 +169,10 @@ struct ChatMessageBubbleContentView: View {
             }
 
             if message.role == .user {
+                if let smallTaskCard = metadata.smallTaskCard {
+                    ChatSmallTaskMessageCard(payload: smallTaskCard)
+                }
+
                 let payloads = imagePayloads(from: message)
                 if payloads.isEmpty == false {
                     ChatImageGalleryBlockView(
@@ -292,6 +296,9 @@ struct ChatMessageBubbleContentView: View {
             return false
         }
         if message.role == .user {
+            if metadata.smallTaskCard != nil {
+                return false
+            }
             let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty == false
         }
@@ -375,6 +382,42 @@ struct ChatMessageBubbleContentView: View {
     }
     
     
+}
+
+private struct ChatSmallTaskMessageCard: View {
+    let payload: ChatSmallTaskMessageCardPayload
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: payload.displayIcon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.white.opacity(0.18)))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(payload.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if payload.displayBrief.isEmpty == false {
+                    Text(payload.displayBrief)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: 260, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.12))
+        )
+    }
 }
 
 private struct ChatMessageErrorCard: View {

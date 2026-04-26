@@ -9,8 +9,10 @@ struct HanlinChatComposerView: View {
     @ObservedObject var memberContextStore: MemberContextStore
     let boundMemberID: Int?
     let modelRows: [AIScenarioRemoteModelRow]
+    let smallTasks: [SmallTask]
     let onSend: () -> Void
     let onCancel: () -> Void
+    let onSmallTaskTapped: (SmallTask) -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
     let onSetMemberBinding: (Int?) -> Void
@@ -32,6 +34,11 @@ struct HanlinChatComposerView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
+                ChatComposerContextTaskBar(
+                    smallTasks: smallTasks,
+                    onSmallTaskTapped: onSmallTaskTapped
+                )
+                
                 HanlinChatInputView(
                     threadID: threadID,
                     modelReasoning: modelReasoning,
@@ -46,16 +53,16 @@ struct HanlinChatComposerView: View {
                     onSetMemberBinding: onSetMemberBinding
                 )
 
-                ChatComposerModelPickerRow(
-                    models: modelRows,
-                    selectedModelName: selectedModelBinding
-                )
+//                ChatComposerModelPickerRow(
+//                    models: modelRows,
+//                    selectedModelName: selectedModelBinding
+//                )
             }
             .padding(.bottom, 12)
             .background {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(.ultraThinMaterial)
-                    .shadow(color: Color.primary.opacity(0.12), radius: 1)
+                    .shadow(color: Color.primary.opacity(0.32), radius: 1)
             }
         }
         .padding(.vertical, 6)

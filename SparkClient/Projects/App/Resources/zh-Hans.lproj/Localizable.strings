@@ -846,6 +846,19 @@
 "ai_settings.tools.generate_task" = "生成任务";
 "common.delete" = "删除";
 "common.placeholder" = "--";
+"ai_settings.small_tasks.nav.title" = "小任务";
+"ai_settings.small_tasks.nav.new_title" = "新建小任务";
+"ai_settings.small_tasks.nav.edit_title" = "编辑小任务";
+"ai_settings.small_tasks.empty" = "暂无小任务";
+"ai_settings.small_tasks.delete.title" = "删除小任务？";
+"ai_settings.small_tasks.section.icon" = "图标选择";
+"ai_settings.small_tasks.section.basic" = "基础信息";
+"ai_settings.small_tasks.section.prompt" = "Prompt";
+"ai_settings.small_tasks.section.tools" = "工具";
+"ai_settings.small_tasks.field.name" = "名称";
+"ai_settings.small_tasks.field.brief" = "简介";
+"ai_settings.models.agent.related_tasks.title" = "关联小任务";
+"ai_settings.models.agent.related_tasks.option_format" = "%@（%@）";
 
 "knowledge.library.title" = "知识库";
 "knowledge.library.empty.title" = "暂无知识文档";

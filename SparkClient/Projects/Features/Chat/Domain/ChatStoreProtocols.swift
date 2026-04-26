@@ -10,7 +10,7 @@ protocol ChatThreadStoring: Sendable {
     func loadThreadListItems() async -> [ChatThreadListItem]
     /// 单线程列表投影（用于 DB 通知后局部刷新一行）。
     func loadThreadListItem(threadID: UUID) async -> ChatThreadListItem?
-    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread
+    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?, rolePrompt: String) async -> ChatThread
     func setActiveThread(id: UUID) async
     func updateThreadMemberBinding(threadID: UUID, memberID: Int?) async
     func updateThreadImageDeliveryMode(threadID: UUID, imageDeliveryModeRaw: String?) async

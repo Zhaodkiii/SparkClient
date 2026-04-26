@@ -20,6 +20,7 @@ struct ChatMessageMetadata {
     /// 对话内结构化医疗卡片（用药/处方/检查/病历），见 ``ChatAttachmentType.structuredHealthCards``。
     let structuredHealthCards: StructuredHealthCardsBlob?
     let captureMessageCard: ChatCaptureMessageCardPayload?
+    let smallTaskCard: ChatSmallTaskMessageCardPayload?
 
     init(message: ChatMessage) {
         toolName = Self.attachmentText(type: .toolName, from: message)
@@ -37,6 +38,7 @@ struct ChatMessageMetadata {
         taskCards = Self.decodeArray(type: .taskCards, from: message)
         structuredHealthCards = Self.decodeObject(type: .structuredHealthCards, from: message)
         captureMessageCard = Self.decodeObject(type: .captureMessageCard, from: message)
+        smallTaskCard = Self.decodeObject(type: .smallTaskCard, from: message)
     }
 
     private static func attachmentText(type: ChatAttachmentType, from message: ChatMessage) -> String? {

@@ -43,13 +43,14 @@ struct SendChatMessageUseCase: Sendable {
         assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        smallTask: SmallTask? = nil,
         cancellationToken: AIRuntimeCancellationToken? = nil,
         onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
         onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
     ) async throws -> ChatThreadSnapshot {
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard sanitizedInput.isEmpty == false || composerAttachments.isEmpty == false else {
+        guard sanitizedInput.isEmpty == false || composerAttachments.isEmpty == false || smallTask != nil else {
             throw ChatFeatureError.emptyInput
         }
 
@@ -66,7 +67,7 @@ struct SendChatMessageUseCase: Sendable {
             let thread = try await resolveThread(
                 existingThreadID: threadID,
                 memberID: memberID,
-                firstUserInput: sanitizedInput,
+                firstUserInput: smallTask?.name ?? sanitizedInput,
                 defaultImageDeliveryRaw: catalogSnapshot.defaultThreadImageDeliveryModeRaw
             )
             let trimmedSelected = selectedChatModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
@@ -80,6 +81,11 @@ struct SendChatMessageUseCase: Sendable {
             let persistedModelName = trimmedSelected?.isEmpty == false
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            let systemPrompt = ChatSystemPromptResolver().resolve(
+                sessionPrompt: thread.rolePrompt,
+                agentPrompt: resolvedRow.systemPrompt,
+                smallTask: smallTask
+            )
 
             if thread.currentModelName != persistedModelName {
                 await repository.updateThreadGenerationConfig(
@@ -153,16 +159,27 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
 
-            // 落库的 content 始终只保存用户原始输入（不包含 OCR 拼接文本）
-            let persistedContent = sanitizedInput
+            let smallTaskCardPayload = smallTask.map(ChatSmallTaskMessageCardPayload.init(task:))
+            let smallTaskCardAttachment = smallTaskCardPayload?.encodedString().map {
+                ChatAttachment(type: .smallTaskCard, text: $0)
+            }
+            let smallTaskDisplayContent = smallTask.map { task in
+                let brief = task.brief.trimmingCharacters(in: .whitespacesAndNewlines)
+                return brief.isEmpty ? "小任务：\(task.name)" : "小任务：\(task.name)\n\(brief)"
+            }
+
+            // 落库的 content 始终只保存用户原始输入（不包含 OCR 拼接文本）；小任务使用卡片附件承载展示信息。
+            let persistedContent = smallTask == nil ? sanitizedInput : (smallTaskDisplayContent ?? "")
+            let persistedKind: ChatMessageKind = smallTask == nil ? .text : .card
+            let persistedAttachments = smallTaskCardAttachment.map { chatAttachments + [$0] } ?? chatAttachments
 
             let clientMessageID = UUID()
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .user,
-                kind: .text,
+                kind: persistedKind,
                 content: persistedContent,
-                attachments: chatAttachments,
+                attachments: persistedAttachments,
                 reasoningContent: nil,
                 reasoningDurationMs: nil,
                 reasoningExpanded: false,
@@ -190,7 +207,7 @@ struct SendChatMessageUseCase: Sendable {
                     ChatThreadSnapshot(thread: thread, messages: history)
                 )
             }
-            let contextMemberID = thread.memberID
+            let contextMemberID = smallTask == nil ? thread.memberID : nil
             let memberContextSummary: String
             if let contextMemberID {
                 memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
@@ -202,24 +219,51 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            let textForTools = sanitizedInput
+            let textForTools = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) } ?? sanitizedInput
+            let aiHistory: [ChatMessage]
+            let effectiveInference: ChatOrchestratorInferenceOptions
+            if let smallTask {
+                aiHistory = [
+                    ChatMessage(
+                        threadID: thread.id,
+                        role: .user,
+                        kind: .text,
+                        content: textForTools,
+                        attachments: [],
+                        deliveryState: .pending,
+                        modelName: "user"
+                    )
+                ]
+                effectiveInference = ChatOrchestratorInferenceOptions(
+                    useTools: smallTask.toolList.isEmpty == false,
+                    useKnowledgeBag: inference.useKnowledgeBag,
+                    useWebSearch: inference.useWebSearch,
+                    reasoningEnabled: inference.reasoningEnabled,
+                    reasoningEffortTier: inference.reasoningEffortTier,
+                    allowedToolNames: Set(smallTask.toolList)
+                )
+            } else {
+                aiHistory = history
+                effectiveInference = inference
+            }
 
             let output = try await orchestrator.generateReply(
                 userInput: textForTools,
-                history: history,
+                history: aiHistory,
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
                 threadID: thread.id,
                 assistantMessageClientID: assistantClientMessageID,
-                inference: inference,
+                inference: effectiveInference,
                 modelReasoning: modelReasoning,
+                systemPrompt: systemPrompt,
                 preferredModelName: resolvedRow.name,
                 temperature: thread.temperature,
                 topP: thread.topP,
                 maxTokens: thread.maxTokens,
                 maxMessages: thread.maxMessages,
                 cancellationToken: cancellationToken,
-                deliverMultimodalImages: deliverMultimodal,
+                deliverMultimodalImages: smallTask == nil && deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
                 onPartial: onAssistantPartial
             )
@@ -333,6 +377,11 @@ struct SendChatMessageUseCase: Sendable {
             let persistedModelName = trimmedSelected?.isEmpty == false
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            let systemPrompt = ChatSystemPromptResolver().resolve(
+                sessionPrompt: thread.rolePrompt,
+                agentPrompt: resolvedRow.systemPrompt,
+                smallTask: nil
+            )
 
             if thread.currentModelName != persistedModelName {
                 await repository.updateThreadGenerationConfig(
@@ -378,6 +427,7 @@ struct SendChatMessageUseCase: Sendable {
                 assistantMessageClientID: assistantClientMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                systemPrompt: systemPrompt,
                 preferredModelName: resolvedRow.name,
                 temperature: thread.temperature,
                 topP: thread.topP,
@@ -476,7 +526,8 @@ struct SendChatMessageUseCase: Sendable {
         let created = await repository.createThread(
             memberID: nil,
             title: title.isEmpty ? promptLocalizer.newThreadTitle() : title,
-            imageDeliveryModeRaw: defaultImageDeliveryRaw
+            imageDeliveryModeRaw: defaultImageDeliveryRaw,
+            rolePrompt: promptLocalizer.chatSystemPrompt()
         )
         await repository.setActiveThread(id: created.id)
         Task {
@@ -498,6 +549,15 @@ struct SendChatMessageUseCase: Sendable {
             return L10n.text("chat.finish_reason.sensitive")
         }
         return nil
+    }
+
+    private func makeSmallTaskUserInput(task: SmallTask, userInput: String) -> String {
+        var blocks = ["请执行小任务：\(task.name)"]
+        let trimmedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedInput.isEmpty == false {
+            blocks.append("【用户补充输入】\n\(trimmedInput)")
+        }
+        return blocks.joined(separator: "\n\n")
     }
 
     private func shortID(_ value: Int?) -> String {

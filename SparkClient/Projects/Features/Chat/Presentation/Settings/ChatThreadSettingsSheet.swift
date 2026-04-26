@@ -25,6 +25,7 @@ struct ChatThreadSettingsSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     modelPickerCard
+                    systemPromptCard
 
                     ChatThreadSettingCard(
                         title: L10n.text("chat.settings.temperature.title"),
@@ -108,6 +109,43 @@ struct ChatThreadSettingsSheet: View {
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+    }
+
+    private var systemPromptCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label {
+                Text("会话系统提示词")
+                    .font(.headline)
+            } icon: {
+                Image(systemName: "text.bubble")
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            Text("默认使用 Spark 健康助手提示词；当当前模型是智能体或触发小任务时，会按小任务 > 智能体 > 会话的优先级生效。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $settings.rolePrompt)
+                .font(.body)
+                .frame(minHeight: 120)
+                .padding(10)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Button("恢复默认") {
+                settings.rolePrompt = PromptLocalizer().chatSystemPrompt()
+            }
+            .font(.footnote.weight(.semibold))
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color(uiColor: .systemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.14), lineWidth: 1)
         )
     }
 

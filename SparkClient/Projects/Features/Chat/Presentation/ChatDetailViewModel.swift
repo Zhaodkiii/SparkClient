@@ -36,6 +36,8 @@ final class ChatDetailViewModel: ObservableObject {
 
     /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
     @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
+    /// 对话场景可消费的小任务（本地 + 服务端，以 code 为唯一标识）。
+    @Published private(set) var chatSmallTasks: [SmallTask] = []
     /// 当前会话输入栏关联模型的推理能力（用于思考开关展示策略）。
     @Published private(set) var reasoningToolbarContext: ChatModelReasoningContext = .unknown
     /// 当前会话在列表中的图片送达方式（用于工具栏菜单展示）。
@@ -246,11 +248,13 @@ final class ChatDetailViewModel: ObservableObject {
         // 获取生效的场景模型配置，获取失败则清空模型列表并返回 nil
         guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
             chatScenarioModels = []
+            chatSmallTasks = []
             return nil
         }
         
         // 提取聊天场景可用模型列表
         chatScenarioModels = bundles.chat.models
+        chatSmallTasks = await aiConfigCenter.effectiveSmallTasks()
 
         // 校验并修正当前选中的模型（确保在可选列表内）
         await validateCurrentSelection(for: threadID)
@@ -563,6 +567,13 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    func startSmallTask(_ task: SmallTask) {
+        guard currentGenerationTask == nil else { return }
+        currentGenerationTask = Task { [weak self] in
+            await self?.sendCurrentDraft(smallTask: task)
+        }
+    }
+
     func cancelCurrentGeneration() {
         guard let threadID = stateStore.selectedThreadID else { return }
         guard stateStore.isSending || currentGenerationCancellationToken != nil || currentGenerationTask != nil else { return }
@@ -577,12 +588,12 @@ final class ChatDetailViewModel: ObservableObject {
         appendCancellationNoticeIfNeeded(threadID: threadID)
     }
 
-    func sendCurrentDraft() async {
+    func sendCurrentDraft(smallTask: SmallTask? = nil) async {
         guard stateStore.isSending == false else { return }
         guard let threadID = stateStore.selectedThreadID else { return }
 
         let composer = stateStore.composerDraft(for: threadID)
-        guard composer.hasVisualContent else { return }
+        guard composer.hasVisualContent || smallTask != nil else { return }
         guard stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false else { return }
 
         let draft = composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -635,6 +646,7 @@ final class ChatDetailViewModel: ObservableObject {
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
+                smallTask: smallTask,
                 cancellationToken: cancellationToken,
                 onImageUploadProgress: { id, progress in
                     Task { @MainActor in
@@ -1218,17 +1230,27 @@ final class ChatDetailViewModel: ObservableObject {
 
     // MARK: - 对话内结构化医疗卡片保存
 
+    /// 保存用药结构化医疗卡片
+    /// - Parameters:
+    ///   - threadID: 对话ID
+    ///   - message: 所属聊天消息
+    ///   - card: 用药卡片数据载体
     func saveMedicationStructuredCard(threadID: UUID, message: ChatMessage, card: MedicationChatCardPayload) async {
+        // 将卡片JSON字符串解码为用药识别草稿模型，解码失败则提示错误
         guard let data = card.draftJSON.data(using: .utf8),
               let draft = try? JSONDecoder().decode(MedicationRecognitionDraft.self, from: data) else {
             notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
             return
         }
+        // 获取当前有效的成员ID，无有效成员则提示错误
         guard let memberID = resolvedMemberID(fallback: card.memberID) else {
             notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
             return
         }
+        
+        // 执行卡片保存逻辑
         await saveWithCardId(card.id, rawTrace: card.displayName) {
+            // 构建医疗文档识别信封
             let envelope = MedicalDocumentRecognitionEnvelope(
                 memberID: memberID,
                 sourceFiles: [],
@@ -1240,6 +1262,7 @@ final class ChatDetailViewModel: ObservableObject {
                     reason: "chat_save"
                 )
             )
+            // 返回结构化医疗文档提取结果
             return MedicalDocumentTypedExtractionOutput(
                 envelope: envelope,
                 typedResult: .medication([draft]),
@@ -1247,20 +1270,29 @@ final class ChatDetailViewModel: ObservableObject {
                 payloadPreview: ""
             )
         } onSuccess: {
+            // 保存成功后标记用药卡片为已保存状态
             await markMedicationSaved(threadID: threadID, message: message, cardID: card.id)
         }
     }
 
+    /// 保存处方结构化医疗卡片
+    /// - Parameters:
+    ///   - threadID: 对话ID
+    ///   - message: 所属聊天消息
+    ///   - card: 处方卡片数据载体
     func savePrescriptionStructuredCard(threadID: UUID, message: ChatMessage, card: PrescriptionChatCardPayload) async {
+        // JSON解码处方草稿模型，失败提示错误
         guard let data = card.draftJSON.data(using: .utf8),
               let draft = try? JSONDecoder().decode(PrescriptionRecognitionDraft.self, from: data) else {
             notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
             return
         }
+        // 获取有效成员ID
         guard let memberID = resolvedMemberID(fallback: card.memberID) else {
             notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
             return
         }
+        
         await saveWithCardId(card.id, rawTrace: card.title) {
             let envelope = MedicalDocumentRecognitionEnvelope(
                 memberID: memberID,
@@ -1280,16 +1312,26 @@ final class ChatDetailViewModel: ObservableObject {
                 payloadPreview: ""
             )
         } onSuccess: {
+            // 标记处方卡片已保存
             await markPrescriptionSaved(threadID: threadID, message: message, cardID: card.id)
         }
     }
 
+    /// 保存检查报告结构化医疗卡片（支持体检报告/病历报告两种类型）
+    /// - Parameters:
+    ///   - threadID: 对话ID
+    ///   - message: 所属聊天消息
+    ///   - card: 检查报告卡片数据载体
     func saveExamReportStructuredCard(threadID: UUID, message: ChatMessage, card: ExamReportChatCardPayload) async {
+        // 转换JSON字符串为数据，失败直接返回
         guard let data = card.draftJSON.data(using: .utf8) else { return }
+        // 获取有效成员ID
         guard let memberID = resolvedMemberID(fallback: card.memberID) else {
             notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
             return
         }
+        
+        // 尝试解码为病历报告模型
         if let report = try? JSONDecoder().decode(MedicalReportRecognitionDraft.self, from: data) {
             await saveWithCardId(card.id, rawTrace: card.title) {
                 let envelope = MedicalDocumentRecognitionEnvelope(
@@ -1314,6 +1356,8 @@ final class ChatDetailViewModel: ObservableObject {
             }
             return
         }
+        
+        // 尝试解码为健康体检报告模型
         if let health = try? JSONDecoder().decode(HealthExamRecognitionDraft.self, from: data) {
             await saveWithCardId(card.id, rawTrace: card.title) {
                 let envelope = MedicalDocumentRecognitionEnvelope(
@@ -1339,16 +1383,24 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    /// 保存病历结构化医疗卡片
+    /// - Parameters:
+    ///   - threadID: 对话ID
+    ///   - message: 所属聊天消息
+    ///   - card: 病历卡片数据载体
     func saveMedicalCaseStructuredCard(threadID: UUID, message: ChatMessage, card: MedicalCaseChatCardPayload) async {
+        // JSON解码病历草稿模型
         guard let data = card.draftJSON.data(using: .utf8),
               let draft = try? JSONDecoder().decode(CaseRecognitionDraft.self, from: data) else {
             notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
             return
         }
+        // 获取有效成员ID
         guard let memberID = resolvedMemberID(fallback: card.memberID) else {
             notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.medical.save")
             return
         }
+        
         await saveWithCardId(card.id, rawTrace: card.title) {
             let envelope = MedicalDocumentRecognitionEnvelope(
                 memberID: memberID,
@@ -1368,21 +1420,35 @@ final class ChatDetailViewModel: ObservableObject {
                 payloadPreview: ""
             )
         } onSuccess: {
+            // 标记病历卡片已保存
             await markMedicalCaseSaved(threadID: threadID, message: message, cardID: card.id)
         }
     }
 
+    /// 统一的医疗卡片保存执行方法（封装通用保存逻辑）
+    /// - Parameters:
+    ///   - cardID: 卡片唯一ID
+    ///   - rawTrace: 日志追踪标识
+    ///   - buildOutput: 构建医疗文档输出结果的闭包
+    ///   - onSuccess: 保存成功回调
     private func saveWithCardId(
         _ cardID: UUID,
         rawTrace: String,
         buildOutput: () throws -> MedicalDocumentTypedExtractionOutput,
         onSuccess: () async -> Void
     ) async {
+        // 标记卡片正在保存中，防止重复保存
         savingStructuredHealthCardIDs.insert(cardID)
+        // 方法结束时移除保存中标记（无论成功失败）
         defer { savingStructuredHealthCardIDs.remove(cardID) }
+        
         do {
+            // 构建保存所需的输出数据
             let output = try buildOutput()
+            // 执行保存用例
             _ = try await saveTypedMedicalDocumentUseCase.execute(output: output)
+            
+            // 保存成功：提示用户 + 打印日志 + 执行成功回调
             notificationClient.success(
                 L10n.text("chat.medical_card.saved.toast"),
                 title: nil,
@@ -1391,49 +1457,71 @@ final class ChatDetailViewModel: ObservableObject {
             logger.info("对话医疗卡片已保存 trace=\(rawTrace)", module: .general)
             await onSuccess()
         } catch {
+            // 保存失败：打印错误日志 + 提示用户
             logger.error("对话医疗卡片保存失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.medical.save")
         }
     }
 
+    /// 解析最终有效的成员ID
+    /// - Parameter fallback: 备用成员ID
+    /// - Returns: 有效成员ID（nil表示无有效成员）
     private func resolvedMemberID(fallback: Int) -> Int? {
+        // 优先使用上下文选中的成员ID
         if let id = memberContextStore.context.selectedMemberID {
             return id
         }
+        // 无选中成员时，使用备用ID（必须大于0才有效）
         return fallback > 0 ? fallback : nil
     }
 
+    // MARK: - 卡片状态标记（更新消息附件中卡片的保存状态）
+
+    /// 标记用药卡片为已保存
     private func markMedicationSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
+        // 修改附件中的结构化卡片数据
         guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markMedicationSaved(id: cardID) }) else { return }
+        // 持久化更新后的附件
         await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
     }
 
+    /// 标记处方卡片为已保存
     private func markPrescriptionSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
         guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markPrescriptionSaved(id: cardID) }) else { return }
         await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
     }
 
+    /// 标记检查报告卡片为已保存
     private func markExamReportSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
         guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markExamReportSaved(id: cardID) }) else { return }
         await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
     }
 
+    /// 标记病历卡片为已保存
     private func markMedicalCaseSaved(threadID: UUID, message: ChatMessage, cardID: UUID) async {
         guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: { $0.markMedicalCaseSaved(id: cardID) }) else { return }
         await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
     }
 
+    // MARK: - 附件持久化与同步
+
+    /// 持久化更新后的结构化卡片附件，并同步到服务端
     private func persistStructuredAttachments(threadID: UUID, message: ChatMessage, attachments: [ChatAttachment]) async {
+        // 更新消息附件（标记待同步）
         await updateChatMessageAttachmentsUseCase.execute(
             clientMessageID: message.clientMessageID,
             attachments: attachments,
             markPendingForSync: true
         )
+        
+        // 更新本地状态存储
         stateStore.updateMessageAttachments(
             threadID: threadID,
             clientMessageID: message.clientMessageID,
             attachments: attachments
         )
+        
+        // 执行同步：推送本地数据到服务端
         do {
             try await syncChatUseCase.pushOutboxOnly()
         } catch {
@@ -1441,22 +1529,34 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    /// 替换消息附件中的结构化健康卡片数据（JSON序列化/反序列化处理）
+    /// - Parameters:
+    ///   - attachments: 原始附件数组
+    ///   - mutate: 修改卡片数据的闭包
+    /// - Returns: 修改后的附件数组
     private func replacingStructuredHealthCardsBlob(
         in attachments: [ChatAttachment],
         mutate: (inout StructuredHealthCardsBlob) -> Void
     ) -> [ChatAttachment]? {
+        // 查找结构化健康卡片附件的索引 + 解析JSON数据
         guard let index = attachments.firstIndex(where: { $0.type == .structuredHealthCards }),
               let raw = attachments[index].text,
               let data = raw.data(using: .utf8),
               var blob = try? JSONDecoder().decode(StructuredHealthCardsBlob.self, from: data) else {
             return nil
         }
+        
+        // 执行修改操作
         mutate(&blob)
+        
+        // 重新编码为JSON字符串
         let enc = JSONEncoder()
         guard let outData = try? enc.encode(blob),
               let text = String(data: outData, encoding: .utf8) else {
             return nil
         }
+        
+        // 替换原附件并返回
         var next = attachments
         next[index] = attachments[index].withText(text)
         return next

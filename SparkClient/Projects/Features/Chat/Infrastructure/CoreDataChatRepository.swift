@@ -27,8 +27,13 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadThreadListItem(threadID: threadID)
     }
 
-    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?) async -> ChatThread {
-        await store.createThread(memberID: memberID, title: title, imageDeliveryModeRaw: imageDeliveryModeRaw)
+    func createThread(memberID: Int?, title: String, imageDeliveryModeRaw: String?, rolePrompt: String) async -> ChatThread {
+        await store.createThread(
+            memberID: memberID,
+            title: title,
+            imageDeliveryModeRaw: imageDeliveryModeRaw,
+            rolePrompt: rolePrompt
+        )
     }
 
     func setActiveThread(id: UUID) async {

@@ -20,6 +20,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let threadMaxTokens: Int?
     let threadMaxMessages: Int?
     let threadRolePrompt: String?
+    let threadSystemPrompt: String?
     let reasoningContent: String?
     let reasoningDurationMs: Int64?
     let reasoningExpanded: Bool?
@@ -44,6 +45,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case threadMaxTokens = "thread_max_tokens"
         case threadMaxMessages = "thread_max_messages"
         case threadRolePrompt = "thread_role_prompt"
+        case threadSystemPrompt = "thread_system_prompt"
         case reasoningContent = "reasoning_content"
         case reasoningDurationMs = "reasoning_duration_ms"
         case reasoningExpanded = "reasoning_expanded"
@@ -69,6 +71,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         threadMaxTokens: Int? = nil,
         threadMaxMessages: Int? = nil,
         threadRolePrompt: String? = nil,
+        threadSystemPrompt: String? = nil,
         reasoningContent: String? = nil,
         reasoningDurationMs: Int64? = nil,
         reasoningExpanded: Bool? = nil,
@@ -92,6 +95,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.threadMaxTokens = threadMaxTokens
         self.threadMaxMessages = threadMaxMessages
         self.threadRolePrompt = threadRolePrompt
+        self.threadSystemPrompt = threadSystemPrompt
         self.reasoningContent = reasoningContent
         self.reasoningDurationMs = reasoningDurationMs
         self.reasoningExpanded = reasoningExpanded
@@ -117,7 +121,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         threadTopP = try c.decodeIfPresent(Double.self, forKey: .threadTopP)
         threadMaxTokens = try c.decodeIfPresent(Int.self, forKey: .threadMaxTokens)
         threadMaxMessages = try c.decodeIfPresent(Int.self, forKey: .threadMaxMessages)
-        threadRolePrompt = try c.decodeIfPresent(String.self, forKey: .threadRolePrompt)
+        let decodedThreadSystemPrompt = try c.decodeIfPresent(String.self, forKey: .threadSystemPrompt)
+        let decodedThreadRolePrompt = try c.decodeIfPresent(String.self, forKey: .threadRolePrompt)
+        threadSystemPrompt = decodedThreadSystemPrompt
+        threadRolePrompt = decodedThreadSystemPrompt ?? decodedThreadRolePrompt
         reasoningContent = try c.decodeIfPresent(String.self, forKey: .reasoningContent)
         reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
         reasoningExpanded = try c.decodeIfPresent(Bool.self, forKey: .reasoningExpanded)
@@ -144,6 +151,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encodeIfPresent(threadMaxTokens, forKey: .threadMaxTokens)
         try c.encodeIfPresent(threadMaxMessages, forKey: .threadMaxMessages)
         try c.encodeIfPresent(threadRolePrompt, forKey: .threadRolePrompt)
+        try c.encodeIfPresent(threadRolePrompt, forKey: .threadSystemPrompt)
         try c.encodeIfPresent(reasoningContent, forKey: .reasoningContent)
         try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
         try c.encodeIfPresent(reasoningExpanded, forKey: .reasoningExpanded)
@@ -175,6 +183,7 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let maxTokens: Int?
     let maxMessages: Int?
     let rolePrompt: String?
+    let systemPrompt: String?
 
     enum CodingKeys: String, CodingKey {
         case threadID = "thread_id"
@@ -193,6 +202,89 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         case maxTokens = "max_tokens"
         case maxMessages = "max_messages"
         case rolePrompt = "role_prompt"
+        case systemPrompt = "system_prompt"
+    }
+
+    nonisolated init(
+        threadID: UUID,
+        title: String,
+        scenario: String,
+        patientID: UUID?,
+        memberID: Int?,
+        isDeleted: Bool,
+        deletedAt: Date?,
+        updatedAt: Date,
+        serverUpdatedAt: Date,
+        imageDeliveryModeRaw: String?,
+        currentModelName: String?,
+        temperature: Double?,
+        topP: Double?,
+        maxTokens: Int?,
+        maxMessages: Int?,
+        rolePrompt: String?,
+        systemPrompt: String? = nil
+    ) {
+        self.threadID = threadID
+        self.title = title
+        self.scenario = scenario
+        self.patientID = patientID
+        self.memberID = memberID
+        self.isDeleted = isDeleted
+        self.deletedAt = deletedAt
+        self.updatedAt = updatedAt
+        self.serverUpdatedAt = serverUpdatedAt
+        self.imageDeliveryModeRaw = imageDeliveryModeRaw
+        self.currentModelName = currentModelName
+        self.temperature = temperature
+        self.topP = topP
+        self.maxTokens = maxTokens
+        self.maxMessages = maxMessages
+        self.rolePrompt = systemPrompt ?? rolePrompt
+        self.systemPrompt = systemPrompt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        threadID = try c.decode(UUID.self, forKey: .threadID)
+        title = try c.decode(String.self, forKey: .title)
+        scenario = try c.decode(String.self, forKey: .scenario)
+        patientID = try c.decodeIfPresent(UUID.self, forKey: .patientID)
+        memberID = try c.decodeIfPresent(Int.self, forKey: .memberID)
+        isDeleted = try c.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        serverUpdatedAt = try c.decode(Date.self, forKey: .serverUpdatedAt)
+        imageDeliveryModeRaw = try c.decodeIfPresent(String.self, forKey: .imageDeliveryModeRaw)
+        currentModelName = try c.decodeIfPresent(String.self, forKey: .currentModelName)
+        temperature = try c.decodeIfPresent(Double.self, forKey: .temperature)
+        topP = try c.decodeIfPresent(Double.self, forKey: .topP)
+        maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens)
+        maxMessages = try c.decodeIfPresent(Int.self, forKey: .maxMessages)
+        let decodedSystemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt)
+        let decodedRolePrompt = try c.decodeIfPresent(String.self, forKey: .rolePrompt)
+        systemPrompt = decodedSystemPrompt
+        rolePrompt = decodedSystemPrompt ?? decodedRolePrompt
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(threadID, forKey: .threadID)
+        try c.encode(title, forKey: .title)
+        try c.encode(scenario, forKey: .scenario)
+        try c.encodeIfPresent(patientID, forKey: .patientID)
+        try c.encodeIfPresent(memberID, forKey: .memberID)
+        try c.encode(isDeleted, forKey: .isDeleted)
+        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(serverUpdatedAt, forKey: .serverUpdatedAt)
+        try c.encodeIfPresent(imageDeliveryModeRaw, forKey: .imageDeliveryModeRaw)
+        try c.encodeIfPresent(currentModelName, forKey: .currentModelName)
+        try c.encodeIfPresent(temperature, forKey: .temperature)
+        try c.encodeIfPresent(topP, forKey: .topP)
+        try c.encodeIfPresent(maxTokens, forKey: .maxTokens)
+        try c.encodeIfPresent(maxMessages, forKey: .maxMessages)
+        try c.encodeIfPresent(rolePrompt, forKey: .rolePrompt)
+        try c.encodeIfPresent(rolePrompt, forKey: .systemPrompt)
     }
 }
 

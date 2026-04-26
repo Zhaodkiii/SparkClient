@@ -91,6 +91,11 @@ struct ChatView: View {
                 },
                 onRemoveAttachment: { attachmentID in
                     detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
+                },
+                smallTasks: composerAssociatedSmallTasks,
+                onSmallTaskTapped: { task in
+                    KeyboardDismissHelper.dismissKeyboard()
+                    detailViewModel.startSmallTask(task)
                 }
             )
         case .hanlin:
@@ -101,6 +106,7 @@ struct ChatView: View {
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
                 boundMemberID: stateStore.selectedThread?.memberID,
                 modelRows: detailViewModel.chatScenarioModels,
+                smallTasks: composerAssociatedSmallTasks,
                 onSend: {
                     KeyboardDismissHelper.dismissKeyboard()
                     detailViewModel.startSendingCurrentDraft()
@@ -108,6 +114,10 @@ struct ChatView: View {
                 onCancel: {
                     KeyboardDismissHelper.dismissKeyboard()
                     detailViewModel.cancelCurrentGeneration()
+                },
+                onSmallTaskTapped: { task in
+                    KeyboardDismissHelper.dismissKeyboard()
+                    detailViewModel.startSmallTask(task)
                 },
                 onAttachmentsPicked: { attachments in
                     detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
@@ -126,6 +136,52 @@ struct ChatView: View {
 
     }
 
+    // MARK: - 编辑器相关计算属性
+    /// 获取当前编辑器选中的模型行（优先级：草稿选中 > 会话当前模型 > 默认模型 > 第一个模型）
+    private var selectedComposerModelRow: AIScenarioRemoteModelRow? {
+        // 1. 优先取编辑器草稿中记录的选中模型名称（去空格）
+        let selectedName = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        // 2. 如果有选中名称，在场景模型列表中匹配对应行
+        if selectedName.isEmpty == false,
+           let row = detailViewModel.chatScenarioModels.first(where: { $0.name == selectedName }) {
+            return row
+        }
+        
+        // 3. 未选中则取当前会话绑定的模型名称匹配
+        if let threadModel = stateStore.selectedThread?.currentModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           threadModel.isEmpty == false,
+           let row = detailViewModel.chatScenarioModels.first(where: { $0.name == threadModel }) {
+            return row
+        }
+        
+        // 4. 最后兜底：默认模型 或 列表第一个模型
+        return detailViewModel.chatScenarioModels.first(where: \.isDefault) ?? detailViewModel.chatScenarioModels.first
+    }
+
+    /// 获取当前选中模型【关联绑定的小任务列表】
+    private var composerAssociatedSmallTasks: [SmallTask] {
+        // 无选中模型返回空数组
+        guard let row = selectedComposerModelRow else { return [] }
+        
+        // 1. 把小任务列表转成【code -> task】的字典，方便快速查找（统一格式化编码）
+        let tasksByCode = detailViewModel.chatSmallTasks.reduce(into: [String: SmallTask]()) { result, task in
+            result[normalizeTaskCode(task.id)] = task
+        }
+        
+        // 2. 根据模型关联的 taskCodes，从字典中取出对应的小任务（过滤不存在的）
+        return row.relatedTaskCodes.compactMap { tasksByCode[normalizeTaskCode($0)] }
+    }
+
+    // MARK: - 工具方法
+    /// 标准化任务编码：去空格 + 转小写（确保匹配不受大小写/空格影响）
+    private func normalizeTaskCode(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+    
+    
     private var configuredLayout: some View {
         lifecycleLayout
     }
