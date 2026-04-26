@@ -27,6 +27,7 @@
 "tool.summary.generate_chat_title" = "用途：根據當前對話生成簡潔標題（≤6 字，可含 emoji）。會話標題仍為預設且使用者已發訊息時可呼叫。無必選引數。";
 "tool.summary.show_custom_message_card" = "用途：在助手回覆內展示拍照/上傳卡片，引導使用者提交圖片。典型場景：需解讀報告/藥盒/皮膚但尚無附件。";
 "tool.summary.get_current_member" = "用途：讀取當前已選成員基本資訊。若未選擇成員，客戶端可引導選擇（Spark 本地返回提示）。";
+"tool.summary.request_member_selection" = "用途：當後續工具或回答需要明確成員歸屬、但目前上下文沒有可用成員時，請求使用者在目前訊息內選擇成員。呼叫後工具迴圈會暫停；使用者選擇後，本工具返回已選擇的 member_id，模型必須繼續完成原任務。";
 "tool.summary.switch_member" = "用途：切換當前成員；選擇後後續 query_member_profile 等使用新成員（Spark 本地為佔位說明）。";
 "tool.summary.find_member" = "用途：透過關係或姓名查詢成員。可提供 name 與/或 relationship（部分匹配）。至少提供其一。";
 "tool.summary.query_member_profile" = "用途：查詢成員健康資訊摘要。query_type：summary / medications / hospital_exams / medical_records / health_exams。可選 member_id（Spark 為成員 UUID 字串）；可選 days、limit。Spark 當前返回各型別記錄數量彙總。";
@@ -88,6 +89,7 @@
 "tool.param.attachment_types" = "report_photo / medicine_box_photo / skin_photo";
 "tool.param.member_name_optional" = "可選，姓名（部分匹配）";
 "tool.param.member_relationship_optional" = "可選，關係（本人、媽媽等）";
+"tool.param.member_selection_reason" = "可選，簡短說明為什麼目前回覆或後續工具需要選擇成員。";
 "tool.param.query_type_enum" = "summary / medications / hospital_exams / medical_records / health_exams";
 "tool.param.member_id_optional" = "可選，成員 UUID 字串；省略則用當前成員。";
 "tool.param.patient_id_optional" = "可選，與 Health 對齊：當值為 UUID 字串時等同 member_id。";
@@ -105,6 +107,9 @@
 "tool.param.replacement_item" = "替換為";
 "tool.param.file_path_local" = "本機檔案絕對路徑";
 "tool.param.tool_query_generic" = "工具查詢引數";
+"tool.result.request_member_selection.waiting" = "請選擇成員後繼續執行工具。";
+"tool.result.request_member_selection.completed" = "使用者已完成成員選擇。請使用返回的 member_id 繼續後續工具呼叫或生成最終回答。";
+"tool.result.request_member_selection.timeout" = "使用者在 40 秒內未選擇成員。請繼續目前對話，或再次提示使用者選擇成員。";
 
 /* ========== Tool UI 文案（工具結果卡片標題等） ========== */
 "tool.ui.knowledge.search_title" = "知識檢索";

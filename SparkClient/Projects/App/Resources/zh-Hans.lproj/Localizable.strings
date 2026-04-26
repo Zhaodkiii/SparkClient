@@ -832,6 +832,7 @@
 "ai_settings.tools.generate_chat_title" = "生成会话标题";
 "ai_settings.tools.show_custom_message_card" = "展示消息卡片";
 "ai_settings.tools.get_current_member" = "获取当前成员";
+"ai_settings.tools.request_member_selection" = "请求选择成员";
 "ai_settings.tools.switch_member" = "切换成员";
 "ai_settings.tools.find_member" = "查找成员";
 "ai_settings.tools.query_member_profile" = "查询成员资料";
@@ -846,6 +847,8 @@
 "ai_settings.tools.generate_task" = "生成任务";
 "common.delete" = "删除";
 "common.placeholder" = "--";
+"chat.pending_member_tool.title" = "选择成员";
+"chat.pending_member_tool.message" = "工具需要成员信息，选择后会继续执行。";
 "ai_settings.small_tasks.nav.title" = "小任务";
 "ai_settings.small_tasks.nav.new_title" = "新建小任务";
 "ai_settings.small_tasks.nav.edit_title" = "编辑小任务";

@@ -475,6 +475,7 @@ extension ChatAssembly {
         let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(repository: chatRepository)
         let toolAuditStore = ToolAuditStore()
         let toolHub = ToolHub(
+            chatRepository: chatRepository,
             auditStore: toolAuditStore,
             medicalQueryAPI: backend.medicalQuery,
             aiSettingsRepository: ai.aiSettingsRepository,

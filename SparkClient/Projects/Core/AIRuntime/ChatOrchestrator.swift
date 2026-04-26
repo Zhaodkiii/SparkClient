@@ -131,14 +131,18 @@ struct ChatOrchestrator: Sendable {
             deliverMultimodalImages: deliverMultimodalImages,
             maxMessages: maxMessages
         )
-        let toolDefinitions = filteredToolDefinitions(inference: inference)
-        let toolChoice: AIRuntimeToolChoice = inference.useTools && toolDefinitions.isEmpty == false ? .auto : .none
+        let baseToolDefinitions = filteredToolDefinitions(inference: inference)
+        var activeToolDefinitions = baseToolDefinitions
+        var activeToolChoice: AIRuntimeToolChoice = inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none
+        var roundToolLocked = false
+        let toolLockedNotice = "本轮对话内已禁止继续调用工具。请基于现有信息直接完成回复，不要再发起工具调用。"
         logger.debug(
-            "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), memberContextLength=\(memberContextSummary.count), tools=\(toolDefinitions.count), toolChoice=\(String(describing: toolChoice))",
+            "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), memberContextLength=\(memberContextSummary.count), tools=\(baseToolDefinitions.count), toolChoice=\(String(describing: activeToolChoice))",
             module: .aiConfig
         )
         var loopMessages = runtimeMessages
-        let maxToolRounds = 3
+        var loopMemberID = memberID
+        let maxToolRounds = 6
         var round = 0
         var executedTools: [ToolExecutionResult] = []
 
@@ -152,8 +156,8 @@ struct ChatOrchestrator: Sendable {
                         request: AIRuntimeTextRequest(
                             scenario: .chat,
                             messages: loopMessages,
-                            tools: toolDefinitions,
-                            toolChoice: toolChoice,
+                            tools: activeToolDefinitions,
+                            toolChoice: activeToolChoice,
                             reasoning: reasoningOpts,
                             preferredModelName: preferredModelName,
                             providerCompanyUppercased: providerCompanyUppercased,
@@ -191,7 +195,12 @@ struct ChatOrchestrator: Sendable {
                 )
             }
 
-            if inference.useTools == false || toolDefinitions.isEmpty {
+            if inference.useTools == false || activeToolDefinitions.isEmpty {
+                if response.hasToolCalls {
+                    loopMessages.append(AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls))
+                    loopMessages.append(AIRuntimeMessage(role: .system, content: toolLockedNotice))
+                    continue
+                }
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
                     logger.warning("AI 返回空文本（工具禁用分支），转为可见错误气泡", module: .aiConfig)
@@ -221,38 +230,33 @@ struct ChatOrchestrator: Sendable {
                 let roundReasoning = response.reasoningText?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .nilIfEmpty
-                let toolStartText = "使用工具：\(call.name)"
-                if let onPartial {
-                    await onPartial(
-                        ChatAssistantPartialDelta(
-                            answer: "",
-                            reasoning: roundReasoning,
-                            kind: .tool,
-                            toolName: call.name,
-                            toolContent: toolStartText
-                        )
-                    )
-                }
+                await emitToolPartial(
+                    answer: "",
+                    reasoning: roundReasoning,
+                    toolName: call.name,
+                    detail: nil,
+                    onPartial: onPartial
+                )
                 let toolResult = await toolHub.executeToolCall(
                     name: call.name,
                     arguments: call.arguments,
-                    memberID: memberID,
+                    memberID: loopMemberID,
                     threadID: threadID,
-                    assistantMessageClientID: assistantMessageClientID
+                    assistantMessageClientID: assistantMessageClientID,
+                    pendingToolCallID: call.id,
+                    pendingResumeMessages: loopMessages
                 )
-                let toolFinishText = "使用工具：\(call.name)\n\(toolResult.outputText)"
-                if let onPartial {
-                    await onPartial(
-                        ChatAssistantPartialDelta(
-                            answer: "",
-                            reasoning: roundReasoning,
-                            kind: .tool,
-                            toolName: call.name,
-                            toolContent: toolFinishText
-                        )
-                    )
-                }
+                await emitToolPartial(
+                    answer: "",
+                    reasoning: roundReasoning,
+                    toolName: call.name,
+                    detail: toolResult.outputText,
+                    onPartial: onPartial
+                )
                 executedTools.append(toolResult)
+                if let resolvedMemberID = toolResult.resolvedMemberID {
+                    loopMemberID = resolvedMemberID
+                }
                 let modelConsent = consentGate.evaluate(result: toolResult, destination: .model)
                 let content = modelConsent.allowed
                     ? toolResult.outputText
@@ -265,6 +269,17 @@ struct ChatOrchestrator: Sendable {
                         name: call.name
                     )
                 )
+                if toolResult.isAwaitingUserInput {
+                    roundToolLocked = true
+                    activeToolDefinitions = []
+                    activeToolChoice = .none
+                    loopMessages.append(AIRuntimeMessage(role: .system, content: toolLockedNotice))
+                    break
+                }
+            }
+            if roundToolLocked {
+                roundToolLocked = false
+                continue
             }
         }
 
@@ -540,23 +555,13 @@ struct ChatOrchestrator: Sendable {
                     call = AIRuntimeToolCall(id: call.id, name: call.name, arguments: call.arguments + argumentsDelta)
                 }
                 toolCallsByIndex[delta.index] = call
-                if let onPartial {
-                    let content: String
-                    if call.arguments.isEmpty {
-                        content = "使用工具：\(call.name.isEmpty ? "Tool" : call.name)"
-                    } else {
-                        content = "使用工具：\(call.name.isEmpty ? "Tool" : call.name)\n\(call.arguments)"
-                    }
-                    await onPartial(
-                        ChatAssistantPartialDelta(
-                            answer: bufferedText,
-                            reasoning: bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                            kind: .tool,
-                            toolName: call.name.isEmpty ? nil : call.name,
-                            toolContent: content
-                        )
-                    )
-                }
+                await emitToolPartial(
+                    answer: bufferedText,
+                    reasoning: bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                    toolName: call.name,
+                    detail: call.arguments.isEmpty ? nil : call.arguments,
+                    onPartial: onPartial
+                )
             case .completed(let response):
                 completedResponse = response
             }
@@ -606,11 +611,12 @@ struct ChatOrchestrator: Sendable {
     private func makeToolTrace(from results: [ToolExecutionResult]) -> (name: String, content: String)? {
         guard results.isEmpty == false else { return nil }
         let names = Array(Set(results.map(\.toolName)))
+            .map(localizedToolDisplayName(for:))
             .sorted()
             .joined(separator: ", ")
         let content = results.enumerated().map { index, item in
             """
-            [\(index + 1)] \(item.toolName)
+            [\(index + 1)] \(localizedToolDisplayName(for: item.toolName))
             \(item.outputText)
             """
         }
@@ -618,6 +624,48 @@ struct ChatOrchestrator: Sendable {
         .trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else { return nil }
         return (names, content)
+    }
+
+    private func emitToolPartial(
+        answer: String,
+        reasoning: String?,
+        toolName: String,
+        detail: String?,
+        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)?
+    ) async {
+        guard let onPartial else { return }
+        await onPartial(
+            ChatAssistantPartialDelta(
+                answer: answer,
+                reasoning: reasoning,
+                kind: .tool,
+                toolName: toolName.isEmpty ? nil : toolName,
+                toolContent: localizedToolOperationText(toolName: toolName, detail: detail)
+            )
+        )
+    }
+
+    private func localizedToolOperationText(toolName: String, detail: String?) -> String {
+        let prefix = L10n.text("chat.bubble.tool.operating_prefix", fallback: "Using tool: ")
+        let title = localizedToolDisplayName(for: toolName)
+        guard let detail = detail?.trimmingCharacters(in: .whitespacesAndNewlines),
+              detail.isEmpty == false else {
+            return "\(prefix)\(title)"
+        }
+        return "\(prefix)\(title)\n\(detail)"
+    }
+
+    private func localizedToolDisplayName(for toolName: String) -> String {
+        let normalized = toolName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty {
+            return L10n.text("chat.bubble.tool.default_name", fallback: "Tool")
+        }
+        let localized = SparkToolName.displayName(for: normalized)
+        let fallbackKey = "ai_settings.tools.\(normalized)"
+        if localized == fallbackKey {
+            return normalized
+        }
+        return localized
     }
 }
 

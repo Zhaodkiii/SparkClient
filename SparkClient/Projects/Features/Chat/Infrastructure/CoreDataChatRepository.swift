@@ -108,6 +108,26 @@ actor CoreDataChatRepository: ChatRepository {
         )
     }
 
+    func updateMessageContentAndAttachments(
+        clientMessageID: UUID,
+        content: String,
+        kind: ChatMessageKind,
+        attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?,
+        markPendingForSync: Bool
+    ) async {
+        await store.updateMessageContentAndAttachments(
+            clientMessageID: clientMessageID,
+            content: content,
+            kind: kind,
+            attachments: attachments,
+            reasoningContent: reasoningContent,
+            reasoningDurationMs: reasoningDurationMs,
+            markPendingForSync: markPendingForSync
+        )
+    }
+
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID, enqueueAttachmentDownloadJobs: Bool) async {
         await store.upsertRemoteMessages(messages, in: threadID, enqueueAttachmentDownloadJobs: enqueueAttachmentDownloadJobs)
     }

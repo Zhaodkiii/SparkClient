@@ -35,6 +35,7 @@ struct ChatMessageBubbleContentView: View {
     let onGenerateKnowledgeCardsPreview: () -> Void
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void
     let onTaskCardAction: (TaskCard.Action) -> Void
+    let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
     let onCaptureOpenCamera: () -> Void
@@ -128,6 +129,16 @@ struct ChatMessageBubbleContentView: View {
             if message.role == .assistant,
                metadata.healthCards.isEmpty == false {
                 ChatHealthCardListView(cards: metadata.healthCards)
+            }
+            if message.role == .assistant,
+               metadata.pendingMemberToolCards.isEmpty == false {
+                ForEach(metadata.pendingMemberToolCards) { card in
+                    ChatPendingMemberToolCardView(
+                        card: card,
+                        memberContextStore: memberContextStore,
+                        onSelectMember: onPendingMemberToolSelect
+                    )
+                }
             }
             if message.role == .assistant,
                let blob = metadata.structuredHealthCards,
@@ -338,7 +349,7 @@ struct ChatMessageBubbleContentView: View {
         let rawContent = metadata.toolContent ?? ""
         guard rawContent.isEmpty == false else { return nil }
         return (
-            name.isEmpty ? L10n.text("chat.bubble.tool.default_name") : name,
+            ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: name),
             rawContent
         )
     }
@@ -351,20 +362,10 @@ struct ChatMessageBubbleContentView: View {
             return (storedState, storedDesc)
         }
         guard let tool = toolMeta() else { return nil }
-
-        let lines = tool.content
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.isEmpty == false }
-
-        let state: String
-        if let first = lines.first, first.hasPrefix("使用工具：") {
-            state = first
-        } else {
-            state = L10n.text("chat.bubble.tool.operating_prefix") + tool.name
-        }
-        let description = lines.dropFirst().joined(separator: "\n")
-        return (state, description)
+        return ChatToolRuntimeAttachmentBuilder.makeOperationalMeta(
+            toolName: metadata.toolName,
+            toolContent: tool.content
+        )
     }
 
     private func formatReasoningTime(_ durationMs: Int64?) -> String? {

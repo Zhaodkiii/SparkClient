@@ -21,6 +21,18 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         self.stateStore = stateStore
     }
 
+    /// 仅写入流式缓存，不触发持久化；用于工具等待态的即时卡片展示。
+    func mergeRichAttachmentsIntoStreamingCache(
+        threadID: UUID,
+        attachments: [ChatAttachment]
+    ) async {
+        guard attachments.isEmpty == false else { return }
+        let store = stateStore
+        await MainActor.run {
+            store?.mergeStreamingAssistantAttachments(threadID: threadID, attachments: attachments)
+        }
+    }
+
     /// 等待助手消息就绪后，再执行合并追加操作
     /// 说明：助手消息在编排结束后才会落库，而工具异步抽取任务可能更早完成
     /// 因此需要轮询等待目标消息存在后，再执行合并逻辑
@@ -33,7 +45,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         threadID: UUID,
         assistantClientMessageID: UUID,
         delta: StructuredHealthCardsBlob,
-        maxWaitSeconds: TimeInterval = 25
+        maxWaitSeconds: TimeInterval = 300
     ) async {
         // 计算超时截止时间
         let deadline = Date().addingTimeInterval(maxWaitSeconds)
@@ -116,7 +128,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         assistantClientMessageID: UUID,
         title: String,
         content: String,
-        maxWaitSeconds: TimeInterval = 25
+        maxWaitSeconds: TimeInterval = 300
     ) async {
         struct Row: Codable {
             let title: String
@@ -139,9 +151,14 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         threadID: UUID,
         assistantClientMessageID: UUID,
         attachments: [ChatAttachment],
-        maxWaitSeconds: TimeInterval = 25
+        maxWaitSeconds: TimeInterval = 300
     ) async {
         guard attachments.isEmpty == false else { return }
+        // 先写入流式缓存，保证“等待消息落库”期间也能立即看到卡片。
+        let store = stateStore
+        await MainActor.run {
+            store?.mergeStreamingAssistantAttachments(threadID: threadID, attachments: attachments)
+        }
         let deadline = Date().addingTimeInterval(maxWaitSeconds)
         while Date() < deadline {
             let messages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
@@ -192,7 +209,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         threadID: UUID,
         assistantClientMessageID: UUID,
         model: ChatHealthSleepModel,
-        maxWaitSeconds: TimeInterval = 25
+        maxWaitSeconds: TimeInterval = 300
     ) async {
         let deadline = Date().addingTimeInterval(maxWaitSeconds)
         while Date() < deadline {
@@ -250,7 +267,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         threadID: UUID,
         assistantClientMessageID: UUID,
         payload: ChatCaptureMessageCardPayload,
-        maxWaitSeconds: TimeInterval = 25
+        maxWaitSeconds: TimeInterval = 300
     ) async {
         let deadline = Date().addingTimeInterval(maxWaitSeconds)
         while Date() < deadline {

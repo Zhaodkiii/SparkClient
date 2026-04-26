@@ -27,6 +27,7 @@ enum ChatAttachmentType: String, Equatable, Sendable, CaseIterable {
     case translatedText = "translatedText"
     case events = "events"
     case taskCards = "task_cards"
+    case pendingMemberToolCards = "pending_member_tool_cards"
     case structuredHealthCards = "structured_health_cards"
     case captureMessageCard = "capture_message_card"
     case smallTaskCard = "small_task_card"

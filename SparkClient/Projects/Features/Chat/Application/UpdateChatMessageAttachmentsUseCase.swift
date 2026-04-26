@@ -14,5 +14,24 @@ struct UpdateChatMessageAttachmentsUseCase: Sendable {
             markPendingForSync: markPendingForSync
         )
     }
-}
 
+    func execute(
+        clientMessageID: UUID,
+        content: String,
+        kind: ChatMessageKind,
+        attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?,
+        markPendingForSync: Bool = true
+    ) async {
+        await repository.updateMessageContentAndAttachments(
+            clientMessageID: clientMessageID,
+            content: content,
+            kind: kind,
+            attachments: attachments,
+            reasoningContent: reasoningContent,
+            reasoningDurationMs: reasoningDurationMs,
+            markPendingForSync: markPendingForSync
+        )
+    }
+}

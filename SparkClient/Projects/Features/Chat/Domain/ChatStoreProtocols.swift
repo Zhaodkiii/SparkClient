@@ -56,6 +56,15 @@ protocol ChatMessageStoring: Sendable {
         attachments: [ChatAttachment],
         markPendingForSync: Bool
     ) async
+    func updateMessageContentAndAttachments(
+        clientMessageID: UUID,
+        content: String,
+        kind: ChatMessageKind,
+        attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?,
+        markPendingForSync: Bool
+    ) async
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID, enqueueAttachmentDownloadJobs: Bool) async
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
 }

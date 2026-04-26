@@ -39,6 +39,24 @@ struct ToolExecutionResult: Sendable {
     let outputText: String
     let sensitive: Bool
     let shouldBypassModel: Bool
+    let isAwaitingUserInput: Bool
+    let resolvedMemberID: Int?
+
+    init(
+        toolName: String,
+        outputText: String,
+        sensitive: Bool,
+        shouldBypassModel: Bool,
+        isAwaitingUserInput: Bool = false,
+        resolvedMemberID: Int? = nil
+    ) {
+        self.toolName = toolName
+        self.outputText = outputText
+        self.sensitive = sensitive
+        self.shouldBypassModel = shouldBypassModel
+        self.isAwaitingUserInput = isAwaitingUserInput
+        self.resolvedMemberID = resolvedMemberID
+    }
 }
 
 enum ToolHubResult: Sendable {
@@ -58,17 +76,23 @@ struct ToolExecutionContext: Sendable {
     let assistantMessageClientID: UUID?
     /// 当前会话 ID（与 ``assistantMessageClientID`` 成对使用）。
     let threadID: UUID?
+    let pendingToolCallID: String?
+    let pendingResumeMessages: [AIRuntimeMessage]
 
     init(
         memberID: Int?,
         locale: Locale,
         assistantMessageClientID: UUID? = nil,
-        threadID: UUID? = nil
+        threadID: UUID? = nil,
+        pendingToolCallID: String? = nil,
+        pendingResumeMessages: [AIRuntimeMessage] = []
     ) {
         self.memberID = memberID
         self.locale = locale
         self.assistantMessageClientID = assistantMessageClientID
         self.threadID = threadID
+        self.pendingToolCallID = pendingToolCallID
+        self.pendingResumeMessages = pendingResumeMessages
     }
 }
 
@@ -100,6 +124,7 @@ enum SparkToolName: String, CaseIterable {
     case generateChatTitle           = "generate_chat_title"
     case showCustomMessageCard       = "show_custom_message_card"
     case getCurrentMember            = "get_current_member"
+    case requestMemberSelection      = "request_member_selection"
     case switchMember                = "switch_member"
     case findMember                  = "find_member"
     case queryMemberProfile          = "query_member_profile"
@@ -192,6 +217,7 @@ enum SparkToolGroup: String, CaseIterable {
         case .member:
             return [
                 .getCurrentMember,
+                .requestMemberSelection,
                 .switchMember,
                 .findMember,
                 .queryMemberProfile
@@ -240,7 +266,21 @@ enum SparkToolGroup: String, CaseIterable {
 
 extension ToolExecutionResult {
     /// 接受 `SparkToolName` 枚举值，避免调用处写 `.rawValue`。
-    init(toolName: SparkToolName, outputText: String, sensitive: Bool, shouldBypassModel: Bool) {
-        self.init(toolName: toolName.rawValue, outputText: outputText, sensitive: sensitive, shouldBypassModel: shouldBypassModel)
+    init(
+        toolName: SparkToolName,
+        outputText: String,
+        sensitive: Bool,
+        shouldBypassModel: Bool,
+        isAwaitingUserInput: Bool = false,
+        resolvedMemberID: Int? = nil
+    ) {
+        self.init(
+            toolName: toolName.rawValue,
+            outputText: outputText,
+            sensitive: sensitive,
+            shouldBypassModel: shouldBypassModel,
+            isAwaitingUserInput: isAwaitingUserInput,
+            resolvedMemberID: resolvedMemberID
+        )
     }
 }

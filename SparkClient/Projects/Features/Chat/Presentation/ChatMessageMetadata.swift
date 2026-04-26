@@ -17,6 +17,7 @@ struct ChatMessageMetadata {
     let healthCards: [ChatHealthCardPayload]
     let sleepVisualization: ChatHealthSleepModel?
     let taskCards: [TaskCard]
+    let pendingMemberToolCards: [PendingMemberToolCard]
     /// 对话内结构化医疗卡片（用药/处方/检查/病历），见 ``ChatAttachmentType.structuredHealthCards``。
     let structuredHealthCards: StructuredHealthCardsBlob?
     let captureMessageCard: ChatCaptureMessageCardPayload?
@@ -36,6 +37,7 @@ struct ChatMessageMetadata {
         healthCards = Self.decodeArray(type: .healthInfo, from: message)
         sleepVisualization = Self.decodeObject(type: .healthSleepVisualization, from: message)
         taskCards = Self.decodeArray(type: .taskCards, from: message)
+        pendingMemberToolCards = Self.decodeArray(type: .pendingMemberToolCards, from: message)
         structuredHealthCards = Self.decodeObject(type: .structuredHealthCards, from: message)
         captureMessageCard = Self.decodeObject(type: .captureMessageCard, from: message)
         smallTaskCard = Self.decodeObject(type: .smallTaskCard, from: message)

@@ -564,6 +564,63 @@ actor CoreDataChatStore {
         }
     }
 
+    func updateMessageContentAndAttachments(
+        clientMessageID: UUID,
+        content: String,
+        kind: ChatMessageKind,
+        attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?,
+        markPendingForSync: Bool
+    ) async {
+        let change = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchMessage(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: clientMessageID,
+                serverMessageID: nil
+            ) else {
+                return nil as (UUID, Bool)?
+            }
+            guard let threadID = object.value(forKey: "threadID") as? UUID else { return nil }
+            let latestRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
+            latestRequest.fetchLimit = 1
+            latestRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "threadID == %@", threadID as CVarArg),
+                NSPredicate(format: "isTombstone == NO"),
+            ])
+            latestRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
+            let latestClientID = try context.fetch(latestRequest).first?.value(forKey: "clientMessageID") as? UUID
+            let thisClientID = object.value(forKey: "clientMessageID") as? UUID
+            let isLatestMessage = latestClientID != nil && latestClientID == thisClientID
+
+            object.setValue(kind.rawValue, forKey: "kind")
+            object.setValue(content, forKey: "content")
+            object.setValue(try self.encoder.encode(attachments), forKey: "attachmentsData")
+            object.setValue(reasoningContent, forKey: "reasoningContent")
+            object.setValue(reasoningDurationMs.map { NSNumber(value: $0) }, forKey: "reasoningDurationMs")
+            if markPendingForSync {
+                object.setValue(ChatDeliveryState.pending.rawValue, forKey: "deliveryState")
+            }
+            object.setValue(Date(), forKey: "serverUpdatedAt")
+            if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
+                thread.setValue(Date(), forKey: "updatedAt")
+            }
+            return (threadID, isLatestMessage)
+        }
+        if let change {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: change.0,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [clientMessageID],
+                    affectsThreadList: change.1
+                )
+            )
+        }
+    }
+
     func upsertRemoteMessages(
         _ messages: [ChatMessage],
         in threadID: UUID,

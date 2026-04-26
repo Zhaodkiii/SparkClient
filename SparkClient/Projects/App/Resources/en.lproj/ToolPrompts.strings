@@ -27,6 +27,7 @@
 "tool.summary.generate_chat_title" = "Purpose: concise chat title (≤6 chars, emoji allowed). No required parameters.";
 "tool.summary.show_custom_message_card" = "Purpose: Show capture/upload card in reply when attachments are missing for report/meds/skin.";
 "tool.summary.get_current_member" = "Purpose: Read currently selected member basics. Spark returns a prompt if none selected.";
+"tool.summary.request_member_selection" = "Purpose: Ask the user to select a member in the current message when the next tool call or answer needs an explicit member and none is available. The tool loop pauses after this call; after selection, this tool returns member_id and the model must continue the original task.";
 "tool.summary.switch_member" = "Purpose: Switch member; subsequent tools use new selection (Spark placeholder).";
 "tool.summary.find_member" = "Purpose: Find member by relationship and/or name (partial). Provide at least one.";
 "tool.summary.query_member_profile" = "Purpose: Query member health profile by query_type. Optional member_id (UUID string in Spark); optional days, limit. Spark returns aggregate counts.";
@@ -88,6 +89,7 @@
 "tool.param.attachment_types" = "report_photo, medicine_box_photo, or skin_photo";
 "tool.param.member_name_optional" = "Optional name partial match";
 "tool.param.member_relationship_optional" = "Optional relationship e.g. self, mother";
+"tool.param.member_selection_reason" = "Optional short reason why the current answer or next tool call needs member selection.";
 "tool.param.query_type_enum" = "Query type enum";
 "tool.param.member_id_optional" = "Optional member UUID string; default current member.";
 "tool.param.patient_id_optional" = "Optional Health key; when UUID string, same as member_id.";
@@ -105,6 +107,9 @@
 "tool.param.replacement_item" = "Replacement";
 "tool.param.file_path_local" = "Local absolute file path";
 "tool.param.tool_query_generic" = "Tool query parameter";
+"tool.result.request_member_selection.waiting" = "Please select a member to continue the tool.";
+"tool.result.request_member_selection.completed" = "The user has completed member selection. Use the returned member_id to continue tool calls or produce the final answer.";
+"tool.result.request_member_selection.timeout" = "The user did not select a member within 40 seconds. Continue the conversation, or ask again for member selection.";
 
 /* ========== Tool UI Strings (card titles etc.) ========== */
 "tool.ui.knowledge.search_title" = "Knowledge Search";

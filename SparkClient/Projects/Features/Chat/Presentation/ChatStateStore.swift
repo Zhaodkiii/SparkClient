@@ -183,6 +183,40 @@ final class ChatStateStore: ObservableObject {
         messagesByThread[threadID] = messages
     }
 
+    func updateMessageContentAndAttachments(
+        threadID: UUID,
+        clientMessageID: UUID,
+        content: String,
+        kind: ChatMessageKind,
+        attachments: [ChatAttachment],
+        reasoningContent: String?,
+        reasoningDurationMs: Int64?
+    ) {
+        guard var messages = messagesByThread[threadID] else { return }
+        guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
+        let old = messages[idx]
+        messages[idx] = ChatMessage(
+            id: old.id,
+            threadID: old.threadID,
+            role: old.role,
+            kind: kind,
+            content: content,
+            attachments: attachments,
+            reasoningContent: reasoningContent,
+            reasoningDurationMs: reasoningDurationMs,
+            reasoningExpanded: old.reasoningExpanded,
+            reasoningVisibility: old.reasoningVisibility,
+            clientMessageID: old.clientMessageID,
+            serverMessageID: old.serverMessageID,
+            deliveryState: old.deliveryState,
+            createdAt: old.createdAt,
+            serverUpdatedAt: Date(),
+            isTombstone: old.isTombstone,
+            modelName: old.modelName
+        )
+        messagesByThread[threadID] = messages
+    }
+
     func setLoadingMore(_ loading: Bool, for threadID: UUID) {
         let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: true, isLoadingMore: false)
         messagePagingByThread[threadID] = MessagePaging(hasMore: current.hasMore, isLoadingMore: loading)
@@ -459,9 +493,30 @@ final class ChatStateStore: ObservableObject {
     }
 
     private func makeStreamingAttachments(from state: StreamingAssistant) -> [ChatAttachment] {
-        runtimeAttachmentBuilder.build(
+        let runtime = runtimeAttachmentBuilder.build(
             toolName: state.state.toolName,
             toolContent: state.state.toolContent
         )
+        return runtime + state.state.extraAttachments
+    }
+
+    func mergeStreamingAssistantAttachments(
+        threadID: UUID,
+        attachments: [ChatAttachment]
+    ) {
+        guard attachments.isEmpty == false else { return }
+        guard var streaming = streamingAssistants[threadID] else { return }
+        var merged = streaming.state.extraAttachments
+        for attachment in attachments {
+            if let index = merged.firstIndex(where: { $0.type == attachment.type }) {
+                merged[index] = attachment
+            } else {
+                merged.append(attachment)
+            }
+        }
+        guard merged != streaming.state.extraAttachments else { return }
+        streaming.state.extraAttachments = merged
+        streamingAssistants[threadID] = streaming
+        streamingContentGeneration &+= 1
     }
 }

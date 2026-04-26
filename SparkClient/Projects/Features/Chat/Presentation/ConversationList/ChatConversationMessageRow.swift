@@ -94,6 +94,16 @@ struct ChatConversationMessageRow: View {
                 saveKnowledgeCard(card, from: message)
             },
             onTaskCardAction: handleTaskCardAction,
+            onPendingMemberToolSelect: { card, memberID in
+                Task {
+                    await detailViewModel.setPendingMemberToolSelection(
+                        threadID: threadID,
+                        message: message,
+                        card: card,
+                        memberID: memberID
+                    )
+                }
+            },
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
             onStructuredHealthCardAction: handleStructuredHealthCardAction,
             onCaptureOpenCamera: {
@@ -131,7 +141,7 @@ struct ChatConversationMessageRow: View {
         let name = ChatMessageMetadata(message: message).toolName ?? ""
         let rawContent = ChatMessageMetadata(message: message).toolContent ?? ""
         guard rawContent.isEmpty == false else { return nil }
-        return (name.isEmpty ? L10n.text("chat.bubble.tool.default_name") : name, rawContent)
+        return (ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: name), rawContent)
     }
 
     private func operationalMeta() -> (state: String, description: String)? {
@@ -143,19 +153,10 @@ struct ChatConversationMessageRow: View {
             return (storedState, storedDesc)
         }
         guard let tool = toolMeta() else { return nil }
-        let lines = tool.content
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.isEmpty == false }
-
-        let state: String
-        if let first = lines.first, first.hasPrefix("使用工具：") {
-            state = first
-        } else {
-            state = L10n.text("chat.bubble.tool.operating_prefix") + tool.name
-        }
-        let description = lines.dropFirst().joined(separator: "\n")
-        return (state, description)
+        return ChatToolRuntimeAttachmentBuilder.makeOperationalMeta(
+            toolName: ChatMessageMetadata(message: message).toolName,
+            toolContent: tool.content
+        )
     }
 
     private func knowledgeCards(from message: ChatMessage) -> [ChatKnowledgeCard] {

@@ -19,29 +19,81 @@ struct ChatToolRuntimeAttachmentBuilder: Sendable {
         }
 
         attachments.append(ChatAttachment(type: .toolContent, text: normalizedContent))
+        if let meta = Self.makeOperationalMeta(toolName: normalizedName, toolContent: normalizedContent) {
+            attachments.append(ChatAttachment(type: .operationalState, text: meta.state))
+            if meta.description.isEmpty == false {
+                attachments.append(ChatAttachment(type: .operationalDescription, text: meta.description))
+            }
+        }
+        return attachments
+    }
 
-        // operationalState/operationalDescription 与 AI_HLY 的语义保持一致：
-        // 1) state 显示当前“正在使用工具”；
-        // 2) description 承载更长的过程文本。
+    static func makeOperationalMeta(toolName: String?, toolContent: String?) -> (state: String, description: String)? {
+        let normalizedName = toolName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedContent = toolContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard normalizedContent.isEmpty == false else { return nil }
+
         let lines = normalizedContent
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
 
-        let stateText: String
-        if let first = lines.first, first.hasPrefix("使用工具：") {
-            stateText = first
-        } else if normalizedName.isEmpty == false {
-            stateText = "正在使用工具：\(normalizedName)"
-        } else {
-            stateText = "正在使用工具"
-        }
-        attachments.append(ChatAttachment(type: .operationalState, text: stateText))
+        let stateText = localizedOperatingState(toolName: normalizedName, firstLine: lines.first)
+        let descriptionStart: Int = {
+            guard let first = lines.first else { return 0 }
+            return isToolStateLine(first) ? 1 : 0
+        }()
+        let description = lines.dropFirst(descriptionStart).joined(separator: "\n")
+        return (stateText, description)
+    }
 
-        let description = lines.dropFirst().joined(separator: "\n")
-        if description.isEmpty == false {
-            attachments.append(ChatAttachment(type: .operationalDescription, text: description))
+    static func localizedDisplayName(for toolName: String?) -> String {
+        let normalized = toolName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if normalized.isEmpty {
+            return L10n.text("chat.bubble.tool.default_name", fallback: "Tool")
         }
-        return attachments
+        let localized = SparkToolName.displayName(for: normalized)
+        let fallbackKey = "ai_settings.tools.\(normalized)"
+        if localized == fallbackKey {
+            return normalized
+        }
+        return localized
+    }
+
+    private static func localizedOperatingState(toolName: String, firstLine: String?) -> String {
+        let prefix = L10n.text("chat.bubble.tool.operating_prefix", fallback: "Using tool: ")
+        if let firstLine, isToolStateLine(firstLine) {
+            let extractedName = extractToolName(fromStateLine: firstLine)
+            let displayName = localizedDisplayName(for: extractedName.isEmpty ? toolName : extractedName)
+            return "\(prefix)\(displayName)"
+        }
+        let displayName = localizedDisplayName(for: toolName)
+        return "\(prefix)\(displayName)"
+    }
+
+    private static func isToolStateLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = [
+            L10n.text("chat.bubble.tool.operating_prefix", fallback: "Using tool: "),
+            "正在使用工具：",
+            "使用工具：",
+            "Using tool: "
+        ]
+        return prefixes.contains { trimmed.hasPrefix($0) }
+    }
+
+    private static func extractToolName(fromStateLine line: String) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = [
+            L10n.text("chat.bubble.tool.operating_prefix", fallback: "Using tool: "),
+            "正在使用工具：",
+            "使用工具：",
+            "Using tool: "
+        ]
+        for prefix in prefixes where trimmed.hasPrefix(prefix) {
+            let raw = String(trimmed.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            return raw
+        }
+        return ""
     }
 }

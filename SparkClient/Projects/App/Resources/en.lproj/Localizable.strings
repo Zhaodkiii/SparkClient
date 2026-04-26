@@ -832,6 +832,7 @@
 "ai_settings.tools.generate_chat_title" = "Generate Chat Title";
 "ai_settings.tools.show_custom_message_card" = "Show Custom Message Card";
 "ai_settings.tools.get_current_member" = "Get Current Member";
+"ai_settings.tools.request_member_selection" = "Request Member Selection";
 "ai_settings.tools.switch_member" = "Switch Member";
 "ai_settings.tools.find_member" = "Find Member";
 "ai_settings.tools.query_member_profile" = "Query Member Profile";
@@ -846,6 +847,8 @@
 "ai_settings.tools.generate_task" = "Generate Task";
 "common.delete" = "Delete";
 "common.placeholder" = "--";
+"chat.pending_member_tool.title" = "Select Member";
+"chat.pending_member_tool.message" = "This tool needs a member. It will continue after selection.";
 "ai_settings.small_tasks.nav.title" = "Small tasks";
 "ai_settings.small_tasks.nav.new_title" = "New small task";
 "ai_settings.small_tasks.nav.edit_title" = "Edit small task";

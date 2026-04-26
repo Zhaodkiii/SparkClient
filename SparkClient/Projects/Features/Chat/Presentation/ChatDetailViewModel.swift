@@ -677,7 +677,12 @@ final class ChatDetailViewModel: ObservableObject {
             if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
                 stateStore.upsertThreadListItem(finalRow)
             }
-            stateStore.setMessages(snapshot.messages, for: snapshot.thread.id)
+            await persistStreamingAttachmentsIfNeeded(
+                threadID: snapshot.thread.id,
+                assistantClientMessageID: streamingMessageID
+            )
+            let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
+            stateStore.setMessages(finalMessages, for: snapshot.thread.id)
             stateStore.clearDraft(for: snapshot.thread.id)
             stateStore.setError(nil, for: snapshot.thread.id)
             logger.info(
@@ -811,7 +816,12 @@ final class ChatDetailViewModel: ObservableObject {
             if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
                 stateStore.upsertThreadListItem(finalRow)
             }
-            stateStore.setMessages(snapshot.messages, for: snapshot.thread.id)
+            await persistStreamingAttachmentsIfNeeded(
+                threadID: snapshot.thread.id,
+                assistantClientMessageID: streamingMessageID
+            )
+            let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
+            stateStore.setMessages(finalMessages, for: snapshot.thread.id)
             stateStore.setError(nil, for: snapshot.thread.id)
             logger.info(
                 "重新生成回答完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
@@ -878,6 +888,40 @@ final class ChatDetailViewModel: ObservableObject {
             deliveryState: .pending,
             source: "chat.cancel"
         )
+    }
+
+    private func persistStreamingAttachmentsIfNeeded(
+        threadID: UUID,
+        assistantClientMessageID: UUID
+    ) async {
+        guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID),
+              streaming.attachments.isEmpty == false else { return }
+        let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
+        guard let target = messages.last(where: { $0.clientMessageID == assistantClientMessageID }) else { return }
+        let merged = mergeAttachments(base: target.attachments, overlay: streaming.attachments)
+        guard merged != target.attachments else { return }
+        await updateChatMessageAttachmentsUseCase.execute(
+            clientMessageID: assistantClientMessageID,
+            attachments: merged,
+            markPendingForSync: true
+        )
+        stateStore.updateMessageAttachments(
+            threadID: threadID,
+            clientMessageID: assistantClientMessageID,
+            attachments: merged
+        )
+    }
+
+    private func mergeAttachments(base: [ChatAttachment], overlay: [ChatAttachment]) -> [ChatAttachment] {
+        var merged = base
+        for attachment in overlay {
+            if let index = merged.firstIndex(where: { $0.type == attachment.type }) {
+                merged[index] = attachment
+            } else {
+                merged.append(attachment)
+            }
+        }
+        return merged
     }
 
     @discardableResult
@@ -1307,6 +1351,74 @@ final class ChatDetailViewModel: ObservableObject {
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
+    }
+
+    // MARK: - 等待成员工具：成员选择写入
+
+    func setPendingMemberToolSelection(
+        threadID: UUID,
+        message: ChatMessage,
+        card: PendingMemberToolCard,
+        memberID: Int?
+    ) async {
+        guard let memberID, memberID > 0 else {
+            notificationClient.error(L10n.text("chat.medical_card.error.no_member"), title: nil, source: "chat.pending_member_tool")
+            return
+        }
+
+        await updateThreadMemberBinding(memberID, for: threadID)
+        memberContextStore.select(memberID: memberID)
+
+        updatePendingMemberToolCardInCache(threadID: threadID, message: message, cardID: card.id) {
+            $0.selectedMemberID = memberID
+            $0.status = .completed
+            $0.arguments["member_id"] = String(memberID)
+            $0.resultText = L10n.text("tool.result.request_member_selection.completed")
+            $0.updatedAt = Date()
+        }
+    }
+
+    private func updatePendingMemberToolCardInCache(
+        threadID: UUID,
+        message: ChatMessage,
+        cardID: UUID,
+        mutate: (inout PendingMemberToolCard) -> Void
+    ) {
+        guard let updated = replacingPendingMemberToolCard(in: message.attachments, cardID: cardID, mutate: mutate),
+              let pending = updated.first(where: { $0.type == .pendingMemberToolCards }) else { return }
+        stateStore.mergeStreamingAssistantAttachments(threadID: threadID, attachments: [pending])
+    }
+
+    private func updatePendingMemberToolCard(
+        threadID: UUID,
+        message: ChatMessage,
+        cardID: UUID,
+        mutate: (inout PendingMemberToolCard) -> Void
+    ) async {
+        guard let updated = replacingPendingMemberToolCard(in: message.attachments, cardID: cardID, mutate: mutate) else { return }
+        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+    }
+
+    private func replacingPendingMemberToolCard(
+        in attachments: [ChatAttachment],
+        cardID: UUID,
+        mutate: (inout PendingMemberToolCard) -> Void
+    ) -> [ChatAttachment]? {
+        guard let index = attachments.firstIndex(where: { $0.type == .pendingMemberToolCards }),
+              let raw = attachments[index].text,
+              let data = raw.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard var cards = try? decoder.decode([PendingMemberToolCard].self, from: data),
+              let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { return nil }
+        mutate(&cards[cardIndex])
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let encoded = try? encoder.encode(cards),
+              let text = String(data: encoded, encoding: .utf8) else { return nil }
+        var next = attachments
+        next[index] = attachments[index].withText(text)
+        return next
     }
 
     // MARK: - 对话内结构化医疗卡片保存

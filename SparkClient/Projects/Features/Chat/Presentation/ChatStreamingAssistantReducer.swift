@@ -13,6 +13,7 @@ struct ChatStreamingAssistantState: Sendable, Equatable {
     var reasoningDurationMs: Int64?
     var toolName: String?
     var toolContent: String?
+    var extraAttachments: [ChatAttachment]
 
     static func initial(kind: ChatMessageKind) -> ChatStreamingAssistantState {
         ChatStreamingAssistantState(
@@ -22,7 +23,8 @@ struct ChatStreamingAssistantState: Sendable, Equatable {
             reasoningStartedAt: nil,
             reasoningDurationMs: nil,
             toolName: nil,
-            toolContent: nil
+            toolContent: nil,
+            extraAttachments: []
         )
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 
 /// 聊天侧工具中枢：解析用户输入中的斜杠命令与 `SparkToolName`，执行后写审计；部分为占位或与配置中的外部 endpoint 路由说明。
 final class ToolHub: @unchecked Sendable {
+    private let chatRepository: any ChatRepository
     private let auditStore: ToolAuditStore
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let aiSettingsRepository: any AISettingsRepository
@@ -22,6 +23,7 @@ final class ToolHub: @unchecked Sendable {
     private var canvasStore: [String: String] = [:]
 
     init(
+        chatRepository: any ChatRepository,
         auditStore: ToolAuditStore,
         medicalQueryAPI: SparkMedicalQueryAPI,
         aiSettingsRepository: any AISettingsRepository,
@@ -35,6 +37,7 @@ final class ToolHub: @unchecked Sendable {
         healthTool: SparkHealthTool = .shared,
         logger: Logger = ConsoleLogger()
     ) {
+        self.chatRepository = chatRepository
         self.auditStore = auditStore
         self.medicalQueryAPI = medicalQueryAPI
         self.aiSettingsRepository = aiSettingsRepository
@@ -106,14 +109,18 @@ final class ToolHub: @unchecked Sendable {
         arguments: String,
         memberID: Int?,
         threadID: UUID? = nil,
-        assistantMessageClientID: UUID? = nil
+        assistantMessageClientID: UUID? = nil,
+        pendingToolCallID: String? = nil,
+        pendingResumeMessages: [AIRuntimeMessage] = []
     ) async -> ToolExecutionResult {
         let invocation = ToolInvocation(name: name, arguments: parseArguments(arguments))
         let context = ToolExecutionContext(
             memberID: memberID,
             locale: .current,
             assistantMessageClientID: assistantMessageClientID,
-            threadID: threadID
+            threadID: threadID,
+            pendingToolCallID: pendingToolCallID,
+            pendingResumeMessages: pendingResumeMessages
         )
         let result = await execute(invocation: invocation, context: context)
         await appendAudit(invocation: invocation, context: context, result: result)
@@ -317,6 +324,8 @@ final class ToolHub: @unchecked Sendable {
                 "originalContent": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_original")),
                 "updatedContent": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_updated"))
             ]
+        case .requestMemberSelection:
+            return ["reason": AIRuntimeToolProperty(type: "string", description: td("tool.param.member_selection_reason"))]
         case .generateChatTitle, .getCurrentMember, .switchMember:
             return [:]
         case .showCustomMessageCard:
@@ -415,7 +424,8 @@ final class ToolHub: @unchecked Sendable {
             return ["title", "content", "type"]
         case .editCanvas:
             return ["patterns", "replacements"]
-        case .searchCalendarAndReminders, .writeSystemEvent,
+        case .requestMemberSelection,
+             .searchCalendarAndReminders, .writeSystemEvent,
              .queryTasksByMember, .generateChatTitle,
              .getCurrentMember, .switchMember, .findMember:
             return []
@@ -484,18 +494,52 @@ final class ToolHub: @unchecked Sendable {
         return args
     }
 
-    /// 按工具名分发到具体 `run*` 实现；多数结果 `shouldBypassModel: true` 由聊天层直接展示。
-    private func execute(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+    /// 按工具名分发到具体 `run*` 实现。
+    /// - 设计说明：
+    ///   1. 这是 Tool 调度的统一入口（类似 Router / Dispatcher）
+    ///   2. 所有工具调用最终都会进入这里，根据 `invocation.name` 分发
+    ///   3. 大多数工具返回 `shouldBypassModel = true`：
+    ///      表示「结果直接展示给用户」，无需再经过大模型润色
+    ///   4. 少部分工具（如需要模型总结/解释）可以设为 false
+    ///
+    /// - 执行流程：
+    ///   invocation.name -> 映射 SparkToolName -> switch -> runXXX
+    ///
+    /// - 扩展方式：
+    ///   新增工具时：
+    ///   1. 在 `SparkToolName` 中增加枚举
+    ///   2. 在此 switch 中增加 case
+    ///   3. 实现对应 runXXX 方法
+    ///
+    /// - 注意：
+    ///   该方法是 async，允许工具内部执行 IO（网络 / DB / 本地存储）
+    ///
+    /// - Parameters:
+    ///   - invocation: 工具调用请求（包含 name / 参数等）
+    ///   - context: 执行上下文（线程ID、消息ID、用户态信息等）
+    ///
+    /// - Returns:
+    ///   ToolExecutionResult：统一封装工具执行结果
+    private func execute(
+        invocation: ToolInvocation,
+        context: ToolExecutionContext
+    ) async -> ToolExecutionResult {
+
+        // MARK: - 内置工具：tool_list（列出所有已接入工具）
+        // 用于调试 / LLM 自省（让模型知道当前系统有哪些工具能力）
         if invocation.name == "tool_list" {
             return ToolExecutionResult(
                 toolName: "tool_list",
                 outputText: "已接入工具（\(SparkToolName.all.count)）：\n\(SparkToolName.all.joined(separator: "\n"))",
-                sensitive: false,
-                shouldBypassModel: true
+                sensitive: false,              // 非敏感信息，可直接展示
+                shouldBypassModel: true        // 不需要模型再加工，直接展示
             )
         }
 
+        // MARK: - 工具名解析（字符串 -> 强类型枚举）
+        // 目的：避免 magic string，统一工具标识
         guard let tool = SparkToolName(rawValue: invocation.name) else {
+            // 未识别工具：直接返回错误信息（不中断流程）
             return ToolExecutionResult(
                 toolName: invocation.name,
                 outputText: "未识别工具：\(invocation.name)",
@@ -504,55 +548,110 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
+        // MARK: - 工具分发（核心路由逻辑）
         switch tool {
+
+        // MARK: ===== 健康数据类工具 =====
         case .fetchStepDetails:
+            /// 获取步数详情（如每日步数、趋势等）
             return await runFetchSteps(invocation: invocation)
+
         case .fetchSleepDetails:
+            /// 获取睡眠数据（需要 context，可能涉及用户身份）
             return await runFetchSleep(invocation: invocation, context: context)
+
         case .fetchEnergyDetails:
+            /// 获取能量消耗（卡路里等）
             return await runFetchEnergy(invocation: invocation)
+
         case .fetchNutritionDetails:
+            /// 获取营养摄入（蛋白质 / 脂肪 / 碳水等）
             return await runFetchNutrition(invocation: invocation)
+
         case .fetchWorkoutDetails:
+            /// 获取运动记录（类型、时长、强度等）
             return await runFetchWorkout(invocation: invocation)
+
         case .makeNutritionData:
+            /// 构建营养数据（纯计算逻辑，无需 async）
             return runMakeNutritionData(invocation: invocation)
 
+
+        // MARK: ===== 知识库类工具 =====
         case .searchKnowledgeBag:
+            /// 搜索知识库（可能涉及向量检索 / 语义搜索）
             return await runSearchKnowledgeBag(invocation: invocation, context: context)
+
         case .createKnowledgeDocument:
+            /// 创建知识文档（写入知识库）
             return await runCreateKnowledgeDocument(invocation: invocation, context: context)
 
+
+        // MARK: ===== Memory（长期记忆）工具 =====
         case .saveMemory:
+            /// 保存记忆（用户偏好 / 历史信息）
             return await runSaveMemory(invocation: invocation)
+
         case .retrieveMemory:
+            /// 读取记忆
             return await runRetrieveMemory(invocation: invocation)
+
         case .updateMemory:
+            /// 更新已有记忆
             return await runUpdateMemory(invocation: invocation)
 
+
+        // MARK: ===== Member（多用户 / 家庭成员）相关 =====
         case .getCurrentMember:
+            /// 获取当前选中的成员
             return await runGetCurrentMember(context: context)
+
+        case .requestMemberSelection:
+            /// 请求用户选择成员（通常会触发 UI 卡片交互）
+            return await runRequestMemberSelection(invocation: invocation, context: context)
+
         case .switchMember, .findMember:
+            /// 切换或查找成员（合并处理）
             return await runFindMember(invocation: invocation)
+
         case .queryMemberProfile:
+            /// 查询成员详细信息（健康档案等）
             return await runQueryMemberProfile(invocation: invocation, context: context)
 
+
+        // MARK: ===== AI 生成类 =====
         case .generateStructuredHealthCard:
+            /// 生成结构化健康卡片（可能结合模型推理 + 数据）
             return await runGenerateStructuredHealthCard(invocation: invocation, context: context)
+
         case .queryTasksByMember:
+            /// 查询某成员的小任务列表
             return await runQueryTasksByMember(invocation: invocation, context: context)
+
         case .generateTask:
+            /// AI 生成小任务（基于用户目标/状态）
             return await runGenerateTask(invocation: invocation, context: context)
+
         case .generateChatTitle:
+            /// 生成聊天标题（轻量级，无需 async）
             return runGenerateChatTitle(invocation: invocation)
+
         case .createCanvas:
+            /// 创建画布（如笔记 / 可视化区域）
             return runCreateCanvas(invocation: invocation)
+
         case .editCanvas:
+            /// 编辑画布内容
             return runEditCanvas(invocation: invocation)
 
+
+        // MARK: ===== UI 卡片类 =====
         case .showCustomMessageCard:
+            /// 展示自定义消息卡片（强 UI 交互）
             return await runShowCustomMessageCard(invocation: invocation, context: context)
 
+
+        // MARK: ===== 外部连接器（统一出口） =====
         case .searchOnline,
              .readWebPage,
              .searchArxivPapers,
@@ -564,6 +663,10 @@ final class ToolHub: @unchecked Sendable {
              .queryWeather,
              .searchCalendarAndReminders,
              .writeSystemEvent:
+
+            /// 所有外部能力统一走 Connector 层：
+            /// - 优点：统一鉴权 / 限流 / 日志 / 错误处理
+            /// - 避免每个工具重复实现 HTTP / SDK 逻辑
             return await runExternalConnectorTool(invocation: invocation, context: context)
         }
     }
@@ -1048,6 +1151,51 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
+    /// 模型主动请求用户选择成员：无成员时挂起当前工具循环，有成员时返回可继续推理的工具结果。
+    private func runRequestMemberSelection(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        if let memberID = await resolveTargetMemberID(invocation: invocation, context: context) {
+            return memberSelectionCompletedResult(toolName: SparkToolName.requestMemberSelection.rawValue, memberID: memberID)
+        }
+        let rawReason = invocation.arguments["reason"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let reason = rawReason?.isEmpty == false ? rawReason : nil
+        guard let selectedMemberID = await awaitMemberSelection(
+            invocation: invocation,
+            context: context,
+            reason: reason ?? "request_member_selection"
+        ) else {
+            return memberSelectionTimeoutResult(toolName: SparkToolName.requestMemberSelection.rawValue)
+        }
+        return memberSelectionCompletedResult(toolName: SparkToolName.requestMemberSelection.rawValue, memberID: selectedMemberID)
+    }
+
+    private func memberSelectionCompletedResult(toolName: String, memberID: Int) -> ToolExecutionResult {
+        let output = [
+            td("tool.result.request_member_selection.completed"),
+            #"{"selection_completed":true,"member_id":\#(memberID),"instruction":"continue_conversation"}"#
+        ].joined(separator: "\n")
+        return ToolExecutionResult(
+            toolName: toolName,
+            outputText: output,
+            sensitive: false,
+            shouldBypassModel: true,
+            resolvedMemberID: memberID
+        )
+    }
+
+    private func memberSelectionTimeoutResult(toolName: String) -> ToolExecutionResult {
+        let output = [
+            td("tool.result.request_member_selection.timeout"),
+            #"{"selection_completed":false,"reason":"user_not_selected","instruction":"continue_without_member_or_ask_again"}"#
+        ].joined(separator: "\n")
+        return ToolExecutionResult(
+            toolName: toolName,
+            outputText: output,
+            sensitive: false,
+            shouldBypassModel: true
+        )
+    }
+
     /// 按名称与/或关系模糊筛选成员（与 HealthClient `find_member` 参数对齐）。
     private func runFindMember(invocation: ToolInvocation) async -> ToolExecutionResult {
         let nameQuery = (invocation.arguments["query"] ?? invocation.arguments["name"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1102,13 +1250,17 @@ final class ToolHub: @unchecked Sendable {
             return context.memberID
         }()
 
-        guard let memberID = targetMemberID else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.queryMemberProfile,
-                outputText: "未找到成员档案。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
+        let memberID: Int
+        if let targetMemberID {
+            memberID = targetMemberID
+        } else if let selected = await awaitMemberSelection(
+            invocation: invocation,
+            context: context,
+            reason: "query_member_profile"
+        ) {
+            memberID = selected
+        } else {
+            return memberSelectionTimeoutResult(toolName: SparkToolName.queryMemberProfile.rawValue)
         }
 
         let data: SparkMedicalSyncAPI.RemoteMemberCompleteData
@@ -1314,14 +1466,17 @@ final class ToolHub: @unchecked Sendable {
 
     /// 任务查询工具：按成员维度返回主任务与子任务信息，供后续任务生成去重。
     private func runQueryTasksByMember(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
-        let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
-        guard let memberID else {
-            return ToolExecutionResult(
-                toolName: .queryTasksByMember,
-                outputText: #"{"ok":false,"error":"no_available_member"}"#,
-                sensitive: false,
-                shouldBypassModel: true
-            )
+        let memberID: Int
+        if let resolved = await resolveTargetMemberID(invocation: invocation, context: context) {
+            memberID = resolved
+        } else if let selected = await awaitMemberSelection(
+            invocation: invocation,
+            context: context,
+            reason: "query_tasks_by_member"
+        ) {
+            memberID = selected
+        } else {
+            return memberSelectionTimeoutResult(toolName: SparkToolName.queryTasksByMember.rawValue)
         }
         let includeCompleted = parseBool(invocation.arguments["include_completed"], defaultValue: true)
         let limit = max(1, min(Int(invocation.arguments["limit"] ?? "") ?? 50, 200))
@@ -1343,14 +1498,16 @@ final class ToolHub: @unchecked Sendable {
                 toolName: SparkToolName.queryTasksByMember,
                 outputText: encodeJSON(payload) ?? #"{"ok":false,"error":"encode_failed"}"#,
                 sensitive: true,
-                shouldBypassModel: true
+                shouldBypassModel: true,
+                resolvedMemberID: memberID
             )
         } catch {
             return ToolExecutionResult(
                 toolName: SparkToolName.queryTasksByMember,
                 outputText: #"{"ok":false,"error":"task_query_failed"}"#,
                 sensitive: false,
-                shouldBypassModel: true
+                shouldBypassModel: true,
+                resolvedMemberID: memberID
             )
         }
     }
@@ -1720,6 +1877,56 @@ final class ToolHub: @unchecked Sendable {
         if let current = context.memberID {
             return current
         }
+        if let threadID = context.threadID,
+           let thread = await chatRepository.loadThread(id: threadID),
+           let threadMemberID = thread.memberID,
+           threadMemberID > 0 {
+            return threadMemberID
+        }
+        return nil
+    }
+
+    private func awaitMemberSelection(
+        invocation: ToolInvocation,
+        context: ToolExecutionContext,
+        reason: String
+    ) async -> Int? {
+        guard let threadID = context.threadID,
+              context.assistantMessageClientID != nil else {
+            return nil
+        }
+
+        let normalizedToolCallID: String? = {
+            let trimmed = context.pendingToolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (trimmed?.isEmpty == false) ? trimmed : nil
+        }()
+        var arguments = invocation.arguments
+        if let memberID = context.memberID {
+            arguments["member_id"] = String(memberID)
+        }
+        let card = PendingMemberToolCard(
+            toolName: invocation.name,
+            arguments: arguments,
+            toolCallID: normalizedToolCallID,
+            resumeMessages: context.pendingResumeMessages,
+            reason: reason
+        )
+        if let attachment = makePendingMemberToolAttachment(cards: [card]) {
+            await structuredHealthCardMergeCoordinator.mergeRichAttachmentsIntoStreamingCache(
+                threadID: threadID,
+                attachments: [attachment]
+            )
+        }
+
+        let deadline = Date().addingTimeInterval(40)
+        while Date() < deadline {
+            if let thread = await chatRepository.loadThread(id: threadID),
+               let memberID = thread.memberID,
+               memberID > 0 {
+                return memberID
+            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
         return nil
     }
 
@@ -1926,6 +2133,15 @@ final class ToolHub: @unchecked Sendable {
     private func makeTaskCardAttachments(cards: [TaskToolCardPayload]) -> [ChatAttachment] {
         guard cards.isEmpty == false, let data = try? JSONEncoder().encode(cards), let text = String(data: data, encoding: .utf8) else { return [] }
         return [ChatAttachment(type: .taskCards, text: text)]
+    }
+
+    private func makePendingMemberToolAttachment(cards: [PendingMemberToolCard]) -> ChatAttachment? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard cards.isEmpty == false,
+              let data = try? encoder.encode(cards),
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        return ChatAttachment(type: .pendingMemberToolCards, text: text)
     }
 
     /// 联网/地图/日历等外部工具：根据 `toolKeys` 解析 endpoint，当前仅返回路由占位说明。
