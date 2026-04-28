@@ -46,200 +46,8 @@ struct ChatMessageBubbleContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if shouldRenderErrorCard {
-                ChatMessageErrorCard(
-                    title: L10n.text("chat.error_card.title"),
-                    message: errorCardBodyText,
-                    retryTitle: L10n.text("chat.error_card.retry"),
-                    onRetry: onRetry
-                )
-            }
-
-            if message.role == .assistant {
-                let payloads = imagePayloads(from: message)
-                if payloads.isEmpty == false {
-                    ChatImageGalleryBlockView(
-                        images: payloads,
-                        style: .assistant,
-                        unifiedFilePreview: $unifiedFilePreview,
-                        downloadToLocalFile: onDownloadChatAttachmentToLocalFile
-                    )
-                }
-            }
-
-            if message.role == .assistant,
-               let reasoning = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
-               reasoning.isEmpty == false {
-                ChatReasoningBlockView(
-                    text: reasoning,
-                    timeText: formatReasoningTime(message.reasoningDurationMs),
-                    isStreaming: message.deliveryState == .sending,
-                    isLastAssistantMessage: isLastAssistantMessage
-                )
-            }
-
-            if message.role == .assistant,
-               let operational = operationalMeta(),
-               isLastAssistantMessage {
-                ChatOperationalStatusBlockView(
-                    operationalState: operational.state,
-                    operationalDescription: operational.description
-                )
-            }
-
-            if message.role == .assistant,
-               let tool = toolMeta() {
-                ChatToolContentBlockView(
-                    toolName: tool.name,
-                    toolContent: tool.content,
-                    isStreaming: message.deliveryState == .sending
-                )
-            }
-
-            if message.role == .assistant,
-               combinedKnowledgeCards.isEmpty == false {
-                ChatKnowledgeCardListView(
-                    cards: combinedKnowledgeCards,
-                    onSave: onSaveKnowledgeCard,
-                    isSaving: { card in
-                        savingKnowledgeCardIDs.contains(card.id)
-                    },
-                    isSaved: { card in
-                        savedKnowledgeCardIDs.contains(card.id)
-                    }
-                )
-            }
-
-            if message.role == .assistant,
-               let translatedText,
-               translatedText.isEmpty == false {
-                ChatTranslatedBlockView(text: translatedText)
-            }
-
-            if message.role == .assistant,
-               metadata.locations.isEmpty == false || metadata.routes.isEmpty == false {
-                ChatMapRouteBlockView(locations: metadata.locations, routes: metadata.routes)
-            }
-
-            if message.role == .assistant,
-               metadata.events.isEmpty == false {
-                ChatEventsCardListView(events: metadata.events)
-            }
-
-            if message.role == .assistant,
-               metadata.healthCards.isEmpty == false {
-                ChatHealthCardListView(cards: metadata.healthCards)
-            }
-            if message.role == .assistant,
-               metadata.pendingMemberToolCards.isEmpty == false {
-                ForEach(metadata.pendingMemberToolCards) { card in
-                    ChatPendingMemberToolCardView(
-                        card: card,
-                        memberContextStore: memberContextStore,
-                        onSelectMember: onPendingMemberToolSelect
-                    )
-                }
-            }
-            if message.role == .assistant,
-               let blob = metadata.structuredHealthCards,
-               blob.medications.isEmpty == false
-                || blob.prescriptions.isEmpty == false
-                || blob.examReports.isEmpty == false
-                || blob.medicalCases.isEmpty == false {
-                ChatStructuredHealthCardsBlockView(
-                    blob: blob,
-                    memberContextStore: memberContextStore,
-                    isSavingIDs: savingStructuredHealthCardIDs,
-                    onAction: onStructuredHealthCardAction
-                )
-            }
-            if message.role == .assistant,
-               let sleep = metadata.sleepVisualization {
-                ChatSleepVisualizationMessageCard(model: sleep)
-            }
-
-            if message.role == .assistant,
-               let captureCard = metadata.captureMessageCard {
-                ChatCaptureTypeMessageCard(
-                    cardType: captureCard.cardType,
-                    onOpenCamera: onCaptureOpenCamera,
-                    onOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
-                    onOpenFiles: onCaptureOpenFiles
-                )
-            }
-
-            if message.role == .assistant,
-               let htmlContent = metadata.htmlContent,
-               htmlContent.isEmpty == false {
-                ChatHTMLPreviewBlockView(htmlContent: htmlContent)
-            }
-
-            if message.role == .user {
-                if let smallTaskCard = metadata.smallTaskCard {
-                    ChatSmallTaskMessageCard(payload: smallTaskCard)
-                }
-
-                let payloads = imagePayloads(from: message)
-                if payloads.isEmpty == false {
-                    ChatImageGalleryBlockView(
-                        images: payloads,
-                        style: .user,
-                        unifiedFilePreview: $unifiedFilePreview,
-                        downloadToLocalFile: onDownloadChatAttachmentToLocalFile
-                    )
-                }
-            }
-
-            let fileAttachments = message.attachments.filter(\.isGenericFileAttachment)
-            if fileAttachments.isEmpty == false {
-                ChatFileAttachmentBlockView(
-                    unifiedFilePreview: $unifiedFilePreview,
-                    attachments: fileAttachments,
-                    role: message.role,
-                    cachedLocalURL: onCachedChatAttachmentLocalURL,
-                    downloadToLocalFile: onDownloadChatAttachmentToLocalFile
-                )
-            }
-
-            if shouldRenderMainMarkdown {
-                if isMathMode {
-                    Text(message.content)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    Markdown(message.content)
-                        .markdownTheme(.chatBubble(foreground: message.role == .user ? .white : .primary))
-                }
-            }
-
-            if message.deliveryState == .failed, shouldRenderErrorCard == false {
-                Button(action: onRetry) {
-                    Text(L10n.text("common.retry"))
-                        .font(.caption)
-                }
-            }
-
-//            if showActions {
-//                if message.role == .assistant, message.deliveryState == .sending {
-//                    EmptyView()
-//                } else {
-//                    actionButtonsHStack
-//                }
-//            }
-
-            if message.role == .assistant {
-                let cards = metadata.taskCards
-                if cards.isEmpty == false {
-                    ForEach(cards) { card in
-                        TaskCardCell(
-                            card: card,
-                            memberContextStore: memberContextStore,
-                            onAction: onTaskCardAction,
-                            isLoading: taskCardLoadingIDs.contains(card.id)
-                        )
-                    }
-                }
+            ForEach(effectiveBlocks) { block in
+                block.render(context: renderContext)
             }
         }
         .padding(.horizontal, 12)
@@ -251,7 +59,98 @@ struct ChatMessageBubbleContentView: View {
         .unifiedFilePreview(selection: $unifiedFilePreview)
     }
 
-    
+    private var renderContext: ChatRenderContext {
+        ChatRenderContext(
+            message: message,
+            isLastAssistantMessage: isLastAssistantMessage,
+            isMathMode: isMathMode,
+            taskCardLoadingIDs: taskCardLoadingIDs,
+            savingKnowledgeCardIDs: savingKnowledgeCardIDs,
+            savedKnowledgeCardIDs: savedKnowledgeCardIDs,
+            savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
+            memberContextStore: memberContextStore,
+            unifiedFilePreview: $unifiedFilePreview,
+            reasoningTimeText: formatReasoningTime(message.reasoningDurationMs),
+            errorCardBodyText: errorCardBodyText,
+            onRetry: onRetry,
+            onSaveKnowledgeCard: onSaveKnowledgeCard,
+            onTaskCardAction: onTaskCardAction,
+            onPendingMemberToolSelect: onPendingMemberToolSelect,
+            onStructuredHealthCardAction: onStructuredHealthCardAction,
+            onCaptureOpenCamera: onCaptureOpenCamera,
+            onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
+            onCaptureOpenFiles: onCaptureOpenFiles,
+            onCachedChatAttachmentLocalURL: onCachedChatAttachmentLocalURL,
+            onDownloadChatAttachmentToLocalFile: onDownloadChatAttachmentToLocalFile
+        )
+    }
+
+    /// 最终生效的消息块数组（动态计算：根据状态动态插入/移除/替换 UI 块）
+    /// 作用：根据消息发送状态、错误、翻译、知识库等条件，返回最终要渲染的 blocks
+    private var effectiveBlocks: [ChatMessageBlock] {
+        // 1. 先拿到原始消息的所有块
+        var blocks = message.blocks
+
+        // 2. 如果消息发送失败 + 需要显示错误卡片 → 在最前面插入【错误提示块】
+        if message.deliveryState == .failed, shouldRenderErrorCard {
+            blocks.insert(
+                ChatMessageBlock(kind: .error, text: errorCardBodyText, createdAt: message.createdAt, updatedAt: message.createdAt),
+                at: 0
+            )
+        }
+
+        // 3. 如果有合并后的知识库卡片 → 移除旧的知识卡片，追加新的
+        if combinedKnowledgeCards.isEmpty == false {
+            // 先删掉已有的知识卡片块
+            blocks.removeAll { $0.kind == .knowledgeCards }
+            // 追加最新合并后的知识卡片块
+            blocks.append(ChatMessageBlock(kind: .knowledgeCards, knowledgeCards: combinedKnowledgeCards, createdAt: message.createdAt, updatedAt: message.createdAt))
+        }
+
+        // 4. 如果有翻译文本 → 移除旧翻译块，追加新翻译块
+        if let translatedText, translatedText.isEmpty == false {
+            // 先删掉已有的翻译块
+            blocks.removeAll { $0.kind == .translatedText }
+            // 追加最新翻译文本
+            blocks.append(ChatMessageBlock(kind: .translatedText, text: translatedText, createdAt: message.createdAt, updatedAt: message.createdAt))
+        }
+
+        return blocks
+        // 5. 过滤工具块（去重）：
+        // 只保留【有 toolCallID 但没有对应展示块】的工具块，避免重复渲染
+//        return blocks.filter { block in
+//            // 非工具块直接保留
+//            guard block.kind == .tool else { return true }
+//            // 没有 toolCallID 的工具块直接保留
+//            guard let toolCallID = block.toolCallID, !toolCallID.isEmpty else { return true }
+//            // 如果已经有对应展示块了，就过滤掉这个原始工具块
+//            return !blocks.contains(where: {
+//                $0.toolCallID == toolCallID && Self.isToolPresentationBlock($0.kind)
+//            })
+//        }
+    }
+
+    private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
+        switch kind {
+        case .tool, .text, .reasoning, .error:
+            return false
+        case .imageGallery,
+                .fileAttachments,
+                .knowledgeCards,
+                .translatedText,
+                .mapRoute,
+                .events,
+                .healthCards,
+                .pendingMemberToolCards,
+                .structuredHealthCards,
+                .sleepVisualization,
+                .captureCard,
+                .html,
+                .smallTaskCard,
+                .taskCards:
+            return true
+        }
+    }
     var actionButtonsHStack: some View {
         
         HStack(spacing: 10) {
@@ -303,27 +202,6 @@ struct ChatMessageBubbleContentView: View {
         .foregroundStyle(.secondary)
         
     }
-    private var shouldRenderMainMarkdown: Bool {
-        if shouldRenderErrorCard {
-            return false
-        }
-        if message.role == .user {
-            if metadata.smallTaskCard != nil {
-                return false
-            }
-            let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty == false
-        }
-        guard message.role == .assistant else { return true }
-        guard message.kind == .tool else { return true }
-        let trimmedContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedContent.isEmpty == false else { return false }
-
-        let toolContent = metadata.toolContent ?? ""
-        if toolContent.isEmpty { return true }
-        return trimmedContent != toolContent
-    }
-
     private var shouldRenderErrorCard: Bool {
         message.deliveryState == .failed && message.role != .user
     }
@@ -340,32 +218,27 @@ struct ChatMessageBubbleContentView: View {
         return L10n.text("chat.error_card.generic_body")
     }
 
-    private func toolMeta() -> (name: String, content: String)? {
-        let name = metadata.toolName ?? ""
-        if metadata.captureMessageCard != nil,
-           name.lowercased().contains("show_custom_message_card") {
-            return nil
-        }
-        let rawContent = metadata.toolContent ?? ""
-        guard rawContent.isEmpty == false else { return nil }
-        return (
-            ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: name),
-            rawContent
-        )
-    }
-
-    private func operationalMeta() -> (state: String, description: String)? {
+    private var operationalMeta: (state: String, description: String)? {
         guard message.deliveryState == .sending else { return nil }
-        let storedState = metadata.operationalState ?? ""
-        let storedDesc = metadata.operationalDescription ?? ""
-        if storedState.isEmpty == false || storedDesc.isEmpty == false {
+        guard let toolBlock = message.blocks.last(where: { $0.kind == .tool }) else {
+            let storedState = metadata.operationalState?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let storedDesc = metadata.operationalDescription?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard storedState.isEmpty == false || storedDesc.isEmpty == false else { return nil }
             return (storedState, storedDesc)
         }
-        guard let tool = toolMeta() else { return nil }
-        return ChatToolRuntimeAttachmentBuilder.makeOperationalMeta(
-            toolName: metadata.toolName,
-            toolContent: tool.content
-        )
+
+        let toolName = toolBlock.toolName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let toolContent = toolBlock.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let meta = ChatToolRuntimeAttachmentBuilder.makeOperationalMeta(
+            toolName: toolName,
+            toolContent: toolContent
+        ) {
+            return meta
+        }
+
+        let displayName = ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: toolName)
+        let fallbackState = L10n.text("chat.bubble.tool.operating_prefix", fallback: "Using tool: ") + displayName
+        return (fallbackState, "")
     }
 
     private func formatReasoningTime(_ durationMs: Int64?) -> String? {
@@ -379,14 +252,9 @@ struct ChatMessageBubbleContentView: View {
         return String(format: "%dm %.1fs", minutes, remainSeconds)
     }
 
-    private func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
-        ChatImagePayloadBuilder.imagePayloads(from: message)
-    }
-    
-    
 }
 
-private struct ChatSmallTaskMessageCard: View {
+struct ChatSmallTaskMessageCard: View {
     let payload: ChatSmallTaskMessageCardPayload
 
     var body: some View {
@@ -422,7 +290,7 @@ private struct ChatSmallTaskMessageCard: View {
     }
 }
 
-private struct ChatMessageErrorCard: View {
+struct ChatMessageErrorCard: View {
     let title: String
     let message: String
     let retryTitle: String

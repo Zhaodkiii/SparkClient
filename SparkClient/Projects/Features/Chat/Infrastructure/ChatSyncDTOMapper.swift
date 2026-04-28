@@ -40,6 +40,7 @@ enum ChatSyncEngineDTOMapper: Sendable {
             kind: kind,
             content: remote.content,
             attachments: remote.attachments ?? [],
+            blocks: remote.blocks,
             reasoningContent: remote.reasoningContent,
             reasoningDurationMs: remote.reasoningDurationMs,
             reasoningExpanded: remote.reasoningExpanded ?? false,

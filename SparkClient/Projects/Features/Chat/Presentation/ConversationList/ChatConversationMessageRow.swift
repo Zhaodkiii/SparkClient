@@ -138,6 +138,14 @@ struct ChatConversationMessageRow: View {
     }
 
     private func toolMeta() -> (name: String, content: String)? {
+        if let block = message.blocks.last(where: { $0.kind == .tool }),
+           let rawContent = block.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           rawContent.isEmpty == false {
+            return (
+                ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: block.toolName),
+                rawContent
+            )
+        }
         let name = ChatMessageMetadata(message: message).toolName ?? ""
         let rawContent = ChatMessageMetadata(message: message).toolContent ?? ""
         guard rawContent.isEmpty == false else { return nil }
@@ -160,7 +168,8 @@ struct ChatConversationMessageRow: View {
     }
 
     private func knowledgeCards(from message: ChatMessage) -> [ChatKnowledgeCard] {
-        ChatMessageMetadata(message: message).knowledgeCards
+        let cards = message.blocks.flatMap(\.knowledgeCards)
+        return cards.isEmpty ? ChatMessageMetadata(message: message).knowledgeCards : cards
     }
 
     private func combinedKnowledgeCards(for message: ChatMessage, metadata: ChatMessageMetadata? = nil) -> [ChatKnowledgeCard] {
@@ -297,7 +306,11 @@ struct ChatConversationMessageRow: View {
 
     private func messageContainingTaskCard(cardID: Int) -> ChatMessage? {
         visibleMessages.first { message in
-            ChatMessageMetadata(message: message).taskCards.contains(where: { $0.id == cardID })
+            let cards = message.blocks.flatMap(\.taskCards)
+            if cards.contains(where: { $0.id == cardID }) {
+                return true
+            }
+            return ChatMessageMetadata(message: message).taskCards.contains(where: { $0.id == cardID })
         }
     }
 
@@ -344,6 +357,10 @@ struct ChatConversationMessageRow: View {
     private func translatedText(for message: ChatMessage, metadata: ChatMessageMetadata? = nil) -> String? {
         if let local = uiStateStore.translatedText(for: message.id), local.isEmpty == false {
             return local
+        }
+        if let blockText = message.blocks.last(where: { $0.kind == .translatedText })?.text,
+           blockText.isEmpty == false {
+            return blockText
         }
         let attachment = metadata?.translatedText ?? ChatMessageMetadata(message: message).translatedText
         return attachment?.isEmpty == false ? attachment : nil

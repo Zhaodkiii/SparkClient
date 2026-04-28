@@ -23,14 +23,19 @@ final class CoreDataStack: @unchecked Sendable {
         stateQueue.sync { containerStorage.viewContext }
     }
 
-    init(inMemory: Bool = false, logger: Logger = ConsoleLogger()) {
+    init(
+        inMemory: Bool = false,
+        modelName: String = "SparkClient",
+        storeURL: URL? = nil,
+        logger: Logger = ConsoleLogger()
+    ) {
         self.logger = logger
         self.inMemory = inMemory
-        self.modelName = "SparkClient"
+        self.modelName = modelName
         let bootContainer = Self.makeContainer(
             modelName: modelName,
             inMemory: inMemory,
-            storeURL: Self.defaultStoreURL()
+            storeURL: storeURL ?? Self.defaultStoreURL()
         )
         self.containerStorage = bootContainer
     }
@@ -102,7 +107,11 @@ final class CoreDataStack: @unchecked Sendable {
             .appendingPathComponent("CoreData", isDirectory: true)
     }
 
+    static func isolatedStoreURL(fileName: String) -> URL {
+        baseStoreDirectory().appendingPathComponent(fileName)
+    }
+
     private static func defaultStoreURL() -> URL {
-        baseStoreDirectory().appendingPathComponent("SparkClient.sqlite")
+        isolatedStoreURL(fileName: "SparkClient.sqlite")
     }
 }

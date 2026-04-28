@@ -3,7 +3,7 @@ import UIKit
 
 /// UIKit 承载的会话消息列表：`DiffableDataSource` 增量更新 + 底部锚定 + 键盘 inset。
 @MainActor
-final class ConversationMessageListViewController: UIViewController, UICollectionViewDelegate {
+final class ConversationMessageListViewController: UIViewController, UICollectionViewDelegate, UIGestureRecognizerDelegate {
     private struct ScrollAnchor {
         let itemID: UUID
         let offsetFromTop: CGFloat
@@ -17,8 +17,12 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     private var hasUserInteractedSinceThreadOpen = false
     private var bottomViewportLockActive = false
     private var lastLockedContentHeight: CGFloat = 0
+    private var lastKnownViewportHeight: CGFloat = 0
+    private var shouldMaintainBottomOnNextLayout = false
     private var lastAppliedMessageIDs: [UUID] = []
     private var lastRenderedMessages: [ChatMessage] = []
+    private var keyboardObservers: [NSObjectProtocol] = []
+    private weak var backgroundTapGestureRecognizer: UITapGestureRecognizer?
 
     weak var stateStore: ChatStateStore?
     weak var detailViewModel: ChatDetailViewModel?
@@ -58,7 +62,20 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         cv.refreshControl = refresh
         refreshControl = refresh
 
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleBackgroundTap(_:)))
+        tapGesture.cancelsTouchesInView = false
+        tapGesture.delegate = self
+        cv.addGestureRecognizer(tapGesture)
+        backgroundTapGestureRecognizer = tapGesture
+
+        registerForKeyboardNotifications()
         configureDataSource()
+    }
+
+    deinit {
+        for observer in keyboardObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func resetForNewThread() {
@@ -69,10 +86,20 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         hasUserInteractedSinceThreadOpen = false
         bottomViewportLockActive = false
         lastLockedContentHeight = 0
+        lastKnownViewportHeight = 0
+        shouldMaintainBottomOnNextLayout = false
     }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        let viewportHeight = currentViewportHeight()
+        let viewportChanged = abs(viewportHeight - lastKnownViewportHeight) > 0.5
+        lastKnownViewportHeight = viewportHeight
+        if viewportChanged, shouldMaintainBottomOnNextLayout {
+            shouldMaintainBottomOnNextLayout = false
+            lastLockedContentHeight = collectionView.collectionViewLayout.collectionViewContentSize.height
+            scrollToBottom(animated: false, force: true)
+        }
         maintainBottomViewportLockIfNeeded()
     }
 
@@ -195,6 +222,49 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         scrollToBottom(animated: false, force: true)
     }
 
+    private func currentViewportHeight() -> CGFloat {
+        let visibleHeight = collectionView.bounds.height
+            - collectionView.adjustedContentInset.top
+            - collectionView.adjustedContentInset.bottom
+        return max(0, visibleHeight)
+    }
+
+    private func registerForKeyboardNotifications() {
+        let center = NotificationCenter.default
+        keyboardObservers = [
+            center.addObserver(
+                forName: UIResponder.keyboardWillChangeFrameNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.prepareForKeyboardViewportChange()
+            },
+            center.addObserver(
+                forName: UIResponder.keyboardWillHideNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.prepareForKeyboardViewportChange()
+            }
+        ]
+    }
+
+    private func prepareForKeyboardViewportChange() {
+        guard let collectionView else { return }
+        if bottomViewportLockActive || ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView) {
+            shouldMaintainBottomOnNextLayout = true
+        }
+    }
+
+    @objc private func handleBackgroundTap(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended, view.window != nil, isKeyboardVisible else { return }
+        KeyboardDismissHelper.dismissKeyboard()
+    }
+
+    private var isKeyboardVisible: Bool {
+        view.window?.firstResponder != nil
+    }
+
     // MARK: - UICollectionViewDelegate
 
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -223,6 +293,11 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         if item == ConversationListLayoutConstants.loadMoreRowUUID {
             onLoadMore?()
         }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === backgroundTapGestureRecognizer, isKeyboardVisible else { return false }
+        return touch.view?.enclosingKeyboardDismissExemptView == nil
     }
 
     // MARK: - Layout & data source
@@ -294,6 +369,32 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                 Color.clear.frame(height: 1)
             }
         }
+    }
+}
+
+private extension UIView {
+    var enclosingKeyboardDismissExemptView: UIView? {
+        sequence(first: self, next: \.superview).first {
+            $0 is UIControl || $0 is UITextField || $0 is UITextView
+        }
+    }
+}
+
+private extension UIWindow {
+    var firstResponder: UIResponder? {
+        firstResponder(in: self)
+    }
+
+    func firstResponder(in root: UIView) -> UIResponder? {
+        if root.isFirstResponder {
+            return root
+        }
+        for subview in root.subviews {
+            if let responder = firstResponder(in: subview) {
+                return responder
+            }
+        }
+        return nil
     }
 }
 

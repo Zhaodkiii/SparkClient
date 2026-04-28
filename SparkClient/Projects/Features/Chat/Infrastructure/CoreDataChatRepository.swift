@@ -62,6 +62,7 @@ actor CoreDataChatRepository: ChatRepository {
         kind: ChatMessageKind,
         content: String,
         attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock]?,
         reasoningContent: String?,
         reasoningDurationMs: Int64?,
         reasoningExpanded: Bool,
@@ -77,6 +78,7 @@ actor CoreDataChatRepository: ChatRepository {
             kind: kind,
             content: content,
             attachments: attachments,
+            blocks: blocks,
             reasoningContent: reasoningContent,
             reasoningDurationMs: reasoningDurationMs,
             reasoningExpanded: reasoningExpanded,
@@ -108,11 +110,26 @@ actor CoreDataChatRepository: ChatRepository {
         )
     }
 
+    func updateMessagePresentation(
+        clientMessageID: UUID,
+        attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock],
+        markPendingForSync: Bool
+    ) async {
+        await store.updateMessagePresentation(
+            clientMessageID: clientMessageID,
+            attachments: attachments,
+            blocks: blocks,
+            markPendingForSync: markPendingForSync
+        )
+    }
+
     func updateMessageContentAndAttachments(
         clientMessageID: UUID,
         content: String,
         kind: ChatMessageKind,
         attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock]?,
         reasoningContent: String?,
         reasoningDurationMs: Int64?,
         markPendingForSync: Bool
@@ -122,6 +139,7 @@ actor CoreDataChatRepository: ChatRepository {
             content: content,
             kind: kind,
             attachments: attachments,
+            blocks: blocks,
             reasoningContent: reasoningContent,
             reasoningDurationMs: reasoningDurationMs,
             markPendingForSync: markPendingForSync

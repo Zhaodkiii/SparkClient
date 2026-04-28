@@ -8,6 +8,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     /// 消息结构化附件（工具结果、知识卡、地图/路线、事件、健康卡等）。
     /// 该字段是“AI 工具结果可重建 UI”的核心数据载体。
     let attachments: [ChatAttachment]?
+    let blocks: [ChatMessageBlock]?
     let clientMessageID: UUID
     let serverMessageID: String?
     let deliveryState: String
@@ -33,6 +34,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case kind
         case content
         case attachments
+        case blocks
         case clientMessageID = "client_message_id"
         case serverMessageID = "server_message_id"
         case deliveryState = "delivery_state"
@@ -59,6 +61,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         kind: String,
         content: String,
         attachments: [ChatAttachment]? = nil,
+        blocks: [ChatMessageBlock]? = nil,
         clientMessageID: UUID,
         serverMessageID: String?,
         deliveryState: String,
@@ -83,6 +86,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.kind = kind
         self.content = content
         self.attachments = attachments
+        self.blocks = blocks
         self.clientMessageID = clientMessageID
         self.serverMessageID = serverMessageID
         self.deliveryState = deliveryState
@@ -110,6 +114,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         kind = try c.decode(String.self, forKey: .kind)
         content = try c.decode(String.self, forKey: .content)
         attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .attachments)
+        blocks = try c.decodeIfPresent([ChatMessageBlock].self, forKey: .blocks)
         clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
         serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
         deliveryState = try c.decode(String.self, forKey: .deliveryState)
@@ -139,6 +144,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encode(kind, forKey: .kind)
         try c.encode(content, forKey: .content)
         try c.encodeIfPresent(attachments, forKey: .attachments)
+        try c.encodeIfPresent(blocks, forKey: .blocks)
         try c.encode(clientMessageID, forKey: .clientMessageID)
         try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
         try c.encode(deliveryState, forKey: .deliveryState)

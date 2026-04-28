@@ -41,6 +41,10 @@ struct ChatAttachment: Equatable, Sendable {
     let type: ChatAttachmentType
     let url: URL?
     let text: String?
+    /// 将附件锚定到某次 tool call 之后，用于在同一条消息内插入卡片。
+    let anchorToolCallID: String?
+    /// 将附件锚定到某个具体 block（可选）。
+    let anchorBlockID: UUID?
     /// 文件服务登记后的 `file_id`（可选）。
     let fileId: Int?
     /// 与 ``FileCacheManager`` 布局一致的缓存键：`{fileUUID小写}/{原始文件名}`。
@@ -53,6 +57,8 @@ struct ChatAttachment: Equatable, Sendable {
         type: ChatAttachmentType,
         url: URL? = nil,
         text: String? = nil,
+        anchorToolCallID: String? = nil,
+        anchorBlockID: UUID? = nil,
         fileId: Int? = nil,
         fullCacheKey: String? = nil,
         fileMd5: String? = nil
@@ -61,6 +67,8 @@ struct ChatAttachment: Equatable, Sendable {
         self.type = type
         self.url = url
         self.text = text
+        self.anchorToolCallID = anchorToolCallID
+        self.anchorBlockID = anchorBlockID
         self.fileId = fileId
         self.fullCacheKey = fullCacheKey
         self.fileMd5 = fileMd5
@@ -108,6 +116,8 @@ struct ChatAttachment: Equatable, Sendable {
             type: type,
             url: url,
             text: newText,
+            anchorToolCallID: anchorToolCallID,
+            anchorBlockID: anchorBlockID,
             fileId: fileId,
             fullCacheKey: fullCacheKey,
             fileMd5: fileMd5
@@ -118,6 +128,8 @@ struct ChatAttachment: Equatable, Sendable {
         type: ChatAttachmentType? = nil,
         url: URL? = nil,
         text: String? = nil,
+        anchorToolCallID: String? = nil,
+        anchorBlockID: UUID? = nil,
         fullCacheKey: String? = nil,
         fileMd5: String? = nil
     ) -> ChatAttachment {
@@ -126,6 +138,8 @@ struct ChatAttachment: Equatable, Sendable {
             type: type ?? self.type,
             url: url ?? self.url,
             text: text ?? self.text,
+            anchorToolCallID: anchorToolCallID ?? self.anchorToolCallID,
+            anchorBlockID: anchorBlockID ?? self.anchorBlockID,
             fileId: fileId,
             fullCacheKey: fullCacheKey ?? self.fullCacheKey,
             fileMd5: fileMd5 ?? self.fileMd5
@@ -167,9 +181,13 @@ extension ChatAttachment: Codable {
         case type
         case url
         case text
+        case anchorToolCallID
+        case anchorBlockID
         case fileId
         case fullCacheKey
         case fileMd5
+        case anchorToolCallIDSnake = "anchor_tool_call_id"
+        case anchorBlockIDSnake = "anchor_block_id"
         case fileIdSnake = "file_id"
         case fullCacheKeySnake = "full_cache_key"
         case fileMd5Snake = "file_md5"
@@ -181,6 +199,10 @@ extension ChatAttachment: Codable {
         type = try c.decode(ChatAttachmentType.self, forKey: .type)
         url = try c.decodeIfPresent(URL.self, forKey: .url)
         text = try c.decodeIfPresent(String.self, forKey: .text)
+        anchorToolCallID = try c.decodeIfPresent(String.self, forKey: .anchorToolCallID)
+            ?? c.decodeIfPresent(String.self, forKey: .anchorToolCallIDSnake)
+        anchorBlockID = try c.decodeIfPresent(UUID.self, forKey: .anchorBlockID)
+            ?? c.decodeIfPresent(UUID.self, forKey: .anchorBlockIDSnake)
         fileId = try c.decodeIfPresent(Int.self, forKey: .fileId)
             ?? c.decodeIfPresent(Int.self, forKey: .fileIdSnake)
         fullCacheKey = try c.decodeIfPresent(String.self, forKey: .fullCacheKey)
@@ -195,6 +217,8 @@ extension ChatAttachment: Codable {
         try c.encode(type, forKey: .type)
         try c.encodeIfPresent(url, forKey: .url)
         try c.encodeIfPresent(text, forKey: .text)
+        try c.encodeIfPresent(anchorToolCallID, forKey: .anchorToolCallID)
+        try c.encodeIfPresent(anchorBlockID, forKey: .anchorBlockID)
         try c.encodeIfPresent(fileId, forKey: .fileId)
         try c.encodeIfPresent(fullCacheKey, forKey: .fullCacheKey)
         try c.encodeIfPresent(fileMd5, forKey: .fileMd5)

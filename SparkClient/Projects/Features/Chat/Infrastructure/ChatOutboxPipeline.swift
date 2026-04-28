@@ -89,6 +89,7 @@ struct ChatOutboxPipeline: Sendable {
                     kind: message.kind.rawValue,
                     content: message.content,
                     attachments: message.attachments,
+                    blocks: message.blocks,
                     clientMessageID: message.clientMessageID,
                     serverMessageID: message.serverMessageID,
                     deliveryState: message.deliveryState.rawValue,

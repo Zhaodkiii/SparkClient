@@ -16,6 +16,27 @@ struct SmallTaskEditorView: View {
     @State private var showTextInputDrawer = false
     @State private var showVoiceInput = false
 
+    init(
+        task: SmallTask?,
+        nextID: Int,
+        promptTooling: AISettingsPromptTooling = .unavailable,
+        onSave: @escaping (SmallTask) -> Void
+    ) {
+        self.task = task
+        self.nextID = nextID
+        self.promptTooling = promptTooling
+        self.onSave = onSave
+
+        _name = State(initialValue: task?.name ?? "")
+        _brief = State(initialValue: task?.brief ?? "")
+        _prompt = State(initialValue: task?.prompt ?? "")
+        _icon = State(initialValue: {
+            let icon = task?.icon ?? ""
+            return icon.isEmpty ? "checklist" : icon
+        }())
+        _selectedToolNames = State(initialValue: Set(task?.toolList ?? []).intersection(Set(SparkToolName.all)))
+    }
+
     var body: some View {
         Form {
             Section(L10n.text("ai_settings.small_tasks.section.icon", fallback: "Icon", comment: "Small task icon section")) {
@@ -98,14 +119,6 @@ struct SmallTaskEditorView: View {
                 isPresented: $showVoiceInput
             )
             .sparkInputPresentationChromeIfAvailable()
-        }
-        .onAppear {
-            guard let task else { return }
-            name = task.name
-            brief = task.brief
-            prompt = task.prompt
-            icon = task.icon.isEmpty ? "checklist" : task.icon
-            selectedToolNames = Set(task.toolList).intersection(Set(SparkToolName.all))
         }
     }
 

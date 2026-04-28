@@ -111,7 +111,7 @@ final class ChatDetailViewModel: ObservableObject {
                     }
                 }
                 let streaming = self.stateStore.isStreamingAssistantActive(for: threadID)
-                let delay: UInt64 = streaming ? 220 : 120
+                let delay: UInt64 = streaming ? 1000 : 120
                 self.chatLoadCoordinator.schedule(delayMs: delay) { [weak self] in
                     guard let self else { return }
                     await self.loadMessagesIfNeeded(for: threadID, skipRemoteSync: true)
@@ -591,16 +591,25 @@ final class ChatDetailViewModel: ObservableObject {
         appendCancellationNoticeIfNeeded(threadID: threadID)
     }
 
+    /// 发送当前编辑框的草稿消息（主入口函数）
     func sendCurrentDraft(smallTask: SmallTask? = nil) async {
+        // 防止重复发送：如果正在发送中，直接返回
         guard stateStore.isSending == false else { return }
+        // 必须选中对话线程，否则无法发送
         guard let threadID = stateStore.selectedThreadID else { return }
 
+        // 获取当前编辑框的草稿内容
         let composer = stateStore.composerDraft(for: threadID)
+        // 必须有内容 或 有任务，才允许发送
         guard composer.hasVisualContent || smallTask != nil else { return }
+        // 附件还在准备中，阻塞发送
         guard stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false else { return }
 
+        // 清理文本首尾空白换行
         let draft = composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 获取发送时的功能开关（工具、联网、知识库、推理等）
         let flags = composer.runtimeFlags
+        // 构造AI推理选项
         let inference = ChatOrchestratorInferenceOptions(
             useTools: flags.useTools,
             useKnowledgeBag: flags.useKnowledgeBag,
@@ -609,16 +618,25 @@ final class ChatDetailViewModel: ObservableObject {
             reasoningEffortTier: flags.reasoningEffortTier
         )
 
+        // 日志：开始发送对话
         logger.info(
             "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), textLen=\(draft.count), attachments=\(composer.attachments.count)",
             module: .general
         )
+        
+        // MARK: - 核心：创建取消令牌，用于中断本次AI生成
         let cancellationToken = AIRuntimeCancellationToken()
         currentGenerationCancellationToken = cancellationToken
+        // 生成流式消息唯一ID
         let streamingMessageID = UUID()
+        // 清理中断相关标记
         cancellationNoticeThreadIDs.remove(threadID)
         finalizedInterruptedAssistantMessageIDs.remove(streamingMessageID)
+        
+        // MARK: - 状态标记：正在发送
         stateStore.setSending(true)
+        
+        // MARK: - 无论成功失败，最后都要重置发送状态（ defer 最终一定会执行）
         defer {
             stateStore.setSending(false)
             if currentGenerationCancellationToken === cancellationToken {
@@ -628,17 +646,26 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         do {
+            // 清除运行时配置覆盖
             await aiConfigCenter.clearRuntimeOverride(for: .chat)
+            // 获取当前模型推理配置
             let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
                 .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
+            
+            // 清空附件上传进度
             let stateStore = self.stateStore
             stateStore.clearComposerAttachmentUploadProgress()
+            
+            // MARK: - 开始流式输出助手消息（界面显示加载/打字效果）
             stateStore.startStreamingAssistant(
                 threadID: threadID,
                 clientMessageID: streamingMessageID,
                 kind: .text
             )
+            
             let loadChatThreadsUseCase = self.loadChatThreadsUseCase
+            
+            // MARK: - 核心执行：发送消息到后端，处理流式返回
             let snapshot = try await sendMessageUseCase.execute(
                 threadID: threadID,
                 memberID: memberContextStore.context.selectedMemberID,
@@ -651,53 +678,75 @@ final class ChatDetailViewModel: ObservableObject {
                 modelReasoning: modelReasoning,
                 smallTask: smallTask,
                 cancellationToken: cancellationToken,
+                
+                // 图片上传进度回调 → 更新UI
                 onImageUploadProgress: { id, progress in
                     Task { @MainActor in
                         stateStore.setComposerAttachmentUploadProgress(id: id, progress: progress)
                     }
                 },
+                
+                // 用户消息已持久化回调 → 更新界面消息列表
                 onUserMessagePersisted: { localSnapshot in
                     let listItem = await loadChatThreadsUseCase.execute(threadID: localSnapshot.thread.id)
                     await MainActor.run {
                         stateStore.setSelectedThreadID(localSnapshot.thread.id)
-                        // 保留流式占位：setMessages 默认会清空 streamingAssistants，会导致后续 onAssistantPartial 全部失效。
+                        // 不清空流式占位，保证打字效果不中断
                         stateStore.setMessages(localSnapshot.messages, for: localSnapshot.thread.id, clearStreamingAssistant: false)
                         if let listItem {
                             stateStore.upsertThreadListItem(listItem)
                         }
+                        // 清空发送成功的草稿
                         stateStore.clearDraft(for: localSnapshot.thread.id)
                     }
                 },
+                
+                // 助手流式返回片段 → 实时追加到界面
                 onAssistantPartial: { delta in
                     await MainActor.run {
                         stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
                     }
                 }
             )
+
+            // MARK: - 发送完成：刷新线程列表
             if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
                 stateStore.upsertThreadListItem(finalRow)
             }
+            
+            // 保存流式产生的附件
             await persistStreamingAttachmentsIfNeeded(
                 threadID: snapshot.thread.id,
                 assistantClientMessageID: streamingMessageID
             )
+            
+            // 加载最终完整消息
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
+            // 清空草稿、清除错误
             stateStore.clearDraft(for: snapshot.thread.id)
             stateStore.setError(nil, for: snapshot.thread.id)
+            
+            // 日志：发送成功
             logger.info(
                 "发送对话完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
                 module: .general
             )
-        } catch is CancellationError {
+            
+        }
+        // MARK: - 用户主动取消发送
+        catch is CancellationError {
             persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.cancel.catch")
             stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
             appendCancellationNoticeIfNeeded(threadID: threadID)
             logger.info("发送对话已中断，thread=\(shortID(threadID))", module: .general)
-        } catch {
+        }
+        // MARK: - 发送失败（网络/服务异常）
+        catch {
             stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
+            // 显示错误卡片
             if shouldRenderAssistantErrorCard(for: error) {
                 appendAssistantErrorMessage(
                     threadID: threadID,
@@ -706,6 +755,7 @@ final class ChatDetailViewModel: ObservableObject {
                 )
             }
             logger.error("发送对话失败：\(error.localizedDescription)", module: .general)
+            // 弹出系统错误提示
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.send")
         }
     }
@@ -758,6 +808,41 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.setError(error.localizedDescription)
             logger.error("手动聊天同步失败：\(error.localizedDescription)", module: .general)
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.sync")
+        }
+    }
+
+    /// 清空指定会话的所有历史消息，保留会话本身与参数配置。
+    func clearMessages(for threadID: UUID) async {
+        let messages = await loadChatMessagesUseCase.execute(threadID: threadID, limit: nil, before: nil)
+        guard messages.isEmpty == false else {
+            await MainActor.run {
+                stateStore.setMessages([], for: threadID, hasMore: false)
+                stateStore.clearDraft(for: threadID)
+                stateStore.setError(nil, for: threadID)
+            }
+            return
+        }
+
+        for message in messages {
+            await chatRepository.softDeleteMessage(clientMessageID: message.clientMessageID)
+        }
+
+        let refreshedMessages = await loadChatMessagesUseCase.execute(threadID: threadID, limit: nil, before: nil)
+        await MainActor.run {
+            stateStore.setMessages(refreshedMessages, for: threadID, hasMore: false)
+            stateStore.clearDraft(for: threadID)
+            stateStore.setError(nil, for: threadID)
+        }
+        if let listItem = await loadChatThreadsUseCase.execute(threadID: threadID) {
+            await MainActor.run {
+                stateStore.upsertThreadListItem(listItem)
+            }
+        }
+
+        do {
+            try await syncChatUseCase.pushOutboxOnly()
+        } catch {
+            logger.warning("清空聊天记录后上送失败，稍后重试：\(error.localizedDescription)", module: .general)
         }
     }
 
@@ -895,27 +980,37 @@ final class ChatDetailViewModel: ObservableObject {
         assistantClientMessageID: UUID
     ) async {
         guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID),
-              streaming.attachments.isEmpty == false else { return }
+              streaming.attachments.isEmpty == false || streaming.blocks.isEmpty == false else { return }
         let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
         guard let target = messages.last(where: { $0.clientMessageID == assistantClientMessageID }) else { return }
         let merged = mergeAttachments(base: target.attachments, overlay: streaming.attachments)
-        guard merged != target.attachments else { return }
+        let mergedBlocks = ChatMessageBlockBuilder.mergeRichBlocks(
+            existingBlocks: target.blocks,
+            incomingBlocks: streaming.blocks
+        )
+        guard merged != target.attachments || mergedBlocks != target.blocks else { return }
         await updateChatMessageAttachmentsUseCase.execute(
             clientMessageID: assistantClientMessageID,
             attachments: merged,
+            blocks: mergedBlocks,
             markPendingForSync: true
         )
-        stateStore.updateMessageAttachments(
+        stateStore.updateMessagePresentation(
             threadID: threadID,
             clientMessageID: assistantClientMessageID,
-            attachments: merged
+            attachments: merged,
+            blocks: mergedBlocks
         )
     }
 
     private func mergeAttachments(base: [ChatAttachment], overlay: [ChatAttachment]) -> [ChatAttachment] {
         var merged = base
         for attachment in overlay {
-            if let index = merged.firstIndex(where: { $0.type == attachment.type }) {
+            if let index = merged.firstIndex(where: {
+                $0.type == attachment.type
+                    && $0.anchorToolCallID == attachment.anchorToolCallID
+                    && $0.anchorBlockID == attachment.anchorBlockID
+            }) {
                 merged[index] = attachment
             } else {
                 merged.append(attachment)
@@ -978,6 +1073,7 @@ final class ChatDetailViewModel: ObservableObject {
                     kind: finalized.kind,
                     content: finalized.content,
                     attachments: finalized.attachments,
+                    blocks: finalized.blocks,
                     reasoningContent: finalized.reasoningContent,
                     reasoningDurationMs: finalized.reasoningDurationMs,
                     reasoningExpanded: finalized.reasoningExpanded,
@@ -1065,6 +1161,7 @@ final class ChatDetailViewModel: ObservableObject {
                     kind: kind,
                     content: content,
                     attachments: [],
+                    blocks: nil,
                     reasoningContent: nil,
                     reasoningDurationMs: nil,
                     reasoningExpanded: false,
@@ -1404,21 +1501,24 @@ final class ChatDetailViewModel: ObservableObject {
         cardID: UUID,
         mutate: (inout PendingMemberToolCard) -> Void
     ) -> [ChatAttachment]? {
-        guard let index = attachments.firstIndex(where: { $0.type == .pendingMemberToolCards }),
-              let raw = attachments[index].text,
-              let data = raw.data(using: .utf8) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        guard var cards = try? decoder.decode([PendingMemberToolCard].self, from: data),
-              let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { return nil }
-        mutate(&cards[cardIndex])
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let encoded = try? encoder.encode(cards),
-              let text = String(data: encoded, encoding: .utf8) else { return nil }
-        var next = attachments
-        next[index] = attachments[index].withText(text)
-        return next
+        for (index, attachment) in attachments.enumerated() {
+            guard attachment.type == .pendingMemberToolCards,
+                  let raw = attachment.text,
+                  let data = raw.data(using: .utf8),
+                  var cards = try? decoder.decode([PendingMemberToolCard].self, from: data),
+                  let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+            mutate(&cards[cardIndex])
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            guard let encoded = try? encoder.encode(cards),
+                  let text = String(data: encoded, encoding: .utf8) else { return nil }
+            var next = attachments
+            next[index] = attachment.withText(text)
+            return next
+        }
+        return nil
     }
 
     // MARK: - 对话内结构化医疗卡片保存

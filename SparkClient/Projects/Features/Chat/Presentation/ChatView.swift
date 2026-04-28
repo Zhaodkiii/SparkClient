@@ -26,6 +26,7 @@ struct ChatView: View {
     @State private var selectedTextSheet: ChatSelectableTextPayload?
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showCaptureFileImporter = false
+    @State private var showClearChatConfirmation = false
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
@@ -232,6 +233,40 @@ struct ChatView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
+                        Menu("聊天记录管理", systemImage: "bubble.left.and.bubble.right") {
+                            Button {
+                                presentParameterCard(.imageDeliveryMode)
+                            } label: {
+                                Label("图片送达方式", systemImage: "photo.on.rectangle.angled")
+                            }
+                            Button {
+                                presentParameterCard(.maxMessages)
+                            } label: {
+                                Label("上下文折叠", systemImage: "rectangle.compress.vertical")
+                            }
+                            Button {
+                                exportChatRecordsToDebugLog()
+                            } label: {
+                                Label("导出聊天记录", systemImage: "square.and.arrow.up")
+                            }
+                            Button {
+                                logger.warning("聊天记录导入暂未接入，thread=\(threadID.uuidString)", module: .general)
+                            } label: {
+                                Label("导入聊天记录", systemImage: "square.and.arrow.down")
+                            }
+                            Button(role: .destructive) {
+                                showClearChatConfirmation = true
+                            } label: {
+                                Label("清空聊天记录", systemImage: "eraser.line.dashed")
+                            }
+                        }
+                        Divider()
+                        Button {
+                            logDebugInfo()
+                        } label: {
+                            Label("打印调试信息", systemImage: "doc.text.magnifyingglass")
+                        }
+                        Divider()
                         Picker(L10n.text("chat.composer.style.title"), selection: $composerStyleRaw) {
                             Text(L10n.text("chat.composer.style.signal")).tag(ChatComposerStyle.signal.rawValue)
                             Text(L10n.text("chat.composer.style.hanlin")).tag(ChatComposerStyle.hanlin.rawValue)
@@ -307,6 +342,14 @@ struct ChatView: View {
             }
             .onDisappear {
                 Task { await detailViewModel.chatPageDidDisappear() }
+            }
+            .alert("确认清空聊天记录？", isPresented: $showClearChatConfirmation) {
+                Button("取消", role: .cancel) {}
+                Button("清空", role: .destructive) {
+                    Task { await detailViewModel.clearMessages(for: threadID) }
+                }
+            } message: {
+                Text("仅清空当前会话消息，保留会话参数设置。")
             }
     }
 
@@ -558,5 +601,78 @@ struct ChatView: View {
         Task {
             await detailViewModel.updateThreadGenerationSettings(next, for: threadID)
         }
+    }
+
+    private func exportChatRecordsToDebugLog() {
+        logDebugInfo()
+    }
+
+    private func logDebugInfo() {
+        let messages = stateStore.selectedMessages
+        let userMessages = messages.filter { $0.role == .user }.count
+        let assistantMessages = messages.filter { $0.role == .assistant }.count
+        let thread = stateStore.selectedThread
+        let modelName = thread?.currentModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selectedModel = (modelName?.isEmpty == false) ? modelName! : "未设置"
+        let summary = """
+        ChatView 对话调试信息:
+        - ThreadID: \(threadID.uuidString)
+        - 标题: \(thread?.listDisplayTitle ?? L10n.text("chat.default_thread_title"))
+        - 选择模型: \(selectedModel)
+        - 消息总数: \(messages.count) (用户: \(userMessages), 助手: \(assistantMessages))
+        - 参数: temperature=\(thread?.temperature ?? 0), topP=\(thread?.topP ?? 0), maxTokens=\(thread?.maxTokens ?? 0), maxMessages=\(thread?.maxMessages ?? 0)
+        - 图片送达方式(本会话): \(thread?.imageDeliveryMode.rawValue ?? "-")
+        - 是否正在发送: \(stateStore.isSending)
+        - 最后错误: \(stateStore.errorMessage(for: threadID) ?? "无")
+        """
+        logger.debug(summary, module: .general)
+
+        let iso = ISO8601DateFormatter()
+        let sortedMessages = messages.sorted { $0.createdAt < $1.createdAt }
+        let payload: [[String: Any]] = sortedMessages.map { message in
+            var row: [String: Any] = [
+                "id": message.id.uuidString,
+                "client_message_id": message.clientMessageID.uuidString,
+                "role": message.role.rawValue,
+                "kind": message.kind.rawValue,
+                "delivery_state": message.deliveryState.rawValue,
+                "created_at": iso.string(from: message.createdAt),
+                "content_preview": String(message.content.prefix(300)),
+                "attachments_count": message.attachments.count,
+                "blocks_count": message.blocks.count
+            ]
+            if let attachmentsObject = encodableToJSONObject(message.attachments) {
+                row["attachments"] = attachmentsObject
+            }
+            if let blocksObject = encodableToJSONObject(message.blocks) {
+                row["blocks"] = blocksObject
+            }
+            if let reasoning = message.reasoningContent, reasoning.isEmpty == false {
+                row["reasoning_preview"] = String(reasoning.suffix(200))
+            }
+            if let model = message.modelName, model.isEmpty == false {
+                row["model_name"] = model
+            }
+            return row
+        }
+        let exportData: [String: Any] = [
+            "thread_id": threadID.uuidString,
+            "title": thread?.listDisplayTitle ?? "",
+            "debug_time": iso.string(from: Date()),
+            "messages": payload
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: exportData, options: [.prettyPrinted]),
+           let json = String(data: data, encoding: .utf8) {
+            logger.debug("ChatView 对话内容 JSON:\n\(json)", module: .general)
+        } else {
+            logger.warning("ChatView 对话内容序列化为 JSON 失败", module: .general)
+        }
+    }
+
+    private func encodableToJSONObject<T: Encodable>(_ value: T) -> Any? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(value) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
     }
 }

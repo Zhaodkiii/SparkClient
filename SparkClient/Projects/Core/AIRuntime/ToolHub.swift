@@ -692,11 +692,14 @@ final class ToolHub: @unchecked Sendable {
             if let threadID = context.threadID,
                let assistantID = context.assistantMessageClientID {
                 let merge = structuredHealthCardMergeCoordinator
+                let normalizedToolCallID = context.pendingToolCallID?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 Task {
                     await merge.insertHealthSleepVisualizationWhenAssistantMessageReady(
                         threadID: threadID,
                         assistantClientMessageID: assistantID,
-                        model: model
+                        model: model,
+                        anchorToolCallID: normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil
                     )
                 }
             }
@@ -1612,16 +1615,29 @@ final class ToolHub: @unchecked Sendable {
         )
         let titleLine = makeTaskTitle(extracted: extracted, type: taskType)
         let userFacing = "已根据描述生成 1 条待确认任务「\(titleLine)」。请在消息内任务卡片中确认或忽略。"
-        let cardRich = makeTaskCardAttachments(cards: [card])
-        return returnWithScheduledRichMerge(
-            context: context,
-            result: ToolExecutionResult(
-                toolName: SparkToolName.generateTask,
-                outputText: userFacing,
-                sensitive: true,
-                shouldBypassModel: true
-            ),
-            richAttachments: cardRich
+        let anchorToolCallID: String? = {
+            let t = context.pendingToolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (t?.isEmpty == false) ? t : nil
+        }()
+        if let taskCards = taskCardsFromToolCardPayload([card]),
+           taskCards.isEmpty == false,
+           let threadID = context.threadID,
+           let assistantID = context.assistantMessageClientID {
+            let merge = structuredHealthCardMergeCoordinator
+            Task {
+                await merge.insertTaskCardsWhenAssistantMessageReady(
+                    threadID: threadID,
+                    assistantClientMessageID: assistantID,
+                    taskCards: taskCards,
+                    anchorToolCallID: anchorToolCallID
+                )
+            }
+        }
+        return ToolExecutionResult(
+            toolName: SparkToolName.generateTask,
+            outputText: userFacing,
+            sensitive: true,
+            shouldBypassModel: true
         )
     }
 
@@ -1911,10 +1927,14 @@ final class ToolHub: @unchecked Sendable {
             resumeMessages: context.pendingResumeMessages,
             reason: reason
         )
-        if let attachment = makePendingMemberToolAttachment(cards: [card]) {
-            await structuredHealthCardMergeCoordinator.mergeRichAttachmentsIntoStreamingCache(
+        if let attachment = makePendingMemberToolAttachment(
+            cards: [card],
+            anchorToolCallID: normalizedToolCallID
+        ) {
+            await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
                 threadID: threadID,
-                attachments: [attachment]
+                attachments: [attachment],
+                blocks: [makePendingMemberToolBlock(cards: [card], toolCallID: normalizedToolCallID)]
             )
         }
 
@@ -1926,6 +1946,20 @@ final class ToolHub: @unchecked Sendable {
                 return memberID
             }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        var timedOutCard = card
+        timedOutCard.status = .completed
+        timedOutCard.resultText = td("tool.result.request_member_selection.timeout")
+        timedOutCard.updatedAt = Date()
+        if let attachment = makePendingMemberToolAttachment(
+            cards: [timedOutCard],
+            anchorToolCallID: normalizedToolCallID
+        ) {
+            await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
+                threadID: threadID,
+                attachments: [attachment],
+                blocks: [makePendingMemberToolBlock(cards: [timedOutCard], toolCallID: normalizedToolCallID)]
+            )
         }
         return nil
     }
@@ -2130,18 +2164,43 @@ final class ToolHub: @unchecked Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    private func makeTaskCardAttachments(cards: [TaskToolCardPayload]) -> [ChatAttachment] {
-        guard cards.isEmpty == false, let data = try? JSONEncoder().encode(cards), let text = String(data: data, encoding: .utf8) else { return [] }
-        return [ChatAttachment(type: .taskCards, text: text)]
+    /// 将工具内 `TaskToolCardPayload` 与消息内 `TaskCard` 对齐（与 `block(from: .taskCards)` 解码路径一致）。
+    private func taskCardsFromToolCardPayload(_ cards: [TaskToolCardPayload]) -> [TaskCard]? {
+        guard cards.isEmpty == false,
+              let data = try? JSONEncoder().encode(cards),
+              let raw = String(data: data, encoding: .utf8)?.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let out = try? decoder.decode([TaskCard].self, from: raw), out.isEmpty == false else { return nil }
+        return out
     }
 
-    private func makePendingMemberToolAttachment(cards: [PendingMemberToolCard]) -> ChatAttachment? {
+    private func makePendingMemberToolAttachment(
+        cards: [PendingMemberToolCard],
+        anchorToolCallID: String? = nil
+    ) -> ChatAttachment? {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard cards.isEmpty == false,
               let data = try? encoder.encode(cards),
               let text = String(data: data, encoding: .utf8) else { return nil }
-        return ChatAttachment(type: .pendingMemberToolCards, text: text)
+        return ChatAttachment(
+            type: .pendingMemberToolCards,
+            text: text,
+            anchorToolCallID: anchorToolCallID
+        )
+    }
+
+    private func makePendingMemberToolBlock(
+        cards: [PendingMemberToolCard],
+        toolCallID: String?
+    ) -> ChatMessageBlock {
+        ChatMessageBlock(
+            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+            kind: .pendingMemberToolCards,
+            toolCallID: toolCallID,
+            pendingMemberToolCards: cards
+        )
     }
 
     /// 联网/地图/日历等外部工具：根据 `toolKeys` 解析 endpoint，当前仅返回路由占位说明。

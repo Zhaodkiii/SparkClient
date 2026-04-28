@@ -40,6 +40,7 @@ protocol ChatMessageStoring: Sendable {
         kind: ChatMessageKind,
         content: String,
         attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock]?,
         reasoningContent: String?,
         reasoningDurationMs: Int64?,
         reasoningExpanded: Bool,
@@ -56,11 +57,18 @@ protocol ChatMessageStoring: Sendable {
         attachments: [ChatAttachment],
         markPendingForSync: Bool
     ) async
+    func updateMessagePresentation(
+        clientMessageID: UUID,
+        attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock],
+        markPendingForSync: Bool
+    ) async
     func updateMessageContentAndAttachments(
         clientMessageID: UUID,
         content: String,
         kind: ChatMessageKind,
         attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock]?,
         reasoningContent: String?,
         reasoningDurationMs: Int64?,
         markPendingForSync: Bool

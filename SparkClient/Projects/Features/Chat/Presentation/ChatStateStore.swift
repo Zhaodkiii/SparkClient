@@ -17,7 +17,6 @@ final class ChatStateStore: ObservableObject {
         let createdAt: Date
     }
     private let streamingReducer = ChatStreamingAssistantReducer()
-    private let runtimeAttachmentBuilder = ChatToolRuntimeAttachmentBuilder()
 
     @Published private(set) var threadItems: [ChatThreadListItem] = []
     @Published private(set) var messagesByThread: [UUID: [ChatMessage]] = [:]
@@ -66,7 +65,8 @@ final class ChatStateStore: ObservableObject {
             role: .assistant,
             kind: streaming.state.kind,
             content: streaming.state.content,
-            attachments: makeStreamingAttachments(from: streaming),
+            attachments: streaming.state.extraAttachments,
+            blocks: streaming.state.blocks,
             reasoningContent: streaming.state.reasoningContent,
             reasoningDurationMs: streaming.state.reasoningDurationMs,
             reasoningExpanded: true,
@@ -168,6 +168,16 @@ final class ChatStateStore: ObservableObject {
             kind: old.kind,
             content: old.content,
             attachments: attachments,
+            blocks: ChatMessageBlockBuilder.merge(
+                existingBlocks: old.blocks,
+                role: old.role,
+                kind: old.kind,
+                content: old.content,
+                attachments: attachments,
+                reasoningContent: old.reasoningContent,
+                reasoningDurationMs: old.reasoningDurationMs,
+                createdAt: old.createdAt
+            ),
             reasoningContent: old.reasoningContent,
             reasoningDurationMs: old.reasoningDurationMs,
             reasoningExpanded: old.reasoningExpanded,
@@ -177,6 +187,39 @@ final class ChatStateStore: ObservableObject {
             deliveryState: old.deliveryState,
             createdAt: old.createdAt,
             serverUpdatedAt: old.serverUpdatedAt,
+            isTombstone: old.isTombstone,
+            modelName: old.modelName
+        )
+        messagesByThread[threadID] = messages
+    }
+
+    func updateMessagePresentation(
+        threadID: UUID,
+        clientMessageID: UUID,
+        attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock]
+    ) {
+        guard var messages = messagesByThread[threadID] else { return }
+        guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
+        let old = messages[idx]
+        /// 入参为与 Core Data 一致的完整展示快照；勿再与 `old.blocks` merge，否则易与流式已合并内容重复插入。
+        messages[idx] = ChatMessage(
+            id: old.id,
+            threadID: old.threadID,
+            role: old.role,
+            kind: old.kind,
+            content: old.content,
+            attachments: attachments,
+            blocks: blocks,
+            reasoningContent: old.reasoningContent,
+            reasoningDurationMs: old.reasoningDurationMs,
+            reasoningExpanded: old.reasoningExpanded,
+            reasoningVisibility: old.reasoningVisibility,
+            clientMessageID: old.clientMessageID,
+            serverMessageID: old.serverMessageID,
+            deliveryState: old.deliveryState,
+            createdAt: old.createdAt,
+            serverUpdatedAt: Date(),
             isTombstone: old.isTombstone,
             modelName: old.modelName
         )
@@ -202,6 +245,16 @@ final class ChatStateStore: ObservableObject {
             kind: kind,
             content: content,
             attachments: attachments,
+            blocks: ChatMessageBlockBuilder.merge(
+                existingBlocks: old.blocks,
+                role: old.role,
+                kind: kind,
+                content: content,
+                attachments: attachments,
+                reasoningContent: reasoningContent,
+                reasoningDurationMs: reasoningDurationMs,
+                createdAt: old.createdAt
+            ),
             reasoningContent: reasoningContent,
             reasoningDurationMs: reasoningDurationMs,
             reasoningExpanded: old.reasoningExpanded,
@@ -473,7 +526,8 @@ final class ChatStateStore: ObservableObject {
                 reasoning: reasoningContent,
                 kind: kind,
                 toolName: toolName,
-                toolContent: toolContent
+                toolContent: toolContent,
+                toolCallID: nil
             )
         )
     }
@@ -492,30 +546,31 @@ final class ChatStateStore: ObservableObject {
         composerDrafts[threadID] = draft
     }
 
-    private func makeStreamingAttachments(from state: StreamingAssistant) -> [ChatAttachment] {
-        let runtime = runtimeAttachmentBuilder.build(
-            toolName: state.state.toolName,
-            toolContent: state.state.toolContent
-        )
-        return runtime + state.state.extraAttachments
-    }
-
     func mergeStreamingAssistantAttachments(
         threadID: UUID,
         attachments: [ChatAttachment]
     ) {
         guard attachments.isEmpty == false else { return }
         guard var streaming = streamingAssistants[threadID] else { return }
-        var merged = streaming.state.extraAttachments
-        for attachment in attachments {
-            if let index = merged.firstIndex(where: { $0.type == attachment.type }) {
-                merged[index] = attachment
-            } else {
-                merged.append(attachment)
-            }
-        }
-        guard merged != streaming.state.extraAttachments else { return }
-        streaming.state.extraAttachments = merged
+        let changed = streamingReducer.mergeAttachments(state: &streaming.state, attachments: attachments)
+        guard changed else { return }
+        streamingAssistants[threadID] = streaming
+        streamingContentGeneration &+= 1
+    }
+
+    func mergeStreamingAssistantPresentation(
+        threadID: UUID,
+        attachments: [ChatAttachment],
+        blocks: [ChatMessageBlock]
+    ) {
+        guard attachments.isEmpty == false || blocks.isEmpty == false else { return }
+        guard var streaming = streamingAssistants[threadID] else { return }
+        let changed = streamingReducer.mergePresentation(
+            state: &streaming.state,
+            attachments: attachments,
+            blocks: blocks
+        )
+        guard changed else { return }
         streamingAssistants[threadID] = streaming
         streamingContentGeneration &+= 1
     }

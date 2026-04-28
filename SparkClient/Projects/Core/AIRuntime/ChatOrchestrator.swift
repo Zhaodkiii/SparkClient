@@ -24,6 +24,7 @@ struct ChatOrchestratorOutput: Sendable {
     
     /// 工具执行的内容/参数（JSON 或结构化文本）
     let toolContent: String?
+    let blocks: [ChatMessageBlock]
 }
 /// 助手流式回调的标准增量模型。
 /// 统一承载“正文 / 推理 / 工具链路”字段，避免多参数回调扩散。
@@ -33,6 +34,7 @@ struct ChatAssistantPartialDelta: Sendable {
     let kind: ChatMessageKind
     let toolName: String?
     let toolContent: String?
+    let toolCallID: String?
 }
 
 struct ChatOrchestrator: Sendable {
@@ -56,39 +58,43 @@ struct ChatOrchestrator: Sendable {
         self.logger = logger
     }
 
+    /// AI 核心：生成回复（支持流式输出、工具调用、多轮循环、多模态）
     func generateReply(
-        userInput: String,
-        history: [ChatMessage],
-        memberContextSummary: String,
-        memberID: Int?,
-        threadID: UUID? = nil,
-        assistantMessageClientID: UUID? = nil,
-        inference: ChatOrchestratorInferenceOptions = .default,
-        modelReasoning: ChatModelReasoningContext = .unknown,
-        systemPrompt: String? = nil,
-        preferredModelName: String? = nil,
-        temperature: Double? = nil,
-        topP: Double? = nil,
-        maxTokens: Int? = nil,
-        maxMessages: Int? = nil,
-        cancellationToken: AIRuntimeCancellationToken? = nil,
-        /// 为 `true` 时，用户消息中的 `image_url` 附件编码为多模态 `content` 数组；否则仅使用 `ChatMessage.content` 字符串。
-        deliverMultimodalImages: Bool = false,
-        /// 网关单点编码（如厂商对 `image_url` 形式的差异）。
-        providerCompanyUppercased: String? = nil,
-        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
+        userInput: String,                                   // 用户输入文本
+        history: [ChatMessage],                              // 聊天历史
+        memberContextSummary: String,                        // 成员上下文摘要
+        memberID: Int?,                                      // 成员ID
+        threadID: UUID? = nil,                                // 对话ID
+        assistantMessageClientID: UUID? = nil,               // 助手消息ID
+        inference: ChatOrchestratorInferenceOptions = .default, // 推理选项
+        modelReasoning: ChatModelReasoningContext = .unknown,   // 模型推理配置
+        systemPrompt: String? = nil,                         // 系统提示词
+        preferredModelName: String? = nil,                    // 优先使用的模型
+        temperature: Double? = nil,                           // 温度系数（随机性）
+        topP: Double? = nil,                                  // 核采样参数
+        maxTokens: Int? = nil,                                // 最大token
+        maxMessages: Int? = nil,                              // 最大消息数
+        cancellationToken: AIRuntimeCancellationToken? = nil, // 取消令牌
+        deliverMultimodalImages: Bool = false,                // 是否发送多模态图片
+        providerCompanyUppercased: String? = nil,              // 模型厂商
+        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil // 流式回调
     ) async throws -> ChatOrchestratorOutput {
+        // 检查是否取消请求
         try cancellationToken?.checkCancellation()
         let promptLocalizer = PromptLocalizer()
+        // 构建推理配置（是否开启深度思考、提示词回退等）
         let reasoningOpts = buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
+        
         logger.debug(
             "对话编排开始，history=\(history.count), member=\(shortID(memberID)), inputLength=\(userInput.count), tools=\(inference.useTools), knowledge=\(inference.useKnowledgeBag), web=\(inference.useWebSearch), reasoning=\(reasoningOpts.isEnabled), promptFallback=\(reasoningOpts.usePromptFallback)",
             module: .aiConfig
         )
 
+        // MARK: - 第一步：判断是否需要调用工具（如联网搜索、文件、插件等）
         let toolResult: ToolHubResult
         if inference.useTools {
             try cancellationToken?.checkCancellation()
+            // 工具中心判断是否需要执行工具
             toolResult = await toolHub.runIfNeeded(
                 userInput: userInput,
                 memberID: memberID,
@@ -97,13 +103,18 @@ struct ChatOrchestrator: Sendable {
         } else {
             toolResult = .none
         }
+
         try cancellationToken?.checkCancellation()
+        
+        // MARK: - 工具已直接执行完成（无需走AI模型），直接返回结果
         if case .executed(let result) = toolResult {
             let modelConsent = consentGate.evaluate(result: result, destination: .model)
             logger.info(
                 "工具调用已命中，tool=\(result.toolName), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive), consentAllowed=\(modelConsent.allowed)",
                 module: .aiConfig
             )
+            
+            // 权限校验：允许则返回原文，否则返回拦截提示
             let output = modelConsent.allowed
                 ? result.outputText
                 : """
@@ -111,6 +122,8 @@ struct ChatOrchestrator: Sendable {
 
                 \(promptLocalizer.consentBlockedHint(reason: modelConsent.reason))
                 """
+            
+            // 返回工具类结果
             return ChatOrchestratorOutput(
                 text: output,
                 reasoningText: nil,
@@ -118,11 +131,19 @@ struct ChatOrchestrator: Sendable {
                 finishReason: nil,
                 kind: .tool,
                 toolName: result.toolName,
-                toolContent: result.outputText
+                toolContent: result.outputText,
+                blocks: [
+                    ChatMessageBlock(
+                        kind: .tool,
+                        text: result.outputText,
+                        toolName: result.toolName
+                    )
+                ]
             )
         }
 
-        // 无工具命中时转入模型推理路径，显式记录入参规模，便于排查上下文膨胀问题。
+        // MARK: - 无工具直接命中 → 进入AI模型推理流程
+        // 构建给AI模型的消息上下文（历史+系统提示+用户上下文）
         let runtimeMessages = await makeRuntimeMessages(
             from: history,
             systemPrompt: systemPrompt,
@@ -131,26 +152,34 @@ struct ChatOrchestrator: Sendable {
             deliverMultimodalImages: deliverMultimodalImages,
             maxMessages: maxMessages
         )
+        
+        // 获取可用工具列表
         let baseToolDefinitions = filteredToolDefinitions(inference: inference)
         var activeToolDefinitions = baseToolDefinitions
         var activeToolChoice: AIRuntimeToolChoice = inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none
-        var roundToolLocked = false
+        var roundToolLocked = false // 工具锁定标记
         let toolLockedNotice = "本轮对话内已禁止继续调用工具。请基于现有信息直接完成回复，不要再发起工具调用。"
+        
         logger.debug(
             "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), memberContextLength=\(memberContextSummary.count), tools=\(baseToolDefinitions.count), toolChoice=\(String(describing: activeToolChoice))",
             module: .aiConfig
         )
+
+        // 循环用变量
         var loopMessages = runtimeMessages
         var loopMemberID = memberID
-        let maxToolRounds = 6
+        let maxToolRounds = 30 // 最大工具调用轮次
         var round = 0
         var executedTools: [ToolExecutionResult] = []
 
+        // MARK: - AI + 工具 多轮循环（最多30轮）
         while round < maxToolRounds {
             round += 1
             try cancellationToken?.checkCancellation()
+            
             let collected: CollectedRuntimeResponse
             do {
+                // MARK: 核心：调用AI模型流式生成
                 collected = try await collectRuntimeResponse(
                     from: try await runtimeService.generateTextStream(
                         request: AIRuntimeTextRequest(
@@ -174,9 +203,11 @@ struct ChatOrchestrator: Sendable {
                 logger.error("AI 推理路径失败：\(error.localizedDescription)", module: .aiConfig)
                 throw error
             }
+
             let response = collected.response
             let toolTrace = makeToolTrace(from: executedTools)
 
+            // MARK: - AI 不调用工具 → 直接返回文本结果
             if response.hasToolCalls == false {
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
@@ -184,6 +215,7 @@ struct ChatOrchestrator: Sendable {
                     throw AIRuntimeError.emptyOutput
                 }
                 let reasoning = response.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
+                
                 return ChatOrchestratorOutput(
                     text: text,
                     reasoningText: reasoning.flatMap { $0.isEmpty ? nil : $0 },
@@ -191,22 +223,32 @@ struct ChatOrchestrator: Sendable {
                     finishReason: response.finishReason,
                     kind: .text,
                     toolName: toolTrace?.name,
-                    toolContent: toolTrace?.content
+                    toolContent: toolTrace?.content,
+                    blocks: buildOutputBlocks(
+                        text: text,
+                        reasoning: reasoning.flatMap { $0.isEmpty ? nil : $0 },
+                        toolName: toolTrace?.name,
+                        toolContent: toolTrace?.content,
+                        executedTools: executedTools
+                    )
                 )
             }
 
+            // MARK: - 禁用工具但AI仍想调用 → 强制禁止并继续
             if inference.useTools == false || activeToolDefinitions.isEmpty {
                 if response.hasToolCalls {
                     loopMessages.append(AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls))
                     loopMessages.append(AIRuntimeMessage(role: .system, content: toolLockedNotice))
                     continue
                 }
+
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
                     logger.warning("AI 返回空文本（工具禁用分支），转为可见错误气泡", module: .aiConfig)
                     throw AIRuntimeError.emptyOutput
                 }
                 let reasoning = response.reasoningText?.trimmingCharacters(in: .whitespacesAndNewlines)
+                
                 return ChatOrchestratorOutput(
                     text: text,
                     reasoningText: reasoning.flatMap { $0.isEmpty ? nil : $0 },
@@ -214,29 +256,48 @@ struct ChatOrchestrator: Sendable {
                     finishReason: response.finishReason,
                     kind: .text,
                     toolName: toolTrace?.name,
-                    toolContent: toolTrace?.content
+                    toolContent: toolTrace?.content,
+                    blocks: buildOutputBlocks(
+                        text: text,
+                        reasoning: reasoning.flatMap { $0.isEmpty ? nil : $0 },
+                        toolName: toolTrace?.name,
+                        toolContent: toolTrace?.content,
+                        executedTools: executedTools
+                    )
                 )
             }
 
+            // MARK: - AI 决定调用工具 → 执行工具并追加结果
             logger.info(
                 "模型返回 tool_calls，round=\(round), count=\(response.toolCalls.count)",
                 module: .aiConfig
             )
+            
+            let roundAnswer = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 把AI的工具调用加入消息历史
             loopMessages.append(
                 AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls)
             )
+
+            // 遍历执行所有工具调用
             for call in response.toolCalls {
                 try cancellationToken?.checkCancellation()
+                
                 let roundReasoning = response.reasoningText?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .nilIfEmpty
+                
+                // 前端UI：显示工具调用中
                 await emitToolPartial(
-                    answer: "",
+                    answer: roundAnswer,
                     reasoning: roundReasoning,
                     toolName: call.name,
+                    toolCallID: call.id,
                     detail: nil,
                     onPartial: onPartial
                 )
+
+                // MARK: 执行工具
                 let toolResult = await toolHub.executeToolCall(
                     name: call.name,
                     arguments: call.arguments,
@@ -246,21 +307,32 @@ struct ChatOrchestrator: Sendable {
                     pendingToolCallID: call.id,
                     pendingResumeMessages: loopMessages
                 )
+
+                // 工具执行完成 → 前端显示结果
                 await emitToolPartial(
-                    answer: "",
+                    answer: roundAnswer,
                     reasoning: roundReasoning,
                     toolName: call.name,
+                    toolCallID: call.id,
                     detail: toolResult.outputText,
                     onPartial: onPartial
                 )
+
+                // 记录已执行工具
                 executedTools.append(toolResult)
+                
+                // 成员ID可能被工具更新
                 if let resolvedMemberID = toolResult.resolvedMemberID {
                     loopMemberID = resolvedMemberID
                 }
+
+                // 权限校验
                 let modelConsent = consentGate.evaluate(result: toolResult, destination: .model)
                 let content = modelConsent.allowed
                     ? toolResult.outputText
                     : promptLocalizer.consentBlockedHint(reason: modelConsent.reason)
+                
+                // 把工具返回结果加入消息上下文
                 loopMessages.append(
                     AIRuntimeMessage(
                         role: .tool,
@@ -269,6 +341,8 @@ struct ChatOrchestrator: Sendable {
                         name: call.name
                     )
                 )
+
+                // 如果工具需要用户输入 → 锁定工具，禁止继续调用
                 if toolResult.isAwaitingUserInput {
                     roundToolLocked = true
                     activeToolDefinitions = []
@@ -277,12 +351,15 @@ struct ChatOrchestrator: Sendable {
                     break
                 }
             }
+
+            // 解锁工具锁定，继续下一轮循环
             if roundToolLocked {
                 roundToolLocked = false
                 continue
             }
         }
 
+        // MARK: - 超过最大工具轮次 → 返回兜底文案
         logger.warning("工具调用超过最大轮次，回退兜底文案", module: .aiConfig)
         return ChatOrchestratorOutput(
             text: promptLocalizer.fallbackAssistantText(),
@@ -291,7 +368,8 @@ struct ChatOrchestrator: Sendable {
             finishReason: "length",
             kind: .text,
             toolName: nil,
-            toolContent: nil
+            toolContent: nil,
+            blocks: [ChatMessageBlock(kind: .text, text: promptLocalizer.fallbackAssistantText())]
         )
     }
 
@@ -518,7 +596,8 @@ struct ChatOrchestrator: Sendable {
                             reasoning: reasoning.isEmpty ? nil : reasoning,
                             kind: .text,
                             toolName: nil,
-                            toolContent: nil
+                            toolContent: nil,
+                            toolCallID: nil
                         )
                     )
                 }
@@ -535,7 +614,8 @@ struct ChatOrchestrator: Sendable {
                             reasoning: reasoning.isEmpty ? nil : reasoning,
                             kind: .text,
                             toolName: nil,
-                            toolContent: nil
+                            toolContent: nil,
+                            toolCallID: nil
                         )
                     )
                 }
@@ -559,6 +639,7 @@ struct ChatOrchestrator: Sendable {
                     answer: bufferedText,
                     reasoning: bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                     toolName: call.name,
+                    toolCallID: call.id,
                     detail: call.arguments.isEmpty ? nil : call.arguments,
                     onPartial: onPartial
                 )
@@ -630,6 +711,7 @@ struct ChatOrchestrator: Sendable {
         answer: String,
         reasoning: String?,
         toolName: String,
+        toolCallID: String?,
         detail: String?,
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)?
     ) async {
@@ -640,9 +722,40 @@ struct ChatOrchestrator: Sendable {
                 reasoning: reasoning,
                 kind: .tool,
                 toolName: toolName.isEmpty ? nil : toolName,
-                toolContent: localizedToolOperationText(toolName: toolName, detail: detail)
+                toolContent: localizedToolOperationText(toolName: toolName, detail: detail),
+                toolCallID: toolCallID
             )
         )
+    }
+
+    private func buildOutputBlocks(
+        text: String,
+        reasoning: String?,
+        toolName: String?,
+        toolContent: String?,
+        executedTools: [ToolExecutionResult]
+    ) -> [ChatMessageBlock] {
+        let blocks: [ChatMessageBlock] = []
+//        if let reasoning, reasoning.isEmpty == false {
+//            blocks.append(ChatMessageBlock(kind: .reasoning, text: reasoning))
+//        }
+//        if executedTools.isEmpty == false {
+//            for result in executedTools {
+//                blocks.append(
+//                    ChatMessageBlock(
+//                        kind: .tool,
+//                        text: result.outputText,
+//                        toolName: result.toolName
+//                    )
+//                )
+//            }
+//        } else if let toolContent, toolContent.isEmpty == false {
+//            blocks.append(ChatMessageBlock(kind: .tool, text: toolContent, toolName: toolName))
+//        }
+//        if text.isEmpty == false {
+//            blocks.append(ChatMessageBlock(kind: .text, text: text))
+//        }
+        return blocks
     }
 
     private func localizedToolOperationText(toolName: String, detail: String?) -> String {

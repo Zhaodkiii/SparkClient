@@ -1,18 +1,14 @@
 import Foundation
 
 /// 工具事件解释器：
-/// - 仅生成运行时工具类附件（`operationalState` 等），由 `ChatToolRuntimeAttachmentBuilder` 从 toolName/toolContent 解析。
-/// - 富 UI 与知识卡附件仅在 `ToolHub` 调用工具时经 `StructuredHealthCardMergeCoordinator` 异步合并，不经此处与 `SendChatMessageUseCase`。
+/// - 新流程下，工具展示以 `ChatMessageBlock` 为唯一真相源；
+/// - 不再把 toolName/toolContent/operational* 这类旧运行时附件落入正式消息，避免重复存储与重复渲染；
+/// - 富 UI 与知识卡附件仍由 `ToolHub` + `StructuredHealthCardMergeCoordinator` 走异步 presentation patch。
 struct ChatToolEventInterpreter: Sendable {
     let logger: Logger
-    let runtimeAttachmentBuilder: ChatToolRuntimeAttachmentBuilder
 
-    init(
-        logger: Logger = ConsoleLogger(),
-        runtimeAttachmentBuilder: ChatToolRuntimeAttachmentBuilder = ChatToolRuntimeAttachmentBuilder()
-    ) {
+    init(logger: Logger = ConsoleLogger()) {
         self.logger = logger
-        self.runtimeAttachmentBuilder = runtimeAttachmentBuilder
     }
 
     /// 解释一次助手输出，生成标准附件集合（仅工具运行时附件）。
@@ -22,25 +18,17 @@ struct ChatToolEventInterpreter: Sendable {
         toolName: String?,
         toolContent: String?
     ) -> ChatToolInterpretationResult {
-        let toolAttachments = makeToolAttachments(toolName: toolName, toolContent: toolContent)
         let result = ChatToolInterpretationResult(
-            attachments: toolAttachments,
-            toolAttachmentCount: toolAttachments.count,
+            attachments: [],
+            toolAttachmentCount: 0,
             knowledgeCardAttachmentCount: 0,
             richAttachmentCount: 0
         )
         logger.debug(
-            "工具事件解释（仅运行时附件） kind=\(kind.rawValue) textLen=\(text.count) tool=\(toolName ?? "-") toolAttach=\(result.toolAttachmentCount)",
+            "工具事件解释（block-only） kind=\(kind.rawValue) textLen=\(text.count) tool=\(toolName ?? "-") toolAttach=0",
             module: .general
         )
         return result
-    }
-
-    private func makeToolAttachments(
-        toolName: String?,
-        toolContent: String?
-    ) -> [ChatAttachment] {
-        runtimeAttachmentBuilder.build(toolName: toolName, toolContent: toolContent)
     }
 }
 

@@ -33,60 +33,76 @@ struct SendChatMessageUseCase: Sendable {
         self.aiConfigCenter = aiConfigCenter
     }
 
+    /// 发送消息核心业务方法：处理输入、上传附件、保存消息、调用AI生成、返回对话快照
     func execute(
-        threadID: UUID?,
-        memberID: Int? = nil,
-        userInput: String,
-        composerAttachments: [ChatComposerAttachmentPreview] = [],
-        preparedAttachments: [ChatPreparedAttachment] = [],
-        selectedChatModelName: String? = nil,
-        assistantClientMessageID: UUID,
-        inference: ChatOrchestratorInferenceOptions = .default,
-        modelReasoning: ChatModelReasoningContext = .unknown,
-        smallTask: SmallTask? = nil,
-        cancellationToken: AIRuntimeCancellationToken? = nil,
-        onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,
-        onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,
-        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
+        threadID: UUID?,                     // 对话线程ID
+        memberID: Int? = nil,                // 成员ID
+        userInput: String,                   // 用户输入文本
+        composerAttachments: [ChatComposerAttachmentPreview] = [],  // 编辑区附件
+        preparedAttachments: [ChatPreparedAttachment] = [],        // 已预处理的附件
+        selectedChatModelName: String? = nil, // 用户选择的模型名称
+        assistantClientMessageID: UUID,      // 助手消息客户端ID
+        inference: ChatOrchestratorInferenceOptions = .default,    // 推理选项
+        modelReasoning: ChatModelReasoningContext = .unknown,      // 模型推理上下文
+        smallTask: SmallTask? = nil,          // 小任务（可选）
+        cancellationToken: AIRuntimeCancellationToken? = nil,      // 取消令牌
+        onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,           // 图片上传进度
+        onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,  // 用户消息落库回调
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil         // AI流式返回回调
     ) async throws -> ChatThreadSnapshot {
+        // 清理用户输入首尾空白
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 校验：输入不能为空 + 无附件 + 无小任务，直接抛空输入错误
         guard sanitizedInput.isEmpty == false || composerAttachments.isEmpty == false || smallTask != nil else {
             throw ChatFeatureError.emptyInput
         }
 
+        // 获取AI配置快照
         let catalogSnapshot = await aiConfigCenter.currentSnapshot()
+        // 获取生效的场景模型配置
         let bundles = try await aiConfigCenter.effectiveScenarioBundles()
         let start = Date()
+        // 日志：发送消息开始
         logger.info(
             "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count), attachments=\(composerAttachments.count)",
             module: .general
         )
 
         do {
+            // 检查是否被取消
             try cancellationToken?.checkCancellation()
+            // 获取或创建对话线程
             let thread = try await resolveThread(
                 existingThreadID: threadID,
                 memberID: memberID,
                 firstUserInput: smallTask?.name ?? sanitizedInput,
                 defaultImageDeliveryRaw: catalogSnapshot.defaultThreadImageDeliveryModeRaw
             )
+            
+            // 模型名称清洗处理
             let trimmedSelected = selectedChatModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             let trimmedThreadModel = thread.currentModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            // 确定优先使用的模型：用户选择 > 线程已有 > 默认
             let preferredName = (trimmedSelected?.isEmpty == false)
                 ? trimmedSelected
                 : ((trimmedThreadModel?.isEmpty == false) ? trimmedThreadModel : nil)
+            // 获取匹配的模型配置，找不到则抛错
             guard let resolvedRow = bundles.resolveRow(for: .chat, preferredModelName: preferredName) else {
                 throw AIConfigError.missingModelForScenario(.chat)
             }
+            // 最终要持久化的模型名称
             let persistedModelName = trimmedSelected?.isEmpty == false
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            
+            // 构建系统提示词
             let systemPrompt = ChatSystemPromptResolver().resolve(
                 sessionPrompt: thread.rolePrompt,
                 agentPrompt: resolvedRow.systemPrompt,
                 smallTask: smallTask
             )
 
+            // 如果线程模型和当前选择不一致，更新线程的模型配置
             if thread.currentModelName != persistedModelName {
                 await repository.updateThreadGenerationConfig(
                     threadID: thread.id,
@@ -99,19 +115,25 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
 
+            // 获取模型是否支持多模态、厂商信息
             let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
+            // 确定图片传递模式
             let effectiveMode = effectiveChatImageDeliveryMode(
                 threadMode: thread.imageDeliveryMode,
                 supportsMultimodal: supportsMultimodal
             )
+            // 是否直接以多模态方式发送图片给AI
             let deliverMultimodal = effectiveMode == .directMultimodal
                 && supportsMultimodal
                 && composerAttachments.isEmpty == false
 
+            // 把预处理附件转成字典，方便按ID查找
             let preparedByID = Dictionary(uniqueKeysWithValues: preparedAttachments.map { ($0.previewID, $0) })
             var chatAttachments: [ChatAttachment] = []
 
+            // 遍历所有编辑区附件，上传并组装成可发送的聊天附件
             for preview in composerAttachments {
+                // 如果附件已经预处理完成，直接复用
                 if let prepared = preparedByID[preview.id] {
                     let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(prepared.record.objectKey)
                     chatAttachments.append(
@@ -126,6 +148,7 @@ struct SendChatMessageUseCase: Sendable {
                     continue
                 }
 
+                // 上传附件到文件服务
                 let record = try await fileTransferService.upload(
                     ManagedFileUploadPayload(
                         data: preview.data,
@@ -138,6 +161,8 @@ struct SendChatMessageUseCase: Sendable {
                         }
                     )
                 )
+                
+                // 图片进行OCR识别
                 let ocrResult: OCRRecognition
                 if preview.kind == .image {
                     ocrResult = try await ocrOrchestrator.recognize(
@@ -147,7 +172,10 @@ struct SendChatMessageUseCase: Sendable {
                 } else {
                     ocrResult = OCRRecognition(text: "", selectedEngine: "none", outputs: [])
                 }
+                
+                // 获取公开访问URL
                 let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
+                // 组装附件模型
                 chatAttachments.append(
                     ChatSendAttachmentAssembly.makeAttachment(
                         kind: preview.kind,
@@ -159,20 +187,24 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
 
+            // 小任务：构建卡片附件
             let smallTaskCardPayload = smallTask.map(ChatSmallTaskMessageCardPayload.init(task:))
             let smallTaskCardAttachment = smallTaskCardPayload?.encodedString().map {
                 ChatAttachment(type: .smallTaskCard, text: $0)
             }
+            // 小任务展示内容
             let smallTaskDisplayContent = smallTask.map { task in
                 let brief = task.brief.trimmingCharacters(in: .whitespacesAndNewlines)
                 return brief.isEmpty ? "小任务：\(task.name)" : "小任务：\(task.name)\n\(brief)"
             }
 
-            // 落库的 content 始终只保存用户原始输入（不包含 OCR 拼接文本）；小任务使用卡片附件承载展示信息。
+            // 落库内容：只保存用户原始输入，小任务用卡片展示
             let persistedContent = smallTask == nil ? sanitizedInput : (smallTaskDisplayContent ?? "")
             let persistedKind: ChatMessageKind = smallTask == nil ? .text : .card
+            // 最终附件 = 普通附件 + 小任务卡片
             let persistedAttachments = smallTaskCardAttachment.map { chatAttachments + [$0] } ?? chatAttachments
 
+            // 保存用户消息到本地数据库
             let clientMessageID = UUID()
             _ = try await repository.appendMessage(
                 threadID: thread.id,
@@ -180,6 +212,7 @@ struct SendChatMessageUseCase: Sendable {
                 kind: persistedKind,
                 content: persistedContent,
                 attachments: persistedAttachments,
+                blocks: nil,
                 reasoningContent: nil,
                 reasoningDurationMs: nil,
                 reasoningExpanded: false,
@@ -194,6 +227,7 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
+            // 异步推送待发送消息到同步队列
             Task {
                 await OutboxCoordinator.pushPendingMessages(
                     chatSyncSupervisor: chatSyncSupervisor,
@@ -201,12 +235,16 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
 
+            // 加载当前对话所有历史消息
             let history = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
+            // 回调：用户消息已落库
             if let onUserMessagePersisted {
                 await onUserMessagePersisted(
                     ChatThreadSnapshot(thread: thread, messages: history)
                 )
             }
+            
+            // 构建成员上下文摘要
             let contextMemberID = smallTask == nil ? thread.memberID : nil
             let memberContextSummary: String
             if let contextMemberID {
@@ -219,6 +257,7 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
+            // 小任务特殊处理：构造AI输入与推理参数
             let textForTools = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) } ?? sanitizedInput
             let aiHistory: [ChatMessage]
             let effectiveInference: ChatOrchestratorInferenceOptions
@@ -247,6 +286,7 @@ struct SendChatMessageUseCase: Sendable {
                 effectiveInference = inference
             }
 
+            // MARK: 核心：调用AI编排器生成回复（流式）
             let output = try await orchestrator.generateReply(
                 userInput: textForTools,
                 history: aiHistory,
@@ -272,19 +312,24 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
+            // 处理AI返回的推理内容
             let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            // 解析工具事件
             let interpreted = toolEventInterpreter.interpret(
                 kind: output.kind,
                 text: output.text,
                 toolName: output.toolName,
                 toolContent: output.toolContent
             )
+            
+            // 保存AI助手消息到本地
             _ = try await repository.appendMessage(
                 threadID: thread.id,
                 role: .assistant,
                 kind: output.kind,
                 content: output.text,
                 attachments: interpreted.attachments,
+                blocks: output.blocks,
                 reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
                 reasoningDurationMs: output.reasoningDurationMs,
                 reasoningExpanded: false,
@@ -295,6 +340,7 @@ struct SendChatMessageUseCase: Sendable {
                 modelName: resolvedRow.name
             )
 
+            // 如果AI结束原因需要提示，追加系统消息
             if let notice = finishReasonNoticeText(output.finishReason) {
                 _ = try await repository.appendMessage(
                     threadID: thread.id,
@@ -302,6 +348,7 @@ struct SendChatMessageUseCase: Sendable {
                     kind: .system,
                     content: notice,
                     attachments: [],
+                    blocks: nil,
                     reasoningContent: nil,
                     reasoningDurationMs: nil,
                     reasoningExpanded: false,
@@ -314,11 +361,13 @@ struct SendChatMessageUseCase: Sendable {
                 logger.warning("AI 完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
 
+            // 推送所有待同步消息
             await OutboxCoordinator.pushPendingMessages(
                 chatSyncSupervisor: chatSyncSupervisor,
                 logger: logger
             )
 
+            // 加载最新线程与消息，返回快照
             guard let latestThread = await repository.loadThread(id: thread.id) else {
                 throw ChatFeatureError.threadNotFound
             }
@@ -330,6 +379,7 @@ struct SendChatMessageUseCase: Sendable {
             )
             return ChatThreadSnapshot(thread: latestThread, messages: latestHistory)
         } catch {
+            // 异常日志
             let cost = Date().timeIntervalSince(start)
             logger.error("sendMessage 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
             throw error
@@ -452,6 +502,7 @@ struct SendChatMessageUseCase: Sendable {
                 kind: output.kind,
                 content: output.text,
                 attachments: interpreted.attachments,
+                blocks: output.blocks,
                 reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
                 reasoningDurationMs: output.reasoningDurationMs,
                 reasoningExpanded: false,
@@ -469,6 +520,7 @@ struct SendChatMessageUseCase: Sendable {
                     kind: .system,
                     content: notice,
                     attachments: [],
+                    blocks: nil,
                     reasoningContent: nil,
                     reasoningDurationMs: nil,
                     reasoningExpanded: false,

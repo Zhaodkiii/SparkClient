@@ -13,6 +13,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatStateStore: ChatStateStore
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
+    @ObservedObject var chatV2ViewModel: ChatV2ViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
 
@@ -58,6 +59,14 @@ struct MainTabCoordinatorView: View {
                 Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
             }
             .tag(AppRouteStore.RootTab.chat)
+
+            NavigationView {
+                ChatV2RootView(viewModel: chatV2ViewModel)
+            }
+            .tabItem {
+                Label("对话V2", systemImage: "bubble.left.and.exclamationmark.bubble.right.fill")
+            }
+            .tag(AppRouteStore.RootTab.chatV2)
 
             CompatibleRouteNavigationContainer(path: routePath(.settings)) {
                 SettingsView(
