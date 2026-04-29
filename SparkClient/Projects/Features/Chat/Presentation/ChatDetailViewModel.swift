@@ -14,7 +14,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let ocrDocumentExtractor: OCRDocumentExtractor
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
     private let syncChatUseCase: SyncChatUseCase
-    private let updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase
+    private let updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase
     private let notificationClient: any NotificationClient
     private let aiConfigCenter: AIConfigCenter
     private let aiSettingsRepository: any AISettingsRepository
@@ -58,7 +58,7 @@ final class ChatDetailViewModel: ObservableObject {
         ocrDocumentExtractor: OCRDocumentExtractor,
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
         syncChatUseCase: SyncChatUseCase,
-        updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase,
+        updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase,
         notificationClient: any NotificationClient,
         aiConfigCenter: AIConfigCenter,
         aiSettingsRepository: any AISettingsRepository,
@@ -79,7 +79,7 @@ final class ChatDetailViewModel: ObservableObject {
         self.ocrDocumentExtractor = ocrDocumentExtractor
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.syncChatUseCase = syncChatUseCase
-        self.updateChatMessageAttachmentsUseCase = updateChatMessageAttachmentsUseCase
+        self.updateChatMessageBlocksUseCase = updateChatMessageBlocksUseCase
         self.notificationClient = notificationClient
         self.aiConfigCenter = aiConfigCenter
         self.aiSettingsRepository = aiSettingsRepository
@@ -946,7 +946,7 @@ final class ChatDetailViewModel: ObservableObject {
             targetMessage = messages.last(where: { message in
                 message.role == .assistant
                     && message.deliveryState == .failed
-                    && message.kind == .system
+                    && message.blocks.contains(where: { $0.kind == .error })
             })
         }
         guard let targetMessage,
@@ -980,43 +980,24 @@ final class ChatDetailViewModel: ObservableObject {
         assistantClientMessageID: UUID
     ) async {
         guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID),
-              streaming.attachments.isEmpty == false || streaming.blocks.isEmpty == false else { return }
+              streaming.blocks.isEmpty == false else { return }
         let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
         guard let target = messages.last(where: { $0.clientMessageID == assistantClientMessageID }) else { return }
-        let merged = mergeAttachments(base: target.attachments, overlay: streaming.attachments)
         let mergedBlocks = ChatMessageBlockBuilder.mergeRichBlocks(
             existingBlocks: target.blocks,
             incomingBlocks: streaming.blocks
         )
-        guard merged != target.attachments || mergedBlocks != target.blocks else { return }
-        await updateChatMessageAttachmentsUseCase.execute(
+        guard mergedBlocks != target.blocks else { return }
+        await updateChatMessageBlocksUseCase.execute(
             clientMessageID: assistantClientMessageID,
-            attachments: merged,
             blocks: mergedBlocks,
             markPendingForSync: true
         )
-        stateStore.updateMessagePresentation(
+        stateStore.updateMessageBlocksSnapshot(
             threadID: threadID,
             clientMessageID: assistantClientMessageID,
-            attachments: merged,
             blocks: mergedBlocks
         )
-    }
-
-    private func mergeAttachments(base: [ChatAttachment], overlay: [ChatAttachment]) -> [ChatAttachment] {
-        var merged = base
-        for attachment in overlay {
-            if let index = merged.firstIndex(where: {
-                $0.type == attachment.type
-                    && $0.anchorToolCallID == attachment.anchorToolCallID
-                    && $0.anchorBlockID == attachment.anchorBlockID
-            }) {
-                merged[index] = attachment
-            } else {
-                merged.append(attachment)
-            }
-        }
-        return merged
     }
 
     @discardableResult
@@ -1026,9 +1007,13 @@ final class ChatDetailViewModel: ObservableObject {
             return false
         }
 
-        let content = streaming.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let reasoning = streaming.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard content.isEmpty == false || reasoning?.isEmpty == false || streaming.attachments.isEmpty == false else {
+        let content = streaming.blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasDeepThought = streaming.blocks.contains(where: { $0.kind == .deepThought })
+        let hasAttachmentBlocks = streaming.blocks.contains { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+        guard content.isEmpty == false || hasDeepThought || hasAttachmentBlocks else {
             logger.debug("中断固化跳过：已生成内容为空，source=\(source), thread=\(shortID(threadID))", module: .general)
             return false
         }
@@ -1042,13 +1027,7 @@ final class ChatDetailViewModel: ObservableObject {
             id: streaming.id,
             threadID: threadID,
             role: .assistant,
-            kind: streaming.kind,
-            content: streaming.content,
-            attachments: streaming.attachments,
-            reasoningContent: reasoning.flatMap { $0.isEmpty ? nil : $0 },
-            reasoningDurationMs: streaming.reasoningDurationMs,
-            reasoningExpanded: false,
-            reasoningVisibility: streaming.reasoningVisibility,
+            blocks: streaming.blocks,
             clientMessageID: streaming.clientMessageID,
             serverMessageID: nil,
             deliveryState: .pending,
@@ -1067,29 +1046,18 @@ final class ChatDetailViewModel: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.chatRepository.appendMessage(
-                    threadID: threadID,
-                    role: .assistant,
-                    kind: finalized.kind,
-                    content: finalized.content,
-                    attachments: finalized.attachments,
-                    blocks: finalized.blocks,
-                    reasoningContent: finalized.reasoningContent,
-                    reasoningDurationMs: finalized.reasoningDurationMs,
-                    reasoningExpanded: finalized.reasoningExpanded,
-                    reasoningVisibility: finalized.reasoningVisibility,
-                    clientMessageID: finalized.clientMessageID,
-                    serverMessageID: nil,
-                    deliveryState: .pending,
-                    modelName: finalized.modelName
-                )
+                _ = try await self.chatRepository.appendMessage(finalized)
                 await self.sendMessageUseCase.pushPendingMessages(source: source)
                 let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
                 await MainActor.run {
                     self.stateStore.setMessages(latest, for: threadID)
                 }
+                let finalizedTextLength = finalized.blocks
+                    .compactMap(\.text)
+                    .joined(separator: "\n")
+                    .count
                 self.logger.info(
-                    "中断时已固化 AI 已生成内容，source=\(source), thread=\(self.shortID(threadID)), clientMessageID=\(self.shortID(finalized.clientMessageID)), contentLength=\(finalized.content.count)",
+                    "中断时已固化 AI 已生成内容，source=\(source), thread=\(self.shortID(threadID)), clientMessageID=\(self.shortID(finalized.clientMessageID)), contentLength=\(finalizedTextLength)",
                     module: .general
                 )
             } catch {
@@ -1100,8 +1068,12 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
 
+        let finalizedTextLength = finalized.blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .count
         logger.info(
-            "中断时保留 AI 已生成内容到本地列表，source=\(source), thread=\(shortID(threadID)), clientMessageID=\(shortID(finalized.clientMessageID)), contentLength=\(finalized.content.count)",
+            "中断时保留 AI 已生成内容到本地列表，source=\(source), thread=\(shortID(threadID)), clientMessageID=\(shortID(finalized.clientMessageID)), contentLength=\(finalizedTextLength)",
             module: .general
         )
         return true
@@ -1140,8 +1112,7 @@ final class ChatDetailViewModel: ObservableObject {
         let local = ChatMessage(
             threadID: threadID,
             role: role,
-            kind: kind,
-            content: content,
+            blocks: [ChatMessageBlock(kind: .text, text: content)],
             clientMessageID: clientMessageID,
             deliveryState: deliveryState,
             modelName: role.rawValue
@@ -1155,22 +1126,7 @@ final class ChatDetailViewModel: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.chatRepository.appendMessage(
-                    threadID: threadID,
-                    role: role,
-                    kind: kind,
-                    content: content,
-                    attachments: [],
-                    blocks: nil,
-                    reasoningContent: nil,
-                    reasoningDurationMs: nil,
-                    reasoningExpanded: false,
-                    reasoningVisibility: .full,
-                    clientMessageID: clientMessageID,
-                    serverMessageID: nil,
-                    deliveryState: deliveryState,
-                    modelName: local.modelName
-                )
+                _ = try await self.chatRepository.appendMessage(local)
                 let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
                 await MainActor.run {
                     self.stateStore.setMessages(latest, for: threadID)
@@ -1226,7 +1182,7 @@ final class ChatDetailViewModel: ObservableObject {
             ? suggestedTitle!.trimmingCharacters(in: .whitespacesAndNewlines)
             : (fallback.isEmpty ? "聊天知识" : fallback)
         logger.info("保存消息为知识开始，title=\(title)", module: .general)
-        // 兼容旧入口：直接将整条消息保存为知识文档。
+        // 直接将整条消息保存为知识文档。
         return try await createKnowledgeDocumentUseCase.execute(
             KnowledgeDocumentDraft(
                 title: title,
@@ -1364,17 +1320,17 @@ final class ChatDetailViewModel: ObservableObject {
         cardID: Int,
         mutate: (inout TaskCard) -> Void
     ) async {
-        guard let updatedAttachments = replacingTaskCard(in: message.attachments, cardID: cardID, mutate: mutate) else { return }
-        await updateChatMessageAttachmentsUseCase.execute(
+        guard let updatedBlocks = replacingTaskCard(in: message.blocks, cardID: cardID, mutate: mutate) else { return }
+        await updateChatMessageBlocksUseCase.execute(
             clientMessageID: message.clientMessageID,
-            attachments: updatedAttachments,
+            blocks: updatedBlocks,
             markPendingForSync: true
         )
 
-        stateStore.updateMessageAttachments(
+        stateStore.updateMessageBlocksFromIncoming(
             threadID: threadID,
             clientMessageID: message.clientMessageID,
-            attachments: updatedAttachments
+            incomingBlocks: updatedBlocks
         )
 
         do {
@@ -1385,30 +1341,27 @@ final class ChatDetailViewModel: ObservableObject {
     }
 
     private func replacingTaskCard(
-        in attachments: [ChatAttachment],
+        in blocks: [ChatMessageBlock],
         cardID: Int,
         mutate: (inout TaskCard) -> Void
-    ) -> [ChatAttachment]? {
-        guard let index = attachments.firstIndex(where: { $0.type == .taskCards }),
-              let raw = attachments[index].text,
-              let data = raw.data(using: .utf8) else {
+    ) -> [ChatMessageBlock]? {
+        guard let index = blocks.lastIndex(where: { $0.kind == .taskCards }) else {
             return nil
         }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard var cards = try? decoder.decode([TaskCard].self, from: data) else { return nil }
+        var cards = blocks[index].taskCards
         guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { return nil }
         mutate(&cards[cardIndex])
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let encoded = try? encoder.encode(cards),
-              let text = String(data: encoded, encoding: .utf8) else {
-            return nil
-        }
-        var next = attachments
-        next[index] = attachments[index].withText(text)
+        var next = blocks
+        let old = blocks[index]
+        next[index] = ChatMessageBlock(
+            id: old.id,
+            anchor: old.anchor,
+            kind: .taskCards,
+            toolCallID: old.toolCallID,
+            taskCards: cards,
+            createdAt: old.createdAt,
+            updatedAt: Date()
+        )
         return next
     }
 
@@ -1481,9 +1434,12 @@ final class ChatDetailViewModel: ObservableObject {
         cardID: UUID,
         mutate: (inout PendingMemberToolCard) -> Void
     ) {
-        guard let updated = replacingPendingMemberToolCard(in: message.attachments, cardID: cardID, mutate: mutate),
-              let pending = updated.first(where: { $0.type == .pendingMemberToolCards }) else { return }
-        stateStore.mergeStreamingAssistantAttachments(threadID: threadID, attachments: [pending])
+        guard let updated = replacingPendingMemberToolCard(in: message.blocks, cardID: cardID, mutate: mutate),
+              let pending = updated.last(where: { $0.kind == .pendingMemberToolCards }) else { return }
+        stateStore.mergeStreamingAssistantAttachments(
+            threadID: threadID,
+            incomingBlocks: [pending]
+        )
     }
 
     private func updatePendingMemberToolCard(
@@ -1492,30 +1448,30 @@ final class ChatDetailViewModel: ObservableObject {
         cardID: UUID,
         mutate: (inout PendingMemberToolCard) -> Void
     ) async {
-        guard let updated = replacingPendingMemberToolCard(in: message.attachments, cardID: cardID, mutate: mutate) else { return }
-        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+        guard let updated = replacingPendingMemberToolCard(in: message.blocks, cardID: cardID, mutate: mutate) else { return }
+        await persistStructuredBlocks(threadID: threadID, message: message, blocks: updated)
     }
 
     private func replacingPendingMemberToolCard(
-        in attachments: [ChatAttachment],
+        in blocks: [ChatMessageBlock],
         cardID: UUID,
         mutate: (inout PendingMemberToolCard) -> Void
-    ) -> [ChatAttachment]? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        for (index, attachment) in attachments.enumerated() {
-            guard attachment.type == .pendingMemberToolCards,
-                  let raw = attachment.text,
-                  let data = raw.data(using: .utf8),
-                  var cards = try? decoder.decode([PendingMemberToolCard].self, from: data),
-                  let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard block.kind == .pendingMemberToolCards else { continue }
+            var cards = block.pendingMemberToolCards
+            guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
             mutate(&cards[cardIndex])
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            guard let encoded = try? encoder.encode(cards),
-                  let text = String(data: encoded, encoding: .utf8) else { return nil }
-            var next = attachments
-            next[index] = attachment.withText(text)
+            var next = blocks
+            next[index] = ChatMessageBlock(
+                id: block.id,
+                anchor: block.anchor,
+                kind: .pendingMemberToolCards,
+                toolCallID: block.toolCallID,
+                pendingMemberToolCards: cards,
+                createdAt: block.createdAt,
+                updatedAt: Date()
+            )
             return next
         }
         return nil
@@ -1699,33 +1655,32 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    // MARK: - 卡片状态标记（更新消息附件中卡片的保存状态）
+    // MARK: - 卡片状态标记（更新消息 blocks 中卡片状态）
 
     private func updateStructuredHealthCardsBlob(
         threadID: UUID,
         message: ChatMessage,
         mutate: (inout StructuredHealthCardsBlob) -> Void
     ) async {
-        guard let updated = replacingStructuredHealthCardsBlob(in: message.attachments, mutate: mutate) else { return }
-        await persistStructuredAttachments(threadID: threadID, message: message, attachments: updated)
+        guard let updated = replacingStructuredHealthCardsBlob(in: message.blocks, mutate: mutate) else { return }
+        await persistStructuredBlocks(threadID: threadID, message: message, blocks: updated)
     }
 
-    // MARK: - 附件持久化与同步
+    // MARK: - Blocks 持久化与同步
 
-    /// 持久化更新后的结构化卡片附件，并同步到服务端
-    private func persistStructuredAttachments(threadID: UUID, message: ChatMessage, attachments: [ChatAttachment]) async {
-        // 更新消息附件（标记待同步）
-        await updateChatMessageAttachmentsUseCase.execute(
+    /// 持久化更新后的结构化卡片 blocks，并同步到服务端
+    private func persistStructuredBlocks(threadID: UUID, message: ChatMessage, blocks: [ChatMessageBlock]) async {
+        await updateChatMessageBlocksUseCase.execute(
             clientMessageID: message.clientMessageID,
-            attachments: attachments,
+            blocks: blocks,
             markPendingForSync: true
         )
         
         // 更新本地状态存储
-        stateStore.updateMessageAttachments(
+        stateStore.updateMessageBlocksFromIncoming(
             threadID: threadID,
             clientMessageID: message.clientMessageID,
-            attachments: attachments
+            incomingBlocks: blocks
         )
         
         // 执行同步：推送本地数据到服务端
@@ -1736,36 +1691,34 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    /// 替换消息附件中的结构化健康卡片数据（JSON序列化/反序列化处理）
+    /// 替换消息 blocks 中的结构化健康卡片数据
     /// - Parameters:
-    ///   - attachments: 原始附件数组
+    ///   - blocks: 原始消息 blocks
     ///   - mutate: 修改卡片数据的闭包
-    /// - Returns: 修改后的附件数组
+    /// - Returns: 修改后的消息 blocks
     private func replacingStructuredHealthCardsBlob(
-        in attachments: [ChatAttachment],
+        in blocks: [ChatMessageBlock],
         mutate: (inout StructuredHealthCardsBlob) -> Void
-    ) -> [ChatAttachment]? {
-        // 查找结构化健康卡片附件的索引 + 解析JSON数据
-        guard let index = attachments.firstIndex(where: { $0.type == .structuredHealthCards }),
-              let raw = attachments[index].text,
-              let data = raw.data(using: .utf8),
-              var blob = try? JSONDecoder().decode(StructuredHealthCardsBlob.self, from: data) else {
+    ) -> [ChatMessageBlock]? {
+        guard let index = blocks.lastIndex(where: { $0.kind == .structuredHealthCards }),
+              var blob = blocks[index].structuredHealthCards else {
             return nil
         }
         
         // 执行修改操作
         mutate(&blob)
         
-        // 重新编码为JSON字符串
-        let enc = JSONEncoder()
-        guard let outData = try? enc.encode(blob),
-              let text = String(data: outData, encoding: .utf8) else {
-            return nil
-        }
-        
-        // 替换原附件并返回
-        var next = attachments
-        next[index] = attachments[index].withText(text)
+        var next = blocks
+        let old = blocks[index]
+        next[index] = ChatMessageBlock(
+            id: old.id,
+            anchor: old.anchor,
+            kind: .structuredHealthCards,
+            toolCallID: old.toolCallID,
+            structuredHealthCards: blob,
+            createdAt: old.createdAt,
+            updatedAt: Date()
+        )
         return next
     }
 }

@@ -37,10 +37,14 @@ final class DefaultChatMessageActionUseCase: ChatMessageActionUseCase {
 
     /// 使用轻量本地规则先生成可预览知识卡，再由用户决定是否保存到知识库。
     func buildKnowledgePreviewCard(message: ChatMessage, metadata: ChatMessageMetadata) -> ChatKnowledgeCard {
-        // 优先使用 block 中的工具输出；旧消息再退回 attachment metadata。
+        // 优先使用 block 中的工具输出；元数据聚合统一来自 blocks。
         let blockToolContent = message.blocks.last(where: { $0.kind == .tool })?.text ?? ""
         let toolContent = blockToolContent.isEmpty ? (metadata.toolContent ?? "") : blockToolContent
-        let primary = toolContent.isEmpty ? message.content : toolContent
+        let fallbackText = message.blocks
+            .filter { $0.kind == .text || $0.kind == .error }
+            .compactMap(\.text)
+            .joined(separator: "\n")
+        let primary = toolContent.isEmpty ? fallbackText : toolContent
         // 文本预处理：压缩空行、去首尾空白，避免卡片展示噪音。
         let normalized = primary
             .replacingOccurrences(of: "\n\n", with: "\n")

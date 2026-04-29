@@ -630,24 +630,31 @@ struct ChatView: View {
         let iso = ISO8601DateFormatter()
         let sortedMessages = messages.sorted { $0.createdAt < $1.createdAt }
         let payload: [[String: Any]] = sortedMessages.map { message in
+            let attachments = message.blocks
+                .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+                .flatMap(\.attachments)
+            let contentPreview = message.blocks
+                .compactMap(\.text)
+                .joined(separator: "\n")
             var row: [String: Any] = [
                 "id": message.id.uuidString,
                 "client_message_id": message.clientMessageID.uuidString,
                 "role": message.role.rawValue,
-                "kind": message.kind.rawValue,
                 "delivery_state": message.deliveryState.rawValue,
                 "created_at": iso.string(from: message.createdAt),
-                "content_preview": String(message.content.prefix(300)),
-                "attachments_count": message.attachments.count,
+                "content_preview": String(contentPreview.prefix(300)),
+                "attachments_count": attachments.count,
                 "blocks_count": message.blocks.count
             ]
-            if let attachmentsObject = encodableToJSONObject(message.attachments) {
+            if let attachmentsObject = encodableToJSONObject(attachments) {
                 row["attachments"] = attachmentsObject
             }
             if let blocksObject = encodableToJSONObject(message.blocks) {
                 row["blocks"] = blocksObject
             }
-            if let reasoning = message.reasoningContent, reasoning.isEmpty == false {
+            if let deepThought = message.blocks.last(where: { $0.kind == .deepThought })?.deepThoughtCard,
+               let reasoning = deepThought.reasoningContent,
+               reasoning.isEmpty == false {
                 row["reasoning_preview"] = String(reasoning.suffix(200))
             }
             if let model = message.modelName, model.isEmpty == false {

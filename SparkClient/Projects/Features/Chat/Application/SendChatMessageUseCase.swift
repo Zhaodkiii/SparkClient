@@ -198,29 +198,67 @@ struct SendChatMessageUseCase: Sendable {
                 return brief.isEmpty ? "小任务：\(task.name)" : "小任务：\(task.name)\n\(brief)"
             }
 
-            // 落库内容：只保存用户原始输入，小任务用卡片展示
-            let persistedContent = smallTask == nil ? sanitizedInput : (smallTaskDisplayContent ?? "")
-            let persistedKind: ChatMessageKind = smallTask == nil ? .text : .card
             // 最终附件 = 普通附件 + 小任务卡片
             let persistedAttachments = smallTaskCardAttachment.map { chatAttachments + [$0] } ?? chatAttachments
+            let persistedContent = smallTask == nil ? sanitizedInput : (smallTaskDisplayContent ?? "")
+            let now = Date()
+            var userBlocks: [ChatMessageBlock] = []
+            let trimmedPersistedContent = persistedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedPersistedContent.isEmpty == false {
+                userBlocks.append(
+                    ChatMessageBlock(
+                        kind: .text,
+                        text: persistedContent,
+                        createdAt: now,
+                        updatedAt: now
+                    )
+                )
+            }
+            let galleryAttachments = persistedAttachments.filter { $0.type == .image }
+            let fileAttachments = persistedAttachments.filter { $0.type == .pdf || $0.type == .file }
+            if galleryAttachments.isEmpty == false {
+                userBlocks.append(
+                    ChatMessageBlock(
+                        kind: .imageGallery,
+                        attachments: galleryAttachments,
+                        createdAt: now,
+                        updatedAt: now
+                    )
+                )
+            }
+            if fileAttachments.isEmpty == false {
+                userBlocks.append(
+                    ChatMessageBlock(
+                        kind: .fileAttachments,
+                        attachments: fileAttachments,
+                        createdAt: now,
+                        updatedAt: now
+                    )
+                )
+            }
+            if let smallTaskCardPayload {
+                userBlocks.append(
+                    ChatMessageBlock(
+                        kind: .smallTaskCard,
+                        smallTaskCard: smallTaskCardPayload,
+                        createdAt: now,
+                        updatedAt: now
+                    )
+                )
+            }
 
             // 保存用户消息到本地数据库
             let clientMessageID = UUID()
             _ = try await repository.appendMessage(
-                threadID: thread.id,
-                role: .user,
-                kind: persistedKind,
-                content: persistedContent,
-                attachments: persistedAttachments,
-                blocks: nil,
-                reasoningContent: nil,
-                reasoningDurationMs: nil,
-                reasoningExpanded: false,
-                reasoningVisibility: .full,
-                clientMessageID: clientMessageID,
-                serverMessageID: nil,
-                deliveryState: .pending,
-                modelName: "user"
+                ChatMessage(
+                    threadID: thread.id,
+                    role: .user,
+                    blocks: userBlocks,
+                    clientMessageID: clientMessageID,
+                    serverMessageID: nil,
+                    deliveryState: .pending,
+                    modelName: "user"
+                )
             )
             logger.debug(
                 "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID))",
@@ -266,9 +304,7 @@ struct SendChatMessageUseCase: Sendable {
                     ChatMessage(
                         threadID: thread.id,
                         role: .user,
-                        kind: .text,
-                        content: textForTools,
-                        attachments: [],
+                        blocks: [.init(kind: .text, text: textForTools)],
                         deliveryState: .pending,
                         modelName: "user"
                     )
@@ -312,51 +348,44 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            // 处理AI返回的推理内容
-            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             // 解析工具事件
-            let interpreted = toolEventInterpreter.interpret(
+            _ = toolEventInterpreter.interpret(
                 kind: output.kind,
                 text: output.text,
                 toolName: output.toolName,
                 toolContent: output.toolContent
             )
+            let assistantBlocks = buildAssistantBlocks(
+                outputBlocks: output.blocks,
+                reasoningText: output.reasoningText,
+                reasoningDurationMs: output.reasoningDurationMs
+            )
             
             // 保存AI助手消息到本地
             _ = try await repository.appendMessage(
-                threadID: thread.id,
-                role: .assistant,
-                kind: output.kind,
-                content: output.text,
-                attachments: interpreted.attachments,
-                blocks: output.blocks,
-                reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
-                reasoningDurationMs: output.reasoningDurationMs,
-                reasoningExpanded: false,
-                reasoningVisibility: .full,
-                clientMessageID: assistantClientMessageID,
-                serverMessageID: nil,
-                deliveryState: .pending,
-                modelName: resolvedRow.name
+                ChatMessage(
+                    threadID: thread.id,
+                    role: .assistant,
+                    blocks: assistantBlocks,
+                    clientMessageID: assistantClientMessageID,
+                    serverMessageID: nil,
+                    deliveryState: .pending,
+                    modelName: resolvedRow.name
+                )
             )
 
             // 如果AI结束原因需要提示，追加系统消息
             if let notice = finishReasonNoticeText(output.finishReason) {
                 _ = try await repository.appendMessage(
-                    threadID: thread.id,
-                    role: .system,
-                    kind: .system,
-                    content: notice,
-                    attachments: [],
-                    blocks: nil,
-                    reasoningContent: nil,
-                    reasoningDurationMs: nil,
-                    reasoningExpanded: false,
-                    reasoningVisibility: .full,
-                    clientMessageID: UUID(),
-                    serverMessageID: nil,
-                    deliveryState: .pending,
-                    modelName: "system"
+                    ChatMessage(
+                        threadID: thread.id,
+                        role: .system,
+                        blocks: [.init(kind: .text, text: notice)],
+                        clientMessageID: UUID(),
+                        serverMessageID: nil,
+                        deliveryState: .pending,
+                        modelName: "system"
+                    )
                 )
                 logger.warning("AI 完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
@@ -458,7 +487,9 @@ struct SendChatMessageUseCase: Sendable {
             )
             let deliverMultimodal = effectiveMode == .directMultimodal
                 && supportsMultimodal
-                && latestUserMessage.attachments.contains(where: \.isUserImageForMultimodal)
+                && latestUserMessage.blocks
+                    .flatMap(\.attachments)
+                    .contains(where: \.isUserImageForMultimodal)
 
             let contextMemberID = thread.memberID
             let memberContextSummary: String
@@ -469,7 +500,10 @@ struct SendChatMessageUseCase: Sendable {
             }
 
             let output = try await orchestrator.generateReply(
-                userInput: latestUserMessage.content,
+                userInput: latestUserMessage.blocks
+                    .compactMap(\.text)
+                    .joined(separator: "\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
                 history: replayHistory,
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
@@ -489,46 +523,40 @@ struct SendChatMessageUseCase: Sendable {
                 onPartial: onAssistantPartial
             )
 
-            let reasoningTrimmed = output.reasoningText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            let interpreted = toolEventInterpreter.interpret(
+            _ = toolEventInterpreter.interpret(
                 kind: output.kind,
                 text: output.text,
                 toolName: output.toolName,
                 toolContent: output.toolContent
             )
+            let assistantBlocks = buildAssistantBlocks(
+                outputBlocks: output.blocks,
+                reasoningText: output.reasoningText,
+                reasoningDurationMs: output.reasoningDurationMs
+            )
             _ = try await repository.appendMessage(
-                threadID: thread.id,
-                role: .assistant,
-                kind: output.kind,
-                content: output.text,
-                attachments: interpreted.attachments,
-                blocks: output.blocks,
-                reasoningContent: reasoningTrimmed.flatMap { $0.isEmpty ? nil : $0 },
-                reasoningDurationMs: output.reasoningDurationMs,
-                reasoningExpanded: false,
-                reasoningVisibility: .full,
-                clientMessageID: assistantClientMessageID,
-                serverMessageID: nil,
-                deliveryState: .pending,
-                modelName: resolvedRow.name
+                ChatMessage(
+                    threadID: thread.id,
+                    role: .assistant,
+                    blocks: assistantBlocks,
+                    clientMessageID: assistantClientMessageID,
+                    serverMessageID: nil,
+                    deliveryState: .pending,
+                    modelName: resolvedRow.name
+                )
             )
 
             if let notice = finishReasonNoticeText(output.finishReason) {
                 _ = try await repository.appendMessage(
-                    threadID: thread.id,
-                    role: .system,
-                    kind: .system,
-                    content: notice,
-                    attachments: [],
-                    blocks: nil,
-                    reasoningContent: nil,
-                    reasoningDurationMs: nil,
-                    reasoningExpanded: false,
-                    reasoningVisibility: .full,
-                    clientMessageID: UUID(),
-                    serverMessageID: nil,
-                    deliveryState: .pending,
-                    modelName: "system"
+                    ChatMessage(
+                        threadID: thread.id,
+                        role: .system,
+                        blocks: [.init(kind: .text, text: notice)],
+                        clientMessageID: UUID(),
+                        serverMessageID: nil,
+                        deliveryState: .pending,
+                        modelName: "system"
+                    )
                 )
                 logger.warning("重新生成完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
@@ -553,6 +581,34 @@ struct SendChatMessageUseCase: Sendable {
             logger.error("regenerateReply 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
             throw error
         }
+    }
+
+    private func buildAssistantBlocks(
+        outputBlocks: [ChatMessageBlock],
+        reasoningText: String?,
+        reasoningDurationMs: Int64?
+    ) -> [ChatMessageBlock] {
+        let now = Date()
+        var blocks = outputBlocks
+        if blocks.isEmpty {
+            blocks = []
+        }
+        let trimmed = reasoningText?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
+        guard trimmed.isEmpty == false else { return blocks }
+        blocks.append(
+            ChatMessageBlock(
+                kind: .deepThought,
+                deepThoughtCard: ChatDeepThoughtCardPayload(
+                    reasoningContent: trimmed,
+                    reasoningDurationMs: reasoningDurationMs,
+                    reasoningExpanded: false,
+                    reasoningVisibility: .full
+                ),
+                createdAt: now,
+                updatedAt: now
+            )
+        )
+        return blocks
     }
 
     private func resolveThread(

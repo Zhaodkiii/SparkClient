@@ -63,14 +63,7 @@ final class ChatStateStore: ObservableObject {
             id: streaming.clientMessageID,
             threadID: streaming.threadID,
             role: .assistant,
-            kind: streaming.state.kind,
-            content: streaming.state.content,
-            attachments: streaming.state.extraAttachments,
             blocks: streaming.state.blocks,
-            reasoningContent: streaming.state.reasoningContent,
-            reasoningDurationMs: streaming.state.reasoningDurationMs,
-            reasoningExpanded: true,
-            reasoningVisibility: .full,
             clientMessageID: streaming.clientMessageID,
             serverMessageID: nil,
             deliveryState: .sending,
@@ -153,112 +146,35 @@ final class ChatStateStore: ObservableObject {
         messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: paging.isLoadingMore)
     }
 
-    func updateMessageAttachments(
+    func updateMessageBlocksFromIncoming(
         threadID: UUID,
         clientMessageID: UUID,
-        attachments: [ChatAttachment]
+        incomingBlocks: [ChatMessageBlock]
     ) {
-        guard var messages = messagesByThread[threadID] else { return }
-        guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
+        guard let messages = messagesByThread[threadID],
+              let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
         let old = messages[idx]
-        messages[idx] = ChatMessage(
-            id: old.id,
-            threadID: old.threadID,
-            role: old.role,
-            kind: old.kind,
-            content: old.content,
-            attachments: attachments,
-            blocks: ChatMessageBlockBuilder.merge(
-                existingBlocks: old.blocks,
-                role: old.role,
-                kind: old.kind,
-                content: old.content,
-                attachments: attachments,
-                reasoningContent: old.reasoningContent,
-                reasoningDurationMs: old.reasoningDurationMs,
-                createdAt: old.createdAt
-            ),
-            reasoningContent: old.reasoningContent,
-            reasoningDurationMs: old.reasoningDurationMs,
-            reasoningExpanded: old.reasoningExpanded,
-            reasoningVisibility: old.reasoningVisibility,
-            clientMessageID: old.clientMessageID,
-            serverMessageID: old.serverMessageID,
-            deliveryState: old.deliveryState,
-            createdAt: old.createdAt,
-            serverUpdatedAt: old.serverUpdatedAt,
-            isTombstone: old.isTombstone,
-            modelName: old.modelName
+        let mergedBlocks = ChatMessageBlockBuilder.mergeRichBlocks(existingBlocks: old.blocks, incomingBlocks: incomingBlocks)
+        updateMessageBlocksSnapshot(
+            threadID: threadID,
+            clientMessageID: clientMessageID,
+            blocks: mergedBlocks
         )
-        messagesByThread[threadID] = messages
     }
 
-    func updateMessagePresentation(
+    func updateMessageBlocksSnapshot(
         threadID: UUID,
         clientMessageID: UUID,
-        attachments: [ChatAttachment],
         blocks: [ChatMessageBlock]
     ) {
         guard var messages = messagesByThread[threadID] else { return }
         guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
         let old = messages[idx]
-        /// 入参为与 Core Data 一致的完整展示快照；勿再与 `old.blocks` merge，否则易与流式已合并内容重复插入。
         messages[idx] = ChatMessage(
             id: old.id,
             threadID: old.threadID,
             role: old.role,
-            kind: old.kind,
-            content: old.content,
-            attachments: attachments,
-            blocks: blocks,
-            reasoningContent: old.reasoningContent,
-            reasoningDurationMs: old.reasoningDurationMs,
-            reasoningExpanded: old.reasoningExpanded,
-            reasoningVisibility: old.reasoningVisibility,
-            clientMessageID: old.clientMessageID,
-            serverMessageID: old.serverMessageID,
-            deliveryState: old.deliveryState,
-            createdAt: old.createdAt,
-            serverUpdatedAt: Date(),
-            isTombstone: old.isTombstone,
-            modelName: old.modelName
-        )
-        messagesByThread[threadID] = messages
-    }
-
-    func updateMessageContentAndAttachments(
-        threadID: UUID,
-        clientMessageID: UUID,
-        content: String,
-        kind: ChatMessageKind,
-        attachments: [ChatAttachment],
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?
-    ) {
-        guard var messages = messagesByThread[threadID] else { return }
-        guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
-        let old = messages[idx]
-        messages[idx] = ChatMessage(
-            id: old.id,
-            threadID: old.threadID,
-            role: old.role,
-            kind: kind,
-            content: content,
-            attachments: attachments,
-            blocks: ChatMessageBlockBuilder.merge(
-                existingBlocks: old.blocks,
-                role: old.role,
-                kind: kind,
-                content: content,
-                attachments: attachments,
-                reasoningContent: reasoningContent,
-                reasoningDurationMs: reasoningDurationMs,
-                createdAt: old.createdAt
-            ),
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
-            reasoningExpanded: old.reasoningExpanded,
-            reasoningVisibility: old.reasoningVisibility,
+            blocks: ChatMessageBlockBuilder.composeBlocks(blocks),
             clientMessageID: old.clientMessageID,
             serverMessageID: old.serverMessageID,
             deliveryState: old.deliveryState,
@@ -548,11 +464,11 @@ final class ChatStateStore: ObservableObject {
 
     func mergeStreamingAssistantAttachments(
         threadID: UUID,
-        attachments: [ChatAttachment]
+        incomingBlocks: [ChatMessageBlock]
     ) {
-        guard attachments.isEmpty == false else { return }
+        guard incomingBlocks.isEmpty == false else { return }
         guard var streaming = streamingAssistants[threadID] else { return }
-        let changed = streamingReducer.mergeAttachments(state: &streaming.state, attachments: attachments)
+        let changed = streamingReducer.mergeAttachments(state: &streaming.state, incomingBlocks: incomingBlocks)
         guard changed else { return }
         streamingAssistants[threadID] = streaming
         streamingContentGeneration &+= 1
@@ -560,15 +476,13 @@ final class ChatStateStore: ObservableObject {
 
     func mergeStreamingAssistantPresentation(
         threadID: UUID,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]
+        incomingBlocks: [ChatMessageBlock]
     ) {
-        guard attachments.isEmpty == false || blocks.isEmpty == false else { return }
+        guard incomingBlocks.isEmpty == false else { return }
         guard var streaming = streamingAssistants[threadID] else { return }
         let changed = streamingReducer.mergePresentation(
             state: &streaming.state,
-            attachments: attachments,
-            blocks: blocks
+            incomingBlocks: incomingBlocks
         )
         guard changed else { return }
         streamingAssistants[threadID] = streaming

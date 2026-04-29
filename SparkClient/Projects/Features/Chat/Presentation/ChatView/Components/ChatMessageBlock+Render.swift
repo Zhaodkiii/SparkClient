@@ -25,7 +25,7 @@ extension ChatMessageBlock {
         case .imageGallery(let attachments):
             ChatImageGalleryBlockView(
                 images: ChatImagePayloadBuilder.imagePayloads(
-                    from: attachmentsOnlyMessage(attachments, base: context.message)
+                    from: imageGalleryMessage(attachments, base: context.message)
                 ),
                 style: context.message.role == .user ? .user : .assistant, // 用户/助手样式
                 unifiedFilePreview: context.unifiedFilePreview,
@@ -33,10 +33,10 @@ extension ChatMessageBlock {
             )
             
             // 3. 深度思考块（AI思考过程）
-        case .reasoning(let text):
+        case .deepThought(let card):
             ChatReasoningBlockView(
-                text: text,
-                timeText: context.reasoningTimeText,
+                text: card.reasoningContent ?? "",
+                timeText: formatDeepThoughtDuration(card.reasoningDurationMs),
                 isStreaming: context.message.deliveryState == .sending, // 是否正在流式输出
                 isLastAssistantMessage: context.isLastAssistantMessage
             )
@@ -162,13 +162,17 @@ extension ChatMessageBlock {
     ///   - attachments: 附件列表
     ///   - base: 原始消息
     /// - Returns: 只带附件的新消息
-    private func attachmentsOnlyMessage(_ attachments: [ChatAttachment], base: ChatMessage) -> ChatMessage {
-        ChatMessage(
+    private func imageGalleryMessage(_ attachments: [ChatAttachment], base: ChatMessage) -> ChatMessage {
+        let galleryBlock = ChatMessageBlock(
+            kind: .imageGallery,
+            attachments: attachments,
+            createdAt: base.createdAt,
+            updatedAt: Date()
+        )
+        return ChatMessage(
             threadID: base.threadID,
             role: base.role,
-            kind: base.kind,
-            content: "",
-            attachments: attachments,
+            blocks: [galleryBlock],
             deliveryState: base.deliveryState,
             modelName: base.modelName
         )
@@ -188,5 +192,16 @@ extension ChatMessageBlock {
             return meta.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         }
         return false
+    }
+
+    private func formatDeepThoughtDuration(_ durationMs: Int64?) -> String? {
+        guard let durationMs, durationMs > 0 else { return nil }
+        let seconds = Double(durationMs) / 1_000
+        if seconds < 60 {
+            return String(format: "%.1fs", seconds)
+        }
+        let minutes = Int(seconds) / 60
+        let remainSeconds = seconds.truncatingRemainder(dividingBy: 60)
+        return String(format: "%dm %.1fs", minutes, remainSeconds)
     }
 }

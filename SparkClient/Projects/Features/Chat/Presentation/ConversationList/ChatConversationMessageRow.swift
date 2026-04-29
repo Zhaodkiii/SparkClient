@@ -70,19 +70,19 @@ struct ChatConversationMessageRow: View {
                 }
             },
             onCopy: {
-                UIPasteboard.general.string = message.content
+                UIPasteboard.general.string = messagePlainText(message)
             },
             onDelete: {
                 uiStateStore.markDeleted(message.id)
             },
             onToggleSpeech: {
-                speechHelper.toggle(text: message.content, id: message.id)
+                speechHelper.toggle(text: messagePlainText(message), id: message.id)
             },
             onToggleTranslate: {
                 toggleTranslate(message)
             },
             onOpenNetworkSearch: {
-                openNetworkSearch(with: message.content)
+                openNetworkSearch(with: messagePlainText(message))
             },
             onSaveMessageToKnowledge: {
                 saveMessageToKnowledge(message)
@@ -224,7 +224,7 @@ struct ChatConversationMessageRow: View {
             }
             do {
                 try await messageActionUseCase.saveMessageToKnowledge(
-                    content: message.content,
+                    content: messagePlainText(message),
                     detailViewModel: detailViewModel
                 )
                 await MainActor.run {
@@ -256,7 +256,7 @@ struct ChatConversationMessageRow: View {
                 }
             }
             do {
-                let translated = try await messageActionUseCase.translate(message.content, detailViewModel: detailViewModel)
+                let translated = try await messageActionUseCase.translate(messagePlainText(message), detailViewModel: detailViewModel)
                 await MainActor.run {
                     uiStateStore.setTranslatedText(translated.trimmingCharacters(in: .whitespacesAndNewlines), for: message.id)
                 }
@@ -364,6 +364,13 @@ struct ChatConversationMessageRow: View {
         }
         let attachment = metadata?.translatedText ?? ChatMessageMetadata(message: message).translatedText
         return attachment?.isEmpty == false ? attachment : nil
+    }
+
+    private func messagePlainText(_ message: ChatMessage) -> String {
+        message.blocks
+            .filter { $0.kind == .text || $0.kind == .tool || $0.kind == .error }
+            .compactMap(\.text)
+            .joined(separator: "\n")
     }
 }
 

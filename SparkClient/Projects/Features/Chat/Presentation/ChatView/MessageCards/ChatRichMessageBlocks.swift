@@ -352,7 +352,10 @@ struct ChatHTMLPreviewBlockView: View {
 enum ChatImagePayloadBuilder {
     static func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
         var payloads: [ChatImagePayload] = []
-        for attachment in message.attachments where attachment.isChatImageLike {
+        let attachments = message.blocks
+            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+            .flatMap(\.attachments)
+        for attachment in attachments where attachment.isChatImageLike {
             if attachment.url == nil,
                let raw = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines),
                raw.isEmpty == false {

@@ -69,7 +69,7 @@ struct ChatOutboxPipeline: Sendable {
         let pending = await outboxStore.pending(limit: 50)
         guard pending.isEmpty == false else { return }
 
-        let toolCount = pending.filter { $0.kind == .tool }.count
+        let toolCount = pending.filter { $0.blocks.contains(where: { $0.kind == .tool }) }.count
         let threads = Set(pending.map(\.threadID)).count
         logger.info(
             "准备上送对话，count=\(pending.count), threads=\(threads), toolMessages=\(toolCount)",
@@ -86,9 +86,6 @@ struct ChatOutboxPipeline: Sendable {
                 ChatRemoteMessageDTO(
                     threadID: message.threadID,
                     role: message.role.rawValue,
-                    kind: message.kind.rawValue,
-                    content: message.content,
-                    attachments: message.attachments,
                     blocks: message.blocks,
                     clientMessageID: message.clientMessageID,
                     serverMessageID: message.serverMessageID,
@@ -102,10 +99,6 @@ struct ChatOutboxPipeline: Sendable {
                     threadMaxTokens: threadsByID[message.threadID]?.maxTokens,
                     threadMaxMessages: threadsByID[message.threadID]?.maxMessages,
                     threadRolePrompt: threadsByID[message.threadID]?.rolePrompt,
-                    reasoningContent: message.reasoningContent,
-                    reasoningDurationMs: message.reasoningDurationMs,
-                    reasoningExpanded: message.reasoningExpanded,
-                    reasoningVisibility: message.reasoningVisibility.rawValue,
                     modelName: message.modelName
                 )
             }

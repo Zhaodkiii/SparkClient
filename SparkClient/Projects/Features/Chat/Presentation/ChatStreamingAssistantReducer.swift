@@ -1,23 +1,19 @@
 import Foundation
 
 /// AI 助手**流式输出状态**
-/// 保存实时更新的文本、思考、工具、卡片、附件等 UI 渲染数据
+/// 保存实时更新的文本、思考、工具与卡片等 blocks 渲染数据
 struct ChatStreamingAssistantState: Sendable, Equatable {
-    var kind: ChatMessageKind                     // 消息类型（文本/工具/卡片等）
-    var content: String                           // 主文本内容（流式不断追加）
     var reasoningContent: String?                 // AI 深度思考内容
     var reasoningStartedAt: Date?                 // 思考开始时间
     var reasoningDurationMs: Int64?               // 思考耗时（毫秒）
     var toolName: String?                         // 当前调用的工具名称
     var toolContent: String?                      // 工具返回内容
-    var extraAttachments: [ChatAttachment]        // 额外附件
+    var extraAttachments: [ChatAttachment]        // 运行时扩展字段（预留）
     var blocks: [ChatMessageBlock]                // 消息块（文本/图片/卡片/错误等）
 
     /// 初始化空状态
     static func initial(kind: ChatMessageKind) -> ChatStreamingAssistantState {
         ChatStreamingAssistantState(
-            kind: kind,
-            content: "",
             reasoningContent: nil,
             reasoningStartedAt: nil,
             reasoningDurationMs: nil,
@@ -42,9 +38,6 @@ struct ChatStreamingAssistantReducer: Sendable {
         let previous = state                       // 保存旧状态（用于对比是否变化）
 
         // 1. 更新基础内容
-        state.kind = delta.kind
-        state.content = delta.answer
-
         // 2. 处理思考内容（推理）
         let normalizedReasoning = normalize(delta.reasoning)
         state.reasoningContent = normalizedReasoning
@@ -68,6 +61,7 @@ struct ChatStreamingAssistantReducer: Sendable {
             current: state.blocks,
             delta: delta,
             reasoningDurationMs: state.reasoningDurationMs,
+            reasoningVisibility: .full,
             extraAttachments: state.extraAttachments,
             now: now
         )
@@ -79,71 +73,32 @@ struct ChatStreamingAssistantReducer: Sendable {
         return state != previous
     }
 
-    /// 合并附件到流式状态
+    /// 合并增量 blocks 到流式状态
     func mergeAttachments(
         state: inout ChatStreamingAssistantState,
-        attachments: [ChatAttachment],
+        incomingBlocks: [ChatMessageBlock],
         now: Date = Date()
     ) -> Bool {
         let previous = state
-        var merged = state.extraAttachments
-
-        // 已存在则替换，不存在则添加
-        for attachment in attachments {
-            if let index = merged.firstIndex(where: {
-                $0.type == attachment.type && $0.anchorToolCallID == attachment.anchorToolCallID
-            }) {
-                merged[index] = attachment
-            } else {
-                merged.append(attachment)
-            }
-        }
-
-        state.extraAttachments = merged
+        guard incomingBlocks.isEmpty == false else { return false }
         
-        // 重新生成消息块
-        state.blocks = ChatMessageBlockBuilder.merge(
+        // 重新生成消息块（blocks-only）
+        state.blocks = ChatMessageBlockBuilder.mergeRichBlocks(
             existingBlocks: state.blocks,
-            role: .assistant,
-            kind: state.kind,
-            content: state.content,
-            attachments: merged + runtimeToolAttachments(toolName: state.toolName, toolContent: state.toolContent),
-            reasoningContent: state.reasoningContent,
-            reasoningDurationMs: state.reasoningDurationMs,
-            createdAt: now
+            incomingBlocks: incomingBlocks
         )
 
         return state != previous
     }
 
-    /// 高级合并：用于展示层（富文本、卡片块、附件批量更新）
+    /// 高级合并：用于展示层（富文本、卡片块批量更新）
     func mergePresentation(
         state: inout ChatStreamingAssistantState,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock],
+        incomingBlocks: [ChatMessageBlock],
         now: Date = Date()
     ) -> Bool {
         let previous = state
-        var mergedAttachments = state.extraAttachments
-
-        // 合并附件
-        for attachment in attachments {
-            if let index = mergedAttachments.firstIndex(where: {
-                $0.type == attachment.type
-                && $0.anchorToolCallID == attachment.anchorToolCallID
-                && $0.anchorBlockID == attachment.anchorBlockID
-            }) {
-                mergedAttachments[index] = attachment
-            } else {
-                mergedAttachments.append(attachment)
-            }
-        }
-        state.extraAttachments = mergedAttachments
-
-        // 合并消息块
-        let incomingBlocks = blocks.isEmpty
-            ? ChatMessageBlockBuilder.blocks(from: attachments, createdAt: now)
-            : blocks
+        guard incomingBlocks.isEmpty == false else { return false }
 
         state.blocks = ChatMessageBlockBuilder.finalizeStreamingPresentationBlocks(
             normalizeStreamingBlocks(
@@ -164,6 +119,7 @@ struct ChatStreamingAssistantReducer: Sendable {
         current: [ChatMessageBlock],
         delta: ChatAssistantPartialDelta,
         reasoningDurationMs: Int64?,
+        reasoningVisibility: ChatReasoningVisibility,
         extraAttachments: [ChatAttachment],
         now: Date
     ) -> [ChatMessageBlock] {
@@ -171,21 +127,27 @@ struct ChatStreamingAssistantReducer: Sendable {
 
         // 1. 处理思考块（reasoning block）
         if let reasoning = normalize(delta.reasoning) {
-            if let index = blocks.firstIndex(where: { $0.kind == .reasoning }) {
+            let card = ChatDeepThoughtCardPayload(
+                reasoningContent: reasoning,
+                reasoningDurationMs: reasoningDurationMs,
+                reasoningExpanded: false,
+                reasoningVisibility: reasoningVisibility
+            )
+            if let index = blocks.firstIndex(where: { $0.kind == .deepThought }) {
                 // 已存在 → 更新
                 let old = blocks[index]
                 blocks[index] = ChatMessageBlock(
                     id: old.id,
                     anchor: old.anchor,
-                    kind: .reasoning,
-                    text: reasoning,
+                    kind: .deepThought,
+                    deepThoughtCard: card,
                     createdAt: old.createdAt,
                     updatedAt: now
                 )
             } else {
                 // 不存在 → 插入到顶部
                 blocks.insert(
-                    ChatMessageBlock(kind: .reasoning, text: reasoning, createdAt: now, updatedAt: now),
+                    ChatMessageBlock(kind: .deepThought, deepThoughtCard: card, createdAt: now, updatedAt: now),
                     at: 0
                 )
             }
@@ -248,16 +210,16 @@ struct ChatStreamingAssistantReducer: Sendable {
             }
         }
 
-        // 最终合并构建器
-        return ChatMessageBlockBuilder.merge(
+        // 最终合并构建器（blocks-only）
+        let runtimeToolBlocks = runtimeToolBlocks(
+            toolName: delta.toolName,
+            toolContent: delta.toolContent,
+            toolCallID: delta.toolCallID,
+            now: now
+        )
+        return ChatMessageBlockBuilder.mergeRichBlocks(
             existingBlocks: blocks,
-            role: .assistant,
-            kind: delta.kind,
-            content: delta.answer,
-            attachments: extraAttachments + runtimeToolAttachments(toolName: delta.toolName, toolContent: delta.toolContent),
-            reasoningContent: delta.reasoning,
-            reasoningDurationMs: reasoningDurationMs,
-            createdAt: now
+            incomingBlocks: runtimeToolBlocks
         )
     }
 
@@ -268,9 +230,25 @@ struct ChatStreamingAssistantReducer: Sendable {
         return value.isEmpty ? nil : value
     }
 
-    /// 构建工具运行时附件
-    private func runtimeToolAttachments(toolName: String?, toolContent: String?) -> [ChatAttachment] {
-        ChatToolRuntimeAttachmentBuilder().build(toolName: toolName, toolContent: toolContent)
+    /// 构建工具运行时块
+    private func runtimeToolBlocks(
+        toolName: String?,
+        toolContent: String?,
+        toolCallID: String?,
+        now: Date
+    ) -> [ChatMessageBlock] {
+        guard let toolContent = normalize(toolContent) else { return [] }
+        return [
+            ChatMessageBlock(
+                anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                kind: .tool,
+                text: toolContent,
+                toolName: normalize(toolName),
+                toolCallID: toolCallID,
+                createdAt: now,
+                updatedAt: now
+            )
+        ]
     }
 
     /// 流式块规范化：合并同类块、避免重复、保持结构干净
@@ -286,8 +264,8 @@ struct ChatStreamingAssistantReducer: Sendable {
                     continue
                 }
             // 思考块：替换已有思考块
-            case .reasoning:
-                if let index = normalized.firstIndex(where: { $0.kind == .reasoning }) {
+            case .deepThought:
+                if let index = normalized.firstIndex(where: { $0.kind == .deepThought }) {
                     normalized[index] = replacing(original: normalized[index], with: block)
                     continue
                 }

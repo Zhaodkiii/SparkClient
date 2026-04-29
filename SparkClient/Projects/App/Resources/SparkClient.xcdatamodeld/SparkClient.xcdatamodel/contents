@@ -84,20 +84,14 @@
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="attachmentsData" optional="YES" attributeType="Binary"/>
+        <attribute name="blocksData" optional="YES" attributeType="Binary"/>
         <attribute name="clientMessageID" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="content" attributeType="String" defaultValueString=""/>
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="deliveryState" attributeType="String" defaultValueString="pending"/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="isTombstone" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
-        <attribute name="kind" attributeType="String" defaultValueString="text"/>
         <attribute name="modelName" optional="YES" attributeType="String"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="reasoningContent" optional="YES" attributeType="String"/>
-        <attribute name="reasoningDurationMs" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="reasoningExpanded" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
-        <attribute name="reasoningVisibility" attributeType="String" defaultValueString="full"/>
         <attribute name="role" attributeType="String" defaultValueString="user"/>
         <attribute name="serverMessageID" optional="YES" attributeType="String"/>
         <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>

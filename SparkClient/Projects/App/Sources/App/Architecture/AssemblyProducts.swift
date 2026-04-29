@@ -99,7 +99,7 @@ struct ChatAssemblyProduct {
     let loadChatMessagesUseCase: LoadChatMessagesUseCase
     let createThreadUseCase: CreateThreadUseCase
     let retryFailedMessageUseCase: RetryFailedMessageUseCase
-    let updateChatMessageAttachmentsUseCase: UpdateChatMessageAttachmentsUseCase
+    let updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase
     let deleteThreadUseCase: DeleteThreadUseCase
     let syncChatUseCase: SyncChatUseCase
     let chatSyncSupervisor: ChatSyncSupervisor
@@ -520,7 +520,7 @@ extension ChatAssembly {
         )
         let chatQueryService = ChatQueryService(repository: chatRepository)
         let syncChatUseCase = SyncChatUseCase(supervisor: chatSyncSupervisor)
-        let updateChatMessageAttachmentsUseCase = UpdateChatMessageAttachmentsUseCase(repository: chatRepository)
+        let updateChatMessageBlocksUseCase = UpdateChatMessageBlocksUseCase(repository: chatRepository)
         let sendChatMessageUseCase = SendChatMessageUseCase(
             repository: chatRepository,
             orchestrator: chatOrchestrator,
@@ -546,7 +546,7 @@ extension ChatAssembly {
                 chatSyncSupervisor: chatSyncSupervisor,
                 logger: logger
             ),
-            updateChatMessageAttachmentsUseCase: updateChatMessageAttachmentsUseCase,
+            updateChatMessageBlocksUseCase: updateChatMessageBlocksUseCase,
             deleteThreadUseCase: DeleteThreadUseCase(
                 repository: chatRepository,
                 chatSyncSupervisor: chatSyncSupervisor

@@ -441,6 +441,14 @@ struct ChatOrchestrator: Sendable {
     }
 
     private func runtimeMessage(from message: ChatMessage, deliverMultimodalImages: Bool) async -> AIRuntimeMessage {
+        let messageText = message.blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let messageAttachments = message.blocks
+            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+            .flatMap(\.attachments)
+
         // 多模态模式：从本地缓存读取 JPEG 字节并内联 base64（不向模型发送远端 URL）
         if deliverMultimodalImages, message.role == .user {
             if let parts = await buildMultimodalParts(from: message) {
@@ -449,19 +457,25 @@ struct ChatOrchestrator: Sendable {
         }
 
         // LocalOCR 模式：非多模态但有图片附件时，从附件中提取 OCR 文本拼接
-        if message.role == .user, message.attachments.isEmpty == false {
+        if message.role == .user, messageAttachments.isEmpty == false {
             let enhancedContent = buildLocalOCRContent(from: message)
-            if enhancedContent != message.content {
+            if enhancedContent != messageText {
                 return AIRuntimeMessage(role: .user, content: enhancedContent)
             }
         }
 
-        return AIRuntimeMessage(role: message.role.runtimeRole, content: message.content)
+        return AIRuntimeMessage(role: message.role.runtimeRole, content: messageText)
     }
 
     private func buildMultimodalParts(from message: ChatMessage) async -> [AIRuntimeContentPart]? {
-        let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageAttachments = message.attachments.filter { $0.isUserImageForMultimodal }
+        let text = message.blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let imageAttachments = message.blocks
+            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+            .flatMap(\.attachments)
+            .filter { $0.isUserImageForMultimodal }
         guard imageAttachments.isEmpty == false else { return nil }
         var parts: [AIRuntimeContentPart] = []
         if text.isEmpty == false {
@@ -494,9 +508,15 @@ struct ChatOrchestrator: Sendable {
 
     /// LocalOCR 模式：从附件元数据中提取 OCR 文本，构造增强后的用户内容
     private func buildLocalOCRContent(from message: ChatMessage) -> String {
-        let userText = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachments = message.attachments.filter { $0.isUserFileForLocalOCR }
-        guard attachments.isEmpty == false else { return message.content }
+        let userText = message.blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachments = message.blocks
+            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+            .flatMap(\.attachments)
+            .filter { $0.isUserFileForLocalOCR }
+        guard attachments.isEmpty == false else { return userText }
 
         var blocks: [String] = []
         for attachment in attachments {
@@ -533,7 +553,7 @@ struct ChatOrchestrator: Sendable {
             blocks.append("【用户输入】\n\(userText)")
         }
         
-        return blocks.isEmpty ? message.content : blocks.joined(separator: "\n\n")
+        return blocks.isEmpty ? userText : blocks.joined(separator: "\n\n")
     }
 
     private func filteredToolDefinitions(inference: ChatOrchestratorInferenceOptions) -> [AIRuntimeToolDefinition] {

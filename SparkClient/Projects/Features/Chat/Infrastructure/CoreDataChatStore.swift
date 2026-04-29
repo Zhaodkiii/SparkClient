@@ -34,6 +34,29 @@ actor CoreDataChatStore {
     private let decoder = JSONDecoder()
     private let logger: Logger
 
+    /// 统一 blocksData 编解码：JSON + LZFSE（失败时自动降级为纯 JSON）。
+    private enum ChatBlockCodec {
+        static func encode(_ blocks: [ChatMessageBlock]) throws -> Data {
+            let json = try JSONEncoder().encode(blocks)
+            if let compressed = try? (json as NSData).compressed(using: .lzfse) {
+                return compressed as Data
+            }
+            return json
+        }
+
+        static func decode(_ data: Data?) -> [ChatMessageBlock] {
+            guard let data else { return [] }
+            if let decompressed = try? (data as NSData).decompressed(using: .lzfse),
+               let decoded = try? JSONDecoder().decode([ChatMessageBlock].self, from: decompressed as Data) {
+                return decoded
+            }
+            if let decoded = try? JSONDecoder().decode([ChatMessageBlock].self, from: data) {
+                return decoded
+            }
+            return []
+        }
+    }
+
     init(
         coreDataStack: CoreDataStack,
         snapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
@@ -393,47 +416,12 @@ actor CoreDataChatStore {
         }) ?? nil
     }
 
-    func appendMessage(
-        threadID: UUID,
-        role: ChatMessageRole,
-        kind: ChatMessageKind,
-        content: String,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]?,
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        reasoningExpanded: Bool,
-        reasoningVisibility: ChatReasoningVisibility,
-        clientMessageID: UUID,
-        serverMessageID: String?,
-        deliveryState: ChatDeliveryState,
-        modelName: String?
-    ) async throws -> ChatMessage {
+    func appendMessage(_ message: ChatMessage) async throws -> ChatMessage {
         guard await activeAccountID() != nil else {
             throw ChatFeatureError.threadNotFound
         }
-        let message = ChatMessage(
-            threadID: threadID,
-            role: role,
-            kind: kind,
-            content: content,
-            attachments: attachments,
-            blocks: blocks,
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
-            reasoningExpanded: reasoningExpanded,
-            reasoningVisibility: reasoningVisibility,
-            clientMessageID: clientMessageID,
-            serverMessageID: serverMessageID,
-            deliveryState: deliveryState,
-            createdAt: Date(),
-            serverUpdatedAt: nil,
-            isTombstone: false,
-            modelName: modelName
-        )
-
         try await kernel.writeWithoutNotification { context, accountID in
-            guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+            guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: message.threadID) else {
                 throw ChatFeatureError.threadNotFound
             }
 
@@ -449,9 +437,9 @@ actor CoreDataChatStore {
         }
         await kernel.postChangeNotification(
             ChatConversationChangeEvent(
-                threadID: threadID,
+                threadID: message.threadID,
                 kind: .messagesAppended,
-                affectedClientMessageIDs: [clientMessageID],
+                affectedClientMessageIDs: [message.clientMessageID],
                 affectsThreadList: true
             )
         )
@@ -517,70 +505,9 @@ actor CoreDataChatStore {
         }
     }
 
-    func updateMessageAttachments(
+    /// blocks-only 更新入口：直接以完整 blocks 快照覆盖消息内容。
+    func updateMessageBlocks(
         clientMessageID: UUID,
-        attachments: [ChatAttachment],
-        markPendingForSync: Bool
-    ) async {
-        let change = try? await kernel.writeWithoutNotification { context, accountID in
-            guard let object = try Self.fetchMessage(
-                context: context,
-                ownerAccountID: accountID,
-                clientMessageID: clientMessageID,
-                serverMessageID: nil
-            ) else {
-                return nil as (UUID, Bool)?
-            }
-            guard let threadID = object.value(forKey: "threadID") as? UUID else { return nil }
-            let latestRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
-            latestRequest.fetchLimit = 1
-            latestRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-                Self.ownerPredicate(accountID),
-                NSPredicate(format: "threadID == %@", threadID as CVarArg),
-                NSPredicate(format: "isTombstone == NO"),
-            ])
-            latestRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
-            let latestClientID = try context.fetch(latestRequest).first?.value(forKey: "clientMessageID") as? UUID
-            let thisClientID = object.value(forKey: "clientMessageID") as? UUID
-            let isLatestMessage = latestClientID != nil && latestClientID == thisClientID
-
-            let existing = Self.toMessage(object: object, decoder: self.decoder, logger: self.logger)
-            let blocks = ChatMessageBlockBuilder.merge(
-                existingBlocks: existing?.blocks ?? [],
-                role: existing?.role ?? .assistant,
-                kind: existing?.kind ?? .text,
-                content: existing?.content ?? "",
-                attachments: attachments,
-                reasoningContent: existing?.reasoningContent,
-                reasoningDurationMs: existing?.reasoningDurationMs,
-                createdAt: existing?.createdAt ?? Date()
-            )
-            let envelope = ChatMessageStorageEnvelope(attachments: attachments, blocks: blocks)
-            object.setValue(try self.encoder.encode(envelope), forKey: "attachmentsData")
-            if markPendingForSync {
-                object.setValue(ChatDeliveryState.pending.rawValue, forKey: "deliveryState")
-            }
-            object.setValue(Date(), forKey: "serverUpdatedAt")
-            if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
-                thread.setValue(Date(), forKey: "updatedAt")
-            }
-            return (threadID, isLatestMessage)
-        }
-        if let change {
-            await kernel.postChangeNotification(
-                ChatConversationChangeEvent(
-                    threadID: change.0,
-                    kind: .messagesUpdated,
-                    affectedClientMessageIDs: [clientMessageID],
-                    affectsThreadList: change.1
-                )
-            )
-        }
-    }
-
-    func updateMessagePresentation(
-        clientMessageID: UUID,
-        attachments: [ChatAttachment],
         blocks: [ChatMessageBlock],
         markPendingForSync: Bool
     ) async {
@@ -606,78 +533,7 @@ actor CoreDataChatStore {
             let thisClientID = object.value(forKey: "clientMessageID") as? UUID
             let isLatestMessage = latestClientID != nil && latestClientID == thisClientID
 
-            let envelope = ChatMessageStorageEnvelope(attachments: attachments, blocks: blocks)
-            object.setValue(try self.encoder.encode(envelope), forKey: "attachmentsData")
-            if markPendingForSync {
-                object.setValue(ChatDeliveryState.pending.rawValue, forKey: "deliveryState")
-            }
-            object.setValue(Date(), forKey: "serverUpdatedAt")
-            if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
-                thread.setValue(Date(), forKey: "updatedAt")
-            }
-            return (threadID, isLatestMessage)
-        }
-        if let change {
-            await kernel.postChangeNotification(
-                ChatConversationChangeEvent(
-                    threadID: change.0,
-                    kind: .messagesUpdated,
-                    affectedClientMessageIDs: [clientMessageID],
-                    affectsThreadList: change.1
-                )
-            )
-        }
-    }
-
-    func updateMessageContentAndAttachments(
-        clientMessageID: UUID,
-        content: String,
-        kind: ChatMessageKind,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]?,
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        markPendingForSync: Bool
-    ) async {
-        let change = try? await kernel.writeWithoutNotification { context, accountID in
-            guard let object = try Self.fetchMessage(
-                context: context,
-                ownerAccountID: accountID,
-                clientMessageID: clientMessageID,
-                serverMessageID: nil
-            ) else {
-                return nil as (UUID, Bool)?
-            }
-            guard let threadID = object.value(forKey: "threadID") as? UUID else { return nil }
-            let latestRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
-            latestRequest.fetchLimit = 1
-            latestRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-                Self.ownerPredicate(accountID),
-                NSPredicate(format: "threadID == %@", threadID as CVarArg),
-                NSPredicate(format: "isTombstone == NO"),
-            ])
-            latestRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
-            let latestClientID = try context.fetch(latestRequest).first?.value(forKey: "clientMessageID") as? UUID
-            let thisClientID = object.value(forKey: "clientMessageID") as? UUID
-            let isLatestMessage = latestClientID != nil && latestClientID == thisClientID
-
-            let existing = Self.toMessage(object: object, decoder: self.decoder, logger: self.logger)
-            object.setValue(kind.rawValue, forKey: "kind")
-            object.setValue(content, forKey: "content")
-            let nextBlocks = blocks ?? ChatMessageBlockBuilder.merge(
-                existingBlocks: existing?.blocks ?? [],
-                role: existing?.role ?? .assistant,
-                kind: kind,
-                content: content,
-                attachments: attachments,
-                reasoningContent: reasoningContent,
-                reasoningDurationMs: reasoningDurationMs,
-                createdAt: existing?.createdAt ?? Date()
-            )
-            let envelope = ChatMessageStorageEnvelope(attachments: attachments, blocks: nextBlocks)
-            object.setValue(try self.encoder.encode(envelope), forKey: "attachmentsData")
-            object.setValue(reasoningContent, forKey: "reasoningContent")
-            object.setValue(reasoningDurationMs.map { NSNumber(value: $0) }, forKey: "reasoningDurationMs")
+            object.setValue(try ChatBlockCodec.encode(blocks), forKey: "blocksData")
             if markPendingForSync {
                 object.setValue(ChatDeliveryState.pending.rawValue, forKey: "deliveryState")
             }
@@ -992,7 +848,10 @@ actor CoreDataChatStore {
         encoder: JSONEncoder
     ) throws {
         let now = Date()
-        for attachment in message.attachments where attachment.isChatImageLike && attachment.effectiveHTTPSImageDownloadURL != nil {
+        for attachment in message.blocks
+            .filter({ $0.kind == .imageGallery || $0.kind == .fileAttachments })
+            .flatMap(\.attachments)
+            where attachment.isChatImageLike && attachment.effectiveHTTPSImageDownloadURL != nil {
             let dedupeKey = attachment.imageDownloadDedupeKey
             let existing = NSFetchRequest<NSManagedObject>(entityName: EntityName.downloadJob)
             existing.fetchLimit = 1
@@ -1100,12 +959,6 @@ actor CoreDataChatStore {
         object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
         object.setValue(message.threadID, forKey: "threadID")
         object.setValue(message.role.rawValue, forKey: "role")
-        object.setValue(message.kind.rawValue, forKey: "kind")
-        object.setValue(message.content, forKey: "content")
-        object.setValue(message.reasoningContent, forKey: "reasoningContent")
-        object.setValue(message.reasoningDurationMs.map { NSNumber(value: $0) }, forKey: "reasoningDurationMs")
-        object.setValue(message.reasoningExpanded, forKey: "reasoningExpanded")
-        object.setValue(message.reasoningVisibility.rawValue, forKey: "reasoningVisibility")
         object.setValue(message.modelName, forKey: "modelName")
         object.setValue(message.clientMessageID, forKey: "clientMessageID")
         object.setValue(message.serverMessageID, forKey: "serverMessageID")
@@ -1113,8 +966,7 @@ actor CoreDataChatStore {
         object.setValue(message.createdAt, forKey: "createdAt")
         object.setValue(message.serverUpdatedAt, forKey: "serverUpdatedAt")
         object.setValue(message.isTombstone, forKey: "isTombstone")
-        let envelope = ChatMessageStorageEnvelope(attachments: message.attachments, blocks: message.blocks)
-        object.setValue(try encoder.encode(envelope), forKey: "attachmentsData")
+        object.setValue(try ChatBlockCodec.encode(message.blocks), forKey: "blocksData")
     }
 
     private static func ownerPredicate(_ accountID: Int64) -> NSPredicate {
@@ -1163,9 +1015,6 @@ actor CoreDataChatStore {
             let threadID = object.value(forKey: "threadID") as? UUID,
             let roleRaw = object.value(forKey: "role") as? String,
             let role = ChatMessageRole(rawValue: roleRaw),
-            let kindRaw = object.value(forKey: "kind") as? String,
-            let kind = ChatMessageKind(rawValue: kindRaw),
-            let content = object.value(forKey: "content") as? String,
             let clientMessageID = object.value(forKey: "clientMessageID") as? UUID,
             let deliveryRaw = object.value(forKey: "deliveryState") as? String,
             let deliveryState = ChatDeliveryState(rawValue: deliveryRaw),
@@ -1174,52 +1023,14 @@ actor CoreDataChatStore {
             return nil
         }
 
-        let attachmentsData = object.value(forKey: "attachmentsData") as? Data
-        let envelope: ChatMessageStorageEnvelope?
-        if let data = attachmentsData {
-            do {
-                if let decoded = try? decoder.decode(ChatMessageStorageEnvelope.self, from: data) {
-                    envelope = decoded
-                } else {
-                    let attachments = try decoder.decode([ChatAttachment].self, from: data)
-                    envelope = ChatMessageStorageEnvelope(attachments: attachments, blocks: [])
-                }
-            } catch {
-                let cid = object.value(forKey: "clientMessageID") as? UUID
-                let tid = object.value(forKey: "threadID") as? UUID
-                logger.warning(
-                    "消息附件 JSON 解码失败，将置空附件。thread=\(tid.map { String($0.uuidString.prefix(8)) } ?? "-") client=\(cid.map { String($0.uuidString.prefix(8)) } ?? "-") error=\(error.localizedDescription)",
-                    module: .general
-                )
-                envelope = nil
-            }
-        } else {
-            envelope = nil
-        }
-
-        let reasoningContent = object.value(forKey: "reasoningContent") as? String
-        let reasoningDurationMs: Int64? = {
-            if let n = object.value(forKey: "reasoningDurationMs") as? NSNumber {
-                return n.int64Value
-            }
-            return nil
-        }()
-        let reasoningExpanded = object.value(forKey: "reasoningExpanded") as? Bool ?? false
-        let visibilityRaw = object.value(forKey: "reasoningVisibility") as? String
-        let reasoningVisibility = ChatReasoningVisibility(rawValue: visibilityRaw ?? "") ?? .full
+        let blocksData = object.value(forKey: "blocksData") as? Data
+        let blocks = ChatBlockCodec.decode(blocksData)
 
         return ChatMessage(
             id: id,
             threadID: threadID,
             role: role,
-            kind: kind,
-            content: content,
-            attachments: envelope?.attachments ?? [],
-            blocks: envelope?.blocks,
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
-            reasoningExpanded: reasoningExpanded,
-            reasoningVisibility: reasoningVisibility,
+            blocks: blocks,
             clientMessageID: clientMessageID,
             serverMessageID: object.value(forKey: "serverMessageID") as? String,
             deliveryState: deliveryState,
@@ -1262,7 +1073,11 @@ actor CoreDataChatStore {
         ])
         let unreadCount = try context.count(for: unreadRequest)
 
-        let previewRaw = latestMessage?.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let previewRaw = latestMessage?
+            .blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let fallbackTitle = thread.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let preview = previewRaw.isEmpty == false ? previewRaw : (fallbackTitle.isEmpty ? "新对话" : fallbackTitle)
 
@@ -1278,7 +1093,10 @@ actor CoreDataChatStore {
 
     private static func firstListThumbnailAttachment(from message: ChatMessage?) -> ChatAttachment? {
         guard let message else { return nil }
-        for attachment in message.attachments where attachment.isChatImageLike {
+        for attachment in message.blocks
+            .filter({ $0.kind == .imageGallery || $0.kind == .fileAttachments })
+            .flatMap(\.attachments)
+            where attachment.isChatImageLike {
             if attachment.sparkClientOSSFileUUIDAndFileName() != nil {
                 return attachment
             }

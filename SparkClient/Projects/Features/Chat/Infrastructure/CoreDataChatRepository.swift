@@ -56,38 +56,8 @@ actor CoreDataChatRepository: ChatRepository {
         await store.latestServerActivity(for: threadID)
     }
 
-    func appendMessage(
-        threadID: UUID,
-        role: ChatMessageRole,
-        kind: ChatMessageKind,
-        content: String,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]?,
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        reasoningExpanded: Bool,
-        reasoningVisibility: ChatReasoningVisibility,
-        clientMessageID: UUID,
-        serverMessageID: String?,
-        deliveryState: ChatDeliveryState,
-        modelName: String?
-    ) async throws -> ChatMessage {
-        try await store.appendMessage(
-            threadID: threadID,
-            role: role,
-            kind: kind,
-            content: content,
-            attachments: attachments,
-            blocks: blocks,
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
-            reasoningExpanded: reasoningExpanded,
-            reasoningVisibility: reasoningVisibility,
-            clientMessageID: clientMessageID,
-            serverMessageID: serverMessageID,
-            deliveryState: deliveryState,
-            modelName: modelName
-        )
+    func appendMessage(_ message: ChatMessage) async throws -> ChatMessage {
+        try await store.appendMessage(message)
     }
 
     func softDeleteMessage(clientMessageID: UUID) async {
@@ -98,50 +68,14 @@ actor CoreDataChatRepository: ChatRepository {
         await store.updateMessageDeliveryState(clientMessageID: clientMessageID, state: state)
     }
 
-    func updateMessageAttachments(
+    func updateMessageBlocks(
         clientMessageID: UUID,
-        attachments: [ChatAttachment],
-        markPendingForSync: Bool
-    ) async {
-        await store.updateMessageAttachments(
-            clientMessageID: clientMessageID,
-            attachments: attachments,
-            markPendingForSync: markPendingForSync
-        )
-    }
-
-    func updateMessagePresentation(
-        clientMessageID: UUID,
-        attachments: [ChatAttachment],
         blocks: [ChatMessageBlock],
         markPendingForSync: Bool
     ) async {
-        await store.updateMessagePresentation(
+        await store.updateMessageBlocks(
             clientMessageID: clientMessageID,
-            attachments: attachments,
             blocks: blocks,
-            markPendingForSync: markPendingForSync
-        )
-    }
-
-    func updateMessageContentAndAttachments(
-        clientMessageID: UUID,
-        content: String,
-        kind: ChatMessageKind,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]?,
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        markPendingForSync: Bool
-    ) async {
-        await store.updateMessageContentAndAttachments(
-            clientMessageID: clientMessageID,
-            content: content,
-            kind: kind,
-            attachments: attachments,
-            blocks: blocks,
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
             markPendingForSync: markPendingForSync
         )
     }

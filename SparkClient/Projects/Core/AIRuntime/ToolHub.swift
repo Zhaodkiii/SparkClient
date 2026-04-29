@@ -699,8 +699,8 @@ final class ToolHub: @unchecked Sendable {
                         threadID: threadID,
                         assistantClientMessageID: assistantID,
                         model: model,
-                        anchorToolCallID: normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil
-                    )
+                        anchorToolCallID: (normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil),
+                        )
                 }
             }
             return ToolExecutionResult(
@@ -955,7 +955,12 @@ final class ToolHub: @unchecked Sendable {
             let body = lines.joined(separator: "\n\n")
             let l10n = AIPromptL10n(locale: .current)
             let title = l10n.tool("tool.ui.knowledge.search_title", fallback: "Knowledge Search")
-            let kc = encodeKnowledgeCardPreviewAttachment(title: title, content: body).map { [$0] } ?? []
+            let toolCallID = normalizedToolCallID(from: context)
+            let kc = knowledgeCardPreviewBlock(
+                title: title,
+                content: body,
+                toolCallID: toolCallID
+            ).map { [$0] } ?? []
             return returnWithScheduledRichMerge(
                 context: context,
                 result: ToolExecutionResult(
@@ -964,7 +969,7 @@ final class ToolHub: @unchecked Sendable {
                     sensitive: false,
                     shouldBypassModel: true
                 ),
-                richAttachments: kc
+                richBlocks: kc
             )
         } catch {
             return ToolExecutionResult(
@@ -995,7 +1000,12 @@ final class ToolHub: @unchecked Sendable {
         )
 
         let userFacing = "已生成知识库文档草稿「\(resolvedTitle)」，内容已附在消息内知识卡中，用户可点击保存到知识库。"
-        let kc = encodeKnowledgeCardPreviewAttachment(title: resolvedTitle, content: content).map { [$0] } ?? []
+        let toolCallID = normalizedToolCallID(from: context)
+        let kc = knowledgeCardPreviewBlock(
+            title: resolvedTitle,
+            content: content,
+            toolCallID: toolCallID
+        ).map { [$0] } ?? []
         return returnWithScheduledRichMerge(
             context: context,
             result: ToolExecutionResult(
@@ -1004,7 +1014,7 @@ final class ToolHub: @unchecked Sendable {
                 sensitive: false,
                 shouldBypassModel: true
             ),
-            richAttachments: kc
+            richBlocks: kc
         )
     }
 
@@ -1432,7 +1442,7 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// 拍照/上传卡片工具：解析 card_type，异步将 captureMessageCard 附件合并回助手消息。
+    /// 拍照/上传卡片工具：解析 card_type，异步将 captureMessageCard block 合并回助手消息。
     private func runShowCustomMessageCard(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let cardType = (invocation.arguments["card_type"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let hint = cardType.isEmpty ? "" : "（\(cardType)）"
@@ -1515,7 +1525,7 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 任务生成工具：先查询任务，再执行抽取与相似度判断；成功时在消息内异步合并任务卡附件，向模型只返回简短可读说明（不经输出字符串解析 JSON）。
+    /// 任务生成工具：先查询任务，再执行抽取与相似度判断；成功时在消息内异步合并任务卡 block，向模型只返回简短可读说明。
     private func runGenerateTask(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let memberID = await resolveTargetMemberID(invocation: invocation, context: context)
         let userInput = (
@@ -1613,24 +1623,22 @@ final class ToolHub: @unchecked Sendable {
             createdAt: iso8601(now),
             updatedAt: iso8601(now)
         )
+        let taskCards = taskCardsFromToolCardPayload([card]) ?? []
         let titleLine = makeTaskTitle(extracted: extracted, type: taskType)
         let userFacing = "已根据描述生成 1 条待确认任务「\(titleLine)」。请在消息内任务卡片中确认或忽略。"
-        let anchorToolCallID: String? = {
-            let t = context.pendingToolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (t?.isEmpty == false) ? t : nil
-        }()
-        if let taskCards = taskCardsFromToolCardPayload([card]),
-           taskCards.isEmpty == false,
+        if taskCards.isEmpty == false,
            let threadID = context.threadID,
            let assistantID = context.assistantMessageClientID {
             let merge = structuredHealthCardMergeCoordinator
+            let normalizedToolCallID = context.pendingToolCallID?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             Task {
                 await merge.insertTaskCardsWhenAssistantMessageReady(
                     threadID: threadID,
                     assistantClientMessageID: assistantID,
                     taskCards: taskCards,
-                    anchorToolCallID: anchorToolCallID
-                )
+                    anchorToolCallID: (normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil),
+                    )
             }
         }
         return ToolExecutionResult(
@@ -1927,16 +1935,10 @@ final class ToolHub: @unchecked Sendable {
             resumeMessages: context.pendingResumeMessages,
             reason: reason
         )
-        if let attachment = makePendingMemberToolAttachment(
-            cards: [card],
-            anchorToolCallID: normalizedToolCallID
-        ) {
-            await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
-                threadID: threadID,
-                attachments: [attachment],
-                blocks: [makePendingMemberToolBlock(cards: [card], toolCallID: normalizedToolCallID)]
-            )
-        }
+        await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
+            threadID: threadID,
+            blocks: [makePendingMemberToolBlock(cards: [card], toolCallID: normalizedToolCallID)]
+        )
 
         let deadline = Date().addingTimeInterval(40)
         while Date() < deadline {
@@ -1951,16 +1953,10 @@ final class ToolHub: @unchecked Sendable {
         timedOutCard.status = .completed
         timedOutCard.resultText = td("tool.result.request_member_selection.timeout")
         timedOutCard.updatedAt = Date()
-        if let attachment = makePendingMemberToolAttachment(
-            cards: [timedOutCard],
-            anchorToolCallID: normalizedToolCallID
-        ) {
-            await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
-                threadID: threadID,
-                attachments: [attachment],
-                blocks: [makePendingMemberToolBlock(cards: [timedOutCard], toolCallID: normalizedToolCallID)]
-            )
-        }
+        await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
+            threadID: threadID,
+            blocks: [makePendingMemberToolBlock(cards: [timedOutCard], toolCallID: normalizedToolCallID)]
+        )
         return nil
     }
 
@@ -2054,13 +2050,13 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// 在助手消息落库后合并富 UI 附件；附件须由 `ToolInvocation` 等结构化入参在调用处构建，不从工具返回字符串再解析。
+    /// 在助手消息落库后合并富 UI blocks；所有内容由调用处直接构建为 `ChatMessageBlock`。
     private func returnWithScheduledRichMerge(
         context: ToolExecutionContext,
         result: ToolExecutionResult,
-        richAttachments: [ChatAttachment]
+        richBlocks: [ChatMessageBlock]
     ) -> ToolExecutionResult {
-        guard richAttachments.isEmpty == false,
+        guard richBlocks.isEmpty == false,
               let threadID = context.threadID,
               let assistantID = context.assistantMessageClientID
         else {
@@ -2068,33 +2064,37 @@ final class ToolHub: @unchecked Sendable {
         }
         let merge = structuredHealthCardMergeCoordinator
         Task {
-            await merge.mergeAppendRichAttachmentsWhenAssistantMessageReady(
+            await merge.mergeAppendRichPresentationWhenAssistantMessageReady(
                 threadID: threadID,
                 assistantClientMessageID: assistantID,
-                attachments: richAttachments
+                blocks: richBlocks
             )
         }
         return result
     }
 
-    /// 与 `ChatMessageMetadata` 中 `knowledgeCard` 解码格式一致（`[{ title, content }]`）。
-    private func encodeKnowledgeCardPreviewAttachment(title: String, content: String) -> ChatAttachment? {
-        struct Row: Codable {
-            let title: String
-            let content: String
-        }
-        guard let data = try? JSONEncoder().encode([Row(title: title, content: content)]),
-              let json = String(data: data, encoding: .utf8) else { return nil }
-        return ChatAttachment(type: .knowledgeCard, text: json)
+    private func knowledgeCardPreviewBlock(
+        title: String,
+        content: String,
+        toolCallID: String?
+    ) -> ChatMessageBlock? {
+        let card = ChatKnowledgeCard(title: title, content: content)
+        return ChatMessageBlock(
+            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+            kind: .knowledgeCards,
+            toolCallID: toolCallID,
+            knowledgeCards: [card]
+        )
     }
 
-    /// 从 `ToolInvocation.arguments` 构建地图/日历/HTML 等富 UI 附件（与 `fetch_sleep_details` 不用输出解码的路径一致）。
-    private func makeExternalConnectorRichAttachments(
+    /// 从 `ToolInvocation.arguments` 构建地图/日历/HTML 等富 UI blocks。
+    private func makeExternalConnectorRichBlocks(
         invocation: ToolInvocation,
-        toolOutputForWebPreview: String
-    ) -> [ChatAttachment] {
+        toolOutputForWebPreview: String,
+        toolCallID: String?
+    ) -> [ChatMessageBlock] {
         let a = invocation.arguments
-        var attachments: [ChatAttachment] = []
+        var blocks: [ChatMessageBlock] = []
         let l10n = AIPromptL10n(locale: .current)
         let locDefault = l10n.tool("tool.ui.rich.location.default_name", fallback: "Location")
         let eventDefault = l10n.tool("tool.ui.rich.event.default_title", fallback: "Event")
@@ -2105,63 +2105,79 @@ final class ToolHub: @unchecked Sendable {
                 if let lat = Double(a["latitude"] ?? ""),
                    let lon = Double(a["longitude"] ?? "") {
                     let loc = [
-                        RichLocation(
+                        ChatMapLocationPayload(
                             name: a["keyword"] ?? a["query"] ?? locDefault,
                             latitude: lat,
                             longitude: lon
                         )
                     ]
-                    if let text = jsonStringForRich(loc) {
-                        attachments.append(ChatAttachment(type: .locationsInfo, text: text))
-                    }
+                    blocks.append(
+                        ChatMessageBlock(
+                            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                            kind: .mapRoute,
+                            toolCallID: toolCallID,
+                            locations: loc,
+                            routes: []
+                        )
+                    )
                 }
                 if let sLat = Double(a["start.latitude"] ?? ""),
                    let sLng = Double(a["start.longitude"] ?? ""),
                    let eLat = Double(a["end.latitude"] ?? ""),
                    let eLng = Double(a["end.longitude"] ?? "") {
                     let loc = [
-                        RichLocation(name: "Start", latitude: sLat, longitude: sLng),
-                        RichLocation(name: "End", latitude: eLat, longitude: eLng)
+                        ChatMapLocationPayload(name: "Start", latitude: sLat, longitude: sLng),
+                        ChatMapLocationPayload(name: "End", latitude: eLat, longitude: eLng)
                     ]
-                    if let text = jsonStringForRich(loc) {
-                        attachments.append(ChatAttachment(type: .locationsInfo, text: text))
-                    }
-                    let routes = [RichRoute(
+                    let routes = [ChatRoutePayload(
                         summary: "Route",
                         distance: a["distance"],
                         duration: a["duration"],
                         mode: a["mode"]
                     )]
-                    if let text = jsonStringForRich(routes) {
-                        attachments.append(ChatAttachment(type: .routeInfo, text: text))
-                    }
+                    blocks.append(
+                        ChatMessageBlock(
+                            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                            kind: .mapRoute,
+                            toolCallID: toolCallID,
+                            locations: loc,
+                            routes: routes
+                        )
+                    )
                 }
             case .searchCalendarAndReminders, .writeSystemEvent:
-                let events = [RichEvent(
+                let events = [ChatEventPayload(
                     type: a["event_type"] ?? a["type"] ?? "calendar",
                     title: a["title"] ?? a["keyword"] ?? eventDefault,
                     dateText: a["start_date"] ?? a["due_date"] ?? a["end_date"],
                     location: a["location"],
                     notes: a["notes"]
                 )]
-                if let text = jsonStringForRich(events) {
-                    attachments.append(ChatAttachment(type: .events, text: text))
-                }
+                blocks.append(
+                    ChatMessageBlock(
+                        anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                        kind: .events,
+                        toolCallID: toolCallID,
+                        events: events
+                    )
+                )
             case .readWebPage:
                 if toolOutputForWebPreview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                    attachments.append(ChatAttachment(type: .htmlContent, text: toolOutputForWebPreview))
+                    blocks.append(
+                        ChatMessageBlock(
+                            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                            kind: .html,
+                            text: toolOutputForWebPreview,
+                            toolCallID: toolCallID
+                        )
+                    )
                 }
             default:
                 break
             }
         }
 
-        return attachments
-    }
-
-    private func jsonStringForRich<T: Encodable>(_ value: T) -> String? {
-        guard let data = try? JSONEncoder().encode(value) else { return nil }
-        return String(data: data, encoding: .utf8)
+        return blocks
     }
 
     /// 将工具内 `TaskToolCardPayload` 与消息内 `TaskCard` 对齐（与 `block(from: .taskCards)` 解码路径一致）。
@@ -2173,22 +2189,6 @@ final class ToolHub: @unchecked Sendable {
         decoder.dateDecodingStrategy = .iso8601
         guard let out = try? decoder.decode([TaskCard].self, from: raw), out.isEmpty == false else { return nil }
         return out
-    }
-
-    private func makePendingMemberToolAttachment(
-        cards: [PendingMemberToolCard],
-        anchorToolCallID: String? = nil
-    ) -> ChatAttachment? {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard cards.isEmpty == false,
-              let data = try? encoder.encode(cards),
-              let text = String(data: data, encoding: .utf8) else { return nil }
-        return ChatAttachment(
-            type: .pendingMemberToolCards,
-            text: text,
-            anchorToolCallID: anchorToolCallID
-        )
     }
 
     private func makePendingMemberToolBlock(
@@ -2218,9 +2218,10 @@ final class ToolHub: @unchecked Sendable {
         args=\(payloadSummary.isEmpty ? "<empty>" : payloadSummary)
         当前为本地执行占位；如需真实联网调用，请在对应 toolClass 网关实现 HTTP 适配。
         """
-        let rich = makeExternalConnectorRichAttachments(
+        let rich = makeExternalConnectorRichBlocks(
             invocation: invocation,
-            toolOutputForWebPreview: output
+            toolOutputForWebPreview: output,
+            toolCallID: normalizedToolCallID(from: context)
         )
         return returnWithScheduledRichMerge(
             context: context,
@@ -2230,7 +2231,7 @@ final class ToolHub: @unchecked Sendable {
                 sensitive: false,
                 shouldBypassModel: true
             ),
-            richAttachments: rich
+            richBlocks: rich
         )
     }
 
@@ -2300,55 +2301,10 @@ final class ToolHub: @unchecked Sendable {
         guard let value else { return "-" }
         return String(value)
     }
-}
 
-// MARK: - 富 UI JSON 行（与消息附件 `locationsInfo` / `routeInfo` / `events` 一致）
-
-private struct RichLocation: Codable, Sendable {
-    let id: UUID
-    let name: String
-    let latitude: Double
-    let longitude: Double
-
-    init(name: String, latitude: Double, longitude: Double) {
-        self.id = UUID()
-        self.name = name
-        self.latitude = latitude
-        self.longitude = longitude
-    }
-}
-
-private struct RichRoute: Codable, Sendable {
-    let id: UUID
-    let summary: String
-    let distance: String?
-    let duration: String?
-    let mode: String?
-
-    init(summary: String, distance: String?, duration: String?, mode: String?) {
-        self.id = UUID()
-        self.summary = summary
-        self.distance = distance
-        self.duration = duration
-        self.mode = mode
-    }
-}
-
-private struct RichEvent: Codable, Sendable {
-    let id: UUID
-    let type: String
-    let title: String
-    let dateText: String?
-    let location: String?
-    let notes: String?
-
-    init(type: String, title: String, dateText: String?, location: String?, notes: String?) {
-        self.id = UUID()
-        self.type = type
-        self.title = title
-        self.dateText = dateText
-        self.location = location
-        self.notes = notes
+    private func normalizedToolCallID(from context: ToolExecutionContext) -> String? {
+        let trimmed = context.pendingToolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 }
 

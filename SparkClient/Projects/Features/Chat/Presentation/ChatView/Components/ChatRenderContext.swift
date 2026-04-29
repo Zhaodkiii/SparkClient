@@ -19,7 +19,6 @@ struct ChatRenderContext {
     let unifiedFilePreview: Binding<FilePreviewInput?>     // 统一文件预览（双向绑定）
     
     // MARK: - 展示文本
-    let reasoningTimeText: String?                         // AI 推理耗时文本
     let errorCardBodyText: String                          // 错误卡片默认提示文本
     
     // MARK: - 用户操作回调（事件响应）

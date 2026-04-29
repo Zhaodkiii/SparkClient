@@ -34,45 +34,10 @@ protocol ChatMessageStoring: Sendable {
     func loadMessages(threadID: UUID, limit: Int?, before: Date?) async -> [ChatMessage]
     func countMessages(threadID: UUID) async -> Int
     func latestServerActivity(for threadID: UUID) async -> Date?
-    func appendMessage(
-        threadID: UUID,
-        role: ChatMessageRole,
-        kind: ChatMessageKind,
-        content: String,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]?,
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        reasoningExpanded: Bool,
-        reasoningVisibility: ChatReasoningVisibility,
-        clientMessageID: UUID,
-        serverMessageID: String?,
-        deliveryState: ChatDeliveryState,
-        modelName: String?
-    ) async throws -> ChatMessage
+    func appendMessage(_ message: ChatMessage) async throws -> ChatMessage
     func softDeleteMessage(clientMessageID: UUID) async
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async
-    func updateMessageAttachments(
-        clientMessageID: UUID,
-        attachments: [ChatAttachment],
-        markPendingForSync: Bool
-    ) async
-    func updateMessagePresentation(
-        clientMessageID: UUID,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock],
-        markPendingForSync: Bool
-    ) async
-    func updateMessageContentAndAttachments(
-        clientMessageID: UUID,
-        content: String,
-        kind: ChatMessageKind,
-        attachments: [ChatAttachment],
-        blocks: [ChatMessageBlock]?,
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        markPendingForSync: Bool
-    ) async
+    func updateMessageBlocks(clientMessageID: UUID, blocks: [ChatMessageBlock], markPendingForSync: Bool) async
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID, enqueueAttachmentDownloadJobs: Bool) async
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
 }

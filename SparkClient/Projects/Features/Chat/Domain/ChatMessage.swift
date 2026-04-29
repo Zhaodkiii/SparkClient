@@ -79,7 +79,7 @@ enum ChatBlockAnchor: Codable, Equatable, Sendable {
 
 enum ChatMessageBlockKind: String, Codable, Sendable {
     case text
-    case reasoning
+    case deepThought
     case tool
     case imageGallery
     case fileAttachments
@@ -108,9 +108,16 @@ struct ChatMapRouteBlockPayload: Codable, Equatable, Sendable {
     let routes: [ChatRoutePayload]
 }
 
+struct ChatDeepThoughtCardPayload: Equatable, Codable, Sendable {
+    var reasoningContent: String?
+    var reasoningDurationMs: Int64?
+    var reasoningExpanded: Bool
+    var reasoningVisibility: ChatReasoningVisibility
+}
+
 enum ChatMessageBlockPayload: Equatable, Sendable {
     case text(String)
-    case reasoning(String)
+    case deepThought(ChatDeepThoughtCardPayload)
     case tool(ChatToolBlockPayload)
     case imageGallery([ChatAttachment])
     case fileAttachments([ChatAttachment])
@@ -131,7 +138,7 @@ enum ChatMessageBlockPayload: Equatable, Sendable {
     var kind: ChatMessageBlockKind {
         switch self {
         case .text: return .text
-        case .reasoning: return .reasoning
+        case .deepThought: return .deepThought
         case .tool: return .tool
         case .imageGallery: return .imageGallery
         case .fileAttachments: return .fileAttachments
@@ -164,7 +171,6 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
     var text: String? {
         switch payload {
         case .text(let text),
-                .reasoning(let text),
                 .translatedText(let text),
                 .html(let text),
                 .error(let text):
@@ -231,6 +237,10 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
         guard case .smallTaskCard(let card) = payload else { return nil }
         return card
     }
+    var deepThoughtCard: ChatDeepThoughtCardPayload? {
+        guard case .deepThought(let card) = payload else { return nil }
+        return card
+    }
 
     nonisolated init(
         id: UUID = UUID(),
@@ -251,6 +261,7 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
         sleepVisualization: ChatHealthSleepModel? = nil,
         captureMessageCard: ChatCaptureMessageCardPayload? = nil,
         smallTaskCard: ChatSmallTaskMessageCardPayload? = nil,
+        deepThoughtCard: ChatDeepThoughtCardPayload? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -272,7 +283,8 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
             captureMessageCard: captureMessageCard,
-            smallTaskCard: smallTaskCard
+            smallTaskCard: smallTaskCard,
+            deepThoughtCard: deepThoughtCard
         )
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -297,6 +309,7 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
         case sleepVisualization
         case captureMessageCard
         case smallTaskCard
+        case deepThoughtCard
         case createdAt
         case updatedAt
     }
@@ -321,6 +334,7 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
         let sleepVisualization = try c.decodeIfPresent(ChatHealthSleepModel.self, forKey: .sleepVisualization)
         let captureMessageCard = try c.decodeIfPresent(ChatCaptureMessageCardPayload.self, forKey: .captureMessageCard)
         let smallTaskCard = try c.decodeIfPresent(ChatSmallTaskMessageCardPayload.self, forKey: .smallTaskCard)
+        let deepThoughtCard = try c.decodeIfPresent(ChatDeepThoughtCardPayload.self, forKey: .deepThoughtCard)
         let createdAt = try c.decode(Date.self, forKey: .createdAt)
         let updatedAt = try c.decode(Date.self, forKey: .updatedAt)
 
@@ -343,6 +357,7 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
             sleepVisualization: sleepVisualization,
             captureMessageCard: captureMessageCard,
             smallTaskCard: smallTaskCard,
+            deepThoughtCard: deepThoughtCard,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -368,6 +383,7 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
         try c.encodeIfPresent(sleepVisualization, forKey: .sleepVisualization)
         try c.encodeIfPresent(captureMessageCard, forKey: .captureMessageCard)
         try c.encodeIfPresent(smallTaskCard, forKey: .smallTaskCard)
+        try c.encodeIfPresent(deepThoughtCard, forKey: .deepThoughtCard)
         try c.encode(createdAt, forKey: .createdAt)
         try c.encode(updatedAt, forKey: .updatedAt)
     }
@@ -387,13 +403,21 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
         structuredHealthCards: StructuredHealthCardsBlob?,
         sleepVisualization: ChatHealthSleepModel?,
         captureMessageCard: ChatCaptureMessageCardPayload?,
-        smallTaskCard: ChatSmallTaskMessageCardPayload?
+        smallTaskCard: ChatSmallTaskMessageCardPayload?,
+        deepThoughtCard: ChatDeepThoughtCardPayload?
     ) -> ChatMessageBlockPayload {
         switch kind {
         case .text:
             return .text(text ?? "")
-        case .reasoning:
-            return .reasoning(text ?? "")
+        case .deepThought:
+            return .deepThought(
+                deepThoughtCard ?? ChatDeepThoughtCardPayload(
+                    reasoningContent: text,
+                    reasoningDurationMs: nil,
+                    reasoningExpanded: false,
+                    reasoningVisibility: .full
+                )
+            )
         case .tool:
             return .tool(.init(name: toolName, content: text ?? ""))
         case .imageGallery:
@@ -440,7 +464,6 @@ struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
 }
 
 struct ChatMessageStorageEnvelope: Codable, Equatable, Sendable {
-    let attachments: [ChatAttachment]
     let blocks: [ChatMessageBlock]
 }
 
@@ -448,14 +471,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let threadID: UUID
     let role: ChatMessageRole
-    let kind: ChatMessageKind
-    let content: String
-    let attachments: [ChatAttachment]
     let blocks: [ChatMessageBlock]
-    var reasoningContent: String?
-    var reasoningDurationMs: Int64?
-    var reasoningExpanded: Bool
-    var reasoningVisibility: ChatReasoningVisibility
     let clientMessageID: UUID
     let serverMessageID: String?
     let deliveryState: ChatDeliveryState
@@ -468,14 +484,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         id: UUID = UUID(),
         threadID: UUID,
         role: ChatMessageRole,
-        kind: ChatMessageKind = .text,
-        content: String,
-        attachments: [ChatAttachment] = [],
-        blocks: [ChatMessageBlock]? = nil,
-        reasoningContent: String? = nil,
-        reasoningDurationMs: Int64? = nil,
-        reasoningExpanded: Bool = false,
-        reasoningVisibility: ChatReasoningVisibility = .full,
+        blocks: [ChatMessageBlock],
         clientMessageID: UUID = UUID(),
         serverMessageID: String? = nil,
         deliveryState: ChatDeliveryState = .pending,
@@ -487,13 +496,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         self.id = id
         self.threadID = threadID
         self.role = role
-        self.kind = kind
-        self.content = content
-        self.attachments = attachments
-        self.reasoningContent = reasoningContent
-        self.reasoningDurationMs = reasoningDurationMs
-        self.reasoningExpanded = reasoningExpanded
-        self.reasoningVisibility = reasoningVisibility
+        self.blocks = blocks
         self.clientMessageID = clientMessageID
         self.serverMessageID = serverMessageID
         self.deliveryState = deliveryState
@@ -501,29 +504,13 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         self.serverUpdatedAt = serverUpdatedAt
         self.isTombstone = isTombstone
         self.modelName = modelName
-        self.blocks = blocks ?? ChatMessageBlockBuilder.legacyBlocks(
-            role: role,
-            kind: kind,
-            content: content,
-            attachments: attachments,
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
-            createdAt: createdAt
-        )
     }
 
     enum CodingKeys: String, CodingKey {
         case id
         case threadID
         case role
-        case kind
-        case content
-        case attachments
         case blocks
-        case reasoningContent
-        case reasoningDurationMs
-        case reasoningExpanded
-        case reasoningVisibility
         case clientMessageID
         case serverMessageID
         case deliveryState
@@ -538,13 +525,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         id = try c.decode(UUID.self, forKey: .id)
         threadID = try c.decode(UUID.self, forKey: .threadID)
         role = try c.decode(ChatMessageRole.self, forKey: .role)
-        kind = try c.decodeIfPresent(ChatMessageKind.self, forKey: .kind) ?? .text
-        content = try c.decode(String.self, forKey: .content)
-        attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .attachments) ?? []
-        reasoningContent = try c.decodeIfPresent(String.self, forKey: .reasoningContent)
-        reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
-        reasoningExpanded = try c.decodeIfPresent(Bool.self, forKey: .reasoningExpanded) ?? false
-        reasoningVisibility = try c.decodeIfPresent(ChatReasoningVisibility.self, forKey: .reasoningVisibility) ?? .full
+        blocks = try c.decode([ChatMessageBlock].self, forKey: .blocks)
         clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
         serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
         deliveryState = try c.decode(ChatDeliveryState.self, forKey: .deliveryState)
@@ -552,16 +533,6 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         serverUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .serverUpdatedAt)
         isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
         modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
-        blocks = try c.decodeIfPresent([ChatMessageBlock].self, forKey: .blocks)
-            ?? ChatMessageBlockBuilder.legacyBlocks(
-                role: role,
-                kind: kind,
-                content: content,
-                attachments: attachments,
-                reasoningContent: reasoningContent,
-                reasoningDurationMs: reasoningDurationMs,
-                createdAt: createdAt
-            )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -569,14 +540,7 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         try c.encode(id, forKey: .id)
         try c.encode(threadID, forKey: .threadID)
         try c.encode(role, forKey: .role)
-        try c.encode(kind, forKey: .kind)
-        try c.encode(content, forKey: .content)
-        try c.encode(attachments, forKey: .attachments)
         try c.encode(blocks, forKey: .blocks)
-        try c.encodeIfPresent(reasoningContent, forKey: .reasoningContent)
-        try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
-        try c.encode(reasoningExpanded, forKey: .reasoningExpanded)
-        try c.encode(reasoningVisibility, forKey: .reasoningVisibility)
         try c.encode(clientMessageID, forKey: .clientMessageID)
         try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
         try c.encode(deliveryState, forKey: .deliveryState)
@@ -585,99 +549,10 @@ struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         try c.encode(isTombstone, forKey: .isTombstone)
         try c.encodeIfPresent(modelName, forKey: .modelName)
     }
+
 }
 
 enum ChatMessageBlockBuilder {
-    nonisolated static func blocks(from attachments: [ChatAttachment], createdAt: Date) -> [ChatMessageBlock] {
-        anchored(blocks: [], attachments: attachments, createdAt: createdAt)
-    }
-
-    nonisolated static func attachments(from blocks: [ChatMessageBlock]) -> [ChatAttachment] {
-        var out: [ChatAttachment] = []
-        for block in blocks {
-            switch block.kind {
-            case .pendingMemberToolCards:
-                guard block.pendingMemberToolCards.isEmpty == false else { continue }
-                let encoder = JSONEncoder()
-                encoder.dateEncodingStrategy = .iso8601
-                guard let data = try? encoder.encode(block.pendingMemberToolCards),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(
-                    ChatAttachment(
-                        type: .pendingMemberToolCards,
-                        text: text,
-                        anchorToolCallID: block.toolCallID ?? block.pendingMemberToolCards.first?.toolCallID,
-                        anchorBlockID: block.anchor?.blockID
-                    )
-                )
-            case .taskCards:
-                guard block.taskCards.isEmpty == false,
-                      let data = try? JSONEncoder().encode(block.taskCards),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .taskCards, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .knowledgeCards:
-                guard block.knowledgeCards.isEmpty == false,
-                      let data = try? JSONEncoder().encode(block.knowledgeCards),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .knowledgeCard, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .structuredHealthCards:
-                guard let blob = block.structuredHealthCards,
-                      let data = try? JSONEncoder().encode(blob),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .structuredHealthCards, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .sleepVisualization:
-                guard let model = block.sleepVisualization,
-                      let data = try? JSONEncoder().encode(model),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .healthSleepVisualization, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .captureCard:
-                guard let payload = block.captureMessageCard,
-                      let data = try? JSONEncoder().encode(payload),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .captureMessageCard, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .html:
-                if let text = block.text, text.isEmpty == false {
-                    out.append(ChatAttachment(type: .htmlContent, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-                }
-            case .mapRoute:
-                if block.locations.isEmpty == false,
-                   let data = try? JSONEncoder().encode(block.locations),
-                   let text = String(data: data, encoding: .utf8) {
-                    out.append(ChatAttachment(type: .locationsInfo, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-                }
-                if block.routes.isEmpty == false,
-                   let data = try? JSONEncoder().encode(block.routes),
-                   let text = String(data: data, encoding: .utf8) {
-                    out.append(ChatAttachment(type: .routeInfo, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-                }
-            case .events:
-                guard block.events.isEmpty == false,
-                      let data = try? JSONEncoder().encode(block.events),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .events, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .healthCards:
-                guard block.healthCards.isEmpty == false,
-                      let data = try? JSONEncoder().encode(block.healthCards),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .healthInfo, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .translatedText:
-                if let text = block.text, text.isEmpty == false {
-                    out.append(ChatAttachment(type: .translatedText, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-                }
-            case .smallTaskCard:
-                guard let payload = block.smallTaskCard,
-                      let data = try? JSONEncoder().encode(payload),
-                      let text = String(data: data, encoding: .utf8) else { continue }
-                out.append(ChatAttachment(type: .smallTaskCard, text: text, anchorToolCallID: block.toolCallID, anchorBlockID: block.anchor?.blockID))
-            case .imageGallery, .fileAttachments:
-                out.append(contentsOf: block.attachments)
-            case .text, .reasoning, .tool, .error:
-                continue
-            }
-        }
-        return out
-    }
-
     nonisolated static func mergeRichBlocks(
         existingBlocks: [ChatMessageBlock],
         incomingBlocks: [ChatMessageBlock]
@@ -700,133 +575,20 @@ enum ChatMessageBlockBuilder {
         stabilizeToolAnchoredPresentationBlockOrder(blocks)
     }
 
-    nonisolated static func legacyBlocks(
-        role: ChatMessageRole,
-        kind: ChatMessageKind,
-        content: String,
-        attachments: [ChatAttachment],
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        createdAt: Date
-    ) -> [ChatMessageBlock] {
-        let metadata = LegacyMetadata(attachments: attachments)
-        var blocks: [ChatMessageBlock] = []
-
-        if role == .assistant,
-           let reasoning = reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
-           reasoning.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .reasoning, text: reasoning, createdAt: createdAt, updatedAt: createdAt))
-        }
-
-        let imageAttachments = attachments.filter(\.isChatImageLike)
-        if imageAttachments.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .imageGallery, attachments: imageAttachments, createdAt: createdAt, updatedAt: createdAt))
-        }
-
-        if role == .assistant,
-           let toolContent = metadata.toolContent,
-           toolContent.isEmpty == false {
-            blocks.append(
-                ChatMessageBlock(
-                    kind: .tool,
-                    text: toolContent,
-                    toolName: metadata.toolName,
-                    createdAt: createdAt,
-                    updatedAt: createdAt
-                )
-            )
-        }
-
-        if metadata.knowledgeCards.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .knowledgeCards, knowledgeCards: metadata.knowledgeCards, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if let translated = metadata.translatedText, translated.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .translatedText, text: translated, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if metadata.locations.isEmpty == false || metadata.routes.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .mapRoute, locations: metadata.locations, routes: metadata.routes, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if metadata.events.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .events, events: metadata.events, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if metadata.healthCards.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .healthCards, healthCards: metadata.healthCards, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if metadata.pendingMemberToolCards.isEmpty == false {
-            blocks.append(contentsOf: metadata.pendingMemberToolCards.map {
-                ChatMessageBlock(
-                    anchor: .toolCall($0.toolCallID ?? ""),
-                    kind: .pendingMemberToolCards,
-                    pendingMemberToolCards: [$0],
-                    createdAt: createdAt,
-                    updatedAt: createdAt
-                )
-            })
-        }
-        if let blob = metadata.structuredHealthCards,
-           blob.medications.isEmpty == false
-            || blob.prescriptions.isEmpty == false
-            || blob.examReports.isEmpty == false
-            || blob.medicalCases.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .structuredHealthCards, structuredHealthCards: blob, createdAt: createdAt, updatedAt: createdAt))
-        }
-//        if let sleep = metadata.sleepVisualization {
-//            blocks.append(ChatMessageBlock(kind: .sleepVisualization, sleepVisualization: sleep, createdAt: createdAt, updatedAt: createdAt))
-//        }
-        if let capture = metadata.captureMessageCard {
-            blocks.append(ChatMessageBlock(kind: .captureCard, captureMessageCard: capture, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if let html = metadata.htmlContent, html.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .html, text: html, createdAt: createdAt, updatedAt: createdAt))
-        }
-        if role == .user, let smallTask = metadata.smallTaskCard {
-            blocks.append(ChatMessageBlock(kind: .smallTaskCard, smallTaskCard: smallTask, createdAt: createdAt, updatedAt: createdAt))
-        }
-
-        let fileAttachments = attachments.filter(\.isGenericFileAttachment)
-        if fileAttachments.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .fileAttachments, attachments: fileAttachments, createdAt: createdAt, updatedAt: createdAt))
-        }
-
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .text, text: content, createdAt: createdAt, updatedAt: createdAt))
-        }
-
-        if metadata.taskCards.isEmpty == false {
-            blocks.append(ChatMessageBlock(kind: .taskCards, taskCards: metadata.taskCards, createdAt: createdAt, updatedAt: createdAt))
-        }
-
-        if blocks.isEmpty {
-            blocks.append(ChatMessageBlock(kind: .text, text: content, createdAt: createdAt, updatedAt: createdAt))
-        }
-        return anchored(blocks: blocks, attachments: attachments, createdAt: createdAt)
+    nonisolated static func composeBlocks(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
+        stabilizeToolAnchoredPresentationBlockOrder(deduplicated(blocks))
     }
 
     nonisolated static func merge(
         existingBlocks: [ChatMessageBlock],
-        role: ChatMessageRole,
-        kind: ChatMessageKind,
-        content: String,
-        attachments: [ChatAttachment],
-        reasoningContent: String?,
-        reasoningDurationMs: Int64?,
-        createdAt: Date
+        incomingBlocks: [ChatMessageBlock]
     ) -> [ChatMessageBlock] {
-        let legacy = legacyBlocks(
-            role: role,
-            kind: kind,
-            content: content,
-            attachments: attachments,
-            reasoningContent: reasoningContent,
-            reasoningDurationMs: reasoningDurationMs,
-            createdAt: createdAt
-        )
-        guard existingBlocks.isEmpty == false else { return legacy }
-        let structuralKinds: Set<ChatMessageBlockKind> = [.text, .reasoning, .tool, .error]
+        let composed = composeBlocks(incomingBlocks)
+        guard existingBlocks.isEmpty == false else { return composed }
+        let structuralKinds: Set<ChatMessageBlockKind> = [.text, .deepThought, .tool, .error]
         var merged = existingBlocks.filter { structuralKinds.contains($0.kind) }
         let toolIDs = Set(merged.compactMap(\.toolCallID))
-        for block in legacy {
+        for block in composed {
             if structuralKinds.contains(block.kind) == false {
                 merged.append(block)
             } else if block.kind == .tool,
@@ -835,36 +597,7 @@ enum ChatMessageBlockBuilder {
                 merged.append(block)
             }
         }
-        return stabilizeToolAnchoredPresentationBlockOrder(
-            anchored(blocks: merged, attachments: attachments, createdAt: createdAt)
-        )
-    }
-
-    nonisolated private static func anchored(
-        blocks: [ChatMessageBlock],
-        attachments: [ChatAttachment],
-        createdAt: Date
-    ) -> [ChatMessageBlock] {
-        var result = blocks
-        let anchoredAttachments = attachments.filter {
-            ($0.anchorToolCallID?.isEmpty == false) || $0.anchorBlockID != nil
-        }
-        guard anchoredAttachments.isEmpty == false else { return result }
-        for attachment in anchoredAttachments {
-            guard let block = block(from: attachment, createdAt: createdAt) else { continue }
-            if let blockID = attachment.anchorBlockID,
-               let index = result.firstIndex(where: { $0.id == blockID }) {
-                result.insert(block, at: index + 1)
-                continue
-            }
-            if let toolCallID = attachment.anchorToolCallID,
-               let index = result.lastIndex(where: { $0.toolCallID == toolCallID }) {
-                result.insert(block, at: index + 1)
-                continue
-            }
-            result.append(block)
-        }
-        return deduplicated(result)
+        return stabilizeToolAnchoredPresentationBlockOrder(merged)
     }
 
     /// 【非孤立静态方法】查找要替换的消息块索引
@@ -966,12 +699,16 @@ enum ChatMessageBlockBuilder {
     nonisolated private static func deduplicated(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
         var seenAttachmentIDs: Set<UUID> = []
         var seenPendingCardIDs: Set<UUID> = []
+        var seenTaskCardIDs: Set<Int> = []
         var out: [ChatMessageBlock] = []
         for block in blocks {
             switch block.kind {
             case .pendingMemberToolCards:
                 let ids = block.pendingMemberToolCards.map(\.id)
                 guard ids.allSatisfy({ seenPendingCardIDs.insert($0).inserted }) else { continue }
+            case .taskCards:
+                let ids = block.taskCards.map(\.id)
+                guard ids.allSatisfy({ seenTaskCardIDs.insert($0).inserted }) else { continue }
             case .captureCard, .structuredHealthCards, .sleepVisualization, .html:
                 if out.contains(where: { $0.kind == block.kind && $0 == block }) {
                     continue
@@ -1021,63 +758,6 @@ enum ChatMessageBlockBuilder {
         return reordered
     }
 
-    nonisolated private static func block(from attachment: ChatAttachment, createdAt: Date) -> ChatMessageBlock? {
-        guard let raw = attachment.text?.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        switch attachment.type {
-        case .pendingMemberToolCards:
-            guard let cards = try? decoder.decode([PendingMemberToolCard].self, from: raw), cards.isEmpty == false else { return nil }
-            return ChatMessageBlock(
-                anchor: attachment.anchorToolCallID.map(ChatBlockAnchor.toolCall),
-                kind: .pendingMemberToolCards,
-                pendingMemberToolCards: cards,
-                createdAt: createdAt,
-                updatedAt: createdAt
-            )
-        case .structuredHealthCards:
-            guard let blob = try? decoder.decode(StructuredHealthCardsBlob.self, from: raw) else { return nil }
-            return ChatMessageBlock(
-                anchor: attachment.anchorToolCallID.map(ChatBlockAnchor.toolCall),
-                kind: .structuredHealthCards,
-                structuredHealthCards: blob,
-                createdAt: createdAt,
-                updatedAt: createdAt
-            )
-        case .taskCards:
-            guard let cards = try? decoder.decode([TaskCard].self, from: raw), cards.isEmpty == false else { return nil }
-            return ChatMessageBlock(
-                anchor: attachment.anchorToolCallID.map(ChatBlockAnchor.toolCall),
-                kind: .taskCards,
-                toolCallID: attachment.anchorToolCallID,
-                taskCards: cards,
-                createdAt: createdAt,
-                updatedAt: createdAt
-            )
-        case .knowledgeCard:
-            guard let cards = try? decoder.decode([ChatKnowledgeCard].self, from: raw), cards.isEmpty == false else { return nil }
-            return ChatMessageBlock(
-                anchor: attachment.anchorToolCallID.map(ChatBlockAnchor.toolCall),
-                kind: .knowledgeCards,
-                toolCallID: attachment.anchorToolCallID,
-                knowledgeCards: cards,
-                createdAt: createdAt,
-                updatedAt: createdAt
-            )
-        case .healthSleepVisualization:
-            guard let model = try? decoder.decode(ChatHealthSleepModel.self, from: raw) else { return nil }
-            return ChatMessageBlock(
-                anchor: attachment.anchorToolCallID.map(ChatBlockAnchor.toolCall),
-                kind: .sleepVisualization,
-                toolCallID: attachment.anchorToolCallID,
-                sleepVisualization: model,
-                createdAt: createdAt,
-                updatedAt: createdAt
-            )
-        default:
-            return nil
-        }
-    }
 }
 
 private extension ChatBlockAnchor {
@@ -1088,57 +768,6 @@ private extension ChatBlockAnchor {
         case .messageStart, .messageEnd, .toolCall:
             return nil
         }
-    }
-}
-
-private struct LegacyMetadata {
-    let toolName: String?
-    let toolContent: String?
-    let knowledgeCards: [ChatKnowledgeCard]
-    let translatedText: String?
-    let htmlContent: String?
-    let locations: [ChatMapLocationPayload]
-    let routes: [ChatRoutePayload]
-    let events: [ChatEventPayload]
-    let healthCards: [ChatHealthCardPayload]
-    let sleepVisualization: ChatHealthSleepModel?
-    let taskCards: [TaskCard]
-    let pendingMemberToolCards: [PendingMemberToolCard]
-    let structuredHealthCards: StructuredHealthCardsBlob?
-    let captureMessageCard: ChatCaptureMessageCardPayload?
-    let smallTaskCard: ChatSmallTaskMessageCardPayload?
-
-    init(attachments: [ChatAttachment]) {
-        func text(_ type: ChatAttachmentType) -> String? {
-            let value = attachments.first(where: { $0.type == type })?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let value, value.isEmpty == false else { return nil }
-            return value
-        }
-        func decodeArray<T: Decodable>(_ type: ChatAttachmentType) -> [T] {
-            guard let raw = text(type), let data = raw.data(using: .utf8) else { return [] }
-            if let rows = try? JSONDecoder().decode([T].self, from: data) { return rows }
-            if let row = try? JSONDecoder().decode(T.self, from: data) { return [row] }
-            return []
-        }
-        func decodeObject<T: Decodable>(_ type: ChatAttachmentType) -> T? {
-            guard let raw = text(type), let data = raw.data(using: .utf8) else { return nil }
-            return try? JSONDecoder().decode(T.self, from: data)
-        }
-        toolName = text(.toolName)
-        toolContent = text(.toolContent)
-        knowledgeCards = decodeArray(.knowledgeCard)
-        translatedText = text(.translatedText)
-        htmlContent = text(.htmlContent)
-        locations = decodeArray(.locationsInfo)
-        routes = decodeArray(.routeInfo)
-        events = decodeArray(.events)
-        healthCards = decodeArray(.healthInfo)
-        sleepVisualization = decodeObject(.healthSleepVisualization)
-        taskCards = decodeArray(.taskCards)
-        pendingMemberToolCards = decodeArray(.pendingMemberToolCards)
-        structuredHealthCards = decodeObject(.structuredHealthCards)
-        captureMessageCard = decodeObject(.captureMessageCard)
-        smallTaskCard = decodeObject(.smallTaskCard)
     }
 }
 
@@ -1153,16 +782,19 @@ extension ChatMessage {
 
     nonisolated private static func userImageRichAttachmentScore(_ message: ChatMessage) -> Int {
         var score = 0
-        for att in message.attachments where att.isChatImageLike {
-            if att.effectiveHTTPSImageDownloadURL != nil {
+        let attachments = message.blocks
+            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+            .flatMap(\.attachments)
+        for attachment in attachments where attachment.isChatImageLike {
+            if attachment.effectiveHTTPSImageDownloadURL != nil {
                 score += 8
                 continue
             }
             var piece = 0
-            if let k = att.fullCacheKey?.trimmingCharacters(in: .whitespacesAndNewlines), k.isEmpty == false { piece += 2 }
-            if let md5 = att.fileMd5?.trimmingCharacters(in: .whitespacesAndNewlines), md5.isEmpty == false { piece += 2 }
-            if let fid = att.fileId, fid > 0 { piece += 2 }
-            if let t = att.text?.trimmingCharacters(in: .whitespacesAndNewlines), t.isEmpty == false { piece += 1 }
+            if let k = attachment.fullCacheKey?.trimmingCharacters(in: .whitespacesAndNewlines), k.isEmpty == false { piece += 2 }
+            if let md5 = attachment.fileMd5?.trimmingCharacters(in: .whitespacesAndNewlines), md5.isEmpty == false { piece += 2 }
+            if let fid = attachment.fileId, fid > 0 { piece += 2 }
+            if let t = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines), t.isEmpty == false { piece += 1 }
             score += piece
         }
         return score

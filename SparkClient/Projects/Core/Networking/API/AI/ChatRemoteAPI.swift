@@ -3,12 +3,7 @@ import Foundation
 struct ChatRemoteMessageDTO: Codable, Sendable {
     let threadID: UUID
     let role: String
-    let kind: String
-    let content: String
-    /// 消息结构化附件（工具结果、知识卡、地图/路线、事件、健康卡等）。
-    /// 该字段是“AI 工具结果可重建 UI”的核心数据载体。
-    let attachments: [ChatAttachment]?
-    let blocks: [ChatMessageBlock]?
+    let blocks: [ChatMessageBlock]
     let clientMessageID: UUID
     let serverMessageID: String?
     let deliveryState: String
@@ -22,18 +17,11 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let threadMaxMessages: Int?
     let threadRolePrompt: String?
     let threadSystemPrompt: String?
-    let reasoningContent: String?
-    let reasoningDurationMs: Int64?
-    let reasoningExpanded: Bool?
-    let reasoningVisibility: String?
     let modelName: String?
 
     enum CodingKeys: String, CodingKey {
         case threadID = "thread_id"
         case role
-        case kind
-        case content
-        case attachments
         case blocks
         case clientMessageID = "client_message_id"
         case serverMessageID = "server_message_id"
@@ -48,20 +36,13 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         case threadMaxMessages = "thread_max_messages"
         case threadRolePrompt = "thread_role_prompt"
         case threadSystemPrompt = "thread_system_prompt"
-        case reasoningContent = "reasoning_content"
-        case reasoningDurationMs = "reasoning_duration_ms"
-        case reasoningExpanded = "reasoning_expanded"
-        case reasoningVisibility = "reasoning_visibility"
         case modelName = "model_name"
     }
 
     nonisolated init(
         threadID: UUID,
         role: String,
-        kind: String,
-        content: String,
-        attachments: [ChatAttachment]? = nil,
-        blocks: [ChatMessageBlock]? = nil,
+        blocks: [ChatMessageBlock],
         clientMessageID: UUID,
         serverMessageID: String?,
         deliveryState: String,
@@ -75,17 +56,10 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         threadMaxMessages: Int? = nil,
         threadRolePrompt: String? = nil,
         threadSystemPrompt: String? = nil,
-        reasoningContent: String? = nil,
-        reasoningDurationMs: Int64? = nil,
-        reasoningExpanded: Bool? = nil,
-        reasoningVisibility: String? = nil,
         modelName: String? = nil
     ) {
         self.threadID = threadID
         self.role = role
-        self.kind = kind
-        self.content = content
-        self.attachments = attachments
         self.blocks = blocks
         self.clientMessageID = clientMessageID
         self.serverMessageID = serverMessageID
@@ -100,10 +74,6 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         self.threadMaxMessages = threadMaxMessages
         self.threadRolePrompt = threadRolePrompt
         self.threadSystemPrompt = threadSystemPrompt
-        self.reasoningContent = reasoningContent
-        self.reasoningDurationMs = reasoningDurationMs
-        self.reasoningExpanded = reasoningExpanded
-        self.reasoningVisibility = reasoningVisibility
         self.modelName = modelName
     }
 
@@ -111,10 +81,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         threadID = try c.decode(UUID.self, forKey: .threadID)
         role = try c.decode(String.self, forKey: .role)
-        kind = try c.decode(String.self, forKey: .kind)
-        content = try c.decode(String.self, forKey: .content)
-        attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .attachments)
-        blocks = try c.decodeIfPresent([ChatMessageBlock].self, forKey: .blocks)
+        blocks = try c.decode([ChatMessageBlock].self, forKey: .blocks)
         clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
         serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
         deliveryState = try c.decode(String.self, forKey: .deliveryState)
@@ -130,10 +97,6 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         let decodedThreadRolePrompt = try c.decodeIfPresent(String.self, forKey: .threadRolePrompt)
         threadSystemPrompt = decodedThreadSystemPrompt
         threadRolePrompt = decodedThreadSystemPrompt ?? decodedThreadRolePrompt
-        reasoningContent = try c.decodeIfPresent(String.self, forKey: .reasoningContent)
-        reasoningDurationMs = try c.decodeIfPresent(Int64.self, forKey: .reasoningDurationMs)
-        reasoningExpanded = try c.decodeIfPresent(Bool.self, forKey: .reasoningExpanded)
-        reasoningVisibility = try c.decodeIfPresent(String.self, forKey: .reasoningVisibility)
         modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
     }
 
@@ -141,10 +104,7 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(threadID, forKey: .threadID)
         try c.encode(role, forKey: .role)
-        try c.encode(kind, forKey: .kind)
-        try c.encode(content, forKey: .content)
-        try c.encodeIfPresent(attachments, forKey: .attachments)
-        try c.encodeIfPresent(blocks, forKey: .blocks)
+        try c.encode(blocks, forKey: .blocks)
         try c.encode(clientMessageID, forKey: .clientMessageID)
         try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
         try c.encode(deliveryState, forKey: .deliveryState)
@@ -158,10 +118,6 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
         try c.encodeIfPresent(threadMaxMessages, forKey: .threadMaxMessages)
         try c.encodeIfPresent(threadRolePrompt, forKey: .threadRolePrompt)
         try c.encodeIfPresent(threadRolePrompt, forKey: .threadSystemPrompt)
-        try c.encodeIfPresent(reasoningContent, forKey: .reasoningContent)
-        try c.encodeIfPresent(reasoningDurationMs, forKey: .reasoningDurationMs)
-        try c.encodeIfPresent(reasoningExpanded, forKey: .reasoningExpanded)
-        try c.encodeIfPresent(reasoningVisibility, forKey: .reasoningVisibility)
         try c.encodeIfPresent(modelName, forKey: .modelName)
     }
 }

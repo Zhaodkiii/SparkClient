@@ -70,7 +70,6 @@ struct ChatMessageBubbleContentView: View {
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             memberContextStore: memberContextStore,
             unifiedFilePreview: $unifiedFilePreview,
-            reasoningTimeText: formatReasoningTime(message.reasoningDurationMs),
             errorCardBodyText: errorCardBodyText,
             onRetry: onRetry,
             onSaveKnowledgeCard: onSaveKnowledgeCard,
@@ -132,7 +131,7 @@ struct ChatMessageBubbleContentView: View {
 
     private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
         switch kind {
-        case .tool, .text, .reasoning, .error:
+        case .tool, .text, .deepThought, .error:
             return false
         case .imageGallery,
                 .fileAttachments,
@@ -207,7 +206,10 @@ struct ChatMessageBubbleContentView: View {
     }
 
     private var errorCardBodyText: String {
-        let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = message.blocks
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty == false {
             return trimmed
         }
@@ -239,17 +241,6 @@ struct ChatMessageBubbleContentView: View {
         let displayName = ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: toolName)
         let fallbackState = L10n.text("chat.bubble.tool.operating_prefix", fallback: "Using tool: ") + displayName
         return (fallbackState, "")
-    }
-
-    private func formatReasoningTime(_ durationMs: Int64?) -> String? {
-        guard let durationMs, durationMs > 0 else { return nil }
-        let seconds = Double(durationMs) / 1_000
-        if seconds < 60 {
-            return String(format: "%.1fs", seconds)
-        }
-        let minutes = Int(seconds) / 60
-        let remainSeconds = seconds.truncatingRemainder(dividingBy: 60)
-        return String(format: "%dm %.1fs", minutes, remainSeconds)
     }
 
 }
