@@ -337,6 +337,22 @@ struct ChatView: View {
                     .navigationTitle(payload.title)
                 }
             }
+            .sheet(
+                item: Binding(
+                    get: { detailViewModel.toolInteractionCoordinator.activePresentation },
+                    set: { _ in }
+                ),
+                onDismiss: {
+                    detailViewModel.toolInteractionCoordinator.handleInteractionSheetDismissed()
+                }
+            ) { active in
+                ToolInteractionPresentationSheet(
+                    active: active,
+                    coordinator: detailViewModel.toolInteractionCoordinator,
+                    memberContextStore: homeViewModel.memberContextStoreForBinding
+                )
+                .readAdaptiveSheetHeight()
+            }
             .onAppear {
                 Task { await detailViewModel.chatPageDidAppear() }
             }
@@ -681,5 +697,47 @@ struct ChatView: View {
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(value) else { return nil }
         return try? JSONSerialization.jsonObject(with: data)
+    }
+
+}
+
+private struct AdaptiveSheetHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        // Follow FoodPicker behavior: always use latest measured height.
+        value = nextValue()
+    }
+}
+
+private extension View {
+    func readAdaptiveSheetHeight() -> some View {
+        overlay {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: AdaptiveSheetHeightPreferenceKey.self,
+                    value: geometry.size.height
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    func adaptiveSheetHeightIfAvailable(
+        measuredHeight: Binding<CGFloat?>,
+        defaultHeight: CGFloat
+    ) -> some View {
+        if #available(iOS 16.0, *) {
+            self
+                .readAdaptiveSheetHeight()
+                .onPreferenceChange(AdaptiveSheetHeightPreferenceKey.self) { height in
+                    guard height > 0 else { return }
+                    measuredHeight.wrappedValue = height
+                }
+                .presentationDetents([.height(measuredHeight.wrappedValue ?? defaultHeight)])
+                .presentationDragIndicator(.visible)
+        } else {
+            self
+        }
     }
 }

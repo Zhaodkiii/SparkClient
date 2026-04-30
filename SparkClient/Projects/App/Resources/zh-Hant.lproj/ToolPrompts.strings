@@ -109,7 +109,7 @@
 "tool.param.tool_query_generic" = "工具查詢引數";
 "tool.result.request_member_selection.waiting" = "請選擇成員後繼續執行工具。";
 "tool.result.request_member_selection.completed" = "使用者已完成成員選擇。請使用返回的 member_id 繼續後續工具呼叫或生成最終回答。";
-"tool.result.request_member_selection.timeout" = "使用者在 40 秒內未選擇成員。請繼續目前對話，或再次提示使用者選擇成員。";
+"tool.result.request_member_selection.timeout" = "使用者取消或未選擇成員。請繼續目前對話，或再次提示使用者選擇成員。";
 
 /* ========== Tool UI 文案（工具結果卡片標題等） ========== */
 "tool.ui.knowledge.search_title" = "知識檢索";
@@ -123,3 +123,11 @@
 "tool.error.structured_health_card.no_member" = "未選擇成員，無法生成結構化健康卡片。";
 "tool.error.structured_health_card.empty_raw_text" = "參數不完整：請提供 raw_text（提煉後的關鍵資訊）。";
 "tool.error.structured_health_card.no_message_binding" = "【系統】內部錯誤：無法關聯助手訊息。";
+"tool.summary.ask_user_question" = "用途：在回答過程中需要使用者補充選擇時呼叫。支援 2-5 個選項、單選/多選、可選其他輸入。呼叫後客戶端會彈出確認表單，使用者提交後工具結果返回選擇內容，隨後繼續生成回答。";
+"tool.param.ask_user_question" = "要詢問使用者的問題，簡潔明確。";
+"tool.param.ask_user_questions" = "問題陣列，最多 5 個；每個問題包含 question、options、selection_mode、allows_other。";
+"tool.param.ask_user_question_item" = "單個問題物件。";
+"tool.param.ask_user_options" = "2-5 個可選項。";
+"tool.param.ask_user_option_item" = "選項文案。";
+"tool.param.ask_user_selection_mode" = "single 或 multiple。";
+"tool.param.ask_user_allows_other" = "是否允許使用者錄入其他答案。";

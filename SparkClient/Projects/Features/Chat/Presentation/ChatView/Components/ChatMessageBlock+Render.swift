@@ -154,6 +154,7 @@ extension ChatMessageBlock {
                     isLoading: context.taskCardLoadingIDs.contains(card.id)
                 )
             }
+
         }
     }
     

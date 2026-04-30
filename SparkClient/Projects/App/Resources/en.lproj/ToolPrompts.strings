@@ -109,7 +109,7 @@
 "tool.param.tool_query_generic" = "Tool query parameter";
 "tool.result.request_member_selection.waiting" = "Please select a member to continue the tool.";
 "tool.result.request_member_selection.completed" = "The user has completed member selection. Use the returned member_id to continue tool calls or produce the final answer.";
-"tool.result.request_member_selection.timeout" = "The user did not select a member within 40 seconds. Continue the conversation, or ask again for member selection.";
+"tool.result.request_member_selection.timeout" = "The user canceled or did not select a member. Continue the conversation, or ask again for member selection.";
 
 /* ========== Tool UI Strings (card titles etc.) ========== */
 "tool.ui.knowledge.search_title" = "Knowledge Search";
@@ -123,3 +123,11 @@
 "tool.error.structured_health_card.no_member" = "No member selected; cannot generate structured health cards.";
 "tool.error.structured_health_card.empty_raw_text" = "Missing raw_text (distilled excerpt).";
 "tool.error.structured_health_card.no_message_binding" = "[System] Internal error: assistant message not bound.";
+"tool.summary.ask_user_question" = "Purpose: ask the user a focused question during an answer. Supports 2-5 options, single or multiple selection, and optional free-form other input. The client shows a sheet and returns the submitted choice so you can continue.";
+"tool.param.ask_user_question" = "A concise, clear question for the user.";
+"tool.param.ask_user_questions" = "Question array, up to 5 items. Each item includes question, options, selection_mode, and allows_other.";
+"tool.param.ask_user_question_item" = "A single question object.";
+"tool.param.ask_user_options" = "2-5 options.";
+"tool.param.ask_user_option_item" = "Option label.";
+"tool.param.ask_user_selection_mode" = "single or multiple.";
+"tool.param.ask_user_allows_other" = "Whether the user may enter another answer.";

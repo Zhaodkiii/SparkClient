@@ -17,6 +17,7 @@ final class ToolHub: @unchecked Sendable {
     /// 异步将卡片合并回当前助手消息（Core Data + `ChatStateStore`）。
     private let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
     private let healthTool: SparkHealthTool
+    private let toolInteractionCoordinator: ToolInteractionCoordinator?
     private let logger: Logger
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
@@ -35,6 +36,7 @@ final class ToolHub: @unchecked Sendable {
         typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor,
         structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator,
         healthTool: SparkHealthTool = .shared,
+        toolInteractionCoordinator: ToolInteractionCoordinator? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.chatRepository = chatRepository
@@ -49,6 +51,7 @@ final class ToolHub: @unchecked Sendable {
         self.typedMedicalDocumentExtractor = typedMedicalDocumentExtractor
         self.structuredHealthCardMergeCoordinator = structuredHealthCardMergeCoordinator
         self.healthTool = healthTool
+        self.toolInteractionCoordinator = toolInteractionCoordinator
         self.logger = logger
     }
 
@@ -56,7 +59,8 @@ final class ToolHub: @unchecked Sendable {
     func runIfNeeded(
         userInput: String,
         memberID: Int?,
-        allowedToolNames: Set<String>? = nil
+        allowedToolNames: Set<String>? = nil,
+        threadID: UUID? = nil
     ) async -> ToolHubResult {
         let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return .none }
@@ -81,7 +85,7 @@ final class ToolHub: @unchecked Sendable {
             return .none
         }
 
-        let context = ToolExecutionContext(memberID: memberID, locale: .current)
+        let context = ToolExecutionContext(memberID: memberID, locale: .current, threadID: threadID)
         let result = await execute(invocation: invocation, context: context)
         await appendAudit(invocation: invocation, context: context, result: result)
         return .executed(result)
@@ -376,6 +380,26 @@ final class ToolHub: @unchecked Sendable {
                     arrayItems: AIRuntimeToolProperty(type: "string", description: td("tool.param.replacement_item"))
                 )
             ]
+        case .askUserQuestion:
+            return [
+                "question": AIRuntimeToolProperty(type: "string", description: td("tool.param.ask_user_question")),
+                "questions": AIRuntimeToolProperty(
+                    type: "array",
+                    description: td("tool.param.ask_user_questions"),
+                    arrayItems: AIRuntimeToolProperty(type: "object", description: td("tool.param.ask_user_question_item"))
+                ),
+                "options": AIRuntimeToolProperty(
+                    type: "array",
+                    description: td("tool.param.ask_user_options"),
+                    arrayItems: AIRuntimeToolProperty(type: "string", description: td("tool.param.ask_user_option_item"))
+                ),
+                "selection_mode": AIRuntimeToolProperty(
+                    type: "string",
+                    description: td("tool.param.ask_user_selection_mode"),
+                    enumValues: ["single", "multiple"]
+                ),
+                "allows_other": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.ask_user_allows_other"))
+            ]
         }
     }
 
@@ -414,6 +438,8 @@ final class ToolHub: @unchecked Sendable {
             return ["originalContent", "updatedContent"]
         case .showCustomMessageCard:
             return ["card_type"]
+        case .askUserQuestion:
+            return []
         case .queryMemberProfile:
             return ["query_type"]
         case .searchOnline, .searchArxivPapers:
@@ -649,6 +675,10 @@ final class ToolHub: @unchecked Sendable {
         case .showCustomMessageCard:
             /// 展示自定义消息卡片（强 UI 交互）
             return await runShowCustomMessageCard(invocation: invocation, context: context)
+
+        case .askUserQuestion:
+            /// 回调 UI 弹出问题 sheet，用户提交后继续工具循环。
+            return await runAskUserQuestion(invocation: invocation, context: context)
 
 
         // MARK: ===== 外部连接器（统一出口） =====
@@ -1477,6 +1507,114 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
+    private func runAskUserQuestion(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let questions = parseQuestionItems(arguments: invocation.arguments)
+        guard questions.isEmpty == false else {
+            return ToolExecutionResult(
+                toolName: SparkToolName.askUserQuestion,
+                outputText: "【系统】ask_user_question 参数无效：需提供 1-5 个问题，每个问题的 options 必须包含 2-5 个选项。",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        guard let toolInteractionCoordinator else {
+            return ToolExecutionResult(
+                toolName: SparkToolName.askUserQuestion,
+                outputText: "【系统】当前界面无法展示问题选择 sheet，请直接向用户提问。",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        let prompt = ToolQuestionPrompt(questions: questions)
+        let answerResult = await toolInteractionCoordinator.requestQuestionAnswer(
+            threadID: context.threadID,
+            prompt: prompt
+        )
+        let answer: ToolQuestionAnswer
+        switch answerResult {
+        case .success(let value):
+            answer = value
+        case .cancelled, .conflict:
+            return ToolExecutionResult(
+                toolName: SparkToolName.askUserQuestion,
+                outputText: "【系统】用户取消或未提交问题选择。请继续当前对话，必要时用自然语言重新询问。",
+                sensitive: false,
+                shouldBypassModel: true,
+                isAwaitingUserInput: true
+            )
+        }
+
+        let payload = ToolQuestionAnswerPayload(questions: questions, responses: answer.responses)
+        let output = encodeJSON(payload) ?? "用户已提交选择。"
+        return ToolExecutionResult(
+            toolName: SparkToolName.askUserQuestion,
+            outputText: output,
+            sensitive: false,
+            shouldBypassModel: true
+        )
+    }
+
+    private func parseQuestionItems(arguments: [String: String]) -> [ToolQuestionItem] {
+        if let raw = arguments["questions"],
+           let data = raw.data(using: .utf8),
+           let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return Array(array.prefix(5)).enumerated().compactMap { index, object in
+                let question = (object["question"] as? String ?? object["title"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawOptions = object["options"] as? [String] ?? []
+                let selectionMode = ChatQuestionSelectionMode(
+                    rawValue: (object["selection_mode"] as? String ?? "single").lowercased()
+                ) ?? .single
+                let allowsOther = object["allows_other"] as? Bool ?? false
+                return makeQuestionItem(
+                    index: index,
+                    question: question,
+                    rawOptions: rawOptions,
+                    selectionMode: selectionMode,
+                    allowsOther: allowsOther
+                )
+            }
+        }
+
+        let question = (arguments["question"] ?? arguments["query"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let selectionMode = ChatQuestionSelectionMode(
+            rawValue: (arguments["selection_mode"] ?? "single")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+        ) ?? .single
+        return makeQuestionItem(
+            index: 0,
+            question: question,
+            rawOptions: parseStringList(arguments["options"]),
+            selectionMode: selectionMode,
+            allowsOther: parseBool(arguments["allows_other"], defaultValue: false)
+        ).map { [$0] } ?? []
+    }
+
+    private func makeQuestionItem(
+        index: Int,
+        question: String,
+        rawOptions: [String],
+        selectionMode: ChatQuestionSelectionMode,
+        allowsOther: Bool
+    ) -> ToolQuestionItem? {
+        guard question.isEmpty == false, (2...5).contains(rawOptions.count) else { return nil }
+        let questionID = "q\(index + 1)"
+        let options = Array(rawOptions.prefix(5)).enumerated().map { optionIndex, text in
+            ChatQuestionOption(id: "\(questionID)_option_\(optionIndex + 1)", text: text)
+        }
+        return ToolQuestionItem(
+            id: questionID,
+            question: question,
+            options: options,
+            allowsOther: allowsOther,
+            selectionMode: selectionMode
+        )
+    }
+
     /// 任务查询工具：按成员维度返回主任务与子任务信息，供后续任务生成去重。
     private func runQueryTasksByMember(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let memberID: Int
@@ -1915,49 +2053,23 @@ final class ToolHub: @unchecked Sendable {
         context: ToolExecutionContext,
         reason: String
     ) async -> Int? {
-        guard let threadID = context.threadID,
-              context.assistantMessageClientID != nil else {
-            return nil
-        }
-
-        let normalizedToolCallID: String? = {
-            let trimmed = context.pendingToolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (trimmed?.isEmpty == false) ? trimmed : nil
-        }()
+        guard let toolInteractionCoordinator else { return nil }
         var arguments = invocation.arguments
         if let memberID = context.memberID {
             arguments["member_id"] = String(memberID)
         }
-        let card = PendingMemberToolCard(
+        let prompt = ToolMemberSelectionPrompt(
+            id: UUID(),
             toolName: invocation.name,
-            arguments: arguments,
-            toolCallID: normalizedToolCallID,
-            resumeMessages: context.pendingResumeMessages,
-            reason: reason
+            reason: reason,
+            arguments: arguments
         )
-        await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
-            threadID: threadID,
-            blocks: [makePendingMemberToolBlock(cards: [card], toolCallID: normalizedToolCallID)]
-        )
-
-        let deadline = Date().addingTimeInterval(40)
-        while Date() < deadline {
-            if let thread = await chatRepository.loadThread(id: threadID),
-               let memberID = thread.memberID,
-               memberID > 0 {
-                return memberID
-            }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        switch await toolInteractionCoordinator.requestMemberSelection(threadID: context.threadID, prompt: prompt) {
+        case .success(let memberID):
+            return memberID
+        case .cancelled, .conflict:
+            return nil
         }
-        var timedOutCard = card
-        timedOutCard.status = .completed
-        timedOutCard.resultText = td("tool.result.request_member_selection.timeout")
-        timedOutCard.updatedAt = Date()
-        await structuredHealthCardMergeCoordinator.mergeRichPresentationIntoStreamingCache(
-            threadID: threadID,
-            blocks: [makePendingMemberToolBlock(cards: [timedOutCard], toolCallID: normalizedToolCallID)]
-        )
-        return nil
     }
 
     private func encodeJSON<T: Encodable>(_ value: T) -> String? {
@@ -2191,18 +2303,6 @@ final class ToolHub: @unchecked Sendable {
         return out
     }
 
-    private func makePendingMemberToolBlock(
-        cards: [PendingMemberToolCard],
-        toolCallID: String?
-    ) -> ChatMessageBlock {
-        ChatMessageBlock(
-            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
-            kind: .pendingMemberToolCards,
-            toolCallID: toolCallID,
-            pendingMemberToolCards: cards
-        )
-    }
-
     /// 联网/地图/日历等外部工具：根据 `toolKeys` 解析 endpoint，当前仅返回路由占位说明。
     private func runExternalConnectorTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let snapshot = await aiConfigCenter.currentSnapshot()
@@ -2321,6 +2421,40 @@ private struct TaskQueryToolPayload: Encodable {
         case queriedAt = "queried_at"
         case total
         case tasks
+    }
+}
+
+private struct ToolQuestionAnswerPayload: Encodable {
+    let responses: [Response]
+
+    init(questions: [ToolQuestionItem], responses: [ToolQuestionResponse]) {
+        self.responses = questions.map { question in
+            let response = responses.first(where: { $0.questionID == question.id })
+            let selectedIDs = Set(response?.selectedOptionIDs ?? [])
+            return Response(
+                questionID: question.id,
+                question: question.question,
+                selectionMode: question.selectionMode.rawValue,
+                selectedOptions: question.options.filter { selectedIDs.contains($0.id) },
+                otherText: response?.otherText
+            )
+        }
+    }
+
+    struct Response: Encodable {
+        let questionID: String
+        let question: String
+        let selectionMode: String
+        let selectedOptions: [ChatQuestionOption]
+        let otherText: String?
+
+        enum CodingKeys: String, CodingKey {
+            case questionID = "question_id"
+            case question
+            case selectionMode = "selection_mode"
+            case selectedOptions = "selected_options"
+            case otherText = "other_text"
+        }
     }
 }
 

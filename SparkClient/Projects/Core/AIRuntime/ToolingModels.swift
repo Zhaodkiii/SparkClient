@@ -59,6 +59,40 @@ struct ToolExecutionResult: Sendable {
     }
 }
 
+enum ToolDataSensitivity: String, Codable, Sendable {
+    case none
+    case personal
+    case sensitive
+    case regulated
+
+    var requiresModelConsent: Bool {
+        switch self {
+        case .none:
+            return false
+        case .personal, .sensitive, .regulated:
+            return true
+        }
+    }
+}
+
+enum ToolDataCategory: String, Codable, Sendable {
+    case health
+    case member
+    case location
+    case memory
+    case knowledge
+    case calendar
+    case publicWeb
+    case ui
+    case system
+}
+
+enum ToolEgressPolicy: String, Codable, Sendable {
+    case allow
+    case requireConsent
+    case localOnly
+}
+
 enum ToolHubResult: Sendable {
     case none
     case executed(ToolExecutionResult)
@@ -137,9 +171,104 @@ enum SparkToolName: String, CaseIterable {
     case generateStructuredHealthCard = "generate_structured_health_card"
     case queryTasksByMember          = "query_tasks_by_member"
     case generateTask                = "generate_task"
+    case askUserQuestion             = "ask_user_question"
 
     /// 自动派生，新增 case 后无需手动维护。
     static var all: [String] { allCases.map(\.rawValue) }
+}
+
+extension SparkToolName {
+    var dataCategory: ToolDataCategory {
+        switch self {
+        case .fetchStepDetails, .fetchEnergyDetails, .fetchNutritionDetails, .makeNutritionData,
+             .fetchSleepDetails, .fetchWorkoutDetails, .generateStructuredHealthCard:
+            return .health
+        case .getCurrentMember, .requestMemberSelection, .switchMember, .findMember, .queryMemberProfile:
+            return .member
+        case .queryLocation, .getCurrentLocation, .searchNearbyLocations, .getRoute, .queryWeather:
+            return .location
+        case .saveMemory, .retrieveMemory, .updateMemory:
+            return .memory
+        case .searchKnowledgeBag, .createKnowledgeDocument:
+            return .knowledge
+        case .searchCalendarAndReminders, .writeSystemEvent:
+            return .calendar
+        case .searchOnline, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
+            return .publicWeb
+        case .showCustomMessageCard, .askUserQuestion:
+            return .ui
+        case .generateChatTitle, .createCanvas, .editCanvas, .queryTasksByMember, .generateTask:
+            return .system
+        }
+    }
+
+    var declaredSensitivity: ToolDataSensitivity {
+        switch dataCategory {
+        case .health:
+            return .regulated
+        case .member, .location, .memory, .calendar:
+            return .personal
+        case .knowledge:
+            return .sensitive
+        case .publicWeb, .ui, .system:
+            return .none
+        }
+    }
+
+    var egressPolicy: ToolEgressPolicy {
+        declaredSensitivity.requiresModelConsent ? .requireConsent : .allow
+    }
+}
+
+enum ChatQuestionSelectionMode: String, Codable, Sendable {
+    case single
+    case multiple
+}
+
+struct ChatQuestionOption: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let text: String
+}
+
+struct ToolQuestionItem: Identifiable, Equatable, Codable, Sendable {
+    let id: String
+    let question: String
+    let options: [ChatQuestionOption]
+    let allowsOther: Bool
+    let selectionMode: ChatQuestionSelectionMode
+}
+
+struct ToolMemberSelectionPrompt: Identifiable, Equatable, Codable, Sendable {
+    let id: UUID
+    let toolName: String
+    let reason: String
+    let arguments: [String: String]
+}
+
+struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendable {
+    let id: UUID
+    let toolName: String
+    let questions: [ToolQuestionItem]
+
+    init(
+        id: UUID = UUID(),
+        toolName: String = SparkToolName.askUserQuestion.rawValue,
+        questions: [ToolQuestionItem]
+    ) {
+        self.id = id
+        self.toolName = toolName
+        self.questions = questions
+    }
+}
+
+struct ToolQuestionAnswer: Equatable, Codable, Sendable {
+    let responses: [ToolQuestionResponse]
+}
+
+struct ToolQuestionResponse: Equatable, Codable, Sendable {
+    let questionID: String
+    let selectedOptionIDs: [String]
+    let otherText: String?
 }
 
 /// 允许在 `switch aString { case SparkToolName.xxx: }` 中使用枚举值做模式匹配，无需改动已有 switch。
@@ -254,7 +383,8 @@ enum SparkToolGroup: String, CaseIterable {
                 .createCanvas,
                 .editCanvas,
                 .queryTasksByMember,
-                .generateTask
+                .generateTask,
+                .askUserQuestion
             ]
         }
     }
@@ -265,6 +395,23 @@ enum SparkToolGroup: String, CaseIterable {
 }
 
 extension ToolExecutionResult {
+    var toolPolicySensitivity: ToolDataSensitivity {
+        SparkToolName(rawValue: toolName)?.declaredSensitivity ?? (sensitive ? .sensitive : .none)
+    }
+
+    var toolEgressPolicy: ToolEgressPolicy {
+        SparkToolName(rawValue: toolName)?.egressPolicy ?? (sensitive ? .requireConsent : .allow)
+    }
+
+    var requiresModelConsent: Bool {
+        switch toolEgressPolicy {
+        case .allow:
+            return sensitive || toolPolicySensitivity.requiresModelConsent
+        case .requireConsent, .localOnly:
+            return true
+        }
+    }
+
     /// 接受 `SparkToolName` 枚举值，避免调用处写 `.rawValue`。
     init(
         toolName: SparkToolName,

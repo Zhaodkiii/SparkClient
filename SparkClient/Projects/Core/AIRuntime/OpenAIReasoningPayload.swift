@@ -3,7 +3,7 @@ import Foundation
 // MARK: - 基础类型
 
 enum ReasoningEffortLevel: String, Encodable {
-    case minimal, low, medium, high
+    case minimal, low, medium, high, max
 
     static func fromTier(_ tier: Int) -> Self {
         switch tier {
@@ -24,7 +24,8 @@ enum ReasoningSwitch: String, Encodable {
 /// 厂商推理协议类型
 enum ReasoningSupportType {
     case openAIStyle    // reasoning_effort（OpenAI / OpenRouter）
-    case enableThinking // enable_thinking + thinking_budget（Qwen / DeepSeek）
+    case enableThinking // enable_thinking + thinking_budget（Qwen / 阿里云等）
+    case deepSeekStyle  // thinking.type + reasoning_effort（high/max）；与 enable_thinking 协议不同
     case thinkingObject // thinking: { type, budget_tokens? }（Anthropic / Doubao / Zhipu …）
     case none           // 不支持推理控制
 }
@@ -33,6 +34,22 @@ struct ProviderReasoningProfile {
     let supportType: ReasoningSupportType
     /// 关闭时是否必须显式下发 disabled（防止服务端默认开启）
     let requiresExplicitDisable: Bool
+    /// 聊天 Composer：开启深度思考后是否展示强度档位菜单（与 `supportType != .none` 一致，可单独覆盖）
+    let showsReasoningDepthMenu: Bool
+    /// 聊天 Composer：强度菜单是否仅为 **high / max** 两档（与 `deepSeekStyle` 一致，可单独覆盖）
+    let usesHighMaxReasoningEffortUI: Bool
+
+    init(
+        supportType: ReasoningSupportType,
+        requiresExplicitDisable: Bool = false,
+        showsReasoningDepthMenu: Bool? = nil,
+        usesHighMaxReasoningEffortUI: Bool? = nil
+    ) {
+        self.supportType = supportType
+        self.requiresExplicitDisable = requiresExplicitDisable
+        self.showsReasoningDepthMenu = showsReasoningDepthMenu ?? (supportType != .none)
+        self.usesHighMaxReasoningEffortUI = usesHighMaxReasoningEffortUI ?? (supportType == .deepSeekStyle)
+    }
 }
 
 extension ProviderReasoningProfile {
@@ -75,8 +92,8 @@ struct ProviderRegistry {
         "QWEN":   .init(supportType: .thinkingObject, requiresExplicitDisable: true),
 
 
-        // ✅ DeepSeek（enable_thinking，非 /think 后缀）
-        "DEEPSEEK": .init(supportType: .enableThinking, requiresExplicitDisable: false),
+        // ✅ DeepSeek：thinking.type + reasoning_effort（high/max），非 enable_thinking / thinking_budget
+        "DEEPSEEK": .init(supportType: .deepSeekStyle, requiresExplicitDisable: false),
 
         // ❌ Spark（讯飞自有网关，不支持客户端推理控制）
         "SPARK": .init(supportType: .none, requiresExplicitDisable: false),
@@ -84,6 +101,16 @@ struct ProviderRegistry {
 
     static func profile(for provider: String?) -> ProviderReasoningProfile {
         profiles[provider?.uppercased() ?? ""] ?? .default
+    }
+
+    /// 与聊天 Composer 对齐：是否展示思考强度菜单（未知厂商沿用 `ProviderReasoningProfile.default`）。
+    static func showsReasoningDepthMenu(for provider: String?) -> Bool {
+        profile(for: provider).showsReasoningDepthMenu
+    }
+
+    /// 与聊天 Composer 对齐：强度菜单是否为 high / max 两档。
+    static func usesHighMaxReasoningEffortUI(for provider: String?) -> Bool {
+        profile(for: provider).usesHighMaxReasoningEffortUI
     }
 }
 
@@ -169,6 +196,8 @@ enum OpenAIReasoningBuilder {
             return buildOpenAIStyle(decision: decision)
         case .enableThinking:
             return buildEnableThinking(decision: decision)
+        case .deepSeekStyle:
+            return buildDeepSeekStyle(decision: decision, effortTier: options.effortTier)
         case .thinkingObject:
             return buildThinkingObject(
                 provider: provider,
@@ -198,7 +227,7 @@ extension OpenAIReasoningBuilder {
         ))
     }
 
-    /// Qwen / DeepSeek：enable_thinking + thinking_budget，关闭时不传字段
+    /// Qwen / 阿里云：enable_thinking + thinking_budget，关闭时不传字段
     private static func buildEnableThinking(
         decision: ReasoningDecision
     ) -> ReasoningBuildResult {
@@ -209,6 +238,36 @@ extension OpenAIReasoningBuilder {
             thinkingBudget: decision.budget,
             thinking: nil
         ))
+    }
+
+    /// DeepSeek：`thinking.type` + 顶层 `reasoning_effort`（仅 high / max）。
+    /// 关闭时必须显式 `thinking: { type: disabled }`，否则服务端默认仍为开启。
+    private static func buildDeepSeekStyle(
+        decision: ReasoningDecision,
+        effortTier: Int
+    ) -> ReasoningBuildResult {
+        let thinkingPayload = ThinkingPayload(
+            type: decision.enabled ? .enabled : .disabled,
+            budgetTokens: nil
+        )
+        // 文档：low/medium → high；最高档 → max
+        let effort: ReasoningEffortLevel? = decision.enabled
+            ? deepSeekReasoningEffort(for: effortTier)
+            : nil
+        return ReasoningBuildResult(extras: OpenAIReasoningExtras(
+            reasoningEffort: effort,
+            enableThinking: nil,
+            thinkingBudget: nil,
+            thinking: thinkingPayload
+        ))
+    }
+
+    /// 与 DeepSeek 文档对齐：档位 3 映射为 max，其余在开启思考时映射为 high。
+    private static func deepSeekReasoningEffort(for effortTier: Int) -> ReasoningEffortLevel {
+        switch effortTier {
+        case 3: return .max
+        default: return .high
+        }
     }
 
     /// Anthropic / Doubao / Zhipu 等：thinking: { type, budget_tokens? }

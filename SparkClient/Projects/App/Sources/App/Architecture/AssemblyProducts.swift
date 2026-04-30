@@ -92,8 +92,8 @@ struct NotificationAssemblyProduct {
 struct ChatAssemblyProduct {
     let chatRepository: CoreDataChatRepository
     let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
-    let toolAuditStore: ToolAuditStore
     let toolHub: ToolHub
+    let toolInteractionCoordinator: ToolInteractionCoordinator
     let chatQueryService: ChatQueryService
     let loadChatThreadsUseCase: LoadChatThreadsUseCase
     let loadChatMessagesUseCase: LoadChatMessagesUseCase
@@ -474,6 +474,7 @@ extension ChatAssembly {
         let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
         let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(repository: chatRepository)
         let toolAuditStore = ToolAuditStore()
+        let toolInteractionCoordinator = ToolInteractionCoordinator()
         let toolHub = ToolHub(
             chatRepository: chatRepository,
             auditStore: toolAuditStore,
@@ -486,6 +487,7 @@ extension ChatAssembly {
             createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
             typedMedicalDocumentExtractor: medical.typedMedicalDocumentExtractor,
             structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
+            toolInteractionCoordinator: toolInteractionCoordinator,
             logger: logger
         )
         let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
@@ -514,7 +516,7 @@ extension ChatAssembly {
         let chatOrchestrator = ChatOrchestrator(
             runtimeService: ai.aiRuntimeService,
             toolHub: toolHub,
-            consentGate: ConsentGate(),
+            consentGate: ConsentGate(toolInteractionCoordinator: toolInteractionCoordinator),
             fileCacheManager: infrastructure.fileCacheManager,
             logger: logger
         )
@@ -535,8 +537,8 @@ extension ChatAssembly {
         return ChatAssemblyProduct(
             chatRepository: chatRepository,
             structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
-            toolAuditStore: toolAuditStore,
             toolHub: toolHub,
+            toolInteractionCoordinator: toolInteractionCoordinator,
             chatQueryService: chatQueryService,
             loadChatThreadsUseCase: LoadChatThreadsUseCase(queryService: chatQueryService),
             loadChatMessagesUseCase: LoadChatMessagesUseCase(queryService: chatQueryService),

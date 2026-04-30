@@ -12,11 +12,6 @@ struct ChatComposerRuntimeTogglesRow: View {
     @State private var expandedToggle: RuntimeToggleKind?
     @State private var collapseToken = UUID()
 
-    /// 与 HealthClient `ActionButtonsView` 中展示思考深度菜单的厂商列表一致（支持 `reasoning_effort` / `thinking_budget` 调节的云端模型）。
-    private static let providersShowingReasoningDepthMenu: Set<String> = [
-        "OPENAI", "GOOGLE", "XAI", "QWEN", "MODELSCOPE", "SILICONCLOUD", "WENXIN", "DOUBAO"
-    ]
-
     private enum RuntimeToggleKind {
         case tools
         case knowledge
@@ -39,10 +34,15 @@ struct ChatComposerRuntimeTogglesRow: View {
         (modelReasoning.providerCompany ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     }
 
-    /// 未知厂商时仍展示档位，避免阻断调节；明确不支持多档调节的厂商仅显示开关。
+    /// 未知厂商时仍展示档位（见 `ProviderRegistry` 默认 profile）；`supportType == .none` 的厂商仅显示开关。
     private var showsReasoningDepthMenu: Bool {
         guard companyUppercased.isEmpty == false else { return true }
-        return Self.providersShowingReasoningDepthMenu.contains(companyUppercased)
+        return ProviderRegistry.showsReasoningDepthMenu(for: modelReasoning.providerCompany)
+    }
+
+    /// 当前模型是否只暴露 **high / max** 两档（与 `ProviderRegistry` / `OpenAIReasoningBuilder` 一致）。
+    private var usesHighMaxReasoningEffortMenu: Bool {
+        ProviderRegistry.usesHighMaxReasoningEffortUI(for: modelReasoning.providerCompany)
     }
 
     private var bgTool: Color {
@@ -346,14 +346,34 @@ struct ChatComposerRuntimeTogglesRow: View {
 
     private var reasoningEffortMenu: some View {
         Menu {
-            ForEach(1 ... 3, id: \.self) { tier in
+            if usesHighMaxReasoningEffortMenu {
                 Button {
-                    stateStore.updateRuntimeFlags(for: threadID) { $0.reasoningEffortTier = tier }
+                    // tier 2 → 网关 `reasoning_effort: high`（tier 1 默认亦映射为 high）
+                    stateStore.updateRuntimeFlags(for: threadID) { $0.reasoningEffortTier = 2 }
                 } label: {
                     Label(
-                        L10n.text("chat.composer.reasoning.tier.\(tier)"),
-                        systemImage: flags.reasoningEffortTier == tier ? "checkmark.circle.fill" : "circle"
+                        L10n.text("chat.composer.reasoning.effort.high"),
+                        systemImage: reasoningEffortHighMaxSelection == .high ? "checkmark.circle.fill" : "circle"
                     )
+                }
+                Button {
+                    stateStore.updateRuntimeFlags(for: threadID) { $0.reasoningEffortTier = 3 }
+                } label: {
+                    Label(
+                        L10n.text("chat.composer.reasoning.effort.max"),
+                        systemImage: reasoningEffortHighMaxSelection == .max ? "checkmark.circle.fill" : "circle"
+                    )
+                }
+            } else {
+                ForEach(1 ... 3, id: \.self) { tier in
+                    Button {
+                        stateStore.updateRuntimeFlags(for: threadID) { $0.reasoningEffortTier = tier }
+                    } label: {
+                        Label(
+                            L10n.text("chat.composer.reasoning.tier.\(tier)"),
+                            systemImage: flags.reasoningEffortTier == tier ? "checkmark.circle.fill" : "circle"
+                        )
+                    }
                 }
             }
         } label: {
@@ -361,12 +381,32 @@ struct ChatComposerRuntimeTogglesRow: View {
                 Image(systemName: "chevron.up.chevron.down")
                     .foregroundStyle(Color(uiColor: .systemPurple))
                     .imageScale(.small)
-                Text(L10n.text("chat.composer.reasoning.tier.\(flags.reasoningEffortTier)"))
+                Text(reasoningEffortMenuTitle)
                     .font(.caption)
                     .foregroundStyle(Color(uiColor: .systemPurple))
                     .padding(.trailing, 8)
             }
         }
+    }
+
+    private enum HighMaxReasoningSelection {
+        case high
+        case max
+    }
+
+    /// 与 `OpenAIReasoningPayload.deepSeekReasoningEffort` 一致：仅 tier 3 为 max。
+    private var reasoningEffortHighMaxSelection: HighMaxReasoningSelection {
+        flags.reasoningEffortTier >= 3 ? .max : .high
+    }
+
+    private var reasoningEffortMenuTitle: String {
+        if usesHighMaxReasoningEffortMenu {
+            switch reasoningEffortHighMaxSelection {
+            case .high: return L10n.text("chat.composer.reasoning.effort.high")
+            case .max: return L10n.text("chat.composer.reasoning.effort.max")
+            }
+        }
+        return L10n.text("chat.composer.reasoning.tier.\(flags.reasoningEffortTier)")
     }
 
     private func updateRuntimeToggle(

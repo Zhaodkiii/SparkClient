@@ -109,7 +109,7 @@
 "tool.param.tool_query_generic" = "工具查询参数";
 "tool.result.request_member_selection.waiting" = "请选择成员后继续执行工具。";
 "tool.result.request_member_selection.completed" = "用户已完成成员选择。请使用返回的 member_id 继续后续工具调用或生成最终回答。";
-"tool.result.request_member_selection.timeout" = "用户在 40 秒内未选择成员。请继续当前对话，或再次提示用户选择成员。";
+"tool.result.request_member_selection.timeout" = "用户取消或未选择成员。请继续当前对话，或再次提示用户选择成员。";
 
 /* ========== Tool UI 文案（工具结果卡片标题等） ========== */
 "tool.ui.knowledge.search_title" = "知识检索";
@@ -123,3 +123,11 @@
 "tool.error.structured_health_card.no_member" = "未选择成员，无法生成结构化健康卡片。";
 "tool.error.structured_health_card.empty_raw_text" = "参数不完整：请提供 raw_text（提炼后的关键信息）。";
 "tool.error.structured_health_card.no_message_binding" = "【系统】内部错误：无法关联助手消息。";
+"tool.summary.ask_user_question" = "用途：在回答过程中需要用户补充选择时调用。支持 2-5 个选项、单选/多选、可选其他输入。调用后客户端会弹出确认表单，用户提交后工具结果返回选择内容，随后继续生成回答。";
+"tool.param.ask_user_question" = "要询问用户的问题，简洁明确。";
+"tool.param.ask_user_questions" = "问题数组，最多 5 个；每个问题包含 question、options、selection_mode、allows_other。";
+"tool.param.ask_user_question_item" = "单个问题对象。";
+"tool.param.ask_user_options" = "2-5 个可选项。";
+"tool.param.ask_user_option_item" = "选项文案。";
+"tool.param.ask_user_selection_mode" = "single 或 multiple。";
+"tool.param.ask_user_allows_other" = "是否允许用户录入其他答案。";

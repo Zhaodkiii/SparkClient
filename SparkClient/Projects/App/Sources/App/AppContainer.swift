@@ -190,7 +190,7 @@ final class AppContainer {
     /// 聊天工具集合（含医疗草稿、知识库写入等）。
     let toolHub: ToolHub
     /// 工具调用审计记录。
-    let toolAuditStore: ToolAuditStore
+    let toolInteractionCoordinator: ToolInteractionCoordinator
     /// 偏好 + 仓库 + 本地通知的医疗同步调度。
     let medicalSyncService: MedicalSyncService
     /// 阿里云 / 本地 OCR 引擎选择与降级。
@@ -421,7 +421,8 @@ final class AppContainer {
         self.chatSyncSupervisor = chat.chatSyncSupervisor
         self.sendChatMessageUseCase = chat.sendChatMessageUseCase
         self.toolHub = chat.toolHub
-        self.toolAuditStore = chat.toolAuditStore
+//        self.toolAuditStore = chat.toolAuditStore
+        self.toolInteractionCoordinator = chat.toolInteractionCoordinator
 
         self.routeStore = notification.routeStore
         self.routeCoordinator = notification.routeCoordinator
@@ -480,6 +481,7 @@ final class AppContainer {
             retryFailedMessageUseCase: chat.retryFailedMessageUseCase,
             syncChatUseCase: chat.syncChatUseCase,
             updateChatMessageBlocksUseCase: chat.updateChatMessageBlocksUseCase,
+            toolInteractionCoordinator: chat.toolInteractionCoordinator,
             notificationClient: notification.notificationClient,
             aiConfigCenter: ai.aiConfigCenter,
             aiSettingsRepository: ai.aiSettingsRepository,

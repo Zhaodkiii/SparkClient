@@ -326,6 +326,7 @@ struct ChatStreamingAssistantReducer: Sendable {
             sleepVisualization: incoming.sleepVisualization,
             captureMessageCard: incoming.captureMessageCard,
             smallTaskCard: incoming.smallTaskCard,
+            deepThoughtCard: incoming.deepThoughtCard ?? original.deepThoughtCard,
             createdAt: original.createdAt,
             updatedAt: incoming.updatedAt
         )

@@ -50,6 +50,11 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         
         // 构建OpenAI规范的聊天完成请求体
         let providerUpper = runtimeRequest.providerCompanyUppercased
+        let deepSeekToolCodec = DeepSeekToolCallRequestCodec(
+            providerCompanyUppercased: providerUpper,
+            modelName: client.model,
+            reasoning: runtimeRequest.reasoning
+        )
         let payload = ChatCompletionRequest(
             model: client.model,
             messages: runtimeMessages.map {
@@ -64,7 +69,8 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                         )
                     }.nilIfEmpty,
                     toolCallID: $0.toolCallID,
-                    name: $0.name
+                    name: $0.name,
+                    reasoningContent: deepSeekToolCodec.reasoningContent(for: $0)
                 )
             },
             temperature: client.temperature,
@@ -352,12 +358,17 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
             onEvent?(.textDelta(fallbackContent))
         }
         
+        let nonStreamingReasoningText = response.reasoningText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if nonStreamingReasoningText.isEmpty == false {
+            onEvent?(.reasoningDelta(nonStreamingReasoningText))
+        }
+
         return ParsedCompletion(
             model: response.model,
             usage: response.usage,
             message: choice.message,
             finishReason: choice.finishReason,
-            reasoningText: ""
+            reasoningText: nonStreamingReasoningText
         )
     }
 
@@ -560,6 +571,7 @@ private struct ChatCompletionRequest: Encodable {
         let toolCalls: [RequestToolCall]?
         let toolCallID: String?
         let name: String?
+        let reasoningContent: String?
 
         enum CodingKeys: String, CodingKey {
             case role
@@ -567,6 +579,7 @@ private struct ChatCompletionRequest: Encodable {
             case toolCalls = "tool_calls"
             case toolCallID = "tool_call_id"
             case name
+            case reasoningContent = "reasoning_content"
         }
     }
 
@@ -622,6 +635,7 @@ private struct ChatCompletionResponse: Decodable {
             let contentString: String?
             let contentParts: [Part]?
             let toolCalls: [ToolCall]?
+            let reasoningContent: String?
 
             var normalizedContent: String {
                 if let contentString, contentString.isEmpty == false {
@@ -640,6 +654,7 @@ private struct ChatCompletionResponse: Decodable {
                 case role
                 case content
                 case toolCalls = "tool_calls"
+                case reasoningContent = "reasoning_content"
             }
 
             init(from decoder: Decoder) throws {
@@ -653,18 +668,21 @@ private struct ChatCompletionResponse: Decodable {
                     contentParts = try container.decodeIfPresent([Part].self, forKey: .content)
                 }
                 toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .toolCalls)
+                reasoningContent = try container.decodeIfPresent(String.self, forKey: .reasoningContent)
             }
 
             init(
                 role: String?,
                 contentString: String?,
                 contentParts: [Part]?,
-                toolCalls: [ToolCall]?
+                toolCalls: [ToolCall]?,
+                reasoningContent: String? = nil
             ) {
                 self.role = role
                 self.contentString = contentString
                 self.contentParts = contentParts
                 self.toolCalls = toolCalls
+                self.reasoningContent = reasoningContent
             }
         }
 
@@ -684,6 +702,10 @@ private struct ChatCompletionResponse: Decodable {
     let model: String
     let choices: [Choice]
     let usage: Usage?
+
+    var reasoningText: String {
+        choices.first?.message.reasoningContent ?? ""
+    }
 }
 
 private struct OpenAIErrorEnvelope: Decodable {
@@ -862,6 +884,36 @@ private struct ParsedCompletion {
     let message: ChatCompletionResponse.Choice.ResponseMessage
     let finishReason: String?
     let reasoningText: String
+}
+
+/// DeepSeek 思考模式工具调用的请求适配。
+/// 仅 DeepSeek 在 assistant tool_calls 消息中编码 `reasoning_content`，避免影响其它 OpenAI 兼容厂商。
+private struct DeepSeekToolCallRequestCodec {
+    private let enabled: Bool
+
+    init(
+        providerCompanyUppercased: String?,
+        modelName: String,
+        reasoning: AIRuntimeReasoningOptions
+    ) {
+        let isDeepSeekProvider = providerCompanyUppercased?.uppercased().contains("DEEPSEEK") == true
+        let isDeepSeekModel = modelName.lowercased().contains("deepseek")
+        enabled = (isDeepSeekProvider || isDeepSeekModel)
+            && reasoning.isEnabled
+            && reasoning.usePromptFallback == false
+    }
+
+    func reasoningContent(for message: AIRuntimeMessage) -> String? {
+        guard enabled,
+              message.role == .assistant,
+              message.toolCalls?.isEmpty == false,
+              let reasoningContent = message.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines),
+              reasoningContent.isEmpty == false
+        else {
+            return nil
+        }
+        return reasoningContent
+    }
 }
 
 private extension Array {

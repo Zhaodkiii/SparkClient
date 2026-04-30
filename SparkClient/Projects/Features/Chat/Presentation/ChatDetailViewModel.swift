@@ -15,6 +15,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
     private let syncChatUseCase: SyncChatUseCase
     private let updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase
+    let toolInteractionCoordinator: ToolInteractionCoordinator
     private let notificationClient: any NotificationClient
     private let aiConfigCenter: AIConfigCenter
     private let aiSettingsRepository: any AISettingsRepository
@@ -59,6 +60,7 @@ final class ChatDetailViewModel: ObservableObject {
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
         syncChatUseCase: SyncChatUseCase,
         updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase,
+        toolInteractionCoordinator: ToolInteractionCoordinator,
         notificationClient: any NotificationClient,
         aiConfigCenter: AIConfigCenter,
         aiSettingsRepository: any AISettingsRepository,
@@ -80,6 +82,7 @@ final class ChatDetailViewModel: ObservableObject {
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.syncChatUseCase = syncChatUseCase
         self.updateChatMessageBlocksUseCase = updateChatMessageBlocksUseCase
+        self.toolInteractionCoordinator = toolInteractionCoordinator
         self.notificationClient = notificationClient
         self.aiConfigCenter = aiConfigCenter
         self.aiSettingsRepository = aiSettingsRepository
@@ -117,6 +120,10 @@ final class ChatDetailViewModel: ObservableObject {
                     await self.loadMessagesIfNeeded(for: threadID, skipRemoteSync: true)
                 }
             }
+            .store(in: &cancellables)
+        toolInteractionCoordinator.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
     }
 

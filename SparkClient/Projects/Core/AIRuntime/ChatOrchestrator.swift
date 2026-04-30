@@ -98,7 +98,8 @@ struct ChatOrchestrator: Sendable {
             toolResult = await toolHub.runIfNeeded(
                 userInput: userInput,
                 memberID: memberID,
-                allowedToolNames: inference.allowedToolNames
+                allowedToolNames: inference.allowedToolNames,
+                threadID: threadID
             )
         } else {
             toolResult = .none
@@ -108,7 +109,15 @@ struct ChatOrchestrator: Sendable {
         
         // MARK: - 工具已直接执行完成（无需走AI模型），直接返回结果
         if case .executed(let result) = toolResult {
-            let modelConsent = consentGate.evaluate(result: result, destination: .model)
+            let modelConsent = await consentGate.awaitModelConsent(
+                result: result,
+                callArguments: "",
+                providerCompany: providerCompanyUppercased,
+                modelName: preferredModelName,
+                endpoint: nil,
+                privacyPolicyURL: nil,
+                threadID: threadID
+            )
             logger.info(
                 "工具调用已命中，tool=\(result.toolName), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive), consentAllowed=\(modelConsent.allowed)",
                 module: .aiConfig
@@ -158,6 +167,11 @@ struct ChatOrchestrator: Sendable {
         var activeToolDefinitions = baseToolDefinitions
         var activeToolChoice: AIRuntimeToolChoice = inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none
         var roundToolLocked = false // 工具锁定标记
+        let toolCallLoopStrategy = RuntimeToolCallLoopStrategy(
+            providerCompanyUppercased: providerCompanyUppercased,
+            preferredModelName: preferredModelName,
+            reasoning: reasoningOpts
+        )
         let toolLockedNotice = "本轮对话内已禁止继续调用工具。请基于现有信息直接完成回复，不要再发起工具调用。"
         
         logger.debug(
@@ -237,7 +251,20 @@ struct ChatOrchestrator: Sendable {
             // MARK: - 禁用工具但AI仍想调用 → 强制禁止并继续
             if inference.useTools == false || activeToolDefinitions.isEmpty {
                 if response.hasToolCalls {
-                    loopMessages.append(AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls))
+                    let assistantReasoning = response.reasoningText?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .nilIfEmpty
+                    loopMessages.append(
+                        AIRuntimeMessage(
+                            role: .assistant,
+                            content: nil,
+                            toolCalls: response.toolCalls,
+                            reasoningContent: toolCallLoopStrategy.reasoningContentForAssistantToolMessage(
+                                assistantReasoning,
+                                toolCalls: response.toolCalls
+                            )
+                        )
+                    )
                     loopMessages.append(AIRuntimeMessage(role: .system, content: toolLockedNotice))
                     continue
                 }
@@ -274,18 +301,29 @@ struct ChatOrchestrator: Sendable {
             )
             
             let roundAnswer = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            // 把AI的工具调用加入消息历史
+            let roundReasoning = response.reasoningText?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .nilIfEmpty
+            let toolCallsToExecute = response.toolCalls
+            guard toolCallsToExecute.isEmpty == false else {
+                continue
+            }
+            // 同一 assistant 消息里的 tool_calls 必须全部执行并逐个回灌 tool result，避免模型上下文状态断裂。
             loopMessages.append(
-                AIRuntimeMessage(role: .assistant, content: nil, toolCalls: response.toolCalls)
+                AIRuntimeMessage(
+                    role: .assistant,
+                    content: roundAnswer.isEmpty ? nil : roundAnswer,
+                    toolCalls: toolCallsToExecute,
+                    reasoningContent: toolCallLoopStrategy.reasoningContentForAssistantToolMessage(
+                        roundReasoning,
+                        toolCalls: toolCallsToExecute
+                    )
+                )
             )
+            try cancellationToken?.checkCancellation()
 
-            // 遍历执行所有工具调用
-            for call in response.toolCalls {
+            for call in toolCallsToExecute {
                 try cancellationToken?.checkCancellation()
-                
-                let roundReasoning = response.reasoningText?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .nilIfEmpty
                 
                 // 前端UI：显示工具调用中
                 await emitToolPartial(
@@ -327,7 +365,15 @@ struct ChatOrchestrator: Sendable {
                 }
 
                 // 权限校验
-                let modelConsent = consentGate.evaluate(result: toolResult, destination: .model)
+                let modelConsent = await consentGate.awaitModelConsent(
+                    result: toolResult,
+                    callArguments: call.arguments,
+                    providerCompany: providerCompanyUppercased,
+                    modelName: preferredModelName,
+                    endpoint: nil,
+                    privacyPolicyURL: nil,
+                    threadID: threadID
+                )
                 let content = modelConsent.allowed
                     ? toolResult.outputText
                     : promptLocalizer.consentBlockedHint(reason: modelConsent.reason)
@@ -799,6 +845,59 @@ struct ChatOrchestrator: Sendable {
             return normalized
         }
         return localized
+    }
+}
+
+/// 模型工具循环策略。
+/// 所有模型的同一子轮 tool_calls 都完整执行；DeepSeek 思考工具调用额外遵循官方规则，
+/// 在 assistant tool_calls 消息中回传 `reasoning_content`。
+private struct RuntimeToolCallLoopStrategy {
+    enum Mode {
+        case openAICompatible
+        case deepSeekThinking
+    }
+
+    let mode: Mode
+    let reasoning: AIRuntimeReasoningOptions
+
+    init(
+        providerCompanyUppercased: String?,
+        preferredModelName: String?,
+        reasoning: AIRuntimeReasoningOptions
+    ) {
+        self.reasoning = reasoning
+        if Self.isDeepSeek(providerCompanyUppercased: providerCompanyUppercased, modelName: preferredModelName),
+           reasoning.isEnabled,
+           reasoning.usePromptFallback == false {
+            mode = .deepSeekThinking
+        } else {
+            mode = .openAICompatible
+        }
+    }
+
+    func reasoningContentForAssistantToolMessage(
+        _ reasoningContent: String?,
+        toolCalls: [AIRuntimeToolCall]
+    ) -> String? {
+        guard toolCalls.isEmpty == false,
+              let reasoningContent,
+              reasoningContent.isEmpty == false
+        else {
+            return nil
+        }
+        switch mode {
+        case .openAICompatible:
+            return nil
+        case .deepSeekThinking:
+            return reasoningContent
+        }
+    }
+
+    private static func isDeepSeek(providerCompanyUppercased: String?, modelName: String?) -> Bool {
+        if providerCompanyUppercased?.uppercased().contains("DEEPSEEK") == true {
+            return true
+        }
+        return modelName?.lowercased().contains("deepseek") == true
     }
 }
 

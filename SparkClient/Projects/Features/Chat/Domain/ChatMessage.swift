@@ -619,8 +619,6 @@ enum ChatMessageBlockBuilder {
                     && block.pendingMemberToolCards.contains(where: { $0.id == firstCard.id })
             }
         }
-        
-        
 
         // 情况2：新块是结构化健康卡、睡眠可视化、拍照卡片、HTML预览
         // 按【块类型 + 工具调用ID + 锚点】三者匹配查找
@@ -691,6 +689,7 @@ enum ChatMessageBlockBuilder {
             sleepVisualization: incoming.sleepVisualization,
             captureMessageCard: incoming.captureMessageCard,
             smallTaskCard: incoming.smallTaskCard,
+            deepThoughtCard: incoming.deepThoughtCard ?? original.deepThoughtCard,
             createdAt: original.createdAt,
             updatedAt: incoming.updatedAt
         )

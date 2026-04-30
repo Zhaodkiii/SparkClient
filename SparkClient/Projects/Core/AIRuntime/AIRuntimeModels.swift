@@ -83,6 +83,8 @@ struct AIRuntimeMessage: Codable, Equatable, Sendable {
     let toolCalls: [AIRuntimeToolCall]?  // 工具调用列表
     let toolCallID: String?          // 工具调用ID（用于关联响应）
     let name: String?                 // 工具/函数名称
+    /// DeepSeek 等思考模式：带 `tool_calls` 的 assistant 轮次须在后续请求中回传，与 API 字段 `reasoning_content` 对应。
+    let reasoningContent: String?
 
     /// 构造方法
     init(
@@ -91,7 +93,8 @@ struct AIRuntimeMessage: Codable, Equatable, Sendable {
         contentParts: [AIRuntimeContentPart]? = nil,
         toolCalls: [AIRuntimeToolCall]? = nil,
         toolCallID: String? = nil,
-        name: String? = nil
+        name: String? = nil,
+        reasoningContent: String? = nil
     ) {
         self.role = role
         self.content = content
@@ -99,6 +102,7 @@ struct AIRuntimeMessage: Codable, Equatable, Sendable {
         self.toolCalls = toolCalls
         self.toolCallID = toolCallID
         self.name = name
+        self.reasoningContent = reasoningContent
     }
 
     /// 本地 GGUF 等仅文本路径：从纯文本或多模态 parts 中提取可拼接的字符串。
