@@ -6,3 +6,8 @@ enum InteractionResult<Success: Sendable>: Sendable {
     case cancelled
     case conflict
 }
+
+struct ToolConsentDecision: Equatable, Sendable {
+    let allowed: Bool
+    let rememberTool: Bool
+}

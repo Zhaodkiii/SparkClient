@@ -18,6 +18,7 @@ final class ToolHub: @unchecked Sendable {
     private let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
     private let healthTool: SparkHealthTool
     private let toolInteractionCoordinator: ToolInteractionCoordinator?
+    private let appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy
     private let logger: Logger
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
@@ -37,6 +38,7 @@ final class ToolHub: @unchecked Sendable {
         structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator,
         healthTool: SparkHealthTool = .shared,
         toolInteractionCoordinator: ToolInteractionCoordinator? = nil,
+        appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy = AppleHealthToolConsentPolicy(),
         logger: Logger = ConsoleLogger()
     ) {
         self.chatRepository = chatRepository
@@ -52,6 +54,7 @@ final class ToolHub: @unchecked Sendable {
         self.structuredHealthCardMergeCoordinator = structuredHealthCardMergeCoordinator
         self.healthTool = healthTool
         self.toolInteractionCoordinator = toolInteractionCoordinator
+        self.appleHealthToolConsentPolicy = appleHealthToolConsentPolicy
         self.logger = logger
     }
 
@@ -115,7 +118,11 @@ final class ToolHub: @unchecked Sendable {
         threadID: UUID? = nil,
         assistantMessageClientID: UUID? = nil,
         pendingToolCallID: String? = nil,
-        pendingResumeMessages: [AIRuntimeMessage] = []
+        pendingResumeMessages: [AIRuntimeMessage] = [],
+        providerCompany: String? = nil,
+        modelName: String? = nil,
+        endpoint: String? = nil,
+        privacyPolicyURL: URL? = nil
     ) async -> ToolExecutionResult {
         let invocation = ToolInvocation(name: name, arguments: parseArguments(arguments))
         let context = ToolExecutionContext(
@@ -124,9 +131,18 @@ final class ToolHub: @unchecked Sendable {
             assistantMessageClientID: assistantMessageClientID,
             threadID: threadID,
             pendingToolCallID: pendingToolCallID,
-            pendingResumeMessages: pendingResumeMessages
+            pendingResumeMessages: pendingResumeMessages,
+            providerCompany: providerCompany,
+            modelName: modelName,
+            endpoint: endpoint,
+            privacyPolicyURL: privacyPolicyURL
         )
-        let result = await execute(invocation: invocation, context: context)
+        let rawResult = await execute(invocation: invocation, context: context)
+        let result = await applyModelEgressConsentIfNeeded(
+            invocation: invocation,
+            context: context,
+            result: rawResult
+        )
         await appendAudit(invocation: invocation, context: context, result: result)
         return result
     }
@@ -701,13 +717,75 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
+    private func applyModelEgressConsentIfNeeded(
+        invocation: ToolInvocation,
+        context: ToolExecutionContext,
+        result: ToolExecutionResult
+    ) async -> ToolExecutionResult {
+        guard appleHealthToolConsentPolicy.requiresConsent(
+            result: result,
+            providerCompany: context.providerCompany
+        ) else {
+            return result
+        }
+        guard let toolInteractionCoordinator else {
+            return modelEgressDeniedResult(
+                toolName: result.toolName,
+                reason: "当前界面无法展示授权弹窗，已阻止敏感工具结果发送给模型。"
+            )
+        }
+
+        let callArguments = encodeJSON(invocation.arguments) ?? invocation.arguments.description
+        let decision = await toolInteractionCoordinator.requestConsentDecision(
+            threadID: context.threadID,
+            result: result,
+            callArguments: callArguments,
+            providerCompany: context.providerCompany,
+            modelName: context.modelName,
+            endpoint: context.endpoint,
+            privacyPolicyURL: context.privacyPolicyURL
+        )
+        switch decision {
+        case .success(let decision):
+            guard decision.allowed else {
+                return modelEgressDeniedResult(
+                    toolName: result.toolName,
+                    reason: "用户未授权将该工具结果发送给第三方模型。"
+                )
+            }
+            if decision.rememberTool {
+                appleHealthToolConsentPolicy.rememberAllowed(toolName: result.toolName)
+            }
+            return result
+        case .cancelled:
+            return modelEgressDeniedResult(
+                toolName: result.toolName,
+                reason: "用户未授权将该工具结果发送给第三方模型。"
+            )
+        case .conflict:
+            return modelEgressDeniedResult(
+                toolName: result.toolName,
+                reason: "授权交互繁忙，已阻止敏感工具结果发送给模型。"
+            )
+        }
+    }
+
+    private func modelEgressDeniedResult(toolName: String, reason: String) -> ToolExecutionResult {
+        ToolExecutionResult(
+            toolName: toolName,
+            outputText: PromptLocalizer().consentBlockedHint(reason: reason),
+            sensitive: false,
+            shouldBypassModel: true
+        )
+    }
+
     /// 从 HealthKit 查询真实步数和步行/跑步距离。
     private func runFetchSteps(invocation: ToolInvocation) async -> ToolExecutionResult {
         let range = resolveHealthRange(arguments: invocation.arguments)
         return ToolExecutionResult(
             toolName: SparkToolName.fetchStepDetails,
             outputText: await healthTool.fetchStepDetails(from: range.start, to: range.end),
-            sensitive: false,
+            sensitive: true,
             shouldBypassModel: true
         )
     }
@@ -736,7 +814,7 @@ final class ToolHub: @unchecked Sendable {
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchSleepDetails,
                 outputText: outputText,
-                sensitive: false,
+                sensitive: true,
                 shouldBypassModel: true
             )
         } catch {
@@ -754,7 +832,7 @@ final class ToolHub: @unchecked Sendable {
         return ToolExecutionResult(
             toolName: SparkToolName.fetchEnergyDetails,
             outputText: await healthTool.fetchEnergyDetails(from: range.start, to: range.end),
-            sensitive: false,
+            sensitive: true,
             shouldBypassModel: true
         )
     }
@@ -764,7 +842,7 @@ final class ToolHub: @unchecked Sendable {
         return ToolExecutionResult(
             toolName: SparkToolName.fetchNutritionDetails,
             outputText: await healthTool.fetchNutritionDetails(from: range.start, to: range.end),
-            sensitive: false,
+            sensitive: true,
             shouldBypassModel: true
         )
     }
@@ -777,7 +855,7 @@ final class ToolHub: @unchecked Sendable {
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchWorkoutDetails,
                 outputText: try await healthTool.fetchWorkoutDetails(from: range.start, to: range.end, types: types, maxItems: maxItems),
-                sensitive: false,
+                sensitive: true,
                 shouldBypassModel: true
             )
         } catch {
@@ -1546,8 +1624,7 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        let payload = ToolQuestionAnswerPayload(questions: questions, responses: answer.responses)
-        let output = encodeJSON(payload) ?? "用户已提交选择。"
+        let output = formatQuestionAnswerText(questions: questions, responses: answer.responses)
         return ToolExecutionResult(
             toolName: SparkToolName.askUserQuestion,
             outputText: output,
@@ -1615,6 +1692,36 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
+    private func formatQuestionAnswerText(
+        questions: [ToolQuestionItem],
+        responses: [ToolQuestionResponse]
+    ) -> String {
+        var lines = [td("tool.result.ask_user_question.submitted")]
+        for (index, question) in questions.enumerated() {
+            let response = responses.first { $0.questionID == question.id }
+            let selectedIDs = Set(response?.selectedOptionIDs ?? [])
+            let selectedTexts = question.options
+                .filter { selectedIDs.contains($0.id) }
+                .map(\.text)
+            let otherText = response?.otherText?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            lines.append(toolFormat("tool.result.ask_user_question.item", index + 1, question.question))
+            if selectedTexts.isEmpty {
+                lines.append(td("tool.result.ask_user_question.no_fixed_selection"))
+            } else {
+                lines.append(toolFormat(
+                    "tool.result.ask_user_question.selected",
+                    selectedTexts.joined(separator: td("tool.result.separator.list"))
+                ))
+            }
+            if let otherText, otherText.isEmpty == false {
+                lines.append(toolFormat("tool.result.ask_user_question.other", otherText))
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// 任务查询工具：按成员维度返回主任务与子任务信息，供后续任务生成去重。
     private func runQueryTasksByMember(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let memberID: Int
@@ -1638,16 +1745,10 @@ final class ToolHub: @unchecked Sendable {
                 tasks.removeAll { $0.status != .pending }
             }
             tasks = Array(tasks.sorted { $0.updatedAt > $1.updatedAt }.prefix(limit))
-            let payload = TaskQueryToolPayload(
-                ok: true,
-                memberID: memberID,
-                queriedAt: iso8601(Date()),
-                total: tasks.count,
-                tasks: tasks
-            )
+            let output = formatTaskQueryText(memberID: memberID, tasks: tasks, queriedAt: Date())
             return ToolExecutionResult(
                 toolName: SparkToolName.queryTasksByMember,
-                outputText: encodeJSON(payload) ?? #"{"ok":false,"error":"encode_failed"}"#,
+                outputText: output,
                 sensitive: true,
                 shouldBypassModel: true,
                 resolvedMemberID: memberID
@@ -1661,6 +1762,42 @@ final class ToolHub: @unchecked Sendable {
                 resolvedMemberID: memberID
             )
         }
+    }
+
+    private func formatTaskQueryText(memberID: Int, tasks: [HealthTask], queriedAt: Date) -> String {
+        var lines = [
+            toolFormat("tool.result.query_tasks_by_member.header", memberID),
+            toolFormat("tool.result.query_tasks_by_member.queried_at", iso8601(queriedAt)),
+            toolFormat("tool.result.query_tasks_by_member.total", tasks.count)
+        ]
+        guard tasks.isEmpty == false else {
+            lines.append(td("tool.result.query_tasks_by_member.empty"))
+            return lines.joined(separator: "\n")
+        }
+
+        lines.append(td("tool.result.query_tasks_by_member.list_title"))
+        for (index, task) in tasks.enumerated() {
+            lines.append(toolFormat("tool.result.query_tasks_by_member.task_item", index + 1, task.title))
+            lines.append(toolFormat(
+                "tool.result.query_tasks_by_member.task_meta",
+                taskTypeText(task.type),
+                taskStatusText(task.status),
+                taskRepeatText(task.repeatType),
+                taskPriorityText(task.priority)
+            ))
+            if let startTime = task.startTime {
+                lines.append(toolFormat("tool.result.query_tasks_by_member.start_time", iso8601(startTime)))
+            }
+            if let dueTime = task.dueTime {
+                lines.append(toolFormat("tool.result.query_tasks_by_member.due_time", iso8601(dueTime)))
+            }
+            let description = compactText(task.description)
+            if description.isEmpty == false {
+                lines.append(toolFormat("tool.result.query_tasks_by_member.description", description))
+            }
+            lines.append(toolFormat("tool.result.query_tasks_by_member.updated_at", iso8601(task.updatedAt)))
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// 任务生成工具：先查询任务，再执行抽取与相似度判断；成功时在消息内异步合并任务卡 block，向模型只返回简短可读说明。
@@ -1922,6 +2059,46 @@ final class ToolHub: @unchecked Sendable {
             return .daily
         }
         return .none
+    }
+
+    private func taskTypeText(_ type: HealthTask.TaskType) -> String {
+        switch type {
+        case .medical: return td("tool.result.task.type.medical")
+        case .exercise: return td("tool.result.task.type.exercise")
+        case .diet: return td("tool.result.task.type.diet")
+        }
+    }
+
+    private func taskStatusText(_ status: HealthTask.TaskStatus) -> String {
+        switch status {
+        case .pending: return td("tool.result.task.status.pending")
+        case .completed: return td("tool.result.task.status.completed")
+        case .canceled: return td("tool.result.task.status.canceled")
+        }
+    }
+
+    private func taskRepeatText(_ repeatType: HealthTask.RepeatType) -> String {
+        switch repeatType {
+        case .none: return td("tool.result.task.repeat.none")
+        case .daily: return td("tool.result.task.repeat.daily")
+        case .weekly: return td("tool.result.task.repeat.weekly")
+        }
+    }
+
+    private func taskPriorityText(_ priority: HealthTask.Priority) -> String {
+        switch priority {
+        case .high: return td("tool.result.task.priority.high")
+        case .medium: return td("tool.result.task.priority.medium")
+        case .low: return td("tool.result.task.priority.low")
+        }
+    }
+
+    private func compactText(_ text: String) -> String {
+        text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+            .joined(separator: td("tool.result.separator.sentence"))
     }
 
     private func buildTaskPayloadStrings(

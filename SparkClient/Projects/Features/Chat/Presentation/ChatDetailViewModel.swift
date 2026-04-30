@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SwiftUI
 
 @MainActor
 final class ChatDetailViewModel: ObservableObject {
@@ -46,6 +47,9 @@ final class ChatDetailViewModel: ObservableObject {
     @Published private(set) var threadImageDeliveryMode: ChatThreadImageDeliveryMode = .directMultimodal
     /// 当前所选对话模型是否支持多模态（用于置灰「直发」选项）。
     @Published private(set) var currentModelSupportsMultimodal: Bool = false
+
+    /// 工具详情 Sheet 渲染上下文（由消息气泡注入，关闭 Sheet 时清空）。
+    @Published private(set) var toolPreviewRenderContext: ChatRenderContext?
 
     init(
         stateStore: ChatStateStore,
@@ -125,6 +129,16 @@ final class ChatDetailViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+    }
+
+    /// 打开工具输出详情全局 Sheet（与 consent/question 共用同一呈现队列）。
+    func presentToolDetailPreview(prompt: ToolPreviewPrompt, renderContext: ChatRenderContext) {
+        toolPreviewRenderContext = renderContext
+        toolInteractionCoordinator.presentToolPreview(prompt: prompt)
+    }
+
+    func clearToolPreviewRenderContext() {
+        toolPreviewRenderContext = nil
     }
 
     func enqueueComposerAttachments(_ attachments: [ChatComposerAttachmentPreview], for threadID: UUID) {

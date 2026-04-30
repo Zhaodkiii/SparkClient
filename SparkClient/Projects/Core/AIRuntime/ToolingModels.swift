@@ -1,20 +1,24 @@
 import Foundation
 
+// MARK: - 工具审计相关
+/// 工具执行审计状态
 enum ToolAuditStatus: String, Codable, Sendable {
-    case success
-    case denied
-    case failed
+    case success    // 执行成功
+    case denied     // 执行被拒绝
+    case failed     // 执行失败
 }
 
+/// 工具执行审计事件（用于记录工具调用日志）
 struct ToolAuditEvent: Identifiable, Codable, Sendable {
-    let id: UUID
-    let toolName: String
-    let memberID: Int?
-    let inputSummary: String
-    let outputSummary: String
-    let status: ToolAuditStatus
-    let createdAt: Date
+    let id: UUID                    // 唯一标识
+    let toolName: String            // 工具名称
+    let memberID: Int?              // 关联成员ID（可选）
+    let inputSummary: String        // 输入内容摘要
+    let outputSummary: String       // 输出内容摘要
+    let status: ToolAuditStatus     // 执行状态
+    let createdAt: Date             // 创建时间
 
+    /// 初始化方法（提供默认值）
     init(
         id: UUID = UUID(),
         toolName: String,
@@ -34,14 +38,17 @@ struct ToolAuditEvent: Identifiable, Codable, Sendable {
     }
 }
 
+// MARK: - 工具执行结果
+/// 工具执行结果模型
 struct ToolExecutionResult: Sendable {
-    let toolName: String
-    let outputText: String
-    let sensitive: Bool
-    let shouldBypassModel: Bool
-    let isAwaitingUserInput: Bool
-    let resolvedMemberID: Int?
+    let toolName: String                // 执行的工具名称
+    let outputText: String              // 工具输出文本
+    let sensitive: Bool                 // 是否包含敏感数据
+    let shouldBypassModel: Bool         // 是否跳过模型直接返回结果
+    let isAwaitingUserInput: Bool       // 是否等待用户输入
+    let resolvedMemberID: Int?          // 已解析的成员ID
 
+    /// 初始化方法
     init(
         toolName: String,
         outputText: String,
@@ -59,12 +66,15 @@ struct ToolExecutionResult: Sendable {
     }
 }
 
+// MARK: - 数据敏感度与策略
+/// 工具数据敏感度等级
 enum ToolDataSensitivity: String, Codable, Sendable {
-    case none
-    case personal
-    case sensitive
-    case regulated
+    case none        // 无敏感
+    case personal    // 个人数据
+    case sensitive   // 敏感数据
+    case regulated   // 受监管数据（如健康）
 
+    /// 是否需要模型授权同意
     var requiresModelConsent: Bool {
         switch self {
         case .none:
@@ -75,43 +85,51 @@ enum ToolDataSensitivity: String, Codable, Sendable {
     }
 }
 
+/// 工具数据分类
 enum ToolDataCategory: String, Codable, Sendable {
-    case health
-    case member
-    case location
-    case memory
-    case knowledge
-    case calendar
-    case publicWeb
-    case ui
-    case system
+    case health      // 健康
+    case member      // 成员
+    case location    // 位置
+    case memory      // 记忆
+    case knowledge   // 知识
+    case calendar    // 日历
+    case publicWeb   // 公共网络
+    case ui          // UI交互
+    case system      // 系统
 }
 
+/// 工具数据出口策略（数据能否外传）
 enum ToolEgressPolicy: String, Codable, Sendable {
-    case allow
-    case requireConsent
-    case localOnly
+    case allow           // 允许外传
+    case requireConsent   // 需要用户授权
+    case localOnly        // 仅本地使用
 }
 
+// MARK: - 工具调用基础模型
+/// 工具中心执行结果
 enum ToolHubResult: Sendable {
-    case none
-    case executed(ToolExecutionResult)
+    case none                    // 无执行
+    case executed(ToolExecutionResult)  // 已执行，返回结果
 }
 
+/// 工具调用信息
 struct ToolInvocation: Sendable {
-    let name: String
-    let arguments: [String: String]
+    let name: String              // 工具名
+    let arguments: [String: String] // 调用参数
 }
 
+/// 工具执行上下文（环境信息）
 struct ToolExecutionContext: Sendable {
-    let memberID: Int?
-    let locale: Locale
-    /// 当前助手消息 `clientMessageID`（异步医疗卡片回填目标）；仅模型工具轮次传入。
-    let assistantMessageClientID: UUID?
-    /// 当前会话 ID（与 ``assistantMessageClientID`` 成对使用）。
-    let threadID: UUID?
-    let pendingToolCallID: String?
-    let pendingResumeMessages: [AIRuntimeMessage]
+    let memberID: Int?                    // 当前成员ID
+    let locale: Locale                    // 区域语言
+    let assistantMessageClientID: UUID?   // 助手消息客户端ID
+    let threadID: UUID?                   // 会话ID
+    let pendingToolCallID: String?        // 待处理工具调用ID
+    let pendingResumeMessages: [AIRuntimeMessage] // 待恢复消息
+    let providerCompany: String?          // 服务提供方公司
+    let modelName: String?                // 使用模型名称
+    let endpoint: String?                 // 接口地址
+    let privacyPolicyURL: URL?            // 隐私政策链接
 
     init(
         memberID: Int?,
@@ -119,7 +137,11 @@ struct ToolExecutionContext: Sendable {
         assistantMessageClientID: UUID? = nil,
         threadID: UUID? = nil,
         pendingToolCallID: String? = nil,
-        pendingResumeMessages: [AIRuntimeMessage] = []
+        pendingResumeMessages: [AIRuntimeMessage] = [],
+        providerCompany: String? = nil,
+        modelName: String? = nil,
+        endpoint: String? = nil,
+        privacyPolicyURL: URL? = nil
     ) {
         self.memberID = memberID
         self.locale = locale
@@ -127,57 +149,83 @@ struct ToolExecutionContext: Sendable {
         self.threadID = threadID
         self.pendingToolCallID = pendingToolCallID
         self.pendingResumeMessages = pendingResumeMessages
+        self.providerCompany = providerCompany
+        self.modelName = modelName
+        self.endpoint = endpoint
+        self.privacyPolicyURL = privacyPolicyURL
     }
 }
 
+/// 工具定义（描述信息）
 struct ToolDefinition: Sendable {
-    let name: String
-    let summary: String
-    let usage: String
+    let name: String      // 工具名
+    let summary: String   // 工具摘要
+    let usage: String     // 使用说明
 }
 
+// MARK: - 工具枚举（核心）
+/// Spark平台所有可用工具枚举
 enum SparkToolName: String, CaseIterable {
-    case fetchStepDetails            = "fetch_step_details"
-    case fetchEnergyDetails          = "fetch_energy_details"
-    case fetchNutritionDetails       = "fetch_nutrition_details"
-    case makeNutritionData           = "make_nutrition_data"
-    case fetchSleepDetails           = "fetch_sleep_details"
-    case fetchWorkoutDetails         = "fetch_workout_details"
-    case searchKnowledgeBag          = "search_knowledge_bag"
-    case createKnowledgeDocument     = "create_knowledge_document"
-    case searchCalendarAndReminders  = "search_calendar_and_reminders"
-    case writeSystemEvent            = "write_system_event"
-    case queryLocation               = "query_location"
-    case getCurrentLocation          = "get_current_location"
-    case searchNearbyLocations       = "search_nearby_locations"
-    case getRoute                    = "get_route"
-    case queryWeather                = "query_weather"
-    case saveMemory                  = "save_memory"
-    case retrieveMemory              = "retrieve_memory"
-    case updateMemory                = "update_memory"
-    case generateChatTitle           = "generate_chat_title"
-    case showCustomMessageCard       = "show_custom_message_card"
-    case getCurrentMember            = "get_current_member"
-    case requestMemberSelection      = "request_member_selection"
-    case switchMember                = "switch_member"
-    case findMember                  = "find_member"
-    case queryMemberProfile          = "query_member_profile"
-    case searchOnline                = "search_online"
-    case readWebPage                 = "read_web_page"
-    case searchArxivPapers           = "search_arxiv_papers"
-    case extractRemoteFileContent    = "extract_remote_file_content"
-    case createCanvas                = "create_canvas"
-    case editCanvas                  = "edit_canvas"
-    case generateStructuredHealthCard = "generate_structured_health_card"
-    case queryTasksByMember          = "query_tasks_by_member"
-    case generateTask                = "generate_task"
-    case askUserQuestion             = "ask_user_question"
+    // 健康类
+    case fetchStepDetails            = "fetch_step_details"             // 获取步数详情
+    case fetchEnergyDetails          = "fetch_energy_details"           // 获取能量详情
+    case fetchNutritionDetails       = "fetch_nutrition_details"        // 获取营养详情
+    case makeNutritionData           = "make_nutrition_data"            // 生成营养数据
+    case fetchSleepDetails           = "fetch_sleep_details"            // 获取睡眠详情
+    case fetchWorkoutDetails         = "fetch_workout_details"          // 获取运动详情
+    
+    // 知识类
+    case searchKnowledgeBag          = "search_knowledge_bag"           // 搜索知识包
+    case createKnowledgeDocument     = "create_knowledge_document"      // 创建知识文档
+    
+    // 日历类
+    case searchCalendarAndReminders  = "search_calendar_and_reminders"  // 搜索日历和提醒
+    case writeSystemEvent            = "write_system_event"              // 写入系统事件
+    
+    // 位置类
+    case queryLocation               = "query_location"                 // 查询位置
+    case getCurrentLocation          = "get_current_location"           // 获取当前位置
+    case searchNearbyLocations       = "search_nearby_locations"        // 搜索附近位置
+    case getRoute                    = "get_route"                       // 获取路线
+    case queryWeather                = "query_weather"                  // 查询天气
+    
+    // 记忆类
+    case saveMemory                  = "save_memory"                     // 保存记忆
+    case retrieveMemory              = "retrieve_memory"                // 检索记忆
+    case updateMemory                = "update_memory"                   // 更新记忆
+    
+    // UI交互类
+    case generateChatTitle           = "generate_chat_title"            // 生成聊天标题
+    case showCustomMessageCard       = "show_custom_message_card"        // 显示自定义消息卡片
+    case askUserQuestion             = "ask_user_question"              // 向用户提问
+    
+    // 成员类
+    case getCurrentMember            = "get_current_member"              // 获取当前成员
+    case requestMemberSelection      = "request_member_selection"        // 请求选择成员
+    case switchMember                = "switch_member"                   // 切换成员
+    case findMember                  = "find_member"                     // 查找成员
+    case queryMemberProfile          = "query_member_profile"            // 查询成员资料
+    
+    // 网络类
+    case searchOnline                = "search_online"                   // 在线搜索
+    case readWebPage                 = "read_web_page"                   // 读取网页
+    case searchArxivPapers           = "search_arxiv_papers"             // 搜索论文
+    case extractRemoteFileContent    = "extract_remote_file_content"    // 提取远程文件内容
+    
+    // 系统/画布类
+    case createCanvas                = "create_canvas"                   // 创建画布
+    case editCanvas                  = "edit_canvas"                     // 编辑画布
+    case generateStructuredHealthCard = "generate_structured_health_card" // 生成结构化健康卡片
+    case queryTasksByMember          = "query_tasks_by_member"           // 查询成员任务
+    case generateTask                = "generate_task"                  // 生成任务
 
-    /// 自动派生，新增 case 后无需手动维护。
+    /// 所有工具原始值集合（自动生成）
     static var all: [String] { allCases.map(\.rawValue) }
 }
 
+// MARK: - 工具属性扩展（分类/敏感度/出口策略）
 extension SparkToolName {
+    /// 工具对应的数据分类
     var dataCategory: ToolDataCategory {
         switch self {
         case .fetchStepDetails, .fetchEnergyDetails, .fetchNutritionDetails, .makeNutritionData,
@@ -202,53 +250,61 @@ extension SparkToolName {
         }
     }
 
+    /// 工具声明的数据敏感度
     var declaredSensitivity: ToolDataSensitivity {
         switch dataCategory {
         case .health:
-            return .regulated
+            return .regulated       // 健康属于受监管数据
         case .member, .location, .memory, .calendar:
-            return .personal
+            return .personal        // 个人相关数据
         case .knowledge:
-            return .sensitive
+            return .sensitive       // 敏感知识数据
         case .publicWeb, .ui, .system:
-            return .none
+            return .none            // 无敏感数据
         }
     }
 
+    /// 工具数据出口策略
     var egressPolicy: ToolEgressPolicy {
         declaredSensitivity.requiresModelConsent ? .requireConsent : .allow
     }
 }
 
+// MARK: - 工具提问交互模型
+/// 选择模式：单选/多选
 enum ChatQuestionSelectionMode: String, Codable, Sendable {
-    case single
-    case multiple
+    case single    // 单选
+    case multiple  // 多选
 }
 
+/// 提问选项
 struct ChatQuestionOption: Codable, Equatable, Identifiable, Sendable {
-    let id: String
-    let text: String
+    let id: String   // 选项ID
+    let text: String // 选项文本
 }
 
+/// 单个问题项
 struct ToolQuestionItem: Identifiable, Equatable, Codable, Sendable {
-    let id: String
-    let question: String
-    let options: [ChatQuestionOption]
-    let allowsOther: Bool
-    let selectionMode: ChatQuestionSelectionMode
+    let id: String                  // 问题ID
+    let question: String            // 问题文本
+    let options: [ChatQuestionOption] // 选项列表
+    let allowsOther: Bool           // 是否允许自定义输入
+    let selectionMode: ChatQuestionSelectionMode // 选择模式
 }
 
+/// 成员选择提示
 struct ToolMemberSelectionPrompt: Identifiable, Equatable, Codable, Sendable {
-    let id: UUID
-    let toolName: String
-    let reason: String
-    let arguments: [String: String]
+    let id: UUID              // 唯一标识
+    let toolName: String      // 关联工具名
+    let reason: String        // 选择原因
+    let arguments: [String: String] // 工具参数
 }
 
+/// 工具提问提示
 struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendable {
-    let id: UUID
-    let toolName: String
-    let questions: [ToolQuestionItem]
+    let id: UUID                  // 唯一标识
+    let toolName: String          // 工具名
+    let questions: [ToolQuestionItem] // 问题列表
 
     init(
         id: UUID = UUID(),
@@ -261,29 +317,34 @@ struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+/// 问题回答
 struct ToolQuestionAnswer: Equatable, Codable, Sendable {
-    let responses: [ToolQuestionResponse]
+    let responses: [ToolQuestionResponse] // 回答列表
 }
 
+/// 单个问题的回答
 struct ToolQuestionResponse: Equatable, Codable, Sendable {
-    let questionID: String
-    let selectedOptionIDs: [String]
-    let otherText: String?
+    let questionID: String        // 问题ID
+    let selectedOptionIDs: [String] // 选中的选项ID
+    let otherText: String?        // 自定义输入文本
 }
 
-/// 允许在 `switch aString { case SparkToolName.xxx: }` 中使用枚举值做模式匹配，无需改动已有 switch。
+// MARK: - 工具模式匹配
+/// 字符串与工具枚举匹配运算符重载（支持 switch case 直接使用枚举）
 func ~=(pattern: SparkToolName, value: String) -> Bool {
     pattern.rawValue == value
 }
 
+// MARK: - 工具本地化与存储工具方法
 extension SparkToolName {
-    static let noSelectionSentinel = "__spark_tools_none__"
+    static let noSelectionSentinel = "__spark_tools_none__" // 无选择标记
 
-    /// L10n key 规则统一为 `"ai_settings.tools.<tool_name>"`，直接插值即可，无需 switch。
+    /// 获取工具本地化显示名称
     static func displayName(for toolName: String) -> String {
         L10n.text("ai_settings.tools.\(toolName)")
     }
 
+    /// 从存储的工具名解析选中集合
     static func selectedSet(fromStoredToolNames toolNames: [String]) -> Set<String> {
         if toolNames.contains(noSelectionSentinel) {
             return []
@@ -292,28 +353,34 @@ extension SparkToolName {
         return normalized.isEmpty ? Set(all) : normalized
     }
 
+    /// 转换为存储格式
     static func storageValues(forSelectedToolNames selectedToolNames: Set<String>) -> [String] {
         let normalized = selectedToolNames.intersection(Set(all))
         return normalized.isEmpty ? [noSelectionSentinel] : normalized.sorted()
     }
 }
 
+// MARK: - 工具分组
+/// 工具分组枚举（用于UI展示）
 enum SparkToolGroup: String, CaseIterable {
-    case health
-    case member
-    case location
-    case memory
-    case knowledge
-    case system
+    case health      // 健康
+    case member      // 成员
+    case location    // 位置
+    case memory      // 记忆
+    case knowledge   // 知识
+    case system      // 系统
 
+    /// 分组标题（本地化）
     var localizedTitle: String {
         L10n.text("ai_settings.tool_groups.\(rawValue)")
     }
 
+    /// 分组描述（本地化）
     var localizedDescription: String {
         L10n.text("ai_settings.tool_groups.\(rawValue).description")
     }
 
+    /// 分组图标（SF Symbol）
     var iconSystemName: String {
         switch self {
         case .health:
@@ -331,6 +398,7 @@ enum SparkToolGroup: String, CaseIterable {
         }
     }
 
+    /// 当前分组包含的工具
     var tools: [SparkToolName] {
         switch self {
         case .health:
@@ -389,30 +457,37 @@ enum SparkToolGroup: String, CaseIterable {
         }
     }
 
+    /// 分组工具原始值数组
     var toolRawValues: [String] {
         tools.map(\.rawValue)
     }
 }
 
+// MARK: - 工具执行结果扩展（便捷方法）
 extension ToolExecutionResult {
+    /// 工具策略敏感度
     var toolPolicySensitivity: ToolDataSensitivity {
         SparkToolName(rawValue: toolName)?.declaredSensitivity ?? (sensitive ? .sensitive : .none)
     }
 
+    /// 工具出口策略
     var toolEgressPolicy: ToolEgressPolicy {
         SparkToolName(rawValue: toolName)?.egressPolicy ?? (sensitive ? .requireConsent : .allow)
     }
 
+    /// 是否需要模型授权
     var requiresModelConsent: Bool {
         switch toolEgressPolicy {
         case .allow:
-            return sensitive || toolPolicySensitivity.requiresModelConsent
-        case .requireConsent, .localOnly:
+            return sensitive
+        case .requireConsent:
+            return sensitive
+        case .localOnly:
             return true
         }
     }
 
-    /// 接受 `SparkToolName` 枚举值，避免调用处写 `.rawValue`。
+    /// 便捷初始化：直接传入枚举，无需写rawValue
     init(
         toolName: SparkToolName,
         outputText: String,

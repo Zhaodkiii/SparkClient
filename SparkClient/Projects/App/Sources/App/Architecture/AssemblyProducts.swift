@@ -516,7 +516,6 @@ extension ChatAssembly {
         let chatOrchestrator = ChatOrchestrator(
             runtimeService: ai.aiRuntimeService,
             toolHub: toolHub,
-            consentGate: ConsentGate(toolInteractionCoordinator: toolInteractionCoordinator),
             fileCacheManager: infrastructure.fileCacheManager,
             logger: logger
         )

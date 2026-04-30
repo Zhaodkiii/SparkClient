@@ -44,9 +44,10 @@ extension ChatMessageBlock {
             // 4. 工具调用块（联网、文件、插件等）
         case .tool(let tool):
             ChatToolBlockStreamedPresentationView(
+                toolBlock: self,
                 context: context,
                 tool: tool,
-                wantsResult: shouldShowToolResultContent(context: context, tool: tool) 
+                wantsResult: shouldShowToolResultContent(context: context, tool: tool)
             )
             
             // 5. 知识库卡片列表

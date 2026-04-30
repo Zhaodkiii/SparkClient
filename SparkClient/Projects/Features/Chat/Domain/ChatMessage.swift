@@ -771,6 +771,42 @@ private extension ChatBlockAnchor {
 }
 
 extension ChatMessage {
+    /// 与指定 `toolCallID` 关联的业务展示块（用于工具详情 Sheet；不含工具行/文本/思考/错误）。
+    nonisolated func chatBlocksLinkedToToolCall(_ toolCallID: String?, excludingBlockId: UUID) -> [ChatMessageBlock] {
+        guard let toolCallID, toolCallID.isEmpty == false else { return [] }
+        let kinds: Set<ChatMessageBlockKind> = [
+            .taskCards,
+            .pendingMemberToolCards,
+            .structuredHealthCards,
+            .sleepVisualization,
+            .captureCard,
+            .html,
+            .smallTaskCard,
+            .healthCards,
+            .events,
+            .mapRoute
+        ]
+        return blocks.filter {
+            $0.id != excludingBlockId
+                && $0.toolCallID == toolCallID
+                && kinds.contains($0.kind)
+        }
+    }
+
+    /// 由工具消息块构造全局工具详情 Sheet 的载荷（含同 `toolCallID` 关联块 id）。
+    nonisolated func makeToolPreviewPrompt(forToolBlock toolBlock: ChatMessageBlock) -> ToolPreviewPrompt? {
+        guard case .tool(let t) = toolBlock.payload else { return nil }
+        let related = chatBlocksLinkedToToolCall(toolBlock.toolCallID, excludingBlockId: toolBlock.id)
+        return ToolPreviewPrompt(
+            toolName: ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: t.name),
+            toolContent: t.content,
+            toolCallID: toolBlock.toolCallID,
+            threadID: threadID,
+            sourceClientMessageID: clientMessageID,
+            relatedBlockIDs: related.map(\.id)
+        )
+    }
+
     nonisolated static func shouldPreferRemoteUserImageSyncData(local: ChatMessage, remote: ChatMessage) -> Bool {
         guard local.clientMessageID == remote.clientMessageID else { return false }
         guard local.role == .user, remote.role == .user else { return false }

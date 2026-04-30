@@ -110,6 +110,36 @@
 "tool.result.request_member_selection.waiting" = "Please select a member to continue the tool.";
 "tool.result.request_member_selection.completed" = "The user has completed member selection. Use the returned member_id to continue tool calls or produce the final answer.";
 "tool.result.request_member_selection.timeout" = "The user canceled or did not select a member. Continue the conversation, or ask again for member selection.";
+"tool.result.separator.list" = ", ";
+"tool.result.separator.sentence" = "; ";
+"tool.result.ask_user_question.submitted" = "The user submitted their selection:";
+"tool.result.ask_user_question.item" = "%d. %@";
+"tool.result.ask_user_question.no_fixed_selection" = "   Selected: no fixed option selected";
+"tool.result.ask_user_question.selected" = "   Selected: %@";
+"tool.result.ask_user_question.other" = "   Additional input: %@";
+"tool.result.query_tasks_by_member.header" = "Queried tasks for member %d.";
+"tool.result.query_tasks_by_member.queried_at" = "Queried at: %@";
+"tool.result.query_tasks_by_member.total" = "Task count: %d";
+"tool.result.query_tasks_by_member.empty" = "No tasks are available for comparison.";
+"tool.result.query_tasks_by_member.list_title" = "Task list:";
+"tool.result.query_tasks_by_member.task_item" = "%d. %@";
+"tool.result.query_tasks_by_member.task_meta" = "   Type: %@; Status: %@; Repeat: %@; Priority: %@";
+"tool.result.query_tasks_by_member.start_time" = "   Start time: %@";
+"tool.result.query_tasks_by_member.due_time" = "   Due time: %@";
+"tool.result.query_tasks_by_member.description" = "   Description: %@";
+"tool.result.query_tasks_by_member.updated_at" = "   Updated at: %@";
+"tool.result.task.type.medical" = "Medical";
+"tool.result.task.type.exercise" = "Exercise";
+"tool.result.task.type.diet" = "Diet";
+"tool.result.task.status.pending" = "Pending";
+"tool.result.task.status.completed" = "Completed";
+"tool.result.task.status.canceled" = "Canceled";
+"tool.result.task.repeat.none" = "No repeat";
+"tool.result.task.repeat.daily" = "Daily";
+"tool.result.task.repeat.weekly" = "Weekly";
+"tool.result.task.priority.high" = "High";
+"tool.result.task.priority.medium" = "Medium";
+"tool.result.task.priority.low" = "Low";
 
 /* ========== Tool UI Strings (card titles etc.) ========== */
 "tool.ui.knowledge.search_title" = "Knowledge Search";

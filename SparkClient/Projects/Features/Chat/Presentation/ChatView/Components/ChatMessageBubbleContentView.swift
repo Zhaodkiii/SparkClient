@@ -41,6 +41,7 @@ struct ChatMessageBubbleContentView: View {
     let onCaptureOpenCamera: () -> Void
     let onCaptureOpenPhotoLibrary: () -> Void
     let onCaptureOpenFiles: () -> Void
+    let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let onCachedChatAttachmentLocalURL: (ChatAttachment) async -> URL?
     let onDownloadChatAttachmentToLocalFile: (ChatAttachment) async throws -> URL
 
@@ -79,6 +80,7 @@ struct ChatMessageBubbleContentView: View {
             onCaptureOpenCamera: onCaptureOpenCamera,
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
+            onPresentToolPreview: onPresentToolPreview,
             onCachedChatAttachmentLocalURL: onCachedChatAttachmentLocalURL,
             onDownloadChatAttachmentToLocalFile: onDownloadChatAttachmentToLocalFile
         )

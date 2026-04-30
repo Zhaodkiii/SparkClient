@@ -113,6 +113,9 @@ struct ChatConversationMessageRow: View {
                 stateStore.setPhotoPickerPresented(true, for: threadID)
             },
             onCaptureOpenFiles: onCaptureOpenFiles,
+            onPresentToolPreview: { prompt, renderContext in
+                detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)
+            },
             onCachedChatAttachmentLocalURL: { attachment in
                 await detailViewModel.cachedLocalURLForChatAttachment(attachment)
             },

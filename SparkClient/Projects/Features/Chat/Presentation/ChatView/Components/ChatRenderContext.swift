@@ -30,8 +30,39 @@ struct ChatRenderContext {
     let onCaptureOpenCamera: () -> Void                    // 打开相机
     let onCaptureOpenPhotoLibrary: () -> Void              // 打开相册
     let onCaptureOpenFiles: () -> Void                    // 打开文件
-    
+    /// 展示工具详情全局 Sheet（由消息行注入，传入预览载荷与当前渲染上下文）。
+    let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
+
     // MARK: - 异步文件操作
     let onCachedChatAttachmentLocalURL: (ChatAttachment) async -> URL?  // 获取附件缓存本地地址
     let onDownloadChatAttachmentToLocalFile: (ChatAttachment) async throws -> URL  // 下载附件到本地
+}
+
+extension ChatRenderContext {
+    /// 用最新消息替换上下文（回调与 UI 状态保持不变），供工具详情 Sheet 等场景使用。
+    func replacingMessage(_ message: ChatMessage) -> ChatRenderContext {
+        ChatRenderContext(
+            message: message,
+            isLastAssistantMessage: isLastAssistantMessage,
+            isMathMode: isMathMode,
+            taskCardLoadingIDs: taskCardLoadingIDs,
+            savingKnowledgeCardIDs: savingKnowledgeCardIDs,
+            savedKnowledgeCardIDs: savedKnowledgeCardIDs,
+            savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
+            memberContextStore: memberContextStore,
+            unifiedFilePreview: unifiedFilePreview,
+            errorCardBodyText: errorCardBodyText,
+            onRetry: onRetry,
+            onSaveKnowledgeCard: onSaveKnowledgeCard,
+            onTaskCardAction: onTaskCardAction,
+            onPendingMemberToolSelect: onPendingMemberToolSelect,
+            onStructuredHealthCardAction: onStructuredHealthCardAction,
+            onCaptureOpenCamera: onCaptureOpenCamera,
+            onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
+            onCaptureOpenFiles: onCaptureOpenFiles,
+            onPresentToolPreview: onPresentToolPreview,
+            onCachedChatAttachmentLocalURL: onCachedChatAttachmentLocalURL,
+            onDownloadChatAttachmentToLocalFile: onDownloadChatAttachmentToLocalFile
+        )
+    }
 }

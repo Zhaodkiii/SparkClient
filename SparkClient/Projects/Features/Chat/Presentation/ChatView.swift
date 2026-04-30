@@ -340,18 +340,26 @@ struct ChatView: View {
             .sheet(
                 item: Binding(
                     get: { detailViewModel.toolInteractionCoordinator.activePresentation },
-                    set: { _ in }
-                ),
-                onDismiss: {
-                    detailViewModel.toolInteractionCoordinator.handleInteractionSheetDismissed()
-                }
+                    set: { newValue in
+                        // 允许工具详情 Sheet 手势关闭时走完协调器队列。
+                        guard newValue == nil else { return }
+                        guard let active = detailViewModel.toolInteractionCoordinator.activePresentation else { return }
+                        if case .toolPreview = active.snapshot {
+                            detailViewModel.clearToolPreviewRenderContext()
+                            detailViewModel.toolInteractionCoordinator.dismissToolPreview(id: active.id)
+                        }
+                    }
+                )
             ) { active in
                 ToolInteractionPresentationSheet(
                     active: active,
                     coordinator: detailViewModel.toolInteractionCoordinator,
-                    memberContextStore: homeViewModel.memberContextStoreForBinding
+                    memberContextStore: homeViewModel.memberContextStoreForBinding,
+                    stateStore: stateStore,
+                    toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
+                    onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() }
                 )
-                .readAdaptiveSheetHeight()
+                .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
             }
             .onAppear {
                 Task { await detailViewModel.chatPageDidAppear() }
@@ -701,8 +709,8 @@ struct ChatView: View {
 
 }
 
-private struct AdaptiveSheetHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+struct AdaptiveSheetHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 300
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         // Follow FoodPicker behavior: always use latest measured height.
@@ -710,7 +718,7 @@ private struct AdaptiveSheetHeightPreferenceKey: PreferenceKey {
     }
 }
 
-private extension View {
+extension View {
     func readAdaptiveSheetHeight() -> some View {
         overlay {
             GeometryReader { geometry in
@@ -722,22 +730,4 @@ private extension View {
         }
     }
 
-    @ViewBuilder
-    func adaptiveSheetHeightIfAvailable(
-        measuredHeight: Binding<CGFloat?>,
-        defaultHeight: CGFloat
-    ) -> some View {
-        if #available(iOS 16.0, *) {
-            self
-                .readAdaptiveSheetHeight()
-                .onPreferenceChange(AdaptiveSheetHeightPreferenceKey.self) { height in
-                    guard height > 0 else { return }
-                    measuredHeight.wrappedValue = height
-                }
-                .presentationDetents([.height(measuredHeight.wrappedValue ?? defaultHeight)])
-                .presentationDragIndicator(.visible)
-        } else {
-            self
-        }
-    }
 }

@@ -857,6 +857,7 @@
 "chat.tool_consent.privacy" = "查看服务商隐私政策";
 "chat.tool_consent.footer" = "如果不允许，模型只会收到用户未授权的系统提示，不会收到原始工具结果。";
 "chat.tool_consent.allow" = "允许发送";
+"chat.tool_consent.allow_always" = "允许并不再询问此工具";
 "chat.tool_consent.deny" = "不允许";
 "chat.tool_question.title" = "补充选择";
 "chat.tool_question.other" = "其他";
@@ -880,6 +881,8 @@
 "ai_settings.small_tasks.section.tools" = "工具";
 "ai_settings.small_tasks.field.name" = "名称";
 "ai_settings.small_tasks.field.brief" = "简介";
+"ai_settings.small_tasks.field.use_current_date" = "在系统提示词中追加当前日期";
+"ai_runtime.prompt.current_date_instruction_format" = "当前日期：%@。请基于此日期理解“今天/明天/本周”等时间表达。";
 "ai_settings.models.agent.related_tasks.title" = "关联小任务";
 "ai_settings.models.agent.related_tasks.option_format" = "%@（%@）";
 

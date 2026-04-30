@@ -40,20 +40,17 @@ struct ChatAssistantPartialDelta: Sendable {
 struct ChatOrchestrator: Sendable {
     let runtimeService: any AIRuntimeServing
     let toolHub: ToolHub
-    let consentGate: ConsentGate
     let fileCacheManager: FileCacheManager
     let logger: Logger
 
     init(
         runtimeService: any AIRuntimeServing,
         toolHub: ToolHub,
-        consentGate: ConsentGate,
         fileCacheManager: FileCacheManager,
         logger: Logger = ConsoleLogger()
     ) {
         self.runtimeService = runtimeService
         self.toolHub = toolHub
-        self.consentGate = consentGate
         self.fileCacheManager = fileCacheManager
         self.logger = logger
     }
@@ -109,32 +106,14 @@ struct ChatOrchestrator: Sendable {
         
         // MARK: - 工具已直接执行完成（无需走AI模型），直接返回结果
         if case .executed(let result) = toolResult {
-            let modelConsent = await consentGate.awaitModelConsent(
-                result: result,
-                callArguments: "",
-                providerCompany: providerCompanyUppercased,
-                modelName: preferredModelName,
-                endpoint: nil,
-                privacyPolicyURL: nil,
-                threadID: threadID
-            )
             logger.info(
-                "工具调用已命中，tool=\(result.toolName), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive), consentAllowed=\(modelConsent.allowed)",
+                "工具调用已命中，tool=\(result.toolName), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive)",
                 module: .aiConfig
             )
             
-            // 权限校验：允许则返回原文，否则返回拦截提示
-            let output = modelConsent.allowed
-                ? result.outputText
-                : """
-                \(result.outputText)
-
-                \(promptLocalizer.consentBlockedHint(reason: modelConsent.reason))
-                """
-            
             // 返回工具类结果
             return ChatOrchestratorOutput(
-                text: output,
+                text: result.outputText,
                 reasoningText: nil,
                 reasoningDurationMs: nil,
                 finishReason: nil,
@@ -343,7 +322,11 @@ struct ChatOrchestrator: Sendable {
                     threadID: threadID,
                     assistantMessageClientID: assistantMessageClientID,
                     pendingToolCallID: call.id,
-                    pendingResumeMessages: loopMessages
+                    pendingResumeMessages: loopMessages,
+                    providerCompany: providerCompanyUppercased,
+                    modelName: preferredModelName,
+                    endpoint: nil,
+                    privacyPolicyURL: nil
                 )
 
                 // 工具执行完成 → 前端显示结果
@@ -364,25 +347,11 @@ struct ChatOrchestrator: Sendable {
                     loopMemberID = resolvedMemberID
                 }
 
-                // 权限校验
-                let modelConsent = await consentGate.awaitModelConsent(
-                    result: toolResult,
-                    callArguments: call.arguments,
-                    providerCompany: providerCompanyUppercased,
-                    modelName: preferredModelName,
-                    endpoint: nil,
-                    privacyPolicyURL: nil,
-                    threadID: threadID
-                )
-                let content = modelConsent.allowed
-                    ? toolResult.outputText
-                    : promptLocalizer.consentBlockedHint(reason: modelConsent.reason)
-                
                 // 把工具返回结果加入消息上下文
                 loopMessages.append(
                     AIRuntimeMessage(
                         role: .tool,
-                        content: content,
+                        content: toolResult.outputText,
                         toolCallID: call.id,
                         name: call.name
                     )

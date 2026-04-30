@@ -30,7 +30,7 @@ struct SmallTask: Codable, Identifiable, Equatable, Sendable {
     
     /// 调用工具列表
     var toolList: [String]
-    
+
     /// 任务来源（本地/服务端）
     var source: TaskSource
 

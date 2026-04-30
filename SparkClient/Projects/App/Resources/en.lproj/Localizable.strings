@@ -857,6 +857,7 @@
 "chat.tool_consent.privacy" = "View provider privacy policy";
 "chat.tool_consent.footer" = "If you do not allow, the model receives only a system notice that the user did not authorize sharing the raw tool result.";
 "chat.tool_consent.allow" = "Allow";
+"chat.tool_consent.allow_always" = "Allow and Don’t Ask Again for This Tool";
 "chat.tool_consent.deny" = "Don’t Allow";
 "chat.tool_question.title" = "Answer Question";
 "chat.tool_question.other" = "Other";
@@ -880,6 +881,8 @@
 "ai_settings.small_tasks.section.tools" = "Tools";
 "ai_settings.small_tasks.field.name" = "Name";
 "ai_settings.small_tasks.field.brief" = "Brief";
+"ai_settings.small_tasks.field.use_current_date" = "Append current date to system prompt";
+"ai_runtime.prompt.current_date_instruction_format" = "Current date: %@. Please use this date to interpret time expressions such as today, tomorrow, and this week.";
 "ai_settings.models.agent.related_tasks.title" = "Related small tasks";
 "ai_settings.models.agent.related_tasks.option_format" = "%@ (%@)";
 

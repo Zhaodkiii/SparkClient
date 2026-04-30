@@ -110,6 +110,36 @@
 "tool.result.request_member_selection.waiting" = "請選擇成員後繼續執行工具。";
 "tool.result.request_member_selection.completed" = "使用者已完成成員選擇。請使用返回的 member_id 繼續後續工具呼叫或生成最終回答。";
 "tool.result.request_member_selection.timeout" = "使用者取消或未選擇成員。請繼續目前對話，或再次提示使用者選擇成員。";
+"tool.result.separator.list" = "、";
+"tool.result.separator.sentence" = "；";
+"tool.result.ask_user_question.submitted" = "使用者已提交選擇：";
+"tool.result.ask_user_question.item" = "%d. %@";
+"tool.result.ask_user_question.no_fixed_selection" = "   已選：未選擇固定選項";
+"tool.result.ask_user_question.selected" = "   已選：%@";
+"tool.result.ask_user_question.other" = "   補充：%@";
+"tool.result.query_tasks_by_member.header" = "已查詢成員 %d 的任務。";
+"tool.result.query_tasks_by_member.queried_at" = "查詢時間：%@";
+"tool.result.query_tasks_by_member.total" = "任務數量：%d";
+"tool.result.query_tasks_by_member.empty" = "目前沒有可用於比對的任務。";
+"tool.result.query_tasks_by_member.list_title" = "任務列表：";
+"tool.result.query_tasks_by_member.task_item" = "%d. %@";
+"tool.result.query_tasks_by_member.task_meta" = "   類型：%@；狀態：%@；重複：%@；優先級：%@";
+"tool.result.query_tasks_by_member.start_time" = "   開始時間：%@";
+"tool.result.query_tasks_by_member.due_time" = "   截止時間：%@";
+"tool.result.query_tasks_by_member.description" = "   描述：%@";
+"tool.result.query_tasks_by_member.updated_at" = "   更新時間：%@";
+"tool.result.task.type.medical" = "醫療";
+"tool.result.task.type.exercise" = "運動";
+"tool.result.task.type.diet" = "飲食";
+"tool.result.task.status.pending" = "待完成";
+"tool.result.task.status.completed" = "已完成";
+"tool.result.task.status.canceled" = "已取消";
+"tool.result.task.repeat.none" = "不重複";
+"tool.result.task.repeat.daily" = "每天";
+"tool.result.task.repeat.weekly" = "每週";
+"tool.result.task.priority.high" = "高";
+"tool.result.task.priority.medium" = "中";
+"tool.result.task.priority.low" = "低";
 
 /* ========== Tool UI 文案（工具結果卡片標題等） ========== */
 "tool.ui.knowledge.search_title" = "知識檢索";

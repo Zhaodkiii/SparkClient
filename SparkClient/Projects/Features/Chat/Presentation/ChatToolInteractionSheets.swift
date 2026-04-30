@@ -5,14 +5,98 @@ private enum ExternalToolConsentSheetDisplayLimits {
     static let maxArgumentChars = 12_000
 }
 
+private struct AdaptiveToolSheetScrollView<Content: View>: View {
+    private let content: Content
+    private let bottomContentPadding: CGFloat = 80
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        if #available(iOS 16.0, *) {
+            scrollView
+                .modifier(AdaptiveToolSheetHeightModifier())
+        } else {
+            scrollView
+        }
+    }
+
+    private var scrollView: some View {
+        ScrollView {
+            content
+                .padding(.bottom, bottomContentPadding)
+                .readAdaptiveSheetHeight()
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+}
+
+@available(iOS 16.0, *)
+private struct AdaptiveToolSheetHeightModifier: ViewModifier {
+    @State private var measuredHeight: CGFloat = AdaptiveSheetHeightPreferenceKey.defaultValue
+    @State private var selectedDetent: PresentationDetent = .height(AdaptiveSheetHeightPreferenceKey.defaultValue)
+
+    private let navigationChromeHeight: CGFloat = 64
+
+    private var maxFittedHeight: CGFloat {
+        UIScreen.main.bounds.height * 0.72
+    }
+
+    private var fittedHeight: CGFloat {
+        min(measuredHeight, maxFittedHeight)
+    }
+
+    private var canScroll: Bool {
+        measuredHeight > maxFittedHeight && selectedDetent == .large
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .scrollDisabled(canScroll == false)
+            .onPreferenceChange(AdaptiveSheetHeightPreferenceKey.self) { height in
+                guard height > 0 else { return }
+                let nextHeight = height + navigationChromeHeight
+                measuredHeight = nextHeight
+                if selectedDetent != .large || nextHeight <= maxFittedHeight {
+                    selectedDetent = .height(min(nextHeight, maxFittedHeight))
+                }
+            }
+            .presentationDetents(detents, selection: $selectedDetent)
+            .presentationDragIndicator(.visible)
+    }
+
+    private var detents: Set<PresentationDetent> {
+        measuredHeight > maxFittedHeight ? [.height(fittedHeight), .large] : [.height(measuredHeight)]
+    }
+}
+
+private struct ToolSheetSection<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 struct ExternalToolDataConsentSheet: View {
     let prompt: ExternalToolDataSharePrompt
     let onAllow: () -> Void
+    let onAllowAlways: () -> Void
     let onDeny: () -> Void
 
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
-            ScrollView {
+            AdaptiveToolSheetScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(L10n.text("chat.tool_consent.intro"))
@@ -44,6 +128,12 @@ struct ExternalToolDataConsentSheet: View {
                     Text(L10n.text("chat.tool_consent.footer"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+
+                    Button(action: onAllowAlways) {
+                        Label(L10n.text("chat.tool_consent.allow_always"), systemImage: "checkmark.shield")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
                 .padding()
             }
@@ -132,36 +222,42 @@ struct ToolQuestionSheet: View {
 
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
-            Form {
-                ForEach(prompt.questions) { question in
-                    Section {
-                        Text(question.question)
-                            .font(.body.weight(.semibold))
-                        ForEach(question.options) { option in
-                            Button {
-                                toggle(option.id, for: question)
-                            } label: {
-                                HStack {
-                                    Image(systemName: selectedIDs(for: question).contains(option.id) ? selectedIcon(for: question) : unselectedIcon(for: question))
-                                        .foregroundStyle(Color.accentColor)
-                                    Text(option.text)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
+            AdaptiveToolSheetScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(prompt.questions) { question in
+                        ToolSheetSection {
+                            Text(question.question)
+                                .font(.body.weight(.semibold))
+                            ForEach(question.options) { option in
+                                Button {
+                                    toggle(option.id, for: question)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: selectedIDs(for: question).contains(option.id) ? selectedIcon(for: question) : unselectedIcon(for: question))
+                                            .foregroundStyle(Color.accentColor)
+                                        Text(option.text)
+                                            .foregroundStyle(.primary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        Spacer()
+                                    }
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
-                        }
-                        if question.allowsOther {
-                            TextField(
-                                L10n.text("chat.tool_question.other"),
-                                text: Binding(
-                                    get: { otherTextByQuestion[question.id] ?? "" },
-                                    set: { otherTextByQuestion[question.id] = $0 }
+                            if question.allowsOther {
+                                TextField(
+                                    L10n.text("chat.tool_question.other"),
+                                    text: Binding(
+                                        get: { otherTextByQuestion[question.id] ?? "" },
+                                        set: { otherTextByQuestion[question.id] = $0 }
+                                    )
                                 )
-                            )
+                                .textFieldStyle(.roundedBorder)
+                            }
                         }
                     }
                 }
+                .padding()
             }
             .navigationTitle(L10n.text("chat.tool_question.title"))
             .toolbar {
@@ -235,44 +331,48 @@ struct MemberSelectionToolSheet: View {
 
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
-            Form {
-                Section {
-                    Text(L10n.text("chat.member_selection_tool.message"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    if prompt.reason.isEmpty == false {
-                        Text(prompt.reason)
-                            .font(.caption.monospaced())
+            AdaptiveToolSheetScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ToolSheetSection {
+                        Text(L10n.text("chat.member_selection_tool.message"))
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        if prompt.reason.isEmpty == false {
+                            Text(prompt.reason)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                }
 
-                Section {
-                    if members.isEmpty {
-                        Text(L10n.text("chat.member_selection_tool.empty"))
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(members) { member in
-                            Button {
-                                selectedMemberID = member.id
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: selectedMemberID == member.id ? "largecircle.fill.circle" : "circle")
-                                        .foregroundStyle(Color.accentColor)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(member.name)
-                                            .foregroundStyle(.primary)
-                                        Text(member.relationship)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                    ToolSheetSection {
+                        if members.isEmpty {
+                            Text(L10n.text("chat.member_selection_tool.empty"))
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(members) { member in
+                                Button {
+                                    selectedMemberID = member.id
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: selectedMemberID == member.id ? "largecircle.fill.circle" : "circle")
+                                            .foregroundStyle(Color.accentColor)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(member.name)
+                                                .foregroundStyle(.primary)
+                                            Text(member.relationship)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
                                     }
-                                    Spacer()
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
+                .padding()
             }
             .navigationTitle(L10n.text("chat.member_selection_tool.title"))
             .onAppear {
@@ -295,32 +395,119 @@ struct MemberSelectionToolSheet: View {
     }
 }
 
+/// 工具输出详情（只读 + 关联业务卡片，与 ask/consent 共用全局 Sheet 入口）。
+struct ToolPreviewSheet: View {
+    let prompt: ToolPreviewPrompt
+    let renderContext: ChatRenderContext?
+    @ObservedObject var coordinator: ToolInteractionCoordinator
+    @ObservedObject var stateStore: ChatStateStore
+    let onClearRenderContext: () -> Void
+
+    private var resolvedMessage: ChatMessage? {
+        stateStore.conversationListItems(for: prompt.threadID)
+            .first { $0.clientMessageID == prompt.sourceClientMessageID }
+    }
+
+    private var orderedRelatedBlocks: [ChatMessageBlock] {
+        let msg = resolvedMessage ?? renderContext?.message
+        guard let msg else { return [] }
+        let byId = Dictionary(uniqueKeysWithValues: msg.blocks.map { ($0.id, $0) })
+        return prompt.relatedBlockIDs.compactMap { byId[$0] }
+    }
+
+    private var contextForCards: ChatRenderContext? {
+        guard let base = renderContext else { return nil }
+        guard let msg = resolvedMessage else { return base }
+        return base.replacingMessage(msg)
+    }
+
+    var body: some View {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
+            AdaptiveToolSheetScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ToolSheetSection {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(prompt.toolName)
+                                .font(.headline)
+                            if let tid = prompt.toolCallID, tid.isEmpty == false {
+                                Text("tool_call_id: \(tid)")
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            Text(prompt.toolContent.isEmpty ? "—" : prompt.toolContent)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+
+                    if orderedRelatedBlocks.isEmpty == false, let ctx = contextForCards {
+                        ToolSheetSection {
+                            Text(L10n.text("chat.tool_preview.related", fallback: "关联内容"))
+                                .font(.subheadline.weight(.semibold))
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(orderedRelatedBlocks) { block in
+                                    block.render(context: ctx)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle(L10n.text("chat.tool_preview.title", fallback: "工具详情"))
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("common.done")) {
+                        onClearRenderContext()
+                        coordinator.dismissToolPreview(id: prompt.id)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// 当前队列中的工具交互（全局 sheet，不写入消息流）。
 struct ToolInteractionPresentationSheet: View {
     let active: ToolInteractionCoordinator.ActivePresentation
     @ObservedObject var coordinator: ToolInteractionCoordinator
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var stateStore: ChatStateStore
+    let toolPreviewRenderContext: ChatRenderContext?
+    let onClearToolPreviewRenderContext: () -> Void
 
     var body: some View {
         switch active.snapshot {
         case .consent(let prompt):
             ExternalToolDataConsentSheet(
                 prompt: prompt,
-                onAllow: { coordinator.completeConsent(allowed: true) },
-                onDeny: { coordinator.completeConsent(allowed: false) }
+                onAllow: { coordinator.completeConsent(id: active.id, allowed: true) },
+                onAllowAlways: { coordinator.completeConsent(id: active.id, allowed: true, rememberTool: true) },
+                onDeny: { coordinator.completeConsent(id: active.id, allowed: false) }
             )
         case .question(let prompt):
             ToolQuestionSheet(
                 prompt: prompt,
-                onSubmit: { coordinator.completeQuestion(answer: ToolQuestionAnswer(responses: $0)) },
-                onCancel: { coordinator.completeQuestionCancelled() }
+                onSubmit: { coordinator.completeQuestion(id: active.id, answer: ToolQuestionAnswer(responses: $0)) },
+                onCancel: { coordinator.completeQuestionCancelled(id: active.id) }
             )
         case .member(let prompt):
             MemberSelectionToolSheet(
                 prompt: prompt,
                 memberContextStore: memberContextStore,
-                onSubmit: { coordinator.completeMemberSelection(memberID: $0) },
-                onCancel: { coordinator.completeMemberCancelled() }
+                onSubmit: { coordinator.completeMemberSelection(id: active.id, memberID: $0) },
+                onCancel: { coordinator.completeMemberCancelled(id: active.id) }
+            )
+        case .toolPreview(let prompt):
+            ToolPreviewSheet(
+                prompt: prompt,
+                renderContext: toolPreviewRenderContext,
+                coordinator: coordinator,
+                stateStore: stateStore,
+                onClearRenderContext: onClearToolPreviewRenderContext
             )
         }
     }
