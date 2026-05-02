@@ -5,6 +5,7 @@ struct PromptInputEditorView: View {
     var isAutoFillInProgress = false
     var isAutoFilled = false
     var isAutoFillDisabled = false
+    var showsCurrentDateButton = true
     var onAutoFill: (() -> Void)?
     var onVoiceInput: () -> Void
     var onTextInput: () -> Void
@@ -18,6 +19,10 @@ struct PromptInputEditorView: View {
             HStack(spacing: 10) {
                 if onAutoFill != nil {
                     autoFillButton
+                }
+
+                if showsCurrentDateButton {
+                    currentDateButton
                 }
 
                 Spacer()
@@ -77,5 +82,35 @@ struct PromptInputEditorView: View {
         }
         .buttonStyle(.plain)
         .disabled(isAutoFillInProgress || isAutoFillDisabled)
+    }
+
+    private var currentDateButton: some View {
+        Button {
+            let enabled = AIPromptKeywords.contains(AIPromptKeywords.currentDate, in: text) == false
+            text = AIPromptKeywords.setting(AIPromptKeywords.currentDate, enabled: enabled, in: text)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: AIPromptKeywords.contains(AIPromptKeywords.currentDate, in: text) ? "calendar.badge.checkmark" : "calendar.badge.plus")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 25, height: 25)
+                Text(
+                    L10n.text(
+                        "ai_settings.small_tasks.field.use_current_date",
+                        fallback: "Append current date to system prompt",
+                        comment: "Use current date keyword action"
+                    )
+                )
+                .font(.caption)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            L10n.text(
+                "ai_settings.small_tasks.field.use_current_date",
+                fallback: "Append current date to system prompt",
+                comment: "Use current date keyword accessibility label"
+            )
+        )
     }
 }

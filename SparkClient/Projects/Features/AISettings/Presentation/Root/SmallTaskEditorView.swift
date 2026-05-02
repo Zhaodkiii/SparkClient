@@ -67,19 +67,6 @@ struct SmallTaskEditorView: View {
                     onVoiceInput: { showVoiceInput = true },
                     onTextInput: { showTextInputDrawer = true }
                 )
-                Toggle(
-                    L10n.text(
-                        "ai_settings.small_tasks.field.use_current_date",
-                        fallback: "Append current date to system prompt",
-                        comment: "Small task use current date toggle"
-                    ),
-                    isOn: Binding(
-                        get: { AIPromptKeywords.contains(AIPromptKeywords.currentDate, in: prompt) },
-                        set: { enabled in
-                            prompt = AIPromptKeywords.setting(AIPromptKeywords.currentDate, enabled: enabled, in: prompt)
-                        }
-                    )
-                )
             }
 
             Section(L10n.text("ai_settings.small_tasks.section.tools", fallback: "Tools", comment: "Small task tools section")) {

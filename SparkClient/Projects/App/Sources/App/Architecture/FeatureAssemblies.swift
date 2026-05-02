@@ -94,6 +94,7 @@ struct MainTabDependencies {
     let chatV2ViewModel: ChatV2ViewModel
     let settingsViewModel: SettingsViewModel
     let aiSettingsViewModel: AISettingsViewModel
+    let versionUpdateCoordinator: AppVersionUpdateCoordinator
     let memberContextStore: MemberContextStore
 }
 
@@ -115,6 +116,7 @@ struct AppContentDependencies {
     let notificationStore: NotificationStore
     let notificationDeliveryCoordinator: NotificationDeliveryCoordinator
     let routeCoordinator: RouteCoordinator
+    let versionUpdateCoordinator: AppVersionUpdateCoordinator
     let coordinator: AppCoordinatorDependencies
 }
 
@@ -122,6 +124,7 @@ struct AppContentDependencies {
 struct AppCoordinatorDependencies {
     let facades: AppFeatureFacades
     let lifecycle: AppLifecycleCoordinator
+    let versionUpdateCoordinator: AppVersionUpdateCoordinator
 }
 
 struct AppAssembly: FeatureAssembly {

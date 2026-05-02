@@ -4,10 +4,12 @@ struct AppCoordinatorView: View {
     private let facades: AppFeatureFacades
     @StateObject private var networkMonitor = NetworkPathMonitor()
     @StateObject private var lifecycle: AppLifecycleCoordinator
+    @StateObject private var versionUpdateCoordinator: AppVersionUpdateCoordinator
 
     init(dependencies: AppCoordinatorDependencies) {
         self.facades = dependencies.facades
         _lifecycle = StateObject(wrappedValue: dependencies.lifecycle)
+        _versionUpdateCoordinator = StateObject(wrappedValue: dependencies.versionUpdateCoordinator)
     }
 
     var body: some View {
@@ -26,6 +28,7 @@ struct AppCoordinatorView: View {
         .animation(.easeInOut, value: lifecycle.sessionState)
         .animation(.easeInOut, value: networkMonitor.hasEvaluatedPath)
         .animation(.easeInOut, value: networkMonitor.isSatisfied)
+        .modifier(VersionUpdateOverlay(coordinator: versionUpdateCoordinator))
         .onAppear {
             networkMonitor.start()
         }
@@ -63,13 +66,15 @@ struct AppCoordinatorView: View {
                     chatDetailViewModel: mainTab.chatDetailViewModel,
                     chatV2ViewModel: mainTab.chatV2ViewModel,
                     settingsViewModel: mainTab.settingsViewModel,
-                    aiSettingsViewModel: mainTab.aiSettingsViewModel
+                    aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                    versionUpdateCoordinator: mainTab.versionUpdateCoordinator
                 )
                 .environmentObject(mainTab.memberContextStore)
                 .id(session.accountID)
                 .task(id: session.accountID) {
                     // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
                     lifecycle.requestNotificationAuthorizationIfNeeded()
+                    await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
                 }
             } else {
                 ProgressView(L10n.text("app.loading.preparing"))

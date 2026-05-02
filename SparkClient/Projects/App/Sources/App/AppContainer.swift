@@ -37,6 +37,8 @@ final class AppContainer {
     let ossConfigurationStore: SparkOSSConfigurationStore
     /// 统一存储策略登记表：集中描述各存储后端的作用域、账号隔离与清理策略。
     let storageRegistry: StorageRegistry
+    /// 应用版本检查与更新弹窗协调器。
+    let versionUpdateCoordinator: AppVersionUpdateCoordinator
     /// 任务中心 UI 观察对象；由 Assembly 封装 `TaskManager.shared` 后注入，View 不再直接访问 singleton。
     let taskManager: TaskManager
     /// 任务同步 facade：根生命周期只依赖协议，不直接触碰 `TaskManager.shared`。
@@ -284,9 +286,11 @@ final class AppContainer {
             notificationStore: notificationStore,
             notificationDeliveryCoordinator: notificationDeliveryCoordinator,
             routeCoordinator: routeCoordinator,
+            versionUpdateCoordinator: versionUpdateCoordinator,
             coordinator: AppCoordinatorDependencies(
                 facades: featureFacades,
-                lifecycle: lifecycle
+                lifecycle: lifecycle,
+                versionUpdateCoordinator: versionUpdateCoordinator
             )
         )
     }()
@@ -365,6 +369,7 @@ final class AppContainer {
         self.taskManager = infrastructure.taskManager
         self.taskRuntime = infrastructure.taskRuntime
         self.storageRegistry = infrastructure.storageRegistry
+        self.versionUpdateCoordinator = AppVersionUpdateCoordinator(api: backend.version, logger: logger)
         self.fileCacheManager = infrastructure.fileCacheManager
         self.fileTransferService = infrastructure.fileTransferService
         self.ossConfigurationStore = infrastructure.ossConfigurationStore
@@ -651,6 +656,7 @@ final class AppContainer {
             chatV2ViewModel: makeChatV2ViewModel(ownerAccountID: ownerAccountID),
             settingsViewModel: makeSettingsViewModel(),
             aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
+            versionUpdateCoordinator: versionUpdateCoordinator,
             memberContextStore: memberContextStore
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)

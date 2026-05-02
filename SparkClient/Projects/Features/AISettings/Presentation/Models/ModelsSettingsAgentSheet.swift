@@ -61,19 +61,6 @@ struct ModelsSettingsAgentSheet: View {
                     onVoiceInput: { showVoiceInput = true },
                     onTextInput: { showTextInputDrawer = true }
                 )
-                Toggle(
-                    L10n.text(
-                        "ai_settings.small_tasks.field.use_current_date",
-                        fallback: "Append current date to system prompt",
-                        comment: "Use current date keyword toggle"
-                    ),
-                    isOn: Binding(
-                        get: { AIPromptKeywords.contains(AIPromptKeywords.currentDate, in: systemPrompt) },
-                        set: { enabled in
-                            systemPrompt = AIPromptKeywords.setting(AIPromptKeywords.currentDate, enabled: enabled, in: systemPrompt)
-                        }
-                    )
-                )
 
                 NavigationLink {
                     MultiSelectOptionsView(

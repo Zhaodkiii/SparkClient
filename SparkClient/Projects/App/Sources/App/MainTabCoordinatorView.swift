@@ -16,6 +16,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatV2ViewModel: ChatV2ViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
@@ -72,6 +73,7 @@ struct MainTabCoordinatorView: View {
                 SettingsView(
                     viewModel: settingsViewModel,
                     aiSettingsViewModel: aiSettingsViewModel,
+                    versionUpdateCoordinator: versionUpdateCoordinator,
                     session: session
                 )
             } destination: { route in

@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     let session: UserSession
     @State private var showDeactivationConfirm = false
 
@@ -41,6 +42,30 @@ struct SettingsView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+
+            Section("版本") {
+                HStack {
+                    Text("当前版本")
+                    Spacer()
+                    Text("\(SparkSystemInfo().appVersion) (\(SparkSystemInfo().buildVersion))")
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    Task { await versionUpdateCoordinator.manualCheck() }
+                } label: {
+                    if versionUpdateCoordinator.isCheckingManually {
+                        ProgressView()
+                    } else {
+                        Text("检查更新")
+                    }
+                }
+                .disabled(versionUpdateCoordinator.isCheckingManually)
+                if let message = versionUpdateCoordinator.manualCheckMessage {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
 

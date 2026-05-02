@@ -20,6 +20,7 @@ final class Backend {
     let files: SparkFileAPI
     let oss: SparkOSSAPI
     let ocr: SparkOCRAPI
+    let version: SparkVersionAPI
     let deviceCache: DeviceCache
 
     init(
@@ -64,6 +65,7 @@ final class Backend {
         self.files = SparkFileAPI(configuration: configuration)
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
+        self.version = SparkVersionAPI(configuration: configuration)
 
         logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
@@ -86,6 +88,7 @@ final class Backend {
         self.files = SparkFileAPI(configuration: configuration)
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
+        self.version = SparkVersionAPI(configuration: configuration)
 
         configuration.logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }

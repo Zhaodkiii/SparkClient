@@ -40,6 +40,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case question(InteractionResult<ToolQuestionAnswer>)
         case member(InteractionResult<Int>)
         case toolPreviewDismissed
+        case systemMessageSettingsDismissed
     }
 
     // MARK: - 内部状态
@@ -128,11 +129,28 @@ final class ToolInteractionCoordinator: ObservableObject {
         )
     }
 
+    func presentSystemMessageSettings(prompt: SystemMessageSettingsPrompt) {
+        enqueue(
+            QueuedWork(
+                id: prompt.id,
+                snapshot: .systemMessageSettings(prompt),
+                completion: nil
+            )
+        )
+    }
+
     /// 关闭工具预览
     func dismissToolPreview(id: UUID) {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
         guard case .toolPreview = activePresentation?.snapshot else { return }
         pendingOutcome = .toolPreviewDismissed
+        resumeUserGate()
+    }
+
+    func dismissSystemMessageSettings(id: UUID) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        guard case .systemMessageSettings = activePresentation?.snapshot else { return }
+        pendingOutcome = .systemMessageSettingsDismissed
         resumeUserGate()
     }
 
@@ -232,6 +250,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case .question: return .question(.cancelled)
         case .member: return .member(.cancelled)
         case .toolPreview: return .toolPreviewDismissed
+        case .systemMessageSettings: return .systemMessageSettingsDismissed
         }
     }
 

@@ -470,6 +470,132 @@ struct ToolPreviewSheet: View {
     }
 }
 
+struct SystemMessageSettingsSheet: View {
+    let prompt: SystemMessageSettingsPrompt
+    let onSave: (String) -> Void
+    let onClose: () -> Void
+
+    @State private var useDefaultSystemMessage: Bool
+    @State private var systemMessage: String
+    @State private var showTextInputDrawer = false
+    @State private var showVoiceInput = false
+
+    init(
+        prompt: SystemMessageSettingsPrompt,
+        onSave: @escaping (String) -> Void,
+        onClose: @escaping () -> Void
+    ) {
+        self.prompt = prompt
+        self.onSave = onSave
+        self.onClose = onClose
+
+        let session = prompt.sessionPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultPrompt = prompt.defaultPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        _useDefaultSystemMessage = State(initialValue: session.isEmpty || session == defaultPrompt)
+        _systemMessage = State(initialValue: session.isEmpty ? prompt.defaultPrompt : prompt.sessionPrompt)
+    }
+
+    var body: some View {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
+            Form {
+                Section("当前模型") {
+                    Label(prompt.modelDisplayName, systemImage: prompt.isAgentModel ? "person.crop.circle" : "cpu")
+                    if prompt.isAgentModel {
+                        Text("当前对话使用的是智能体提示词。智能体提示词不可在会话内修改，请进入对应的智能体页面维护。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("这里只维护当前会话级别的系统提示词。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if prompt.isAgentModel {
+                    Section("智能体系统提示词") {
+                        Text(agentPromptText)
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if prompt.sessionPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                        Section("当前会话级提示词") {
+                            Text(prompt.sessionPrompt)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                } else {
+                    Section("选择系统提示词") {
+                        Picker("提示词设置", selection: $useDefaultSystemMessage) {
+                            Text("默认系统消息").tag(true)
+                            Text("自定义系统消息").tag(false)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    if useDefaultSystemMessage {
+                        Section("使用默认提示词") {
+                            Text(prompt.defaultPrompt)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    } else {
+                        Section("编辑 System 角色消息") {
+                            PromptInputEditorView(
+                                text: $systemMessage,
+                                onVoiceInput: { showVoiceInput = true },
+                                onTextInput: { showTextInputDrawer = true }
+                            )
+                        }
+                    }
+                }
+
+                Section("说明") {
+                    Text("System 角色消息用于设定对话上下文、风格、身份与行为边界。当前页面只保存会话级提示词；智能体提示词只展示，不在这里修改。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("系统消息设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(prompt.isAgentModel ? L10n.text("common.done") : L10n.text("common.cancel"), action: onClose)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        onSave(useDefaultSystemMessage ? prompt.defaultPrompt : systemMessage)
+                    }
+                    .disabled(prompt.isAgentModel)
+                }
+            }
+        }
+        .sheet(isPresented: $showTextInputDrawer) {
+            SparkPromptInputDrawerSheet(
+                text: $systemMessage,
+                isPresented: $showTextInputDrawer
+            )
+            .sparkInputPresentationChromeIfAvailable()
+        }
+        .sheet(isPresented: $showVoiceInput) {
+            SparkVoiceInputSheet(
+                text: $systemMessage,
+                isPresented: $showVoiceInput
+            )
+            .sparkInputPresentationChromeIfAvailable()
+        }
+    }
+
+    private var agentPromptText: String {
+        let text = prompt.agentPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? "该智能体未配置提示词。" : text
+    }
+}
+
 /// 当前队列中的工具交互（全局 sheet，不写入消息流）。
 struct ToolInteractionPresentationSheet: View {
     let active: ToolInteractionCoordinator.ActivePresentation
@@ -478,6 +604,7 @@ struct ToolInteractionPresentationSheet: View {
     @ObservedObject var stateStore: ChatStateStore
     let toolPreviewRenderContext: ChatRenderContext?
     let onClearToolPreviewRenderContext: () -> Void
+    let onSaveSystemMessage: (SystemMessageSettingsPrompt, String) -> Void
 
     var body: some View {
         switch active.snapshot {
@@ -508,6 +635,15 @@ struct ToolInteractionPresentationSheet: View {
                 coordinator: coordinator,
                 stateStore: stateStore,
                 onClearRenderContext: onClearToolPreviewRenderContext
+            )
+        case .systemMessageSettings(let prompt):
+            SystemMessageSettingsSheet(
+                prompt: prompt,
+                onSave: { value in
+                    onSaveSystemMessage(prompt, value)
+                    coordinator.dismissSystemMessageSettings(id: active.id)
+                },
+                onClose: { coordinator.dismissSystemMessageSettings(id: active.id) }
             )
         }
     }

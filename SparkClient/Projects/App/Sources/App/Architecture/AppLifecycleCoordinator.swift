@@ -39,6 +39,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         guard hasEvaluatedPath else { return }
         logger.info("启动流程：网络路径已评估，开始应用级引导与会话恢复", module: .general)
         await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
+        await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
         await sessionStore.restoreIfNeeded()
         if case .signedIn(let session) = sessionStore.state {
             await prepareSignedInSessionIfNeeded(session)
@@ -85,6 +86,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         guard case .signedIn = sessionStore.state else { return }
         logger.debug("前台流程：应用回到前台，触发任务增量同步", module: .general)
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
+        await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
     }
 
     func handleServerAuthInvalidationIfNeeded() async {

@@ -137,6 +137,10 @@ final class ChatDetailViewModel: ObservableObject {
         toolInteractionCoordinator.presentToolPreview(prompt: prompt)
     }
 
+    func presentSystemMessageSettings(prompt: SystemMessageSettingsPrompt) {
+        toolInteractionCoordinator.presentSystemMessageSettings(prompt: prompt)
+    }
+
     func clearToolPreviewRenderContext() {
         toolPreviewRenderContext = nil
     }
@@ -477,6 +481,32 @@ final class ChatDetailViewModel: ObservableObject {
             try await syncChatUseCase.pushSingleThread(threadID: threadID)
         } catch {
             logger.warning("线程参数上送失败，稍后重试：\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    func updateThreadSystemPrompt(_ rolePrompt: String, for threadID: UUID) async {
+        guard let thread = await chatRepository.loadThread(id: threadID) else { return }
+        let trimmed = rolePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard thread.rolePrompt != trimmed else { return }
+
+        await chatRepository.updateThreadGenerationConfig(
+            threadID: threadID,
+            currentModelName: thread.currentModelName,
+            temperature: thread.temperature,
+            topP: thread.topP,
+            maxTokens: thread.maxTokens,
+            maxMessages: thread.maxMessages,
+            rolePrompt: trimmed
+        )
+
+        if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
+            stateStore.upsertThreadListItem(item)
+        }
+
+        do {
+            try await syncChatUseCase.pushSingleThread(threadID: threadID)
+        } catch {
+            logger.warning("会话系统消息上送失败，稍后重试：\(error.localizedDescription)", module: .general)
         }
     }
 

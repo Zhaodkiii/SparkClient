@@ -262,6 +262,12 @@ struct ChatView: View {
                         }
                         Divider()
                         Button {
+                            presentSystemMessageSettings()
+                        } label: {
+                            Label("设置系统消息", systemImage: "text.bubble")
+                        }
+                        Divider()
+                        Button {
                             logDebugInfo()
                         } label: {
                             Label("打印调试信息", systemImage: "doc.text.magnifyingglass")
@@ -347,6 +353,8 @@ struct ChatView: View {
                         if case .toolPreview = active.snapshot {
                             detailViewModel.clearToolPreviewRenderContext()
                             detailViewModel.toolInteractionCoordinator.dismissToolPreview(id: active.id)
+                        } else if case .systemMessageSettings = active.snapshot {
+                            detailViewModel.toolInteractionCoordinator.dismissSystemMessageSettings(id: active.id)
                         }
                     }
                 )
@@ -357,7 +365,12 @@ struct ChatView: View {
                     memberContextStore: homeViewModel.memberContextStoreForBinding,
                     stateStore: stateStore,
                     toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
-                    onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() }
+                    onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() },
+                    onSaveSystemMessage: { prompt, value in
+                        Task {
+                            await detailViewModel.updateThreadSystemPrompt(value, for: prompt.threadID)
+                        }
+                    }
                 )
                 .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
             }
@@ -602,6 +615,22 @@ struct ChatView: View {
         } else {
             activeParameterCard = kind
         }
+    }
+
+    private func presentSystemMessageSettings() {
+        activeParameterCard = nil
+        let thread = stateStore.selectedThread ?? ChatThread(title: L10n.text("chat.default_thread_title"))
+        let row = selectedComposerModelRow
+        let isAgent = row?.identity == AIModelIdentity.agent.rawValue
+        let prompt = SystemMessageSettingsPrompt(
+            threadID: threadID,
+            sessionPrompt: thread.rolePrompt,
+            defaultPrompt: PromptLocalizer().chatSystemPrompt(),
+            modelDisplayName: row?.displayTitle ?? thread.currentModelName ?? L10n.text("chat.composer.model.default"),
+            isAgentModel: isAgent,
+            agentPrompt: isAgent ? row?.systemPrompt : nil
+        )
+        detailViewModel.presentSystemMessageSettings(prompt: prompt)
     }
 
     private func updateOverlaySetting(
