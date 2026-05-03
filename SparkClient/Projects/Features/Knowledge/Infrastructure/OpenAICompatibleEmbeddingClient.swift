@@ -1,6 +1,6 @@
 import Foundation
 
-/// OpenAI 兼容 `POST .../embeddings` 客户端（与 Health `KnowledgeAPI` 解析逻辑对齐）。
+/// OpenAI 兼容 `POST .../embeddings` 客户端。
 protocol KnowledgeEmbeddingClient: Sendable {
     func embed(texts: [String], modelName: String, apiKey: String, endpointURL: URL) async throws -> [[Float]]
 }
@@ -82,7 +82,10 @@ final class OpenAICompatibleEmbeddingClient: KnowledgeEmbeddingClient {
         request.httpMethod = "POST"
         request.httpBody = jsonData
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedKey.isEmpty == false {
+            request.setValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
+        }
         return try await urlSession.data(for: request)
     }
 

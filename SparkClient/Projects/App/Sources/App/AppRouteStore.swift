@@ -33,7 +33,6 @@ final class AppRouteStore: ObservableObject {
         case knowledge = 2
         case chat = 3
         case settings = 4
-        case chatV2 = 5
     }
 
     @Published var selectedTab: RootTab = .home

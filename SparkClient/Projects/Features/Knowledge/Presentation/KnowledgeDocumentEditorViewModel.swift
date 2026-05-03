@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import UIKit
 
-/// 单篇知识「写作页」状态：编辑/预览、防抖保存、工具栏与向量化（仅依赖用例与 AI 设置快照）。
+/// 单篇知识「写作页」状态：编辑/预览、防抖保存、工具栏与向量化。
 @MainActor
 final class KnowledgeDocumentEditorViewModel: ObservableObject {
     let documentID: UUID
@@ -15,7 +15,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isSaving = false
     @Published var errorMessage: String?
-    @Published var embeddingModels: [AllModels] = []
+    @Published var embeddingModels: [AIScenarioRemoteModelRow] = []
     @Published var selectedEmbeddingModelName: String = ""
     @Published private(set) var embeddingInProgress = false
     @Published private(set) var textProcessingInProgress = false
@@ -79,8 +79,7 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            let snapshot = await aiConfigCenter.currentSnapshot()
-            refreshEmbeddingModels(from: snapshot)
+            await refreshEmbeddingModels()
 
             guard let doc = try await loadDocumentUseCase.execute(id: documentID) else {
                 errorMessage = L10n.text("knowledge.error.document_missing")
@@ -128,17 +127,16 @@ final class KnowledgeDocumentEditorViewModel: ObservableObject {
         return maxIndex > 0 ? "\(baseName)_\(maxIndex)" : baseName
     }
 
-    private func refreshEmbeddingModels(from snapshot: AISettingsSnapshot) {
-        embeddingModels = KnowledgeEmbeddingResolution.visibleEmbeddingModels(in: snapshot)
-        let preferred = (snapshot.scenarioDefaultModelName(for: .embedding) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if let match = embeddingModels.first(where: { $0.name == preferred }) {
-            selectedEmbeddingModelName = match.name
-        } else if let first = embeddingModels.first {
-            selectedEmbeddingModelName = first.name
-        } else {
-            selectedEmbeddingModelName = preferred
+    private func refreshEmbeddingModels() async {
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
+            embeddingModels = []
+            selectedEmbeddingModelName = ""
+            return
         }
+        let bundle = bundles.embedding
+        embeddingModels = bundle.models
+        let preferred = selectedEmbeddingModelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        selectedEmbeddingModelName = bundle.resolveRow(preferredModelName: preferred.isEmpty ? nil : preferred)?.name ?? ""
     }
 
     /// 手动保存（导航栏「保存」）。

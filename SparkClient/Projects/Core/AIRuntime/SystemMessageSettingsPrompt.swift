@@ -9,6 +9,7 @@ struct SystemMessageSettingsPrompt: Codable, Equatable, Sendable {
     let modelDisplayName: String
     let isAgentModel: Bool
     let agentPrompt: String?
+    let promptTemplates: [PromptRepo]
 
     init(
         id: UUID = UUID(),
@@ -17,7 +18,8 @@ struct SystemMessageSettingsPrompt: Codable, Equatable, Sendable {
         defaultPrompt: String,
         modelDisplayName: String,
         isAgentModel: Bool,
-        agentPrompt: String?
+        agentPrompt: String?,
+        promptTemplates: [PromptRepo] = []
     ) {
         self.id = id
         self.threadID = threadID
@@ -26,5 +28,6 @@ struct SystemMessageSettingsPrompt: Codable, Equatable, Sendable {
         self.modelDisplayName = modelDisplayName
         self.isAgentModel = isAgentModel
         self.agentPrompt = agentPrompt
+        self.promptTemplates = promptTemplates
     }
 }

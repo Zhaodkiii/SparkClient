@@ -161,6 +161,96 @@ struct SearchKeys: Identifiable, Codable, Equatable, Sendable {
     var help: String
     var source: AIRecordSource
     var timestamp: Date
+    var authType: SearchProviderAuthType = .bearer
+    var priority: Int = 0
+    var enabledScopes: [String] = ["chat", "small_task"]
+    var revision: Int = 1
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        company: String,
+        key: String,
+        requestURL: String,
+        isUsing: Bool,
+        searchClass: String,
+        help: String,
+        source: AIRecordSource,
+        timestamp: Date,
+        authType: SearchProviderAuthType = .bearer,
+        priority: Int = 0,
+        enabledScopes: [String] = ["chat", "small_task"],
+        revision: Int = 1
+    ) {
+        self.id = id
+        self.name = name
+        self.company = company
+        self.key = key
+        self.requestURL = requestURL
+        self.isUsing = isUsing
+        self.searchClass = searchClass
+        self.help = help
+        self.source = source
+        self.timestamp = timestamp
+        self.authType = authType
+        self.priority = priority
+        self.enabledScopes = enabledScopes
+        self.revision = revision
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, company, key, requestURL, isUsing, searchClass, help, source, timestamp
+        case authType, priority, enabledScopes, revision
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        company = try container.decode(String.self, forKey: .company)
+        key = try container.decodeIfPresent(String.self, forKey: .key) ?? ""
+        requestURL = try container.decode(String.self, forKey: .requestURL)
+        isUsing = try container.decodeIfPresent(Bool.self, forKey: .isUsing) ?? false
+        searchClass = try container.decodeIfPresent(String.self, forKey: .searchClass) ?? "web"
+        help = try container.decodeIfPresent(String.self, forKey: .help) ?? ""
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+        authType = try container.decodeIfPresent(SearchProviderAuthType.self, forKey: .authType) ?? .bearer
+        priority = try container.decodeIfPresent(Int.self, forKey: .priority) ?? 0
+        enabledScopes = try container.decodeIfPresent([String].self, forKey: .enabledScopes) ?? ["chat", "small_task"]
+        revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 1
+    }
+}
+
+enum SearchProviderAuthType: String, Codable, Equatable, Sendable {
+    case bearer
+    case headerToken
+    case queryAPIKey
+    case none
+}
+
+struct SearchRuntimeConfigRevision: Codable, Equatable, Sendable {
+    static let schemaVersion = 1
+
+    var schemaVersion: Int
+    var localRevision: Int
+    var updatedAt: Date
+    var activeSearchKeyID: UUID?
+    var preferencesHash: String
+
+    init(
+        schemaVersion: Int = SearchRuntimeConfigRevision.schemaVersion,
+        localRevision: Int = 1,
+        updatedAt: Date = Date(),
+        activeSearchKeyID: UUID? = nil,
+        preferencesHash: String = ""
+    ) {
+        self.schemaVersion = schemaVersion
+        self.localRevision = localRevision
+        self.updatedAt = updatedAt
+        self.activeSearchKeyID = activeSearchKeyID
+        self.preferencesHash = preferencesHash
+    }
 }
 
 struct ToolKeys: Identifiable, Codable, Equatable, Sendable {
@@ -490,12 +580,76 @@ struct AISearchToolPreferences: Codable, Equatable, Sendable {
     }
 }
 
+
+/// 提示词仓库模型（用于存储、管理 AI 系统提示词）
+/// 支持：自定义提示词 + 内置预设提示词（多语言本地化）
 struct PromptRepo: Identifiable, Codable, Equatable, Sendable {
+    /// 唯一标识 ID
     var id: UUID = UUID()
+    /// 提示词标题（原始文本）
     var title: String
+    /// 提示词内容（原始文本）
     var content: String
+    /// 是否为系统预设提示词（true = 内置预设，false = 用户自定义）
     var isSystem: Bool
+    /// 创建/更新时间戳
     var timestamp: Date
+    /// 多语言本地化 Key（内置预设提示词使用）
+    var localizationKey: String? = nil
+
+    // MARK: - 本地化计算属性
+
+    /// 本地化后的标题（优先读取多语言配置，无则返回原始标题）
+    var localizedTitle: String {
+        // 获取本地化 Key：优先使用自身属性，否则兼容旧版通过标题/内容匹配
+        guard let localizationKey = localizationKey ?? Self.legacyLocalizationKey(title: title, content: content) else {
+            return title
+        }
+        // 从多语言配置读取文本，读取失败则使用原始标题作为兜底
+        return L10n.text("ai_settings.prompt_repo.preset.\(localizationKey).title", fallback: title)
+    }
+
+    /// 本地化后的内容（优先读取多语言配置，无则返回原始内容）
+    var localizedContent: String {
+        guard let localizationKey = localizationKey ?? Self.legacyLocalizationKey(title: title, content: content) else {
+            return content
+        }
+        return L10n.text("ai_settings.prompt_repo.preset.\(localizationKey).content", fallback: content)
+    }
+
+    // MARK: - 旧版兼容：根据原始标题/内容自动匹配本地化 Key
+
+    /// 【旧版兼容方法】
+    /// 针对没有设置 localizationKey 的预设提示词
+    /// 根据原始的中英文标题+内容，自动返回对应的本地化 Key
+    private static func legacyLocalizationKey(title: String, content: String) -> String? {
+        // 去除首尾空白、换行，避免格式差异导致匹配失败
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 匹配已知的内置预设提示词，返回对应的 localizationKey
+        switch (normalizedTitle, normalizedContent) {
+        // 健康助手默认提示词
+        case ("健康助手默认提示词", "你是一位专业健康助手。回答要分层：先结论，再行动建议，再风险提示；避免绝对化诊断。"),
+             ("Health assistant default prompt", "You are a professional health assistant. Structure answers with: conclusion first, actionable suggestions next, and risk notes last. Avoid absolute diagnoses."):
+            return "health_assistant"
+        // 医学抽取结构化模板
+        case ("医学抽取结构化模板", "从输入文本提取：主诉、现病史、既往史、过敏史、用药史、检查结果、评估与建议。缺失字段返回 null。"),
+             ("Medical extraction template", "Extract from the input text: chief complaint, present illness, past history, allergy history, medication history, test results, assessment, and recommendations. Return null for missing fields."):
+            return "medical_extraction"
+        // 知识召回增强模板
+        case ("知识召回增强模板", "优先使用召回知识回答；若知识不足，明确说明不确定性并给出后续补充信息建议。"),
+             ("Knowledge recall enhancement template", "Prioritize recalled knowledge when answering. If the knowledge is insufficient, clearly state uncertainty and suggest what additional information is needed."):
+            return "knowledge_recall"
+        // 双语医学解释模板
+        case ("双语医学解释模板", "先用中文解释医学术语，再给出英文对应术语和一句简明定义，保持术语一致。"),
+             ("Bilingual medical explanation", "Explain the medical term in Chinese first, then provide the English term and one concise definition. Keep terminology consistent."):
+            return "bilingual_medical"
+        // 无匹配
+        default:
+            return nil
+        }
+    }
 }
 
 struct MemoryArchive: Identifiable, Codable, Equatable, Sendable {
@@ -615,24 +769,79 @@ enum AISettingsDefaults {
         let timestamp = Date()
         return [
             SearchKeys(
-                name: "Spark Search",
-                company: "SPARK",
+                name: "智谱清言搜索",
+                company: "ZHIPUAI",
                 key: "",
-                requestURL: "https://api.sparkclient.local/v1/search",
-                isUsing: true,
+                requestURL: "https://open.bigmodel.cn/api/paas/v4/web_search",
+                isUsing: false,
                 searchClass: "web",
-                help: "Default web search connector",
+                help: "智谱 Web Search API",
                 source: .system,
                 timestamp: timestamp
             ),
             SearchKeys(
-                name: "Tavily Search",
+                name: "博查AI",
+                company: "BOCHAAI",
+                key: "",
+                requestURL: "https://api.bochaai.com/v1/web-search",
+                isUsing: false,
+                searchClass: "web",
+                help: "博查 Web Search API",
+                source: .system,
+                timestamp: timestamp
+            ),
+            SearchKeys(
+                name: "LangSearch",
+                company: "LANGSEARCH",
+                key: "",
+                requestURL: "https://api.langsearch.com/v1/web-search",
+                isUsing: false,
+                searchClass: "web",
+                help: "LangSearch Web Search API",
+                source: .system,
+                timestamp: timestamp
+            ),
+            SearchKeys(
+                name: "Exa",
+                company: "EXA",
+                key: "",
+                requestURL: "https://api.exa.ai/search",
+                isUsing: false,
+                searchClass: "web",
+                help: "Exa neural search API",
+                source: .system,
+                timestamp: timestamp
+            ),
+            SearchKeys(
+                name: "Tavily",
                 company: "TAVILY",
                 key: "",
                 requestURL: "https://api.tavily.com/search",
                 isUsing: false,
                 searchClass: "web",
-                help: "High quality web retrieval for RAG",
+                help: "Tavily Web Search API",
+                source: .system,
+                timestamp: timestamp
+            ),
+            SearchKeys(
+                name: "Brave Search",
+                company: "BRAVE",
+                key: "",
+                requestURL: "https://api.search.brave.com/res/v1/web/search",
+                isUsing: false,
+                searchClass: "web",
+                help: "Brave Search API",
+                source: .system,
+                timestamp: timestamp
+            ),
+            SearchKeys(
+                name: "Perplexity",
+                company: "PERPLEXITY",
+                key: "",
+                requestURL: "https://api.perplexity.ai/chat/completions",
+                isUsing: false,
+                searchClass: "web",
+                help: "Perplexity Sonar web search API",
                 source: .system,
                 timestamp: timestamp
             ),
@@ -643,7 +852,7 @@ enum AISettingsDefaults {
                 requestURL: "https://serpapi.com/search.json",
                 isUsing: false,
                 searchClass: "web",
-                help: "Google/Baidu mixed search API",
+                help: "SerpAPI search endpoint",
                 source: .system,
                 timestamp: timestamp
             )
@@ -1068,28 +1277,32 @@ enum AISettingsDefaults {
         let timestamp = Date()
         return [
             PromptRepo(
-                title: "健康助手默认提示词",
-                content: "你是一位专业健康助手。回答要分层：先结论，再行动建议，再风险提示；避免绝对化诊断。",
+                title: L10n.text("ai_settings.prompt_repo.preset.health_assistant.title", fallback: "健康助手默认提示词"),
+                content: L10n.text("ai_settings.prompt_repo.preset.health_assistant.content", fallback: "你是一位专业健康助手。回答要分层：先结论，再行动建议，再风险提示；避免绝对化诊断。"),
                 isSystem: true,
-                timestamp: timestamp
+                timestamp: timestamp,
+                localizationKey: "health_assistant"
             ),
             PromptRepo(
-                title: "医学抽取结构化模板",
-                content: "从输入文本提取：主诉、现病史、既往史、过敏史、用药史、检查结果、评估与建议。缺失字段返回 null。",
+                title: L10n.text("ai_settings.prompt_repo.preset.medical_extraction.title", fallback: "医学抽取结构化模板"),
+                content: L10n.text("ai_settings.prompt_repo.preset.medical_extraction.content", fallback: "从输入文本提取：主诉、现病史、既往史、过敏史、用药史、检查结果、评估与建议。缺失字段返回 null。"),
                 isSystem: true,
-                timestamp: timestamp
+                timestamp: timestamp,
+                localizationKey: "medical_extraction"
             ),
             PromptRepo(
-                title: "知识召回增强模板",
-                content: "优先使用召回知识回答；若知识不足，明确说明不确定性并给出后续补充信息建议。",
+                title: L10n.text("ai_settings.prompt_repo.preset.knowledge_recall.title", fallback: "知识召回增强模板"),
+                content: L10n.text("ai_settings.prompt_repo.preset.knowledge_recall.content", fallback: "优先使用召回知识回答；若知识不足，明确说明不确定性并给出后续补充信息建议。"),
                 isSystem: true,
-                timestamp: timestamp
+                timestamp: timestamp,
+                localizationKey: "knowledge_recall"
             ),
             PromptRepo(
-                title: "双语医学解释模板",
-                content: "先用中文解释医学术语，再给出英文对应术语和一句简明定义，保持术语一致。",
+                title: L10n.text("ai_settings.prompt_repo.preset.bilingual_medical.title", fallback: "双语医学解释模板"),
+                content: L10n.text("ai_settings.prompt_repo.preset.bilingual_medical.content", fallback: "先用中文解释医学术语，再给出英文对应术语和一句简明定义，保持术语一致。"),
                 isSystem: true,
-                timestamp: timestamp
+                timestamp: timestamp,
+                localizationKey: "bilingual_medical"
             )
         ]
     }

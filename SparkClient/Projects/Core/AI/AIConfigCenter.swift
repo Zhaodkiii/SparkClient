@@ -69,7 +69,7 @@ final class AIConfigCenter {
         let snapshot = await repository.loadSnapshot(ownerAccountID: ownerAccountID)
         let resolvedOwner = await resolvedOwnerAccountID(explicit: ownerAccountID)
         logger.info(
-            "AIConfigCenter.prewarm 已从仓储拿到快照 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count)，即将写入运行时缓存",
+            "AIConfigCenter.prewarm 已从仓储拿到快照 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count) 提示词=\(snapshot.promptRepo.count)，即将写入运行时缓存",
             module: .aiConfig
         )
         await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: resolvedOwner)
@@ -83,7 +83,7 @@ final class AIConfigCenter {
 
         if let hit = await runtimeConfigStore.cachedSnapshotIfMatches(ownerAccountID: resolved) {
             logger.debug(
-                "AIConfigCenter.currentSnapshot 命中内存缓存 厂商Key=\(hit.apiKeys.count) 模型=\(hit.allModels.count)",
+                "AIConfigCenter.currentSnapshot 命中内存缓存 厂商Key=\(hit.apiKeys.count) 模型=\(hit.allModels.count) 提示词=\(hit.promptRepo.count)",
                 module: .aiConfig
             )
             return hit
@@ -92,7 +92,7 @@ final class AIConfigCenter {
         let snapshot = await repository.loadSnapshot(ownerAccountID: ownerAccountID)
         await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: resolved)
         logger.debug(
-            "AIConfigCenter.currentSnapshot 已从仓储回填缓存 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count)",
+            "AIConfigCenter.currentSnapshot 已从仓储回填缓存 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count) 提示词=\(snapshot.promptRepo.count)",
             module: .aiConfig
         )
         return snapshot
@@ -113,6 +113,10 @@ final class AIConfigCenter {
 
     func effectiveSmallTasks() async -> [SmallTask] {
         await runtimeConfigStore.effectiveSmallTasks()
+    }
+
+    func effectiveSearchConfig() async throws -> SearchRuntimeConfig {
+        try await runtimeConfigStore.effectiveSearchConfig()
     }
 
     func updateScenarioDefaultModel(_ modelName: String, for scenario: AIScenario) async {

@@ -7,6 +7,7 @@ actor AIRuntimeConfigStore {
     private var localSmallTasks: [SmallTask] = []
     private var proSmallTasks: [SmallTask] = []
     private(set) var proRevision: String?
+    private var cachedSearchConfig: Result<SearchRuntimeConfig, SearchRuntimeError>?
 
     /// 与 `localBundles` 同源的上次快照；供设置页与推理侧避免重复读库。
     private var cachedSnapshot: AISettingsSnapshot?
@@ -26,6 +27,10 @@ actor AIRuntimeConfigStore {
             scenarioDefaults: snapshot.scenarioDefaultModels
         )
         localSmallTasks = snapshot.smallTasks.filter { $0.source == .local }
+        cachedSearchConfig = Result { try SearchRuntimeConfigResolver.resolve(from: snapshot) }
+            .mapError { error in
+                error as? SearchRuntimeError ?? .invalidResponse(error.localizedDescription)
+            }
     }
 
     /// 仅当缓存存在且账号与当前解析一致时返回，避免跨账号误用。
@@ -55,6 +60,7 @@ actor AIRuntimeConfigStore {
         cachedOwnerAccountID = nil
         localSmallTasks = []
         proSmallTasks = []
+        cachedSearchConfig = nil
     }
 
     func localScenarioBundles() -> AIScenarioRemoteBundlesCollection? {
@@ -74,6 +80,13 @@ actor AIRuntimeConfigStore {
             merged[task.id] = task
         }
         return merged.values.sorted { $0.id < $1.id }
+    }
+
+    func effectiveSearchConfig() throws -> SearchRuntimeConfig {
+        guard let cachedSearchConfig else {
+            throw AIConfigError.runtimeNotBootstrapped
+        }
+        return try cachedSearchConfig.get()
     }
 
     /// 场景默认模型变更后，同步更新运行时缓存快照与已缓存 bundle。

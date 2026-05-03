@@ -55,24 +55,20 @@ struct SearchKnowledgeUseCase: Sendable {
 
         let hasVectors = try await repository.hasVectorIndexedChunks()
         if hasVectors {
-            let snapshot = await aiConfigCenter.currentSnapshot()
-            let modelName = (snapshot.scenarioDefaultModelName(for: .embedding) ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if modelName.isEmpty == false {
-                do {
-                    let resolved = try KnowledgeEmbeddingResolution.resolve(modelName: modelName, snapshot: snapshot)
-                    let vectors = try await embeddingClient.embed(
-                        texts: [trimmed],
-                        modelName: resolved.apiModelName,
-                        apiKey: resolved.apiKey,
-                        endpointURL: resolved.embeddingsURL
-                    )
-                    if let q = vectors.first, q.isEmpty == false {
-                        return try await repository.search(query: trimmed, limit: limit, queryEmbedding: q)
-                    }
-                } catch {
-                    // 查询嵌入失败时回退词法，保证 ToolHub 仍可用。
+            do {
+                let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+                let resolved = try KnowledgeEmbeddingResolution.resolve(modelName: nil, in: bundles)
+                let vectors = try await embeddingClient.embed(
+                    texts: [trimmed],
+                    modelName: resolved.apiModelName,
+                    apiKey: resolved.apiKey,
+                    endpointURL: resolved.embeddingsURL
+                )
+                if let q = vectors.first, q.isEmpty == false {
+                    return try await repository.search(query: trimmed, limit: limit, queryEmbedding: q)
                 }
+            } catch {
+                // 查询嵌入失败时回退词法，保证 ToolHub 仍可用。
             }
         }
         return try await repository.search(query: trimmed, limit: limit, queryEmbedding: nil)

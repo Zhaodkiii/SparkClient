@@ -48,6 +48,23 @@
         <attribute name="source" attributeType="String" defaultValueString="system"/>
         <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="AISearchProviderEntity" representedClassName="AISearchProviderEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="authType" attributeType="String" defaultValueString="bearer"/>
+        <attribute name="company" attributeType="String" defaultValueString=""/>
+        <attribute name="enabledScopesData" optional="YES" attributeType="Binary"/>
+        <attribute name="help" attributeType="String" defaultValueString=""/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isUsing" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="key" attributeType="String" defaultValueString=""/>
+        <attribute name="name" attributeType="String" defaultValueString=""/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="priority" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="requestURL" attributeType="String" defaultValueString=""/>
+        <attribute name="revision" attributeType="Integer 32" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="searchClass" attributeType="String" defaultValueString="web"/>
+        <attribute name="source" attributeType="String" defaultValueString="system"/>
+        <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
     <entity name="AIScenarioBundleCacheEntity" representedClassName="AIScenarioBundleCacheEntity" syncable="YES" codeGenerationType="class">
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="payloadData" optional="YES" attributeType="Binary"/>
@@ -69,6 +86,25 @@
         <attribute name="source" attributeType="String" defaultValueString="Local"/>
         <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="toolListData" optional="YES" attributeType="Binary"/>
+    </entity>
+    <entity name="PromptRepoEntity" representedClassName="PromptRepoEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="content" attributeType="String" defaultValueString=""/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isSystem" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="localizationKey" optional="YES" attributeType="String"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="position" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String" defaultValueString=""/>
+    </entity>
+    <entity name="MemoryRecordEntity" representedClassName="MemoryRecordEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="content" attributeType="String" defaultValueString=""/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="pinned" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="title" attributeType="String" defaultValueString=""/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ChatAttachmentDownloadEntity" representedClassName="ChatAttachmentDownloadEntity" syncable="YES" codeGenerationType="class">
         <attribute name="attachmentID" attributeType="UUID" usesScalarValueType="NO"/>

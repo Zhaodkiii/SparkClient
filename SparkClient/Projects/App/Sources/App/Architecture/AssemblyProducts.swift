@@ -27,11 +27,18 @@ struct AuthAssemblyProduct {
 /// AI 领域装配产物：持久配置、运行时缓存、云端/本地模型网关统一在这里创建。
 struct AIAssemblyProduct {
     let aiSettingsRepository: any AISettingsRepository
+    let memoryRepository: any MemoryRepository
     let knowledgeEmbeddingClient: any KnowledgeEmbeddingClient
     let aiRuntimeStore: AIRuntimeStore
     let aiConfigCenter: AIConfigCenter
     let aiRuntimeService: AIRuntimeService
     let localModelService: LocalModelService
+    let loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase
+    let saveMemoryUseCase: SaveMemoryUseCase
+    let retrieveMemoryUseCase: RetrieveMemoryUseCase
+    let updateMemoryUseCase: UpdateMemoryUseCase
+    let deleteMemoryUseCase: DeleteMemoryUseCase
+    let memoryPreferencesUseCase: MemoryPreferencesUseCase
     let polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase
     let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     let autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase
@@ -223,6 +230,10 @@ extension AIAssembly {
             snapshotStore: sessionSnapshotStore,
             logger: logger
         )
+        let memoryRepository = CoreDataMemoryRepository(
+            coreDataStack: coreDataStack,
+            sessionSnapshotStore: sessionSnapshotStore
+        )
         let knowledgeEmbeddingClient = OpenAICompatibleEmbeddingClient()
         let aiRuntimeStore = AIRuntimeStore()
         let aiRuntimeConfigStore = AIRuntimeConfigStore()
@@ -249,11 +260,18 @@ extension AIAssembly {
         )
         return AIAssemblyProduct(
             aiSettingsRepository: aiSettingsRepository,
+            memoryRepository: memoryRepository,
             knowledgeEmbeddingClient: knowledgeEmbeddingClient,
             aiRuntimeStore: aiRuntimeStore,
             aiConfigCenter: aiConfigCenter,
             aiRuntimeService: aiRuntimeService,
             localModelService: localModelService,
+            loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase(repository: memoryRepository),
+            saveMemoryUseCase: SaveMemoryUseCase(repository: memoryRepository),
+            retrieveMemoryUseCase: RetrieveMemoryUseCase(repository: memoryRepository),
+            updateMemoryUseCase: UpdateMemoryUseCase(repository: memoryRepository),
+            deleteMemoryUseCase: DeleteMemoryUseCase(repository: memoryRepository),
+            memoryPreferencesUseCase: MemoryPreferencesUseCase(repository: memoryRepository),
             polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase(runtime: aiRuntimeService),
             translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase(runtime: aiRuntimeService),
             autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase(runtime: aiRuntimeService)
@@ -483,6 +501,10 @@ extension ChatAssembly {
             aiConfigCenter: ai.aiConfigCenter,
             runtimeService: ai.aiRuntimeService,
             taskService: infrastructure.taskService,
+            saveMemoryUseCase: ai.saveMemoryUseCase,
+            retrieveMemoryUseCase: ai.retrieveMemoryUseCase,
+            updateMemoryUseCase: ai.updateMemoryUseCase,
+            memoryPreferencesUseCase: ai.memoryPreferencesUseCase,
             searchKnowledgeUseCase: knowledge.searchKnowledgeUseCase,
             createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
             typedMedicalDocumentExtractor: medical.typedMedicalDocumentExtractor,
@@ -531,6 +553,7 @@ extension ChatAssembly {
             fileTransferService: infrastructure.fileTransferService,
             ocrOrchestrator: medical.ocrOrchestrator,
             aiConfigCenter: ai.aiConfigCenter,
+            retrieveMemoryUseCase: ai.retrieveMemoryUseCase,
             logger: logger
         )
         return ChatAssemblyProduct(

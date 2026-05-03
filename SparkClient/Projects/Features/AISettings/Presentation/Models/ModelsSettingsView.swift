@@ -161,6 +161,7 @@ struct ModelsSettingsView: View {
                     editingAgent: editingAgent,
                     smallTasks: viewModel.effectiveSmallTasks,
                     promptTooling: viewModel.promptTooling,
+                    promptTemplates: viewModel.snapshot.promptRepo,
                     onCreate: { displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
                         Task {
                             await viewModel.createLocalAgentAndPersist(

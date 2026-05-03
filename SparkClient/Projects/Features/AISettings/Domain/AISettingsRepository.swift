@@ -11,6 +11,8 @@ protocol AISettingsRepository: Sendable {
     func saveModel(_ model: AllModels) async throws
     /// 单条更新厂商配置（按 `id` upsert）。
     func saveProvider(_ provider: APIKeys) async throws
+    /// 更新当前账号的提示词库（按列表顺序写入 `position`）。
+    func savePromptRepo(_ promptRepo: [PromptRepo], ownerAccountID: Int64?) async throws
 }
 
 extension AISettingsRepository {

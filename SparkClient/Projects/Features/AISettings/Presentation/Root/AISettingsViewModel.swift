@@ -14,6 +14,14 @@ struct AISettingsPromptTooling {
     )
 }
 
+struct AISettingsMemoryTooling {
+    let loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase
+    let saveMemoryUseCase: SaveMemoryUseCase
+    let updateMemoryUseCase: UpdateMemoryUseCase
+    let deleteMemoryUseCase: DeleteMemoryUseCase
+    let memoryPreferencesUseCase: MemoryPreferencesUseCase
+}
+
 /// AI 设置页面的核心视图模型
 /// 负责管理AI配置、模型、厂商密钥的加载、编辑、保存与状态同步
 /// 所有UI操作均在主线程执行
@@ -48,6 +56,8 @@ final class AISettingsViewModel: ObservableObject {
     private let aiConfigCenter: AIConfigCenter?
     /// 提示词工具
     let promptTooling: AISettingsPromptTooling
+    /// 记忆档案工具
+    private let memoryTooling: AISettingsMemoryTooling?
     /// 本地模型服务
     private let localModelService: LocalModelService
     /// 厂商模型目录服务
@@ -60,6 +70,7 @@ final class AISettingsViewModel: ObservableObject {
     // MARK: - 私有属性
     /// 最后一次持久化的快照（用于对比是否有修改）
     private var lastPersistedSnapshot: AISettingsSnapshot = .default
+    private var cachedMemoryArchiveViewModel: MemoryArchiveSettingsViewModel?
     /// 订阅者集合
     private var cancellables: Set<AnyCancellable> = []
 
@@ -67,6 +78,29 @@ final class AISettingsViewModel: ObservableObject {
     /// 创建场景模型偏好设置视图模型
     func makeScenarioModelPreferencesViewModel() -> ScenarioModelPreferencesViewModel {
         ScenarioModelPreferencesViewModel(aiConfigCenter: aiConfigCenter)
+    }
+
+    func makeMemoryArchiveSettingsViewModel() -> MemoryArchiveSettingsViewModel {
+        if let cachedMemoryArchiveViewModel {
+            return cachedMemoryArchiveViewModel
+        }
+        let fallbackRepository = InMemoryMemoryRepository()
+        let tooling = memoryTooling ?? AISettingsMemoryTooling(
+            loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase(repository: fallbackRepository),
+            saveMemoryUseCase: SaveMemoryUseCase(repository: fallbackRepository),
+            updateMemoryUseCase: UpdateMemoryUseCase(repository: fallbackRepository),
+            deleteMemoryUseCase: DeleteMemoryUseCase(repository: fallbackRepository),
+            memoryPreferencesUseCase: MemoryPreferencesUseCase(repository: fallbackRepository)
+        )
+        let created = MemoryArchiveSettingsViewModel(
+            loadUseCase: tooling.loadMemoryArchiveUseCase,
+            saveUseCase: tooling.saveMemoryUseCase,
+            updateUseCase: tooling.updateMemoryUseCase,
+            deleteUseCase: tooling.deleteMemoryUseCase,
+            preferencesUseCase: tooling.memoryPreferencesUseCase
+        )
+        cachedMemoryArchiveViewModel = created
+        return created
     }
 
     // MARK: - 初始化
@@ -80,7 +114,8 @@ final class AISettingsViewModel: ObservableObject {
         ownerAccountIDForLoad: Int64? = nil,
         aiConfigAPI: SparkAIConfigAPI? = nil,
         aiConfigCenter: AIConfigCenter? = nil,
-        promptTooling: AISettingsPromptTooling = .unavailable
+        promptTooling: AISettingsPromptTooling = .unavailable,
+        memoryTooling: AISettingsMemoryTooling? = nil
     ) {
         self.loadUseCase = loadUseCase
         self.saveUseCase = saveUseCase
@@ -92,6 +127,7 @@ final class AISettingsViewModel: ObservableObject {
         self.aiConfigAPI = aiConfigAPI
         self.aiConfigCenter = aiConfigCenter
         self.promptTooling = promptTooling
+        self.memoryTooling = memoryTooling
         // 绑定快照变化监听
         bindSnapshotChanges()
     }
@@ -130,6 +166,7 @@ final class AISettingsViewModel: ObservableObject {
         defer { isSaving = false }
 
         do {
+            snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
             // 执行持久化保存
             try await performPersistToRepository()
             // 更新最后保存的快照
@@ -425,6 +462,13 @@ final class AISettingsViewModel: ObservableObject {
     func saveProviderFromEditorAndPersist(_ provider: APIKeys) async -> Bool {
         _ = providerCoordinator.saveProviderFromEditor(provider, in: &snapshot)
         return await persistSnapshotNowReturningBool()
+    }
+
+    // MARK: - 提示词库单独持久化
+    /// 设置页提示词库新增、删除、排序、编辑后立即同步数据库与运行时缓存。
+    @discardableResult
+    func persistPromptRepoNow() async -> Bool {
+        await persistPromptRepoNowReturningBool()
     }
 
     // MARK: - 模型单条持久化
@@ -776,6 +820,7 @@ final class AISettingsViewModel: ObservableObject {
         defer { isSaving = false }
         
         do {
+            snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
             try await performPersistToRepository()
             lastPersistedSnapshot = snapshot
             hasUnsavedChanges = false
@@ -825,6 +870,24 @@ final class AISettingsViewModel: ObservableObject {
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             await refreshEffectiveSmallTasks()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func persistPromptRepoNowReturningBool() async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            try await saveUseCase.execute(promptRepo: snapshot.promptRepo, ownerAccountID: ownerAccountIDForLoad)
+            lastPersistedSnapshot.promptRepo = snapshot.promptRepo
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             return true
         } catch {
             errorMessage = error.localizedDescription

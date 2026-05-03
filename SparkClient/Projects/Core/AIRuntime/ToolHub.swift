@@ -9,6 +9,10 @@ final class ToolHub: @unchecked Sendable {
     private let aiConfigCenter: AIConfigCenter
     private let runtimeService: any AIRuntimeServing
     private let taskService: TaskService
+    private let saveMemoryUseCase: SaveMemoryUseCase
+    private let retrieveMemoryUseCase: RetrieveMemoryUseCase
+    private let updateMemoryUseCase: UpdateMemoryUseCase
+    private let memoryPreferencesUseCase: MemoryPreferencesUseCase
     /// 知识库检索/创建：经用例访问 `CoreDataKnowledgeRepository`，避免在此直接操作持久化。
     private let searchKnowledgeUseCase: SearchKnowledgeUseCase
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
@@ -19,6 +23,7 @@ final class ToolHub: @unchecked Sendable {
     private let healthTool: SparkHealthTool
     private let toolInteractionCoordinator: ToolInteractionCoordinator?
     private let appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy
+    private let webSearchGateway: WebSearchGateway
     private let logger: Logger
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
@@ -32,6 +37,10 @@ final class ToolHub: @unchecked Sendable {
         aiConfigCenter: AIConfigCenter,
         runtimeService: any AIRuntimeServing,
         taskService: TaskService,
+        saveMemoryUseCase: SaveMemoryUseCase,
+        retrieveMemoryUseCase: RetrieveMemoryUseCase,
+        updateMemoryUseCase: UpdateMemoryUseCase,
+        memoryPreferencesUseCase: MemoryPreferencesUseCase,
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor,
@@ -39,6 +48,7 @@ final class ToolHub: @unchecked Sendable {
         healthTool: SparkHealthTool = .shared,
         toolInteractionCoordinator: ToolInteractionCoordinator? = nil,
         appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy = AppleHealthToolConsentPolicy(),
+        webSearchGateway: WebSearchGateway = WebSearchGateway(),
         logger: Logger = ConsoleLogger()
     ) {
         self.chatRepository = chatRepository
@@ -48,6 +58,10 @@ final class ToolHub: @unchecked Sendable {
         self.aiConfigCenter = aiConfigCenter
         self.runtimeService = runtimeService
         self.taskService = taskService
+        self.saveMemoryUseCase = saveMemoryUseCase
+        self.retrieveMemoryUseCase = retrieveMemoryUseCase
+        self.updateMemoryUseCase = updateMemoryUseCase
+        self.memoryPreferencesUseCase = memoryPreferencesUseCase
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.typedMedicalDocumentExtractor = typedMedicalDocumentExtractor
@@ -55,6 +69,7 @@ final class ToolHub: @unchecked Sendable {
         self.healthTool = healthTool
         self.toolInteractionCoordinator = toolInteractionCoordinator
         self.appleHealthToolConsentPolicy = appleHealthToolConsentPolicy
+        self.webSearchGateway = webSearchGateway
         self.logger = logger
     }
 
@@ -1126,7 +1141,7 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    /// 将内容追加到 `memoryArchive` 并保存。
+    /// 将内容写入独立记忆仓储。
     private func runSaveMemory(invocation: ToolInvocation) async -> ToolExecutionResult {
         let content = (invocation.arguments["content"] ?? invocation.arguments["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else {
@@ -1138,18 +1153,21 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        var snapshot = await aiConfigCenter.currentSnapshot()
-        let title = String(content.prefix(20))
-        snapshot.memoryArchive.append(
-            MemoryArchive(title: title.isEmpty ? "新记忆" : title, content: content, pinned: false, timestamp: Date())
-        )
-
-        do {
-            try await aiSettingsRepository.save(snapshot: snapshot)
-            await aiConfigCenter.rebuildRuntimeCache(from: snapshot)
+        let preferences = await memoryPreferencesUseCase.load()
+        guard preferences.isEnabled, preferences.allowToolWrite else {
             return ToolExecutionResult(
                 toolName: SparkToolName.saveMemory,
-                outputText: "记忆已保存：\(title)",
+                outputText: "记忆功能当前未允许写入。",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        do {
+            let record = try await saveMemoryUseCase.execute(content: content)
+            return ToolExecutionResult(
+                toolName: SparkToolName.saveMemory,
+                outputText: "记忆已保存：\(record.title)",
                 sensitive: true,
                 shouldBypassModel: true
             )
@@ -1163,35 +1181,36 @@ final class ToolHub: @unchecked Sendable {
         }
     }
 
-    /// 无 query 时取最近几条记忆；有 query 时在 `memoryArchive` 中筛选。
+    /// 无 query 时取最近几条记忆；有 query 时用记忆检索引擎召回。
     private func runRetrieveMemory(invocation: ToolInvocation) async -> ToolExecutionResult {
         let query = (invocation.arguments["query"] ?? invocation.arguments["keyword"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let snapshot = await aiConfigCenter.currentSnapshot()
-        let hits: [MemoryArchive]
-        if query.isEmpty {
-            hits = Array(snapshot.memoryArchive.suffix(5))
-        } else {
-            hits = snapshot.memoryArchive.filter {
-                $0.title.localizedCaseInsensitiveContains(query) || $0.content.localizedCaseInsensitiveContains(query)
+        do {
+            let hits = try await retrieveMemoryUseCase.execute(keyword: query)
+            if hits.isEmpty {
+                return ToolExecutionResult(
+                    toolName: SparkToolName.retrieveMemory,
+                    outputText: "未检索到相关记忆。",
+                    sensitive: false,
+                    shouldBypassModel: true
+                )
             }
-        }
-
-        if hits.isEmpty {
+            let lines = hits.map { hit in
+                "- \(hit.record.title)：\(hit.record.content)"
+            }
             return ToolExecutionResult(
                 toolName: SparkToolName.retrieveMemory,
-                outputText: "未检索到相关记忆。",
+                outputText: lines.joined(separator: "\n"),
+                sensitive: true,
+                shouldBypassModel: true
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.retrieveMemory,
+                outputText: "记忆检索失败：\(error.localizedDescription)",
                 sensitive: false,
                 shouldBypassModel: true
             )
         }
-
-        let lines = hits.suffix(5).map { "- \($0.title)：\(String($0.content.prefix(100)))" }
-        return ToolExecutionResult(
-            toolName: SparkToolName.retrieveMemory,
-            outputText: lines.joined(separator: "\n"),
-            sensitive: true,
-            shouldBypassModel: true
-        )
     }
 
     /// 按原文或标题匹配一条记忆并替换正文、更新时间。
@@ -1208,25 +1227,21 @@ final class ToolHub: @unchecked Sendable {
             )
         }
 
-        var snapshot = await aiConfigCenter.currentSnapshot()
-        guard let index = snapshot.memoryArchive.firstIndex(where: { $0.content == original || $0.title == original }) else {
-            return ToolExecutionResult(
-                toolName: SparkToolName.updateMemory,
-                outputText: "记忆更新失败：未找到原始内容。",
-                sensitive: false,
-                shouldBypassModel: true
-            )
-        }
-
-        snapshot.memoryArchive[index].content = updated
-        snapshot.memoryArchive[index].timestamp = Date()
-
         do {
-            try await aiSettingsRepository.save(snapshot: snapshot)
-            await aiConfigCenter.rebuildRuntimeCache(from: snapshot)
+            guard let record = try await updateMemoryUseCase.execute(
+                originalContentOrTitle: original,
+                updatedContent: updated
+            ) else {
+                return ToolExecutionResult(
+                    toolName: SparkToolName.updateMemory,
+                    outputText: "记忆更新失败：未找到原始内容。",
+                    sensitive: false,
+                    shouldBypassModel: true
+                )
+            }
             return ToolExecutionResult(
                 toolName: SparkToolName.updateMemory,
-                outputText: "记忆已更新：\(snapshot.memoryArchive[index].title)",
+                outputText: "记忆已更新：\(record.title)",
                 sensitive: true,
                 shouldBypassModel: true
             )
@@ -2480,8 +2495,16 @@ final class ToolHub: @unchecked Sendable {
         return out
     }
 
-    /// 联网/地图/日历等外部工具：根据 `toolKeys` 解析 endpoint，当前仅返回路由占位说明。
+    /// 联网/网页读取优先走本地搜索网关；地图/天气/日历等外部工具暂按 `toolKeys` 返回路由说明。
     private func runExternalConnectorTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        if invocation.name == SparkToolName.searchOnline.rawValue || invocation.name == SparkToolName.searchArxivPapers.rawValue {
+            return await runWebSearchTool(invocation: invocation, context: context)
+        }
+
+        if invocation.name == SparkToolName.readWebPage.rawValue || invocation.name == SparkToolName.extractRemoteFileContent.rawValue {
+            return await runReadWebPageTool(invocation: invocation, context: context)
+        }
+
         let snapshot = await aiConfigCenter.currentSnapshot()
         let endpoint = resolveEndpoint(for: invocation.name, toolKeys: snapshot.toolKeys)
         let payloadSummary = invocation.arguments
@@ -2510,6 +2533,126 @@ final class ToolHub: @unchecked Sendable {
             ),
             richBlocks: rich
         )
+    }
+
+    private func runWebSearchTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let query = (invocation.arguments["query"] ?? invocation.arguments["keyword"] ?? invocation.arguments["content"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else {
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: SearchRuntimeError.emptyQuery.localizedDescription,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        do {
+            let config = try await aiConfigCenter.effectiveSearchConfig()
+            let primary = try await webSearchGateway.search(query: query, config: config)
+            let combined = try await mergedBilingualSearchIfNeeded(primary: primary, query: query, config: config)
+            let combinedMarkdown = combined.markdown
+            let rich = [
+                ChatMessageBlock(
+                    anchor: normalizedToolCallID(from: context).map(ChatBlockAnchor.toolCall),
+                    kind: .html,
+                    text: combinedMarkdown,
+                    toolCallID: normalizedToolCallID(from: context)
+                )
+            ]
+            return returnWithScheduledRichMerge(
+                context: context,
+                result: ToolExecutionResult(
+                    toolName: invocation.name,
+                    outputText: combinedMarkdown,
+                    sensitive: false,
+                    shouldBypassModel: false
+                ),
+                richBlocks: rich
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: error.localizedDescription,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+    }
+
+    private func mergedBilingualSearchIfNeeded(
+        primary: WebSearchResponse,
+        query: String,
+        config: SearchRuntimeConfig
+    ) async throws -> WebSearchResponse {
+        guard config.bilingualSearch else { return primary }
+        let secondaryQuery = bilingualSearchVariant(for: query)
+        guard secondaryQuery != query else { return primary }
+        let secondary = try await webSearchGateway.search(query: secondaryQuery, config: config)
+        var seen = Set<String>()
+        let mergedItems = (primary.items + secondary.items).filter { item in
+            let key = item.url.isEmpty ? item.title : item.url
+            guard seen.contains(key) == false else { return false }
+            seen.insert(key)
+            return true
+        }
+        return WebSearchResponse(
+            providerName: primary.providerName,
+            query: "\(primary.query) / \(secondary.query)",
+            items: Array(mergedItems.prefix(config.searchCount)),
+            totalEstimatedMatches: primary.totalEstimatedMatches ?? secondary.totalEstimatedMatches,
+            revision: primary.revision
+        )
+    }
+
+    private func bilingualSearchVariant(for query: String) -> String {
+        let hasCJK = query.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value))
+        }
+        return hasCJK ? "\(query) English sources" : "\(query) 中文资料"
+    }
+
+    private func runReadWebPageTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        let url = (invocation.arguments["url"] ?? invocation.arguments["link"] ?? invocation.arguments["query"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard url.isEmpty == false else {
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: "网页读取失败：url 不能为空。",
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
+
+        do {
+            let text = try await webSearchGateway.readWebPage(urlString: url)
+            let output = "网页读取结果\nURL: \(url)\n\n\(text)"
+            let rich = [
+                ChatMessageBlock(
+                    anchor: normalizedToolCallID(from: context).map(ChatBlockAnchor.toolCall),
+                    kind: .html,
+                    text: output,
+                    toolCallID: normalizedToolCallID(from: context)
+                )
+            ]
+            return returnWithScheduledRichMerge(
+                context: context,
+                result: ToolExecutionResult(
+                    toolName: invocation.name,
+                    outputText: output,
+                    sensitive: false,
+                    shouldBypassModel: false
+                ),
+                richBlocks: rich
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: error.localizedDescription,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
     }
 
     /// 将工具名映射到配置里的 `toolClass`（weather/map/calendar/code/tool），再取可用 `requestURL`。

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 按账号存于 Core Data 的 AI 设置快照（含 `allModels` / `apiKeys`）。
+/// 按账号存于 Core Data 的 AI 设置快照（含 `allModels` / `apiKeys` / `smallTasks` / `promptRepo`）。
 /// 已登录冷启动：`AppBootstrapper.bootstrapIfNeeded(for:)` 以 `UserSession.accountID` 调用 `AIConfigCenter.prewarm` 写入运行时缓存；设置页 `AISettingsViewModel` 应传入同一 `ownerAccountID` 加载目录，避免依赖会话快照解析顺序。
 struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var allModels: [AllModels]
@@ -8,6 +8,8 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var smallTasks: [SmallTask]
     /// 检索与知识相关本地偏好。
     var searchToolPreferences: AISearchToolPreferences
+    /// 本地搜索配置版本；仅用于客户端内缓存失效、审计与工具消费，不参与服务端同步。
+    var searchConfigRevision: SearchRuntimeConfigRevision
     /// 场景级默认模型（`AIScenario.rawValue` -> 模型 `name`）。
     var scenarioDefaultModels: [String: String]
     /// 场景级模型来源选择（`AIScenario.rawValue` -> `AIModelSelectionSource.rawValue`）。
@@ -28,6 +30,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         apiKeys: [APIKeys],
         smallTasks: [SmallTask] = [],
         searchToolPreferences: AISearchToolPreferences = AISettingsDefaults.searchToolPreferences,
+        searchConfigRevision: SearchRuntimeConfigRevision = SearchRuntimeConfigRevision(),
         scenarioDefaultModels: [String: String] = [:],
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
@@ -43,6 +46,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.apiKeys = apiKeys
         self.smallTasks = smallTasks
         self.searchToolPreferences = searchToolPreferences
+        self.searchConfigRevision = searchConfigRevision
         self.scenarioDefaultModels = scenarioDefaultModels
         self.scenarioModelSources = scenarioModelSources
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
@@ -61,6 +65,7 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         apiKeys: [],
         smallTasks: [],
         searchToolPreferences: AISettingsDefaults.searchToolPreferences,
+        searchConfigRevision: SearchRuntimeConfigRevision(),
         scenarioDefaultModels: [:],
         scenarioModelSources: [:],
         trialChatPickerDisabledModelNames: [],
@@ -106,15 +111,58 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     mutating func setScenarioModelSource(_ source: AIModelSelectionSource, for scenario: AIScenario) {
         scenarioModelSources[scenario.rawValue] = source
     }
+
+    mutating func refreshSearchConfigRevision(previous: AISettingsSnapshot?) {
+        normalizeSearchProviderSelection()
+        let hash = SearchRuntimeConfigResolver.normalizedHash(
+            preferences: searchToolPreferences,
+            searchKeys: searchKeys
+        )
+        let previousRevision = previous?.searchConfigRevision ?? searchConfigRevision
+        guard hash != previousRevision.preferencesHash else {
+            searchConfigRevision = previousRevision
+            return
+        }
+
+        let activeID = searchKeys.first(where: { $0.isUsing })?.id
+        searchConfigRevision = SearchRuntimeConfigRevision(
+            schemaVersion: SearchRuntimeConfigRevision.schemaVersion,
+            localRevision: max(1, previousRevision.localRevision + 1),
+            updatedAt: Date(),
+            activeSearchKeyID: activeID,
+            preferencesHash: hash
+        )
+    }
+
+    mutating func normalizeSearchProviderSelection() {
+        let activeIDs = searchKeys
+            .enumerated()
+            .filter { $0.element.isUsing }
+            .map(\.offset)
+        guard activeIDs.count > 1 else { return }
+        let keep = activeIDs
+            .max {
+                let lhs = searchKeys[$0]
+                let rhs = searchKeys[$1]
+                if lhs.priority == rhs.priority {
+                    return lhs.timestamp < rhs.timestamp
+                }
+                return lhs.priority < rhs.priority
+            }
+        for index in searchKeys.indices where index != keep {
+            searchKeys[index].isUsing = false
+        }
+    }
 }
 
-// MARK: - 偏好持久化载荷（与快照非目录字段一致）
+// MARK: - 偏好持久化载荷（与快照轻量偏好字段一致）
 
 extension AISettingsSnapshot {
-    /// 与 `AISettingsSnapshot` 中除 `allModels` / `apiKeys` 外的字段一一对应，供账号级 UserDefaults 序列化；
+    /// 供账号级 UserDefaults 序列化；模型目录、小任务、提示词库等可维护数据以 Core Data 为准。
     /// 仓储层只对该类型做 `JSONEncoder` / `JSONDecoder`，避免重复结构体与手写映射。
     struct PreferencesPayload: Codable, Equatable, Sendable {
         var searchToolPreferences: AISearchToolPreferences
+        var searchConfigRevision: SearchRuntimeConfigRevision
         var scenarioDefaultModels: [String: String]
         var scenarioModelSources: [String: AIModelSelectionSource]
         var trialChatPickerDisabledModelNames: [String]
@@ -122,12 +170,12 @@ extension AISettingsSnapshot {
         var trialModelPolicy: [AITrialModelPolicyItem]
         var searchKeys: [SearchKeys]
         var toolKeys: [ToolKeys]
-        var promptRepo: [PromptRepo]
         var memoryArchive: [MemoryArchive]
         var translationDic: [TranslationDic]
 
         static let `default` = PreferencesPayload(
             searchToolPreferences: AISettingsDefaults.searchToolPreferences,
+            searchConfigRevision: SearchRuntimeConfigRevision(),
             scenarioDefaultModels: [:],
             scenarioModelSources: [:],
             trialChatPickerDisabledModelNames: [],
@@ -135,13 +183,13 @@ extension AISettingsSnapshot {
             trialModelPolicy: [],
             searchKeys: AISettingsDefaults.searchKeys,
             toolKeys: AISettingsDefaults.toolKeys,
-            promptRepo: AISettingsDefaults.promptRepo,
             memoryArchive: AISettingsDefaults.memoryArchive,
             translationDic: AISettingsDefaults.translationDic
         )
 
         init(
             searchToolPreferences: AISearchToolPreferences,
+            searchConfigRevision: SearchRuntimeConfigRevision,
             scenarioDefaultModels: [String: String],
             scenarioModelSources: [String: AIModelSelectionSource],
             trialChatPickerDisabledModelNames: [String],
@@ -149,11 +197,11 @@ extension AISettingsSnapshot {
             trialModelPolicy: [AITrialModelPolicyItem],
             searchKeys: [SearchKeys],
             toolKeys: [ToolKeys],
-            promptRepo: [PromptRepo],
             memoryArchive: [MemoryArchive],
             translationDic: [TranslationDic]
         ) {
             self.searchToolPreferences = searchToolPreferences
+            self.searchConfigRevision = searchConfigRevision
             self.scenarioDefaultModels = scenarioDefaultModels
             self.scenarioModelSources = scenarioModelSources
             self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
@@ -161,13 +209,13 @@ extension AISettingsSnapshot {
             self.trialModelPolicy = trialModelPolicy
             self.searchKeys = searchKeys
             self.toolKeys = toolKeys
-            self.promptRepo = promptRepo
             self.memoryArchive = memoryArchive
             self.translationDic = translationDic
         }
 
         enum CodingKeys: String, CodingKey {
             case searchToolPreferences
+            case searchConfigRevision
             case userInfo
             case scenarioDefaultModels
             case scenarioModelSources
@@ -176,7 +224,6 @@ extension AISettingsSnapshot {
             case trialModelPolicy
             case searchKeys
             case toolKeys
-            case promptRepo
             case memoryArchive
             case translationDic
         }
@@ -209,6 +256,8 @@ extension AISettingsSnapshot {
             } else {
                 searchToolPreferences = AISettingsDefaults.searchToolPreferences
             }
+            searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .searchConfigRevision)
+                ?? SearchRuntimeConfigRevision()
 
             scenarioDefaultModels = try container.decodeIfPresent([String: String].self, forKey: .scenarioDefaultModels) ?? [:]
             scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .scenarioModelSources) ?? [:]
@@ -217,7 +266,6 @@ extension AISettingsSnapshot {
             trialModelPolicy = try container.decodeIfPresent([AITrialModelPolicyItem].self, forKey: .trialModelPolicy) ?? []
             searchKeys = try container.decodeIfPresent([SearchKeys].self, forKey: .searchKeys) ?? AISettingsDefaults.searchKeys
             toolKeys = try container.decodeIfPresent([ToolKeys].self, forKey: .toolKeys) ?? AISettingsDefaults.toolKeys
-            promptRepo = try container.decodeIfPresent([PromptRepo].self, forKey: .promptRepo) ?? AISettingsDefaults.promptRepo
             memoryArchive = try container.decodeIfPresent([MemoryArchive].self, forKey: .memoryArchive) ?? AISettingsDefaults.memoryArchive
             translationDic = try container.decodeIfPresent([TranslationDic].self, forKey: .translationDic) ?? AISettingsDefaults.translationDic
         }
@@ -225,6 +273,7 @@ extension AISettingsSnapshot {
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(searchToolPreferences, forKey: .searchToolPreferences)
+            try container.encode(searchConfigRevision, forKey: .searchConfigRevision)
             try container.encode(scenarioDefaultModels, forKey: .scenarioDefaultModels)
             try container.encode(scenarioModelSources, forKey: .scenarioModelSources)
             try container.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
@@ -232,16 +281,16 @@ extension AISettingsSnapshot {
             try container.encode(trialModelPolicy, forKey: .trialModelPolicy)
             try container.encode(searchKeys, forKey: .searchKeys)
             try container.encode(toolKeys, forKey: .toolKeys)
-            try container.encode(promptRepo, forKey: .promptRepo)
             try container.encode(memoryArchive, forKey: .memoryArchive)
             try container.encode(translationDic, forKey: .translationDic)
         }
     }
 
-    /// 从当前快照提取偏好载荷（字段与 `PreferencesPayload` 一致）。
+    /// 从当前快照提取轻量偏好载荷。`promptRepo` 完全由 Core Data 持久化，不进入 UserDefaults。
     var preferencesPayload: PreferencesPayload {
         PreferencesPayload(
             searchToolPreferences: searchToolPreferences,
+            searchConfigRevision: searchConfigRevision,
             scenarioDefaultModels: scenarioDefaultModels,
             scenarioModelSources: scenarioModelSources,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
@@ -249,19 +298,25 @@ extension AISettingsSnapshot {
             trialModelPolicy: trialModelPolicy,
             searchKeys: searchKeys,
             toolKeys: toolKeys,
-            promptRepo: promptRepo,
             memoryArchive: memoryArchive,
             translationDic: translationDic
         )
     }
 
     /// 用 Core Data 中的目录数据与已解码的偏好载荷组装完整快照。
-    init(allModels: [AllModels], apiKeys: [APIKeys], smallTasks: [SmallTask] = [], preferences: PreferencesPayload) {
+    init(
+        allModels: [AllModels],
+        apiKeys: [APIKeys],
+        smallTasks: [SmallTask] = [],
+        promptRepo: [PromptRepo],
+        preferences: PreferencesPayload
+    ) {
         self.init(
             allModels: allModels,
             apiKeys: apiKeys,
             smallTasks: smallTasks,
             searchToolPreferences: preferences.searchToolPreferences,
+            searchConfigRevision: preferences.searchConfigRevision,
             scenarioDefaultModels: preferences.scenarioDefaultModels,
             scenarioModelSources: preferences.scenarioModelSources,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
@@ -269,7 +324,7 @@ extension AISettingsSnapshot {
             trialModelPolicy: preferences.trialModelPolicy,
             searchKeys: preferences.searchKeys,
             toolKeys: preferences.toolKeys,
-            promptRepo: preferences.promptRepo,
+            promptRepo: promptRepo,
             memoryArchive: preferences.memoryArchive,
             translationDic: preferences.translationDic
         )

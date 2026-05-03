@@ -6,6 +6,7 @@ struct ModelsSettingsAgentSheet: View {
     var editingAgent: AllModels?
     var smallTasks: [SmallTask] = []
     var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTemplates: [PromptRepo] = []
     let onCreate: (String, String, String, String, [String], [String], [String]) -> Void
     let onUpdate: ((UUID, String, String, String, String, [String], [String], [String]) -> Void)?
 
@@ -54,6 +55,7 @@ struct ModelsSettingsAgentSheet: View {
             Section(L10n.text("ai_settings.models.agent.section.system_prompt")) {
                 PromptInputEditorView(
                     text: $systemPrompt,
+                    promptTemplates: promptTemplates,
                     isAutoFillInProgress: autoFillInProgress,
                     isAutoFilled: autoFilled,
                     isAutoFillDisabled: displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,

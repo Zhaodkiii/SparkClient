@@ -72,7 +72,12 @@ struct AISettingsView: View {
 
             Section(L10n.text("ai_settings.section.personalization")) {
                 NavigationLink {
-                    PromptRepoSettingsView(promptRepo: $viewModel.snapshot.promptRepo)
+                    PromptRepoSettingsView(
+                        promptRepo: $viewModel.snapshot.promptRepo,
+                        onPersist: {
+                            await viewModel.persistPromptRepoNow()
+                        }
+                    )
                         .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
@@ -83,7 +88,7 @@ struct AISettingsView: View {
                 }
 
                 NavigationLink {
-                    MemoryArchiveSettingsView(memoryArchive: $viewModel.snapshot.memoryArchive)
+                    MemoryArchiveSettingsView(viewModel: viewModel.makeMemoryArchiveSettingsViewModel())
                         .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(

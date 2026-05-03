@@ -92,6 +92,8 @@ final class AppContainer {
     let authRepository: any AuthRepository
     /// 本地 AI 偏好（模型、温度等）；与知识库仓库解耦。
     let aiSettingsRepository: any AISettingsRepository
+    /// 账号级长期记忆仓储。
+    let memoryRepository: any MemoryRepository
     /// 本地知识库持久化（Core Data：`KnowledgeDocumentEntity` / `KnowledgeChunkEntity`）。
     let knowledgeRepository: any KnowledgeRepository
     /// 本机 GGUF 等小模型加载与推理入口（与云端网关并列供 `AIRuntimeService` 选择）。
@@ -139,6 +141,13 @@ final class AppContainer {
     let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     /// 使用文本优化场景自动生成智能体 system prompt。
     let autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase
+    /// 记忆档案读写与召回。
+    let loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase
+    let saveMemoryUseCase: SaveMemoryUseCase
+    let retrieveMemoryUseCase: RetrieveMemoryUseCase
+    let updateMemoryUseCase: UpdateMemoryUseCase
+    let deleteMemoryUseCase: DeleteMemoryUseCase
+    let memoryPreferencesUseCase: MemoryPreferencesUseCase
     /// 对知识库内图片附件做 OCR 回填正文。
     let ocrKnowledgeImageUseCase: OCRKnowledgeImageUseCase
     /// 从本地文件导入为知识文档。
@@ -383,11 +392,18 @@ final class AppContainer {
         self.signOutUseCase = auth.signOutUseCase
 
         self.aiSettingsRepository = ai.aiSettingsRepository
+        self.memoryRepository = ai.memoryRepository
         self.knowledgeEmbeddingClient = ai.knowledgeEmbeddingClient
         self.aiRuntimeStore = ai.aiRuntimeStore
         self.aiConfigCenter = ai.aiConfigCenter
         self.aiRuntimeService = ai.aiRuntimeService
         self.localModelService = ai.localModelService
+        self.loadMemoryArchiveUseCase = ai.loadMemoryArchiveUseCase
+        self.saveMemoryUseCase = ai.saveMemoryUseCase
+        self.retrieveMemoryUseCase = ai.retrieveMemoryUseCase
+        self.updateMemoryUseCase = ai.updateMemoryUseCase
+        self.deleteMemoryUseCase = ai.deleteMemoryUseCase
+        self.memoryPreferencesUseCase = ai.memoryPreferencesUseCase
         self.polishKnowledgeTextUseCase = ai.polishKnowledgeTextUseCase
         self.translateKnowledgeTextUseCase = ai.translateKnowledgeTextUseCase
         self.autoFillAgentPromptUseCase = ai.autoFillAgentPromptUseCase
@@ -653,7 +669,7 @@ final class AppContainer {
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
-            chatV2ViewModel: makeChatV2ViewModel(ownerAccountID: ownerAccountID),
+//            chatV2ViewModel: makeChatV2ViewModel(ownerAccountID: ownerAccountID),
             settingsViewModel: makeSettingsViewModel(),
             aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
             versionUpdateCoordinator: versionUpdateCoordinator,
@@ -710,6 +726,13 @@ final class AppContainer {
                 ocrImage: { image in
                     try await ocrKnowledgeImageUseCase.execute(image: image)
                 }
+            ),
+            memoryTooling: AISettingsMemoryTooling(
+                loadMemoryArchiveUseCase: loadMemoryArchiveUseCase,
+                saveMemoryUseCase: saveMemoryUseCase,
+                updateMemoryUseCase: updateMemoryUseCase,
+                deleteMemoryUseCase: deleteMemoryUseCase,
+                memoryPreferencesUseCase: memoryPreferencesUseCase
             )
         )
         aiSettingsViewModelCache.store(created, ownerAccountID: ownerAccountID)

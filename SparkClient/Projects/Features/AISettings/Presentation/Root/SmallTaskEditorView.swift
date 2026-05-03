@@ -4,6 +4,7 @@ struct SmallTaskEditorView: View {
     let task: SmallTask?
     let nextID: Int
     var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTemplates: [PromptRepo] = []
     let onSave: (SmallTask) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -20,11 +21,13 @@ struct SmallTaskEditorView: View {
         task: SmallTask?,
         nextID: Int,
         promptTooling: AISettingsPromptTooling = .unavailable,
+        promptTemplates: [PromptRepo] = [],
         onSave: @escaping (SmallTask) -> Void
     ) {
         self.task = task
         self.nextID = nextID
         self.promptTooling = promptTooling
+        self.promptTemplates = promptTemplates
         self.onSave = onSave
 
         _name = State(initialValue: task?.name ?? "")
@@ -64,6 +67,7 @@ struct SmallTaskEditorView: View {
             Section(L10n.text("ai_settings.small_tasks.section.prompt", fallback: "Prompt", comment: "Small task prompt section")) {
                 PromptInputEditorView(
                     text: $prompt,
+                    promptTemplates: promptTemplates,
                     onVoiceInput: { showVoiceInput = true },
                     onTextInput: { showTextInputDrawer = true }
                 )

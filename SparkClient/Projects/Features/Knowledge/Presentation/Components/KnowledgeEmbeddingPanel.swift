@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// 预览模式底栏：对齐 Health `KnowledgeWritingView` 向量化区 — 主按钮 + 横向嵌入模型（数据来自服务端合并快照 + 已配置密钥）。
+/// 预览模式底栏：主按钮 + 横向嵌入模型（数据来自运行时合并后的 embedding 场景 bundle）。
 struct KnowledgeEmbeddingPanel: View {
-    let models: [AllModels]
+    let models: [AIScenarioRemoteModelRow]
     @Binding var selectedModelName: String
     let isIndexed: Bool
     let lastModelName: String?
@@ -76,13 +76,13 @@ struct KnowledgeEmbeddingPanel: View {
         }
     }
 
-    private func embeddingModelChip(model: AllModels, isSelected: Bool) -> some View {
+    private func embeddingModelChip(model: AIScenarioRemoteModelRow, isSelected: Bool) -> some View {
         HStack(spacing: 8) {
             if isSelected {
                 Image(systemName: "cpu")
                     .foregroundStyle(Color.accentColor)
             }
-            Text(model.displayName)
+            Text(model.displayTitle)
                 .font(.caption)
                 .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
         }

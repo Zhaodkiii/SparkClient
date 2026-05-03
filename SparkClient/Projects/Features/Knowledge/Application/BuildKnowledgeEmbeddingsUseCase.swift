@@ -7,8 +7,8 @@ struct BuildKnowledgeEmbeddingsUseCase: Sendable {
     let embeddingClient: any KnowledgeEmbeddingClient
 
     func execute(documentID: UUID, modelName: String) async throws -> KnowledgeDocument {
-        let snapshot = await aiConfigCenter.currentSnapshot()
-        let resolved = try KnowledgeEmbeddingResolution.resolve(modelName: modelName, snapshot: snapshot)
+        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        let resolved = try KnowledgeEmbeddingResolution.resolve(modelName: modelName, in: bundles)
 
         guard let doc = try await repository.loadDocument(id: documentID) else {
             throw BuildError.documentNotFound

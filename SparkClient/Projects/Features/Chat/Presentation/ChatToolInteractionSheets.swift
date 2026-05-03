@@ -498,21 +498,21 @@ struct SystemMessageSettingsSheet: View {
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
             Form {
-                Section("当前模型") {
+                Section(L10n.text("chat.system_message.section.current_model")) {
                     Label(prompt.modelDisplayName, systemImage: prompt.isAgentModel ? "person.crop.circle" : "cpu")
                     if prompt.isAgentModel {
-                        Text("当前对话使用的是智能体提示词。智能体提示词不可在会话内修改，请进入对应的智能体页面维护。")
+                        Text(L10n.text("chat.system_message.agent_model_hint"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("这里只维护当前会话级别的系统提示词。")
+                        Text(L10n.text("chat.system_message.session_hint"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 if prompt.isAgentModel {
-                    Section("智能体系统提示词") {
+                    Section(L10n.text("chat.system_message.section.agent_prompt")) {
                         Text(agentPromptText)
                             .font(.body)
                             .textSelection(.enabled)
@@ -520,7 +520,7 @@ struct SystemMessageSettingsSheet: View {
                     }
 
                     if prompt.sessionPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-                        Section("当前会话级提示词") {
+                        Section(L10n.text("chat.system_message.section.session_prompt")) {
                             Text(prompt.sessionPrompt)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -528,25 +528,26 @@ struct SystemMessageSettingsSheet: View {
                         }
                     }
                 } else {
-                    Section("选择系统提示词") {
-                        Picker("提示词设置", selection: $useDefaultSystemMessage) {
-                            Text("默认系统消息").tag(true)
-                            Text("自定义系统消息").tag(false)
+                    Section(L10n.text("chat.system_message.section.selection")) {
+                        Picker(L10n.text("chat.system_message.picker.title"), selection: $useDefaultSystemMessage) {
+                            Text(L10n.text("chat.system_message.option.default")).tag(true)
+                            Text(L10n.text("chat.system_message.option.custom")).tag(false)
                         }
                         .pickerStyle(.segmented)
                     }
 
                     if useDefaultSystemMessage {
-                        Section("使用默认提示词") {
+                        Section(L10n.text("chat.system_message.section.default_prompt")) {
                             Text(prompt.defaultPrompt)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                         }
                     } else {
-                        Section("编辑 System 角色消息") {
+                        Section(L10n.text("chat.system_message.section.edit_system_role")) {
                             PromptInputEditorView(
                                 text: $systemMessage,
+                                promptTemplates: prompt.promptTemplates,
                                 onVoiceInput: { showVoiceInput = true },
                                 onTextInput: { showTextInputDrawer = true }
                             )
@@ -554,20 +555,20 @@ struct SystemMessageSettingsSheet: View {
                     }
                 }
 
-                Section("说明") {
-                    Text("System 角色消息用于设定对话上下文、风格、身份与行为边界。当前页面只保存会话级提示词；智能体提示词只展示，不在这里修改。")
+                Section(L10n.text("chat.system_message.section.description")) {
+                    Text(L10n.text("chat.system_message.description"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("系统消息设置")
+            .navigationTitle(L10n.text("chat.system_message.nav_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(prompt.isAgentModel ? L10n.text("common.done") : L10n.text("common.cancel"), action: onClose)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(L10n.text("common.save")) {
                         onSave(useDefaultSystemMessage ? prompt.defaultPrompt : systemMessage)
                     }
                     .disabled(prompt.isAgentModel)
@@ -592,7 +593,7 @@ struct SystemMessageSettingsSheet: View {
 
     private var agentPromptText: String {
         let text = prompt.agentPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return text.isEmpty ? "该智能体未配置提示词。" : text
+        return text.isEmpty ? L10n.text("chat.system_message.agent_prompt_empty") : text
     }
 }
 

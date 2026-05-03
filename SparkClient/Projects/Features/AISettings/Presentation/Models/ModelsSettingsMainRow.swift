@@ -140,6 +140,7 @@ struct ModelsSettingsMainRow: View {
                     editingAgent: model,
                     smallTasks: viewModel.effectiveSmallTasks,
                     promptTooling: viewModel.promptTooling,
+                    promptTemplates: viewModel.snapshot.promptRepo,
                     onCreate: { _, _, _, _, _, _, _ in },
                     onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
                         Task {

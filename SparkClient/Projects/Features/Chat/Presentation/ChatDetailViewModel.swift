@@ -41,6 +41,8 @@ final class ChatDetailViewModel: ObservableObject {
     @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
     /// 对话场景可消费的小任务（本地 + 服务端，以 code 为唯一标识）。
     @Published private(set) var chatSmallTasks: [SmallTask] = []
+    /// 系统提示词编辑器可直接消费的提示词库模板。
+    @Published private(set) var chatPromptTemplates: [PromptRepo] = []
     /// 当前会话输入栏关联模型的推理能力（用于思考开关展示策略）。
     @Published private(set) var reasoningToolbarContext: ChatModelReasoningContext = .unknown
     /// 当前会话在列表中的图片送达方式（用于工具栏菜单展示）。
@@ -277,12 +279,15 @@ final class ChatDetailViewModel: ObservableObject {
         guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
             chatScenarioModels = []
             chatSmallTasks = []
+            chatPromptTemplates = []
             return nil
         }
         
         // 提取聊天场景可用模型列表
         chatScenarioModels = bundles.chat.models
         chatSmallTasks = await aiConfigCenter.effectiveSmallTasks()
+        let snapshot = await aiConfigCenter.currentSnapshot()
+        chatPromptTemplates = snapshot.promptRepo
 
         // 校验并修正当前选中的模型（确保在可选列表内）
         await validateCurrentSelection(for: threadID)

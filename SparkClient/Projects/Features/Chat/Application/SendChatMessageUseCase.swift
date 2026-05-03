@@ -9,6 +9,7 @@ struct SendChatMessageUseCase: Sendable {
     let fileTransferService: FileTransferService
     let ocrOrchestrator: OCROrchestrator
     let aiConfigCenter: AIConfigCenter
+    let retrieveMemoryUseCase: RetrieveMemoryUseCase
     let logger: Logger
 
     init(
@@ -20,6 +21,7 @@ struct SendChatMessageUseCase: Sendable {
         fileTransferService: FileTransferService,
         ocrOrchestrator: OCROrchestrator,
         aiConfigCenter: AIConfigCenter,
+        retrieveMemoryUseCase: RetrieveMemoryUseCase,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
@@ -31,6 +33,7 @@ struct SendChatMessageUseCase: Sendable {
         self.fileTransferService = fileTransferService
         self.ocrOrchestrator = ocrOrchestrator
         self.aiConfigCenter = aiConfigCenter
+        self.retrieveMemoryUseCase = retrieveMemoryUseCase
     }
 
     /// 发送消息核心业务方法：处理输入、上传附件、保存消息、调用AI生成、返回对话快照
@@ -96,10 +99,13 @@ struct SendChatMessageUseCase: Sendable {
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
             
             // 构建系统提示词
-            let systemPrompt = ChatSystemPromptResolver().resolve(
-                sessionPrompt: thread.rolePrompt,
-                agentPrompt: resolvedRow.systemPrompt,
-                smallTask: smallTask
+            let systemPrompt = await systemPromptWithRelevantMemory(
+                base: ChatSystemPromptResolver().resolve(
+                    sessionPrompt: thread.rolePrompt,
+                    agentPrompt: resolvedRow.systemPrompt,
+                    smallTask: smallTask
+                ),
+                query: sanitizedInput
             )
 
             // 如果线程模型和当前选择不一致，更新线程的模型配置
@@ -456,7 +462,7 @@ struct SendChatMessageUseCase: Sendable {
             let persistedModelName = trimmedSelected?.isEmpty == false
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
-            let systemPrompt = ChatSystemPromptResolver().resolve(
+            let baseSystemPrompt = ChatSystemPromptResolver().resolve(
                 sessionPrompt: thread.rolePrompt,
                 agentPrompt: resolvedRow.systemPrompt,
                 smallTask: nil
@@ -479,6 +485,14 @@ struct SendChatMessageUseCase: Sendable {
             guard let latestUserMessage = replayHistory.last(where: { $0.role == .user && $0.isTombstone == false }) else {
                 throw ChatFeatureError.emptyInput
             }
+            let replayUserInput = latestUserMessage.blocks
+                .compactMap(\.text)
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let systemPrompt = await systemPromptWithRelevantMemory(
+                base: baseSystemPrompt,
+                query: replayUserInput
+            )
 
             let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
             let effectiveMode = effectiveChatImageDeliveryMode(
@@ -500,10 +514,7 @@ struct SendChatMessageUseCase: Sendable {
             }
 
             let output = try await orchestrator.generateReply(
-                userInput: latestUserMessage.blocks
-                    .compactMap(\.text)
-                    .joined(separator: "\n")
-                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                userInput: replayUserInput,
                 history: replayHistory,
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
@@ -666,6 +677,20 @@ struct SendChatMessageUseCase: Sendable {
             blocks.append("【用户补充输入】\n\(trimmedInput)")
         }
         return blocks.joined(separator: "\n\n")
+    }
+
+    private func systemPromptWithRelevantMemory(base: String, query: String) async -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return base }
+        do {
+            let results = try await retrieveMemoryUseCase.execute(keyword: trimmed)
+            let memorySection = MemoryPromptBuilder().makePromptSection(results: results)
+            guard memorySection.isEmpty == false else { return base }
+            return [base, memorySection].joined(separator: "\n\n")
+        } catch {
+            logger.warning("记忆检索注入失败：\(error.localizedDescription)", module: .aiConfig)
+            return base
+        }
     }
 
     private func shortID(_ value: Int?) -> String {

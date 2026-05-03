@@ -91,7 +91,7 @@ struct MainTabDependencies {
     let chatStateStore: ChatStateStore
     let chatListViewModel: ChatListViewModel
     let chatDetailViewModel: ChatDetailViewModel
-    let chatV2ViewModel: ChatV2ViewModel
+//    let chatV2ViewModel: ChatV2ViewModel
     let settingsViewModel: SettingsViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let versionUpdateCoordinator: AppVersionUpdateCoordinator

@@ -79,7 +79,8 @@ struct SmallTasksSettingsView: View {
                 SmallTaskEditorView(
                     task: task,
                     nextID: viewModel.nextLocalSmallTaskID(),
-                    promptTooling: viewModel.promptTooling
+                    promptTooling: viewModel.promptTooling,
+                    promptTemplates: viewModel.snapshot.promptRepo
                 ) { updatedTask in
                     Task {
                         await viewModel.upsertLocalSmallTaskAndPersist(updatedTask)

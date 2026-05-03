@@ -233,44 +233,44 @@ struct ChatView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        Menu("聊天记录管理", systemImage: "bubble.left.and.bubble.right") {
+                        Menu(L10n.text("chat.management.records_menu"), systemImage: "bubble.left.and.bubble.right") {
                             Button {
                                 presentParameterCard(.imageDeliveryMode)
                             } label: {
-                                Label("图片送达方式", systemImage: "photo.on.rectangle.angled")
+                                Label(L10n.text("chat.image_delivery.menu"), systemImage: "photo.on.rectangle.angled")
                             }
                             Button {
                                 presentParameterCard(.maxMessages)
                             } label: {
-                                Label("上下文折叠", systemImage: "rectangle.compress.vertical")
+                                Label(L10n.text("chat.management.context_window"), systemImage: "rectangle.compress.vertical")
                             }
                             Button {
                                 exportChatRecordsToDebugLog()
                             } label: {
-                                Label("导出聊天记录", systemImage: "square.and.arrow.up")
+                                Label(L10n.text("chat.management.export_records"), systemImage: "square.and.arrow.up")
                             }
                             Button {
                                 logger.warning("聊天记录导入暂未接入，thread=\(threadID.uuidString)", module: .general)
                             } label: {
-                                Label("导入聊天记录", systemImage: "square.and.arrow.down")
+                                Label(L10n.text("chat.management.import_records"), systemImage: "square.and.arrow.down")
                             }
                             Button(role: .destructive) {
                                 showClearChatConfirmation = true
                             } label: {
-                                Label("清空聊天记录", systemImage: "eraser.line.dashed")
+                                Label(L10n.text("chat.management.clear_records"), systemImage: "eraser.line.dashed")
                             }
                         }
                         Divider()
                         Button {
                             presentSystemMessageSettings()
                         } label: {
-                            Label("设置系统消息", systemImage: "text.bubble")
+                            Label(L10n.text("chat.system_message.menu"), systemImage: "text.bubble")
                         }
                         Divider()
                         Button {
                             logDebugInfo()
                         } label: {
-                            Label("打印调试信息", systemImage: "doc.text.magnifyingglass")
+                            Label(L10n.text("chat.management.print_debug_info"), systemImage: "doc.text.magnifyingglass")
                         }
                         Divider()
                         Picker(L10n.text("chat.composer.style.title"), selection: $composerStyleRaw) {
@@ -380,13 +380,13 @@ struct ChatView: View {
             .onDisappear {
                 Task { await detailViewModel.chatPageDidDisappear() }
             }
-            .alert("确认清空聊天记录？", isPresented: $showClearChatConfirmation) {
-                Button("取消", role: .cancel) {}
-                Button("清空", role: .destructive) {
+            .alert(L10n.text("chat.management.clear_confirm_title"), isPresented: $showClearChatConfirmation) {
+                Button(L10n.text("common.cancel"), role: .cancel) {}
+                Button(L10n.text("chat.management.clear_action"), role: .destructive) {
                     Task { await detailViewModel.clearMessages(for: threadID) }
                 }
             } message: {
-                Text("仅清空当前会话消息，保留会话参数设置。")
+                Text(L10n.text("chat.management.clear_confirm_message"))
             }
     }
 
@@ -628,7 +628,8 @@ struct ChatView: View {
             defaultPrompt: PromptLocalizer().chatSystemPrompt(),
             modelDisplayName: row?.displayTitle ?? thread.currentModelName ?? L10n.text("chat.composer.model.default"),
             isAgentModel: isAgent,
-            agentPrompt: isAgent ? row?.systemPrompt : nil
+            agentPrompt: isAgent ? row?.systemPrompt : nil,
+            promptTemplates: detailViewModel.chatPromptTemplates
         )
         detailViewModel.presentSystemMessageSettings(prompt: prompt)
     }

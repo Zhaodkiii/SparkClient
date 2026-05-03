@@ -14,4 +14,8 @@ struct SaveAISettingsUseCase: Sendable {
     func execute(provider: APIKeys) async throws {
         try await repository.saveProvider(provider)
     }
+
+    func execute(promptRepo: [PromptRepo], ownerAccountID: Int64? = nil) async throws {
+        try await repository.savePromptRepo(promptRepo, ownerAccountID: ownerAccountID)
+    }
 }
