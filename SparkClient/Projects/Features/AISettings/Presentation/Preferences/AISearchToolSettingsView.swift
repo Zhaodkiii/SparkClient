@@ -23,12 +23,18 @@ private struct SearchHelpPage: Identifiable {
 }
 
 struct AISearchToolSettingsView: View {
-    @Binding var preferences: AISearchToolPreferences
-    @Binding var searchKeys: [SearchKeys]
-    @Binding var toolKeys: [ToolKeys]
+    @ObservedObject var viewModel: AISettingsViewModel
 
     @State private var editorContext: SearchKeyEditorContext?
     @State private var errorMessage: String?
+
+    private var preferences: AISearchToolPreferences {
+        viewModel.snapshot.searchToolPreferences
+    }
+
+    private var searchKeys: [SearchKeys] {
+        viewModel.snapshot.searchKeys
+    }
 
     private var sortedSearchKeys: [SearchKeys] {
         searchKeys.sorted {
@@ -57,12 +63,12 @@ struct AISearchToolSettingsView: View {
             }
 
             Section(L10n.text("ai_settings.search.section.active_search")) {
-                Toggle(L10n.text("ai_settings.field.use_search"), isOn: $preferences.useSearch)
+                Toggle(L10n.text("ai_settings.field.use_search"), isOn: preferenceBinding(\.useSearch))
                     .tint(.blue)
             }
 
             Section(L10n.text("ai_settings.search.section.result_count")) {
-                Stepper(value: $preferences.searchCount, in: 5...20) {
+                Stepper(value: preferenceBinding(\.searchCount), in: 5...20) {
                     HStack {
                         Text(L10n.text("ai_settings.field.search_count"))
                         Spacer()
@@ -73,7 +79,7 @@ struct AISearchToolSettingsView: View {
             }
 
             Section(L10n.text("ai_settings.search.section.bilingual")) {
-                Toggle(L10n.text("ai_settings.field.bilingual_search"), isOn: $preferences.bilingualSearch)
+                Toggle(L10n.text("ai_settings.field.bilingual_search"), isOn: preferenceBinding(\.bilingualSearch))
                     .tint(.blue)
             }
 
@@ -106,7 +112,7 @@ struct AISearchToolSettingsView: View {
                 initialKey: context.key,
                 isNew: context.isNew,
                 onSave: { key in
-                    saveSearchKey(key, isNew: context.isNew)
+                    saveSearchKey(key)
                 }
             )
         }
@@ -171,7 +177,7 @@ struct AISearchToolSettingsView: View {
         }
     }
 
-    private func saveSearchKey(_ key: SearchKeys, isNew: Bool) {
+    private func saveSearchKey(_ key: SearchKeys) {
         var next = key
         next.name = next.name.trimmingCharacters(in: .whitespacesAndNewlines)
         next.company = next.company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -181,19 +187,11 @@ struct AISearchToolSettingsView: View {
         next.timestamp = Date()
         next.revision += 1
 
-        if next.isUsing {
-            for index in searchKeys.indices {
-                searchKeys[index].isUsing = false
+        Task { @MainActor in
+            if await viewModel.upsertSearchKeyAndPersist(next) {
+                impact(.medium)
             }
         }
-
-        if isNew {
-            searchKeys.append(next)
-        } else if let index = searchKeys.firstIndex(where: { $0.id == next.id }) {
-            searchKeys[index] = next
-        }
-
-        impact(.medium)
     }
 
     private func setActiveSearchProvider(id: UUID, enabled: Bool) {
@@ -203,21 +201,31 @@ struct AISearchToolSettingsView: View {
             return
         }
 
-        for index in searchKeys.indices {
-            if searchKeys[index].id == id {
-                searchKeys[index].isUsing = enabled
-                searchKeys[index].timestamp = Date()
-                searchKeys[index].revision += 1
-            } else if enabled {
-                searchKeys[index].isUsing = false
+        Task { @MainActor in
+            if await viewModel.setSearchProviderEnabledAndPersist(id: id, enabled: enabled) {
+                impact(.light)
             }
         }
-        impact(.light)
     }
 
     private func deleteSearchKeys(at offsets: IndexSet) {
         let ids = offsets.map { sortedSearchKeys[$0].id }
-        searchKeys.removeAll { ids.contains($0.id) }
+        Task { @MainActor in
+            _ = await viewModel.deleteSearchKeysAndPersist(ids: ids)
+        }
+    }
+
+    private func preferenceBinding<Value>(_ keyPath: WritableKeyPath<AISearchToolPreferences, Value>) -> Binding<Value> {
+        Binding(
+            get: { preferences[keyPath: keyPath] },
+            set: { value in
+                Task { @MainActor in
+                    var next = viewModel.snapshot.searchToolPreferences
+                    next[keyPath: keyPath] = value
+                    _ = await viewModel.updateSearchToolPreferencesAndPersist(next)
+                }
+            }
+        )
     }
 
     private func makeBlankSearchKey() -> SearchKeys {

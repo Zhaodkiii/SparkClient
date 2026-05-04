@@ -251,7 +251,7 @@ final class SparkHealthTool: @unchecked Sendable {
         return ChatHealthSleepModel(generatedAt: Int64(Date().timeIntervalSince1970), days: days)
     }
 
-    func fetchWorkoutDetails(from startDate: Date, to endDate: Date, types: [String], maxItems: Int) async throws -> String {
+    func fetchWorkoutDetails(from startDate: Date, to endDate: Date, types: [String], maxItems: Int) async throws -> ChatHealthWorkoutModel {
         guard validateDateRange(startDate: startDate, endDate: endDate) else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.invalid_date_range"))
         }
@@ -275,32 +275,27 @@ final class SparkHealthTool: @unchecked Sendable {
         }
 
         let workouts = try await workoutSamples(predicate: predicate, limit: max(1, min(maxItems, 100)))
-        if workouts.isEmpty {
-            return Self.text("health.tool.error.no_workouts")
-        }
-
-        var lines: [String] = []
+        var notes: [String] = []
         if unrecognized.isEmpty == false {
-            lines.append(Self.format("health.tool.warning.unrecognized_activity_types", unrecognized.joined(separator: ", ")))
+            notes.append(Self.format("health.tool.warning.unrecognized_activity_types", unrecognized.joined(separator: ", ")))
         }
-        lines.append("\(Self.text("health.tool.report.workouts.title")) \(Self.dateRangeText(startDate, endDate)):")
 
+        var sessions: [ChatHealthWorkoutModel.WorkoutSession] = []
         for workout in workouts {
-            let durationMinutes = workout.duration / 60
-            let distance = workout.totalDistance.map { Self.formatDistanceMeters($0.doubleValue(for: .meter())) }
-            let energy = workout.totalEnergyBurned.map { Self.formatDoubleUnit($0.doubleValue(for: .kilocalorie()), key: "health.tool.unit.kcal.precision") }
-            let heartRate = await averageHeartRate(from: workout.startDate, to: workout.endDate)
-
-            var metrics = [
-                Self.format("health.tool.workout.metric.duration", Self.formatDurationMinutes(durationMinutes))
-            ]
-            if let distance { metrics.append(Self.format("health.tool.workout.metric.distance", distance)) }
-            if let energy { metrics.append(Self.format("health.tool.workout.metric.active_energy", energy)) }
-            if let heartRate { metrics.append(Self.format("health.tool.workout.metric.average_hr", String(format: "%.0f", heartRate))) }
-
-            lines.append("- \(Self.dateTimeText(workout.startDate)): \(Self.workoutActivityDisplayName(workout.workoutActivityType))\(Self.text("health.tool.separator.metric"))\(metrics.joined(separator: Self.text("health.tool.separator.metric")))")
+            if let session = await enrichWorkoutSession(workout) {
+                sessions.append(session)
+            }
         }
-        return lines.joined(separator: "\n")
+
+        if sessions.isEmpty {
+            notes.append(Self.text("health.tool.error.no_workouts"))
+        }
+
+        return ChatHealthWorkoutModel(
+            generatedAt: Int64(Date().timeIntervalSince1970),
+            workouts: sessions,
+            notes: notes
+        )
     }
 
     func makeNutritionData(protein: Double?, carbohydrates: Double?, fat: Double?, energy: Double?, date: Date = Date()) -> SparkNutritionCard {
@@ -450,6 +445,7 @@ final class SparkHealthTool: @unchecked Sendable {
             HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
             HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
             HKObjectType.workoutType(),
+            HKSeriesType.workoutRoute(),
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.quantityType(forIdentifier: .flightsClimbed)!,
             HKObjectType.quantityType(forIdentifier: .distanceCycling)!
@@ -562,6 +558,118 @@ final class SparkHealthTool: @unchecked Sendable {
         }
     }
 
+    private func enrichWorkoutSession(_ workout: HKWorkout) async -> ChatHealthWorkoutModel.WorkoutSession? {
+        let start = Int64(workout.startDate.timeIntervalSince1970)
+        let end = Int64(workout.endDate.timeIntervalSince1970)
+        let distanceMeters = workout.totalDistance?.doubleValue(for: .meter())
+        let activeEnergyKcal = workout.totalEnergyBurned?.doubleValue(for: .kilocalorie())
+        let elapsedSeconds = max(0, Int64(workout.duration.rounded()))
+        let averageHeartRate = await averageHeartRate(from: workout.startDate, to: workout.endDate)
+        let heartRates = await heartRateSamples(from: workout.startDate, to: workout.endDate, maxPoints: 160)
+        let route = await routePoints(for: workout, maxPoints: 220)
+        let averageSpeed = distanceMeters.flatMap { distance -> Double? in
+            guard workout.duration > 0, distance > 0 else { return nil }
+            return distance / workout.duration
+        }
+        let averagePace = averageSpeed.flatMap { speed -> Double? in
+            guard speed > 0 else { return nil }
+            return 1000 / speed / 60
+        }
+
+        return ChatHealthWorkoutModel.WorkoutSession(
+            id: workout.uuid.uuidString,
+            activityTypeKey: Self.workoutActivityTypeKey(workout.workoutActivityType),
+            activityTypeName: Self.workoutActivityDisplayName(workout.workoutActivityType),
+            start: start,
+            end: end,
+            startText: Self.dateTimeText(workout.startDate),
+            endText: Self.dateTimeText(workout.endDate),
+            elapsedSeconds: elapsedSeconds,
+            trainingSeconds: nil,
+            pausedSeconds: nil,
+            distanceMeters: distanceMeters,
+            activeEnergyKcal: activeEnergyKcal,
+            totalEnergyKcal: activeEnergyKcal,
+            elevationAscendedMeters: nil,
+            averageSpeedMps: averageSpeed,
+            averageHeartRateBpm: averageHeartRate,
+            averagePowerW: nil,
+            averageCadence: nil,
+            averagePaceMinPerKm: averagePace,
+            poolLengthMeters: Self.poolLengthMeters(from: workout),
+            swimmingLengthCount: nil,
+            heartRateSamples: heartRates,
+            events: Self.workoutEvents(workout.workoutEvents ?? []),
+            route: route
+        )
+    }
+
+    private func heartRateSamples(from start: Date, to end: Date, maxPoints: Int) async -> [ChatHealthWorkoutModel.HeartRatePoint] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+        let limit = max(1, maxPoints * 4)
+        let samples: [HKQuantitySample] = (try? await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: limit, sortDescriptors: sort) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: samples as? [HKQuantitySample] ?? [])
+                }
+            }
+            healthStore.execute(query)
+        }) ?? []
+
+        let mapped = samples.map {
+            ChatHealthWorkoutModel.HeartRatePoint(
+                timestamp: Int64($0.startDate.timeIntervalSince1970),
+                bpm: $0.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+            )
+        }
+        return Self.downsample(mapped, maxPoints: maxPoints)
+    }
+
+    private func routePoints(for workout: HKWorkout, maxPoints: Int) async -> [ChatHealthWorkoutModel.RoutePoint] {
+        let routeType = HKSeriesType.workoutRoute()
+        let predicate = HKQuery.predicateForObjects(from: workout)
+        let routes: [HKWorkoutRoute] = (try? await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: routeType, predicate: predicate, limit: 1, sortDescriptors: nil) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: samples as? [HKWorkoutRoute] ?? [])
+                }
+            }
+            healthStore.execute(query)
+        }) ?? []
+        guard let route = routes.first else { return [] }
+
+        let locations: [CLLocation] = (try? await withCheckedThrowingContinuation { continuation in
+            var collected: [CLLocation] = []
+            let query = HKWorkoutRouteQuery(route: route) { _, locations, done, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                collected.append(contentsOf: locations ?? [])
+                if done {
+                    continuation.resume(returning: collected)
+                }
+            }
+            healthStore.execute(query)
+        }) ?? []
+
+        let points = locations.map {
+            ChatHealthWorkoutModel.RoutePoint(
+                lat: $0.coordinate.latitude,
+                lon: $0.coordinate.longitude,
+                altitudeM: $0.verticalAccuracy >= 0 ? $0.altitude : nil,
+                timestamp: Int64($0.timestamp.timeIntervalSince1970)
+            )
+        }
+        return Self.downsample(points, maxPoints: maxPoints)
+    }
+
     private func validateDateRange(startDate: Date, endDate: Date) -> Bool {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -617,6 +725,68 @@ final class SparkHealthTool: @unchecked Sendable {
             }
         }
         return rawValue == HKCategoryValueSleepAnalysis.asleep.rawValue ? .unspecified : .awake
+    }
+
+    private static func workoutActivityTypeKey(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .running: return "running"
+        case .walking: return "walking"
+        case .cycling: return "cycling"
+        case .hiking: return "hiking"
+        case .badminton: return "badminton"
+        case .swimming: return "swimming"
+        case .yoga: return "yoga"
+        case .functionalStrengthTraining: return "functional_strength"
+        case .traditionalStrengthTraining: return "traditional_strength"
+        case .elliptical: return "elliptical"
+        case .rowing: return "rowing"
+        case .crossTraining: return "cross_training"
+        case .highIntensityIntervalTraining: return "hiit"
+        case .cardioDance: return "dance"
+        case .coreTraining: return "core_training"
+        case .pilates: return "pilates"
+        case .other: return "other"
+        default: return "workout"
+        }
+    }
+
+    private static func workoutEvents(_ events: [HKWorkoutEvent]) -> [ChatHealthWorkoutModel.WorkoutEvent] {
+        events.map { event in
+            let type: ChatHealthWorkoutModel.WorkoutEvent.EventType
+            switch event.type {
+            case .pause:
+                type = .pause
+            case .resume:
+                type = .resume
+            case .lap:
+                type = .lap
+            case .marker:
+                type = .marker
+            case .segment:
+                type = .segment
+            default:
+                type = .other
+            }
+            return ChatHealthWorkoutModel.WorkoutEvent(
+                type: type,
+                dateIntervalSince1970: Int64(event.dateInterval.start.timeIntervalSince1970)
+            )
+        }
+    }
+
+    private static func poolLengthMeters(from workout: HKWorkout) -> Double? {
+        guard let raw = workout.metadata?[HKMetadataKeyLapLength] else { return nil }
+        if let quantity = raw as? HKQuantity {
+            return quantity.doubleValue(for: .meter())
+        }
+        return raw as? Double
+    }
+
+    private static func downsample<T>(_ values: [T], maxPoints: Int) -> [T] {
+        guard values.count > maxPoints, maxPoints > 0 else { return values }
+        guard maxPoints > 1 else { return Array(values.prefix(1)) }
+        let stride = Double(values.count - 1) / Double(maxPoints - 1)
+        return (0..<maxPoints).map { values[Int((Double($0) * stride).rounded())] }
     }
 
     private static func parseWorkoutActivityType(_ value: String) -> HKWorkoutActivityType? {

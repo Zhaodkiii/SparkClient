@@ -1,7 +1,7 @@
 import Foundation
 
 /// 聊天内「工具详情」Sheet 的展示载荷（不入库）。
-struct ToolPreviewPrompt: Codable, Equatable, Sendable {
+nonisolated struct ToolPreviewPrompt: Codable, Equatable, Sendable {
     let id: UUID
     let toolName: String
     let toolContent: String

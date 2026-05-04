@@ -304,13 +304,13 @@ struct ChatOrchestrator: Sendable {
             for call in toolCallsToExecute {
                 try cancellationToken?.checkCancellation()
                 
-                // 前端UI：显示工具调用中
+                // 前端UI：显示工具调用中（带上模型传入参数，避免覆盖流式阶段已展示的 arguments）
                 await emitToolPartial(
                     answer: roundAnswer,
                     reasoning: roundReasoning,
                     toolName: call.name,
                     toolCallID: call.id,
-                    detail: nil,
+                    detail: trimmedToolCallArguments(call.arguments),
                     onPartial: onPartial
                 )
 
@@ -329,13 +329,13 @@ struct ChatOrchestrator: Sendable {
                     privacyPolicyURL: nil
                 )
 
-                // 工具执行完成 → 前端显示结果
+                // 工具执行完成 → 前端显示「参数 + 输出」，供气泡与工具详情 Sheet 共用
                 await emitToolPartial(
                     answer: roundAnswer,
                     reasoning: roundReasoning,
                     toolName: call.name,
                     toolCallID: call.id,
-                    detail: toolResult.outputText,
+                    detail: toolCallDetail(arguments: call.arguments, output: toolResult.outputText),
                     onPartial: onPartial
                 )
 
@@ -801,6 +801,22 @@ struct ChatOrchestrator: Sendable {
             return "\(prefix)\(title)"
         }
         return "\(prefix)\(title)\n\(detail)"
+    }
+
+    /// 工具开始执行时展示的参数字段（与 `AIRuntimeToolCall.arguments` 一致，多为 JSON 字符串）。
+    private func trimmedToolCallArguments(_ arguments: String) -> String? {
+        arguments.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    /// 工具详情 / 气泡正文：同时包含调用参数与执行输出。
+    private func toolCallDetail(arguments: String, output: String) -> String {
+        let args = arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+        let out = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let argsTitle = L10n.text("chat.bubble.tool.arguments", fallback: "参数")
+        let outputTitle = L10n.text("chat.bubble.tool.output", fallback: "输出")
+        if args.isEmpty { return out }
+        if out.isEmpty { return "\(argsTitle)\n\(args)" }
+        return "\(argsTitle)\n\(args)\n\n\(outputTitle)\n\(out)"
     }
 
     private func localizedToolDisplayName(for toolName: String) -> String {

@@ -1510,3 +1510,13 @@
 "ai_settings.search.editor.note" = "After configuring an API key, enable the search provider you want to use in the list. Web search can use only one provider at a time.";
 "ai_settings.search.editor.nav_add" = "Add Search Provider";
 "ai_settings.search.editor.nav_edit" = "Edit Key";
+
+"chat.workout.title" = "Workout Data";
+"chat.workout.metric.sessions" = "Sessions";
+"chat.workout.metric.duration" = "Duration";
+"chat.workout.metric.distance" = "Distance";
+"chat.workout.metric.energy" = "Energy";
+"chat.workout.heart_rate" = "Heart rate";
+"chat.workout.route" = "Route";
+"chat.workout.more_format" = "%d more sessions";
+"chat.workout.readable.summary_format" = "%d sessions, total duration %@, total distance %@, active energy %.0f kcal";

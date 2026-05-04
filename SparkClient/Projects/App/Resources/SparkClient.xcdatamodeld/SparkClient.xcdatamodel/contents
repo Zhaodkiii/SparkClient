@@ -133,39 +133,6 @@
         <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
     </entity>
-    <entity name="ChatMessageEntityV2" representedClassName="ChatMessageEntityV2" syncable="YES" codeGenerationType="class">
-        <attribute name="clientMessageID" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="committedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="documentData" optional="YES" attributeType="Binary"/>
-        <attribute name="errorText" optional="YES" attributeType="String"/>
-        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="roleRaw" attributeType="String" defaultValueString="user"/>
-        <attribute name="serverMessageID" optional="YES" attributeType="String"/>
-        <attribute name="statusRaw" attributeType="String" defaultValueString="draft"/>
-        <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="version" attributeType="Integer 32" defaultValueString="1" usesScalarValueType="YES"/>
-    </entity>
-    <entity name="ChatOutboxEntityV2" representedClassName="ChatOutboxEntityV2" syncable="YES" codeGenerationType="class">
-        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="messageID" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="requestEnvelopeData" optional="YES" attributeType="Binary"/>
-        <attribute name="retryCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="statusRaw" attributeType="String" defaultValueString="pending"/>
-        <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
-    <entity name="ChatSyncCheckpointEntityV2" representedClassName="ChatSyncCheckpointEntityV2" syncable="YES" codeGenerationType="class">
-        <attribute name="cursor" optional="YES" attributeType="String"/>
-        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="scopeKey" attributeType="String" defaultValueString=""/>
-        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
     <entity name="ChatSyncCursorEntity" representedClassName="ChatSyncCursorEntity" syncable="YES" codeGenerationType="class">
         <attribute name="key" attributeType="String"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
@@ -190,17 +157,6 @@
         <attribute name="temperature" attributeType="Double" defaultValueString="0.6" usesScalarValueType="YES"/>
         <attribute name="title" attributeType="String" defaultValueString=""/>
         <attribute name="topP" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
-        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
-    </entity>
-    <entity name="ChatThreadEntityV2" representedClassName="ChatThreadEntityV2" syncable="YES" codeGenerationType="class">
-        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
-        <attribute name="lastSyncedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="memberID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
-        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="scenarioRaw" attributeType="String" defaultValueString="chat"/>
-        <attribute name="statusRaw" attributeType="String" defaultValueString="active"/>
-        <attribute name="title" attributeType="String" defaultValueString=""/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ExaminationReportEntity" representedClassName="ExaminationReportEntity" syncable="YES" codeGenerationType="class">

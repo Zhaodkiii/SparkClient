@@ -93,20 +93,20 @@ struct ChatMessageBubbleContentView: View {
         var blocks = message.blocks
 
         // 2. 如果消息发送失败 + 需要显示错误卡片 → 在最前面插入【错误提示块】
-        if message.deliveryState == .failed, shouldRenderErrorCard {
-            blocks.insert(
-                ChatMessageBlock(kind: .error, text: errorCardBodyText, createdAt: message.createdAt, updatedAt: message.createdAt),
-                at: 0
-            )
-        }
+//        if message.deliveryState == .failed, shouldRenderErrorCard {
+//            blocks.insert(
+//                ChatMessageBlock(kind: .error, text: errorCardBodyText, createdAt: message.createdAt, updatedAt: message.createdAt),
+//                at: 0
+//            )
+//        }
 
         // 3. 如果有合并后的知识库卡片 → 移除旧的知识卡片，追加新的
-        if combinedKnowledgeCards.isEmpty == false {
-            // 先删掉已有的知识卡片块
-            blocks.removeAll { $0.kind == .knowledgeCards }
-            // 追加最新合并后的知识卡片块
-            blocks.append(ChatMessageBlock(kind: .knowledgeCards, knowledgeCards: combinedKnowledgeCards, createdAt: message.createdAt, updatedAt: message.createdAt))
-        }
+//        if combinedKnowledgeCards.isEmpty == false {
+//            // 先删掉已有的知识卡片块
+//            blocks.removeAll { $0.kind == .knowledgeCards }
+//            // 追加最新合并后的知识卡片块
+//            blocks.append(ChatMessageBlock(kind: .knowledgeCards, knowledgeCards: combinedKnowledgeCards, createdAt: message.createdAt, updatedAt: message.createdAt))
+//        }
 
         // 4. 如果有翻译文本 → 移除旧翻译块，追加新翻译块
         if let translatedText, translatedText.isEmpty == false {
@@ -145,6 +145,7 @@ struct ChatMessageBubbleContentView: View {
                 .pendingMemberToolCards,
                 .structuredHealthCards,
                 .sleepVisualization,
+                .workoutVisualization,
                 .captureCard,
                 .html,
                 .smallTaskCard,

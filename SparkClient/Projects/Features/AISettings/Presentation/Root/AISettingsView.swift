@@ -55,11 +55,7 @@ struct AISettingsView: View {
                 }
 
                 NavigationLink {
-                    AISearchToolSettingsView(
-                        preferences: $viewModel.snapshot.searchToolPreferences,
-                        searchKeys: $viewModel.snapshot.searchKeys,
-                        toolKeys: $viewModel.snapshot.toolKeys
-                    )
+                    AISearchToolSettingsView(viewModel: viewModel)
                     .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(

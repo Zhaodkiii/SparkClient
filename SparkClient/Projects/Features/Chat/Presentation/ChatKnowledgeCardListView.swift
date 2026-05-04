@@ -6,6 +6,8 @@ struct ChatKnowledgeCard: Codable, Equatable, Identifiable {
     let id: UUID
     let title: String
     let content: String
+    /// `search_knowledge_bag` 检索预览为 `false`（仅展示）；`create_knowledge_document` 等新建草稿为 `true`。
+    let showsSaveAndCopy: Bool
 
     /// 与服务端只下发 title/content、attachment 里无稳定 `id` 时一致：用正文派生确定性 UUID。
     /// 若每次 JSON 解析都 `UUID()`，同一张卡在每次 `body` 重算后都会换新 id，`savedKnowledgeCardIDs` 会永远对不上。
@@ -25,16 +27,18 @@ struct ChatKnowledgeCard: Codable, Equatable, Identifiable {
         )
     }
 
-    init(id: UUID? = nil, title: String, content: String) {
+    init(id: UUID? = nil, title: String, content: String, showsSaveAndCopy: Bool = true) {
         self.id = id ?? Self.stableID(title: title, content: content)
         self.title = title
         self.content = content
+        self.showsSaveAndCopy = showsSaveAndCopy
     }
 
     enum CodingKeys: String, CodingKey {
         case id
         case title
         case content
+        case showsSaveAndCopy
     }
 
     init(from decoder: Decoder) throws {
@@ -48,6 +52,15 @@ struct ChatKnowledgeCard: Codable, Equatable, Identifiable {
         }
         self.title = title
         self.content = content
+        self.showsSaveAndCopy = try c.decodeIfPresent(Bool.self, forKey: .showsSaveAndCopy) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(content, forKey: .content)
+        try c.encode(showsSaveAndCopy, forKey: .showsSaveAndCopy)
     }
 }
 
@@ -82,56 +95,58 @@ struct ChatKnowledgeCardListView: View {
                         .foregroundStyle(Color.accentColor)
                         Spacer(minLength: 0)
 
-                        Button {
-                            UIPasteboard.general.string = plainText(from: card.content)
-                            copiedCardID = card.id
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                if copiedCardID == card.id {
-                                    copiedCardID = nil
+                        if card.showsSaveAndCopy {
+                            Button {
+                                UIPasteboard.general.string = plainText(from: card.content)
+                                copiedCardID = card.id
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                    if copiedCardID == card.id {
+                                        copiedCardID = nil
+                                    }
                                 }
+                            } label: {
+                                Image(systemName: copiedCardID == card.id ? "checkmark" : "square.on.square")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
                             }
-                        } label: {
-                            Image(systemName: copiedCardID == card.id ? "checkmark" : "square.on.square")
-                                .font(.caption)
-                                .foregroundStyle(.white)
-                        }
-                        .padding(6)
-                        .background(Color.accentColor)
-                        .clipShape(Capsule())
+                            .padding(6)
+                            .background(Color.accentColor)
+                            .clipShape(Capsule())
 
-                        Button {
-                            // 组件只负责触发动作，不直接处理存储逻辑，保持 UI 与业务解耦。
-                            onSave(card)
-                        } label: {
-                            if isSaving(card) {
-                                HStack(spacing: 4) {
-                                    ProgressView()
-                                        .scaleEffect(0.75)
-                                    Text(L10n.text("chat.bubble.knowledge.saving"))
+                            Button {
+                                // 组件只负责触发动作，不直接处理存储逻辑，保持 UI 与业务解耦。
+                                onSave(card)
+                            } label: {
+                                if isSaving(card) {
+                                    HStack(spacing: 4) {
+                                        ProgressView()
+                                            .scaleEffect(0.75)
+                                        Text(L10n.text("chat.bubble.knowledge.saving"))
+                                    }
+                                    .font(.caption)
+                                    .padding(6)
+                                    .background(Color(uiColor: .systemGray5))
+                                    .foregroundStyle(.gray)
+                                    .clipShape(Capsule())
+                                } else {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: isSaved(card) ? "checkmark.circle.fill" : "backpack")
+                                        Text(
+                                            isSaved(card)
+                                            ? L10n.text("chat.bubble.knowledge.saved_to_bag")
+                                            : L10n.text("chat.bubble.knowledge.save_to_bag")
+                                        )
+                                    }
+                                    .font(.caption)
+                                    .padding(6)
+                                    .background(isSaved(card) ? Color(uiColor: .systemGray5) : Color.accentColor)
+                                    .foregroundStyle(isSaved(card) ? .gray : .white)
+                                    .clipShape(Capsule())
                                 }
-                                .font(.caption)
-                                .padding(6)
-                                .background(Color(uiColor: .systemGray5))
-                                .foregroundStyle(.gray)
-                                .clipShape(Capsule())
-                            } else {
-                                HStack(spacing: 4) {
-                                    Image(systemName: isSaved(card) ? "checkmark.circle.fill" : "backpack")
-                                    Text(
-                                        isSaved(card)
-                                        ? L10n.text("chat.bubble.knowledge.saved_to_bag")
-                                        : L10n.text("chat.bubble.knowledge.save_to_bag")
-                                    )
-                                }
-                                .font(.caption)
-                                .padding(6)
-                                .background(isSaved(card) ? Color(uiColor: .systemGray5) : Color.accentColor)
-                                .foregroundStyle(isSaved(card) ? .gray : .white)
-                                .clipShape(Capsule())
                             }
+                            // 保存中或已保存都禁用，防止重复请求。
+                            .disabled(isSaving(card) || isSaved(card))
                         }
-                        // 保存中或已保存都禁用，防止重复请求。
-                        .disabled(isSaving(card) || isSaved(card))
                     }
 
                     Divider()

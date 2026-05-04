@@ -286,8 +286,8 @@ struct ChatStreamingAssistantReducer: Sendable {
                     normalized[normalized.count-1] = replacing(original: last, with: block)
                     continue
                 }
-            // 结构化卡片块：按类型+锚点合并（与睡眠卡同规则，含任务卡/待选成员卡）
-            case .sleepVisualization, .structuredHealthCards, .captureCard, .html, .taskCards, .pendingMemberToolCards:
+            // 结构化卡片块：按类型+toolCallID+锚点合并（与睡眠卡同规则；含知识卡/任务卡/待选成员卡）
+            case .sleepVisualization, .workoutVisualization, .structuredHealthCards, .captureCard, .knowledgeCards, .html, .taskCards, .pendingMemberToolCards:
                 if let index = normalized.lastIndex(where: {
                     $0.kind == block.kind
                     && $0.toolCallID == block.toolCallID
@@ -324,6 +324,7 @@ struct ChatStreamingAssistantReducer: Sendable {
             healthCards: incoming.healthCards,
             structuredHealthCards: incoming.structuredHealthCards,
             sleepVisualization: incoming.sleepVisualization,
+            workoutVisualization: incoming.workoutVisualization,
             captureMessageCard: incoming.captureMessageCard,
             smallTaskCard: incoming.smallTaskCard,
             deepThoughtCard: incoming.deepThoughtCard ?? original.deepThoughtCard,

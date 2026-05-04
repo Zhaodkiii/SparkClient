@@ -175,6 +175,83 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         }
     }
 
+    func saveSearchKey(_ searchKey: SearchKeys, ownerAccountID explicitAccountID: Int64?) async throws {
+        let ownerAccountID: Int64?
+        if let explicitAccountID {
+            ownerAccountID = explicitAccountID
+        } else {
+            ownerAccountID = await currentOwnerAccountID()
+        }
+        guard let ownerAccountID else {
+            logger.info("未登录，跳过搜索厂商单条持久化", module: .aiConfig)
+            return
+        }
+        try await coreDataStack.performBackgroundTask { context in
+            try self.upsertSearchKey(searchKey, ownerAccountID: ownerAccountID, context: context)
+        }
+        logger.info(
+            "AI 搜索厂商单条写链路完成 ownerAccountID=\(ownerAccountID) id=\(searchKey.id) company=\(searchKey.company)",
+            module: .aiConfig
+        )
+    }
+
+    func deleteSearchKeys(ids: [UUID], ownerAccountID explicitAccountID: Int64?) async throws {
+        let ownerAccountID: Int64?
+        if let explicitAccountID {
+            ownerAccountID = explicitAccountID
+        } else {
+            ownerAccountID = await currentOwnerAccountID()
+        }
+        guard let ownerAccountID else {
+            logger.info("未登录，跳过搜索厂商删除持久化", module: .aiConfig)
+            return
+        }
+        guard ids.isEmpty == false else { return }
+        try await coreDataStack.performBackgroundTask { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.searchProvider)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                self.ownerPredicate(ownerAccountID),
+                NSPredicate(format: "\(Field.id) IN %@", ids),
+            ])
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
+        }
+        logger.info(
+            "AI 搜索厂商删除写链路完成 ownerAccountID=\(ownerAccountID) ids=\(ids.count)",
+            module: .aiConfig
+        )
+    }
+
+    func saveSearchToolPreferences(
+        _ preferences: AISearchToolPreferences,
+        revision: SearchRuntimeConfigRevision,
+        searchKeys: [SearchKeys]?,
+        ownerAccountID explicitAccountID: Int64?
+    ) async throws {
+        let ownerAccountID: Int64?
+        if let explicitAccountID {
+            ownerAccountID = explicitAccountID
+        } else {
+            ownerAccountID = await currentOwnerAccountID()
+        }
+        guard let ownerAccountID else {
+            logger.info("未登录，跳过搜索工具偏好持久化", module: .aiConfig)
+            return
+        }
+        var payload = loadDecodedPreferencesPayload(ownerAccountID: ownerAccountID)
+        payload.searchToolPreferences = preferences
+        payload.searchConfigRevision = revision
+        if let searchKeys {
+            payload.searchKeys = searchKeys
+        }
+        savePreferencesPayload(payload, ownerAccountID: ownerAccountID)
+        logger.info(
+            "AI 搜索工具偏好写链路完成 ownerAccountID=\(ownerAccountID) revision=\(revision.localRevision)",
+            module: .aiConfig
+        )
+    }
+
     func savePromptRepo(_ promptRepo: [PromptRepo], ownerAccountID explicitAccountID: Int64?) async throws {
         let ownerAccountID: Int64?
         if let explicitAccountID {
@@ -272,13 +349,15 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             let promptRepo = try self.fetchPromptRepo(ownerAccountID: ownerAccountID, context: context)
             return (apiKeys, searchKeys, allModels, smallTasks, promptRepo)
         }
+        let hasStoredPreferencesPayload = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)) != nil
         let preferences = loadDecodedPreferencesPayload(ownerAccountID: ownerAccountID)
         let searchKeys = try await searchKeysFromStoreOrMigratedPreferences(
             storedSearchKeys: stored.1,
             preferences: preferences,
+            hasStoredPreferencesPayload: hasStoredPreferencesPayload,
             ownerAccountID: ownerAccountID
         )
-        let prefsSource = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)) != nil ? "UserDefaults 已存在载荷" : "UserDefaults 使用默认偏好"
+        let prefsSource = hasStoredPreferencesPayload ? "UserDefaults 已存在载荷" : "UserDefaults 使用默认偏好"
         logger.debug(
             "AI loadSnapshot 读链路完成 ownerAccountID=\(ownerAccountID) 读到 厂商Key=\(stored.0.count) 搜索厂商=\(searchKeys.count) 模型=\(stored.2.count) 小任务=\(stored.3.count) 提示词=\(stored.4.count)；偏好：\(prefsSource)",
             module: .aiConfig
@@ -317,13 +396,14 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     private func searchKeysFromStoreOrMigratedPreferences(
         storedSearchKeys: [SearchKeys],
         preferences: AISettingsSnapshot.PreferencesPayload,
+        hasStoredPreferencesPayload: Bool,
         ownerAccountID: Int64
     ) async throws -> [SearchKeys] {
         guard storedSearchKeys.isEmpty else { return storedSearchKeys }
 
-        let migrationSource = preferences.searchKeys.isEmpty
-            ? AISettingsSeedCatalog.getSearchKeyList()
-            : preferences.searchKeys
+        let migrationSource = hasStoredPreferencesPayload
+            ? preferences.searchKeys
+            : AISettingsSeedCatalog.getSearchKeyList()
         guard migrationSource.isEmpty == false else { return [] }
 
         try await coreDataStack.performBackgroundTask { context in

@@ -1510,3 +1510,13 @@
 "ai_settings.search.editor.note" = "注意：配置 API 后，请在列表中打开您要使用的搜索引擎。联网搜索同一时间最多启用一个搜索引擎。";
 "ai_settings.search.editor.nav_add" = "添加搜索引擎";
 "ai_settings.search.editor.nav_edit" = "编辑密钥";
+
+"chat.workout.title" = "运动数据";
+"chat.workout.metric.sessions" = "次数";
+"chat.workout.metric.duration" = "总时长";
+"chat.workout.metric.distance" = "总距离";
+"chat.workout.metric.energy" = "活动能量";
+"chat.workout.heart_rate" = "心率";
+"chat.workout.route" = "路线";
+"chat.workout.more_format" = "还有 %d 次运动";
+"chat.workout.readable.summary_format" = "共 %d 次，总时长 %@，总距离 %@，活动能量 %.0f 千卡";

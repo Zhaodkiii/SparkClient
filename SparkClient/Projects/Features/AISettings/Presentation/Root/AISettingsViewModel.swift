@@ -471,6 +471,68 @@ final class AISettingsViewModel: ObservableObject {
         await persistPromptRepoNowReturningBool()
     }
 
+    // MARK: - 搜索工具持久化
+    /// 搜索偏好变更后立即持久化到账号级偏好载荷，并刷新运行时搜索配置版本。
+    @discardableResult
+    func updateSearchToolPreferencesAndPersist(_ preferences: AISearchToolPreferences) async -> Bool {
+        snapshot.searchToolPreferences = preferences
+        snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
+        return await persistSearchToolPreferencesNowReturningBool()
+    }
+
+    /// 搜索厂商编辑器保存后立即按单条 upsert 到数据库。
+    @discardableResult
+    func upsertSearchKeyAndPersist(_ searchKey: SearchKeys) async -> Bool {
+        var changedIDs: Set<UUID> = [searchKey.id]
+        if searchKey.isUsing {
+            for index in snapshot.searchKeys.indices where snapshot.searchKeys[index].id != searchKey.id && snapshot.searchKeys[index].isUsing {
+                snapshot.searchKeys[index].isUsing = false
+                snapshot.searchKeys[index].timestamp = Date()
+                snapshot.searchKeys[index].revision += 1
+                changedIDs.insert(snapshot.searchKeys[index].id)
+            }
+        }
+
+        if let index = snapshot.searchKeys.firstIndex(where: { $0.id == searchKey.id }) {
+            snapshot.searchKeys[index] = searchKey
+        } else {
+            snapshot.searchKeys.append(searchKey)
+        }
+        snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
+        return await persistSearchKeysNowReturningBool(ids: changedIDs)
+    }
+
+    /// 搜索厂商启停后立即按变更行写入数据库。
+    @discardableResult
+    func setSearchProviderEnabledAndPersist(id: UUID, enabled: Bool) async -> Bool {
+        guard let selectedIndex = snapshot.searchKeys.firstIndex(where: { $0.id == id }) else { return false }
+
+        var changedIDs: Set<UUID> = [id]
+        for index in snapshot.searchKeys.indices {
+            if index == selectedIndex {
+                snapshot.searchKeys[index].isUsing = enabled
+                snapshot.searchKeys[index].timestamp = Date()
+                snapshot.searchKeys[index].revision += 1
+            } else if enabled, snapshot.searchKeys[index].isUsing {
+                snapshot.searchKeys[index].isUsing = false
+                snapshot.searchKeys[index].timestamp = Date()
+                snapshot.searchKeys[index].revision += 1
+                changedIDs.insert(snapshot.searchKeys[index].id)
+            }
+        }
+        snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
+        return await persistSearchKeysNowReturningBool(ids: changedIDs)
+    }
+
+    /// 搜索厂商删除后立即从数据库删除对应行。
+    @discardableResult
+    func deleteSearchKeysAndPersist(ids: [UUID]) async -> Bool {
+        guard ids.isEmpty == false else { return true }
+        snapshot.searchKeys.removeAll { ids.contains($0.id) }
+        snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
+        return await deleteSearchKeysNowReturningBool(ids: ids)
+    }
+
     // MARK: - 模型单条持久化
     /// 保存按钮触发：先改缓存，再单条落库（模型）
     @discardableResult
@@ -886,6 +948,82 @@ final class AISettingsViewModel: ObservableObject {
         do {
             try await saveUseCase.execute(promptRepo: snapshot.promptRepo, ownerAccountID: ownerAccountIDForLoad)
             lastPersistedSnapshot.promptRepo = snapshot.promptRepo
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func persistSearchToolPreferencesNowReturningBool() async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            try await saveUseCase.execute(
+                searchToolPreferences: snapshot.searchToolPreferences,
+                revision: snapshot.searchConfigRevision,
+                ownerAccountID: ownerAccountIDForLoad
+            )
+            lastPersistedSnapshot.searchToolPreferences = snapshot.searchToolPreferences
+            lastPersistedSnapshot.searchConfigRevision = snapshot.searchConfigRevision
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func persistSearchKeysNowReturningBool(ids: Set<UUID>) async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            for id in ids {
+                guard let searchKey = snapshot.searchKeys.first(where: { $0.id == id }) else { continue }
+                try await saveUseCase.execute(searchKey: searchKey, ownerAccountID: ownerAccountIDForLoad)
+            }
+            try await saveUseCase.execute(
+                searchToolPreferences: snapshot.searchToolPreferences,
+                revision: snapshot.searchConfigRevision,
+                searchKeys: snapshot.searchKeys,
+                ownerAccountID: ownerAccountIDForLoad
+            )
+            lastPersistedSnapshot.searchKeys = snapshot.searchKeys
+            lastPersistedSnapshot.searchConfigRevision = snapshot.searchConfigRevision
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func deleteSearchKeysNowReturningBool(ids: [UUID]) async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            try await saveUseCase.executeDeletedSearchKeys(ids: ids, ownerAccountID: ownerAccountIDForLoad)
+            try await saveUseCase.execute(
+                searchToolPreferences: snapshot.searchToolPreferences,
+                revision: snapshot.searchConfigRevision,
+                searchKeys: snapshot.searchKeys,
+                ownerAccountID: ownerAccountIDForLoad
+            )
+            lastPersistedSnapshot.searchKeys = snapshot.searchKeys
+            lastPersistedSnapshot.searchConfigRevision = snapshot.searchConfigRevision
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             return true

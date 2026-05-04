@@ -1,8 +1,9 @@
 import Foundation
 
 /// 集中管理文案 Key，避免 UI 层散落硬编码字符串。
-enum L10n {
-    static func text(_ key: String, fallback: String? = nil, comment: StaticString = "") -> String {
+/// `nonisolated`：工程启用 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 时，仍允许域模型 / 合并逻辑在非 UI 隔离域读取文案。
+nonisolated enum L10n {
+    nonisolated static func text(_ key: String, fallback: String? = nil, comment: StaticString = "") -> String {
         _ = comment
 
         for localization in preferredLocalizations() {
@@ -19,7 +20,7 @@ enum L10n {
         return fallback ?? key
     }
 
-    static func homeGreeting(_ name: String) -> String {
+    nonisolated static func homeGreeting(_ name: String) -> String {
         String(
             format: text("home.greeting"),
             locale: Locale.current,
@@ -27,7 +28,7 @@ enum L10n {
         )
     }
 
-    private static func preferredLocalizations(locale: Locale = .current) -> [String] {
+    private nonisolated static func preferredLocalizations(locale: Locale = .current) -> [String] {
         var ordered: [String] = []
         let identifier = locale.identifier
         let languageCode = locale.languageCode?.lowercased() ?? "en"

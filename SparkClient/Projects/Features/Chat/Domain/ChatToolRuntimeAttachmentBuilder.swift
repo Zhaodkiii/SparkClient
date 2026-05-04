@@ -4,7 +4,7 @@ import Foundation
 /// - 统一产出 toolName/toolContent/operationalState/operationalDescription；
 /// - 被“流式显示链路”和“最终落库链路”共同复用；
 /// - 目标是消除重复规则，避免两条链路展示不一致。
-struct ChatToolRuntimeAttachmentBuilder: Sendable {
+nonisolated struct ChatToolRuntimeAttachmentBuilder: Sendable {
     func build(toolName: String?, toolContent: String?) -> [ChatAttachment] {
         var attachments: [ChatAttachment] = []
 
@@ -47,7 +47,7 @@ struct ChatToolRuntimeAttachmentBuilder: Sendable {
         return (stateText, description)
     }
 
-    static func localizedDisplayName(for toolName: String?) -> String {
+    nonisolated static func localizedDisplayName(for toolName: String?) -> String {
         let normalized = toolName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if normalized.isEmpty {
             return L10n.text("chat.bubble.tool.default_name", fallback: "Tool")

@@ -627,7 +627,7 @@ final class ToolHub: @unchecked Sendable {
 
         case .fetchWorkoutDetails:
             /// 获取运动记录（类型、时长、强度等）
-            return await runFetchWorkout(invocation: invocation)
+            return await runFetchWorkout(invocation: invocation, context: context)
 
         case .makeNutritionData:
             /// 构建营养数据（纯计算逻辑，无需 async）
@@ -862,14 +862,29 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    private func runFetchWorkout(invocation: ToolInvocation) async -> ToolExecutionResult {
+    private func runFetchWorkout(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let range = resolveHealthRange(arguments: invocation.arguments)
         let types = parseStringList(invocation.arguments["types"])
         let maxItems = parseIntValue(invocation.arguments["max_items"] ?? "") ?? 100
         do {
+            let model = try await healthTool.fetchWorkoutDetails(from: range.start, to: range.end, types: types, maxItems: maxItems)
+            if let threadID = context.threadID,
+               let assistantID = context.assistantMessageClientID {
+                let merge = structuredHealthCardMergeCoordinator
+                let normalizedToolCallID = context.pendingToolCallID?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                Task {
+                    await merge.insertHealthWorkoutVisualizationWhenAssistantMessageReady(
+                        threadID: threadID,
+                        assistantClientMessageID: assistantID,
+                        model: model,
+                        anchorToolCallID: (normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil)
+                    )
+                }
+            }
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchWorkoutDetails,
-                outputText: try await healthTool.fetchWorkoutDetails(from: range.start, to: range.end, types: types, maxItems: maxItems),
+                outputText: model.toReadableText(),
                 sensitive: true,
                 shouldBypassModel: true
             )
@@ -1078,21 +1093,24 @@ final class ToolHub: @unchecked Sendable {
             let body = lines.joined(separator: "\n\n")
             let l10n = AIPromptL10n(locale: .current)
             let title = l10n.tool("tool.ui.knowledge.search_title", fallback: "Knowledge Search")
-            let toolCallID = normalizedToolCallID(from: context)
-            let kc = knowledgeCardPreviewBlock(
-                title: title,
-                content: body,
-                toolCallID: toolCallID
-            ).map { [$0] } ?? []
-            return returnWithScheduledRichMerge(
-                context: context,
-                result: ToolExecutionResult(
-                    toolName: SparkToolName.searchKnowledgeBag,
-                    outputText: body,
-                    sensitive: false,
-                    shouldBypassModel: true
-                ),
-                richBlocks: kc
+            if let threadID = context.threadID,
+               let assistantID = context.assistantMessageClientID {
+                let merge = structuredHealthCardMergeCoordinator
+                let anchorToolCallID = normalizedToolCallID(from: context)
+                Task {
+                    await merge.insertKnowledgeCardsWhenAssistantMessageReady(
+                        threadID: threadID,
+                        assistantClientMessageID: assistantID,
+                        cards: [ChatKnowledgeCard(title: title, content: body, showsSaveAndCopy: false)],
+                        anchorToolCallID: anchorToolCallID
+                    )
+                }
+            }
+            return ToolExecutionResult(
+                toolName: SparkToolName.searchKnowledgeBag,
+                outputText: body,
+                sensitive: false,
+                shouldBypassModel: true
             )
         } catch {
             return ToolExecutionResult(
@@ -1123,21 +1141,24 @@ final class ToolHub: @unchecked Sendable {
         )
 
         let userFacing = "已生成知识库文档草稿「\(resolvedTitle)」，内容已附在消息内知识卡中，用户可点击保存到知识库。"
-        let toolCallID = normalizedToolCallID(from: context)
-        let kc = knowledgeCardPreviewBlock(
-            title: resolvedTitle,
-            content: content,
-            toolCallID: toolCallID
-        ).map { [$0] } ?? []
-        return returnWithScheduledRichMerge(
-            context: context,
-            result: ToolExecutionResult(
-                toolName: SparkToolName.createKnowledgeDocument,
-                outputText: userFacing,
-                sensitive: false,
-                shouldBypassModel: true
-            ),
-            richBlocks: kc
+        if let threadID = context.threadID,
+           let assistantID = context.assistantMessageClientID {
+            let merge = structuredHealthCardMergeCoordinator
+            let anchorToolCallID = normalizedToolCallID(from: context)
+            Task {
+                await merge.insertKnowledgeCardsWhenAssistantMessageReady(
+                    threadID: threadID,
+                    assistantClientMessageID: assistantID,
+                    cards: [ChatKnowledgeCard(title: resolvedTitle, content: content)],
+                    anchorToolCallID: anchorToolCallID
+                )
+            }
+        }
+        return ToolExecutionResult(
+            toolName: SparkToolName.createKnowledgeDocument,
+            outputText: userFacing,
+            sensitive: false,
+            shouldBypassModel: true
         )
     }
 
@@ -2377,20 +2398,6 @@ final class ToolHub: @unchecked Sendable {
         return result
     }
 
-    private func knowledgeCardPreviewBlock(
-        title: String,
-        content: String,
-        toolCallID: String?
-    ) -> ChatMessageBlock? {
-        let card = ChatKnowledgeCard(title: title, content: content)
-        return ChatMessageBlock(
-            anchor: toolCallID.map(ChatBlockAnchor.toolCall),
-            kind: .knowledgeCards,
-            toolCallID: toolCallID,
-            knowledgeCards: [card]
-        )
-    }
-
     /// 从 `ToolInvocation.arguments` 构建地图/日历/HTML 等富 UI blocks。
     private func makeExternalConnectorRichBlocks(
         invocation: ToolInvocation,
@@ -2586,12 +2593,20 @@ final class ToolHub: @unchecked Sendable {
         config: SearchRuntimeConfig
     ) async throws -> WebSearchResponse {
         guard config.bilingualSearch else { return primary }
-        let secondaryQuery = bilingualSearchVariant(for: query)
-        guard secondaryQuery != query else { return primary }
+        let secondaryQuery: String
+        do {
+            secondaryQuery = try await translateSearchQueryForBilingualSearch(query)
+        } catch {
+            logger.warning("双语搜索翻译失败，使用原始搜索结果：\(error.localizedDescription)", module: .aiConfig)
+            return primary
+        }
+        guard secondaryQuery.isEmpty == false, secondaryQuery.caseInsensitiveCompare(query) != .orderedSame else {
+            return primary
+        }
         let secondary = try await webSearchGateway.search(query: secondaryQuery, config: config)
         var seen = Set<String>()
         let mergedItems = (primary.items + secondary.items).filter { item in
-            let key = item.url.isEmpty ? item.title : item.url
+            let key = normalizedSearchResultKey(item)
             guard seen.contains(key) == false else { return false }
             seen.insert(key)
             return true
@@ -2599,17 +2614,47 @@ final class ToolHub: @unchecked Sendable {
         return WebSearchResponse(
             providerName: primary.providerName,
             query: "\(primary.query) / \(secondary.query)",
-            items: Array(mergedItems.prefix(config.searchCount)),
+            items: Array(mergedItems.prefix(max(config.searchCount, config.searchCount * 2))),
             totalEstimatedMatches: primary.totalEstimatedMatches ?? secondary.totalEstimatedMatches,
             revision: primary.revision
         )
     }
 
-    private func bilingualSearchVariant(for query: String) -> String {
-        let hasCJK = query.unicodeScalars.contains { scalar in
-            (0x4E00...0x9FFF).contains(Int(scalar.value))
-        }
-        return hasCJK ? "\(query) English sources" : "\(query) 中文资料"
+    private func translateSearchQueryForBilingualSearch(_ query: String) async throws -> String {
+        let prompt = """
+        请直接翻译以下搜索查询，保留原意并适合用于搜索引擎。
+        如果输入是中文，翻译为英文；如果输入是其他语言，翻译为中文。
+        只输出翻译后的查询，不要解释，不要加引号。
+
+        \(query)
+        """
+        let stream = try await runtimeService.generateTextStream(
+            request: AIRuntimeTextRequest(
+                scenario: .optimizationText,
+                messages: [
+                    AIRuntimeMessage(
+                        role: .system,
+                        content: "You translate search queries for bilingual web search. Chinese queries must become English; non-Chinese queries must become Chinese. Return only the translated query."
+                    ),
+                    AIRuntimeMessage(role: .user, content: prompt)
+                ],
+                tools: [],
+                toolChoice: .none,
+                reasoning: .disabled,
+                temperature: 0.2,
+                maxTokens: 120
+            )
+        )
+        return try await collectStreamText(from: stream)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’`"))
+    }
+
+    private func normalizedSearchResultKey(_ item: WebSearchResultItem) -> String {
+        let raw = item.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? item.title
+            : item.url
+        return raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func runReadWebPageTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {

@@ -16,6 +16,7 @@ struct ChatMessageMetadata {
     let events: [ChatEventPayload]
     let healthCards: [ChatHealthCardPayload]
     let sleepVisualization: ChatHealthSleepModel?
+    let workoutVisualization: ChatHealthWorkoutModel?
     let taskCards: [TaskCard]
     let pendingMemberToolCards: [PendingMemberToolCard]
     /// 对话内结构化医疗卡片（用药/处方/检查/病历），对应 `structuredHealthCards` block。
@@ -52,6 +53,7 @@ struct ChatMessageMetadata {
             .filter { $0.kind == .healthCards }
             .flatMap(\.healthCards)
         sleepVisualization = message.blocks.last(where: { $0.kind == .sleepVisualization })?.sleepVisualization
+        workoutVisualization = message.blocks.last(where: { $0.kind == .workoutVisualization })?.workoutVisualization
         taskCards = message.blocks
             .filter { $0.kind == .taskCards }
             .flatMap(\.taskCards)

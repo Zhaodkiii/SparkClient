@@ -11,6 +11,12 @@ protocol AISettingsRepository: Sendable {
     func saveModel(_ model: AllModels) async throws
     /// 单条更新厂商配置（按 `id` upsert）。
     func saveProvider(_ provider: APIKeys) async throws
+    /// 单条更新联网搜索厂商配置（按 `id` upsert）。
+    func saveSearchKey(_ searchKey: SearchKeys, ownerAccountID: Int64?) async throws
+    /// 删除联网搜索厂商配置（按 `id`）。
+    func deleteSearchKeys(ids: [UUID], ownerAccountID: Int64?) async throws
+    /// 更新搜索工具轻量偏好，持久化到账号级偏好载荷。
+    func saveSearchToolPreferences(_ preferences: AISearchToolPreferences, revision: SearchRuntimeConfigRevision, searchKeys: [SearchKeys]?, ownerAccountID: Int64?) async throws
     /// 更新当前账号的提示词库（按列表顺序写入 `position`）。
     func savePromptRepo(_ promptRepo: [PromptRepo], ownerAccountID: Int64?) async throws
 }

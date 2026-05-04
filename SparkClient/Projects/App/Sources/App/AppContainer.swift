@@ -224,8 +224,6 @@ final class AppContainer {
     let chatListViewModel: ChatListViewModel
     /// 单会话消息与发送 UI（单例）。
     let chatDetailViewModel: ChatDetailViewModel
-    /// 对话 V2 独立快照存储：只服务新版本页面，不复用旧聊天仓储。
-    let chatV2SnapshotStore: any ChatV2SnapshotStore
     /// 账号级运行时重置入口：账号切换、登出、鉴权失效都走这里。
     lazy var accountSessionRuntime: AccountSessionRuntime = {
         AccountSessionRuntime(
@@ -309,12 +307,10 @@ final class AppContainer {
     private var cachedMedicalDocumentUploadViewModel: MedicalDocumentUploadViewModel?
     private var cachedSettingsViewModel: SettingsViewModel?
     private var aiSettingsViewModelCache = AccountScopedCache<AISettingsViewModel>()
-    private var chatV2ViewModelCache = AccountScopedCache<ChatV2ViewModel>()
     private var mainTabDependenciesCache = AccountScopedCache<MainTabDependencies>()
 
     init(
         coreDataStack: CoreDataStack,
-        chatV2CoreDataStack: CoreDataStack,
         backend: Backend,
         ocrConfiguration: OCRConfiguration = OCRConfiguration(),
         logger: Logger = ConsoleLogger()
@@ -323,7 +319,6 @@ final class AppContainer {
         self.coreDataStack = coreDataStack
         self.backend = backend
         self.logger = logger
-        self.chatV2SnapshotStore = CoreDataChatV2SnapshotStore(coreDataStack: chatV2CoreDataStack, logger: logger)
 
         // MARK: 领域 Assembly
         // AppContainer 只决定装配顺序；每个领域内部的真实构造逻辑下沉到对应 Assembly。
@@ -522,15 +517,9 @@ final class AppContainer {
         SparkLogger.configure(level: environment.logLevel, subsystem: environment.subsystem)
         let logger = ConsoleLogger()
         let coreDataStack = CoreDataStack.shared
-        let chatV2CoreDataStack = CoreDataStack(
-            modelName: "SparkClient",
-            storeURL: CoreDataStack.isolatedStoreURL(fileName: "SparkClient.ChatV2.sqlite"),
-            logger: logger
-        )
         let backend = Backend(baseURL: environment.apiBaseURL, logger: logger)
         return AppContainer(
             coreDataStack: coreDataStack,
-            chatV2CoreDataStack: chatV2CoreDataStack,
             backend: backend,
             ocrConfiguration: environment.ocrConfiguration,
             logger: logger
@@ -544,15 +533,9 @@ final class AppContainer {
         SparkLogger.configure(level: .debug, subsystem: "SparkClient.Preview")
         let logger = ConsoleLogger()
         let coreDataStack = CoreDataStack.preview
-        let chatV2CoreDataStack = CoreDataStack(
-            inMemory: true,
-            modelName: "SparkClient",
-            logger: logger
-        )
         let backend = Backend(baseURL: URL(string: "https://preview.sparkclient.local")!, logger: logger)
         return AppContainer(
             coreDataStack: coreDataStack,
-            chatV2CoreDataStack: chatV2CoreDataStack,
             backend: backend,
             ocrConfiguration: OCRConfiguration(enableLocalServerOCR: false),
             logger: logger
@@ -630,7 +613,6 @@ final class AppContainer {
         cachedMedicalDocumentUploadViewModel = nil
         cachedSettingsViewModel = nil
         aiSettingsViewModelCache.clear()
-        chatV2ViewModelCache.clear()
         mainTabDependenciesCache.clear()
         logger.info("账号级 ViewModel 与主 Tab 依赖缓存已清理", module: .general)
     }
@@ -669,33 +651,12 @@ final class AppContainer {
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
-//            chatV2ViewModel: makeChatV2ViewModel(ownerAccountID: ownerAccountID),
             settingsViewModel: makeSettingsViewModel(),
             aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
             versionUpdateCoordinator: versionUpdateCoordinator,
             memberContextStore: memberContextStore
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
-        return created
-    }
-
-    /// 对话 V2 使用账号级独立页面状态。
-    ///
-    /// 它不依赖旧版 `ChatStateStore`，也不读取旧消息表，确保两个版本完全并行。
-    func makeChatV2ViewModel(ownerAccountID: Int64) -> ChatV2ViewModel {
-        if chatV2ViewModelCache.matches(ownerAccountID),
-           let cached = chatV2ViewModelCache.value {
-            logger.debug("对话V2 ViewModel 命中账号级缓存 accountID=\(ownerAccountID)", module: .general)
-            return cached
-        }
-
-        logger.info("对话V2 ViewModel 首次初始化 accountID=\(ownerAccountID)", module: .general)
-        let created = ChatV2ViewModel(
-            ownerAccountID: ownerAccountID,
-            snapshotStore: chatV2SnapshotStore,
-            logger: logger
-        )
-        chatV2ViewModelCache.store(created, ownerAccountID: ownerAccountID)
         return created
     }
 

@@ -15,7 +15,16 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         }
 
         var requiresDatabaseMerge: Bool {
-            blocks.contains { $0.kind == .structuredHealthCards }
+            blocks.contains { block in
+                switch block.kind {
+                case .structuredHealthCards,
+                        .sleepVisualization,
+                        .workoutVisualization:
+                    return true
+                default:
+                    return false
+                }
+            }
         }
     }
 
@@ -125,18 +134,64 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         threadID: UUID,
         assistantClientMessageID: UUID,
         title: String,
-        content: String,
+        content: String
+    ) async {
+        await insertKnowledgeCardsWhenAssistantMessageReady(
+            threadID: threadID,
+            assistantClientMessageID: assistantClientMessageID,
+            cards: [ChatKnowledgeCard(title: title, content: content)],
+            anchorToolCallID: nil
+        )
+    }
+
+    /// 与 `insertHealthSleepVisualizationWhenAssistantMessageReady` 同构：先合入流式缓存，带工具调用锚点以便与工具行对齐。
+    func insertKnowledgeCardsWhenAssistantMessageReady(
+        threadID: UUID,
+        assistantClientMessageID: UUID,
+        cards: [ChatKnowledgeCard],
+        anchorToolCallID: String? = nil
+    ) async {
+        guard cards.isEmpty == false else { return }
+        guard (try? JSONEncoder().encode(cards)) != nil else { return }
+
+        let patch = PresentationPatch(
+            blocks: [
+                ChatMessageBlock(
+                    anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
+                    kind: .knowledgeCards,
+                    toolCallID: anchorToolCallID,
+                    knowledgeCards: cards
+                )
+            ]
+        )
+
+        await mergeRichPresentationIntoStreamingCache(threadID: threadID, patch: patch)
+    }
+
+    func insertHealthWorkoutVisualizationWhenAssistantMessageReady(
+        threadID: UUID,
+        assistantClientMessageID: UUID,
+        model: ChatHealthWorkoutModel,
+        anchorToolCallID: String? = nil,
         maxWaitSeconds: TimeInterval = 300
     ) async {
+        guard (try? JSONEncoder().encode(model)) != nil else { return }
+
+        let patch = PresentationPatch(
+            blocks: [
+                ChatMessageBlock(
+                    anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
+                    kind: .workoutVisualization,
+                    toolCallID: anchorToolCallID,
+                    workoutVisualization: model
+                )
+            ]
+        )
+
         await mergeAppendRichPresentationWhenAssistantMessageReady(
             threadID: threadID,
             assistantClientMessageID: assistantClientMessageID,
-            blocks: [
-                ChatMessageBlock(
-                    kind: .knowledgeCards,
-                    knowledgeCards: [ChatKnowledgeCard(title: title, content: content)]
-                )
-            ],
+            patch: patch,
             maxWaitSeconds: maxWaitSeconds
         )
     }
@@ -161,7 +216,12 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
             ]
         )
 
-        await mergeRichPresentationIntoStreamingCache(threadID: threadID, patch: patch)
+        await mergeAppendRichPresentationWhenAssistantMessageReady(
+            threadID: threadID,
+            assistantClientMessageID: assistantClientMessageID,
+            patch: patch,
+            maxWaitSeconds: maxWaitSeconds
+        )
     }
 
     /// 与 `insertHealthSleepVisualizationWhenAssistantMessageReady` 同构：先合入流式缓存，再在助手消息已落库且锚点工具行存在时写入持久化与待同步。

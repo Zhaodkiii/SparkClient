@@ -97,8 +97,12 @@ extension ChatMessageBlock {
             // 12. 睡眠数据可视化
         case .sleepVisualization(let sleep):
             ChatSleepVisualizationMessageCard(model: sleep)
+
+            // 13. 运动数据可视化
+        case .workoutVisualization(let workout):
+            ChatWorkoutVisualizationMessageCard(model: workout)
             
-            // 13. 快捷捕获卡片（相机/相册/文件）
+            // 14. 快捷捕获卡片（相机/相册/文件）
         case .captureCard(let captureCard):
             ChatCaptureTypeMessageCard(
                 cardType: captureCard.cardType,
@@ -107,17 +111,17 @@ extension ChatMessageBlock {
                 onOpenFiles: context.onCaptureOpenFiles
             )
             
-            // 14. HTML 内容预览
+            // 15. HTML 内容预览
         case .html(let html):
             if html.isEmpty == false {
                 ChatHTMLPreviewBlockView(htmlContent: html)
             }
             
-            // 15. 小任务卡片
+            // 16. 小任务卡片
         case .smallTaskCard(let payload):
             ChatSmallTaskMessageCard(payload: payload)
             
-            // 16. 文件附件块
+            // 17. 文件附件块
         case .fileAttachments(let attachments):
             ChatFileAttachmentBlockView(
                 unifiedFilePreview: context.unifiedFilePreview,
@@ -127,7 +131,7 @@ extension ChatMessageBlock {
                 downloadToLocalFile: context.onDownloadChatAttachmentToLocalFile
             )
             
-            // 17. 纯文本 / Markdown / 数学公式
+            // 18. 纯文本 / Markdown / 数学公式
         case .text(let text):
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                 if context.isMathMode {
@@ -145,7 +149,7 @@ extension ChatMessageBlock {
                 }
             }
             
-            // 18. 任务卡片列表
+            // 19. 任务卡片列表
         case .taskCards(let cards):
             ForEach(cards) { card in
                 TaskCardCell(
