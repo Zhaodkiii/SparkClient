@@ -691,6 +691,7 @@ final class ChatDetailViewModel: ObservableObject {
         
         // MARK: - 状态标记：正在发送
         stateStore.setSending(true)
+        stateStore.requestScrollToBottom(for: threadID)
         
         // MARK: - 无论成功失败，最后都要重置发送状态（ defer 最终一定会执行）
         defer {
@@ -749,6 +750,7 @@ final class ChatDetailViewModel: ObservableObject {
                         stateStore.setSelectedThreadID(localSnapshot.thread.id)
                         // 不清空流式占位，保证打字效果不中断
                         stateStore.setMessages(localSnapshot.messages, for: localSnapshot.thread.id, clearStreamingAssistant: false)
+                        stateStore.requestScrollToBottom(for: localSnapshot.thread.id)
                         if let listItem {
                             stateStore.upsertThreadListItem(listItem)
                         }

@@ -35,6 +35,8 @@ final class ChatStateStore: ObservableObject {
     @Published private var bottomViewportLockedThreadIDs: Set<UUID> = []
     /// Bumps on each streaming text/reasoning update so views can scroll even when message count is unchanged.
     @Published private(set) var streamingContentGeneration: UInt64 = 0
+    /// Bumps when the conversation view should force-scroll to the newest message, such as after sending.
+    @Published private(set) var scrollToBottomRequestGenerationByThread: [UUID: UInt64] = [:]
 
     var selectedThread: ChatThread? {
         threadItems.first(where: { $0.id == selectedThreadID })?.thread
@@ -210,6 +212,14 @@ final class ChatStateStore: ObservableObject {
 
     func isBottomViewportLocked(for threadID: UUID) -> Bool {
         bottomViewportLockedThreadIDs.contains(threadID)
+    }
+
+    func requestScrollToBottom(for threadID: UUID) {
+        scrollToBottomRequestGenerationByThread[threadID, default: 0] &+= 1
+    }
+
+    func scrollToBottomRequestGeneration(for threadID: UUID) -> UInt64 {
+        scrollToBottomRequestGenerationByThread[threadID] ?? 0
     }
 
     func setDraft(_ text: String, for threadID: UUID?) {

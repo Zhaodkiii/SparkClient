@@ -2,28 +2,51 @@ import SwiftUI
 import UIKit
 
 /// UIKit 承载的会话消息列表：`DiffableDataSource` 增量更新 + 底部锚定 + 键盘 inset。
+
+///
+/// UIKit 聊天会话消息列表控制器
+/// 核心能力：
+/// 1. Diffable DataSource 增量更新消息（高性能、无闪烁）
+/// 2. 流式消息自动滚动到底部
+/// 3. 键盘弹出/隐藏时自动保持视口
+/// 4. 下拉刷新 + 上拉加载更多
+/// 5. 滚动锚定（顶部插入消息不跳动、底部锁定）
+///
 @MainActor
 final class ConversationMessageListViewController: UIViewController, UICollectionViewDelegate, UIGestureRecognizerDelegate {
+
+    // MARK: - 滚动锚点（顶部插入消息时保持位置不跳动）
     private struct ScrollAnchor {
-        let itemID: UUID
-        let offsetFromTop: CGFloat
+        let itemID: UUID           // 锚定的消息 ID
+        let offsetFromTop: CGFloat // 距离顶部的偏移量
     }
 
-    private(set) var collectionView: UICollectionView!
-    private var dataSource: UICollectionViewDiffableDataSource<Int, UUID>!
-    private var messageLookup: [UUID: ChatMessage] = [:]
-    private var lastStreamingGeneration: UInt64 = 0
-    private var userDragging = false
-    private var hasUserInteractedSinceThreadOpen = false
-    private var bottomViewportLockActive = false
-    private var lastLockedContentHeight: CGFloat = 0
-    private var lastKnownViewportHeight: CGFloat = 0
-    private var shouldMaintainBottomOnNextLayout = false
-    private var lastAppliedMessageIDs: [UUID] = []
-    private var lastRenderedMessages: [ChatMessage] = []
-    private var keyboardObservers: [NSObjectProtocol] = []
-    private weak var backgroundTapGestureRecognizer: UITapGestureRecognizer?
+    // MARK: - UI 组件
+    private(set) var collectionView: UICollectionView! // 消息列表（UICollectionView）
+    private var dataSource: UICollectionViewDiffableDataSource<Int, UUID>! // 增量数据源
+    private var messageLookup: [UUID: ChatMessage] = [:] // 消息 ID → 消息模型映射
 
+    // MARK: - 流式渲染状态
+    private var lastStreamingGeneration: UInt64 = 0 // 流式更新版本号（判断是否需要重刷）
+    private var lastScrollToBottomRequestGeneration: UInt64 = 0 // 发送等主动动作触发的强制贴底版本号
+    private var userDragging = false // 用户是否正在手动拖拽列表
+    private var hasUserInteractedSinceThreadOpen = false // 用户是否交互过（交互后不再自动滚到底部）
+    
+    // MARK: - 视口锁定（AI 回复时强制贴底）
+    private var bottomViewportLockActive = false // 是否激活底部锁定
+    private var lastLockedContentHeight: CGFloat = 0 // 上次锁定时的内容高度
+    private var lastKnownViewportHeight: CGFloat = 0 // 上次可见区域高度
+    private var shouldMaintainBottomOnNextLayout = false // 下次布局时强制贴底
+
+    // MARK: - 数据缓存
+    private var lastAppliedMessageIDs: [UUID] = [] // 上次应用的消息 ID 列表
+    private var lastRenderedMessages: [ChatMessage] = [] // 上次渲染的消息
+    
+    // MARK: - 键盘 & 手势
+    private var keyboardObservers: [NSObjectProtocol] = [] // 键盘监听
+    private weak var backgroundTapGestureRecognizer: UITapGestureRecognizer? // 空白点击收起键盘
+
+    // MARK: - 依赖注入（ViewModel / Store / 工具）
     weak var stateStore: ChatStateStore?
     weak var detailViewModel: ChatDetailViewModel?
     weak var uiStateStore: ChatMessageUIStateStore?
@@ -32,23 +55,31 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     var taskManager: TaskManager?
     var logger: Logger?
     var actionState: ChatMessageActionState?
-    var onLoadMore: (() -> Void)?
-    var onRefresh: (() async -> Void)?
-    var onCaptureOpenFiles: (() -> Void)?
+    
+    // MARK: - 回调
+    var onLoadMore: (() -> Void)? // 上拉加载更多
+    var onRefresh: (() async -> Void)? // 下拉刷新
+    var onCaptureOpenFiles: (() -> Void)? // 打开文件回调
 
+    // MARK: - 刷新控件
     private var refreshControl: UIRefreshControl?
-    private var isLoadingMoreFlag: Bool = false
+    private var isLoadingMoreFlag: Bool = false // 加载中状态
 
+    // MARK: - 生命周期
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+        
+        // 1. 创建布局 + CollectionView
         let layout = Self.makeCompositionalLayout()
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.delegate = self
         cv.alwaysBounceVertical = true
-        cv.keyboardDismissMode = .interactive
+        cv.keyboardDismissMode = .interactive // 互动模式收起键盘
         view.addSubview(cv)
+        
+        // 铺满全屏
         NSLayoutConstraint.activate([
             cv.topAnchor.constraint(equalTo: view.topAnchor),
             cv.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -57,30 +88,36 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         ])
         collectionView = cv
 
+        // 2. 下拉刷新
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         cv.refreshControl = refresh
         refreshControl = refresh
 
+        // 3. 空白点击收起键盘
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleBackgroundTap(_:)))
         tapGesture.cancelsTouchesInView = false
         tapGesture.delegate = self
         cv.addGestureRecognizer(tapGesture)
         backgroundTapGestureRecognizer = tapGesture
 
+        // 4. 键盘监听 + 数据源配置
         registerForKeyboardNotifications()
         configureDataSource()
     }
 
+    // 注销监听
     deinit {
         for observer in keyboardObservers {
             NotificationCenter.default.removeObserver(observer)
         }
     }
 
+    /// 切换新会话时重置所有状态
     func resetForNewThread() {
         lastAppliedMessageIDs = []
         lastStreamingGeneration = 0
+        lastScrollToBottomRequestGeneration = 0
         lastRenderedMessages = []
         userDragging = false
         hasUserInteractedSinceThreadOpen = false
@@ -90,19 +127,24 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         shouldMaintainBottomOnNextLayout = false
     }
 
+    /// 视图布局完成（键盘/旋转/分屏 后触发）
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let viewportHeight = currentViewportHeight()
         let viewportChanged = abs(viewportHeight - lastKnownViewportHeight) > 0.5
         lastKnownViewportHeight = viewportHeight
+        
+        // 视口变化时，保持贴底
         if viewportChanged, shouldMaintainBottomOnNextLayout {
             shouldMaintainBottomOnNextLayout = false
             lastLockedContentHeight = collectionView.collectionViewLayout.collectionViewContentSize.height
             scrollToBottom(animated: false, force: true)
         }
+        
         maintainBottomViewportLockIfNeeded()
     }
 
+    // MARK: - 下拉刷新
     @objc private func handleRefresh() {
         guard let onRefresh else {
             refreshControl?.endRefreshing()
@@ -116,53 +158,77 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         }
     }
 
+    // MARK: - 核心：应用消息列表（增量更新 UI）
+    /// 外部调用：传入最新消息，进行增量刷新
     func apply(threadID: UUID, payload: ConversationListApplyPayload) {
         guard let collectionView else { return }
-        _ = threadID
         isLoadingMoreFlag = payload.isLoadingMoreMessages
         let messages = payload.messages
         let hasMoreMessages = payload.hasMoreMessages
         let streamingContentGeneration = payload.streamingContentGeneration
+        let shouldForceScrollToBottom = payload.scrollToBottomRequestGeneration != lastScrollToBottomRequestGeneration
+        lastScrollToBottomRequestGeneration = payload.scrollToBottomRequestGeneration
+        if shouldForceScrollToBottom {
+            shouldMaintainBottomOnNextLayout = true
+        }
+        
+        // 未交互时 → 自动贴底
         bottomViewportLockActive = payload.lockBottomViewport && hasUserInteractedSinceThreadOpen == false
+        
+        // 构建更新计划（diff 算法：新增/更新/删除/ prepend）
         let previousForPlan = payload.forceFullListRediff ? [] : lastRenderedMessages
         let updatePlan = ConversationUpdateBuilder.plan(previous: previousForPlan, current: messages)
+        
+        // 记录当前是否贴底（用于新增消息后判断是否继续贴底）
         let wasPinnedToBottom = ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView)
+        // 顶部插入消息时，记录锚点（防止跳动）
         let topAnchor = updatePlan.hasPrependedItems ? captureTopAnchor() : nil
 
+        // 构建 Item ID 列表
         var items: [UUID] = []
         if hasMoreMessages {
-            items.append(ConversationListLayoutConstants.loadMoreRowUUID)
+            items.append(ConversationListLayoutConstants.loadMoreRowUUID) // 加载更多行
         }
         for m in messages {
             items.append(m.clientMessageID)
         }
 
+        // 构建消息映射表
         var lookup: [UUID: ChatMessage] = [:]
         for m in messages {
             lookup[m.clientMessageID] = m
         }
         messageLookup = lookup
 
-        let newMessageOrder = messages.map(\.clientMessageID)
-        lastAppliedMessageIDs = newMessageOrder
+        // 缓存最后渲染数据
+        lastAppliedMessageIDs = messages.map(\.clientMessageID)
         lastRenderedMessages = messages
 
+        // 构建 Diffable 快照
         var snapshot = NSDiffableDataSourceSnapshot<Int, UUID>()
         snapshot.appendSections([0])
         snapshot.appendItems(items, toSection: 0)
+        
+        // 需要刷新的行（流式更新）
         let reloadableIDs = updatePlan.reloadedItemIDs.filter { snapshot.indexOfItem($0) != nil }
-        if reloadableIDs.isEmpty == false {
+        if !reloadableIDs.isEmpty {
             snapshot.reloadItems(reloadableIDs)
         }
 
+        // 流式版本号递增
         let genBump = streamingContentGeneration != lastStreamingGeneration
         lastStreamingGeneration = streamingContentGeneration
 
+        // 应用快照
         dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
             guard let self else { return }
             self.view.layoutIfNeeded()
             self.collectionView.layoutIfNeeded()
-            if self.bottomViewportLockActive {
+            
+            // 策略：主动请求贴底 → 底部锁定 → 恢复顶部锚点 → 结构变化贴底 → 流式更新贴底
+            if shouldForceScrollToBottom {
+                self.scrollToBottom(animated: false, force: true)
+            } else if self.bottomViewportLockActive {
                 self.maintainBottomViewportLockIfNeeded(force: true)
             } else if updatePlan.hasPrependedItems, let topAnchor {
                 self.restoreTopAnchor(topAnchor)
@@ -178,6 +244,8 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         }
     }
 
+    // MARK: - 顶部锚点（顶部加载历史消息时保持屏幕不动）
+    /// 捕获当前顶部锚点
     private func captureTopAnchor() -> ScrollAnchor? {
         let visible = collectionView.indexPathsForVisibleItems.sorted()
         for indexPath in visible {
@@ -194,34 +262,42 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         return nil
     }
 
+    /// 恢复顶部锚点（不跳动）
     private func restoreTopAnchor(_ anchor: ScrollAnchor) {
         guard let indexPath = dataSource.indexPath(for: anchor.itemID),
               let attributes = collectionView.layoutAttributesForItem(at: indexPath) else {
             return
         }
         let targetY = attributes.frame.minY - anchor.offsetFromTop
-        collectionView.setContentOffset(CGPoint(x: collectionView.contentOffset.x, y: targetY), animated: false)
+        collectionView.setContentOffset(CGPoint(x: 0, y: targetY), animated: false)
     }
 
+    // MARK: - 滚动到底部
     private func scrollToBottom(animated: Bool, force: Bool) {
         guard let collectionView else { return }
         let n = collectionView.numberOfItems(inSection: 0)
         guard n > 0 else { return }
-        if force == false && ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView) == false {
+        
+        // 非强制：只有原本就在底部才滚动
+        if !force && !ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView) {
             return
         }
+        
         let indexPath = IndexPath(item: n - 1, section: 0)
         collectionView.scrollToItem(at: indexPath, at: .bottom, animated: animated)
     }
 
+    /// 维持底部锁定（AI 流式回复专用）
     private func maintainBottomViewportLockIfNeeded(force: Bool = false) {
-        guard bottomViewportLockActive, hasUserInteractedSinceThreadOpen == false else { return }
+        guard bottomViewportLockActive, !hasUserInteractedSinceThreadOpen else { return }
         let contentHeight = collectionView.collectionViewLayout.collectionViewContentSize.height
+        
         guard force || abs(contentHeight - lastLockedContentHeight) > 0.5 else { return }
         lastLockedContentHeight = contentHeight
         scrollToBottom(animated: false, force: true)
     }
 
+    /// 计算可见视口高度（减去安全区 + 内边距）
     private func currentViewportHeight() -> CGFloat {
         let visibleHeight = collectionView.bounds.height
             - collectionView.adjustedContentInset.top
@@ -229,9 +305,11 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         return max(0, visibleHeight)
     }
 
+    // MARK: - 键盘监听
     private func registerForKeyboardNotifications() {
         let center = NotificationCenter.default
         keyboardObservers = [
+            // 键盘即将改变 frame
             center.addObserver(
                 forName: UIResponder.keyboardWillChangeFrameNotification,
                 object: nil,
@@ -239,6 +317,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
             ) { [weak self] _ in
                 self?.prepareForKeyboardViewportChange()
             },
+            // 键盘即将隐藏
             center.addObserver(
                 forName: UIResponder.keyboardWillHideNotification,
                 object: nil,
@@ -249,6 +328,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         ]
     }
 
+    /// 键盘变化前：标记需要保持贴底
     private func prepareForKeyboardViewportChange() {
         guard let collectionView else { return }
         if bottomViewportLockActive || ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView) {
@@ -256,103 +336,124 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         }
     }
 
+    // MARK: - 空白点击收起键盘
     @objc private func handleBackgroundTap(_ gesture: UITapGestureRecognizer) {
         guard gesture.state == .ended, view.window != nil, isKeyboardVisible else { return }
         KeyboardDismissHelper.dismissKeyboard()
     }
 
+    /// 判断键盘是否弹出
     private var isKeyboardVisible: Bool {
         view.window?.firstResponder != nil
     }
 
     // MARK: - UICollectionViewDelegate
-
+    /// 开始拖拽：用户已交互 → 停止自动贴底
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         userDragging = true
         hasUserInteractedSinceThreadOpen = true
         bottomViewportLockActive = false
     }
 
+    /// 结束拖拽
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        if decelerate == false {
+        if !decelerate {
             userDragging = false
         }
     }
 
+    /// 滚动停止
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         userDragging = false
     }
 
+    /// 即将显示 Cell
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        if bottomViewportLockActive,
-           indexPath.section == 0,
-           indexPath.item == collectionView.numberOfItems(inSection: 0) - 1 {
+        // 底部锁定强化
+        if bottomViewportLockActive, indexPath.item == collectionView.numberOfItems(inSection: 0) - 1 {
             maintainBottomViewportLockIfNeeded(force: true)
         }
+        
+        // 滑到“加载更多”行 → 触发加载
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
         if item == ConversationListLayoutConstants.loadMoreRowUUID {
             onLoadMore?()
         }
     }
 
+    // MARK: - 手势代理：过滤不需要响应的点击（如按钮、输入框）
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard gestureRecognizer === backgroundTapGestureRecognizer, isKeyboardVisible else { return false }
         return touch.view?.enclosingKeyboardDismissExemptView == nil
     }
 
-    // MARK: - Layout & data source
-
+    // MARK: - 布局：Compositional Layout
     private static func makeCompositionalLayout() -> UICollectionViewLayout {
+        // 自适应高度消息 cell
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
             heightDimension: .estimated(140)
         )
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
+        
         let groupSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
             heightDimension: .estimated(140)
         )
         let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
+        
         let section = NSCollectionLayoutSection(group: group)
-        section.interGroupSpacing = 12
+        section.interGroupSpacing = 12 // 消息间距
         section.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 0, bottom: 16, trailing: 0)
+        
         return UICollectionViewCompositionalLayout(section: section)
     }
 
+    // MARK: - 数据源配置
     private func configureDataSource() {
-        let registration = UICollectionView.CellRegistration<ConversationHostingCell, UUID> { [weak self] cell, _, item in
+        // UIKit 包裹 SwiftUI Cell
+        let registration = UICollectionView.CellRegistration<ConversationHostingCell, UUID> { [weak self] cell, _, itemID in
             guard let self else { return }
-            cell.configure(parent: self, content: self.hostedContent(for: item))
+            cell.configure(parent: self, content: self.hostedContent(for: itemID))
         }
+
+        // DataSource
         dataSource = UICollectionViewDiffableDataSource<Int, UUID>(
             collectionView: collectionView,
-            cellProvider: { collectionView, indexPath, item in
-                collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+            cellProvider: { collectionView, indexPath, itemID in
+                collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: itemID)
             }
         )
     }
 
+    // MARK: - SwiftUI 内容构建
     @ViewBuilder
-    private func hostedContent(for item: UUID) -> some View {
-        if item == ConversationListLayoutConstants.loadMoreRowUUID {
+    private func hostedContent(for itemID: UUID) -> some View {
+        // 加载更多行
+        if itemID == ConversationListLayoutConstants.loadMoreRowUUID {
             ConversationLoadMoreRow(isLoading: isLoadingMoreFlag)
-        } else {
-            let clientID = item
-            if let msg = messageLookup[clientID],
-               let stateStore,
-               let detailViewModel,
-               let uiStateStore,
-               let speechHelper,
-               let memberContextStore,
-               let actionState,
-               let taskManager,
-               let logger {
+        }
+        // 消息行
+        else {
+            if let msg = messageLookup[itemID],
+               let stateStore = stateStore,
+               let detailViewModel = detailViewModel,
+               let uiStateStore = uiStateStore,
+               let speechHelper = speechHelper,
+               let memberContextStore = memberContextStore,
+               let actionState = actionState,
+               let taskManager = taskManager,
+               let logger = logger
+            {
                 let threadID = msg.threadID
-                let all = stateStore.conversationListItems(for: threadID).filter { uiStateStore.isDeleted($0.id) == false }
+                let allVisibleMessages = stateStore.conversationListItems(for: threadID)
+                    .filter { uiStateStore.isDeleted($0.id) == false }
+                
+                // 消息行 SwiftUI 组件
                 ChatConversationMessageRow(
                     threadID: threadID,
                     message: msg,
-                    visibleMessages: all,
+                    visibleMessages: allVisibleMessages,
                     stateStore: stateStore,
                     detailViewModel: detailViewModel,
                     uiStateStore: uiStateStore,

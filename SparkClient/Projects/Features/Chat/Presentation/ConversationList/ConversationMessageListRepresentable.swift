@@ -17,6 +17,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     var isLoadingMoreMessages: Bool
     var lockBottomViewport: Bool
     var streamingContentGeneration: UInt64
+    var scrollToBottomRequestGeneration: UInt64
 
     var onLoadMore: () -> Void
     var onRefresh: () async -> Void
@@ -63,6 +64,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
             isLoadingMoreMessages: isLoadingMoreMessages,
             lockBottomViewport: lockBottomViewport,
             streamingContentGeneration: streamingContentGeneration,
+            scrollToBottomRequestGeneration: scrollToBottomRequestGeneration,
             forceFullListRediff: forceRediff
         )
         uiViewController.apply(threadID: threadID, payload: payload)

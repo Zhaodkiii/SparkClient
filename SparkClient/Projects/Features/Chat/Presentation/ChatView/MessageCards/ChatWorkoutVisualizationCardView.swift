@@ -3,7 +3,17 @@ import SwiftUI
 struct ChatWorkoutVisualizationMessageCard: View {
     let model: ChatHealthWorkoutModel
 
-    @State private var expandedIDs: Set<String> = []
+    @State private var expandedIDs: Set<String>
+
+    init(model: ChatHealthWorkoutModel) {
+        self.model = model
+        let sorted = model.workouts.sorted { $0.start < $1.start }
+        if sorted.count == 1, let first = sorted.first {
+            _expandedIDs = State(initialValue: [first.id])
+        } else {
+            _expandedIDs = State(initialValue: [])
+        }
+    }
 
     private var workouts: [ChatHealthWorkoutModel.WorkoutSession] {
         model.workouts.sorted { $0.start < $1.start }
@@ -68,12 +78,12 @@ struct ChatWorkoutVisualizationMessageCard: View {
             }
         }
         .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
-        .onAppear(perform: setInitialExpansion)
     }
 
     private var header: some View {
@@ -116,11 +126,6 @@ struct ChatWorkoutVisualizationMessageCard: View {
                 icon: "flame"
             )
         }
-    }
-
-    private func setInitialExpansion() {
-        guard expandedIDs.isEmpty, workouts.count == 1, let first = workouts.first else { return }
-        expandedIDs = [first.id]
     }
 }
 

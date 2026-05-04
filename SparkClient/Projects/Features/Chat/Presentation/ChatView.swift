@@ -406,6 +406,7 @@ struct ChatView: View {
             isLoadingMoreMessages: isLoadingMoreMessages,
             lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
             streamingContentGeneration: stateStore.streamingContentGeneration,
+            scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
             onLoadMore: {
                 Task { await detailViewModel.loadMoreMessages(for: threadID) }
             },

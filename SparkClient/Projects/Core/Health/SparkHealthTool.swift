@@ -142,72 +142,122 @@ final class SparkHealthTool: @unchecked Sendable {
         }
     }
 
+    ///
+    /// 查询睡眠详情（核心方法）
+    /// 从 HealthKit 读取睡眠分析数据 → 按自然天分组 → 生成睡眠阶段、时长、时间线
+    /// 返回：ChatHealthSleepModel（供 AI 展示 + 睡眠卡片渲染）
+    ///
     func fetchSleepDetails(from startDate: Date, to endDate: Date) async throws -> ChatHealthSleepModel {
         let calendar = Calendar.current
 
+        // 1. 基础校验：时间范围是否合法
         guard validateDateRange(startDate: startDate, endDate: endDate) else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.invalid_date_range"))
         }
+
+        // 2. 检查 HealthKit 是否可用
         guard HKHealthStore.isHealthDataAvailable() else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.healthkit_unavailable"))
         }
+
+        // 3. 获取睡眠分析类型（HKCategoryType）
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.sleep_type_unavailable"))
         }
 
+        // 4. 请求健康数据授权（必须）
         try await requestAuthorization()
 
-        let bedtimeHour = 20
+        // MARK: 构建睡眠查询时间范围
+        // 睡眠逻辑：以 前一天 18:00 作为睡眠日的开始
+        let bedtimeHour = 18
         let bedtimeMinute = 0
         let prevDay = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: startDate)) ?? startDate
         let predicateStart = calendar.date(bySettingHour: bedtimeHour, minute: bedtimeMinute, second: 0, of: prevDay) ?? prevDay
         let predicateEnd = inclusivePredicateEnd(for: endDate)
+
+        // 5. 执行查询：获取睡眠 categorySamples
         let samples = try await categorySamples(type: sleepType, start: predicateStart, end: predicateEnd)
 
+        // 6. 过滤：只保留我们关心的睡眠阶段（排除无效值）
         let acceptedStages = Self.acceptedSleepStageRawValues()
         let filteredSamples = samples.filter { acceptedStages.contains($0.value) }
+
         guard filteredSamples.isEmpty == false else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.no_sleep"))
         }
 
-        let isoDayFormatter = Self.dayFormatter(calendar: calendar)
-        let clockFormatter = Self.clockFormatter(calendar: calendar)
+        // 格式化工具
+        let isoDayFormatter = Self.dayFormatter(calendar: calendar)    // 日期格式化：yyyy-MM-dd
+        let clockFormatter = Self.clockFormatter(calendar: calendar)  // 时间格式化：HH:mm
 
+        async let heartRateSamplesTask = optionalQuantitySamples(for: .heartRate, start: predicateStart, end: predicateEnd)
+        async let respiratorySamplesTask = optionalQuantitySamples(for: .respiratoryRate, start: predicateStart, end: predicateEnd)
+        async let wristTemperatureSamplesTask = optionalSleepingWristTemperatureSamples(start: predicateStart, end: predicateEnd)
+        let (heartRateSamples, respiratorySamples, wristTemperatureSamples) = await (
+            heartRateSamplesTask,
+            respiratorySamplesTask,
+            wristTemperatureSamplesTask
+        )
+
+        // MARK: 睡眠自然日分组规则
+        // 规则：18:00 之后入睡 → 算作当天的睡眠
         func sleepDayAnchor(for date: Date) -> Date {
             let todayStart = calendar.startOfDay(for: date)
             guard let bedtimeToday = calendar.date(bySettingHour: bedtimeHour, minute: bedtimeMinute, second: 0, of: todayStart) else {
                 return todayStart
             }
+            // 早于当晚18点 → 属于前一天睡眠
             return date < bedtimeToday
                 ? (calendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart)
                 : todayStart
         }
 
+        // 7. 按睡眠日分组（关键：一晚睡眠 = 一组）
         var grouped: [Date: [HKCategorySample]] = [:]
         for sample in filteredSamples {
             grouped[sleepDayAnchor(for: sample.startDate), default: []].append(sample)
         }
 
+        // 8. 筛选目标日期范围内的睡眠日
         let startDay = calendar.startOfDay(for: startDate)
         let endDay = calendar.startOfDay(for: endDate)
+        
+        // 9. 遍历每一天 → 构建睡眠 Day 模型
         let days = grouped.keys
             .filter { $0 >= startDay && $0 <= endDay }
             .sorted()
             .compactMap { day -> ChatHealthSleepModel.Day? in
+                // 取出当天所有睡眠片段并按时间排序
                 let daySamples = (grouped[day] ?? []).sorted { $0.startDate < $1.startDate }
                 guard let first = daySamples.first, let last = daySamples.last else { return nil }
+
+                // 整段睡眠的起止时间戳
                 let spanStart = Int64(first.startDate.timeIntervalSince1970)
                 let spanEnd = Int64(last.endDate.timeIntervalSince1970)
                 let spanSeconds = max(1, Double(spanEnd - spanStart))
 
+                // 统计各阶段分钟数
                 var stageMinutes: [ChatHealthSleepModel.Stage: Int] = [:]
+                
+                // 10. 把 HealthKit 原始片段 → 睡眠时间线 Segment
                 let segments = daySamples.map { sample -> ChatHealthSleepModel.Segment in
-                    let stage = Self.chatStage(fromRawValue: sample.value)
+                    let stage = Self.chatStage(fromRawValue: sample.value) // 映射：系统值 → 统一睡眠阶段
                     let start = Int64(sample.startDate.timeIntervalSince1970)
                     let end = Int64(sample.endDate.timeIntervalSince1970)
                     let minutes = Int((sample.endDate.timeIntervalSince(sample.startDate) / 60).rounded())
+                    
+                    // 累加各阶段时长
                     stageMinutes[stage, default: 0] += max(0, minutes)
+                    let vitals = Self.buildSleepSegmentVitals(
+                        start: sample.startDate,
+                        end: sample.endDate,
+                        heartRateSamples: heartRateSamples,
+                        respiratorySamples: respiratorySamples,
+                        wristTemperatureSamples: wristTemperatureSamples
+                    )
 
+                    // 计算百分比：用于睡眠条形图渲染
                     return ChatHealthSleepModel.Segment(
                         stage: stage,
                         start: start,
@@ -215,15 +265,18 @@ final class SparkHealthTool: @unchecked Sendable {
                         startPercent: max(0, Double(start - spanStart) / spanSeconds * 100),
                         widthPercent: max(0.01, Double(end - start) / spanSeconds * 100),
                         startText: clockFormatter.string(from: sample.startDate),
-                        endText: clockFormatter.string(from: sample.endDate)
+                        endText: clockFormatter.string(from: sample.endDate),
+                        vitals: vitals
                     )
                 }
 
+                // 11. 计算总睡眠时长（排除清醒 awake）
                 let awake = stageMinutes[.awake] ?? 0
                 let totalSleep = max(0, stageMinutes.reduce(0) { partial, item in
                     item.key == .awake ? partial : partial + item.value
                 })
 
+                // 12. 构建单日睡眠模型
                 return ChatHealthSleepModel.Day(
                     date: isoDayFormatter.string(from: day),
                     summary: ChatHealthSleepModel.Summary(
@@ -233,7 +286,7 @@ final class SparkHealthTool: @unchecked Sendable {
                         startText: clockFormatter.string(from: first.startDate),
                         endText: clockFormatter.string(from: last.endDate)
                     ),
-                    timeline: segments,
+                    timeline: segments, // 完整睡眠阶段时间线
                     stages: ChatHealthSleepModel.StageBreakdown(
                         deep: stageMinutes[.deep] ?? 0,
                         core: stageMinutes[.core] ?? 0,
@@ -244,53 +297,106 @@ final class SparkHealthTool: @unchecked Sendable {
                 )
             }
 
+        // 13. 最终校验：无睡眠数据则抛出错误
         guard days.isEmpty == false else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.no_sleep_range"))
         }
 
-        return ChatHealthSleepModel(generatedAt: Int64(Date().timeIntervalSince1970), days: days)
+        // 14. 返回最终睡眠模型
+        return ChatHealthSleepModel(
+            generatedAt: Int64(Date().timeIntervalSince1970),
+            days: days
+        )
     }
-
-    func fetchWorkoutDetails(from startDate: Date, to endDate: Date, types: [String], maxItems: Int) async throws -> ChatHealthWorkoutModel {
+    ///
+    /// 从 HealthKit 读取健身/运动记录详情
+    /// 作用：查询跑步、骑行、游泳、力量训练等运动数据 → 转为 ChatHealthWorkoutModel
+    ///
+    /// - Parameters:
+    ///   - startDate: 开始时间
+    ///   - endDate: 结束时间
+    ///   - types: 运动类型列表（running / cycling / swimming 等字符串）
+    ///   - maxItems: 最大返回条数
+    /// - Returns: 可给 AI 使用的标准化运动数据模型 ChatHealthWorkoutModel
+    ///
+    func fetchWorkoutDetails(
+        from startDate: Date,
+        to endDate: Date,
+        types: [String],
+        maxItems: Int
+    ) async throws -> ChatHealthWorkoutModel {
+        // MARK: 1. 基础校验
+        // 校验时间范围是否合法
         guard validateDateRange(startDate: startDate, endDate: endDate) else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.invalid_date_range"))
         }
+        // 检查设备是否支持 HealthKit
         guard HKHealthStore.isHealthDataAvailable() else {
             throw SparkHealthToolError(message: Self.text("health.tool.error.healthkit_unavailable"))
         }
 
+        // MARK: 2. 请求健康数据授权
+        // 向用户申请读取健身记录的权限
         try await requestAuthorization()
 
+        // MARK: 3. 解析传入的运动类型
+        // 将字符串类型（如 "running"）映射为 HealthKit 对应的 HKWorkoutActivityType
         let activityTypes = types.compactMap(Self.parseWorkoutActivityType)
+        // 记录无法识别的运动类型，用于提示用户
         let unrecognized = types.filter { Self.parseWorkoutActivityType($0) == nil }
-        let datePredicate = HKQuery.predicateForSamples(withStart: startDate, end: inclusivePredicateEnd(for: endDate))
+
+        // MARK: 4. 构建查询条件（NSPredicate）
+        // 时间范围条件
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: startDate,
+            end: inclusivePredicateEnd(for: endDate)
+        )
+        
         let predicate: NSPredicate
         if activityTypes.isEmpty {
+            // 不指定运动类型 → 只按时间查询
             predicate = datePredicate
         } else {
+            // 指定了运动类型 → 时间 + 运动类型 组合查询
             predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 datePredicate,
-                NSCompoundPredicate(orPredicateWithSubpredicates: activityTypes.map { HKQuery.predicateForWorkouts(with: $0) })
+                NSCompoundPredicate(orPredicateWithSubpredicates: activityTypes.map {
+                    HKQuery.predicateForWorkouts(with: $0)
+                })
             ])
         }
 
-        let workouts = try await workoutSamples(predicate: predicate, limit: max(1, min(maxItems, 100)))
+        // MARK: 5. 从 HealthKit 读取运动数据
+        // 执行查询，限制最大条数 1~100
+        let workouts = try await workoutSamples(
+            predicate: predicate,
+            limit: max(1, min(maxItems, 100))
+        )
+
+        // MARK: 6. 处理无法识别的运动类型提示
         var notes: [String] = []
-        if unrecognized.isEmpty == false {
-            notes.append(Self.format("health.tool.warning.unrecognized_activity_types", unrecognized.joined(separator: ", ")))
+        if !unrecognized.isEmpty {
+            notes.append(Self.format(
+                "health.tool.warning.unrecognized_activity_types",
+                unrecognized.joined(separator: ", ")
+            ))
         }
 
+        // MARK: 7. 转换：HKWorkout → ChatHealthWorkoutModel.WorkoutSession
         var sessions: [ChatHealthWorkoutModel.WorkoutSession] = []
         for workout in workouts {
+            //  enrich：补充心率、路线、事件、卡路里等详细数据
             if let session = await enrichWorkoutSession(workout) {
                 sessions.append(session)
             }
         }
 
+        // MARK: 8. 无数据时添加提示
         if sessions.isEmpty {
             notes.append(Self.text("health.tool.error.no_workouts"))
         }
 
+        // MARK: 9. 构建最终模型并返回
         return ChatHealthWorkoutModel(
             generatedAt: Int64(Date().timeIntervalSince1970),
             workouts: sessions,
@@ -447,12 +553,16 @@ final class SparkHealthTool: @unchecked Sendable {
             HKObjectType.workoutType(),
             HKSeriesType.workoutRoute(),
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
+            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!,
             HKObjectType.quantityType(forIdentifier: .flightsClimbed)!,
             HKObjectType.quantityType(forIdentifier: .distanceCycling)!
         ]
         if #available(iOS 16.0, *) {
             if let runningSpeed = HKObjectType.quantityType(forIdentifier: .runningSpeed) {
                 readTypes.insert(runningSpeed)
+            }
+            if let wristTemperature = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
+                readTypes.insert(wristTemperature)
             }
         }
         try await requestAuthorization(readTypes: readTypes, writeTypes: [])
@@ -511,6 +621,45 @@ final class SparkHealthTool: @unchecked Sendable {
                 }
             }
             healthStore.execute(query)
+        }
+    }
+
+    private func quantitySamples(type: HKQuantityType, start: Date, end: Date) async throws -> [HKQuantitySample] {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: sort) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: samples as? [HKQuantitySample] ?? [])
+                }
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    private func optionalQuantitySamples(for identifier: HKQuantityTypeIdentifier, start: Date, end: Date) async -> [HKQuantitySample] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
+        do {
+            return try await quantitySamples(type: type, start: start, end: end)
+        } catch {
+            logger.error("HealthKit optional quantity query failed: \(identifier.rawValue), \(error.localizedDescription)", module: .aiConfig)
+            return []
+        }
+    }
+
+    private func optionalSleepingWristTemperatureSamples(start: Date, end: Date) async -> [HKQuantitySample] {
+        guard #available(iOS 16.0, *),
+              let type = HKQuantityType.quantityType(forIdentifier: .appleSleepingWristTemperature)
+        else {
+            return []
+        }
+        do {
+            return try await quantitySamples(type: type, start: start, end: end)
+        } catch {
+            logger.error("HealthKit wrist temperature query failed: \(error.localizedDescription)", module: .aiConfig)
+            return []
         }
     }
 
@@ -725,6 +874,72 @@ final class SparkHealthTool: @unchecked Sendable {
             }
         }
         return rawValue == HKCategoryValueSleepAnalysis.asleep.rawValue ? .unspecified : .awake
+    }
+
+    private static func buildSleepSegmentVitals(
+        start: Date,
+        end: Date,
+        heartRateSamples: [HKQuantitySample],
+        respiratorySamples: [HKQuantitySample],
+        wristTemperatureSamples: [HKQuantitySample]
+    ) -> ChatHealthSleepModel.SegmentVitals? {
+        let heartRate = aggregateQuantitySamples(
+            heartRateSamples,
+            unit: HKUnit.count().unitDivided(by: .minute()),
+            start: start,
+            end: end,
+            minSampleCount: 3,
+            valueFilter: { $0 >= 30 && $0 <= 220 }
+        )
+        let respiratoryRate = aggregateQuantitySamples(
+            respiratorySamples,
+            unit: HKUnit.count().unitDivided(by: .minute()),
+            start: start,
+            end: end,
+            minSampleCount: 2,
+            valueFilter: { $0 >= 4 && $0 <= 60 }
+        )
+        let wristTemperature = aggregateQuantitySamples(
+            wristTemperatureSamples,
+            unit: .degreeCelsius(),
+            start: start,
+            end: end,
+            minSampleCount: 1,
+            valueFilter: { $0 >= -10 && $0 <= 10 }
+        )
+
+        let vitals = ChatHealthSleepModel.SegmentVitals(
+            avgHeartRate: heartRate.avg,
+            minHeartRate: heartRate.min,
+            maxHeartRate: heartRate.max,
+            avgRespiratoryRate: respiratoryRate.avg,
+            avgWristTemperature: wristTemperature.avg
+        )
+        return vitals.hasValues ? vitals : nil
+    }
+
+    private static func aggregateQuantitySamples(
+        _ samples: [HKQuantitySample],
+        unit: HKUnit,
+        start: Date,
+        end: Date,
+        minSampleCount: Int,
+        valueFilter: (Double) -> Bool
+    ) -> (avg: Double?, min: Double?, max: Double?) {
+        let values = samples.compactMap { sample -> Double? in
+            guard sample.startDate < end, sample.endDate > start else { return nil }
+            let value = sample.quantity.doubleValue(for: unit)
+            return valueFilter(value) ? value : nil
+        }
+        guard values.count >= minSampleCount else {
+            return (nil, nil, nil)
+        }
+        let total = values.reduce(0, +)
+        return (
+            avg: total / Double(values.count),
+            min: values.min(),
+            max: values.max()
+        )
     }
 
     private static func workoutActivityTypeKey(_ type: HKWorkoutActivityType) -> String {

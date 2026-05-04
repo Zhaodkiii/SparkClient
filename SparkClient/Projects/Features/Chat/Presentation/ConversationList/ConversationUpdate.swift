@@ -33,6 +33,8 @@ struct ConversationListApplyPayload: Equatable, Sendable {
     /// 对齐 Signal `initialPosition` 的语义：打开会话期间临时保持底部锁，直到 newest 窗口稳定。
     var lockBottomViewport: Bool
     var streamingContentGeneration: UInt64
+    /// Incrementing request token. When changed, the UIKit list force-scrolls to the bottom after applying the frame.
+    var scrollToBottomRequestGeneration: UInt64
     /// 为 true 时以「空上一帧」参与 diff（如下拉刷新），避免与旧窗口做错误 structural diff。
     var forceFullListRediff: Bool
 }

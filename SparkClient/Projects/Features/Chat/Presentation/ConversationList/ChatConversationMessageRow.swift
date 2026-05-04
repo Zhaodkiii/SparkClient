@@ -3,6 +3,8 @@ import UIKit
 
 /// 单条会话消息行（从 ``ChatView`` 抽出），供 `UICollectionView` + `UIHostingController` 复用。
 struct ChatConversationMessageRow: View {
+    @State private var rowWidth: CGFloat = 0
+
     let threadID: UUID
     let message: ChatMessage
     let visibleMessages: [ChatMessage]
@@ -24,17 +26,38 @@ struct ChatConversationMessageRow: View {
         message.clientMessageID == ChatView.inlineErrorClientMessageID || message.role != .user
     }
 
+    private var bubbleMaxWidth: CGFloat {
+        let rowHorizontalPadding: CGFloat = 16
+        let oppositeSideMinimumMargin: CGFloat = message.role == .user ? 40 : 0
+        let fallbackWidth = UIScreen.main.bounds.width
+        let measuredWidth = rowWidth > 0 ? rowWidth : fallbackWidth
+        return max(1, measuredWidth - rowHorizontalPadding - oppositeSideMinimumMargin)
+    }
+
     var body: some View {
         HStack {
             if message.role == .assistant || message.role == .system {
                 bubbleContent
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: bubbleMaxWidth, alignment: .leading)
+                Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 40)
                 bubbleContent
+                    .frame(maxWidth: bubbleMaxWidth, alignment: .trailing)
             }
         }
+        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
         .padding(8)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: RowWidthPreferenceKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(RowWidthPreferenceKey.self) { width in
+            if abs(rowWidth - width) > 0.5 {
+                rowWidth = width
+            }
+        }
     }
 
     private var bubbleContent: some View {
@@ -374,6 +397,14 @@ struct ChatConversationMessageRow: View {
             .filter { $0.kind == .text || $0.kind == .tool || $0.kind == .error }
             .compactMap(\.text)
             .joined(separator: "\n")
+    }
+
+    private struct RowWidthPreferenceKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
     }
 }
 

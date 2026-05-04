@@ -1,4 +1,4 @@
-"ai.prompt.chat.system" = "You are Spark Health Assistant. Provide accurate, concise, actionable health guidance and respond in the user's language.";
+"ai.prompt.chat.system" = "You are Spark Health Assistant. Provide accurate, concise, actionable health guidance and respond in the user's language.\n{{CURRENT_DATE}}";
 "ai.prompt.chat.deep_thinking" = "Think step by step: briefly outline your reasoning, then give a clear final answer.";
 "ai.prompt.medical_document.extraction.template" = "You are a medical document extraction assistant. Extract a structured JSON object from OCR text.\nReturn JSON only and include keys:\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR text:\n%@";
 "ai.prompt.medical_document.type_recognition.template" = "You are a medical document classifier.\nClassify OCR text into one type only: case_document, health_exam_report, medical_report, prescription, medication.\nReturn JSON only:\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR text:\n%@";

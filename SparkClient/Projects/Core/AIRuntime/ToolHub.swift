@@ -862,33 +862,65 @@ final class ToolHub: @unchecked Sendable {
         )
     }
 
-    private func runFetchWorkout(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+    ///
+    /// AI 工具调用：执行【获取用户健身/运动记录】
+    /// 入口：AI 助手调用 fetchWorkoutDetails 工具时会走进来
+    /// 作用：查询健康数据 → 生成运动卡片 → 返回自然语言结果给AI展示
+    ///
+    private func runFetchWorkout(
+        invocation: ToolInvocation,       // AI 工具调用参数（时间、类型、数量）
+        context: ToolExecutionContext     // 执行上下文（会话ID、消息ID等）
+    ) async -> ToolExecutionResult {       // 返回给AI的工具执行结果
+        
+        // MARK: 1. 解析AI传入的参数
+        // 解析时间范围：今天/本周/本月/自定义时间
         let range = resolveHealthRange(arguments: invocation.arguments)
+        // 解析运动类型：running / cycling / swimming 等
         let types = parseStringList(invocation.arguments["types"])
+        // 解析最大返回条数，默认100
         let maxItems = parseIntValue(invocation.arguments["max_items"] ?? "") ?? 100
+
         do {
-            let model = try await healthTool.fetchWorkoutDetails(from: range.start, to: range.end, types: types, maxItems: maxItems)
+            // MARK: 2. 核心：调用 HealthTool 查询健康数据
+            // 从 HealthKit 读取运动记录 → 转为 ChatHealthWorkoutModel
+            let model = try await healthTool.fetchWorkoutDetails(
+                from: range.start,
+                to: range.end,
+                types: types,
+                maxItems: maxItems
+            )
+            
+            // MARK: 3. 异步插入【健身运动可视化卡片】到聊天消息中
+            // 只有在会话和助手消息都存在时，才渲染UI卡片
             if let threadID = context.threadID,
                let assistantID = context.assistantMessageClientID {
+                
                 let merge = structuredHealthCardMergeCoordinator
+                // 清理工具调用ID空白字符
                 let normalizedToolCallID = context.pendingToolCallID?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // 后台任务：等助手消息就绪后，插入运动数据卡片
                 Task {
                     await merge.insertHealthWorkoutVisualizationWhenAssistantMessageReady(
                         threadID: threadID,
                         assistantClientMessageID: assistantID,
                         model: model,
-                        anchorToolCallID: (normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil)
+                        anchorToolCallID: normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil
                     )
                 }
             }
+
+            // MARK: 4. 返回【可读文本】给AI
+            // 把结构化运动数据 → 自然语言文字，让AI直接朗读/展示
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchWorkoutDetails,
-                outputText: model.toReadableText(),
-                sensitive: true,
-                shouldBypassModel: true
+                outputText: model.toReadableText(),  // 👈 关键：生成人类可读文本
+                sensitive: true,                     // 健康数据 = 敏感数据
+                shouldBypassModel: true             // 不再回传给大模型，直接展示
             )
         } catch {
+            // MARK: 5. 异常处理：查询失败时返回错误信息
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchWorkoutDetails,
                 outputText: "运动记录查询失败：\(error.localizedDescription)",
@@ -956,111 +988,111 @@ final class ToolHub: @unchecked Sendable {
             .filter { $0.isEmpty == false }
     }
 
-    private func buildSleepModel(from startDate: Date, to endDate: Date) -> ChatHealthSleepModel {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: startDate)
-        let dayEnd = calendar.startOfDay(for: endDate)
-        let daysCount = max(1, (calendar.dateComponents([.day], from: dayStart, to: dayEnd).day ?? 0) + 1)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
+//    private func buildSleepModel(from startDate: Date, to endDate: Date) -> ChatHealthSleepModel {
+//        let calendar = Calendar.current
+//        let dayStart = calendar.startOfDay(for: startDate)
+//        let dayEnd = calendar.startOfDay(for: endDate)
+//        let daysCount = max(1, (calendar.dateComponents([.day], from: dayStart, to: dayEnd).day ?? 0) + 1)
+//        let formatter = DateFormatter()
+//        formatter.locale = Locale(identifier: "en_US_POSIX")
+//        formatter.timeZone = calendar.timeZone
+//        formatter.dateFormat = "yyyy-MM-dd"
+//
+//        var days: [ChatHealthSleepModel.Day] = []
+//        for offset in 0..<min(daysCount, 7) {
+//            guard let baseDay = calendar.date(byAdding: .day, value: offset, to: dayStart) else { continue }
+//            guard let sleepStart = calendar.date(bySettingHour: 23, minute: 10, second: 0, of: baseDay),
+//                  let sleepEnd = calendar.date(byAdding: .hour, value: 7, to: sleepStart)
+//            else { continue }
+//
+//            let total = Int(sleepEnd.timeIntervalSince(sleepStart) / 60)
+//            let deep = Int(Double(total) * 0.22)
+//            let rem = Int(Double(total) * 0.19)
+//            let awake = 24
+//            let core = max(0, total - deep - rem - awake)
+//
+//            let timeline = buildSleepTimeline(
+//                sleepStart: sleepStart,
+//                totalMinutes: total,
+//                deepMinutes: deep,
+//                coreMinutes: core,
+//                remMinutes: rem,
+//                awakeMinutes: awake
+//            )
+//
+//            let summary = ChatHealthSleepModel.Summary(
+//                totalSleepMinutes: total,
+//                start: Int64(sleepStart.timeIntervalSince1970),
+//                end: Int64(sleepEnd.timeIntervalSince1970),
+//                startText: nil,
+//                endText: nil
+//            )
+//            let stages = ChatHealthSleepModel.StageBreakdown(
+//                deep: deep,
+//                core: core,
+//                rem: rem,
+//                awake: awake,
+//                unspecified: 0
+//            )
+//            days.append(
+//                ChatHealthSleepModel.Day(
+//                    date: formatter.string(from: baseDay),
+//                    summary: summary,
+//                    timeline: timeline,
+//                    stages: stages
+//                )
+//            )
+//        }
+//
+//        return ChatHealthSleepModel(
+//            generatedAt: Int64(Date().timeIntervalSince1970),
+//            days: days
+//        )
+//    }
 
-        var days: [ChatHealthSleepModel.Day] = []
-        for offset in 0..<min(daysCount, 7) {
-            guard let baseDay = calendar.date(byAdding: .day, value: offset, to: dayStart) else { continue }
-            guard let sleepStart = calendar.date(bySettingHour: 23, minute: 10, second: 0, of: baseDay),
-                  let sleepEnd = calendar.date(byAdding: .hour, value: 7, to: sleepStart)
-            else { continue }
-
-            let total = Int(sleepEnd.timeIntervalSince(sleepStart) / 60)
-            let deep = Int(Double(total) * 0.22)
-            let rem = Int(Double(total) * 0.19)
-            let awake = 24
-            let core = max(0, total - deep - rem - awake)
-
-            let timeline = buildSleepTimeline(
-                sleepStart: sleepStart,
-                totalMinutes: total,
-                deepMinutes: deep,
-                coreMinutes: core,
-                remMinutes: rem,
-                awakeMinutes: awake
-            )
-
-            let summary = ChatHealthSleepModel.Summary(
-                totalSleepMinutes: total,
-                start: Int64(sleepStart.timeIntervalSince1970),
-                end: Int64(sleepEnd.timeIntervalSince1970),
-                startText: nil,
-                endText: nil
-            )
-            let stages = ChatHealthSleepModel.StageBreakdown(
-                deep: deep,
-                core: core,
-                rem: rem,
-                awake: awake,
-                unspecified: 0
-            )
-            days.append(
-                ChatHealthSleepModel.Day(
-                    date: formatter.string(from: baseDay),
-                    summary: summary,
-                    timeline: timeline,
-                    stages: stages
-                )
-            )
-        }
-
-        return ChatHealthSleepModel(
-            generatedAt: Int64(Date().timeIntervalSince1970),
-            days: days
-        )
-    }
-
-    private func buildSleepTimeline(
-        sleepStart: Date,
-        totalMinutes: Int,
-        deepMinutes: Int,
-        coreMinutes: Int,
-        remMinutes: Int,
-        awakeMinutes: Int
-    ) -> [ChatHealthSleepModel.Segment] {
-        let blocks: [(ChatHealthSleepModel.Stage, Int)] = [
-            (.core, Int(Double(coreMinutes) * 0.45)),
-            (.deep, Int(Double(deepMinutes) * 0.5)),
-            (.core, Int(Double(coreMinutes) * 0.35)),
-            (.rem, Int(Double(remMinutes) * 0.6)),
-            (.awake, awakeMinutes),
-            (.core, max(0, coreMinutes - Int(Double(coreMinutes) * 0.8))),
-            (.deep, max(0, deepMinutes - Int(Double(deepMinutes) * 0.5))),
-            (.rem, max(0, remMinutes - Int(Double(remMinutes) * 0.6)))
-        ].filter { $0.1 > 0 }
-
-        var cursor = Int64(sleepStart.timeIntervalSince1970)
-        let totalSeconds = max(1, totalMinutes * 60)
-        var segments: [ChatHealthSleepModel.Segment] = []
-        for (stage, minute) in blocks {
-            let duration = Int64(minute * 60)
-            let start = cursor
-            let end = cursor + duration
-            let startPercent = Double(start - Int64(sleepStart.timeIntervalSince1970)) / Double(totalSeconds)
-            let widthPercent = Double(duration) / Double(totalSeconds)
-            segments.append(
-                ChatHealthSleepModel.Segment(
-                    stage: stage,
-                    start: start,
-                    end: end,
-                    startPercent: max(0, startPercent),
-                    widthPercent: max(0, widthPercent),
-                    startText: nil,
-                    endText: nil
-                )
-            )
-            cursor = end
-        }
-        return segments
-    }
+//    private func buildSleepTimeline(
+//        sleepStart: Date,
+//        totalMinutes: Int,
+//        deepMinutes: Int,
+//        coreMinutes: Int,
+//        remMinutes: Int,
+//        awakeMinutes: Int
+//    ) -> [ChatHealthSleepModel.Segment] {
+//        let blocks: [(ChatHealthSleepModel.Stage, Int)] = [
+//            (.core, Int(Double(coreMinutes) * 0.45)),
+//            (.deep, Int(Double(deepMinutes) * 0.5)),
+//            (.core, Int(Double(coreMinutes) * 0.35)),
+//            (.rem, Int(Double(remMinutes) * 0.6)),
+//            (.awake, awakeMinutes),
+//            (.core, max(0, coreMinutes - Int(Double(coreMinutes) * 0.8))),
+//            (.deep, max(0, deepMinutes - Int(Double(deepMinutes) * 0.5))),
+//            (.rem, max(0, remMinutes - Int(Double(remMinutes) * 0.6)))
+//        ].filter { $0.1 > 0 }
+//
+//        var cursor = Int64(sleepStart.timeIntervalSince1970)
+//        let totalSeconds = max(1, totalMinutes * 60)
+//        var segments: [ChatHealthSleepModel.Segment] = []
+//        for (stage, minute) in blocks {
+//            let duration = Int64(minute * 60)
+//            let start = cursor
+//            let end = cursor + duration
+//            let startPercent = Double(start - Int64(sleepStart.timeIntervalSince1970)) / Double(totalSeconds)
+//            let widthPercent = Double(duration) / Double(totalSeconds)
+//            segments.append(
+//                ChatHealthSleepModel.Segment(
+//                    stage: stage,
+//                    start: start,
+//                    end: end,
+//                    startPercent: max(0, startPercent),
+//                    widthPercent: max(0, widthPercent),
+//                    startText: nil,
+//                    endText: nil
+//                )
+//            )
+//            cursor = end
+//        }
+//        return segments
+//    }
 
     /// 在本地知识库中按标题、正文和切块检索知识片段；知识卡预览由协调器异步写入，不经 `ChatToolEventInterpreter`。
     private func runSearchKnowledgeBag(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
