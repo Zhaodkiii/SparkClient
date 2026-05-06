@@ -113,12 +113,12 @@ struct ModelsSettingsAgentSheet: View {
 
                 NavigationLink {
                     GroupedToolSelectionView(
-                        title: L10n.text("ai_settings.models.online.field.tools"),
+                        title: L10n.text("common.tools"),
                         selectedValues: $selectedToolNames
                     )
                 } label: {
                     HStack {
-                        Text(L10n.text("ai_settings.models.online.field.tools"))
+                        Text(L10n.text("common.tools"))
                         Spacer()
                         Text(selectedToolsSummary)
                             .foregroundStyle(.secondary)
@@ -134,7 +134,7 @@ struct ModelsSettingsAgentSheet: View {
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(isEditing ? L10n.text("ai_settings.save") : L10n.text("ai_settings.models.agent.action.create")) {
+                Button(isEditing ? L10n.text("common.save") : L10n.text("ai_settings.models.agent.action.create")) {
                     if isEditing, let agent = editingAgent {
                         onUpdate?(
                             agent.id,
@@ -257,7 +257,7 @@ struct ModelsSettingsAgentSheet: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("ai_settings.models.online.selection.all")
+            return L10n.text("common.all")
         }
         return "\(selectedToolNames.count)/\(total)"
     }
@@ -277,7 +277,7 @@ private struct AgentBaseModelPreview: View {
             HStack(spacing: 8) {
                 capabilityChip(model.isLocalModel ? L10n.text("ai_settings.models.badge.local") : L10n.text("ai_settings.models.badge.service"), enabled: true)
                 capabilityChip(L10n.text("ai_settings.models.capability.reasoning"), enabled: model.supportsReasoning)
-                capabilityChip(L10n.text("ai_settings.models.capability.tools"), enabled: model.supportsToolUse)
+                capabilityChip(L10n.text("common.tools"), enabled: model.supportsToolUse)
                 capabilityChip(L10n.text("ai_settings.models.capability.multimodal"), enabled: model.supportsMultimodal)
             }
         }

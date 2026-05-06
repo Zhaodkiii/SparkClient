@@ -31,7 +31,7 @@ struct AddLabItemSheet: View {
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.category"), text: $draft.category)
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.subcategory"), text: $draft.subCategory)
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.item_name"), text: $draft.itemName)
-                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.result"), text: $draft.resultValue)
+                    SparkFormTextRow(title: L10n.text("common.result"), text: $draft.resultValue)
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.unit"), text: $draft.unit)
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.reference_range"), text: $draft.referenceRange)
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.flag"), text: $draft.flag)
@@ -42,7 +42,7 @@ struct AddLabItemSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .sparkFormBottomBar(
                 canSubmit: canSubmit,
-                saveTitle: L10n.text("medical_record.forms.action.complete"),
+                saveTitle: L10n.text("common.done"),
                 onCancel: {
                     formLog.info("AddLabItemSheet: cancel tapped", module: formLogModule)
                     dismiss()

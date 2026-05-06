@@ -161,7 +161,7 @@ struct ProviderSettingsEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button(L10n.text("ai_settings.providers.editor.action.save")) {
+                Button(L10n.text("common.save")) {
                     if provider.privacyPolicyURL.isEmpty == false, provider.privacyPolicyAccepted == false {
                         return
                     }

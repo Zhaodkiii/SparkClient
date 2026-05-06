@@ -133,7 +133,7 @@ struct MedicationPrescriptionBatchCard: View {
         VStack(alignment: .leading, spacing: 12) {
             if let diagnosis = item.diagnosis?.nonEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.text("home.medical.list.medications.diagnosis"))
+                    Text(L10n.text("common.diagnosis"))
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundStyle(.secondary)

@@ -37,9 +37,9 @@ private struct LaboratoryDetailHeaderRow: View {
     var body: some View {
         HStack(spacing: 0) {
             headerCell(L10n.text("home.medical.list.examination.detail.lab.item"), width: 180, alignment: .leading)
-            headerCell(L10n.text("home.medical.list.examination.detail.lab.result"), width: 140)
+            headerCell(L10n.text("common.result"), width: 140)
             headerCell(L10n.text("home.medical.list.examination.detail.lab.reference"), width: 150)
-            headerCell(L10n.text("home.medical.list.examination.detail.lab.status"), width: 120)
+            headerCell(L10n.text("common.status"), width: 120)
         }
         .padding(.vertical, 10)
     }
@@ -90,7 +90,7 @@ private struct LaboratoryDetailRow: View {
             }
 
             cell(width: 120) {
-                Text(item.flag.nonEmpty ?? L10n.text("home.medical.list.examination.detail.lab.normal"))
+                Text(item.flag.nonEmpty ?? L10n.text("common.normal"))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(flagColor)
                     .padding(.horizontal, 10)

@@ -165,7 +165,7 @@ private struct AddCustomProviderSheet: View {
                     Button(L10n.text("common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("ai_settings.providers.editor.action.save")) {
+                    Button(L10n.text("common.save")) {
                         guard validate() else { return }
                         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         let normalizedCompany = "CUSTOM_\(UUID().uuidString.prefix(8).uppercased())"

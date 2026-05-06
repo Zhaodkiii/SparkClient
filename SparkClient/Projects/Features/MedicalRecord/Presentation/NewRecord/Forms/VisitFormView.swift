@@ -96,9 +96,9 @@ struct VisitFormView: View {
 
     private var saveTitle: String {
         switch mode {
-        case .create: return L10n.text("medical_record.forms.action.save")
+        case .create: return L10n.text("common.save")
         case .serverEdit: return L10n.text("medical_record.forms.action.update")
-        case .localEdit: return L10n.text("medical_record.forms.action.complete")
+        case .localEdit: return L10n.text("common.done")
         }
     }
 

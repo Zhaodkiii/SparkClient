@@ -32,7 +32,7 @@ struct EditSparkModelSheet: View {
     var body: some View {
         CompatibleNavigationContainer {
             Form {
-                Section(L10n.text("ai_settings.models.edit.section.name")) {
+                Section(L10n.text("common.name")) {
                     TextField(L10n.text("ai_settings.models.edit.field.display_name"), text: $displayName)
                 }
                 Section(L10n.text("ai_settings.models.edit.section.icon")) {
@@ -70,12 +70,12 @@ struct EditSparkModelSheet: View {
 
                         NavigationLink {
                             GroupedToolSelectionView(
-                                title: L10n.text("ai_settings.models.online.field.tools"),
+                                title: L10n.text("common.tools"),
                                 selectedValues: $selectedToolNames
                             )
                         } label: {
                             HStack {
-                                Text(L10n.text("ai_settings.models.online.field.tools"))
+                                Text(L10n.text("common.tools"))
                                 Spacer()
                                 Text(selectedToolsSummary)
                                     .foregroundStyle(.secondary)
@@ -114,7 +114,7 @@ struct EditSparkModelSheet: View {
                     Button(L10n.text("common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("ai_settings.save")) { save() }
+                    Button(L10n.text("common.save")) { save() }
                 }
             }
             .sheet(isPresented: $showIconPicker) {
@@ -179,7 +179,7 @@ struct EditSparkModelSheet: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("ai_settings.models.online.selection.all")
+            return L10n.text("common.all")
         }
         return "\(selectedToolNames.count)/\(total)"
     }

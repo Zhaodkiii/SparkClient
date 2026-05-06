@@ -354,7 +354,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
                     isSaved: false,
                     memberID: memberID,
                     ossFileId: ossFileId,
-                    displayName: name.isEmpty ? fallbackName("chat.medical_card.medication.untitled") : name,
+                    displayName: name.isEmpty ? fallbackName("common.medication") : name,
                     specification: spec.isEmpty ? nil : spec,
                     dosageLine: dosage.isEmpty ? nil : dosage
                 )
@@ -374,7 +374,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
             }
             // 处方标题：医院名称 / 默认标题
             let title = nonEmptyTrimmed(draft.institutionName)
-                ?? fallbackName("chat.medical_card.prescription.title")
+                ?? fallbackName("common.prescription")
             // 处方副标题：诊断信息
             let sub = nonEmptyTrimmed(draft.diagnosis)
             

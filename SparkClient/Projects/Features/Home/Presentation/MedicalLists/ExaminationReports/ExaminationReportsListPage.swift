@@ -166,7 +166,7 @@ private struct ExaminationReportFilterBar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ExaminationReportFilterChip(
-                    title: L10n.text("home.medical.list.examination.filter.all"),
+                    title: L10n.text("common.all"),
                     icon: "list.bullet",
                     isSelected: selectedCategory == nil,
                     color: Color(uiColor: .systemGray)

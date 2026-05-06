@@ -131,7 +131,7 @@ struct ChatComposerRuntimeTogglesRow: View {
                     )
                     .scaleEffect(expandedToggle == .tools ? 0.86 : 1)
                 if expandedToggle == .tools {
-                    Text(L10n.text("chat.composer.toggle.tools"))
+                    Text(L10n.text("common.tools"))
                         .font(.caption)
                         .foregroundStyle(flags.useTools ? Color(uiColor: .systemBrown) : Color(.systemGray))
                         .padding(.trailing, 12)
@@ -147,7 +147,7 @@ struct ChatComposerRuntimeTogglesRow: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(bgTool, lineWidth: 1)
         )
-        .accessibilityLabel(L10n.text("chat.composer.toggle.tools"))
+        .accessibilityLabel(L10n.text("common.tools"))
         .animation(toggleAnimation, value: flags.useTools)
         .animation(toggleAnimation, value: expandedToggle)
     }

@@ -121,7 +121,7 @@ private enum HealthExamFilter: CaseIterable, Identifiable {
     var titleKey: String {
         switch self {
         case .all:
-            return "home.medical.list.health_exam.filter.all"
+            return "common.all"
         case .withSummary:
             return "home.medical.list.health_exam.filter.with_summary"
         case .withAttachments:

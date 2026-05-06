@@ -27,7 +27,7 @@ struct PrescriptionBatchDetailPage: View {
             }
 
             if let diagnosis = item.diagnosis?.nonEmpty {
-                Section(L10n.text("home.medical.list.medications.diagnosis")) {
+                Section(L10n.text("common.diagnosis")) {
                     Text(diagnosis)
                         .font(.body)
                 }
@@ -53,7 +53,7 @@ struct PrescriptionBatchDetailPage: View {
             }
 
             if let attachments = item.attachments, attachments.isEmpty == false {
-                Section(L10n.text("home.medical.attachments.title")) {
+                Section(L10n.text("common.attachments")) {
                     MedicalAttachmentListView(
                         attachments: attachments,
                         fileTransferService: fileTransferService

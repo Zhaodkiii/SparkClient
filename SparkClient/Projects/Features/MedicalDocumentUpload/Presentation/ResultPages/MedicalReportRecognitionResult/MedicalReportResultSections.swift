@@ -139,7 +139,7 @@ struct MedicalReportCardsSectionView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer()
-                Button(L10n.text("medical.upload.result.common.edit")) {
+                Button(L10n.text("common.edit")) {
                     onEdit(index, report)
                 }
                 .font(.caption.weight(.semibold))

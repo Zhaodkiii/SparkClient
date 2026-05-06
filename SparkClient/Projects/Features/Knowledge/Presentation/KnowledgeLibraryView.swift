@@ -74,7 +74,7 @@ struct KnowledgeLibraryView: View {
             .refreshable {
                 await viewModel.refresh()
             }
-            .alert(L10n.text("knowledge.error.title"), isPresented: Binding(
+            .alert(L10n.text("common.error"), isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { newValue in
                     if newValue == false {

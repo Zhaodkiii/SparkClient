@@ -240,7 +240,7 @@ struct ExamReportCard: View {
 
             ExamStatCard(
                 value: "\(max(detailItems.count - abnormalDetailItems.count, 0))",
-                label: L10n.text("home.medical.list.health_exam.stats.normal"),
+                label: L10n.text("common.normal"),
                 backgroundColor: Color(uiColor: .systemGreen).opacity(0.08),
                 textColor: Color(uiColor: .systemGreen)
             )

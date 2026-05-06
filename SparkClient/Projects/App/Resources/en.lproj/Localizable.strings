@@ -70,7 +70,6 @@
 "home.medical.list.medications.action.add_plan" = "Add medication plan";
 "home.medical.list.medications.footer.no_more" = "No more data";
 "home.medical.list.medications.batch_no" = "Rx No.: %@";
-"home.medical.list.medications.diagnosis" = "Diagnosis";
 "home.medical.list.medications.in_batch_count" = "Medications (%d)";
 "home.medical.list.medications.manage" = "Manage";
 "home.medical.list.medications.attachments_count" = "Attachments (%d)";
@@ -103,10 +102,8 @@
 "home.medical.list.medications.reminder" = "Medication reminder";
 "home.medical.list.medications.reminder_times" = "Reminder times";
 "home.medical.list.exam.stat.type" = "Exam type";
-"home.medical.list.exam.stat.attachments" = "Attachments";
 "home.medical.list.lab.toggle" = "View impression";
 "home.medical.list.examination.search.placeholder" = "Search reports...";
-"home.medical.list.examination.filter.all" = "All";
 "home.medical.list.examination.category.laboratory" = "Laboratory";
 "home.medical.list.examination.category.imaging" = "Imaging";
 "home.medical.list.examination.category.pathology" = "Pathology";
@@ -114,10 +111,7 @@
 "home.medical.list.examination.empty.subtitle" = "Uploaded reports appear here";
 "home.medical.list.examination.card.view_detail" = "View details";
 "home.medical.list.examination.card.items" = "Items";
-"home.medical.list.examination.card.normal" = "Normal";
-"home.medical.list.examination.card.attachments" = "Attachments";
 "home.medical.list.examination.card.abnormal" = "Highlights";
-"home.medical.list.examination.card.status" = "Status";
 "home.medical.list.examination.card.key_points" = "Key information";
 "home.medical.list.examination.card.tap_to_expand" = "Tap the title to expand";
 "home.medical.list.examination.card.department" = "Department";
@@ -127,10 +121,7 @@
 "home.medical.list.examination.card.category" = "Category";
 "home.medical.list.examination.card.subcategory" = "Subcategory";
 "home.medical.list.examination.detail.lab.item" = "Item";
-"home.medical.list.examination.detail.lab.result" = "Result";
 "home.medical.list.examination.detail.lab.reference" = "Reference";
-"home.medical.list.examination.detail.lab.status" = "Status";
-"home.medical.list.examination.detail.lab.normal" = "Normal";
 "home.medical.list.examination.detail.imaging.modality" = "Modality";
 "home.medical.list.examination.detail.imaging.body_part" = "Body part";
 "home.medical.list.examination.detail.imaging.result" = "Result";
@@ -139,9 +130,7 @@
 "home.medical.list.examination.detail.pathology.diagnosis" = "Pathology diagnosis";
 "home.medical.list.details.loading" = "Loading details…";
 "home.medical.list.details.section" = "Detail items";
-"home.medical.attachments.title" = "Attachments";
 "home.medical.list.health_exam.search.placeholder" = "Search exam reports...";
-"home.medical.list.health_exam.filter.all" = "All";
 "home.medical.list.health_exam.filter.with_summary" = "With summary";
 "home.medical.list.health_exam.filter.with_attachments" = "With attachments";
 "home.medical.list.health_exam.empty.title" = "No exam reports";
@@ -150,10 +139,8 @@
 "home.medical.list.health_exam.view_detail" = "View details";
 "home.medical.list.health_exam.stats.report_no" = "Report no.";
 "home.medical.list.health_exam.stats.items" = "Items";
-"home.medical.list.health_exam.stats.normal" = "Normal";
 "home.medical.list.health_exam.stats.abnormal" = "Abnormal";
 "home.medical.list.health_exam.stats.exam_type" = "Type";
-"home.medical.list.health_exam.stats.attachments" = "Attachments";
 "home.medical.list.health_exam.high_risk.title" = "High risk items";
 "home.medical.list.health_exam.other_risk.title" = "Other risk items";
 "home.medical.list.health_exam.risk.high" = "High";
@@ -177,9 +164,7 @@
 "home.medical.case_detail.timeline" = "Timeline";
 "home.medical.case_detail.timeline.empty" = "No additional timeline items yet.";
 "home.medical.case_detail.add_record" = "Add record";
-"home.medical.case_detail.add.menu.medication" = "Medication";
 "home.medical.case_detail.add.menu.symptom" = "Symptom";
-"home.medical.case_detail.add.menu.prescription" = "Prescription";
 "home.medical.case_detail.add.menu.examination" = "Medical examination";
 "home.medical.case_detail.add.menu.visit" = "Visit";
 "home.medical.case_detail.add.menu.follow_up" = "Follow-up";
@@ -220,9 +205,7 @@
 "medical.upload.leave.message" = "Unsaved extraction results will be lost.";
 "medical.upload.leave.stay" = "Keep editing";
 "medical.upload.leave.leave" = "Leave";
-"medical.upload.result.title" = "Title";
 "medical.upload.result.summary" = "Summary";
-"medical.upload.result.diagnosis" = "Diagnosis";
 "medical.upload.result.empty_diagnosis" = "Not extracted";
 "medical.upload.result.occurred_at" = "Visit date";
 "medical.upload.step.prepare_file" = "Preparing file";
@@ -244,8 +227,6 @@
 "medical.upload.kind.case" = "Case record";
 "medical.upload.kind.health_exam" = "Health checkup";
 "medical.upload.kind.medical_report" = "Medical report";
-"medical.upload.kind.prescription" = "Prescription";
-"medical.upload.kind.medication" = "Medication";
 "home.health_basics.title" = "Health basics";
 "home.health_basics.authorize" = "Authorize Health";
 "home.health_basics.only_self" = "Apple Health data is available for the self member only.";
@@ -263,7 +244,6 @@
 "home.members.action_title" = "Member actions";
 "home.members.delete.confirm_title" = "Delete this member?";
 "home.members.delete.confirm_message" = "Deleting \"%@\" also removes associated medical records. This cannot be undone.";
-"home.members.save" = "Save";
 "home.members.field.name" = "Name";
 "home.members.field.name_placeholder" = "Enter member name";
 "home.members.field.relationship" = "Relationship";
@@ -338,7 +318,6 @@
 "chat.composer.style.hanlin" = "Pro";
 "chat.composer.model.default" = "Default";
 "chat.composer.model.loading" = "Loading models…";
-"chat.composer.toggle.tools" = "Tools";
 "chat.composer.toggle.knowledge" = "Knowledge bag";
 "chat.composer.toggle.web" = "Web search";
 "chat.composer.toggle.thinking" = "Deep";
@@ -544,7 +523,6 @@
 "api_error.code.42901" = "Verification codes are being requested too frequently. Please try again later.";
 
 "ai_settings.title" = "AI Scenario Config";
-"ai_settings.save" = "Save";
 "ai_settings.scenario.chat" = "Chat Scenario";
 "ai_settings.scenario.embedding" = "Embedding Scenario";
 "ai_settings.scenario.voice" = "Voice Scenario";
@@ -565,7 +543,6 @@
 "ai_settings.scenario_default_hint" = "Default";
 "ai_settings.no_models_configure_key" = "No models available: the server has not published a model list for this scenario, and no catalog models have a configured API key.";
 "ai_settings.endpoint" = "Endpoint";
-"ai_settings.model" = "Model";
 "ai_settings.api_key" = "API Key (optional)";
 "ai_settings.temperature" = "Temperature";
 "ai_settings.max_tokens" = "Max Tokens";
@@ -597,7 +574,6 @@
 "ai_settings.row.memory_archive.subtitle" = "Long-term memory entries";
 "ai_settings.row.translation_dic" = "Translation Dictionary";
 "ai_settings.row.translation_dic.subtitle" = "Terminology mappings";
-"ai_settings.field.name" = "Name";
 "ai_settings.field.company" = "Company";
 "ai_settings.field.enabled" = "Enabled";
 "ai_settings.field.display_name" = "Display Name";
@@ -617,7 +593,6 @@
 "ai_settings.field.use_knowledge" = "Enable Knowledge Recall";
 "ai_settings.field.knowledge_count" = "Knowledge Count";
 "ai_settings.field.knowledge_similarity" = "Knowledge Similarity";
-"ai_settings.field.title" = "Title";
 "ai_settings.field.content" = "Content";
 "ai_settings.field.system_preset" = "System Preset";
 "ai_settings.field.pinned" = "Pinned";
@@ -723,9 +698,7 @@
 "company_YI" = "Yi";
 "company_ZHIPUAI" = "Zhipu AI";
 
-"ai_settings.identity.model" = "Model";
 "ai_settings.identity.agent" = "Agent";
-"ai_settings.models.filter.all" = "All";
 "ai_settings.models.filter.models_only" = "Models";
 "ai_settings.models.filter.agents_only" = "Agents";
 "ai_settings.models.nav_title.models" = "Models";
@@ -753,7 +726,6 @@
 "ai_settings.models.menu.add_agent" = "Add new agent";
 "ai_settings.models.action.create_local_agent" = "Create local agent";
 "ai_settings.models.capability.reasoning" = "Reason";
-"ai_settings.models.capability.tools" = "Tools";
 "ai_settings.models.capability.multimodal" = "Multimodal";
 "ai_settings.field.reasoning_controllable" = "Reasoning controllable";
 "ai_settings.field.price_tier" = "Price tier";
@@ -792,7 +764,6 @@
 "ai_settings.models.empty.list_none" = "No models in the catalog.";
 "ai_settings.models.advanced.nav_title" = "Advanced";
 "ai_settings.models.alert.cannot_delete_system" = "Built-in models cannot be deleted.";
-"ai_settings.models.action.edit" = "Edit";
 
 "ai_settings.models.online.section.basic" = "Basic";
 "ai_settings.models.online.field.api_name" = "API model name";
@@ -803,9 +774,7 @@
 "ai_settings.models.online.section.price" = "Price";
 "ai_settings.models.online.section.usage" = "Scenarios & Tools";
 "ai_settings.models.online.field.scenarios" = "Scenarios";
-"ai_settings.models.online.field.tools" = "Tools";
 "ai_settings.models.online.selection.none" = "None";
-"ai_settings.models.online.selection.all" = "All";
 "ai_settings.models.online.section.capabilities" = "Capabilities";
 "ai_settings.models.online.toggle.default_hidden" = "Hidden by default";
 "ai_settings.models.online.toggle.supports_text" = "Supports text";
@@ -835,7 +804,6 @@
 "ai_settings.models.online.probe.err.http_failed" = "Probe request failed (HTTP %d).";
 "ai_settings.models.online.probe.err.http_failed_detail" = "Probe request failed (HTTP %d): %@";
 
-"ai_settings.models.edit.section.name" = "Name";
 "ai_settings.models.edit.field.display_name" = "Display name";
 "ai_settings.models.edit.section.icon" = "Icon";
 "ai_settings.models.edit.section.capabilities" = "Capabilities";
@@ -851,6 +819,19 @@
 "common.operation_failed" = "Operation failed";
 "common.ok" = "OK";
 "common.close" = "Close";
+"common.all" = "All";
+"common.attachments" = "Attachments";
+"common.status" = "Status";
+"common.normal" = "Normal";
+"common.prescription" = "Prescription";
+"common.medication" = "Medication";
+"common.name" = "Name";
+"common.title" = "Title";
+"common.result" = "Result";
+"common.diagnosis" = "Diagnosis";
+"common.tools" = "Tools";
+"common.model" = "Model";
+"common.edit" = "Edit";
 "common.done" = "Done";
 "common.save" = "Save";
 
@@ -905,7 +886,6 @@
 "ai_settings.providers.editor.test.failed" = "Failed";
 "ai_settings.providers.editor.test.no_models" = "No available models";
 "ai_settings.providers.editor.nav_title" = "Edit key";
-"ai_settings.providers.editor.action.save" = "Save";
 "ai_settings.providers.editor.alert.delete_model_title" = "Delete model?";
 "ai_settings.providers.editor.alert.delete_model_message" = "This model will be removed from the current provider model list.";
 "ai_settings.providers.editor.alert.notice_title" = "Notice";
@@ -991,8 +971,6 @@
 "ai_settings.small_tasks.section.icon" = "Icon";
 "ai_settings.small_tasks.section.basic" = "Basic info";
 "ai_settings.small_tasks.section.prompt" = "Prompt";
-"ai_settings.small_tasks.section.tools" = "Tools";
-"ai_settings.small_tasks.field.name" = "Name";
 "ai_settings.small_tasks.field.brief" = "Brief";
 "ai_settings.small_tasks.field.use_current_date" = "Append current date to system prompt";
 "ai_runtime.prompt.current_date_instruction_format" = "Current date: %@. Please use this date to interpret time expressions such as today, tomorrow, and this week.";
@@ -1006,8 +984,6 @@
 "knowledge.loading" = "Loading…";
 "knowledge.not_found.title" = "Document not found";
 "knowledge.not_found.message" = "The selected knowledge document could not be loaded.";
-"knowledge.nav.save" = "Save";
-"knowledge.nav.edit" = "Edit";
 "knowledge.title.placeholder" = "Knowledge title";
 "knowledge.title.untitled" = "Untitled";
 "knowledge.new_document_title" = "New knowledge";
@@ -1028,7 +1004,6 @@
 "knowledge.delete.title" = "Delete document?";
 "knowledge.delete.message" = "This document will be removed from the local library.";
 "knowledge.delete.confirm" = "Delete";
-"knowledge.error.title" = "Error";
 "knowledge.error.document_missing" = "Document not found.";
 "knowledge.error.body_empty" = "Body cannot be empty.";
 "knowledge.error.embedding_no_model" = "Select an embedding model first.";
@@ -1144,15 +1119,12 @@
 "medical.upload.a11y.step" = "Step %d: %@";
 
 // MARK: - Error Messages
-"medical.upload.error.title" = "Error";
 "medical.upload.error.confirm" = "OK";
 "medical.upload.error.no_result" = "No recognition result to save.";
 
 // MARK: - Medical record draft forms
 "medical_record.forms.error.submit_failed" = "Submit failed";
-"medical_record.forms.action.save" = "Save";
 "medical_record.forms.action.update" = "Update";
-"medical_record.forms.action.complete" = "Done";
 
 "medical_record.forms.lab_item.card_title" = "Lab item";
 "medical_record.forms.lab_item.nav_title" = "New lab item";
@@ -1160,7 +1132,6 @@
 "medical_record.forms.field.category" = "Category";
 "medical_record.forms.field.subcategory" = "Subcategory";
 "medical_record.forms.field.item_name" = "Item";
-"medical_record.forms.field.result" = "Result";
 "medical_record.forms.field.unit" = "Unit";
 "medical_record.forms.field.reference_range" = "Reference range";
 "medical_record.forms.field.flag" = "Flag";
@@ -1173,7 +1144,6 @@
 "medical_record.forms.field.notes" = "Notes";
 "medical_record.forms.field.planned_time" = "Planned time";
 "medical_record.forms.field.completed_time" = "Completed time";
-"medical_record.forms.field.status" = "Status";
 "medical_record.forms.field.method" = "Method";
 "medical_record.forms.field.outcome" = "Outcome";
 "medical_record.forms.field.next_plan" = "Next plan";
@@ -1195,9 +1165,7 @@
 "medical_record.forms.field.prescriber" = "Prescriber";
 "medical_record.forms.field.institution" = "Institution";
 "medical_record.forms.field.prescribed_at" = "Prescribed at";
-"medical_record.forms.field.diagnosis" = "Diagnosis";
 "medical_record.forms.field.batch_no" = "Batch number";
-"medical_record.forms.field.batch_status" = "Status";
 "medical_record.forms.field.procedure_name" = "Procedure";
 "medical_record.forms.field.procedure_code" = "Procedure code";
 "medical_record.forms.field.site" = "Site";
@@ -1269,7 +1237,6 @@
 "medical.upload.result.member.subtitle" = "Confirm this recognition result is linked to the selected member";
 "medical.upload.result.member.id" = "Member ID";
 
-"medical.upload.result.common.edit" = "Edit";
 "medical.upload.result.common.back" = "Back";
 "medical.upload.result.common.submit" = "Submit";
 "medical.upload.result.common.save_status" = "Save status";
@@ -1282,7 +1249,6 @@
 "medical.upload.result.attachments.count" = "%d items";
 "medical.upload.result.attachments.empty" = "No attachments";
 
-"medical.upload.result.prescription.nav_title" = "Prescription";
 "medical.upload.result.prescription.batch_no" = "Batch No.";
 "medical.upload.result.prescription.hospital" = "Institution";
 "medical.upload.result.prescription.prescriber" = "Prescriber";
@@ -1292,7 +1258,6 @@
 "medical.upload.result.prescription.edit_batch" = "Edit batch";
 "medical.upload.result.prescription.empty_medications" = "No medication items";
 
-"medical.upload.result.medication.nav_title" = "Medication";
 "medical.upload.result.medication.section.title" = "Medication list";
 "medical.upload.result.medication.section.subtitle" = "Supports single and batch local editing";
 "medical.upload.result.medication.count_format" = "%d items";
@@ -1314,7 +1279,6 @@
 "medical.upload.result.medical_report.empty_category" = "No reports in this category";
 "medical.upload.result.medical_report.detail_count" = "%d detail items";
 
-"medical.upload.result.common.complete" = "Done";
 
 "ai_settings.providers.section.trial_providers" = "Available providers during trial";
 "ai_settings.providers.badge.trial" = "Trial";
@@ -1363,7 +1327,6 @@
 "medical.upload.result.health_exam.summary.title" = "Summary Row";
 "medical.upload.result.health_exam.summary.subtitle" = "Filter items by total/normal/abnormal";
 "medical.upload.result.health_exam.summary.total" = "Total";
-"medical.upload.result.health_exam.summary.normal" = "Normal";
 "medical.upload.result.health_exam.summary.abnormal" = "Abnormal";
 
 "medical.upload.result.health_exam.groups.title" = "Category Groups";
@@ -1372,7 +1335,6 @@
 "medical.upload.result.health_exam.risk.high" = "High";
 "medical.upload.result.health_exam.risk.mid" = "Medium";
 "medical.upload.result.health_exam.risk.low" = "Low";
-"medical.upload.result.health_exam.risk.normal" = "Normal";
 
 "medical.upload.result.health_exam.item.nav" = "Edit exam item";
 "medical.upload.result.health_exam.item.edit_title" = "Exam item";
@@ -1388,7 +1350,6 @@
 
 "task.center.entry" = "Task Center";
 "task.center.title" = "Task Center";
-"task.filter.all" = "All";
 "task.filter.pending" = "Pending";
 "task.filter.completed" = "Completed";
 "task.filter.canceled" = "Canceled";
@@ -1397,7 +1358,6 @@
 "task.action.complete" = "Complete Task";
 "task.action.cancel" = "Cancel Task";
 "task.action.edit" = "Edit Task";
-"task.field.title" = "Title";
 "task.field.description" = "Description";
 "task.time.unspecified" = "Time not set";
 "task.type.medical" = "Medical";
@@ -1432,8 +1392,6 @@
 "chat.medical_card.saved.toast" = "Saved to health records.";
 "chat.medical_card.error.decode" = "Could not read card data.";
 "chat.medical_card.error.no_member" = "Select a member first.";
-"chat.medical_card.medication.untitled" = "Medication";
-"chat.medical_card.prescription.title" = "Prescription";
 "chat.medical_card.exam.title" = "Exam report";
 "chat.medical_card.case.title" = "Medical case";
 "chat.medical_card.extraction_failed.title" = "Extraction incomplete";

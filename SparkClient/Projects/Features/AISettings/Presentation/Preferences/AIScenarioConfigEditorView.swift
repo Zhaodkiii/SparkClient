@@ -31,7 +31,7 @@ struct AIScenarioConfigEditorView: View {
 
             if let row = snapshot.resolveScenarioRow(for: scenario) {
                 readOnlyField(title: L10n.text("ai_settings.endpoint"), value: row.endpoint)
-                readOnlyField(title: L10n.text("ai_settings.model"), value: row.model)
+                readOnlyField(title: L10n.text("common.model"), value: row.model)
                 if let key = row.apiKey, key.isEmpty == false {
                     readOnlyField(
                         title: L10n.text("ai_settings.api_key"),

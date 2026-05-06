@@ -91,7 +91,7 @@ struct PrescriptionBatchListSectionView: View {
 
             Spacer()
 
-            Button(L10n.text("medical.upload.result.common.edit")) {
+            Button(L10n.text("common.edit")) {
                 onEditMedication(index, draft)
             }
             .font(.caption.weight(.semibold))

@@ -30,7 +30,7 @@ struct ModelsAdvancedEditorView: View {
                         if let binding = bindingForModel(id: id) {
                             DisclosureGroup {
                                 TextField(L10n.text("ai_settings.field.display_name"), text: binding.displayName)
-                                TextField(L10n.text("ai_settings.model"), text: binding.name)
+                                TextField(L10n.text("common.model"), text: binding.name)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
                                 TextField(L10n.text("ai_settings.field.company"), text: binding.company)
@@ -74,7 +74,7 @@ struct ModelsAdvancedEditorView: View {
     private func identitySparkLabel(_ identity: AIModelIdentity) -> String {
         switch identity {
         case .model:
-            return L10n.text("ai_settings.identity.model")
+            return L10n.text("common.model")
         case .agent:
             return L10n.text("ai_settings.identity.agent")
         }

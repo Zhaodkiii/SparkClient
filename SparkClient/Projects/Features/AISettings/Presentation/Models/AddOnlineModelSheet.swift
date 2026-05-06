@@ -154,12 +154,12 @@ struct AddOnlineModelSheet: View {
 
                     NavigationLink {
                         GroupedToolSelectionView(
-                            title: L10n.text("ai_settings.models.online.field.tools"),
+                            title: L10n.text("common.tools"),
                             selectedValues: $selectedToolNames
                         )
                     } label: {
                         HStack {
-                            Text(L10n.text("ai_settings.models.online.field.tools"))
+                            Text(L10n.text("common.tools"))
                             Spacer()
                             Text(selectedToolsSummary)
                                 .foregroundStyle(.secondary)
@@ -342,7 +342,7 @@ struct AddOnlineModelSheet: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("ai_settings.models.online.selection.all")
+            return L10n.text("common.all")
         }
         return "\(selectedToolNames.count)/\(total)"
     }
@@ -564,7 +564,7 @@ struct GroupedToolSelectionView: View {
             return L10n.text("ai_settings.models.online.selection.none")
         }
         if selectedCount == total {
-            return L10n.text("ai_settings.models.online.selection.all")
+            return L10n.text("common.all")
         }
         return "\(selectedCount)/\(total)"
     }

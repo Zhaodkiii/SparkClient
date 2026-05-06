@@ -337,7 +337,7 @@ private struct SearchKeyEditorView: View {
                 }
 
                 Section(L10n.text("ai_settings.search.editor.section.basic")) {
-                    TextField(L10n.text("ai_settings.field.name"), text: $key.name)
+                    TextField(L10n.text("common.name"), text: $key.name)
                     TextField(L10n.text("ai_settings.field.company"), text: $key.company)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
@@ -407,7 +407,7 @@ private struct SearchKeyEditorView: View {
                     Button(L10n.text("common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("ai_settings.providers.editor.action.save")) {
+                    Button(L10n.text("common.save")) {
                         guard validateForSave() else { return }
                         onSave(key)
                         dismiss()

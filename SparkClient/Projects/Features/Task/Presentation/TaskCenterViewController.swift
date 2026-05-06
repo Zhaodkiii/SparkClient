@@ -11,7 +11,7 @@ struct TaskCenterViewController: View {
 
         var title: String {
             switch self {
-            case .all: return NSLocalizedString("task.filter.all", comment: "全部")
+            case .all: return NSLocalizedString("common.all", comment: "All")
             case .pending: return NSLocalizedString("task.filter.pending", comment: "待完成")
             case .completed: return NSLocalizedString("task.filter.completed", comment: "已完成")
             case .canceled: return NSLocalizedString("task.filter.canceled", comment: "已取消")
@@ -254,7 +254,7 @@ private struct TaskFormView: View {
     var body: some View {
         Form {
             Section {
-                TextField(NSLocalizedString("task.field.title", comment: "标题"), text: $draft.title)
+                TextField(NSLocalizedString("common.title", comment: "Title"), text: $draft.title)
                 TextField(NSLocalizedString("task.field.description", comment: "描述"), text: $draft.description)
             }
         }

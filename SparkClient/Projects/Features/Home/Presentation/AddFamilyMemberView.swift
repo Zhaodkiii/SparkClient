@@ -63,7 +63,7 @@ struct AddFamilyMemberView: View {
     private var actionTitle: String {
         switch mode {
         case .create:
-            return L10n.text("home.members.save")
+            return L10n.text("common.save")
         case .edit:
             return L10n.text("home.members.update")
         }

@@ -296,7 +296,7 @@ private struct PromptRepoTitleEditSheet: View {
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
             Form {
-                Section(L10n.text("ai_settings.field.title", fallback: "Title", comment: "Prompt title field")) {
+                Section(L10n.text("common.title", fallback: "Title", comment: "Prompt title field")) {
                     TextField(L10n.text("ai_settings.prompt_repo.title_placeholder", fallback: "Enter title", comment: "Prompt title placeholder"), text: titleBinding)
                         .textInputAutocapitalizationIfAvailable(.never)
                         .autocorrectionDisabledIfAvailable()

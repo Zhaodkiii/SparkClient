@@ -79,7 +79,7 @@ struct HealthExamReportDetailPage: View {
             }
 
             if let attachments = item.attachments, attachments.isEmpty == false {
-                Section(L10n.text("home.medical.attachments.title")) {
+                Section(L10n.text("common.attachments")) {
                     MedicalAttachmentListView(
                         attachments: attachments,
                         fileTransferService: fileTransferService

@@ -60,7 +60,7 @@ struct SmallTaskEditorView: View {
             }
 
             Section(L10n.text("ai_settings.small_tasks.section.basic", fallback: "Basic info", comment: "Small task basic section")) {
-                TextField(L10n.text("ai_settings.small_tasks.field.name", fallback: "Name", comment: "Small task name field"), text: $name)
+                TextField(L10n.text("common.name", fallback: "Name", comment: "Small task name field"), text: $name)
                 TextField(L10n.text("ai_settings.small_tasks.field.brief", fallback: "Brief", comment: "Small task brief field"), text: $brief)
             }
 
@@ -73,15 +73,15 @@ struct SmallTaskEditorView: View {
                 )
             }
 
-            Section(L10n.text("ai_settings.small_tasks.section.tools", fallback: "Tools", comment: "Small task tools section")) {
+            Section(L10n.text("common.tools", fallback: "Tools", comment: "Small task tools section")) {
                 NavigationLink {
                     GroupedToolSelectionView(
-                        title: L10n.text("ai_settings.models.online.field.tools", fallback: "Tools", comment: "Tool selection title"),
+                        title: L10n.text("common.tools", fallback: "Tools", comment: "Tool selection title"),
                         selectedValues: $selectedToolNames
                     )
                 } label: {
                     HStack {
-                        Text(L10n.text("ai_settings.models.online.field.tools", fallback: "Tools", comment: "Tool selection label"))
+                        Text(L10n.text("common.tools", fallback: "Tools", comment: "Tool selection label"))
                         Spacer()
                         Text(selectedToolsSummary)
                             .foregroundStyle(.secondary)
@@ -95,7 +95,7 @@ struct SmallTaskEditorView: View {
                 Button(L10n.text("common.cancel", fallback: "Cancel", comment: "Cancel action")) { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(L10n.text("ai_settings.save", fallback: "Save", comment: "Save action")) {
+                Button(L10n.text("common.save", fallback: "Save", comment: "Save action")) {
                     save()
                 }
                 .disabled(canSave == false)
@@ -134,7 +134,7 @@ struct SmallTaskEditorView: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("ai_settings.models.online.selection.all", fallback: "All", comment: "All tools selected")
+            return L10n.text("common.all", fallback: "All", comment: "All tools selected")
         }
         if selectedToolNames.isEmpty {
             return L10n.text("ai_settings.models.online.selection.none", fallback: "None", comment: "No tools selected")

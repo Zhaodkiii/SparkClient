@@ -16,7 +16,7 @@ struct MedicationRecognitionResultView: View {
             onBack: onBack,
             onSave: onSave
         )
-        .navigationTitle(L10n.text("medical.upload.result.medication.nav_title"))
+        .navigationTitle(L10n.text("common.medication"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

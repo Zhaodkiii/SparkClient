@@ -221,7 +221,7 @@ struct KnowledgeDocumentDetailView: View {
                     }
                 }
             } label: {
-                Text(editor.isEditMode ? L10n.text("knowledge.nav.save") : L10n.text("knowledge.nav.edit"))
+                Text(editor.isEditMode ? L10n.text("common.save") : L10n.text("common.edit"))
                     .foregroundStyle(Color.accentColor)
             }
             .disabled(editor.isSaving)
@@ -379,7 +379,7 @@ private struct EditorErrorAlertModifier: ViewModifier {
     @ObservedObject var editor: KnowledgeDocumentEditorViewModel
 
     func body(content: Content) -> some View {
-        content.alert(L10n.text("knowledge.error.title"), isPresented: Binding(
+        content.alert(L10n.text("common.error"), isPresented: Binding(
             get: { editor.errorMessage != nil },
             set: { if $0 == false { editor.clearError() } }
         )) {

@@ -13,7 +13,7 @@ struct MedicalAttachmentIconView: View {
                     Image(systemName: isExpanded ? "paperclip.circle.fill" : "paperclip")
                         .font(.title3)
                         .foregroundStyle(count > 0 ? Color.accentColor : .secondary)
-                    Text(L10n.text("home.medical.attachments.title"))
+                    Text(L10n.text("common.attachments"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

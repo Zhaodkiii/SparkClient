@@ -424,9 +424,9 @@ private extension MedicalDocumentKind {
         case .medicalReport:
             return L10n.text("medical.upload.kind.medical_report")
         case .prescription:
-            return L10n.text("medical.upload.kind.prescription")
+            return L10n.text("common.prescription")
         case .medication:
-            return L10n.text("medical.upload.kind.medication")
+            return L10n.text("common.medication")
         }
     }
 

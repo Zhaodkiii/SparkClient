@@ -52,9 +52,9 @@ struct PrescriptionBatchFormView: View {
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescriber"), text: $prescriberName)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.institution"), text: $institutionName)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescribed_at"), text: $prescribedAt)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.diagnosis"), text: $diagnosis)
+                SparkFormTextRow(title: L10n.text("common.diagnosis"), text: $diagnosis)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $batchNo)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_status"), text: $status)
+                SparkFormTextRow(title: L10n.text("common.status"), text: $status)
             }
             .padding(16)
         }
@@ -94,9 +94,9 @@ struct PrescriptionBatchFormView: View {
 
     private var saveTitle: String {
         switch mode {
-        case .create: return L10n.text("medical_record.forms.action.save")
+        case .create: return L10n.text("common.save")
         case .serverEdit: return L10n.text("medical_record.forms.action.update")
-        case .localEdit: return L10n.text("medical_record.forms.action.complete")
+        case .localEdit: return L10n.text("common.done")
         }
     }
 

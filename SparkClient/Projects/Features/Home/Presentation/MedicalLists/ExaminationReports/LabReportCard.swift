@@ -250,7 +250,7 @@ struct LabReportCard: View {
                 )
                 StatCardView(
                     value: "\(max(detailItems.count - abnormalDetailItems.count, 0))",
-                    label: L10n.text("home.medical.list.examination.card.normal"),
+                    label: L10n.text("common.normal"),
                     backgroundColor: Color(uiColor: .systemGreen).opacity(0.08),
                     textColor: Color(uiColor: .systemGreen)
                 )

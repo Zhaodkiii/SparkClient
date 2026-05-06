@@ -126,7 +126,7 @@ enum HealthExamResultSummaryFilter: String, CaseIterable {
         case .all:
             return "medical.upload.result.health_exam.summary.total"
         case .normal:
-            return "medical.upload.result.health_exam.summary.normal"
+            return "common.normal"
         case .abnormal:
             return "medical.upload.result.health_exam.summary.abnormal"
         }
@@ -148,7 +148,7 @@ enum HealthExamRiskLevel: String {
         case .low:
             return "medical.upload.result.health_exam.risk.low"
         case .normal:
-            return "medical.upload.result.health_exam.risk.normal"
+            return "common.normal"
         }
     }
 

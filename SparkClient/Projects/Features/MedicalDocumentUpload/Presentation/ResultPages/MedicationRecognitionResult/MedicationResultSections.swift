@@ -82,7 +82,7 @@ struct MedicationListSectionView: View {
 
             Spacer()
 
-            Button(L10n.text("medical.upload.result.common.edit")) {
+            Button(L10n.text("common.edit")) {
                 onEditItem(index, item)
             }
             .font(.caption.weight(.semibold))

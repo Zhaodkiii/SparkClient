@@ -9,7 +9,7 @@ enum ModelsSettingsIdentityFilter: CaseIterable, Hashable {
     var localizedTitle: String {
         switch self {
         case .all:
-            return L10n.text("ai_settings.models.filter.all")
+            return L10n.text("common.all")
         case .model:
             return L10n.text("ai_settings.models.filter.models_only")
         case .agent:

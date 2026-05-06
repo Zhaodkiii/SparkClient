@@ -34,7 +34,7 @@ struct HealthExamBasicInfoSectionView: View {
             title: L10n.text("medical.upload.result.health_exam.basic_info.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.basic_info.subtitle"),
             systemImage: "doc.text",
-            actionTitle: L10n.text("medical.upload.result.common.edit"),
+            actionTitle: L10n.text("common.edit"),
             action: onEdit
         ) {
             VStack(alignment: .leading, spacing: 10) {
@@ -253,7 +253,7 @@ struct HealthExamRiskItemCell: View {
                         .fill(item.riskLevel.tint.opacity(0.12))
                 )
 
-            Button(L10n.text("medical.upload.result.common.edit"), action: onEdit)
+            Button(L10n.text("common.edit"), action: onEdit)
                 .font(.caption.weight(.semibold))
         }
         .padding(10)

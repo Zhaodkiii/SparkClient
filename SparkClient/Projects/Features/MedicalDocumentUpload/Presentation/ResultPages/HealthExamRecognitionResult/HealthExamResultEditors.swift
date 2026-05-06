@@ -48,7 +48,7 @@ struct HealthExamBasicInfoEditorView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button(L10n.text("medical.upload.result.common.complete")) {
+                Button(L10n.text("common.done")) {
                     onSubmit(
                         initial.replacingBasicInfo(
                             institutionName: institutionName.nilIfBlank,
@@ -120,7 +120,7 @@ struct HealthExamRiskItemEditorView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button(L10n.text("medical.upload.result.common.complete")) {
+                Button(L10n.text("common.done")) {
                     onSubmit(
                         MedicalReportItem(
                             category: category.nilIfBlank ?? item.category,

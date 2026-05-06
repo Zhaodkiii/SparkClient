@@ -49,7 +49,7 @@ struct MedicalCaseDetailPage: View {
 
                     if showingAttachments, attachments.isEmpty == false {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text(L10n.text("home.medical.attachments.title"))
+                            Text(L10n.text("common.attachments"))
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
@@ -141,7 +141,7 @@ struct MedicalCaseDetailPage: View {
                 triggerAddRecordHaptic()
                 addRecordSheet = .medication
             } label: {
-                Label(L10n.text("home.medical.case_detail.add.menu.medication"), systemImage: "pills.fill")
+                Label(L10n.text("common.medication"), systemImage: "pills.fill")
             }
             Button {
                 triggerAddRecordHaptic()
@@ -153,7 +153,7 @@ struct MedicalCaseDetailPage: View {
                 triggerAddRecordHaptic()
                 addRecordSheet = .prescription
             } label: {
-                Label(L10n.text("home.medical.case_detail.add.menu.prescription"), systemImage: "doc.text.fill")
+                Label(L10n.text("common.prescription"), systemImage: "doc.text.fill")
             }
             Button {
                 triggerAddRecordHaptic()

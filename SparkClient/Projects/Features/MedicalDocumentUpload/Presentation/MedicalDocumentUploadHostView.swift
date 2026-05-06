@@ -75,7 +75,7 @@ struct MedicalDocumentUploadHostView: View {
                 }
             }
         }
-        .alert(L10n.text("medical.upload.error.title"), isPresented: .constant(viewModel.errorMessage != nil)) {
+        .alert(L10n.text("common.error"), isPresented: .constant(viewModel.errorMessage != nil)) {
             Button(L10n.text("medical.upload.error.confirm")) {
                 viewModel.errorMessage = nil
             }

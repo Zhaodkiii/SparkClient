@@ -70,7 +70,6 @@
 "home.medical.list.medications.action.add_plan" = "添加用药计划";
 "home.medical.list.medications.footer.no_more" = "没有更多数据了";
 "home.medical.list.medications.batch_no" = "处方号：%@";
-"home.medical.list.medications.diagnosis" = "诊断";
 "home.medical.list.medications.in_batch_count" = "用药（%d 种）";
 "home.medical.list.medications.manage" = "管理";
 "home.medical.list.medications.attachments_count" = "附件（%d）";
@@ -103,10 +102,8 @@
 "home.medical.list.medications.reminder" = "服药提醒";
 "home.medical.list.medications.reminder_times" = "提醒时间";
 "home.medical.list.exam.stat.type" = "体检类型";
-"home.medical.list.exam.stat.attachments" = "附件";
 "home.medical.list.lab.toggle" = "查看结论";
 "home.medical.list.examination.search.placeholder" = "搜索检查报告...";
-"home.medical.list.examination.filter.all" = "全部";
 "home.medical.list.examination.category.laboratory" = "实验室检查";
 "home.medical.list.examination.category.imaging" = "影像学检查";
 "home.medical.list.examination.category.pathology" = "病理检查";
@@ -114,10 +111,7 @@
 "home.medical.list.examination.empty.subtitle" = "上传检查报告后，将在这里显示";
 "home.medical.list.examination.card.view_detail" = "查看详情";
 "home.medical.list.examination.card.items" = "检查项";
-"home.medical.list.examination.card.normal" = "正常";
-"home.medical.list.examination.card.attachments" = "附件";
 "home.medical.list.examination.card.abnormal" = "重点";
-"home.medical.list.examination.card.status" = "状态";
 "home.medical.list.examination.card.key_points" = "重点信息";
 "home.medical.list.examination.card.tap_to_expand" = "轻点标题展开重点信息";
 "home.medical.list.examination.card.department" = "科室";
@@ -127,10 +121,7 @@
 "home.medical.list.examination.card.category" = "分类";
 "home.medical.list.examination.card.subcategory" = "子分类";
 "home.medical.list.examination.detail.lab.item" = "检验项目";
-"home.medical.list.examination.detail.lab.result" = "结果";
 "home.medical.list.examination.detail.lab.reference" = "参考值";
-"home.medical.list.examination.detail.lab.status" = "状态";
-"home.medical.list.examination.detail.lab.normal" = "正常";
 "home.medical.list.examination.detail.imaging.modality" = "检查方式";
 "home.medical.list.examination.detail.imaging.body_part" = "检查部位";
 "home.medical.list.examination.detail.imaging.result" = "检查结果";
@@ -139,9 +130,7 @@
 "home.medical.list.examination.detail.pathology.diagnosis" = "病理诊断";
 "home.medical.list.details.loading" = "正在加载明细…";
 "home.medical.list.details.section" = "明细项目";
-"home.medical.attachments.title" = "附件";
 "home.medical.list.health_exam.search.placeholder" = "搜索体检报告...";
-"home.medical.list.health_exam.filter.all" = "全部";
 "home.medical.list.health_exam.filter.with_summary" = "有综述";
 "home.medical.list.health_exam.filter.with_attachments" = "有附件";
 "home.medical.list.health_exam.empty.title" = "暂无体检报告";
@@ -150,10 +139,8 @@
 "home.medical.list.health_exam.view_detail" = "查看详情";
 "home.medical.list.health_exam.stats.report_no" = "报告号";
 "home.medical.list.health_exam.stats.items" = "检查项";
-"home.medical.list.health_exam.stats.normal" = "正常";
 "home.medical.list.health_exam.stats.abnormal" = "异常";
 "home.medical.list.health_exam.stats.exam_type" = "类型";
-"home.medical.list.health_exam.stats.attachments" = "附件";
 "home.medical.list.health_exam.high_risk.title" = "高风险项目";
 "home.medical.list.health_exam.other_risk.title" = "其他风险项目";
 "home.medical.list.health_exam.risk.high" = "高风险";
@@ -177,9 +164,7 @@
 "home.medical.case_detail.timeline" = "时间线";
 "home.medical.case_detail.timeline.empty" = "暂无额外时间轴条目。";
 "home.medical.case_detail.add_record" = "新增记录";
-"home.medical.case_detail.add.menu.medication" = "用药";
 "home.medical.case_detail.add.menu.symptom" = "症状";
-"home.medical.case_detail.add.menu.prescription" = "处方";
 "home.medical.case_detail.add.menu.examination" = "医疗检查";
 "home.medical.case_detail.add.menu.visit" = "就诊";
 "home.medical.case_detail.add.menu.follow_up" = "随访";
@@ -220,9 +205,7 @@
 "medical.upload.leave.message" = "离开后本次未保存的抽取结果会丢失。";
 "medical.upload.leave.stay" = "继续编辑";
 "medical.upload.leave.leave" = "离开";
-"medical.upload.result.title" = "标题";
 "medical.upload.result.summary" = "摘要";
-"medical.upload.result.diagnosis" = "诊断";
 "medical.upload.result.empty_diagnosis" = "未提取";
 "medical.upload.result.occurred_at" = "就诊时间";
 "medical.upload.step.prepare_file" = "准备文件";
@@ -244,8 +227,6 @@
 "medical.upload.kind.case" = "病例";
 "medical.upload.kind.health_exam" = "体检报告";
 "medical.upload.kind.medical_report" = "医疗报告";
-"medical.upload.kind.prescription" = "处方";
-"medical.upload.kind.medication" = "用药";
 "home.health_basics.title" = "健康基础信息";
 "home.health_basics.authorize" = "授权健康";
 "home.health_basics.only_self" = "仅“本人”成员可展示 Apple 健康数据。";
@@ -263,7 +244,6 @@
 "home.members.action_title" = "成员操作";
 "home.members.delete.confirm_title" = "确认删除成员";
 "home.members.delete.confirm_message" = "删除成员“%@”后，该成员关联的医疗记录将同步删除，此操作不可撤销。";
-"home.members.save" = "保存";
 "home.members.field.name" = "姓名";
 "home.members.field.name_placeholder" = "请输入家庭成员姓名";
 "home.members.field.relationship" = "关系";
@@ -338,7 +318,6 @@
 "chat.composer.style.hanlin" = "专业";
 "chat.composer.model.default" = "默认模型";
 "chat.composer.model.loading" = "加载模型中…";
-"chat.composer.toggle.tools" = "工具";
 "chat.composer.toggle.knowledge" = "知识背包";
 "chat.composer.toggle.web" = "联网搜索";
 "chat.composer.toggle.thinking" = "深度思考";
@@ -544,7 +523,6 @@
 "api_error.code.42901" = "验证码请求过于频繁，请稍后再试。";
 
 "ai_settings.title" = "AI 场景配置";
-"ai_settings.save" = "保存";
 "ai_settings.scenario.chat" = "对话";
 "ai_settings.scenario.embedding" = "向量模型";
 "ai_settings.scenario.voice" = "语音模型";
@@ -565,7 +543,6 @@
 "ai_settings.scenario_default_hint" = "默认";
 "ai_settings.no_models_configure_key" = "暂无可用模型：服务端未下发该场景模型列表，且本地目录中无已配置 API Key 的模型。";
 "ai_settings.endpoint" = "端点";
-"ai_settings.model" = "模型";
 "ai_settings.api_key" = "API Key（可选）";
 "ai_settings.temperature" = "温度";
 "ai_settings.max_tokens" = "最大 Tokens";
@@ -597,7 +574,6 @@
 "ai_settings.row.memory_archive.subtitle" = "长期记忆条目";
 "ai_settings.row.translation_dic" = "翻译词典";
 "ai_settings.row.translation_dic.subtitle" = "术语映射";
-"ai_settings.field.name" = "名称";
 "ai_settings.field.company" = "厂商";
 "ai_settings.field.enabled" = "启用";
 "ai_settings.field.display_name" = "显示名";
@@ -617,7 +593,6 @@
 "ai_settings.field.use_knowledge" = "启用知识召回";
 "ai_settings.field.knowledge_count" = "召回条数";
 "ai_settings.field.knowledge_similarity" = "召回相似度";
-"ai_settings.field.title" = "标题";
 "ai_settings.field.content" = "内容";
 "ai_settings.field.system_preset" = "系统预设";
 "ai_settings.field.pinned" = "置顶";
@@ -723,9 +698,7 @@
 "company_YI" = "零一万物";
 "company_ZHIPUAI" = "智谱 AI";
 
-"ai_settings.identity.model" = "模型";
 "ai_settings.identity.agent" = "智能体";
-"ai_settings.models.filter.all" = "全部";
 "ai_settings.models.filter.models_only" = "模型";
 "ai_settings.models.filter.agents_only" = "智能体";
 "ai_settings.models.nav_title.models" = "模型";
@@ -753,7 +726,6 @@
 "ai_settings.models.menu.add_agent" = "添加新智能体";
 "ai_settings.models.action.create_local_agent" = "创建本地智能体";
 "ai_settings.models.capability.reasoning" = "推理";
-"ai_settings.models.capability.tools" = "工具";
 "ai_settings.models.capability.multimodal" = "多模态";
 "ai_settings.field.reasoning_controllable" = "思考可控";
 "ai_settings.field.price_tier" = "价格档位";
@@ -792,7 +764,6 @@
 "ai_settings.models.empty.list_none" = "暂无模型。";
 "ai_settings.models.advanced.nav_title" = "高级";
 "ai_settings.models.alert.cannot_delete_system" = "系统预置模型无法删除。";
-"ai_settings.models.action.edit" = "编辑";
 
 "ai_settings.models.online.section.basic" = "基本信息";
 "ai_settings.models.online.field.api_name" = "API 模型名";
@@ -803,9 +774,7 @@
 "ai_settings.models.online.section.price" = "价格";
 "ai_settings.models.online.section.usage" = "使用场景与工具";
 "ai_settings.models.online.field.scenarios" = "使用场景";
-"ai_settings.models.online.field.tools" = "工具";
 "ai_settings.models.online.selection.none" = "未设置";
-"ai_settings.models.online.selection.all" = "全部";
 "ai_settings.models.online.section.capabilities" = "能力";
 "ai_settings.models.online.toggle.default_hidden" = "默认隐藏";
 "ai_settings.models.online.toggle.supports_text" = "支持文本";
@@ -835,7 +804,6 @@
 "ai_settings.models.online.probe.err.http_failed" = "探测请求失败（HTTP %d）。";
 "ai_settings.models.online.probe.err.http_failed_detail" = "探测请求失败（HTTP %d）：%@";
 
-"ai_settings.models.edit.section.name" = "名称";
 "ai_settings.models.edit.field.display_name" = "显示名称";
 "ai_settings.models.edit.section.icon" = "图标";
 "ai_settings.models.edit.section.capabilities" = "能力";
@@ -851,6 +819,19 @@
 "common.operation_failed" = "操作失败";
 "common.ok" = "确定";
 "common.close" = "关闭";
+"common.all" = "全部";
+"common.attachments" = "附件";
+"common.status" = "状态";
+"common.normal" = "正常";
+"common.prescription" = "处方";
+"common.medication" = "用药";
+"common.name" = "名称";
+"common.title" = "标题";
+"common.result" = "结果";
+"common.diagnosis" = "诊断";
+"common.tools" = "工具";
+"common.model" = "模型";
+"common.edit" = "编辑";
 "common.done" = "完成";
 "common.save" = "保存";
 
@@ -905,7 +886,6 @@
 "ai_settings.providers.editor.test.failed" = "测试失败";
 "ai_settings.providers.editor.test.no_models" = "无可用模型";
 "ai_settings.providers.editor.nav_title" = "编辑密钥";
-"ai_settings.providers.editor.action.save" = "保存";
 "ai_settings.providers.editor.alert.delete_model_title" = "删除模型？";
 "ai_settings.providers.editor.alert.delete_model_message" = "删除后将从当前厂商模型列表移除。";
 "ai_settings.providers.editor.alert.notice_title" = "提示";
@@ -991,8 +971,6 @@
 "ai_settings.small_tasks.section.icon" = "图标选择";
 "ai_settings.small_tasks.section.basic" = "基础信息";
 "ai_settings.small_tasks.section.prompt" = "Prompt";
-"ai_settings.small_tasks.section.tools" = "工具";
-"ai_settings.small_tasks.field.name" = "名称";
 "ai_settings.small_tasks.field.brief" = "简介";
 "ai_settings.small_tasks.field.use_current_date" = "在系统提示词中追加当前日期";
 "ai_runtime.prompt.current_date_instruction_format" = "当前日期：%@。请基于此日期理解“今天/明天/本周”等时间表达。";
@@ -1006,8 +984,6 @@
 "knowledge.loading" = "加载中…";
 "knowledge.not_found.title" = "未找到文档";
 "knowledge.not_found.message" = "所选知识文档无法加载。";
-"knowledge.nav.save" = "保存";
-"knowledge.nav.edit" = "编辑";
 "knowledge.title.placeholder" = "请输入知识名称";
 "knowledge.title.untitled" = "未命名";
 "knowledge.new_document_title" = "新知识";
@@ -1028,7 +1004,6 @@
 "knowledge.delete.title" = "删除文档？";
 "knowledge.delete.message" = "该知识文档将从本地库移除。";
 "knowledge.delete.confirm" = "删除";
-"knowledge.error.title" = "错误";
 "knowledge.error.document_missing" = "未找到文档。";
 "knowledge.error.body_empty" = "正文不能为空。";
 "knowledge.error.embedding_no_model" = "请先选择嵌入模型。";
@@ -1144,15 +1119,12 @@
 "medical.upload.a11y.step" = "步骤 %d: %@";
 
 // MARK: - 错误提示
-"medical.upload.error.title" = "错误";
 "medical.upload.error.confirm" = "好";
 "medical.upload.error.no_result" = "暂无可保存的识别结果。";
 
 // MARK: - 病历草稿表单（新建/编辑）
 "medical_record.forms.error.submit_failed" = "提交失败";
-"medical_record.forms.action.save" = "保存";
 "medical_record.forms.action.update" = "更新";
-"medical_record.forms.action.complete" = "完成";
 
 "medical_record.forms.lab_item.card_title" = "检验子项";
 "medical_record.forms.lab_item.nav_title" = "新增检验项";
@@ -1160,7 +1132,6 @@
 "medical_record.forms.field.category" = "分类";
 "medical_record.forms.field.subcategory" = "子分类";
 "medical_record.forms.field.item_name" = "项目";
-"medical_record.forms.field.result" = "结果";
 "medical_record.forms.field.unit" = "单位";
 "medical_record.forms.field.reference_range" = "参考范围";
 "medical_record.forms.field.flag" = "标记";
@@ -1173,7 +1144,6 @@
 "medical_record.forms.field.notes" = "备注";
 "medical_record.forms.field.planned_time" = "计划时间";
 "medical_record.forms.field.completed_time" = "完成时间";
-"medical_record.forms.field.status" = "状态";
 "medical_record.forms.field.method" = "方式";
 "medical_record.forms.field.outcome" = "结果";
 "medical_record.forms.field.next_plan" = "下一步计划";
@@ -1195,9 +1165,7 @@
 "medical_record.forms.field.prescriber" = "开方医生";
 "medical_record.forms.field.institution" = "机构";
 "medical_record.forms.field.prescribed_at" = "开方时间";
-"medical_record.forms.field.diagnosis" = "诊断";
 "medical_record.forms.field.batch_no" = "批次号";
-"medical_record.forms.field.batch_status" = "状态";
 "medical_record.forms.field.procedure_name" = "手术名称";
 "medical_record.forms.field.procedure_code" = "手术编码";
 "medical_record.forms.field.site" = "部位";
@@ -1269,7 +1237,6 @@
 "medical.upload.result.member.subtitle" = "确认识别结果将归档到该成员";
 "medical.upload.result.member.id" = "成员 ID";
 
-"medical.upload.result.common.edit" = "编辑";
 "medical.upload.result.common.back" = "返回";
 "medical.upload.result.common.submit" = "提交保存";
 "medical.upload.result.common.save_status" = "保存状态";
@@ -1282,7 +1249,6 @@
 "medical.upload.result.attachments.count" = "%d个";
 "medical.upload.result.attachments.empty" = "暂无附件";
 
-"medical.upload.result.prescription.nav_title" = "处方";
 "medical.upload.result.prescription.batch_no" = "处方号";
 "medical.upload.result.prescription.hospital" = "开方机构";
 "medical.upload.result.prescription.prescriber" = "开方医生";
@@ -1292,7 +1258,6 @@
 "medical.upload.result.prescription.edit_batch" = "编辑批次";
 "medical.upload.result.prescription.empty_medications" = "暂无药品条目";
 
-"medical.upload.result.medication.nav_title" = "用药";
 "medical.upload.result.medication.section.title" = "药品列表";
 "medical.upload.result.medication.section.subtitle" = "支持单条与批量本地编辑";
 "medical.upload.result.medication.count_format" = "%d项";
@@ -1314,7 +1279,6 @@
 "medical.upload.result.medical_report.empty_category" = "暂无该分类报告";
 "medical.upload.result.medical_report.detail_count" = "明细 %d 项";
 
-"medical.upload.result.common.complete" = "完成";
 
 "ai_settings.providers.section.trial_providers" = "试用期可用厂商";
 "ai_settings.providers.badge.trial" = "试用";
@@ -1363,7 +1327,6 @@
 "medical.upload.result.health_exam.summary.title" = "Summary Row";
 "medical.upload.result.health_exam.summary.subtitle" = "按总数/正常/异常筛选指标";
 "medical.upload.result.health_exam.summary.total" = "总";
-"medical.upload.result.health_exam.summary.normal" = "正常";
 "medical.upload.result.health_exam.summary.abnormal" = "异常";
 
 "medical.upload.result.health_exam.groups.title" = "Category Groups";
@@ -1372,7 +1335,6 @@
 "medical.upload.result.health_exam.risk.high" = "高风险";
 "medical.upload.result.health_exam.risk.mid" = "中风险";
 "medical.upload.result.health_exam.risk.low" = "低风险";
-"medical.upload.result.health_exam.risk.normal" = "正常";
 
 "medical.upload.result.health_exam.item.nav" = "编辑体检指标";
 "medical.upload.result.health_exam.item.edit_title" = "体检指标项";
@@ -1388,7 +1350,6 @@
 
 "task.center.entry" = "任务中心";
 "task.center.title" = "任务中心";
-"task.filter.all" = "全部";
 "task.filter.pending" = "待完成";
 "task.filter.completed" = "已完成";
 "task.filter.canceled" = "已取消";
@@ -1397,7 +1358,6 @@
 "task.action.complete" = "完成任务";
 "task.action.cancel" = "取消任务";
 "task.action.edit" = "修改任务";
-"task.field.title" = "标题";
 "task.field.description" = "描述";
 "task.time.unspecified" = "未设置时间";
 "task.type.medical" = "医疗";
@@ -1432,8 +1392,6 @@
 "chat.medical_card.saved.toast" = "已保存到健康档案。";
 "chat.medical_card.error.decode" = "无法解析卡片数据。";
 "chat.medical_card.error.no_member" = "请先选择成员。";
-"chat.medical_card.medication.untitled" = "用药";
-"chat.medical_card.prescription.title" = "处方";
 "chat.medical_card.exam.title" = "检查报告";
 "chat.medical_card.case.title" = "病历";
 "chat.medical_card.extraction_failed.title" = "抽取未完成";

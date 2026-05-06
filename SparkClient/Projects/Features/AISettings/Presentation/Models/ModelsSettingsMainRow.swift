@@ -46,7 +46,7 @@ struct ModelsSettingsMainRow: View {
                             .lineLimit(1)
                     }
                     if model.supportsToolUse {
-                        Text(L10n.text("ai_settings.models.capability.tools"))
+                        Text(L10n.text("common.tools"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -125,7 +125,7 @@ struct ModelsSettingsMainRow: View {
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             if showsLeadingSwipeAction {
                 Button(action: openEditor) {
-                    Label(L10n.text("ai_settings.models.action.edit"), systemImage: "square.and.pencil")
+                    Label(L10n.text("common.edit"), systemImage: "square.and.pencil")
                 }
                 .tint(.blue)
             }
