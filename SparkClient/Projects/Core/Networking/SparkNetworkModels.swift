@@ -461,21 +461,15 @@ extension SparkNetworkError: LocalizedError {
         case .transport(let urlError):
             return "网络异常：\(urlError.localizedDescription)"
         case .invalidResponse:
-            return "服务器响应无效，请稍后重试。"
+            return L10n.text("api_error.invalid_response", fallback: "服务器响应无效，请稍后重试。")
         case .httpError(let statusCode, let backend, _):
-            if let backend, backend.msg.isEmpty == false {
-                return backend.msg
-            }
-            return "请求失败（HTTP \(statusCode)），请稍后重试。"
+            return BackendErrorLocalizer.message(for: backend, statusCode: statusCode)
         case .decoding(_):
-            return "数据解析失败，请稍后重试。"
+            return L10n.text("api_error.decoding", fallback: "数据解析失败，请稍后重试。")
         case .refreshFailed(let backend, _):
-            if let backend, backend.msg.isEmpty == false {
-                return backend.msg
-            }
-            return "登录状态失效，请重新登录。"
+            return BackendErrorLocalizer.message(for: backend, statusCode: 401)
         case .timeout:
-            return "请求超时，请检查网络后重试。"
+            return L10n.text("api_error.timeout", fallback: "请求超时，请检查网络后重试。")
         }
     }
 }

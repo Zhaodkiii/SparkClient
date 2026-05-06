@@ -60,13 +60,13 @@ struct HanlinChatComposerView: View {
             }
             .padding(.bottom, 12)
             .background {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                RoundedRectangle(cornerRadius: 0, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .shadow(color: Color.primary.opacity(0.32), radius: 1)
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 15)
+//        .padding(.vertical, 6)
+//        .padding(.horizontal, 15)
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],

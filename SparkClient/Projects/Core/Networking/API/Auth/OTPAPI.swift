@@ -40,6 +40,7 @@ struct SparkOTPAPI {
         let expires_in: Int
         let token_type: String
         let otp_id: String
+        let is_new_user: Bool?
     }
 
     func requestEmailOTP(

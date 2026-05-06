@@ -172,9 +172,11 @@ struct ChatComposerView: View {
                         get: { stateStore.draft(for: threadID) },
                         set: { stateStore.setDraft($0, for: threadID) }
                     ),
-                    measuredHeight: $inputHeight
+                    measuredHeight: $inputHeight,
+                    minimumHeight: 24,
+                    maximumHeight: 110
                 )
-                .frame(height: min(max(inputHeight, 24), 110))
+                .frame(height: inputHeight)
             }
         }
         .padding(.horizontal, 16)
@@ -440,6 +442,8 @@ private struct ChatComposerAttachmentSheet: View {
 private struct ChatComposerTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var measuredHeight: CGFloat
+    let minimumHeight: CGFloat
+    let maximumHeight: CGFloat
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -450,6 +454,7 @@ private struct ChatComposerTextView: UIViewRepresentable {
         textView.delegate = context.coordinator
         textView.backgroundColor = .clear
         textView.isScrollEnabled = false
+        textView.showsVerticalScrollIndicator = true
         textView.font = UIFont.preferredFont(forTextStyle: .body)
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
@@ -465,9 +470,17 @@ private struct ChatComposerTextView: UIViewRepresentable {
     }
 
     private func recalculateHeight(for textView: UITextView) {
-        let fittingSize = CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)
+        let fittingSize = CGSize(width: max(textView.bounds.width, 1), height: .greatestFiniteMagnitude)
         let measured = textView.sizeThatFits(fittingSize).height
-        let nextHeight = max(measured, 24)
+        let nextHeight = min(max(measured, minimumHeight), maximumHeight)
+        let shouldScroll = measured > maximumHeight
+
+        if textView.isScrollEnabled != shouldScroll {
+            textView.isScrollEnabled = shouldScroll
+        }
+        if shouldScroll == false && textView.contentOffset != .zero {
+            textView.setContentOffset(.zero, animated: false)
+        }
         if abs(measuredHeight - nextHeight) > 0.5 {
             DispatchQueue.main.async {
                 measuredHeight = nextHeight

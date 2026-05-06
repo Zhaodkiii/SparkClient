@@ -194,6 +194,7 @@ struct ChatView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composerChrome
             }
+            .ignoresSafeArea(.container, edges: .bottom)
             .overlay(alignment: .bottom) {
                 parameterOverlay
             }

@@ -2,23 +2,27 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     let session: UserSession
-    @State private var showDeactivationConfirm = false
 
     var body: some View {
         List {
-            Section(L10n.text("settings.section.session")) {
-                settingsRow(
-                    title: session.signInMethod == .phone ? "手机号" : L10n.text("settings.email"),
-                    value: session.email
-                )
-                settingsRow(
-                    title: L10n.text("settings.sign_in_method"),
-                    value: session.signInMethod == .phone ? "手机号验证码" : L10n.text("settings.sign_in_method.apple")
-                )
-                settingsRow(title: L10n.text("settings.sign_in_time"), value: session.signedInAt.formatted(date: .abbreviated, time: .shortened))
+            Section(L10n.text("settings.section.account")) {
+                NavigationLink {
+                    AccountManagementView(viewModel: accountManagementViewModel, session: session)
+                        .hidesMainTabBarWhenPushed()
+                } label: {
+                    HStack {
+                        Label(L10n.text("settings.account_management"), systemImage: "person.crop.circle")
+                        Spacer()
+                        Text(session.displayName.isEmpty ? session.email : session.displayName)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
 
             Section(L10n.text("settings.section.architecture")) {
@@ -126,50 +130,10 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
-                Button(role: .destructive) {
-                    Task { await viewModel.signOut() }
-                } label: {
-                    if viewModel.isSigningOut {
-                        ProgressView()
-                    } else {
-                        Text(L10n.text("settings.sign_out"))
-                    }
-                }
-            }
-
-            Section(L10n.text("settings.section.danger")) {
-                HStack {
-                    Text(L10n.text("settings.deactivation.current_status"))
-                    Spacer()
-                    Text(viewModel.deactivationStatusDescription.isEmpty ? L10n.text("settings.deactivation.status.none") : viewModel.deactivationStatusDescription)
-                        .foregroundStyle(.secondary)
-                        .font(.footnote)
-                }
-
-                Button(role: .destructive) {
-                    showDeactivationConfirm = true
-                } label: {
-                    if viewModel.isRequestingDeactivation {
-                        ProgressView()
-                    } else {
-                        Text(L10n.text("settings.deactivation.request"))
-                    }
-                }
-                .disabled(viewModel.isRequestingDeactivation)
-            }
         }
         .navigationTitle(L10n.text("settings.title"))
         .task {
             await viewModel.loadSyncPreference()
-        }
-        .confirmationDialog(L10n.text("settings.deactivation.confirm.title"), isPresented: $showDeactivationConfirm, titleVisibility: .visible) {
-            Button(L10n.text("settings.deactivation.confirm.submit"), role: .destructive) {
-                Task { await viewModel.requestDeactivation() }
-            }
-            Button(L10n.text("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.text("settings.deactivation.confirm.message"))
         }
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { viewModel.errorMessage != nil },
@@ -182,15 +146,6 @@ struct SettingsView: View {
             Button(L10n.text("common.ok")) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
-        }
-    }
-
-    private func settingsRow(title: String, value: String) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value)
-                .foregroundStyle(.secondary)
         }
     }
 }

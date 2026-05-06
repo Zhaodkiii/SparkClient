@@ -17,7 +17,6 @@ struct HanlinChatInputView: View {
     let onSetMemberBinding: (Int?) -> Void
 
     @State private var inputHeight: CGFloat = 24
-    @State private var inputExpandedSheet = false
     @State private var voiceInputSheet = false
     @State private var unifiedFilePreview: FilePreviewInput?
 
@@ -99,13 +98,6 @@ struct HanlinChatInputView: View {
                 )
                 .ignoresSafeArea()
             }
-            .sheet(isPresented: $inputExpandedSheet) {
-                SparkPromptInputDrawerSheet(
-                    text: draftBinding,
-                    isPresented: $inputExpandedSheet
-                )
-                .sparkInputPresentationChromeIfAvailable()
-            }
             .sheet(isPresented: $voiceInputSheet) {
                 SparkVoiceInputSheet(
                     text: draftBinding,
@@ -135,33 +127,25 @@ struct HanlinChatInputView: View {
                         }
 
                         HanlinChatTextView(
-                            text: Binding(
-                                get: { stateStore.draft(for: threadID) },
-                                set: { stateStore.setDraft($0, for: threadID) }
-                            ),
-                            measuredHeight: $inputHeight
+                            text: draftBinding,
+                            measuredHeight: $inputHeight,
+                            minimumHeight: 44,
+                            maximumHeight: 160,
+                            isSending: stateStore.isSending
                         )
-                        .frame(height: min(max(inputHeight, 44), 160))
+                        .frame(height: inputHeight)
                     }
                     .padding(.leading, 12)
 
-                    Button {
-                        voiceInputSheet = true
-                    } label: {
-                        Image(systemName: "microphone.circle")
-                            .foregroundStyle(Color(.systemGray))
-                            .padding(.trailing, 3)
-                    }
-                    .disabled(stateStore.isSending)
-
-                    Button {
-                        inputExpandedSheet = true
-                    } label: {
-                        Image(systemName: inputExpandedSheet ? "chevron.down" : "chevron.up")
-                            .foregroundStyle(Color(.systemGray))
-                            .padding(.trailing, 12)
-                    }
-                    .disabled(stateStore.isSending)
+                    // 语音目前先隐藏 后期介入电话
+//                    Button {
+//                        voiceInputSheet = true
+//                    } label: {
+//                        Image(systemName: "microphone.circle")
+//                            .foregroundStyle(Color(.systemGray))
+//                            .padding(.trailing, 3)
+//                    }
+//                    .disabled(stateStore.isSending)
                 }
 
                 HStack(spacing: 6) {
@@ -471,9 +455,60 @@ private struct HanlinAttachmentSheet: View {
     }
 }
 
-private struct HanlinChatTextView: UIViewRepresentable {
+private struct HanlinChatTextView: View {
     @Binding var text: String
     @Binding var measuredHeight: CGFloat
+    let minimumHeight: CGFloat
+    let maximumHeight: CGFloat
+    let isSending: Bool
+
+    @State private var inputExpandedSheet = false
+    @State private var reachedScrollThreshold = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            HanlinChatTextUIKitView(
+                text: $text,
+                measuredHeight: $measuredHeight,
+                minimumHeight: minimumHeight,
+                maximumHeight: maximumHeight,
+                onScrollThresholdChange: { reachedThreshold in
+                    if reachedScrollThreshold != reachedThreshold {
+                        reachedScrollThreshold = reachedThreshold
+                    }
+                }
+            )
+            .frame(maxWidth: .infinity)
+
+            if reachedScrollThreshold {
+                Button {
+                    inputExpandedSheet = true
+                } label: {
+                    Image(systemName: inputExpandedSheet ? "chevron.down" : "chevron.up")
+                        .foregroundStyle(Color(.systemGray))
+                        .padding(.trailing, 12)
+                }
+                .disabled(isSending)
+                .padding(.top)
+            }
+                
+        }
+        .sheet(isPresented: $inputExpandedSheet) {
+            SparkPromptInputDrawerSheet(
+                text: $text,
+                isPresented: $inputExpandedSheet
+            )
+            .sparkInputPresentationChromeIfAvailable()
+        }
+    }
+}
+
+private struct HanlinChatTextUIKitView: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var measuredHeight: CGFloat
+    let minimumHeight: CGFloat
+    let maximumHeight: CGFloat
+    let onScrollThresholdChange: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -484,6 +519,7 @@ private struct HanlinChatTextView: UIViewRepresentable {
         textView.delegate = context.coordinator
         textView.backgroundColor = .clear
         textView.isScrollEnabled = false
+        textView.showsVerticalScrollIndicator = true
         textView.font = UIFont.preferredFont(forTextStyle: .body)
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
@@ -499,9 +535,20 @@ private struct HanlinChatTextView: UIViewRepresentable {
     }
 
     private func recalculateHeight(for textView: UITextView) {
-        let fittingSize = CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)
+        let fittingSize = CGSize(width: max(textView.bounds.width, 1), height: .greatestFiniteMagnitude)
         let measured = textView.sizeThatFits(fittingSize).height
-        let nextHeight = max(measured, 44)
+        let nextHeight = min(max(measured, minimumHeight), maximumHeight)
+        let shouldScroll = measured > maximumHeight
+
+        if textView.isScrollEnabled != shouldScroll {
+            textView.isScrollEnabled = shouldScroll
+        }
+        DispatchQueue.main.async {
+            onScrollThresholdChange(shouldScroll)
+        }
+        if shouldScroll == false && textView.contentOffset != .zero {
+            textView.setContentOffset(.zero, animated: false)
+        }
         if abs(measuredHeight - nextHeight) > 0.5 {
             DispatchQueue.main.async {
                 measuredHeight = nextHeight
@@ -510,9 +557,9 @@ private struct HanlinChatTextView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
-        private let parent: HanlinChatTextView
+        private let parent: HanlinChatTextUIKitView
 
-        init(_ parent: HanlinChatTextView) {
+        init(_ parent: HanlinChatTextUIKitView) {
             self.parent = parent
         }
 

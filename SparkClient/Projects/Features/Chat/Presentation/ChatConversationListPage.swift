@@ -145,7 +145,9 @@ struct ChatConversationListPage: View {
                             .lineLimit(2)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .contextMenu {

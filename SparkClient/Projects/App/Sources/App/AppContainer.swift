@@ -90,6 +90,8 @@ final class AppContainer {
     let userProfileRepository: any UserProfileRepository
     /// 登录、刷新 token、登出。
     let authRepository: any AuthRepository
+    /// 账户资料、二次验证与销户提交。
+    let accountManagementRepository: any AccountManagementRepository
     /// 本地 AI 偏好（模型、温度等）；与知识库仓库解耦。
     let aiSettingsRepository: any AISettingsRepository
     /// 账号级长期记忆仓储。
@@ -113,6 +115,12 @@ final class AppContainer {
     let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     /// 清除令牌与会话。
     let signOutUseCase: SignOutUseCase
+    /// 加载账户管理页资料。
+    let loadAccountProfileUseCase: LoadAccountProfileUseCase
+    /// 请求账户高危操作验证。
+    let requestAccountVerificationUseCase: RequestAccountVerificationUseCase
+    /// 提交账户注销申请。
+    let submitAccountDeactivationUseCase: SubmitAccountDeactivationUseCase
     /// 首页医疗卡片：成员、病例、体检、用药等摘要（可带远程刷新策略）。
     let loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase
     /// 首页家庭成员增删改选。
@@ -214,6 +222,8 @@ final class AppContainer {
 
     /// 登录态与恢复会话的 Observable 封装。
     let sessionStore: AppSessionStore
+    /// 新用户引导状态：按账号持久化，根协调器只观察这个 Store 做分流。
+    let onboardingStore: OnboardingStore
     /// 当前选中的医疗成员上下文（首页与聊天共用）。
     let memberContextStore: MemberContextStore
     /// 聊天列表与详情共享的选中线程、输入态等。
@@ -276,6 +286,11 @@ final class AppContainer {
             pushAdapter: pushAdapter,
             logger: logger
         ),
+        onboarding: OnboardingAssembly(
+            store: onboardingStore,
+            makeFlowViewModel: { [self] in makeOnboardingFlowViewModel() },
+            logger: logger
+        ),
         mainTab: MainTabAssembly(
             makeDependencies: { [self] ownerAccountID in
                 makeMainTabDependencies(ownerAccountID: ownerAccountID)
@@ -306,6 +321,7 @@ final class AppContainer {
     private var cachedHomeViewModel: HomeViewModel?
     private var cachedMedicalDocumentUploadViewModel: MedicalDocumentUploadViewModel?
     private var cachedSettingsViewModel: SettingsViewModel?
+    private var cachedAccountManagementViewModel: AccountManagementViewModel?
     private var aiSettingsViewModelCache = AccountScopedCache<AISettingsViewModel>()
     private var mainTabDependenciesCache = AccountScopedCache<MainTabDependencies>()
 
@@ -324,6 +340,7 @@ final class AppContainer {
         // AppContainer 只决定装配顺序；每个领域内部的真实构造逻辑下沉到对应 Assembly。
         let infrastructure = AppAssembly.makeInfrastructure(backend: backend, logger: logger)
         let auth = AuthAssembly.makeCore(backend: backend, logger: logger)
+        let accountManagementRepository = DefaultAccountManagementRepository(backend: backend)
         let ai = AIAssembly.makeCore(
             coreDataStack: coreDataStack,
             backend: backend,
@@ -380,11 +397,15 @@ final class AppContainer {
 
         self.userProfileRepository = auth.userProfileRepository
         self.authRepository = auth.authRepository
+        self.accountManagementRepository = accountManagementRepository
         self.restoreSessionUseCase = auth.restoreSessionUseCase
         self.signInWithAppleUseCase = auth.signInWithAppleUseCase
         self.requestPhoneOTPUseCase = auth.requestPhoneOTPUseCase
         self.signInWithPhoneOTPUseCase = auth.signInWithPhoneOTPUseCase
         self.signOutUseCase = auth.signOutUseCase
+        self.loadAccountProfileUseCase = LoadAccountProfileUseCase(repository: accountManagementRepository)
+        self.requestAccountVerificationUseCase = RequestAccountVerificationUseCase(repository: accountManagementRepository)
+        self.submitAccountDeactivationUseCase = SubmitAccountDeactivationUseCase(repository: accountManagementRepository)
 
         self.aiSettingsRepository = ai.aiSettingsRepository
         self.memoryRepository = ai.memoryRepository
@@ -458,6 +479,7 @@ final class AppContainer {
         // MARK: 会话 Store 与跨界面共享 ViewModel
         // 注意：`sessionStore` 使用刚赋值的 `restoreSessionUseCase`，`chatListViewModel` 依赖 `sessionStore`，顺序不可颠倒。
         self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
+        self.onboardingStore = OnboardingStore(repository: UserDefaultsOnboardingStateRepository())
         self.memberContextStore = notification.memberContextStore
         self.memberContextStore.configure(manage: manageHomeMemberUseCase)
         self.chatStateStore = ChatStateStore()
@@ -557,6 +579,14 @@ final class AppContainer {
         )
     }
 
+    /// 新用户引导：复用账号级 OnboardingStore 与成员上下文，不直接持有完整容器。
+    func makeOnboardingFlowViewModel() -> OnboardingFlowViewModel {
+        OnboardingFlowViewModel(
+            store: onboardingStore,
+            memberContextStore: memberContextStore
+        )
+    }
+
     /// 首页：医疗摘要、成员管理与成员上下文、通知。
     func makeHomeViewModel() -> HomeViewModel {
         if let cachedHomeViewModel {
@@ -596,14 +626,27 @@ final class AppContainer {
             return cachedSettingsViewModel
         }
         let created = SettingsViewModel(
-            sessionStore: sessionStore,
-            signOutUseCase: signOutUseCase,
-            memberContextStore: memberContextStore,
             medicalSyncService: medicalSyncService,
-            deviceCache: backend.deviceCache,
-            backend: backend
+            deviceCache: backend.deviceCache
         )
         cachedSettingsViewModel = created
+        return created
+    }
+
+    /// 账户管理：账户资料、退出登录、注销验证与最终提交。
+    func makeAccountManagementViewModel() -> AccountManagementViewModel {
+        if let cachedAccountManagementViewModel {
+            return cachedAccountManagementViewModel
+        }
+        let created = AccountManagementViewModel(
+            loadAccountProfileUseCase: loadAccountProfileUseCase,
+            requestAccountVerificationUseCase: requestAccountVerificationUseCase,
+            submitAccountDeactivationUseCase: submitAccountDeactivationUseCase,
+            signOutUseCase: signOutUseCase,
+            sessionStore: sessionStore,
+            memberContextStore: memberContextStore
+        )
+        cachedAccountManagementViewModel = created
         return created
     }
 
@@ -612,6 +655,7 @@ final class AppContainer {
         cachedHomeViewModel = nil
         cachedMedicalDocumentUploadViewModel = nil
         cachedSettingsViewModel = nil
+        cachedAccountManagementViewModel = nil
         aiSettingsViewModelCache.clear()
         mainTabDependenciesCache.clear()
         logger.info("账号级 ViewModel 与主 Tab 依赖缓存已清理", module: .general)
@@ -652,6 +696,7 @@ final class AppContainer {
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
             settingsViewModel: makeSettingsViewModel(),
+            accountManagementViewModel: makeAccountManagementViewModel(),
             aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
             versionUpdateCoordinator: versionUpdateCoordinator,
             memberContextStore: memberContextStore

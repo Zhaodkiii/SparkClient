@@ -75,6 +75,11 @@ struct NotificationFeatureDependencies {
     let pushAdapter: PushAdapter
 }
 
+struct OnboardingFeatureDependencies {
+    let store: OnboardingStore
+    let makeFlowViewModel: @MainActor () -> OnboardingFlowViewModel
+}
+
 /// 主 Tab 运行所需的稳定依赖包。
 ///
 /// 这组对象属于账号级 UI 运行时：同一账号登录期间只初始化一次，网络状态、前后台切换、
@@ -92,6 +97,7 @@ struct MainTabDependencies {
     let chatListViewModel: ChatListViewModel
     let chatDetailViewModel: ChatDetailViewModel
     let settingsViewModel: SettingsViewModel
+    let accountManagementViewModel: AccountManagementViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let versionUpdateCoordinator: AppVersionUpdateCoordinator
     let memberContextStore: MemberContextStore
@@ -107,6 +113,7 @@ struct AppFeatureFacades {
     let chat: ChatFeatureDependencies
     let medical: MedicalFeatureDependencies
     let notifications: NotificationFeatureDependencies
+    let onboarding: OnboardingFeatureDependencies
     let mainTab: MainTabFeatureDependencies
 }
 
@@ -132,6 +139,7 @@ struct AppAssembly: FeatureAssembly {
     let chat: ChatAssembly
     let medical: MedicalAssembly
     let notifications: NotificationAssembly
+    let onboarding: OnboardingAssembly
     let mainTab: MainTabAssembly
     let logger: Logger
     let scope: DependencyScope = .appSingleton
@@ -144,6 +152,7 @@ struct AppAssembly: FeatureAssembly {
             chat: chat.makeFacade(),
             medical: medical.makeFacade(),
             notifications: notifications.makeFacade(),
+            onboarding: onboarding.makeFacade(),
             mainTab: mainTab.makeFacade()
         )
     }
@@ -230,6 +239,21 @@ struct NotificationAssembly: FeatureAssembly {
             store: store,
             client: client,
             pushAdapter: pushAdapter
+        )
+    }
+}
+
+struct OnboardingAssembly: FeatureAssembly {
+    let store: OnboardingStore
+    let makeFlowViewModel: @MainActor () -> OnboardingFlowViewModel
+    let logger: Logger
+    let scope: DependencyScope = .accountScoped
+
+    func makeFacade() -> OnboardingFeatureDependencies {
+        logger.debug("OnboardingAssembly 输出引导流程 facade", module: .general)
+        return OnboardingFeatureDependencies(
+            store: store,
+            makeFlowViewModel: makeFlowViewModel
         )
     }
 }

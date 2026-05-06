@@ -441,8 +441,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         let serverMessage: String?
         if let networkError = error as? SparkNetworkError,
            case .httpError(_, let backend, _) = networkError {
-            let text = backend?.msg.trimmingCharacters(in: .whitespacesAndNewlines)
-            serverMessage = (text?.isEmpty == false) ? text : nil
+            let text = BackendErrorLocalizer.message(for: backend).trimmingCharacters(in: .whitespacesAndNewlines)
+            serverMessage = text.isEmpty == false ? text : nil
         } else {
             serverMessage = nil
         }

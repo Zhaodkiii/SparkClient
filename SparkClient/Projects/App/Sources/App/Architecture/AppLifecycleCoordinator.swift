@@ -56,6 +56,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         didHandleSignedOutState = true
         preparedAccountID = nil
         preparingAccountID = nil
+        container.onboardingStore.deactivate()
         await container.appBootstrapper.reset()
         await container.accountSessionRuntime.activateGuest()
     }
@@ -70,6 +71,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         defer { preparingAccountID = nil }
 
         await container.accountSessionRuntime.activateUser(accountID: session.accountID)
+        await container.onboardingStore.activate(session: session)
         await container.appBootstrapper.bootstrapIfNeeded(for: session)
         await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)

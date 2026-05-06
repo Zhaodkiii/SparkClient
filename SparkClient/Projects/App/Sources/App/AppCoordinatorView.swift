@@ -5,9 +5,11 @@ struct AppCoordinatorView: View {
     @StateObject private var networkMonitor = NetworkPathMonitor()
     @StateObject private var lifecycle: AppLifecycleCoordinator
     @StateObject private var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    @ObservedObject private var onboardingStore: OnboardingStore
 
     init(dependencies: AppCoordinatorDependencies) {
         self.facades = dependencies.facades
+        self.onboardingStore = dependencies.facades.onboarding.store
         _lifecycle = StateObject(wrappedValue: dependencies.lifecycle)
         _versionUpdateCoordinator = StateObject(wrappedValue: dependencies.versionUpdateCoordinator)
     }
@@ -52,28 +54,38 @@ struct AppCoordinatorView: View {
         case .signedIn(let session):
             if lifecycle.preparedAccountID == session.accountID {
                 let mainTab = facades.mainTab.makeDependencies(session.accountID)
-                MainTabCoordinatorView(
-                    session: session,
-                    routeStore: mainTab.routeStore,
-                    homeDependencies: mainTab.homeDependencies,
-                    knowledgeDependencies: mainTab.knowledgeDependencies,
-                    taskManager: mainTab.taskManager,
-                    homeViewModel: mainTab.homeViewModel,
-                    medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
-                    knowledgeViewModel: mainTab.knowledgeViewModel,
-                    chatStateStore: mainTab.chatStateStore,
-                    chatListViewModel: mainTab.chatListViewModel,
-                    chatDetailViewModel: mainTab.chatDetailViewModel,
-                    settingsViewModel: mainTab.settingsViewModel,
-                    aiSettingsViewModel: mainTab.aiSettingsViewModel,
-                    versionUpdateCoordinator: mainTab.versionUpdateCoordinator
-                )
-                .environmentObject(mainTab.memberContextStore)
-                .id(session.accountID)
-                .task(id: session.accountID) {
-                    // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-                    lifecycle.requestNotificationAuthorizationIfNeeded()
-                    await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
+                if onboardingStore.activeAccountID == session.accountID, onboardingStore.needsOnboarding {
+                    OnboardingFlowView(
+                        viewModel: facades.onboarding.makeFlowViewModel(),
+                        memberContextStore: mainTab.memberContextStore,
+                        aiSettingsViewModel: mainTab.aiSettingsViewModel
+                    )
+                    .id("onboarding-\(session.accountID)")
+                } else {
+                    MainTabCoordinatorView(
+                        session: session,
+                        routeStore: mainTab.routeStore,
+                        homeDependencies: mainTab.homeDependencies,
+                        knowledgeDependencies: mainTab.knowledgeDependencies,
+                        taskManager: mainTab.taskManager,
+                        homeViewModel: mainTab.homeViewModel,
+                        medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
+                        knowledgeViewModel: mainTab.knowledgeViewModel,
+                        chatStateStore: mainTab.chatStateStore,
+                        chatListViewModel: mainTab.chatListViewModel,
+                        chatDetailViewModel: mainTab.chatDetailViewModel,
+                        settingsViewModel: mainTab.settingsViewModel,
+                        accountManagementViewModel: mainTab.accountManagementViewModel,
+                        aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                        versionUpdateCoordinator: mainTab.versionUpdateCoordinator
+                    )
+                    .environmentObject(mainTab.memberContextStore)
+                    .id(session.accountID)
+                    .task(id: session.accountID) {
+                        // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
+                        lifecycle.requestNotificationAuthorizationIfNeeded()
+                        await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
+                    }
                 }
             } else {
                 ProgressView(L10n.text("app.loading.preparing"))

@@ -31,6 +31,60 @@ struct SparkDeactivationAPI {
         let countdown_hours: Int?
     }
 
+    struct AccountDeactivationSubmitRequest: Encodable {
+        let reason: String?
+        let immediateDeactivation: Bool
+        let countdownHours: Int?
+        let dataRetentionDays: Int?
+        let anonymizePersonalData: Bool
+        let deleteRelatedData: Bool
+        let verification: AccountDeactivationVerification
+
+        enum CodingKeys: String, CodingKey {
+            case reason
+            case immediateDeactivation = "immediate_deactivation"
+            case countdownHours = "countdown_hours"
+            case dataRetentionDays = "data_retention_days"
+            case anonymizePersonalData = "anonymize_personal_data"
+            case deleteRelatedData = "delete_related_data"
+            case verification
+        }
+    }
+
+    enum AccountDeactivationVerification: Encodable {
+        case apple(identityToken: String, authorizationCode: String?, userIdentifier: String)
+        case phone(otpID: String, code: String)
+        case email(otpID: String, code: String)
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case identityToken = "identity_token"
+            case authorizationCode = "authorization_code"
+            case userIdentifier = "user_identifier"
+            case otpID = "otp_id"
+            case code
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .apple(let identityToken, let authorizationCode, let userIdentifier):
+                try container.encode("apple", forKey: .type)
+                try container.encode(identityToken, forKey: .identityToken)
+                try container.encodeIfPresent(authorizationCode, forKey: .authorizationCode)
+                try container.encode(userIdentifier, forKey: .userIdentifier)
+            case .phone(let otpID, let code):
+                try container.encode("phone", forKey: .type)
+                try container.encode(otpID, forKey: .otpID)
+                try container.encode(code, forKey: .code)
+            case .email(let otpID, let code):
+                try container.encode("email", forKey: .type)
+                try container.encode(otpID, forKey: .otpID)
+                try container.encode(code, forKey: .code)
+            }
+        }
+    }
+
     func getDeactivationStatus(deactivationId: Int) async throws -> DeactivationStatus? {
         let operation = CacheableSparkNetworkOperation(
             name: "Deactivation.GetStatus",
@@ -88,6 +142,30 @@ struct SparkDeactivationAPI {
                     requiresAuth: true,
                     allowETag: false,
                     serialKey: "deactivation.request",
+                    retryConfig: .default,
+                    isIdempotent: false,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        return try APIResponseDecoder.decodeWrappedData(DeactivationRequestResult.self, from: response)
+    }
+
+    func submitAccountDeactivation(_ request: AccountDeactivationSubmitRequest) async throws -> DeactivationRequestResult {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Deactivation.SubmitVerified",
+            apiName: "DeactivationAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/deactivation/",
+                headers: [:],
+                body: .json(AnyEncodable(request)),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "deactivation.submit.verified",
                     retryConfig: .default,
                     isIdempotent: false,
                     queuePriority: .high

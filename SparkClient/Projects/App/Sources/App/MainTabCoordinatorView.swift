@@ -14,6 +14,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
+    @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
 
@@ -63,6 +64,7 @@ struct MainTabCoordinatorView: View {
             CompatibleRouteNavigationContainer(path: routePath(.settings)) {
                 SettingsView(
                     viewModel: settingsViewModel,
+                    accountManagementViewModel: accountManagementViewModel,
                     aiSettingsViewModel: aiSettingsViewModel,
                     versionUpdateCoordinator: versionUpdateCoordinator,
                     session: session
