@@ -13,18 +13,50 @@ struct MedicalCaseDetailPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
+    let onUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
+    let onDeleted: (Int) -> Void
 
     @State private var showingAttachments = false
     @State private var dismissedTimelineEventIDs: Set<String> = []
     @State private var addRecordSheet: MedicalCaseAddRecordKind?
+    @State private var currentItem: SparkMedicalSyncAPI.RemoteMedicalCaseSummary
+    @State private var showingEditSheet = false
+    @State private var showingDeleteConfirmation = false
+    @State private var exportFileURL: URL?
+    @State private var isExporting = false
+    @State private var isDeleting = false
+    @Environment(\.dismiss) private var dismiss
+
+    init(
+        item: SparkMedicalSyncAPI.RemoteMedicalCaseSummary,
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
+        memberContextStore: MemberContextStore,
+        notificationClient: any NotificationClient,
+        onUpdated: @escaping (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void,
+        onDeleted: @escaping (Int) -> Void
+    ) {
+        self.item = item
+        self.completeData = completeData
+        self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
+        self.memberContextStore = memberContextStore
+        self.notificationClient = notificationClient
+        self.onUpdated = onUpdated
+        self.onDeleted = onDeleted
+        _currentItem = State(initialValue: item)
+    }
 
     private var timelineEvents: [MedicalCaseTimelineEvent] {
-        MedicalCaseTimelineEventBuilder.makeEvents(from: item, completeData: completeData)
+        MedicalCaseTimelineEventBuilder.makeEvents(from: currentItem, completeData: completeData)
             .filter { dismissedTimelineEventIDs.contains($0.id) == false }
     }
 
     private var attachments: [SparkMedicalSyncAPI.RemoteManagedFile] {
-        item.attachments ?? []
+        currentItem.attachments ?? []
     }
 
     var body: some View {
@@ -32,10 +64,10 @@ struct MedicalCaseDetailPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     MedicalCasePatientHeaderCard(
-                        item: item,
+                        item: currentItem,
                         attachmentsCount: attachments.count,
                         attachmentsExpanded: showingAttachments,
-                        onEdit: { performEditFeedback() },
+                        onEdit: { openEditSheet() },
                         onToggleAttachments: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 showingAttachments.toggle()
@@ -91,9 +123,55 @@ struct MedicalCaseDetailPage: View {
 
             addRecordFloatingButton
         }
-        .navigationTitle(item.title?.nonEmpty ?? L10n.text("home.medical.list.medical_cases.title"))
+        .navigationTitle(currentItem.title?.nonEmpty ?? L10n.text("home.medical.list.medical_cases.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button {
+                        exportMedicalCasePDF()
+                    } label: {
+                        Label(L10n.text("home.medical.case_detail.action.export", fallback: "导出"), systemImage: "square.and.arrow.up")
+                    }
+
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label(L10n.text("common.delete"), systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .disabled(isDeleting || isExporting)
+            }
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingAttachments)
+        .sheet(isPresented: $showingEditSheet) {
+            CompatibleNavigationContainer {
+                MedicalCaseFormView(
+                    mode: .serverEdit(currentItem, onSaved: handleUpdatedCase),
+                    memberContextStore: memberContextStore,
+                    workflowAPI: workflowAPI,
+                    notificationClient: notificationClient
+                )
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { exportFileURL != nil },
+            set: { if $0 == false { exportFileURL = nil } }
+        )) {
+            if let exportFileURL {
+                MedicalCaseActivityView(activityItems: [exportFileURL])
+            }
+        }
+        .alert(L10n.text("home.medical.case_detail.delete.title", fallback: "删除病历"), isPresented: $showingDeleteConfirmation) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(L10n.text("common.delete"), role: .destructive) {
+                Task { await deleteMedicalCase() }
+            }
+        } message: {
+            Text(L10n.text("home.medical.case_detail.delete.message", fallback: "删除后列表中将不再显示该病历。"))
+        }
         .fullScreenCover(item: $addRecordSheet) { kind in
             CompatibleNavigationContainer {
                 medicalCaseAddRecordDestination(kind)
@@ -122,8 +200,8 @@ struct MedicalCaseDetailPage: View {
                     MedicalCaseTimelineRow(
                         event: event,
                         isLast: index == timelineEvents.count - 1,
-                        memberID: item.member,
-                        medicalCaseID: item.id,
+                        memberID: currentItem.member,
+                        medicalCaseID: currentItem.id,
                         workflowAPI: workflowAPI,
                         fileTransferService: fileTransferService,
                         onTimelineEventRemoved: { id in
@@ -203,8 +281,8 @@ struct MedicalCaseDetailPage: View {
     @ViewBuilder
     private func medicalCaseAddRecordDestination(_ kind: MedicalCaseAddRecordKind) -> some View {
         let service = MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
-        let memberID = item.member
-        let medicalCaseID = item.id
+        let memberID = currentItem.member
+        let medicalCaseID = currentItem.id
         switch kind {
         case .medication:
             MedicationFormView(mode: .create, onCreateSubmit: { draft in
@@ -242,11 +320,62 @@ struct MedicalCaseDetailPage: View {
         generator.impactOccurred()
     }
 
-    private func performEditFeedback() {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
+    private func openEditSheet() {
+        performEditFeedback()
+        showingEditSheet = true
     }
 
+    private func handleUpdatedCase(_ updated: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) {
+        currentItem = updated
+        onUpdated(updated)
+    }
+
+    private func exportMedicalCasePDF() {
+        Task { await exportMedicalCasePDFAsync() }
+    }
+
+    @MainActor
+    private func exportMedicalCasePDFAsync() async {
+        guard isExporting == false else { return }
+        isExporting = true
+        defer { isExporting = false }
+
+        do {
+            exportFileURL = try await MedicalCasePDFExporter.makePDF(
+                item: currentItem,
+                completeData: completeData,
+                timelineEvents: timelineEvents,
+                attachments: attachments,
+                fileTransferService: fileTransferService
+            )
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("home.medical.case_detail.export.failed", fallback: "导出失败"), source: "medical.case.detail")
+        }
+    }
+
+    @MainActor
+    private func deleteMedicalCase() async {
+        guard isDeleting == false else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+
+        do {
+            try await MedicalCaseMutationService(workflowAPI: workflowAPI).delete(id: currentItem.id)
+            notificationClient.success(L10n.text("home.medical.case_detail.delete.success", fallback: "病历已删除"), source: "medical.case.detail")
+            onDeleted(currentItem.id)
+            dismiss()
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("home.medical.case_detail.delete.failed", fallback: "删除失败"), source: "medical.case.detail")
+        }
+    }
+
+    /// 执行编辑操作时的触觉反馈（震动效果）
+    private func performEditFeedback() {
+        // 创建触觉反馈生成器，设置震动样式为中等强度
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        // 触发震动反馈
+        generator.impactOccurred()
+    }
 }
 
 // MARK: - Header card（对齐 HealthClient `PatientHeaderCard` 信息层级）
@@ -499,7 +628,11 @@ private extension SparkMedicalSyncAPI.RemoteMedicalCaseSummary {
             item: .previewSample,
             completeData: nil,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
-            fileTransferService: AppContainer.preview.fileTransferService
+            fileTransferService: AppContainer.preview.fileTransferService,
+            memberContextStore: AppContainer.preview.memberContextStore,
+            notificationClient: AppContainer.preview.notificationClient,
+            onUpdated: { _ in },
+            onDeleted: { _ in }
         )
     }
     .preferredColorScheme(.light)
@@ -511,7 +644,11 @@ private extension SparkMedicalSyncAPI.RemoteMedicalCaseSummary {
             item: .previewSample,
             completeData: nil,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
-            fileTransferService: AppContainer.preview.fileTransferService
+            fileTransferService: AppContainer.preview.fileTransferService,
+            memberContextStore: AppContainer.preview.memberContextStore,
+            notificationClient: AppContainer.preview.notificationClient,
+            onUpdated: { _ in },
+            onDeleted: { _ in }
         )
     }
     .preferredColorScheme(.dark)

@@ -2,10 +2,13 @@ import SwiftUI
 
 /// 分类型结果页路由：作为抽取结果入口，使用 NavigationLink 跳转到对应的结果页面模块。
 struct MedicalDocumentResultRouterView: View {
+    @EnvironmentObject private var memberContextStore: MemberContextStore
+
     let output: MedicalDocumentTypedExtractionOutput
     let isSaving: Bool
     let saveReceipt: MedicalDocumentSaveReceipt?
     let onBack: () -> Void
+    let onSelectMember: (Int?) -> Void
     let onSave: () -> Void
 
     var body: some View {
@@ -47,9 +50,11 @@ struct MedicalDocumentResultRouterView: View {
         case .healthExamReport:
             HealthExamRecognitionResultView(
                 output: output,
+                memberContextStore: memberContextStore,
                 isSaving: isSaving,
                 saveReceipt: saveReceipt,
                 onBack: onBack,
+                onSelectMember: onSelectMember,
                 onSave: onSave
             )
         case .medicalReport:

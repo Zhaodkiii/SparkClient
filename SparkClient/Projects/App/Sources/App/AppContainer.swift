@@ -681,7 +681,9 @@ final class AppContainer {
                 medicalQueryAPI: backend.medicalQuery,
                 fileTransferService: fileTransferService,
                 taskManager: taskManager,
-                logger: logger
+                logger: logger,
+                memberContextStore: memberContextStore,
+                notificationClient: notificationClient
             ),
             knowledgeDependencies: KnowledgeFeatureDependencies(
                 makeEditorViewModel: { [self] documentID in

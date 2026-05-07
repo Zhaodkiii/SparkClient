@@ -60,6 +60,10 @@ enum SparkMedicalSyncAPI {
         var hospitalName: String
         /// 就诊时年龄，可选。
         var ageAtVisit: Int?
+        /// 病情严重程度，可为空。
+        var severity: String? = nil
+        /// 业务展示状态，可为空；区别于后端整型流转状态 `status`。
+        var caseStatus: String? = nil
         var diagnosisSummary: String
         /// 扩展键值，便于后端向前兼容增加字段而不改表结构。
         var extra: [String: String]?
@@ -73,6 +77,8 @@ enum SparkMedicalSyncAPI {
             case title
             case hospitalName = "hospital_name"
             case ageAtVisit = "age_at_visit"
+            case severity
+            case caseStatus = "case_status"
             case diagnosisSummary = "diagnosis_summary"
             case extra
             case updatedAt = "updated_at"
@@ -504,6 +510,8 @@ enum SparkMedicalSyncAPI {
         var title: String?
         var hospitalName: String?
         var ageAtVisit: Int?
+        var severity: String? = nil
+        var caseStatus: String? = nil
         var diagnosisSummary: String?
         var extra: [String: String]?
         var createdAt: Date?
@@ -513,10 +521,11 @@ enum SparkMedicalSyncAPI {
         var attachments: [RemoteManagedFile]?
 
         enum CodingKeys: String, CodingKey {
-            case id, member, status, title, extra, symptoms, medications, attachments
+            case id, member, status, title, severity, extra, symptoms, medications, attachments
             case recordType = "record_type"
             case hospitalName = "hospital_name"
             case ageAtVisit = "age_at_visit"
+            case caseStatus = "case_status"
             case diagnosisSummary = "diagnosis_summary"
             case createdAt = "created_at"
             case updatedAt = "updated_at"

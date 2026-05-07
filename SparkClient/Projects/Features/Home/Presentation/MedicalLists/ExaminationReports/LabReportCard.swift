@@ -517,7 +517,7 @@ private struct ExaminationReportDetailHostPage: View {
                     ExamReportFormView(
                         mode: .serverEdit(existing: existingDraft),
                         onServerSubmit: { draft in
-                            let mergedReport = report.applying(draft: draft)
+                            let mergedReport = report.applyingRecognitionDraft(draft)
                             try await mutationService.updateReport(report: mergedReport)
                         }
                     )
@@ -556,8 +556,9 @@ private struct ExaminationReportDetailHostPage: View {
     }
 }
 
-private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
-    func applying(draft: MedicalReportRecognitionDraft) -> Self {
+extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+    /// 将表单/识别草稿合并到报告摘要与明细行（编辑保存与新建后列表回填共用）。
+    func applyingRecognitionDraft(_ draft: MedicalReportRecognitionDraft) -> Self {
         var updated = self
         updated.category = draft.category ?? updated.category
         updated.itemName = draft.title
@@ -593,6 +594,34 @@ private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
             )
         }
         return updated
+    }
+
+    /// 新建接口返回 ID 后，构造列表展示用的摘要（含明细，避免立刻再请求明细）。
+    static func summaryAfterCreate(id: Int, memberID: Int, draft: MedicalReportRecognitionDraft) -> Self {
+        let now = Date()
+        let shell = Self(
+            id: id,
+            member: memberID,
+            medicalRecord: nil,
+            category: draft.category ?? "laboratory",
+            subCategory: nil,
+            itemName: nil,
+            performedAt: nil,
+            reportedAt: nil,
+            organizationName: nil,
+            departmentName: nil,
+            doctorName: nil,
+            findings: nil,
+            impression: nil,
+            source: nil,
+            status: nil,
+            extra: nil,
+            createdAt: now,
+            updatedAt: now,
+            attachments: [],
+            medExamDetails: nil
+        )
+        return shell.applyingRecognitionDraft(draft)
     }
 }
 private struct StatCardView: View {

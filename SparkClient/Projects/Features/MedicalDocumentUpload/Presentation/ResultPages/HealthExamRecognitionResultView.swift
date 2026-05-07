@@ -2,22 +2,136 @@ import SwiftUI
 
 /// 体检报告识别结果页（模块化：ResultPages/HealthExamRecognitionResult）
 struct HealthExamRecognitionResultView: View {
-    let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSave: () -> Void
+    private let content: HealthExamRecognitionResultContentView
+    private let title: String
+    private let mode: HealthExamResultMode
+    private let detailReportID: Int?
+    private let workflowAPI: SparkMedicalWorkflowAPI?
+    private let notificationClient: (any NotificationClient)?
+    private let onDeleted: ((Int) -> Void)?
 
-    var body: some View {
-        HealthExamRecognitionResultContentView(
+    @Environment(\.dismiss) private var dismiss
+    @State private var isShowingDeleteConfirm = false
+    @State private var isDeleting = false
+
+    init(
+        output: MedicalDocumentTypedExtractionOutput,
+        memberContextStore: MemberContextStore,
+        isSaving: Bool,
+        saveReceipt: MedicalDocumentSaveReceipt?,
+        onBack: @escaping () -> Void,
+        onSelectMember: @escaping (Int?) -> Void,
+        onSave: @escaping () -> Void
+    ) {
+        self.content = HealthExamRecognitionResultContentView(
             output: output,
+            memberContextStore: memberContextStore,
             isSaving: isSaving,
             saveReceipt: saveReceipt,
             onBack: onBack,
+            onSelectMember: onSelectMember,
             onSave: onSave
         )
-        .navigationTitle(L10n.text("medical.upload.result.health_exam.nav_title"))
+        self.title = L10n.text("medical.upload.result.health_exam.nav_title")
+        self.mode = .recognition
+        self.detailReportID = nil
+        self.workflowAPI = nil
+        self.notificationClient = nil
+        self.onDeleted = nil
+    }
+
+    init(
+        item: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments,
+        fileTransferService: FileTransferService,
+        memberContextStore: MemberContextStore,
+        workflowAPI: SparkMedicalWorkflowAPI,
+        notificationClient: any NotificationClient,
+        onDeleted: ((Int) -> Void)? = nil
+    ) {
+        self.content = HealthExamRecognitionResultContentView(
+            item: item,
+            fileTransferService: fileTransferService,
+            memberContextStore: memberContextStore
+        )
+        self.title = item.institutionName?.nonEmpty ?? L10n.text("home.medical.list.health_exam_reports.title")
+        self.mode = .detail
+        self.detailReportID = item.id
+        self.workflowAPI = workflowAPI
+        self.notificationClient = notificationClient
+        self.onDeleted = onDeleted
+    }
+
+    var body: some View {
+        content
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                toolbarActionMenu
+            }
+        }
+        .alert(
+            L10n.text("home.medical.list.health_exam.delete.confirm_title", fallback: "删除体检报告？"),
+            isPresented: $isShowingDeleteConfirm
+        ) {
+            Button(L10n.text("common.delete"), role: .destructive) {
+                Task { await deleteDetailReport() }
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("home.medical.list.health_exam.delete.confirm_message", fallback: "删除后该报告将从列表中移除。"))
+        }
+    }
+
+    @ViewBuilder
+    private var toolbarActionMenu: some View {
+        if mode == .detail {
+            Menu {
+                Button {
+                } label: {
+                    Label(L10n.text("common.export", fallback: "导出"), systemImage: "square.and.arrow.up.on.square")
+                }
+
+                Button {
+                } label: {
+                    Label(L10n.text("common.share", fallback: "分享"), systemImage: "square.and.arrow.up")
+                }
+
+                Button {
+                } label: {
+                    Label(L10n.text("common.edit"), systemImage: "pencil")
+                }
+
+                Divider()
+
+                Button(role: .destructive) {
+                    isShowingDeleteConfirm = true
+                } label: {
+                    Label(L10n.text("common.delete"), systemImage: "trash")
+                }
+                .disabled(isDeleting)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        } else {
+            EmptyView()
+        }
+    }
+
+    @MainActor
+    private func deleteDetailReport() async {
+        guard isDeleting == false, let detailReportID, let workflowAPI else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+
+        do {
+            try await workflowAPI.delete(kind: .healthExamReports, id: detailReportID)
+            notificationClient?.success(L10n.text("home.medical.list.health_exam.delete.success", fallback: "体检报告已删除"), source: "health.exam.detail")
+            onDeleted?(detailReportID)
+            dismiss()
+        } catch {
+            notificationClient?.error(error.localizedDescription, title: L10n.text("home.medical.list.health_exam.delete.failed", fallback: "删除失败"), source: "health.exam.detail")
+        }
     }
 }
 
@@ -25,9 +139,11 @@ struct HealthExamRecognitionResultView: View {
     CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
             output: .previewHealthExamOutput,
+            memberContextStore: MemberContextStore(),
             isSaving: false,
             saveReceipt: nil,
             onBack: {},
+            onSelectMember: { _ in },
             onSave: {}
         )
     }
@@ -38,9 +154,11 @@ struct HealthExamRecognitionResultView: View {
     CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
             output: .previewHealthExamOutput,
+            memberContextStore: MemberContextStore(),
             isSaving: false,
             saveReceipt: nil,
             onBack: {},
+            onSelectMember: { _ in },
             onSave: {}
         )
     }

@@ -20,6 +20,7 @@ struct HanlinChatComposerView: View {
     let onPersistSelectedChatModel: (String?) -> Void
 
     @State private var showFileImporter = false
+    @State private var isKeyboardVisible = false
 
     private var selectedModelBinding: Binding<String?> {
         Binding(
@@ -53,10 +54,12 @@ struct HanlinChatComposerView: View {
                     onSetMemberBinding: onSetMemberBinding
                 )
 
-                ChatComposerModelPickerRow(
-                    models: modelRows,
-                    selectedModelName: selectedModelBinding
-                )
+                if !isKeyboardVisible {
+                    ChatComposerModelPickerRow(
+                        models: modelRows,
+                        selectedModelName: selectedModelBinding
+                    )
+                }
             }
             .padding(.bottom, 12)
             .background {
@@ -67,6 +70,16 @@ struct HanlinChatComposerView: View {
         }
 //        .padding(.vertical, 6)
 //        .padding(.horizontal, 15)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isKeyboardVisible = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isKeyboardVisible = false
+            }
+        }
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],

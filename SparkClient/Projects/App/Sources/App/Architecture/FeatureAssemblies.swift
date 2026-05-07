@@ -37,6 +37,8 @@ struct HomeFeatureDependencies {
     let fileTransferService: FileTransferService
     let taskManager: TaskManager
     let logger: Logger
+    let memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
 }
 
 struct KnowledgeFeatureDependencies {
@@ -52,7 +54,9 @@ extension HomeFeatureDependencies {
             medicalQueryAPI: container.backend.medicalQuery,
             fileTransferService: container.fileTransferService,
             taskManager: container.taskManager,
-            logger: container.logger
+            logger: container.logger,
+            memberContextStore: container.memberContextStore,
+            notificationClient: container.notificationClient
         )
     }
 }

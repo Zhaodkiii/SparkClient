@@ -28,17 +28,61 @@ struct ExamReportFormView: View {
             case .pathology: return L10n.text("medical_record.forms.exam_report.label.pathology")
             }
         }
+
+        var menuSystemImage: String {
+            switch self {
+            case .laboratory: return "flask"
+            case .imaging: return "camera.viewfinder"
+            case .pathology: return "microscope"
+            }
+        }
     }
 
-    struct ItemDraft: Identifiable {
-        var id = UUID()
-        var category: String = ""
-        var subCategory: String = ""
-        var itemName: String = ""
-        var resultValue: String = ""
-        var unit: String = ""
-        var referenceRange: String = ""
-        var flag: String = ""
+    struct ItemDraft: Identifiable, Equatable {
+        var id: UUID
+        var category: String
+        var subCategory: String
+        var itemName: String
+        var resultValue: String
+        var unit: String
+        var referenceRange: String
+        var flag: String
+        /// 影像 / 病理等：`MedicalReportItem.modality`
+        var modality: String
+        /// `MedicalReportItem.bodyPart`
+        var bodyPart: String
+        /// `MedicalReportItem.resultAt`（检查或报告日期）
+        var resultAt: String
+        /// `MedicalReportItem.diagnosis`（所见+结论等长文本）
+        var diagnosis: String
+
+        init(
+            id: UUID = UUID(),
+            category: String = "",
+            subCategory: String = "",
+            itemName: String = "",
+            resultValue: String = "",
+            unit: String = "",
+            referenceRange: String = "",
+            flag: String = "",
+            modality: String = "",
+            bodyPart: String = "",
+            resultAt: String = "",
+            diagnosis: String = ""
+        ) {
+            self.id = id
+            self.category = category
+            self.subCategory = subCategory
+            self.itemName = itemName
+            self.resultValue = resultValue
+            self.unit = unit
+            self.referenceRange = referenceRange
+            self.flag = flag
+            self.modality = modality
+            self.bodyPart = bodyPart
+            self.resultAt = resultAt
+            self.diagnosis = diagnosis
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -54,6 +98,11 @@ struct ExamReportFormView: View {
     @State private var doctor: String
     @State private var content: String
     @State private var date: String
+    @State private var examDay: Date
+    @State private var formKeyboardVisible = false
+    /// 检验模块：新建子项时的默认一级/二级分类（仅存于 UI，写入各 `ItemDraft`）。
+    @State private var labPrimaryCategory: String
+    @State private var labSubCategory: String
     @State private var items: [ItemDraft]
     @State private var editingItem: ItemDraft?
     @State private var isSaving = false
@@ -86,7 +135,13 @@ struct ExamReportFormView: View {
         _hospital = State(initialValue: seed.hospital ?? "")
         _doctor = State(initialValue: seed.doctor ?? "")
         _content = State(initialValue: seed.content)
-        _date = State(initialValue: seed.date ?? "")
+        let rawDate = (seed.date ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedDate = rawDate.isEmpty ? Self.formatExamDayString(Date()) : rawDate
+        _date = State(initialValue: resolvedDate)
+        _examDay = State(initialValue: Self.parseExamDay(from: resolvedDate))
+        let labSeed = pageType == .laboratory ? seed.details.first : nil
+        _labPrimaryCategory = State(initialValue: labSeed?.category ?? "")
+        _labSubCategory = State(initialValue: labSeed?.subCategory ?? "")
         _items = State(initialValue: seed.details.map {
             ItemDraft(
                 category: $0.category,
@@ -95,7 +150,11 @@ struct ExamReportFormView: View {
                 resultValue: $0.resultValue ?? "",
                 unit: $0.unit ?? "",
                 referenceRange: $0.referenceRange ?? "",
-                flag: $0.flag ?? ""
+                flag: $0.flag ?? "",
+                modality: $0.modality ?? "",
+                bodyPart: $0.bodyPart ?? "",
+                resultAt: $0.resultAt ?? "",
+                diagnosis: $0.diagnosis ?? ""
             )
         })
     }
@@ -103,57 +162,93 @@ struct ExamReportFormView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                SparkFormCard(title: navTitle) {
-                    Picker(L10n.text("medical_record.forms.exam_report.picker.subpage"), selection: $pageType) {
-                        ForEach(PageType.allCases, id: \.self) { type in
-                            Text(type.segmentTitle).tag(type)
+                SparkFormCard(
+                    title: L10n.text("medical_record.forms.medical_case.section.basic"),
+                    titleSystemImage: "calendar"
+                ) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L10n.text("medical_record.forms.exam_report.field.exam_date"))
+                                .font(.subheadline.weight(.medium))
+                            DatePicker(
+                                "",
+                                selection: $examDay,
+                                displayedComponents: .date
+                            )
+                            .labelsHidden()
+                            .datePickerStyle(.compact)
+                            .onChange(of: examDay) { newValue in
+                                date = Self.formatExamDayString(newValue)
+                            }
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: pageType) { newValue in
-                        category = newValue.rawValue
-                    }
 
-                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.category"), text: $category)
-                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.report_title"), text: $title)
-                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.hospital"), text: $hospital)
-                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.doctor"), text: $doctor)
-                    SparkFormTextRow(
-                        title: L10n.text("medical_record.forms.field.date"),
-                        text: $date,
-                        placeholder: L10n.text("medical_record.forms.field.date_placeholder")
-                    )
-                    SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.report_content"), text: $content)
-                }
+                        VisitDivider(color: Color(.separator), height: 1, verticalPadding: 6)
 
-                SparkFormCard(title: String(format: L10n.text("medical_record.forms.exam_report.section_items_format"), pageType.itemLabel)) {
-                    Button(L10n.text("medical_record.forms.exam_report.add_item")) {
-                        editingItem = .init()
-                    }
-                    .buttonStyle(.bordered)
+                        SparkFormTextRow(
+                            title: L10n.text("medical_record.forms.field.report_title"),
+                            text: $title,
+                            placeholder: L10n.text("medical_record.forms.exam_report.placeholder.report_title"),
+                            required: true,
+                            keyboardVisible: $formKeyboardVisible
+                        )
 
-                    ForEach(items) { item in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(item.itemName.isEmpty ? L10n.text("medical_record.forms.exam_report.unnamed_item") : item.itemName)
-                                .font(.subheadline.weight(.semibold))
-                            Text(String(format: L10n.text("medical_record.forms.exam_report.result_line"), item.resultValue))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        SparkFormCard(title: L10n.text("medical_record.forms.exam_report.field.exam_type")) {
+                            VStack(alignment: .leading, spacing: 18) {
+                                Picker(
+                                    L10n.text("medical_record.forms.exam_report.field.exam_type"),
+                                    selection: $pageType
+                                ) {
+                                    ForEach(PageType.allCases, id: \.self) { type in
+                                        Label(type.segmentTitle, systemImage: type.menuSystemImage)
+                                            .tag(type)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .onChange(of: pageType) { newValue in
+                                    category = newValue.rawValue
+                                }
+
+                                examTypeModuleContent
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
-                        .onTapGesture { editingItem = item }
+
+                        SparkFormTextRow(
+                            title: L10n.text("medical_record.forms.exam_report.field.hospital"),
+                            text: $hospital,
+                            placeholder: L10n.text("medical_record.forms.exam_report.placeholder.hospital"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
+                        SparkFormTextRow(
+                            title: L10n.text("medical_record.forms.exam_report.field.exam_doctor"),
+                            text: $doctor,
+                            placeholder: L10n.text("medical_record.forms.exam_report.placeholder.doctor"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
+
+                        VisitDivider(color: Color(.separator), height: 1, verticalPadding: 6)
+
+                        SparkFormTextAreaRow(
+                            title: L10n.text("medical_record.forms.field.report_content"),
+                            text: $content,
+                            placeholder: L10n.text("medical_record.forms.exam_report.placeholder.report_content"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
                     }
                 }
             }
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(uiColor: .systemBackground)))
             .padding(16)
+        }
+        .sparkKeyboardDoneToolbar {
+            SparkKeyboardDismiss.endEditing()
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(uiColor: .systemGroupedBackground))
         .sparkFormBottomBar(
             canSubmit: !isSaving,
             saveTitle: saveTitle,
+            keyboardVisible: $formKeyboardVisible,
             onCancel: {
                 formLog.info("ExamReportFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
@@ -161,28 +256,20 @@ struct ExamReportFormView: View {
             onSave: { saveNow() }
         )
         .sheet(item: $editingItem) { item in
-            AddLabItemSheet(draft: .init(
-                category: item.category,
-                subCategory: item.subCategory,
-                itemName: item.itemName,
-                resultValue: item.resultValue,
-                unit: item.unit,
-                referenceRange: item.referenceRange,
-                flag: item.flag
-            )) { newItem in
-                let mapped = ItemDraft(
-                    category: newItem.category,
-                    subCategory: newItem.subCategory,
-                    itemName: newItem.itemName,
-                    resultValue: newItem.resultValue,
-                    unit: newItem.unit,
-                    referenceRange: newItem.referenceRange,
-                    flag: newItem.flag
-                )
-                if let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = mapped
-                } else {
-                    items.append(mapped)
+            Group {
+                switch pageType {
+                case .laboratory:
+                    AddLabItemSheet(draft: item) { newItem in
+                        mergeEditedItem(newItem, replacing: item.id)
+                    }
+                case .imaging:
+                    AddImagingReportItemSheet(draft: item) { newItem in
+                        mergeEditedItem(newItem, replacing: item.id)
+                    }
+                case .pathology:
+                    AddPathologyReportItemSheet(draft: item) { newItem in
+                        mergeEditedItem(newItem, replacing: item.id)
+                    }
                 }
             }
         }
@@ -190,6 +277,157 @@ struct ExamReportFormView: View {
             Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
+        }
+    }
+
+    // MARK: - 检查类型内模块（对齐 Health：Picker 下方按类型展开；数据仍用 `items` / `MedicalReportItem`）
+
+    @ViewBuilder
+    private var examTypeModuleContent: some View {
+        switch pageType {
+        case .laboratory:
+            laboratoryModule
+        case .imaging:
+            imagingPathologyItemsModule(isPathology: false)
+        case .pathology:
+            imagingPathologyItemsModule(isPathology: true)
+        }
+    }
+
+    private var laboratoryModule: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SparkLabExamCategoryCascadeRow(
+                primaryTitle: L10n.text("medical_record.forms.exam_report.lab.primary_category"),
+                secondaryTitle: L10n.text("medical_record.forms.exam_report.lab.subcategory"),
+                primaryPlaceholder: L10n.text("medical_record.forms.exam_report.lab.placeholder.primary"),
+                secondaryPlaceholder: L10n.text("medical_record.forms.exam_report.lab.placeholder.subcategory"),
+                primaryRequired: true,
+                secondaryRequired: false,
+                primary: $labPrimaryCategory,
+                secondary: $labSubCategory,
+                keyboardVisible: $formKeyboardVisible
+            )
+            Button {
+                presentNewLabItem()
+            } label: {
+                Label(L10n.text("medical_record.forms.exam_report.add_item"), systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.bordered)
+
+            if items.isEmpty {
+                laboratoryEmptyState
+            }
+            itemChipList
+        }
+    }
+
+    private func imagingPathologyItemsModule(isPathology: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Button {
+                presentNewGenericItem()
+            } label: {
+                Label(L10n.text("medical_record.forms.exam_report.add_item"), systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.bordered)
+
+            if items.isEmpty {
+                imagingPathologyEmptyState(isPathology: isPathology)
+            }
+            itemChipList
+        }
+    }
+
+    private var laboratoryEmptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "mail.and.text.magnifyingglass")
+                .font(.system(size: 44))
+                .foregroundStyle(.gray.opacity(0.35))
+            Text(L10n.text("medical_record.forms.exam_report.items.empty.lab.title"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(L10n.text("medical_record.forms.exam_report.items.empty.lab.subtitle"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    private func imagingPathologyEmptyState(isPathology: Bool) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: isPathology ? "microscope" : "camera.viewfinder")
+                .font(.system(size: 44))
+                .foregroundStyle(.gray.opacity(0.35))
+            Text(L10n.text(isPathology
+                ? "medical_record.forms.exam_report.items.empty.pathology.title"
+                : "medical_record.forms.exam_report.items.empty.imaging.title"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(L10n.text(isPathology
+                ? "medical_record.forms.exam_report.items.empty.pathology.subtitle"
+                : "medical_record.forms.exam_report.items.empty.imaging.subtitle"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    private var itemChipList: some View {
+        ForEach(items) { item in
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.itemName.isEmpty ? L10n.text("medical_record.forms.exam_report.unnamed_item") : item.itemName)
+                    .font(.subheadline.weight(.semibold))
+                Text(chipSubtitle(for: item))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
+            .onTapGesture { editingItem = item }
+        }
+    }
+
+    private func presentNewLabItem() {
+        editingItem = ItemDraft(
+            category: labPrimaryCategory,
+            subCategory: labSubCategory,
+            itemName: "",
+            resultValue: "",
+            unit: "",
+            referenceRange: "",
+            flag: ""
+        )
+    }
+
+    private func presentNewGenericItem() {
+        editingItem = ItemDraft()
+    }
+
+    private func chipSubtitle(for item: ItemDraft) -> String {
+        switch pageType {
+        case .laboratory:
+            return String(format: L10n.text("medical_record.forms.exam_report.result_line"), item.resultValue)
+        case .imaging, .pathology:
+            let diag = item.diagnosis.trimmingCharacters(in: .whitespacesAndNewlines)
+            if diag.isEmpty == false {
+                return diag.count > 80 ? String(diag.prefix(80)) + "…" : diag
+            }
+            let part = item.bodyPart.trimmingCharacters(in: .whitespacesAndNewlines)
+            if part.isEmpty == false { return part }
+            return item.resultValue.isEmpty ? "—" : item.resultValue
+        }
+    }
+
+    private func mergeEditedItem(_ newItem: ItemDraft, replacing id: UUID) {
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            items[index] = newItem
+        } else {
+            items.append(newItem)
         }
     }
 
@@ -230,10 +468,10 @@ struct ExamReportFormView: View {
                 unit: row.unit.nilIfBlank,
                 referenceRange: row.referenceRange.nilIfBlank,
                 flag: row.flag.nilIfBlank,
-                resultAt: nil,
-                modality: nil,
-                bodyPart: nil,
-                diagnosis: nil,
+                resultAt: row.resultAt.nilIfBlank,
+                modality: row.modality.nilIfBlank,
+                bodyPart: row.bodyPart.nilIfBlank,
+                diagnosis: row.diagnosis.nilIfBlank,
                 extra: nil,
                 sortOrder: "\(index)"
             )
@@ -297,5 +535,27 @@ struct ExamReportFormView: View {
         if lower.contains("path") || lower.contains("病理") { return .pathology }
         if lower.contains("image") || lower.contains("影像") || lower.contains("ct") || lower.contains("mr") { return .imaging }
         return .laboratory
+    }
+
+    private static let examDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static func parseExamDay(from raw: String?) -> Date {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), raw.isEmpty == false else {
+            return Date()
+        }
+        if let parsed = examDayFormatter.date(from: raw) {
+            return parsed
+        }
+        return ISO8601DateFormatter().date(from: raw) ?? Date()
+    }
+
+    private static func formatExamDayString(_ day: Date) -> String {
+        examDayFormatter.string(from: day)
     }
 }

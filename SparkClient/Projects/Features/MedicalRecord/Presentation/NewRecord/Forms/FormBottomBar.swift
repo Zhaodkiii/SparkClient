@@ -40,6 +40,8 @@ struct SparkFormBottomBar: View {
     let cancelTitle: String?
     let saveTitle: String
     let saveSystemImage: String?
+    /// 非 `nil` 且为 `true` 时展示右下角「完成」并收起键盘；与表单内 `SparkFormTextRow` / `SparkFormTextAreaRow` 传入同一绑定即可联动。
+    let keyboardVisible: Binding<Bool>?
     let onCancel: () -> Void
     let onSave: () -> Void
 
@@ -48,6 +50,7 @@ struct SparkFormBottomBar: View {
         cancelTitle: String?,
         saveTitle: String,
         saveSystemImage: String? = "checkmark.circle.fill",
+        keyboardVisible: Binding<Bool>? = nil,
         onCancel: @escaping () -> Void,
         onSave: @escaping () -> Void
     ) {
@@ -55,37 +58,59 @@ struct SparkFormBottomBar: View {
         self.cancelTitle = cancelTitle
         self.saveTitle = saveTitle
         self.saveSystemImage = saveSystemImage
+        self.keyboardVisible = keyboardVisible
         self.onCancel = onCancel
         self.onSave = onSave
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            if let cancelTitle {
-                Button(action: onCancel) {
-                    Text(cancelTitle)
+        ZStack(alignment: .bottom) {
+            HStack(spacing: 12) {
+                if let cancelTitle {
+                    Button(action: onCancel) {
+                        Text(cancelTitle)
+                    }
+                    .buttonStyle(SparkFormBorderButtonStyle())
                 }
-                .buttonStyle(SparkFormBorderButtonStyle())
-            }
 
-            Button(action: onSave) {
-                if let sys = saveSystemImage {
-                    Label(saveTitle, systemImage: sys)
-                        .labelStyle(.titleAndIcon)
-                } else {
-                    Text(saveTitle)
+                Button(action: onSave) {
+                    if let sys = saveSystemImage {
+                        Label(saveTitle, systemImage: sys)
+                            .labelStyle(.titleAndIcon)
+                    } else {
+                        Text(saveTitle)
+                    }
                 }
+                .buttonStyle(SparkFormPrimaryButtonStyle())
+                .disabled(!canSubmit)
+                .opacity(canSubmit ? 1 : 0.6)
             }
-            .buttonStyle(SparkFormPrimaryButtonStyle())
-            .disabled(!canSubmit)
-            .opacity(canSubmit ? 1 : 0.6)
+            .padding(12)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 10, y: 4)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            if let keyboardVisible, keyboardVisible.wrappedValue {
+                HStack {
+                    Spacer()
+                    Button {
+                        SparkKeyboardDismiss.endEditing()
+                    } label: {
+                        Text(L10n.text("common.done"))
+                            .font(.system(size: 16, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.trailing, 10)
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
-        .padding(12)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 10, y: 4)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .animation(.easeInOut(duration: 0.2), value: keyboardVisible?.wrappedValue ?? false)
     }
 }
 
@@ -96,6 +121,7 @@ extension View {
         cancelTitle: String? = L10n.text("common.cancel"),
         saveTitle: String,
         saveSystemImage: String? = "checkmark.circle.fill",
+        keyboardVisible: Binding<Bool>? = nil,
         onCancel: @escaping () -> Void,
         onSave: @escaping () -> Void
     ) -> some View {
@@ -105,6 +131,7 @@ extension View {
                 cancelTitle: cancelTitle,
                 saveTitle: saveTitle,
                 saveSystemImage: saveSystemImage,
+                keyboardVisible: keyboardVisible,
                 onCancel: onCancel,
                 onSave: onSave
             )

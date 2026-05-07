@@ -48,6 +48,8 @@ extension SparkMedicalSyncAPI.RemoteMedicalCaseSummary {
             title: title ?? "",
             hospitalName: hospitalName ?? "",
             ageAtVisit: ageAtVisit,
+            severity: severity,
+            caseStatus: caseStatus,
             diagnosisSummary: diagnosisSummary ?? "",
             extra: extra ?? [:],
             updatedAt: updatedAt ?? Date(timeIntervalSince1970: 0)
@@ -178,6 +180,8 @@ extension SparkMedicalSyncAPI.RemoteMedicalCase {
             title: title,
             hospitalName: hospitalName,
             ageAtVisit: ageAtVisit,
+            severity: severity,
+            caseStatus: caseStatus,
             diagnosisSummary: diagnosisSummary,
             extra: extra ?? [:],
             updatedAt: updatedAt

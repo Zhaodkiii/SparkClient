@@ -6,6 +6,10 @@ struct MedicalRecordCard: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
+    let onUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
+    let onDeleted: (Int) -> Void
     var maxChips: Int = 8
 
     private var chiefComplaintText: String {
@@ -61,7 +65,11 @@ struct MedicalRecordCard: View {
                 item: item,
                 completeData: completeData,
                 workflowAPI: workflowAPI,
-                fileTransferService: fileTransferService
+                fileTransferService: fileTransferService,
+                memberContextStore: memberContextStore,
+                notificationClient: notificationClient,
+                onUpdated: onUpdated,
+                onDeleted: onDeleted
             )
             .hidesMainTabBarWhenPushed()
         } label: {

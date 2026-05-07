@@ -33,6 +33,8 @@ struct AddFamilyMemberView: View {
     @State private var birthDate: Date?
     @State private var isSaving = false
     @State private var showDatePicker = false
+    private let datePickerSheetHeight: CGFloat = 300
+
     init(mode: Mode, store: MemberContextStore) {
         self.mode = mode
         self.store = store
@@ -126,34 +128,45 @@ struct AddFamilyMemberView: View {
             }
         }
         .sheet(isPresented: $showDatePicker) {
-            CompatibleNavigationContainer {
-                VStack {
-                    DatePicker(
-                        L10n.text("home.members.field.birth_date"),
-                        selection: Binding(
-                            get: { birthDate ?? Calendar.current.date(byAdding: .year, value: -24, to: Date()) ?? Date() },
-                            set: { birthDate = $0 }
-                        ),
-                        in: ...Date(),
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.wheel)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.top, 16)
-                .navigationTitle(L10n.text("home.members.select_birth_date"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(L10n.text("common.ok")) {
-                            showDatePicker = false
-                        }
-                    }
+            if #available(iOS 16.0, *) {
+                DatePickerSheet(
+                    selectedDate: $birthDate,
+                    datePickerSheetHeight: datePickerSheetHeight
+                )
+            } else {
+                NavigationView {
+                    legacyBirthDatePickerSheetContent
                 }
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: relationshipCode)
+    }
+
+    private var legacyBirthDatePickerSheetContent: some View {
+        VStack {
+            DatePicker(
+                L10n.text("home.members.field.birth_date"),
+                selection: Binding(
+                    get: { birthDate ?? Calendar.current.date(byAdding: .year, value: -24, to: Date()) ?? Date() },
+                    set: { birthDate = $0 }
+                ),
+                in: ...Date(),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.top, 16)
+        .navigationTitle(L10n.text("home.members.select_birth_date"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(L10n.text("common.ok")) {
+                    showDatePicker = false
+                }
+            }
+        }
     }
 
     private var relationshipSection: some View {
@@ -338,6 +351,43 @@ struct AddFamilyMemberView: View {
     AddFamilyMemberView(mode: .create, store: HomeViewModel.preview.memberContextStoreForBinding)
 }
 
+@available(iOS 16.0, *)
+private struct DatePickerSheet: View {
+    @Binding var selectedDate: Date?
+    let datePickerSheetHeight: CGFloat
+
+    @State private var tempDate: Date
+
+    init(selectedDate: Binding<Date?>, datePickerSheetHeight: CGFloat) {
+        self._selectedDate = selectedDate
+        self.datePickerSheetHeight = datePickerSheetHeight
+        self._tempDate = State(initialValue: selectedDate.wrappedValue ?? Calendar.current.date(byAdding: .year, value: -24, to: Date()) ?? Date())
+    }
+
+    var body: some View {
+        AdaptiveSheetContainer.fixed(
+            height: datePickerSheetHeight,
+            cancelTitle: L10n.text("common.cancel"),
+            confirmTitle: L10n.text("common.done"),
+            cancelColor: .secondary,
+            confirmColor: .accentColor,
+            onCancel: {},
+            onConfirm: {
+                selectedDate = tempDate
+            }
+        ) {
+            DatePicker(
+                L10n.text("home.members.field.birth_date"),
+                selection: $tempDate,
+                in: ...Date(),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+}
 
 enum MemberRelationshipCatalog {
     struct Option {

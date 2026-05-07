@@ -5,9 +5,12 @@ struct ExaminationReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments>
     private let fileTransferService: FileTransferService
     private let medicalResourceAPI: SparkMedicalWorkflowAPI
+    /// 当前成员 ID；`complete-data` 缺失时为 0，此时不展示新增入口。
+    private let memberID: Int
 
     @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
+    @State private var isPresentingAddExamSheet = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -16,6 +19,7 @@ struct ExaminationReportsListPage: View {
         fileTransferService: FileTransferService,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     ) {
+        self.memberID = completeData?.memberId ?? 0
         self.fileTransferService = fileTransferService
         self.medicalResourceAPI = SparkMedicalWorkflowAPI(configuration: medicalQueryAPI.configuration)
         _viewModel = StateObject(
@@ -90,6 +94,36 @@ struct ExaminationReportsListPage: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.examination_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if memberID > 0 {
+                Button {
+                    isPresentingAddExamSheet = true
+                } label: {
+                    Label(L10n.text("home.medical.list.examination.action.add"), systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(uiColor: .systemGroupedBackground))
+            }
+        }
+        .sheet(isPresented: $isPresentingAddExamSheet) {
+            CompatibleNavigationContainer(legacyStackStyle: true) {
+                ExamReportFormView(mode: .create, onCreateSubmit: { draft in
+                    let service = MedicalRecordFormSubmissionService(workflowAPI: medicalResourceAPI)
+                    let newID = try await service.submitMedicalReportCreate(memberID: memberID, draft: draft, medicalCaseID: nil)
+                    let summary = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.summaryAfterCreate(
+                        id: newID,
+                        memberID: memberID,
+                        draft: draft
+                    )
+                    await MainActor.run {
+                        viewModel.prependReport(summary)
+                    }
+                })
+            }
+        }
     }
 
     @ViewBuilder

@@ -5,6 +5,10 @@ struct ExamReportCard: View {
     let item: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments
     var isLoadingDetails = false
     let fileTransferService: FileTransferService
+    let memberContextStore: MemberContextStore
+    let workflowAPI: SparkMedicalWorkflowAPI
+    let notificationClient: any NotificationClient
+    var onDeleted: ((Int) -> Void)?
 
     @State private var isOtherRiskExpanded = false
     @State private var isShowingAttachments = false
@@ -202,9 +206,13 @@ struct ExamReportCard: View {
             .foregroundStyle(Color.accentColor)
         } else if canNavigateToDetail {
             NavigationLink {
-                HealthExamReportDetailPage(
+                HealthExamRecognitionResultView(
                     item: item,
-                    fileTransferService: fileTransferService
+                    fileTransferService: fileTransferService,
+                    memberContextStore: memberContextStore,
+                    workflowAPI: workflowAPI,
+                    notificationClient: notificationClient,
+                    onDeleted: onDeleted
                 )
                 .hidesMainTabBarWhenPushed()
             } label: {

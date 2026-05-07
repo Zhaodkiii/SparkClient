@@ -1,13 +1,17 @@
 import SwiftUI
 
 struct HealthExamRecognitionResultContentView: View {
-    let output: MedicalDocumentTypedExtractionOutput
+    @ObservedObject var memberContextStore: MemberContextStore
+    let attachmentSource: HealthExamResultAttachmentSource
+    let mode: HealthExamResultMode
     let isSaving: Bool
     let saveReceipt: MedicalDocumentSaveReceipt?
     let onBack: () -> Void
+    let onSelectMember: (Int?) -> Void
     let onSave: () -> Void
 
     @State private var draft: HealthExamRecognitionDraft
+    @State private var selectedMemberID: Int?
     @State private var summaryFilter: HealthExamResultSummaryFilter = .all
     @State private var localEditor: HealthExamResultLocalEditor?
     @State private var expandedCategories: Set<String> = []
@@ -17,16 +21,22 @@ struct HealthExamRecognitionResultContentView: View {
 
     init(
         output: MedicalDocumentTypedExtractionOutput,
+        memberContextStore: MemberContextStore,
         isSaving: Bool,
         saveReceipt: MedicalDocumentSaveReceipt?,
         onBack: @escaping () -> Void,
+        onSelectMember: @escaping (Int?) -> Void,
         onSave: @escaping () -> Void
     ) {
-        self.output = output
+        self.memberContextStore = memberContextStore
+        self.attachmentSource = .local(output.envelope.sourceFiles.map { HealthExamResultLocalAttachmentItem(file: $0) })
+        self.mode = .recognition
         self.isSaving = isSaving
         self.saveReceipt = saveReceipt
         self.onBack = onBack
+        self.onSelectMember = onSelectMember
         self.onSave = onSave
+        _selectedMemberID = State(initialValue: output.envelope.memberID)
 
         if case .healthExamReport(let report) = output.typedResult {
             _draft = State(initialValue: report)
@@ -42,8 +52,21 @@ struct HealthExamRecognitionResultContentView: View {
         }
     }
 
-    private var attachments: [HealthExamResultLocalAttachmentItem] {
-        output.envelope.sourceFiles.map { HealthExamResultLocalAttachmentItem(file: $0) }
+    init(
+        item: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments,
+        fileTransferService: FileTransferService,
+        memberContextStore: MemberContextStore
+    ) {
+        self.memberContextStore = memberContextStore
+        self.attachmentSource = .remote(item.attachments ?? [], fileTransferService)
+        self.mode = .detail
+        self.isSaving = false
+        self.saveReceipt = nil
+        self.onBack = {}
+        self.onSelectMember = { _ in }
+        self.onSave = {}
+        _selectedMemberID = State(initialValue: item.member)
+        _draft = State(initialValue: HealthExamRecognitionDraft(remoteReport: item))
     }
 
     private var indexedItems: [HealthExamRiskDisplayItem] {
@@ -98,12 +121,23 @@ struct HealthExamRecognitionResultContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HealthExamMemberSectionView(memberID: output.envelope.memberID, draft: draft)
+                HealthExamMemberSectionView(
+                    memberContextStore: memberContextStore,
+                    selectedMemberID: selectedMemberID,
+                    draft: draft,
+                    onSelectMember: mode.isEditable ? { memberID in
+                        selectedMemberID = memberID
+                        onSelectMember(memberID)
+                    } : nil
+                )
 
-                HealthExamBasicInfoSectionView(draft: draft) {
-                    logger.info("Health exam result: open basic info editor", module: logModule)
-                    localEditor = .basicInfo(draft)
-                }
+                HealthExamBasicInfoSectionView(
+                    draft: draft,
+                    onEdit: mode.isEditable ? {
+                        logger.info("Health exam result: open basic info editor", module: logModule)
+                        localEditor = .basicInfo(draft)
+                    } : nil
+                )
 
                 HealthExamRiskOverviewCard(
                     highCount: highRiskCount,
@@ -124,16 +158,16 @@ struct HealthExamRecognitionResultContentView: View {
 
                 HealthExamCategoryGroupsSectionView(
                     groups: groupedItems,
-                    onEditItem: { item in
+                    onEditItem: mode.isEditable ? { item in
                         logger.info("Health exam result: open risk item editor index=\(item.originalIndex)", module: logModule)
                         localEditor = .riskItem(index: item.originalIndex, item: item.item)
-                    },
+                    } : nil,
                     expandedCategories: $expandedCategories
                 )
 
-                HealthExamAttachmentsSectionView(attachments: attachments)
+                HealthExamAttachmentsSectionView(source: attachmentSource)
 
-                if let saveReceipt {
+                if mode.isEditable, let saveReceipt {
                     HealthExamResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
                         subtitle: L10n.text("medical.upload.result.common.save_success"),
@@ -151,10 +185,12 @@ struct HealthExamRecognitionResultContentView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
-            bottomBar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
+            if mode.isEditable {
+                bottomBar
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+            }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: summaryFilter)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: expandedCategories)

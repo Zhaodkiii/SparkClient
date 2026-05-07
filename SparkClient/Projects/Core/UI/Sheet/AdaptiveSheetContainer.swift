@@ -1,0 +1,110 @@
+import SwiftUI
+
+/// Reusable sheet container for compact picker-style sheets on iOS 16+.
+@available(iOS 16.0, *)
+struct AdaptiveSheetContainer<Content: View>: View {
+    let content: Content
+    let cancelTitle: String
+    let confirmTitle: String
+    let cancelColor: Color
+    let confirmColor: Color
+    let showConfirmButton: Bool
+    let fixedHeight: CGFloat?
+    let toolbarHeight: CGFloat
+    let contentVerticalPadding: CGFloat
+    let dismissOnConfirm: Bool
+    let onCancel: () -> Void
+    let onConfirm: (() -> Void)?
+
+    @Environment(\.dismiss) private var dismiss
+
+    init(
+        cancelTitle: String = L10n.text("common.cancel"),
+        confirmTitle: String = L10n.text("common.done"),
+        cancelColor: Color = .secondary,
+        confirmColor: Color = .accentColor,
+        showConfirmButton: Bool = true,
+        fixedHeight: CGFloat? = nil,
+        toolbarHeight: CGFloat = 68,
+        contentVerticalPadding: CGFloat = 20,
+        dismissOnConfirm: Bool = true,
+        onCancel: @escaping () -> Void = {},
+        onConfirm: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.cancelTitle = cancelTitle
+        self.confirmTitle = confirmTitle
+        self.cancelColor = cancelColor
+        self.confirmColor = confirmColor
+        self.showConfirmButton = showConfirmButton
+        self.fixedHeight = fixedHeight
+        self.toolbarHeight = toolbarHeight
+        self.contentVerticalPadding = contentVerticalPadding
+        self.dismissOnConfirm = dismissOnConfirm
+        self.onCancel = onCancel
+        self.onConfirm = onConfirm
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(cancelTitle) {
+                    onCancel()
+                    dismiss()
+                }
+                .foregroundColor(cancelColor)
+
+                Spacer()
+
+                if showConfirmButton, let onConfirm {
+                    Button(confirmTitle) {
+                        onConfirm()
+                        if dismissOnConfirm {
+                            dismiss()
+                        }
+                    }
+                    .foregroundColor(confirmColor)
+                    .fontWeight(.medium)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+
+            content
+                .padding(.vertical, contentVerticalPadding)
+        }
+        .presentationDetents(
+            fixedHeight != nil
+                ? [.height(fixedHeight! + toolbarHeight)]
+                : [.medium, .large]
+        )
+        .presentationDragIndicator(.visible)
+    }
+}
+
+@available(iOS 16.0, *)
+extension AdaptiveSheetContainer {
+    static func fixed(
+        height: CGFloat,
+        cancelTitle: String = L10n.text("common.cancel"),
+        confirmTitle: String = L10n.text("common.done"),
+        cancelColor: Color = .secondary,
+        confirmColor: Color = .accentColor,
+        onCancel: @escaping () -> Void = {},
+        onConfirm: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) -> AdaptiveSheetContainer {
+        AdaptiveSheetContainer(
+            cancelTitle: cancelTitle,
+            confirmTitle: confirmTitle,
+            cancelColor: cancelColor,
+            confirmColor: confirmColor,
+            fixedHeight: height,
+            dismissOnConfirm: true,
+            onCancel: onCancel,
+            onConfirm: onConfirm,
+            content: content
+        )
+    }
+}

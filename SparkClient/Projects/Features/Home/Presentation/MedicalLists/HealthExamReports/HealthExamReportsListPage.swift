@@ -3,19 +3,28 @@ import SwiftUI
 /// 体检报告列表页：顶部搜索与筛选固定，正文展示体检卡片列表。
 struct HealthExamReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments>
+    private let workflowAPI: SparkMedicalWorkflowAPI
     private let fileTransferService: FileTransferService
+    private let memberContextStore: MemberContextStore
+    private let notificationClient: any NotificationClient
 
     @State private var query = ""
     @State private var selectedFilter: HealthExamFilter = .all
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        workflowAPI: SparkMedicalWorkflowAPI,
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger,
         fileTransferService: FileTransferService,
+        memberContextStore: MemberContextStore,
+        notificationClient: any NotificationClient,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)? = nil
     ) {
+        self.workflowAPI = workflowAPI
         self.fileTransferService = fileTransferService
+        self.memberContextStore = memberContextStore
+        self.notificationClient = notificationClient
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
                 reports: completeData?.healthExamReports ?? [],
@@ -92,7 +101,13 @@ struct HealthExamReportsListPage: View {
                     ExamReportCard(
                         item: report,
                         isLoadingDetails: viewModel.isLoading(reportID: report.id),
-                        fileTransferService: fileTransferService
+                        fileTransferService: fileTransferService,
+                        memberContextStore: memberContextStore,
+                        workflowAPI: workflowAPI,
+                        notificationClient: notificationClient,
+                        onDeleted: { deletedID in
+                            viewModel.removeReport(reportID: deletedID)
+                        }
                     )
                     .task {
                         await viewModel.loadDetailsIfNeeded(for: report.id)

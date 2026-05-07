@@ -116,6 +116,34 @@ struct HealthExamResultLocalAttachmentItem: Identifiable {
     }
 }
 
+enum HealthExamResultMode {
+    case detail
+    case recognition
+
+    var isEditable: Bool {
+        switch self {
+        case .detail:
+            return false
+        case .recognition:
+            return true
+        }
+    }
+}
+
+enum HealthExamResultAttachmentSource {
+    case local([HealthExamResultLocalAttachmentItem])
+    case remote([SparkMedicalSyncAPI.RemoteManagedFile], FileTransferService)
+
+    var count: Int {
+        switch self {
+        case .local(let attachments):
+            return attachments.count
+        case .remote(let attachments, _):
+            return attachments.count
+        }
+    }
+}
+
 enum HealthExamResultSummaryFilter: String, CaseIterable {
     case all
     case normal
@@ -225,6 +253,52 @@ extension HealthExamRecognitionDraft {
             items: next
         )
     }
+}
+
+extension HealthExamRecognitionDraft {
+    init(remoteReport item: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments) {
+        self.init(
+            institutionName: item.institutionName,
+            reportNo: item.reportNo,
+            examDate: item.examDate.map(Self.remoteDateFormatter.string(from:)),
+            examType: item.examType.map(String.init),
+            summary: item.summary,
+            items: (item.medExamDetails ?? []).map(MedicalReportItem.init(remoteDetail:))
+        )
+    }
+
+    private static let remoteDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+extension MedicalReportItem {
+    init(remoteDetail detail: SparkMedicalSyncAPI.RemoteMedExamDetail) {
+        self.init(
+            category: detail.category,
+            subCategory: detail.subCategory.nonEmpty,
+            itemName: detail.itemName,
+            itemCode: detail.itemCode.nonEmpty,
+            resultValue: detail.resultValue,
+            unit: detail.unit.nonEmpty,
+            referenceRange: detail.referenceRange.nonEmpty,
+            flag: detail.flag.nonEmpty,
+            resultAt: detail.resultAt.map(Self.remoteDateFormatter.string(from:)),
+            modality: detail.modality.nonEmpty,
+            bodyPart: detail.bodyPart.nonEmpty,
+            diagnosis: detail.diagnosis,
+            extra: detail.extra,
+            sortOrder: "\(detail.sortOrder)"
+        )
+    }
+
+    private static let remoteDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }
 
 extension MedicalReportItem {

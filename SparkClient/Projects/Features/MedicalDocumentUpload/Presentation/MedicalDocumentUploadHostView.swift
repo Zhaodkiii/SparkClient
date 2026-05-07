@@ -55,6 +55,9 @@ struct MedicalDocumentUploadHostView: View {
                         isSaving: viewModel.isSaving,
                         saveReceipt: viewModel.saveReceipt,
                         onBack: { viewModel.reset() },
+                        onSelectMember: { memberID in
+                            viewModel.updateResultMemberID(memberID)
+                        },
                         onSave: {
                             Task {
                                 _ = await viewModel.saveResult()

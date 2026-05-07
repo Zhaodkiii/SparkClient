@@ -94,4 +94,9 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
         reports.removeAll { $0.id == reportID }
         onReportsUpdated?(reports)
     }
+
+    func prependReport(_ report: Report) {
+        reports.insert(report, at: 0)
+        onReportsUpdated?(reports)
+    }
 }

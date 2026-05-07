@@ -10,6 +10,8 @@ struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
     var title: String
     var hospitalName: String
     var ageAtVisit: Int?
+    var severity: String?
+    var caseStatus: String?
     var diagnosisSummary: String
     var extra: [String: String]
     var updatedAt: Date
@@ -22,6 +24,8 @@ struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
         title: String,
         hospitalName: String = "",
         ageAtVisit: Int? = nil,
+        severity: String? = nil,
+        caseStatus: String? = nil,
         diagnosisSummary: String = "",
         extra: [String: String] = [:],
         updatedAt: Date = Date()
@@ -33,6 +37,8 @@ struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
         self.title = title
         self.hospitalName = hospitalName
         self.ageAtVisit = ageAtVisit
+        self.severity = severity
+        self.caseStatus = caseStatus
         self.diagnosisSummary = diagnosisSummary
         self.extra = extra
         self.updatedAt = updatedAt

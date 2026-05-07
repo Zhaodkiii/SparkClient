@@ -201,6 +201,11 @@ struct HomeView: View {
                             route: medicalRoute(for: card.id),
                             completeData: viewModel.dashboard?.medical.completeData,
                             dependencies: dependencies,
+                            onMedicalCasesUpdated: { cases in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.medicalCases = cases
+                                }
+                            },
                             onHealthExamReportsUpdated: { reports in
                                 viewModel.updateMedicalCompleteData { completeData in
                                     completeData.healthExamReports = reports

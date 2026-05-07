@@ -2,8 +2,18 @@ import SwiftUI
 import UIKit
 
 struct HealthExamMemberSectionView: View {
-    let memberID: Int?
+    @ObservedObject var memberContextStore: MemberContextStore
+    let selectedMemberID: Int?
     let draft: HealthExamRecognitionDraft
+    var onSelectMember: ((Int?) -> Void)?
+
+    private var selectedMemberName: String {
+        guard let selectedMemberID else {
+            return L10n.text("medical.upload.member.not_selected")
+        }
+        return memberContextStore.context.members.first(where: { $0.id == selectedMemberID })?.name
+            ?? "\(selectedMemberID)"
+    }
 
     var body: some View {
         HealthExamResultSectionCard(
@@ -12,10 +22,7 @@ struct HealthExamMemberSectionView: View {
             systemImage: "person.crop.circle.badge.checkmark"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                HealthExamResultInfoLine(
-                    title: L10n.text("medical.upload.result.member.id"),
-                    value: memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
-                )
+                memberRow
                 HealthExamResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.total_count"),
                     value: "\(draft.items.count)"
@@ -23,18 +30,55 @@ struct HealthExamMemberSectionView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var memberRow: some View {
+        if let onSelectMember {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L10n.text("medical.upload.result.member.title"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                MemberProfileBindingMenu(
+                    memberContextStore: memberContextStore,
+                    selectedMemberID: selectedMemberID,
+                    onSelect: onSelectMember
+                ) {
+                    HStack {
+                        Image(systemName: "person.crop.circle")
+                            .foregroundStyle(Color.accentColor)
+                        Text(selectedMemberName)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                }
+            }
+        } else {
+            HealthExamResultInfoLine(
+                title: L10n.text("medical.upload.result.member.title"),
+                value: selectedMemberName
+            )
+        }
+    }
 }
 
 struct HealthExamBasicInfoSectionView: View {
     let draft: HealthExamRecognitionDraft
-    let onEdit: () -> Void
+    var onEdit: (() -> Void)?
 
     var body: some View {
         HealthExamResultSectionCard(
             title: L10n.text("medical.upload.result.health_exam.basic_info.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.basic_info.subtitle"),
             systemImage: "doc.text",
-            actionTitle: L10n.text("common.edit"),
+            actionTitle: onEdit == nil ? nil : L10n.text("common.edit"),
             action: onEdit
         ) {
             VStack(alignment: .leading, spacing: 10) {
@@ -150,7 +194,7 @@ struct HealthExamSummaryRow: View {
 
 struct HealthExamCategoryGroupsSectionView: View {
     let groups: [(category: String, rows: [HealthExamRiskDisplayItem])]
-    let onEditItem: (HealthExamRiskDisplayItem) -> Void
+    var onEditItem: ((HealthExamRiskDisplayItem) -> Void)?
     @Binding var expandedCategories: Set<String>
 
     var body: some View {
@@ -205,9 +249,12 @@ struct HealthExamCategoryGroupsSectionView: View {
             if expanded {
                 VStack(spacing: 8) {
                     ForEach(group.rows) { row in
-                        HealthExamRiskItemCell(item: row, onEdit: {
-                            onEditItem(row)
-                        })
+                        HealthExamRiskItemCell(
+                            item: row,
+                            onEdit: onEditItem.map { edit in
+                                { edit(row) }
+                            }
+                        )
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -223,7 +270,7 @@ struct HealthExamCategoryGroupsSectionView: View {
 
 struct HealthExamRiskItemCell: View {
     let item: HealthExamRiskDisplayItem
-    let onEdit: () -> Void
+    var onEdit: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -253,8 +300,10 @@ struct HealthExamRiskItemCell: View {
                         .fill(item.riskLevel.tint.opacity(0.12))
                 )
 
-            Button(L10n.text("common.edit"), action: onEdit)
-                .font(.caption.weight(.semibold))
+            if let onEdit {
+                Button(L10n.text("common.edit"), action: onEdit)
+                    .font(.caption.weight(.semibold))
+            }
         }
         .padding(10)
         .background(
@@ -265,7 +314,7 @@ struct HealthExamRiskItemCell: View {
 }
 
 struct HealthExamAttachmentsSectionView: View {
-    let attachments: [HealthExamResultLocalAttachmentItem]
+    let source: HealthExamResultAttachmentSource
 
     @State private var selectedPreview: FilePreviewInput?
 
@@ -277,24 +326,32 @@ struct HealthExamAttachmentsSectionView: View {
             badgeText: String(
                 format: L10n.text("medical.upload.result.attachments.count"),
                 locale: .current,
-                attachments.count
+                source.count
             )
         ) {
-            if attachments.isEmpty {
+            if source.count == 0 {
                 Text(L10n.text("medical.upload.result.attachments.empty"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(spacing: 8) {
-                    ForEach(attachments) { item in
-                        Button {
-                            selectedPreview = item.previewInput
-                        } label: {
-                            row(item)
+                switch source {
+                case .local(let attachments):
+                    VStack(spacing: 8) {
+                        ForEach(attachments) { item in
+                            Button {
+                                selectedPreview = item.previewInput
+                            } label: {
+                                row(item)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                case .remote(let attachments, let fileTransferService):
+                    MedicalAttachmentListView(
+                        attachments: attachments,
+                        fileTransferService: fileTransferService
+                    )
                 }
             }
         }

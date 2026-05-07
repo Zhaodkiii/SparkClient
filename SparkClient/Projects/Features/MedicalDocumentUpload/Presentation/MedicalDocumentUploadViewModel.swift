@@ -300,6 +300,24 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         }
     }
 
+    func updateResultMemberID(_ memberID: Int?) {
+        guard let output = typedOutput else { return }
+        typedOutput = MedicalDocumentTypedExtractionOutput(
+            envelope: MedicalDocumentRecognitionEnvelope(
+                memberID: memberID,
+                sourceFiles: output.envelope.sourceFiles,
+                rawOCRText: output.envelope.rawOCRText,
+                typeResolution: output.envelope.typeResolution
+            ),
+            typedResult: output.typedResult,
+            extractedJSON: output.extractedJSON,
+            payloadPreview: output.payloadPreview
+        )
+        selectedMemberName = memberID.flatMap { id in
+            memberContextStore.context.members.first(where: { $0.id == id })?.name
+        }
+    }
+
 
     /// 将界面与中间态恢复为初始：清空文件、结果、进度与上传缓存，就诊人名称回读当前上下文。
     func reset() {
