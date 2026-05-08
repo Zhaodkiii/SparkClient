@@ -3,8 +3,12 @@ import SwiftUI
 /// 医疗检查列表页：顶部固定搜索与分类，正文按分组展示检查卡片。
 struct ExaminationReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments>
+    private let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     private let fileTransferService: FileTransferService
     private let medicalResourceAPI: SparkMedicalWorkflowAPI
+    @ObservedObject private var memberContextStore: MemberContextStore
+    private let notificationClient: any NotificationClient
+    private let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     /// 当前成员 ID；`complete-data` 缺失时为 0，此时不展示新增入口。
     private let memberID: Int
 
@@ -17,11 +21,18 @@ struct ExaminationReportsListPage: View {
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger,
         fileTransferService: FileTransferService,
-        onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
+        memberContextStore: MemberContextStore,
+        notificationClient: any NotificationClient,
+        onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil,
+        onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)? = nil
     ) {
+        self.completeData = completeData
         self.memberID = completeData?.memberId ?? 0
         self.fileTransferService = fileTransferService
         self.medicalResourceAPI = SparkMedicalWorkflowAPI(configuration: medicalQueryAPI.configuration)
+        self.memberContextStore = memberContextStore
+        self.notificationClient = notificationClient
+        self.onMedicalCasesUpdated = onMedicalCasesUpdated
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
                 reports: completeData?.examinationReports ?? [],
@@ -141,13 +152,21 @@ struct ExaminationReportsListPage: View {
                             reports: reports,
                             fileTransferService: fileTransferService,
                             medicalResourceAPI: medicalResourceAPI,
+                            completeData: completeData,
+                            memberContextStore: memberContextStore,
+                            notificationClient: notificationClient,
                             isLoading: { viewModel.isLoading(reportID: $0) },
                             onLoadDetails: { reportID in
                                 await viewModel.loadDetailsIfNeeded(for: reportID)
                             },
                             onDeleted: { deletedID in
                                 viewModel.removeReport(reportID: deletedID)
-                            }
+                            },
+                            onMedicalCaseLinked: { updated in
+                                viewModel.upsertReport(updated)
+                            },
+                            onMedicalCaseUpdated: handleMedicalCaseUpdated,
+                            onMedicalCaseDeleted: handleMedicalCaseDeleted
                         )
                     }
                 }
@@ -155,6 +174,21 @@ struct ExaminationReportsListPage: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
         }
+    }
+
+    private func handleMedicalCaseUpdated(_ updated: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) {
+        var cases = completeData?.medicalCases ?? []
+        if let index = cases.firstIndex(where: { $0.id == updated.id }) {
+            cases[index] = updated
+        } else {
+            cases.insert(updated, at: 0)
+        }
+        onMedicalCasesUpdated?(cases)
+    }
+
+    private func handleMedicalCaseDeleted(_ deletedID: Int) {
+        let cases = (completeData?.medicalCases ?? []).filter { $0.id != deletedID }
+        onMedicalCasesUpdated?(cases)
     }
 }
 
@@ -260,9 +294,15 @@ private struct ExaminationReportCategorySection: View {
     let reports: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]
     let fileTransferService: FileTransferService
     let medicalResourceAPI: SparkMedicalWorkflowAPI
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
     let isLoading: (Int) -> Bool
     let onLoadDetails: (Int) async -> Void
     let onDeleted: (Int) -> Void
+    let onMedicalCaseLinked: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
+    let onMedicalCaseUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
+    let onMedicalCaseDeleted: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -296,8 +336,20 @@ private struct ExaminationReportCategorySection: View {
                         isLoadingDetails: isLoading(report.id),
                         fileTransferService: fileTransferService,
                         medicalResourceAPI: medicalResourceAPI,
+                        completeData: completeData,
+                        memberContextStore: memberContextStore,
+                        notificationClient: notificationClient,
                         onDeleted: { deletedID in
                             onDeleted(deletedID)
+                        },
+                        onMedicalCaseLinked: { updated in
+                            onMedicalCaseLinked(updated)
+                        },
+                        onMedicalCaseUpdated: { updated in
+                            onMedicalCaseUpdated(updated)
+                        },
+                        onMedicalCaseDeleted: { deletedID in
+                            onMedicalCaseDeleted(deletedID)
                         }
                     )
                     .task {

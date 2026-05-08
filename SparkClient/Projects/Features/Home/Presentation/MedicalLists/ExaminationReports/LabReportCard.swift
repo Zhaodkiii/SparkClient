@@ -7,10 +7,18 @@ struct LabReportCard: View {
     var isLoadingDetails = false
     let fileTransferService: FileTransferService
     let medicalResourceAPI: SparkMedicalWorkflowAPI
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
     var onDeleted: ((Int) -> Void)? = nil
+    var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)? = nil
+    var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil
+    var onMedicalCaseDeleted: ((Int) -> Void)? = nil
 
     @State private var isExpanded = false
     @State private var isShowingAttachments = false
+    @State private var medicalCaseRoute: MedicalCaseLinkRoute?
+    @State private var isUpdatingMedicalCaseLink = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -76,6 +84,7 @@ struct LabReportCard: View {
             }
 
             cardContentSection
+            linkedMedicalCaseSection
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -91,6 +100,36 @@ struct LabReportCard: View {
         )
         .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
+        .fullScreenCover(item: $medicalCaseRoute) { route in
+            switch route {
+            case .detail(let medicalCaseID):
+                CompatibleNavigationContainer {
+                    LinkedMedicalCaseDetailPage(
+                        medicalCaseID: medicalCaseID,
+                        completeData: completeData,
+                        workflowAPI: medicalResourceAPI,
+                        fileTransferService: fileTransferService,
+                        memberContextStore: memberContextStore,
+                        notificationClient: notificationClient,
+                        onUpdated: { onMedicalCaseUpdated?($0) },
+                        onDeleted: { onMedicalCaseDeleted?($0) }
+                    )
+                }
+            case .associate:
+                MedicalResourceAssociateMedicalCaseView(
+                    memberID: item.member,
+                    resourceKind: .examinationReports,
+                    resourceID: item.id,
+                    patchField: .medicalRecord,
+                    workflowAPI: medicalResourceAPI
+                ) { (_: SparkMedicalSyncAPI.RemoteExaminationReport, selectedCase) in
+                    var updated = item
+                    updated.medicalRecord = selectedCase.id
+                    updated.updatedAt = Date()
+                    onMedicalCaseLinked?(updated)
+                }
+            }
+        }
     }
 
     private var headerSection: some View {
@@ -236,6 +275,55 @@ struct LabReportCard: View {
             imagingSection
         case .pathology:
             pathologySection
+        }
+    }
+
+    private var linkedMedicalCaseSection: some View {
+        MedicalCaseLinkRow(
+            medicalCaseID: item.medicalRecord,
+            linkedTitle: L10n.text("home.medical.list.examination.linked_case.title", fallback: "已关联病历"),
+            linkedSubtitle: L10n.text("home.medical.list.examination.linked_case.subtitle", fallback: "点击查看关联病历详情"),
+            unlinkedTitle: L10n.text("home.medical.list.examination.unlinked_case.title", fallback: "关联病历"),
+            unlinkedSubtitle: L10n.text("home.medical.list.examination.unlinked_case.subtitle", fallback: "把这份检查报告归入一次就诊或病例"),
+            detailAction: {
+                if let medicalRecord = item.medicalRecord {
+                    medicalCaseRoute = .detail(medicalRecord)
+                }
+            },
+            switchAction: {
+                medicalCaseRoute = .associate
+            },
+            unlinkAction: {
+                Task { await unlinkMedicalCase() }
+            }
+        ) {
+            if let medicalRecord = item.medicalRecord {
+                medicalCaseRoute = .detail(medicalRecord)
+            } else {
+                medicalCaseRoute = .associate
+            }
+        }
+    }
+
+    @MainActor
+    private func unlinkMedicalCase() async {
+        guard isUpdatingMedicalCaseLink == false else { return }
+        isUpdatingMedicalCaseLink = true
+        defer { isUpdatingMedicalCaseLink = false }
+
+        do {
+            let _: SparkMedicalSyncAPI.RemoteExaminationReport = try await medicalResourceAPI.update(
+                SparkMedicalSyncAPI.RemoteExaminationReport.self,
+                kind: .examinationReports,
+                id: item.id,
+                body: MedicalCaseLinkPatch(field: .medicalRecord, medicalCaseID: nil)
+            )
+            var updated = item
+            updated.medicalRecord = nil
+            updated.updatedAt = Date()
+            onMedicalCaseLinked?(updated)
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("medical.case_link.unlink.failed", fallback: "取消关联失败"), source: "medical.case.link")
         }
     }
 

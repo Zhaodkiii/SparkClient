@@ -99,4 +99,13 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
         reports.insert(report, at: 0)
         onReportsUpdated?(reports)
     }
+
+    func upsertReport(_ report: Report) {
+        if let index = reports.firstIndex(where: { $0.id == report.id }) {
+            reports[index] = report
+        } else {
+            reports.insert(report, at: 0)
+        }
+        onReportsUpdated?(reports)
+    }
 }

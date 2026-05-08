@@ -215,6 +215,11 @@ struct HomeView: View {
                                 viewModel.updateMedicalCompleteData { completeData in
                                     completeData.examinationReports = reports
                                 }
+                            },
+                            onPrescriptionBatchesUpdated: { batches in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.prescriptionBatches = batches
+                                }
                             }
                         )
                         .hidesMainTabBarWhenPushed()

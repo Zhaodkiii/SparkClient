@@ -56,19 +56,43 @@ private enum MedicationDisplayStatus {
 struct MedicationsListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let fileTransferService: FileTransferService
+    let workflowAPI: SparkMedicalWorkflowAPI
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
+    let onPrescriptionBatchesUpdated: (([SparkMedicalSyncAPI.RemotePrescriptionBatchComplete]) -> Void)?
+    let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
 
     @State private var selectedFilter: MedicationFilterType = .active
+    @State private var prescriptionBatches: [SparkMedicalSyncAPI.RemotePrescriptionBatchComplete]
+    @State private var standaloneMedications: [SparkMedicalSyncAPI.RemoteMedication]
 
     private let logger: Logger = ConsoleLogger()
     private let logModule = LogModule.home
 
+    init(
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        fileTransferService: FileTransferService,
+        workflowAPI: SparkMedicalWorkflowAPI,
+        memberContextStore: MemberContextStore,
+        notificationClient: any NotificationClient,
+        onPrescriptionBatchesUpdated: (([SparkMedicalSyncAPI.RemotePrescriptionBatchComplete]) -> Void)? = nil,
+        onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)? = nil
+    ) {
+        self.completeData = completeData
+        self.fileTransferService = fileTransferService
+        self.workflowAPI = workflowAPI
+        self.memberContextStore = memberContextStore
+        self.notificationClient = notificationClient
+        self.onPrescriptionBatchesUpdated = onPrescriptionBatchesUpdated
+        self.onMedicalCasesUpdated = onMedicalCasesUpdated
+        _prescriptionBatches = State(initialValue: completeData?.prescriptionBatches ?? [])
+        _standaloneMedications = State(initialValue: completeData?.standaloneMedications ?? [])
+    }
+
     /// 统一列表数据源：处方批次优先展示，批次内已包含的药品不再重复显示。
     private var sortedItems: [MedicationListItem] {
-        let batches = completeData?.prescriptionBatches ?? []
-        let standaloneMedications = completeData?.standaloneMedications ?? []
-
-        var items: [MedicationListItem] = batches.map { .prescriptionBatch($0) }
-        let medicationIDsInBatch = Set(batches.flatMap { $0.medications ?? [] }.map(\.id))
+        var items: [MedicationListItem] = prescriptionBatches.map { .prescriptionBatch($0) }
+        let medicationIDsInBatch = Set(prescriptionBatches.flatMap { $0.medications ?? [] }.map(\.id))
         items.append(
             contentsOf: standaloneMedications
                 .filter { medicationIDsInBatch.contains($0.id) == false }
@@ -119,6 +143,12 @@ struct MedicationsListPage: View {
                 module: logModule
             )
         }
+        .onChange(of: completeData?.prescriptionBatches ?? []) { newValue in
+            prescriptionBatches = newValue
+        }
+        .onChange(of: completeData?.standaloneMedications ?? []) { newValue in
+            standaloneMedications = newValue
+        }
     }
 
     // MARK: - 顶部筛选
@@ -162,12 +192,30 @@ struct MedicationsListPage: View {
                     case .prescriptionBatch(let batch):
                         MedicationPrescriptionBatchCard(
                             item: batch,
-                            fileTransferService: fileTransferService
+                            fileTransferService: fileTransferService,
+                            workflowAPI: workflowAPI,
+                            completeData: completeData,
+                            memberContextStore: memberContextStore,
+                            notificationClient: notificationClient,
+                            onMedicalCaseLinked: upsertPrescriptionBatch,
+                            onMedicalCaseUpdated: handleMedicalCaseUpdated,
+                            onMedicalCaseDeleted: handleMedicalCaseDeleted
                         )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                     case .standaloneMedication(let medication):
-                        MedicationCard(item: medication)
+                        MedicationCard(
+                            item: medication,
+                            medicalCaseID: prescriptionBatches.first(where: { $0.id == medication.batch })?.medicalCase,
+                            workflowAPI: workflowAPI,
+                            completeData: completeData,
+                            fileTransferService: fileTransferService,
+                            memberContextStore: memberContextStore,
+                            notificationClient: notificationClient,
+                            onBatchMedicalCaseLinked: upsertPrescriptionBatch,
+                            onMedicalCaseUpdated: handleMedicalCaseUpdated,
+                            onMedicalCaseDeleted: handleMedicalCaseDeleted
+                        )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                     }
@@ -227,6 +275,30 @@ struct MedicationsListPage: View {
         }
     }
 
+    private func upsertPrescriptionBatch(_ batch: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete) {
+        if let index = prescriptionBatches.firstIndex(where: { $0.id == batch.id }) {
+            prescriptionBatches[index] = batch
+        } else {
+            prescriptionBatches.insert(batch, at: 0)
+        }
+        onPrescriptionBatchesUpdated?(prescriptionBatches)
+    }
+
+    private func handleMedicalCaseUpdated(_ updated: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) {
+        var cases = completeData?.medicalCases ?? []
+        if let index = cases.firstIndex(where: { $0.id == updated.id }) {
+            cases[index] = updated
+        } else {
+            cases.insert(updated, at: 0)
+        }
+        onMedicalCasesUpdated?(cases)
+    }
+
+    private func handleMedicalCaseDeleted(_ deletedID: Int) {
+        let cases = (completeData?.medicalCases ?? []).filter { $0.id != deletedID }
+        onMedicalCasesUpdated?(cases)
+    }
+
     // MARK: - 过滤辅助
 
     private func matches(_ status: MedicationDisplayStatus, for item: MedicationListItem) -> Bool {
@@ -255,14 +327,26 @@ struct MedicationsListPage: View {
 
 #Preview("Medication List Light") {
     CompatibleNavigationContainer {
-        MedicationsListPage(completeData: nil, fileTransferService: AppContainer.preview.fileTransferService)
+        MedicationsListPage(
+            completeData: nil,
+            fileTransferService: AppContainer.preview.fileTransferService,
+            workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+            memberContextStore: AppContainer.preview.memberContextStore,
+            notificationClient: AppContainer.preview.notificationClient
+        )
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medication List Dark") {
     CompatibleNavigationContainer {
-        MedicationsListPage(completeData: nil, fileTransferService: AppContainer.preview.fileTransferService)
+        MedicationsListPage(
+            completeData: nil,
+            fileTransferService: AppContainer.preview.fileTransferService,
+            workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+            memberContextStore: AppContainer.preview.memberContextStore,
+            notificationClient: AppContainer.preview.notificationClient
+        )
     }
     .preferredColorScheme(.dark)
 }

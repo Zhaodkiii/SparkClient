@@ -4,8 +4,17 @@ import SwiftUI
 struct MedicationPrescriptionBatchCard: View {
     let item: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete
     let fileTransferService: FileTransferService
+    let workflowAPI: SparkMedicalWorkflowAPI
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
+    var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemotePrescriptionBatchComplete) -> Void)? = nil
+    var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil
+    var onMedicalCaseDeleted: ((Int) -> Void)? = nil
 
     @State private var showMedications = true
+    @State private var medicalCaseRoute: MedicalCaseLinkRoute?
+    @State private var isUpdatingMedicalCaseLink = false
 
     private var medications: [SparkMedicalSyncAPI.RemoteMedication] {
         item.medications ?? []
@@ -52,6 +61,36 @@ struct MedicationPrescriptionBatchCard: View {
         )
         .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 2)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showMedications)
+        .fullScreenCover(item: $medicalCaseRoute) { route in
+            switch route {
+            case .detail(let medicalCaseID):
+                CompatibleNavigationContainer {
+                    LinkedMedicalCaseDetailPage(
+                        medicalCaseID: medicalCaseID,
+                        completeData: completeData,
+                        workflowAPI: workflowAPI,
+                        fileTransferService: fileTransferService,
+                        memberContextStore: memberContextStore,
+                        notificationClient: notificationClient,
+                        onUpdated: { onMedicalCaseUpdated?($0) },
+                        onDeleted: { onMedicalCaseDeleted?($0) }
+                    )
+                }
+            case .associate:
+                MedicalResourceAssociateMedicalCaseView(
+                    memberID: item.member,
+                    resourceKind: .prescriptionBatches,
+                    resourceID: item.id,
+                    patchField: .medicalCase,
+                    workflowAPI: workflowAPI
+                ) { (_: SparkMedicalSyncAPI.RemotePrescriptionBatch, selectedCase) in
+                    var updated = item
+                    updated.medicalCase = selectedCase.id
+                    updated.updatedAt = Date()
+                    onMedicalCaseLinked?(updated)
+                }
+            }
+        }
     }
 
     // MARK: - Header
@@ -218,46 +257,51 @@ struct MedicationPrescriptionBatchCard: View {
     // MARK: - Link Section
 
     private var linkedMedicalCaseSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Divider()
-                .opacity(0.35)
-                .padding(.horizontal, 16)
-
-            HStack(spacing: 14) {
-                Image(systemName: item.medicalCase != nil ? "link.circle.fill" : "link.badge.plus")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(item.medicalCase != nil ? Color.accentColor : Color.secondary)
-                    .frame(width: 40, height: 40)
-                    .background(
-                        (item.medicalCase != nil ? Color.accentColor : Color.secondary).opacity(0.14),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(
-                        item.medicalCase != nil
-                            ? L10n.text("home.medical.list.medications.linked_case.title")
-                            : L10n.text("home.medical.list.medications.unlinked_case.title")
-                    )
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                    Text(
-                        item.medicalCase != nil
-                            ? L10n.text("home.medical.list.medications.linked_case.subtitle")
-                            : L10n.text("home.medical.list.medications.unlinked_case.subtitle")
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        MedicalCaseLinkRow(
+            medicalCaseID: item.medicalCase,
+            linkedTitle: L10n.text("home.medical.list.medications.linked_case.title"),
+            linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle"),
+            unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title"),
+            unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle"),
+            detailAction: {
+                if let medicalCase = item.medicalCase {
+                    medicalCaseRoute = .detail(medicalCase)
                 }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.secondary.opacity(0.8))
+            },
+            switchAction: {
+                medicalCaseRoute = .associate
+            },
+            unlinkAction: {
+                Task { await unlinkMedicalCase() }
             }
-            .padding(16)
+        ) {
+            if let medicalCase = item.medicalCase {
+                medicalCaseRoute = .detail(medicalCase)
+            } else {
+                medicalCaseRoute = .associate
+            }
+        }
+    }
+
+    @MainActor
+    private func unlinkMedicalCase() async {
+        guard isUpdatingMedicalCaseLink == false else { return }
+        isUpdatingMedicalCaseLink = true
+        defer { isUpdatingMedicalCaseLink = false }
+
+        do {
+            let _: SparkMedicalSyncAPI.RemotePrescriptionBatch = try await workflowAPI.update(
+                SparkMedicalSyncAPI.RemotePrescriptionBatch.self,
+                kind: .prescriptionBatches,
+                id: item.id,
+                body: MedicalCaseLinkPatch(field: .medicalCase, medicalCaseID: nil)
+            )
+            var updated = item
+            updated.medicalCase = nil
+            updated.updatedAt = Date()
+            onMedicalCaseLinked?(updated)
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("medical.case_link.unlink.failed", fallback: "取消关联失败"), source: "medical.case.link")
         }
     }
 }

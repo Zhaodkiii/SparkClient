@@ -16,6 +16,7 @@ struct HomeMedicalListView: View {
     let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     let onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?
     let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
+    let onPrescriptionBatchesUpdated: (([SparkMedicalSyncAPI.RemotePrescriptionBatchComplete]) -> Void)?
 
     var body: some View {
         switch route {
@@ -45,12 +46,20 @@ struct HomeMedicalListView: View {
                 medicalQueryAPI: dependencies.medicalQueryAPI,
                 logger: dependencies.logger,
                 fileTransferService: dependencies.fileTransferService,
-                onReportsUpdated: onExaminationReportsUpdated
+                memberContextStore: dependencies.memberContextStore,
+                notificationClient: dependencies.notificationClient,
+                onReportsUpdated: onExaminationReportsUpdated,
+                onMedicalCasesUpdated: onMedicalCasesUpdated
             )
         case .medications:
             MedicationsListPage(
                 completeData: completeData,
-                fileTransferService: dependencies.fileTransferService
+                fileTransferService: dependencies.fileTransferService,
+                workflowAPI: dependencies.medicalWorkflowAPI,
+                memberContextStore: dependencies.memberContextStore,
+                notificationClient: dependencies.notificationClient,
+                onPrescriptionBatchesUpdated: onPrescriptionBatchesUpdated,
+                onMedicalCasesUpdated: onMedicalCasesUpdated
             )
         }
     }
@@ -58,14 +67,14 @@ struct HomeMedicalListView: View {
 
 #Preview("Medical Lists Light") {
     CompatibleNavigationContainer {
-        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
+        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onPrescriptionBatchesUpdated: nil)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medical Lists Dark") {
     CompatibleNavigationContainer {
-        HomeMedicalListView(route: .medications, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
+        HomeMedicalListView(route: .medications, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onPrescriptionBatchesUpdated: nil)
     }
     .preferredColorScheme(.dark)
 }
