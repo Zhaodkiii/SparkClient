@@ -803,17 +803,16 @@ enum MedicalCasePDFExporter {
         if let prescription = event.prescription {
             drawOptionalLine(L10n.text("medical_record.forms.field.institution"), value: prescription.institutionName, writer: writer)
             drawOptionalLine(L10n.text("medical_record.forms.field.prescriber"), value: prescription.prescriberName, writer: writer)
-            if let meds = event.nestedMedications, meds.isEmpty == false {
-                writer.drawText(
-                    String(format: L10n.text("home.medical.timeline.prescription.medication_count"), meds.count),
-                    font: .systemFont(ofSize: 11, weight: .semibold),
-                    color: .secondaryLabel,
-                    spacingAfter: 4
-                )
-                for med in meds {
-                    writer.drawBullet(medicationSummary(med))
+            drawOptionalLine(L10n.text("common.prescription"), value: prescription.prescriptionNo, writer: writer)
+            if event.nestedMedicationPlans.isEmpty == false {
+                writer.drawText("服药计划 \(event.nestedMedicationPlans.count) 项", font: .systemFont(ofSize: 11, weight: .semibold), color: .secondaryLabel, spacingAfter: 4)
+                for plan in event.nestedMedicationPlans {
+                    writer.drawBullet(medicationPlanSummary(plan, box: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] }))
                 }
             }
+        }
+        if let plan = event.medicationPlan {
+            writer.drawBullet(medicationPlanSummary(plan, box: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] }))
         }
 
         if let examination = event.examination {
@@ -857,9 +856,6 @@ enum MedicalCasePDFExporter {
     }
 
     private static func timelineAttachments(for event: MedicalCaseTimelineEvent) -> [SparkMedicalSyncAPI.RemoteManagedFile] {
-        if let attachments = event.prescription?.attachments, attachments.isEmpty == false {
-            return attachments
-        }
         if let attachments = event.examination?.attachments, attachments.isEmpty == false {
             return attachments
         }
@@ -900,13 +896,17 @@ enum MedicalCasePDFExporter {
         .joined(separator: " · ")
     }
 
-    private static func medicationSummary(_ medication: SparkMedicalSyncAPI.RemoteMedication) -> String {
+    private static func medicationPlanSummary(
+        _ plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
+        box: SparkMedicalSyncAPI.RemoteMedicineBox?
+    ) -> String {
         [
-            medication.drugName.nilIfBlank ?? medication.genericName.nilIfBlank,
-            medication.strength.nilIfBlank,
-            medication.frequencyText.nilIfBlank,
-            medication.dosePerTime.nilIfBlank,
-            medication.instructions.nilIfBlank
+            plan.drugName.nilIfBlank,
+            plan.dosePerTime.nilIfBlank,
+            plan.frequencyText.nilIfBlank,
+            plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank,
+            box.map { "药箱剩余 \($0.remainingQuantity.formatted(.number.precision(.fractionLength(0...2)))) \($0.unit)" },
+            plan.instructions.nilIfBlank
         ]
         .compactMap { $0 }
         .joined(separator: " · ")
@@ -916,10 +916,10 @@ enum MedicalCasePDFExporter {
         switch kind {
         case .symptom:
             return L10n.text("home.medical.case_detail.add.menu.symptom")
-        case .medication:
-            return L10n.text("common.medication")
         case .prescription:
-            return L10n.text("common.prescription")
+            return L10n.text("common.prescription", fallback: "处方")
+        case .medication:
+            return L10n.text("common.medication", fallback: "用药")
         case .examination(let category):
             return L10n.text(category.titleKey)
         case .visit:

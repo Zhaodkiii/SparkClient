@@ -72,15 +72,6 @@ struct SparkMedicalQueryAPI {
         try await resources.list([SparkMedicalSyncAPI.RemoteExaminationReport].self, kind: .examinationReports, query: memberQuery(memberID))
     }
 
-    /// 查询处方批次（按成员、病历可选过滤）。
-    func listPrescriptionBatches(memberID: Int? = nil, medicalCaseID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemotePrescriptionBatch] {
-        try await resources.list(
-            [SparkMedicalSyncAPI.RemotePrescriptionBatch].self,
-            kind: .prescriptionBatches,
-            query: memberAndCaseQuery(memberID: memberID, medicalCaseID: medicalCaseID)
-        )
-    }
-
     /// 查询体检/检查明细（按成员及业务维度可选过滤）。
     func listMedExamDetails(
         memberID: Int? = nil,
@@ -97,22 +88,84 @@ struct SparkMedicalQueryAPI {
         return try await resources.list([SparkMedicalSyncAPI.RemoteMedExamDetail].self, kind: .medExamDetails, query: q)
     }
 
-    /// 查询用药（按成员、批次可选过滤）。
-    func listMedications(memberID: Int? = nil, batchID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedication] {
+    /// 查询药箱库存（按成员可选过滤）。
+    func listMedicineBoxes(
+        memberID: Int? = nil,
+        medicineType: String? = nil,
+        expireBefore: Date? = nil,
+        lowStock: Bool? = nil
+    ) async throws -> [SparkMedicalSyncAPI.RemoteMedicineBox] {
         var q: [URLQueryItem] = memberQuery(memberID)
-        if let batchID {
-            q.append(URLQueryItem(name: "batch_id", value: "\(batchID)"))
+        if let medicineType {
+            q.append(URLQueryItem(name: "medicine_type", value: medicineType))
         }
-        return try await resources.list([SparkMedicalSyncAPI.RemoteMedication].self, kind: .medications, query: q)
+        if let expireBefore {
+            q.append(URLQueryItem(name: "expire_before", value: MedicalDateCoding.encodeDateOnly(expireBefore)))
+        }
+        if let lowStock {
+            q.append(URLQueryItem(name: "low_stock", value: lowStock ? "true" : "false"))
+        }
+        return try await resources.list([SparkMedicalSyncAPI.RemoteMedicineBox].self, kind: .medicineBoxes, query: q)
     }
 
-    /// 查询服药打卡记录（按成员、药品可选过滤）。
-    func listMedicationTakenRecords(memberID: Int? = nil, medicationID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedicationTakenRecord] {
+    /// 查询处方（按成员、状态可选过滤）。
+    func listPrescriptions(memberID: Int? = nil, medicalCaseID: Int? = nil, status: String? = nil) async throws -> [SparkMedicalSyncAPI.RemotePrescription] {
         var q: [URLQueryItem] = memberQuery(memberID)
-        if let medicationID {
-            q.append(URLQueryItem(name: "medication_id", value: "\(medicationID)"))
+        if let medicalCaseID {
+            q.append(URLQueryItem(name: "medical_case_id", value: "\(medicalCaseID)"))
         }
-        return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationTakenRecord].self, kind: .medicationTakenRecords, query: q)
+        if let status {
+            q.append(URLQueryItem(name: "status", value: status))
+        }
+        return try await resources.list([SparkMedicalSyncAPI.RemotePrescription].self, kind: .prescriptions, query: q)
+    }
+
+    /// 查询服药计划（按成员、药箱、处方、状态可选过滤）。
+    func listMedicationPlans(
+        memberID: Int? = nil,
+        medicalCaseID: Int? = nil,
+        medicineBoxID: Int? = nil,
+        prescriptionID: Int? = nil,
+        status: String? = nil
+    ) async throws -> [SparkMedicalSyncAPI.RemoteMedicationPlan] {
+        var q: [URLQueryItem] = memberQuery(memberID)
+        if let medicalCaseID {
+            q.append(URLQueryItem(name: "medical_case_id", value: "\(medicalCaseID)"))
+        }
+        if let medicineBoxID {
+            q.append(URLQueryItem(name: "medicine_box_id", value: "\(medicineBoxID)"))
+        }
+        if let prescriptionID {
+            q.append(URLQueryItem(name: "prescription_id", value: "\(prescriptionID)"))
+        }
+        if let status {
+            q.append(URLQueryItem(name: "status", value: status))
+        }
+        return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationPlan].self, kind: .medicationPlans, query: q)
+    }
+
+    /// 查询服药记录（按成员、计划、状态、计划时间窗口可选过滤）。
+    func listMedicationRecords(
+        memberID: Int? = nil,
+        planID: Int? = nil,
+        status: String? = nil,
+        scheduledFrom: Date? = nil,
+        scheduledTo: Date? = nil
+    ) async throws -> [SparkMedicalSyncAPI.RemoteMedicationRecord] {
+        var q: [URLQueryItem] = memberQuery(memberID)
+        if let planID {
+            q.append(URLQueryItem(name: "plan_id", value: "\(planID)"))
+        }
+        if let status {
+            q.append(URLQueryItem(name: "status", value: status))
+        }
+        if let scheduledFrom {
+            q.append(URLQueryItem(name: "scheduled_from", value: MedicalDateCoding.encodeISO8601(scheduledFrom)))
+        }
+        if let scheduledTo {
+            q.append(URLQueryItem(name: "scheduled_to", value: MedicalDateCoding.encodeISO8601(scheduledTo)))
+        }
+        return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationRecord].self, kind: .medicationRecords, query: q)
     }
 
     /// 按成员单接口拉取医疗数据汇总（病例汇总 / 报告头 / 处方与附件）。

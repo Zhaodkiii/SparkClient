@@ -111,7 +111,9 @@ struct MedicalCaseTimelineRow: View {
                 .foregroundStyle(.primary)
 
             if event.kind == .prescription, let prescription = event.prescription {
-                prescriptionBody(prescription: prescription, medications: event.nestedMedications ?? [])
+                prescriptionBody(prescription: prescription, plans: event.nestedMedicationPlans)
+            } else if event.kind == .medication, let plan = event.medicationPlan {
+                medicationPlanBody(plan: plan)
             } else if case .examination(let category) = event.kind, let examination = event.examination {
                 examinationBody(examination: examination, category: category)
             } else if event.kind == .visit, let visit = event.visit {
@@ -156,42 +158,55 @@ struct MedicalCaseTimelineRow: View {
     }
 
     private func prescriptionBody(
-        prescription: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete,
-        medications: [SparkMedicalSyncAPI.RemoteMedication]
+        prescription: SparkMedicalSyncAPI.RemotePrescription,
+        plans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if (prescription.diagnosis ?? "").isEmpty == false {
-                Text((prescription.diagnosis ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+            if prescription.diagnosis.nilIfBlank != nil {
+                Text(prescription.diagnosis)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            let count = medications.count
-            if count > 0 {
-                Text(String(format: L10n.text("home.medical.timeline.prescription.medication_count"), count))
+            HStack(spacing: 8) {
+                if let no = prescription.prescriptionNo?.nilIfBlank {
+                    MedicalCaseSeverityBadge(text: no, tint: Color(uiColor: .systemPurple))
+                }
+                if prescription.status.isEmpty == false {
+                    MedicalCaseSeverityBadge(text: prescriptionStatusText(prescription.status), tint: Color(uiColor: .systemPurple))
+                }
+            }
+
+            if plans.isEmpty == false {
+                Text("服药计划 \(plans.count) 项")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 8) {
-                    ForEach(medications, id: \.id) { med in
-                        MedicalCaseMedicationInlineRow(medication: med)
+                    ForEach(plans, id: \.id) { plan in
+                        MedicalCaseMedicationPlanInlineRow(
+                            plan: plan,
+                            medicineBox: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] }
+                        )
                     }
                 }
             }
+        }
+    }
 
-            if let attachments = prescription.attachments, attachments.isEmpty == false {
-                Divider()
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(attachments, id: \.id) { attachment in
-                            MedicalCaseAttachmentPill(
-                                attachment: attachment,
-                                fileTransferService: fileTransferService
-                            )
-                        }
-                    }
-                }
+    private func medicationPlanBody(plan: SparkMedicalSyncAPI.RemoteMedicationPlan) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            MedicalCaseMedicationPlanInlineRow(
+                plan: plan,
+                medicineBox: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] }
+            )
+
+            if plan.instructions.nilIfBlank != nil {
+                Text(plan.instructions)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -303,6 +318,19 @@ struct MedicalCaseTimelineRow: View {
             }
         }
     }
+
+    private func prescriptionStatusText(_ status: String) -> String {
+        switch status {
+        case "active":
+            return "生效中"
+        case "completed":
+            return "已完成"
+        case "cancelled":
+            return "已取消"
+        default:
+            return status
+        }
+    }
 }
 
 private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
@@ -311,13 +339,24 @@ private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
     }
 }
 
-private struct MedicalCaseMedicationInlineRow: View {
-    let medication: SparkMedicalSyncAPI.RemoteMedication
+private struct MedicalCaseMedicationPlanInlineRow: View {
+    let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
+    let medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox?
 
     private var secondaryLine: String {
-        [medication.strength.nilIfBlank, medication.frequencyText.nilIfBlank]
-            .compactMap { $0 }
-            .joined(separator: " · ")
+        [
+            plan.dosePerTime.nilIfBlank,
+            plan.frequencyText.nilIfBlank,
+            plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
+
+    private var stockText: String? {
+        guard let medicineBox else { return nil }
+        let remaining = medicineBox.remainingQuantity.formatted(.number.precision(.fractionLength(0...2)))
+        return "药箱剩余 \(remaining) \(medicineBox.unit)"
     }
 
     var body: some View {
@@ -326,7 +365,7 @@ private struct MedicalCaseMedicationInlineRow: View {
                 .font(.caption)
                 .foregroundStyle(Color(uiColor: .systemIndigo))
             VStack(alignment: .leading, spacing: 2) {
-                Text(medication.drugName.nilIfBlank ?? medication.genericName.nilIfBlank ?? "—")
+                Text(plan.drugName.nilIfBlank ?? "未命名药品")
                     .font(.callout)
                     .foregroundStyle(.primary)
                 if secondaryLine.isEmpty == false {
@@ -334,12 +373,35 @@ private struct MedicalCaseMedicationInlineRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if let stockText {
+                    Text(stockText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 0)
+            Text(planStatusText(plan.status))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
         .padding(8)
         .background(Color(uiColor: .systemGray6))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func planStatusText(_ status: String) -> String {
+        switch status {
+        case "active":
+            return "执行中"
+        case "paused":
+            return "已暂停"
+        case "completed":
+            return "已完成"
+        case "cancelled":
+            return "已取消"
+        default:
+            return status
+        }
     }
 }
 
@@ -379,142 +441,6 @@ private struct MedicalCaseMedicationInlineRow: View {
         isLast: false,
         memberID: 1,
         medicalCaseID: 1,
-        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
-        fileTransferService: AppContainer.preview.fileTransferService,
-        onTimelineEventRemoved: nil
-    )
-    .padding()
-    .preferredColorScheme(.dark)
-}
-
-#Preview("Timeline row — prescription — Light") {
-    let med = SparkMedicalSyncAPI.RemoteMedication(
-        id: 9,
-        member: 1,
-        batch: 3,
-        genericName: "布洛芬",
-        brandName: "",
-        drugName: "布洛芬缓释胶囊",
-        dosageForm: "胶囊",
-        strength: "300mg",
-        route: "口服",
-        dosePerTime: "1 粒",
-        doseValue: 1,
-        doseUnit: "粒",
-        frequencyCode: "BID",
-        period: "日",
-        timesPerPeriod: 2,
-        frequencyText: "每日 2 次",
-        durationDays: 5,
-        instructions: "饭后服",
-        reminderEnabled: false,
-        reminderTimes: [],
-        sortOrder: 0,
-        extra: nil,
-        updatedAt: Date()
-    )
-    let batch = SparkMedicalSyncAPI.RemotePrescriptionBatchComplete(
-        id: 3,
-        member: 1,
-        medicalCase: 42,
-        prescriberName: "王医生",
-        institutionName: "仁和医院",
-        prescribedAt: Date(),
-        diagnosis: "上呼吸道感染",
-        batchNo: "RX-1001",
-        status: "active",
-        auditorName: nil,
-        auditedAt: nil,
-        extra: nil,
-        createdAt: Date(),
-        updatedAt: Date(),
-        medications: [med],
-        attachments: []
-    )
-    let event = MedicalCaseTimelineEvent(
-        id: "prescription-3",
-        kind: .prescription,
-        title: batch.institutionName ?? "",
-        detail: batch.diagnosis ?? "",
-        date: Date(),
-        statusBadgeText: "治疗中",
-        prescription: batch,
-        nestedMedications: batch.medications,
-        editRoute: .prescription(batch)
-    )
-    MedicalCaseTimelineRow(
-        event: event,
-        isLast: true,
-        memberID: 1,
-        medicalCaseID: 42,
-        workflowAPI: AppContainer.preview.backend.medicalWorkflow,
-        fileTransferService: AppContainer.preview.fileTransferService,
-        onTimelineEventRemoved: nil
-    )
-    .padding()
-    .preferredColorScheme(.light)
-}
-
-#Preview("Timeline row — prescription — Dark") {
-    let med = SparkMedicalSyncAPI.RemoteMedication(
-        id: 9,
-        member: 1,
-        batch: 3,
-        genericName: "布洛芬",
-        brandName: "",
-        drugName: "布洛芬缓释胶囊",
-        dosageForm: "胶囊",
-        strength: "300mg",
-        route: "口服",
-        dosePerTime: "1 粒",
-        doseValue: 1,
-        doseUnit: "粒",
-        frequencyCode: "BID",
-        period: "日",
-        timesPerPeriod: 2,
-        frequencyText: "每日 2 次",
-        durationDays: 5,
-        instructions: "饭后服",
-        reminderEnabled: false,
-        reminderTimes: [],
-        sortOrder: 0,
-        extra: nil,
-        updatedAt: Date()
-    )
-    let batch = SparkMedicalSyncAPI.RemotePrescriptionBatchComplete(
-        id: 3,
-        member: 1,
-        medicalCase: 42,
-        prescriberName: "王医生",
-        institutionName: "仁和医院",
-        prescribedAt: Date(),
-        diagnosis: "上呼吸道感染",
-        batchNo: "RX-1001",
-        status: "active",
-        auditorName: nil,
-        auditedAt: nil,
-        extra: nil,
-        createdAt: Date(),
-        updatedAt: Date(),
-        medications: [med],
-        attachments: []
-    )
-    let event = MedicalCaseTimelineEvent(
-        id: "prescription-3",
-        kind: .prescription,
-        title: batch.institutionName ?? "",
-        detail: batch.diagnosis ?? "",
-        date: Date(),
-        statusBadgeText: "治疗中",
-        prescription: batch,
-        nestedMedications: batch.medications,
-        editRoute: .prescription(batch)
-    )
-    MedicalCaseTimelineRow(
-        event: event,
-        isLast: true,
-        memberID: 1,
-        medicalCaseID: 42,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
         onTimelineEventRemoved: nil

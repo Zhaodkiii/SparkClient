@@ -77,25 +77,21 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
             )
             return receipt
 
-        // 4. 保存处方单（使用组合创建 API）
         case .prescription(let draft):
-            let receipt = try await saveCombinedPrescription(
-                memberID: memberID,
-                draft: draft,
-                envelope: output.envelope,
-                now: now
-            )
-            return receipt
+            let title = draft.diagnosis ?? draft.institutionName ?? "prescription"
+            throw unsupportedMedicationDocumentError(title)
 
         case .medication(let lines):
-            let receipt = try await saveCombinedMedications(
-                memberID: memberID,
-                lines: lines,
-                envelope: output.envelope,
-                now: now
-            )
-            return receipt
+            throw unsupportedMedicationDocumentError("medication rows: \(lines.count)")
         }
+    }
+
+    private func unsupportedMedicationDocumentError(_ context: String) -> NSError {
+        NSError(
+            domain: "DefaultTypedMedicalDocumentSaver",
+            code: -2,
+            userInfo: [NSLocalizedDescriptionKey: "旧处方批次/药品行保存链路已移除，请使用药箱、服药计划、服药记录资源保存。(\(context))"]
+        )
     }
 }
 
@@ -145,39 +141,6 @@ private extension DefaultTypedMedicalDocumentSaver {
         if let s = line.genericName?.trimmingCharacters(in: .whitespacesAndNewlines), s.isEmpty == false { return s }
         if let s = line.brandName?.trimmingCharacters(in: .whitespacesAndNewlines), s.isEmpty == false { return s }
         return ""
-    }
-
-    func medicationLineToSavePayload(
-        memberID: Int,
-        batch: Int,
-        line: MedicationRecognitionDraft,
-        fallbackIndex: Int
-    ) -> SparkMedicalWorkflowAPI.MedicationSavePayload {
-        let extra = mergeTypedUploadExtra(line.extra)
-        let sort = line.sortOrder.parsedAsSortOrderInt() ?? fallbackIndex
-        return SparkMedicalWorkflowAPI.MedicationSavePayload(
-            member: memberID,
-            batch: batch,
-            genericName: line.genericName ?? "",
-            brandName: line.brandName ?? "",
-            drugName: resolvedDrugDisplayName(line),
-            dosageForm: line.dosageForm ?? "",
-            strength: line.strength ?? "",
-            route: line.route ?? "",
-            dosePerTime: line.dosePerTime ?? "",
-            doseValue: line.doseValue.parsedAsDoseValue(),
-            doseUnit: line.doseUnit ?? "",
-            frequencyCode: line.frequencyCode ?? "",
-            period: line.period ?? "",
-            timesPerPeriod: line.timesPerPeriod.parsedAsTimesPerPeriod(),
-            frequencyText: line.frequencyText ?? "",
-            durationDays: line.durationDays.parsedAsDurationDays(),
-            instructions: line.instructions ?? "",
-            reminderEnabled: line.reminderEnabled ?? false,
-            reminderTimes: line.reminderTimes ?? [],
-            sortOrder: sort,
-            extra: extra
-        )
     }
 
     // MARK: 构建体检报告保存参数
@@ -288,17 +251,6 @@ private extension DefaultTypedMedicalDocumentSaver {
         }
     }
 
-    // MARK: 构建处方里的药品列表
-    func buildPrescriptionMedicationPayloads(
-        memberID: Int,
-        draft: PrescriptionRecognitionDraft
-    ) -> [SparkMedicalWorkflowAPI.MedicationSavePayload] {
-        let rows = draft.medications ?? []
-        return rows.enumerated().map { index, line in
-            medicationLineToSavePayload(memberID: memberID, batch: 0, line: line, fallbackIndex: index)
-        }
-    }
-
     // MARK: 构建医疗报告保存参数
     func buildMedicalReportPayloads(
         memberID: Int,
@@ -392,13 +344,12 @@ private extension DefaultTypedMedicalDocumentSaver {
             ageAtVisit: draft.ageAtVisit.parsedAsAgeAtVisitInteger(),
             extra: caseDocumentExtra(draft: draft)
         )
-        // 后端组合接口：症状/就诊/手术/随访各单条；检查与处方批次可多选
+        // 后端组合接口：症状/就诊/手术/随访各单条；检查报告可多选。
         let symptomRequest = draft.symptom?.toCreateRequest()
         let visitRequest = draft.visit?.toCreateRequest()
         let surgeryRequest = draft.surgery?.toCreateRequest()
         let followUpRequest = draft.followUps?.first.map { $0.toCreateRequest() }
         let examReports = draft.examinationReports?.map { $0.toExaminationReportCreateRequest() }
-        let batchRequests = draft.prescriptionBatches?.map { $0.toPrescriptionBatchCreateRequest() }
 
         let request = CombinedMedicalCreateRequest(
             member: MemberCreateRequestWithId(
@@ -415,13 +366,12 @@ private extension DefaultTypedMedicalDocumentSaver {
             surgery: surgeryRequest,
             followUp: followUpRequest,
             examinationReports: examReports,
-            prescriptionBatches: batchRequests,
             sourceFileIds: sourceFileIds
         )
 
         let response = try await combinedAPI.createCombinedMedical(request)
         logger.info(
-            "病例文档组合创建成功，memberID=\(response.memberId), caseID=\(response.medicalCaseId), exams=\(response.examinationReportIds?.count ?? 0), batches=\(response.prescriptionBatchIds?.count ?? 0)",
+            "病例文档组合创建成功，memberID=\(response.memberId), caseID=\(response.medicalCaseId), exams=\(response.examinationReportIds?.count ?? 0)",
             module: .medical
         )
         return MedicalDocumentSaveReceipt(
@@ -492,127 +442,6 @@ private extension DefaultTypedMedicalDocumentSaver {
         )
         return MedicalDocumentSaveReceipt(
             recordID: recordID,
-            savedAt: now,
-            isSuccess: true
-        )
-    }
-
-    /// 使用组合创建 API 保存处方单
-    func saveCombinedPrescription(
-        memberID: Int,
-        draft: PrescriptionRecognitionDraft,
-        envelope: MedicalDocumentRecognitionEnvelope,
-        now: Date
-    ) async throws -> MedicalDocumentSaveReceipt {
-        let sourceFileIds = extractSourceFileIds(from: envelope)
-
-        // 构建处方批次请求
-        let prescriptionBatch = draft.toPrescriptionBatchCreateRequest()
-
-        // 构建 extra，将 prescribedAt 放入其中
-        var prescriptionExtra: [String: String] = ["batch_no": draft.batchNo ?? ""]
-        if let prescribedAt = draft.prescribedAt {
-            prescriptionExtra["occurred_at"] = prescribedAt
-        }
-
-        let request = CombinedMedicalCreateRequest(
-            member: MemberCreateRequestWithId(
-                id: memberID,
-                name: nil,
-                gender: nil,
-                birthDate: nil,
-                relationship: nil,
-                extra: nil
-            ),
-            medicalCase: MedicalCaseCreateRequest(
-                title: "处方: \(draft.diagnosis ?? "未命名")",
-                hospitalName: draft.institutionName,
-                diagnosisSummary: draft.diagnosis,
-                ageAtVisit: nil,
-                extra: prescriptionExtra
-            ),
-            symptom: nil,
-            visit: nil,
-            surgery: nil,
-            followUp: nil,
-            examinationReports: nil,
-            prescriptionBatches: [prescriptionBatch],
-            sourceFileIds: sourceFileIds
-        )
-
-        let response = try await combinedAPI.createCombinedMedical(request)
-        logger.info(
-            "处方单组合创建成功，memberID=\(response.memberId), caseID=\(response.medicalCaseId), batchCount=\(response.prescriptionBatchIds?.count ?? 0)",
-            module: .medical
-        )
-        return MedicalDocumentSaveReceipt(
-            recordID: response.medicalCaseId,
-            savedAt: now,
-            isSuccess: true
-        )
-    }
-
-    /// 使用组合创建 API 保存药品列表
-    func saveCombinedMedications(
-        memberID: Int,
-        lines: [MedicationRecognitionDraft],
-        envelope: MedicalDocumentRecognitionEnvelope,
-        now: Date
-    ) async throws -> MedicalDocumentSaveReceipt {
-        guard lines.isEmpty == false else {
-            throw NSError(
-                domain: "DefaultTypedMedicalDocumentSaver",
-                code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "medication extraction produced no rows"]
-            )
-        }
-
-        let sourceFileIds = extractSourceFileIds(from: envelope)
-
-        // 构建处方批次（不含具体医院信息，仅为药品分组）
-        let medications = lines.map { $0.toPrescriptionMedicationRequest() }
-        let prescriptionBatch = PrescriptionBatchCreateRequest(
-            prescriberName: nil,
-            institutionName: nil,
-            prescribedAt: nil,
-            diagnosis: nil,
-            batchNo: nil,
-            status: "active",
-            medications: medications
-        )
-
-        let request = CombinedMedicalCreateRequest(
-            member: MemberCreateRequestWithId(
-                id: memberID,
-                name: nil,
-                gender: nil,
-                birthDate: nil,
-                relationship: nil,
-                extra: nil
-            ),
-            medicalCase: MedicalCaseCreateRequest(
-                title: "用药记录 (\(lines.count)项药品)",
-                hospitalName: nil,
-                diagnosisSummary: nil,
-                ageAtVisit: nil,
-                extra: ["source": "medication_only"]
-            ),
-            symptom: nil,
-            visit: nil,
-            surgery: nil,
-            followUp: nil,
-            examinationReports: nil,
-            prescriptionBatches: [prescriptionBatch],
-            sourceFileIds: sourceFileIds
-        )
-
-        let response = try await combinedAPI.createCombinedMedical(request)
-        logger.info(
-            "药品列表组合创建成功，memberID=\(response.memberId), caseID=\(response.medicalCaseId), batchCount=\(response.prescriptionBatchIds?.count ?? 0)",
-            module: .medical
-        )
-        return MedicalDocumentSaveReceipt(
-            recordID: response.medicalCaseId,
             savedAt: now,
             isSuccess: true
         )

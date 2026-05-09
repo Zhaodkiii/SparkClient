@@ -27,7 +27,7 @@ extension HomeDashboard {
             case medicalCases
             case healthExamReports
             case medicalReports
-            case medications
+            case medicationPlans
         }
 
         let id: Kind

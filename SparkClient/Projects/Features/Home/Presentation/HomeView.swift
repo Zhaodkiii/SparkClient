@@ -215,11 +215,6 @@ struct HomeView: View {
                                 viewModel.updateMedicalCompleteData { completeData in
                                     completeData.examinationReports = reports
                                 }
-                            },
-                            onPrescriptionBatchesUpdated: { batches in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.prescriptionBatches = batches
-                                }
                             }
                         )
                         .hidesMainTabBarWhenPushed()
@@ -293,8 +288,8 @@ struct HomeView: View {
             return L10n.text("home.medical.card.examination_reports.title")
         case .medicalReports:
             return L10n.text("home.medical.card.medical_reports.title")
-        case .medications:
-            return L10n.text("home.medical.card.medications.title")
+        case .medicationPlans:
+            return L10n.text("home.medical.card.medication_plans.title", fallback: "服药计划")
         }
     }
 
@@ -306,8 +301,8 @@ struct HomeView: View {
             return L10n.text("home.medical.card.examination_reports.subtitle")
         case .medicalReports:
             return L10n.text("home.medical.card.medical_reports.subtitle")
-        case .medications:
-            return L10n.text("home.medical.card.medications.subtitle")
+        case .medicationPlans:
+            return L10n.text("home.medical.card.medication_plans.subtitle", fallback: "执行中的规则")
         }
     }
 
@@ -319,8 +314,8 @@ struct HomeView: View {
             return .healthExamReports
         case .medicalReports:
             return .examinationReports
-        case .medications:
-            return .medications
+        case .medicationPlans:
+            return .medicationPlans
         }
     }
 
@@ -467,7 +462,7 @@ extension HomeViewModel {
                 HomeDashboard.MedicalCard(id: .medicalCases, count: 4, latestDate: now.addingTimeInterval(-86_400), symbol: "doc.text.fill"),
                 HomeDashboard.MedicalCard(id: .healthExamReports, count: 2, latestDate: now.addingTimeInterval(-172_800), symbol: "heart.text.square.fill"),
                 HomeDashboard.MedicalCard(id: .medicalReports, count: 6, latestDate: now.addingTimeInterval(-259_200), symbol: "list.clipboard.fill"),
-                HomeDashboard.MedicalCard(id: .medications, count: 8, latestDate: now.addingTimeInterval(-86_400 * 3), symbol: "pills.fill")
+                HomeDashboard.MedicalCard(id: .medicationPlans, count: 3, latestDate: now.addingTimeInterval(-86_400 * 2), symbol: "calendar.badge.clock")
             ], completeData: nil)
         )
 

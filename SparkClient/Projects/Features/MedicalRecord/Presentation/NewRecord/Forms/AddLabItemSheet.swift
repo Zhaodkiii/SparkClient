@@ -1,12 +1,5 @@
 import SwiftUI
 
-// MARK: - 单位（对齐 Health `UnitPickerRow`：常用 / 更多 / 自定义 + 行内输入）
-
-private enum SparkLabUnitSelection: Hashable {
-    case predefined(String)
-    case custom
-}
-
 private let sparkLabCommonUnits: [String] = [
     "g/L", "10^9/L", "10^12/L", "%", "fL", "pg", "U/L", "IU/L"
 ]
@@ -83,13 +76,6 @@ private enum SparkLabResultFlag: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - 状态选择：预置 / 自定义（对齐单位行交互）
-
-private enum SparkLabFlagSelection: Hashable {
-    case predefined(SparkLabResultFlag)
-    case custom
-}
-
 /// 检验报告子项：布局参考 Health `AddLabItemSheet`；底部使用 `sparkFormBottomBar`（取消 / 完成）。
 struct AddLabItemSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -98,13 +84,6 @@ struct AddLabItemSheet: View {
     let onSubmit: (ExamReportFormView.ItemDraft) -> Void
 
     @State private var sheetKeyboardVisible = false
-    @State private var labUnitSelection: SparkLabUnitSelection = .predefined("g/L")
-    @State private var labCustomUnit: String = ""
-    @FocusState private var labUnitCustomFocused: Bool
-
-    @State private var labFlagSelection: SparkLabFlagSelection = .predefined(.normal)
-    @State private var labCustomFlag: String = ""
-    @FocusState private var labFlagCustomFocused: Bool
 
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
@@ -205,234 +184,78 @@ struct AddLabItemSheet: View {
             }
             .padding(.horizontal, 16)
             .onAppear {
-                syncLabUnitSelectionFromDraft()
-                syncLabFlagSelectionFromDraft()
+                seedLabUnitIfNeeded()
+                seedLabFlagIfNeeded()
                 reconcileDraftCategoryDefaultsIfNeeded()
             }
-            .onChange(of: labUnitSelection) { _ in
-                applyLabUnitSelection()
-            }
-            .onChange(of: labCustomUnit) { _ in
-                if case .custom = labUnitSelection {
-                    draft.unit = labCustomUnit.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            }
-            .onChange(of: labFlagSelection) { _ in
-                applyLabFlagSelection()
-            }
-            .onChange(of: labCustomFlag) { _ in
-                if case .custom = labFlagSelection {
-                    draft.flag = labCustomFlag.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            }
         }
     }
 
-    private func syncLabUnitSelectionFromDraft() {
+    private var labUnitSections: [(header: String?, options: [String])] {
+        [
+            (L10n.text("medical_record.forms.lab_item.unit_section_common"), sparkLabCommonUnits),
+            (L10n.text("medical_record.forms.lab_item.unit_section_more"), sparkLabMoreUnits)
+        ]
+    }
+
+    private var labFlagSections: [(header: String?, options: [String])] {
+        [(nil, SparkLabResultFlag.allCases.map(\.storageString))]
+    }
+
+    private var labFlagText: Binding<String> {
+        Binding(
+            get: {
+                let t = draft.flag.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard t.isEmpty == false else { return SparkLabResultFlag.normal.storageString }
+                return SparkLabResultFlag.isPredefinedStoredValue(t)
+                    ? SparkLabResultFlag.fromStoredFlag(t).storageString
+                    : draft.flag
+            },
+            set: { draft.flag = $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        )
+    }
+
+    private func seedLabUnitIfNeeded() {
         let u = draft.unit.trimmingCharacters(in: .whitespacesAndNewlines)
-        let allPredefined = sparkLabCommonUnits + sparkLabMoreUnits
-        if let match = allPredefined.first(where: { $0 == u }) {
-            labUnitSelection = .predefined(match)
-            labCustomUnit = ""
-        } else if u.isEmpty {
-            let first = sparkLabCommonUnits.first ?? "g/L"
-            labUnitSelection = .predefined(first)
-            draft.unit = first
-            labCustomUnit = ""
-        } else {
-            labUnitSelection = .custom
-            labCustomUnit = u
+        if u.isEmpty {
+            draft.unit = sparkLabCommonUnits.first ?? "g/L"
         }
     }
 
-    private func applyLabUnitSelection() {
-        let allPredefined = sparkLabCommonUnits + sparkLabMoreUnits
-        switch labUnitSelection {
-        case .predefined(let s):
-            draft.unit = s
-            labCustomUnit = ""
-        case .custom:
-            if allPredefined.contains(draft.unit) {
-                labCustomUnit = ""
-                draft.unit = ""
-            } else {
-                labCustomUnit = draft.unit.trimmingCharacters(in: .whitespacesAndNewlines)
-                draft.unit = labCustomUnit.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-    }
-
-    private func syncLabFlagSelectionFromDraft() {
+    private func seedLabFlagIfNeeded() {
         let t = draft.flag.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty {
-            labFlagSelection = .predefined(.normal)
             draft.flag = SparkLabResultFlag.normal.storageString
-            labCustomFlag = ""
-            return
-        }
-        if SparkLabResultFlag.isPredefinedStoredValue(t) {
-            let resolved = SparkLabResultFlag.fromStoredFlag(t)
-            labFlagSelection = .predefined(resolved)
-            draft.flag = resolved.storageString
-            labCustomFlag = ""
-            return
-        }
-        labFlagSelection = .custom
-        labCustomFlag = t
-    }
-
-    private func applyLabFlagSelection() {
-        switch labFlagSelection {
-        case .predefined(let s):
-            draft.flag = s.storageString
-            labCustomFlag = ""
-        case .custom:
-            let trimmed = draft.flag.trimmingCharacters(in: .whitespacesAndNewlines)
-            if SparkLabResultFlag.isPredefinedStoredValue(trimmed) {
-                labCustomFlag = ""
-                draft.flag = ""
-            } else {
-                labCustomFlag = trimmed
-                draft.flag = trimmed
-            }
         }
     }
 
     private var labUnitRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Text(L10n.text("medical_record.forms.field.unit"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("*")
-                    .foregroundStyle(.red)
-                    .font(.subheadline)
-            }
-
-            HStack(alignment: .center, spacing: 10) {
-                Picker("", selection: $labUnitSelection) {
-                    Section(L10n.text("medical_record.forms.lab_item.unit_section_common")) {
-                        ForEach(sparkLabCommonUnits, id: \.self) { u in
-                            Text(u).tag(SparkLabUnitSelection.predefined(u))
-                        }
-                    }
-                    Section(L10n.text("medical_record.forms.lab_item.unit_section_more")) {
-                        ForEach(sparkLabMoreUnits, id: \.self) { u in
-                            Text(u).tag(SparkLabUnitSelection.predefined(u))
-                        }
-                    }
-                    Section {
-                        Text(L10n.text("medical_record.forms.lab_item.unit_custom_menu")).tag(SparkLabUnitSelection.custom)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(minWidth: labUnitSelectionIsCustom ? 120 : 0, maxWidth: labUnitSelectionIsCustom ? 140 : .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .background(Color(uiColor: .secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
-                )
-
-                if labUnitSelectionIsCustom {
-                    TextField(
-                        L10n.text("medical_record.forms.lab_item.unit_custom_placeholder"),
-                        text: $labCustomUnit
-                    )
-                    .textInputAutocapitalizationIfAvailable(.never)
-                    .autocorrectionDisabledIfAvailable()
-                    .focused($labUnitCustomFocused)
-                    .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(uiColor: .systemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(
-                                labUnitCustomFocused ? Color.accentColor : Color(uiColor: .separator),
-                                lineWidth: labUnitCustomFocused ? 1.5 : 1
-                            )
-                    )
-                    .onAppear { labUnitCustomFocused = true }
-                }
-            }
-        }
-    }
-
-    private var labUnitSelectionIsCustom: Bool {
-        if case .custom = labUnitSelection { return true }
-        return false
+        SparkFormMenuCustomRow(
+            title: L10n.text("medical_record.forms.field.unit"),
+            required: true,
+            sections: labUnitSections,
+            text: $draft.unit,
+            customMenuTitle: L10n.text("medical_record.forms.lab_item.unit_custom_menu"),
+            customPlaceholder: L10n.text("medical_record.forms.lab_item.unit_custom_placeholder"),
+            keyboardVisible: $sheetKeyboardVisible,
+            customAutofocus: true
+        )
     }
 
     private var labFlagRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
-                Text(L10n.text("medical_record.forms.lab_item.field.flag"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("*")
-                    .foregroundStyle(.red)
-                    .font(.subheadline)
-            }
-
-            HStack(alignment: .center, spacing: 10) {
-                Picker("", selection: $labFlagSelection) {
-                    Section {
-                        ForEach(SparkLabResultFlag.allCases) { status in
-                            Label(status.title, systemImage: status.symbol)
-                                .tag(SparkLabFlagSelection.predefined(status))
-                        }
-                    }
-                    Section {
-                        Text(L10n.text("medical_record.forms.lab_item.flag_custom_menu"))
-                            .tag(SparkLabFlagSelection.custom)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(minWidth: labFlagSelectionIsCustom ? 120 : 0, maxWidth: labFlagSelectionIsCustom ? 160 : .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .background(Color(uiColor: .secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
-                )
-
-                if labFlagSelectionIsCustom {
-                    TextField(
-                        L10n.text("medical_record.forms.lab_item.flag_custom_placeholder"),
-                        text: $labCustomFlag
-                    )
-                    .textInputAutocapitalizationIfAvailable(.never)
-                    .autocorrectionDisabledIfAvailable()
-                    .focused($labFlagCustomFocused)
-                    .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(uiColor: .systemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(
-                                labFlagCustomFocused ? Color.accentColor : Color(uiColor: .separator),
-                                lineWidth: labFlagCustomFocused ? 1.5 : 1
-                            )
-                    )
-                    .onAppear { labFlagCustomFocused = true }
-                }
-            }
-        }
-    }
-
-    private var labFlagSelectionIsCustom: Bool {
-        if case .custom = labFlagSelection { return true }
-        return false
+        SparkFormMenuCustomRow(
+            title: L10n.text("medical_record.forms.lab_item.field.flag"),
+            required: true,
+            sections: labFlagSections,
+            text: labFlagText,
+            customMenuTitle: L10n.text("medical_record.forms.lab_item.flag_custom_menu"),
+            customPlaceholder: L10n.text("medical_record.forms.lab_item.flag_custom_placeholder"),
+            keyboardVisible: $sheetKeyboardVisible,
+            optionSystemImage: { option in
+                SparkLabResultFlag.allCases.first { $0.storageString == option }?.symbol
+            },
+            customAutofocus: true
+        )
     }
 
     /// 表单顶部已选一级、二级时带入子项；子项空则填该一级下第一个预设（可改）。

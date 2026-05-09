@@ -359,8 +359,42 @@ enum SparkMedicalSyncAPI {
         }
     }
 
-    /// 处方批次：一次开药可包含多条 `RemoteMedication`（`batch` 外键指向本表 `id`）。
-    struct RemotePrescriptionBatch: Codable, Sendable, Equatable {
+    /// 药箱：用户/成员拥有的物理药品库存。
+    struct RemoteMedicineBox: Codable, Sendable, Equatable {
+        var id: Int
+        var member: Int
+        var drugName: String
+        var medicineType: String?
+        var genericName: String
+        var brandName: String
+        var dosageForm: String
+        var strength: String
+        var totalQuantity: Double
+        var remainingQuantity: Double
+        var unit: String
+        var expireDate: Date?
+        var productionBatch: String
+        var notes: String
+        var extra: [String: String]?
+        var updatedAt: Date
+
+        enum CodingKeys: String, CodingKey {
+            case id, member, strength, unit, notes, extra
+            case drugName = "drug_name"
+            case medicineType = "medicine_type"
+            case genericName = "generic_name"
+            case brandName = "brand_name"
+            case dosageForm = "dosage_form"
+            case totalQuantity = "total_quantity"
+            case remainingQuantity = "remaining_quantity"
+            case expireDate = "expire_date"
+            case productionBatch = "production_batch"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    /// 处方：作为服药计划的可选来源，不再承载药品行。
+    struct RemotePrescription: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
         var medicalCase: Int?
@@ -368,102 +402,92 @@ enum SparkMedicalSyncAPI {
         var institutionName: String
         var prescribedAt: Date?
         var diagnosis: String
-        var batchNo: String?
+        var prescriptionNo: String?
         var status: String
-        var auditorName: String
-        var auditedAt: Date?
         var extra: [String: String]?
         var updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
-            case id
-            case member
+            case id, member, diagnosis, status, extra
             case medicalCase = "medical_case"
             case prescriberName = "prescriber_name"
             case institutionName = "institution_name"
             case prescribedAt = "prescribed_at"
-            case diagnosis
-            case batchNo = "batch_no"
-            case status
-            case auditorName = "auditor_name"
-            case auditedAt = "audited_at"
-            case extra
+            case prescriptionNo = "prescription_no"
             case updatedAt = "updated_at"
         }
     }
 
-    /// 处方药品行：同时保留「展示用字符串」（如 `dosePerTime`、`frequencyText`）与「结构化字段」（`doseValue`、`timesPerPeriod`）便于解析与提醒。
-    struct RemoteMedication: Codable, Sendable, Equatable {
+    /// 服药计划：独立的用药规则，可选关联药箱与处方。
+    struct RemoteMedicationPlan: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
-        /// 所属 `RemotePrescriptionBatch.id`。
-        var batch: Int
-        var genericName: String
-        var brandName: String
+        var medicalCase: Int?
+        var medicineBox: Int?
+        var prescription: Int?
         var drugName: String
-        var dosageForm: String
-        var strength: String
-        /// 给药途径（口服、静脉等）。
-        var route: String
         var dosePerTime: String
         var doseValue: Double?
         var doseUnit: String
-        var frequencyCode: String
-        var period: String
-        var timesPerPeriod: Int?
         var frequencyText: String
+        var frequencyCode: String
+        var reminderTimes: [MedicationReminderTime]
+        var startDate: Date
+        var endDate: Date?
         var durationDays: Int?
         var instructions: String
         var reminderEnabled: Bool
-        /// 提醒时间列表，通常为 HH:mm 或 ISO 局部时间字符串，与产品约定一致。
-        var reminderTimes: [String]
-        var sortOrder: Int
+        var status: String
         var extra: [String: String]?
         var updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
-            case id, member, batch, strength, route, period, instructions, extra
-            case genericName = "generic_name"
-            case brandName = "brand_name"
+            case id, member, prescription, instructions, status, extra
+            case medicalCase = "medical_case"
+            case medicineBox = "medicine_box"
             case drugName = "drug_name"
-            case dosageForm = "dosage_form"
             case dosePerTime = "dose_per_time"
             case doseValue = "dose_value"
             case doseUnit = "dose_unit"
             case frequencyCode = "frequency_code"
-            case timesPerPeriod = "times_per_period"
             case frequencyText = "frequency_text"
+            case reminderTimes = "reminder_times"
+            case startDate = "start_date"
+            case endDate = "end_date"
             case durationDays = "duration_days"
             case reminderEnabled = "reminder_enabled"
-            case reminderTimes = "reminder_times"
-            case sortOrder = "sort_order"
             case updatedAt = "updated_at"
         }
     }
 
-    /// 用药记录：某一剂次应服时间、实际服用时间、状态与用户在当时的时区（跨区旅行时有意义）。
-    struct RemoteMedicationTakenRecord: Codable, Sendable, Equatable {
+    struct MedicationReminderTime: Codable, Sendable, Equatable {
+        var time: String
+        var dose: Double?
+    }
+
+    /// 服药记录：计划剂次与实际打卡事实表。
+    struct RemoteMedicationRecord: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
-        /// 关联 `RemoteMedication.id`。
-        var medication: Int
+        var plan: Int
         var scheduledAt: Date
         var takenAt: Date?
         var status: String
-        /// 当天或疗程内的第几剂。
-        var doseSequence: Int
+        var plannedDose: String
         var actualDose: String
+        var doseSequence: Int
         var timezone: String
         var notes: String
         var extra: [String: String]?
         var updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
-            case id, member, medication, status, timezone, notes, extra
+            case id, member, plan, status, timezone, notes, extra
             case scheduledAt = "scheduled_at"
             case takenAt = "taken_at"
-            case doseSequence = "dose_sequence"
+            case plannedDose = "planned_dose"
             case actualDose = "actual_dose"
+            case doseSequence = "dose_sequence"
             case updatedAt = "updated_at"
         }
     }
@@ -602,36 +626,23 @@ enum SparkMedicalSyncAPI {
         }
     }
 
-    /// 处方批次 + 嵌套药品行 + 附件。
-    struct RemotePrescriptionBatchComplete: Codable, Sendable, Equatable {
-        var id: Int
-        var member: Int
-        var medicalCase: Int?
-        var prescriberName: String?
-        var institutionName: String?
-        var prescribedAt: Date?
-        var diagnosis: String?
-        var batchNo: String?
-        var status: String?
-        var auditorName: String?
-        var auditedAt: Date?
-        var extra: [String: String]?
-        var createdAt: Date?
-        var updatedAt: Date?
-        var medications: [RemoteMedication]?
-        var attachments: [RemoteManagedFile]?
+    struct RemoteMedicationSummary: Codable, Sendable, Equatable {
+        var todayTotal: Int
+        var todayTaken: Int
+        var todaySkipped: Int
+        var adherenceRate: Double
+        var activePlanCount: Int
+        var lowStockCount: Int
+        var expiringSoonCount: Int
 
         enum CodingKeys: String, CodingKey {
-            case id, member, diagnosis, status, extra, medications, attachments
-            case medicalCase = "medical_case"
-            case prescriberName = "prescriber_name"
-            case institutionName = "institution_name"
-            case prescribedAt = "prescribed_at"
-            case batchNo = "batch_no"
-            case auditorName = "auditor_name"
-            case auditedAt = "audited_at"
-            case createdAt = "created_at"
-            case updatedAt = "updated_at"
+            case todayTotal = "today_total"
+            case todayTaken = "today_taken"
+            case todaySkipped = "today_skipped"
+            case adherenceRate = "adherence_rate"
+            case activePlanCount = "active_plan_count"
+            case lowStockCount = "low_stock_count"
+            case expiringSoonCount = "expiring_soon_count"
         }
     }
 
@@ -642,8 +653,11 @@ enum SparkMedicalSyncAPI {
         var medicalCases: [RemoteMedicalCaseSummary]?
         var healthExamReports: [RemoteHealthExamReportWithAttachments]?
         var examinationReports: [RemoteExaminationReportWithAttachments]?
-        var prescriptionBatches: [RemotePrescriptionBatchComplete]?
-        var standaloneMedications: [RemoteMedication]?
+        var medicineBoxes: [RemoteMedicineBox]?
+        var prescriptions: [RemotePrescription]?
+        var medicationPlans: [RemoteMedicationPlan]?
+        var todayMedicationRecords: [RemoteMedicationRecord]?
+        var medicationSummary: RemoteMedicationSummary?
         var symptoms: [RemoteSymptom]?
         var visits: [RemoteVisit]?
         var surgeries: [RemoteSurgery]?
@@ -655,8 +669,11 @@ enum SparkMedicalSyncAPI {
             case medicalCases = "medical_cases"
             case healthExamReports = "health_exam_reports"
             case examinationReports = "examination_reports"
-            case prescriptionBatches = "prescription_batches"
-            case standaloneMedications = "standalone_medications"
+            case medicineBoxes = "medicine_boxes"
+            case prescriptions
+            case medicationPlans = "medication_plans"
+            case todayMedicationRecords = "today_medication_records"
+            case medicationSummary = "medication_summary"
             case symptoms
             case visits
             case surgeries

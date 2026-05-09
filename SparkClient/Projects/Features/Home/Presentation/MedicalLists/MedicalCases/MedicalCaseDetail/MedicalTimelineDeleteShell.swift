@@ -64,7 +64,7 @@ struct MedicalTimelineDeleteShell<Content: View>: View {
 #Preview("Delete shell — Light") {
     CompatibleNavigationContainer {
         MedicalTimelineDeleteShell(
-            resourceKind: .medications,
+            resourceKind: .symptoms,
             resourceID: 1,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
             onDeleted: {}
@@ -79,7 +79,7 @@ struct MedicalTimelineDeleteShell<Content: View>: View {
 #Preview("Delete shell — Dark") {
     CompatibleNavigationContainer {
         MedicalTimelineDeleteShell(
-            resourceKind: .prescriptionBatches,
+            resourceKind: .visits,
             resourceID: 1,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
             onDeleted: {}

@@ -82,15 +82,15 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                 )
             }
 
-        // 用药
-        let medicationRows: [SparkMedicalSyncAPI.RemoteMedication] = (try? await medicalQueryAPI.listMedications(memberID: memberID)) ?? []
-        let medications = medicationRows.map {
+        // 服药计划
+        let planRows: [SparkMedicalSyncAPI.RemoteMedicationPlan] = (try? await medicalQueryAPI.listMedicationPlans(memberID: memberID)) ?? []
+        let medications = planRows.map {
                 MedicalRecord(
                     id: $0.id,
                     memberID: $0.member,
                     title: $0.drugName.isEmpty ? "Medication" : $0.drugName,
                     summary: makeMedicationSummary(dosage: $0.dosePerTime, frequency: $0.frequencyText),
-                    occurredAt: $0.updatedAt,
+                    occurredAt: $0.startDate,
                     updatedAt: $0.updatedAt
                 )
             }

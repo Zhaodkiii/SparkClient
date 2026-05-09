@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 private enum MedicalCaseAddRecordKind: String, Identifiable {
-    case medication, symptom, prescription, examination, visit, followUp, surgery
+    case symptom, examination, visit, followUp, surgery
 
     var id: String { rawValue }
 }
@@ -217,21 +217,9 @@ struct MedicalCaseDetailPage: View {
         Menu {
             Button {
                 triggerAddRecordHaptic()
-                addRecordSheet = .medication
-            } label: {
-                Label(L10n.text("common.medication"), systemImage: "pills.fill")
-            }
-            Button {
-                triggerAddRecordHaptic()
                 addRecordSheet = .symptom
             } label: {
                 Label(L10n.text("home.medical.case_detail.add.menu.symptom"), systemImage: "heart.text.square.fill")
-            }
-            Button {
-                triggerAddRecordHaptic()
-                addRecordSheet = .prescription
-            } label: {
-                Label(L10n.text("common.prescription"), systemImage: "doc.text.fill")
             }
             Button {
                 triggerAddRecordHaptic()
@@ -284,17 +272,9 @@ struct MedicalCaseDetailPage: View {
         let memberID = currentItem.member
         let medicalCaseID = currentItem.id
         switch kind {
-        case .medication:
-            MedicationFormView(mode: .create, onCreateSubmit: { draft in
-                try await service.submitMedicationSingle(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
-            })
         case .symptom:
             SymptomFormView(mode: .create, onCreateSubmit: { draft in
                 try await service.submitSymptomCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
-            })
-        case .prescription:
-            MedicationMultiCreateView(mode: .create, createMedicalCaseID: medicalCaseID, onCreateSubmit: { draft in
-                try await service.submitPrescriptionBatch(memberID: memberID, draft: draft)
             })
         case .examination:
             ExamReportFormView(mode: .create, onCreateSubmit: { draft in

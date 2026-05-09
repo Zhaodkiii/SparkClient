@@ -199,68 +199,6 @@ struct ExaminationReportCreateRequest: Encodable, Sendable {
     }
 }
 
-/// 用药项创建请求（内嵌于处方批次）
-struct PrescriptionMedicationRequest: Encodable, Sendable {
-    let genericName: String?
-    let brandName: String?
-    let drugName: String?
-    let dosageForm: String?
-    let strength: String?
-    let route: String?
-    let dosePerTime: String?
-    let doseValue: Double?
-    let doseUnit: String?
-    let frequencyCode: String?
-    let period: String?
-    let timesPerPeriod: Int?
-    let frequencyText: String?
-    let durationDays: Int?
-    let instructions: String?
-    let sortOrder: Int?
-    let extra: [String: String]?
-
-    enum CodingKeys: String, CodingKey {
-        case genericName = "generic_name"
-        case brandName = "brand_name"
-        case drugName = "drug_name"
-        case dosageForm = "dosage_form"
-        case strength
-        case route
-        case dosePerTime = "dose_per_time"
-        case doseValue = "dose_value"
-        case doseUnit = "dose_unit"
-        case frequencyCode = "frequency_code"
-        case period
-        case timesPerPeriod = "times_per_period"
-        case frequencyText = "frequency_text"
-        case durationDays = "duration_days"
-        case instructions
-        case sortOrder = "sort_order"
-        case extra
-    }
-}
-
-/// 处方批次创建请求（与 `PrescriptionBatch` 字段对齐）
-struct PrescriptionBatchCreateRequest: Encodable, Sendable {
-    let prescriberName: String?
-    let institutionName: String?
-    let prescribedAt: String?
-    let diagnosis: String?
-    let batchNo: String?
-    let status: String?
-    let medications: [PrescriptionMedicationRequest]?
-
-    enum CodingKeys: String, CodingKey {
-        case prescriberName = "prescriber_name"
-        case institutionName = "institution_name"
-        case prescribedAt = "prescribed_at"
-        case diagnosis
-        case batchNo = "batch_no"
-        case status
-        case medications
-    }
-}
-
 /// 组合创建请求（一次性创建所有医疗信息）
 /// 参考 HealthClient 的 SeverMedicalCreateRequest 模式
 struct CombinedMedicalCreateRequest: Encodable, Sendable {
@@ -286,9 +224,6 @@ struct CombinedMedicalCreateRequest: Encodable, Sendable {
     /// 检查报告列表（可选）
     let examinationReports: [ExaminationReportCreateRequest]?
 
-    /// 处方批次列表（可选，推荐）
-    let prescriptionBatches: [PrescriptionBatchCreateRequest]?
-
     /// 源文件 ID 列表（用于绑定附件）
     let sourceFileIds: [Int]?
 
@@ -300,7 +235,6 @@ struct CombinedMedicalCreateRequest: Encodable, Sendable {
         case surgery
         case followUp = "follow_up"
         case examinationReports = "examination_reports"
-        case prescriptionBatches = "prescription_batches"
         case sourceFileIds = "source_file_ids"
     }
 }
@@ -316,7 +250,6 @@ struct CombinedMedicalCreateResponse: Decodable, Sendable {
     let surgeryId: Int?
     let followUpId: Int?
     let examinationReportIds: [Int]?
-    let prescriptionBatchIds: [Int]?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -327,7 +260,6 @@ struct CombinedMedicalCreateResponse: Decodable, Sendable {
         case surgeryId = "surgery_id"
         case followUpId = "follow_up_id"
         case examinationReportIds = "examination_report_ids"
-        case prescriptionBatchIds = "prescription_batch_ids"
         case createdAt = "created_at"
     }
 }

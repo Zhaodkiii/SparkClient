@@ -101,67 +101,86 @@ extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
     }
 }
 
-extension SparkMedicalSyncAPI.RemotePrescriptionBatchComplete {
-    var domainBatch: PrescriptionBatch {
-        PrescriptionBatch(
+extension SparkMedicalSyncAPI.RemoteMedicineBox {
+    var domainModel: MedicineBox {
+        MedicineBox(
             id: id,
             memberID: member,
-            medicalCaseID: medicalCase,
-            prescriberName: prescriberName ?? "",
-            institutionName: institutionName ?? "",
-            prescribedAt: prescribedAt,
-            diagnosis: diagnosis ?? "",
-            batchNo: batchNo ?? "",
-            status: status ?? "",
-            auditorName: auditorName ?? "",
-            auditedAt: auditedAt,
-            extra: extra ?? [:],
-            updatedAt: updatedAt ?? Date(timeIntervalSince1970: 0)
-        )
-    }
-}
-
-extension SparkMedicalSyncAPI.RemoteMedication {
-    var domainModel: Medication {
-        Medication(
-            id: id,
-            memberID: member,
-            batchID: batch,
+            drugName: drugName,
+            medicineType: medicineType,
             genericName: genericName,
             brandName: brandName,
-            drugName: drugName,
             dosageForm: dosageForm,
             strength: strength,
-            route: route,
-            dosePerTime: dosePerTime,
-            doseValue: doseValue,
-            doseUnit: doseUnit,
-            frequencyCode: frequencyCode,
-            period: period,
-            timesPerPeriod: timesPerPeriod,
-            frequencyText: frequencyText,
-            durationDays: durationDays,
-            instructions: instructions,
-            reminderEnabled: reminderEnabled,
-            reminderTimes: reminderTimes,
-            sortOrder: sortOrder,
+            totalQuantity: totalQuantity,
+            remainingQuantity: remainingQuantity,
+            unit: unit,
+            expireDate: expireDate,
+            productionBatch: productionBatch,
+            notes: notes,
             extra: extra ?? [:],
             updatedAt: updatedAt
         )
     }
 }
 
-extension SparkMedicalSyncAPI.RemoteMedicationTakenRecord {
-    var domainModel: MedicationTakenRecord {
-        MedicationTakenRecord(
+extension SparkMedicalSyncAPI.RemotePrescription {
+    var domainModel: Prescription {
+        Prescription(
             id: id,
             memberID: member,
-            medicationID: medication,
+            medicalCaseID: medicalCase,
+            prescriberName: prescriberName,
+            institutionName: institutionName,
+            prescribedAt: prescribedAt,
+            diagnosis: diagnosis,
+            prescriptionNo: prescriptionNo,
+            status: status,
+            extra: extra ?? [:],
+            updatedAt: updatedAt
+        )
+    }
+}
+
+extension SparkMedicalSyncAPI.RemoteMedicationPlan {
+    var domainModel: MedicationPlan {
+        MedicationPlan(
+            id: id,
+            memberID: member,
+            medicalCaseID: medicalCase,
+            medicineBoxID: medicineBox,
+            prescriptionID: prescription,
+            drugName: drugName,
+            dosePerTime: dosePerTime,
+            doseValue: doseValue,
+            doseUnit: doseUnit,
+            frequencyText: frequencyText,
+            frequencyCode: frequencyCode,
+            reminderTimes: reminderTimes.map { MedicationPlan.ReminderTime(time: $0.time, dose: $0.dose) },
+            startDate: startDate,
+            endDate: endDate,
+            durationDays: durationDays,
+            instructions: instructions,
+            reminderEnabled: reminderEnabled,
+            status: status,
+            extra: extra ?? [:],
+            updatedAt: updatedAt
+        )
+    }
+}
+
+extension SparkMedicalSyncAPI.RemoteMedicationRecord {
+    var domainModel: MedicationRecord {
+        MedicationRecord(
+            id: id,
+            memberID: member,
+            planID: plan,
             scheduledAt: scheduledAt,
             takenAt: takenAt,
             status: status,
-            doseSequence: doseSequence,
+            plannedDose: plannedDose,
             actualDose: actualDose,
+            doseSequence: doseSequence,
             timezone: timezone,
             notes: notes,
             extra: extra ?? [:],
@@ -333,26 +352,6 @@ extension SparkMedicalSyncAPI.RemoteMedExamDetail {
             diagnosis: diagnosis,
             extra: extra,
             sortOrder: sortOrder,
-            updatedAt: updatedAt
-        )
-    }
-}
-
-extension SparkMedicalSyncAPI.RemotePrescriptionBatch {
-    var domainModel: PrescriptionBatch {
-        PrescriptionBatch(
-            id: id,
-            memberID: member,
-            medicalCaseID: medicalCase,
-            prescriberName: prescriberName,
-            institutionName: institutionName,
-            prescribedAt: prescribedAt,
-            diagnosis: diagnosis,
-            batchNo: batchNo ?? "",
-            status: status,
-            auditorName: auditorName,
-            auditedAt: auditedAt,
-            extra: extra ?? [:],
             updatedAt: updatedAt
         )
     }

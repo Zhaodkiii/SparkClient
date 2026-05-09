@@ -1475,8 +1475,10 @@ final class ToolHub: @unchecked Sendable {
         let examCount = (data.examinationReports ?? []).count
         let examDetailCount = 0
         let reportCount = 0
-        let batches = data.prescriptionBatches ?? []
-        let medicationCount = batches.flatMap { $0.medications ?? [] }.count + (data.standaloneMedications ?? []).count
+        let medicineBoxCount = (data.medicineBoxes ?? []).count
+        let prescriptionCount = (data.prescriptions ?? []).count
+        let medicationPlanCount = (data.medicationPlans ?? []).count
+        let medicationRecordCount = (data.todayMedicationRecords ?? []).count
         let daysNote = invocation.arguments["days"] ?? "3"
         let limitNote = invocation.arguments["limit"] ?? "3"
 
@@ -1494,7 +1496,10 @@ final class ToolHub: @unchecked Sendable {
         体检主表数：\(healthExamCount)
         医技明细数：\(examDetailCount)
         医疗报告数：\(reportCount)
-        用药数：\(medicationCount)
+        药箱药品数：\(medicineBoxCount)
+        处方数：\(prescriptionCount)
+        服药计划数：\(medicationPlanCount)
+        今日服药记录数：\(medicationRecordCount)
         """
 
         return ToolExecutionResult(

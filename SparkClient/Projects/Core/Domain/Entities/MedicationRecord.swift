@@ -1,14 +1,15 @@
 import Foundation
 
-struct MedicationTakenRecord: Identifiable, Codable, Equatable, Sendable {
+struct MedicationRecord: Identifiable, Codable, Equatable, Sendable {
     let id: Int
     var memberID: Int
-    var medicationID: Int
+    var planID: Int
     var scheduledAt: Date
     var takenAt: Date?
     var status: String
-    var doseSequence: Int
+    var plannedDose: String
     var actualDose: String
+    var doseSequence: Int
     var timezone: String
     var notes: String
     var extra: [String: String]

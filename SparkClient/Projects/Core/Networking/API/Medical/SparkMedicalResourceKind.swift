@@ -12,7 +12,8 @@ enum SparkMedicalResourceKind: String, Sendable, CaseIterable {
     case healthExamReports = "health-exam-reports"
     case examinationReports = "examination-reports"
     case medExamDetails = "med-exam-details"
-    case prescriptionBatches = "prescription-batches"
-    case medications = "medications"
-    case medicationTakenRecords = "medication-taken-records"
+    case medicineBoxes = "medicine-boxes"
+    case prescriptions = "prescriptions"
+    case medicationPlans = "medication-plans"
+    case medicationRecords = "medication-records"
 }

@@ -136,51 +136,6 @@ extension MedicalReportRecognitionDraft {
     }
 }
 
-// MARK: - Medication Recognition Draft Mappers
-
-extension MedicationRecognitionDraft {
-    /// 转换为处方用药创建请求
-    /// 数值字段从 OCR 字符串转换为实际数值类型
-    func toPrescriptionMedicationRequest() -> PrescriptionMedicationRequest {
-        PrescriptionMedicationRequest(
-            genericName: genericName,
-            brandName: brandName,
-            drugName: drugName,
-            dosageForm: dosageForm,
-            strength: strength,
-            route: route,
-            dosePerTime: dosePerTime,
-            doseValue: doseValue.parsedAsDoseValue(),
-            doseUnit: doseUnit,
-            frequencyCode: frequencyCode,
-            period: period,
-            timesPerPeriod: timesPerPeriod.parsedAsTimesPerPeriod(),
-            frequencyText: frequencyText,
-            durationDays: durationDays.parsedAsDurationDays(),
-            instructions: instructions,
-            sortOrder: sortOrder.parsedAsSortOrderInt(),
-            extra: extra
-        )
-    }
-}
-
-// MARK: - Prescription Recognition Draft Mappers
-
-extension PrescriptionRecognitionDraft {
-    /// 转换为处方批次创建请求
-    func toPrescriptionBatchCreateRequest() -> PrescriptionBatchCreateRequest {
-        PrescriptionBatchCreateRequest(
-            prescriberName: prescriberName,
-            institutionName: institutionName,
-            prescribedAt: prescribedAt,
-            diagnosis: diagnosis,
-            batchNo: batchNo,
-            status: status,
-            medications: medications?.map { $0.toPrescriptionMedicationRequest() }
-        )
-    }
-}
-
 // MARK: - Health Exam Recognition Draft Mappers
 
 extension HealthExamRecognitionDraft {

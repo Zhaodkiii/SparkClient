@@ -3,8 +3,8 @@ import SwiftUI
 /// 病例详情时间轴条目类型：与 HealthClient `TimelineShellPalette` 的色系与图标语义对齐。
 enum MedicalCaseTimelineKind: Hashable, Sendable {
     case symptom
-    case medication
     case prescription
+    case medication
     case examination(ExaminationReportCategory)
     case visit
     case surgery
@@ -19,17 +19,17 @@ enum MedicalCaseTimelineKind: Hashable, Sendable {
                 border: Color(uiColor: .systemOrange).opacity(0.35),
                 iconName: "exclamationmark.triangle.fill"
             )
-        case .medication:
-            return MedicalCaseTimelinePalette(
-                tint: Color(uiColor: .systemIndigo),
-                border: Color(uiColor: .systemIndigo).opacity(0.35),
-                iconName: "pills.fill"
-            )
         case .prescription:
             return MedicalCaseTimelinePalette(
                 tint: Color(uiColor: .systemPurple),
                 border: Color(uiColor: .systemPurple).opacity(0.35),
                 iconName: "doc.text.fill"
+            )
+        case .medication:
+            return MedicalCaseTimelinePalette(
+                tint: Color(uiColor: .systemIndigo),
+                border: Color(uiColor: .systemIndigo).opacity(0.35),
+                iconName: "pills.fill"
             )
         case .examination(let category):
             return MedicalCaseTimelinePalette(
@@ -75,8 +75,8 @@ struct MedicalCaseTimelinePalette: Sendable {
     HStack(spacing: 16) {
         ForEach([
             MedicalCaseTimelineKind.symptom,
-            .medication,
             .prescription,
+            .medication,
             .examination(.laboratory),
             .examination(.imaging),
             .examination(.pathology),
@@ -104,8 +104,8 @@ struct MedicalCaseTimelinePalette: Sendable {
     HStack(spacing: 16) {
         ForEach([
             MedicalCaseTimelineKind.symptom,
-            .medication,
             .prescription,
+            .medication,
             .examination(.laboratory),
             .examination(.imaging),
             .examination(.pathology),

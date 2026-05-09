@@ -2,8 +2,6 @@ import Foundation
 
 /// 时间轴「编辑」路由：用于 `NavigationLink` 目标与删除资源。
 enum MedicalCaseTimelineEditRoute: Equatable {
-    case prescription(SparkMedicalSyncAPI.RemotePrescriptionBatchComplete)
-    case standaloneMedication(SparkMedicalSyncAPI.RemoteMedication)
     case examination(SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments, category: ExaminationReportCategory)
     case symptom(SparkMedicalSyncAPI.RemoteSymptom)
     case visit(SparkMedicalSyncAPI.RemoteVisit)
@@ -12,10 +10,6 @@ enum MedicalCaseTimelineEditRoute: Equatable {
 
     var deleteResource: (kind: SparkMedicalResourceKind, id: Int)? {
         switch self {
-        case .prescription(let batch):
-            return (.prescriptionBatches, batch.id)
-        case .standaloneMedication(let medication):
-            return (.medications, medication.id)
         case .examination(let report, _):
             return (.examinationReports, report.id)
         case .symptom(let row):
@@ -39,9 +33,11 @@ struct MedicalCaseTimelineEvent: Identifiable {
     let date: Date
     let statusBadgeText: String?
 
-    /// 处方卡片：头信息与嵌套药品。
-    let prescription: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete?
-    let nestedMedications: [SparkMedicalSyncAPI.RemoteMedication]?
+    /// 新药物结构：处方头 + 该处方下的服药计划，或单独的服药计划。
+    let prescription: SparkMedicalSyncAPI.RemotePrescription?
+    let medicationPlan: SparkMedicalSyncAPI.RemoteMedicationPlan?
+    let nestedMedicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
+    let medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox]
 
     /// 检查报告卡片。
     let examination: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments?
@@ -62,8 +58,10 @@ struct MedicalCaseTimelineEvent: Identifiable {
         detail: String,
         date: Date,
         statusBadgeText: String?,
-        prescription: SparkMedicalSyncAPI.RemotePrescriptionBatchComplete? = nil,
-        nestedMedications: [SparkMedicalSyncAPI.RemoteMedication]? = nil,
+        prescription: SparkMedicalSyncAPI.RemotePrescription? = nil,
+        medicationPlan: SparkMedicalSyncAPI.RemoteMedicationPlan? = nil,
+        nestedMedicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] = [],
+        medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox] = [:],
         examination: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments? = nil,
         examinationCategory: ExaminationReportCategory? = nil,
         symptom: SparkMedicalSyncAPI.RemoteSymptom? = nil,
@@ -79,7 +77,9 @@ struct MedicalCaseTimelineEvent: Identifiable {
         self.date = date
         self.statusBadgeText = statusBadgeText
         self.prescription = prescription
-        self.nestedMedications = nestedMedications
+        self.medicationPlan = medicationPlan
+        self.nestedMedicationPlans = nestedMedicationPlans
+        self.medicineBoxesByID = medicineBoxesByID
         self.examination = examination
         self.examinationCategory = examinationCategory
         self.symptom = symptom
@@ -98,7 +98,9 @@ struct MedicalCaseTimelineEvent: Identifiable {
             date: date,
             statusBadgeText: text,
             prescription: prescription,
-            nestedMedications: nestedMedications,
+            medicationPlan: medicationPlan,
+            nestedMedicationPlans: nestedMedicationPlans,
+            medicineBoxesByID: medicineBoxesByID,
             examination: examination,
             examinationCategory: examinationCategory,
             symptom: symptom,
@@ -128,48 +130,47 @@ enum MedicalCaseTimelineEventBuilder {
         let date = item.updatedAt ?? item.createdAt ?? .now
         let badge = statusBadgeText(for: item.status)
         var events: [MedicalCaseTimelineEvent] = []
+        let medicineBoxesByID = Dictionary(uniqueKeysWithValues: (completeData?.medicineBoxes ?? []).map { ($0.id, $0) })
+        let plansForCase = (completeData?.medicationPlans ?? []).filter { $0.medicalCase == item.id }
+        let prescriptionsForCase = (completeData?.prescriptions ?? []).filter { $0.medicalCase == item.id }
+        var nestedPlanIDs = Set<Int>()
 
-        let batchesForCase = (completeData?.prescriptionBatches ?? []).filter { $0.medicalCase == item.id }
-        let idsInCaseNested = Set(batchesForCase.flatMap { $0.medications ?? [] }.map(\.id))
-        let caseBatchIds = Set(batchesForCase.map(\.id))
-
-        for batch in batchesForCase {
-            let rowDate = batch.prescribedAt ?? batch.updatedAt ?? batch.createdAt ?? date
-            let meds = batch.medications ?? []
-            let title = batch.institutionName?.nonEmpty
-                ?? (batch.diagnosis ?? "").nilIfBlank
-                ?? L10n.text("home.medical.list.fallback.prescription_title")
-            let detail = (batch.diagnosis ?? "").nilIfBlank ?? ""
+        for prescription in prescriptionsForCase {
+            let nestedPlans = plansForCase
+                .filter { $0.prescription == prescription.id }
+                .sorted { $0.startDate > $1.startDate }
+            nestedPlanIDs.formUnion(nestedPlans.map(\.id))
+            let title = prescription.institutionName.nilIfBlank
+                ?? prescription.prescriberName.nilIfBlank
+                ?? prescription.prescriptionNo?.nilIfBlank
+                ?? L10n.text("common.prescription", fallback: "处方")
+            let detail = prescription.diagnosis.nilIfBlank ?? ""
             events.append(
                 MedicalCaseTimelineEvent(
-                    id: "prescription-\(batch.id)",
+                    id: "prescription-\(prescription.id)",
                     kind: .prescription,
                     title: title,
                     detail: detail,
-                    date: rowDate,
+                    date: prescription.prescribedAt ?? prescription.updatedAt,
                     statusBadgeText: nil,
-                    prescription: batch,
-                    nestedMedications: meds,
-                    editRoute: .prescription(batch)
+                    prescription: prescription,
+                    nestedMedicationPlans: nestedPlans,
+                    medicineBoxesByID: medicineBoxesByID
                 )
             )
         }
 
-        let standaloneForCase = standaloneMedications(for: item, completeData: completeData, idsInCaseNested: idsInCaseNested, caseBatchIds: caseBatchIds)
-        for medication in standaloneForCase {
-            let title = medication.drugName.nilIfBlank ?? medication.genericName.nilIfBlank ?? L10n.text("home.medical.list.fallback.medication_name")
-            let detail = medicationLineSummary(medication)
+        for plan in plansForCase where nestedPlanIDs.contains(plan.id) == false {
             events.append(
                 MedicalCaseTimelineEvent(
-                    id: "medication-\(medication.id)",
+                    id: "medication-plan-\(plan.id)",
                     kind: .medication,
-                    title: title,
-                    detail: detail,
-                    date: medication.updatedAt,
+                    title: plan.drugName.nilIfBlank ?? L10n.text("common.medication", fallback: "用药"),
+                    detail: medicationPlanDetailLine(plan, box: plan.medicineBox.flatMap { medicineBoxesByID[$0] }),
+                    date: plan.startDate,
                     statusBadgeText: nil,
-                    prescription: nil,
-                    nestedMedications: nil,
-                    editRoute: .standaloneMedication(medication)
+                    medicationPlan: plan,
+                    medicineBoxesByID: medicineBoxesByID
                 )
             )
         }
@@ -292,19 +293,6 @@ enum MedicalCaseTimelineEventBuilder {
         return sorted
     }
 
-    private static func standaloneMedications(
-        for item: SparkMedicalSyncAPI.RemoteMedicalCaseSummary,
-        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
-        idsInCaseNested: Set<Int>,
-        caseBatchIds: Set<Int>
-    ) -> [SparkMedicalSyncAPI.RemoteMedication] {
-        guard let standalone = completeData?.standaloneMedications else { return [] }
-        return standalone.filter { med in
-            if idsInCaseNested.contains(med.id) { return false }
-            return caseBatchIds.contains(med.batch)
-        }
-    }
-
     private static func symptomDetailLine(_ s: SparkMedicalSyncAPI.RemoteSymptom) -> String {
         [s.severity.nilIfBlank, s.bodyPart.nilIfBlank, s.notes.nilIfBlank].compactMap { $0 }.joined(separator: " · ")
     }
@@ -321,9 +309,18 @@ enum MedicalCaseTimelineEventBuilder {
         [f.outcome.nilIfBlank, f.nextAction.nilIfBlank].compactMap { $0 }.joined(separator: " · ")
     }
 
-    private static func medicationLineSummary(_ m: SparkMedicalSyncAPI.RemoteMedication) -> String {
-        let parts = [m.strength.nilIfBlank, m.frequencyText.nilIfBlank, m.dosePerTime.nilIfBlank].compactMap { $0 }
-        return parts.joined(separator: " · ")
+    private static func medicationPlanDetailLine(
+        _ plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
+        box: SparkMedicalSyncAPI.RemoteMedicineBox?
+    ) -> String {
+        [
+            plan.dosePerTime.nilIfBlank,
+            plan.frequencyText.nilIfBlank,
+            plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank,
+            box.map { "\($0.remainingQuantity.formatted(.number.precision(.fractionLength(0...2)))) \($0.unit)" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
     }
 
     private static func metaDetail(from item: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> String? {
