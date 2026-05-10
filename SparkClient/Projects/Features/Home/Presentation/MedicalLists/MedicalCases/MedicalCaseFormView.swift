@@ -336,7 +336,7 @@ struct MedicalCaseFormView: View {
                                     keyboardVisible: $isKeyboardVisible
                                 )
                             }
-                            .padding(.top, 6)
+                            .padding(6)
                         },
                         label: {
                             HStack(spacing: 8) {
@@ -905,7 +905,7 @@ enum MedicalCasePDFExporter {
             plan.dosePerTime.nilIfBlank,
             plan.frequencyText.nilIfBlank,
             plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank,
-            box.map { "药箱剩余 \($0.remainingQuantity.formatted(.number.precision(.fractionLength(0...2)))) \($0.unit)" },
+            box?.totalQuantity.map { "药箱存量 \($0.formatted(.number.precision(.fractionLength(0...2))))" },
             plan.instructions.nilIfBlank
         ]
         .compactMap { $0 }

@@ -520,11 +520,12 @@ public enum PathologyCategoryTaxonomy: SparkTaxonomy {
 // MARK: - 菜单选项 + 自定义（视觉对齐 `AddLabItemSheet` 单位 / 状态行）
 
 private enum SparkFormMenuCustomPick: Hashable {
+    case none
     case option(String)
     case custom
 }
 
-/// 分段菜单 +「自定义…」与行内输入；`sections` 全空时退化为仅自定义输入（用于「一级为自定义时二级只能手输」）。
+/// 分段菜单 +「未选择」+「自定义…」与行内输入；选项可为空（仅展示未选择 / 自定义）。绑定值为空字符串时表示未选择。
 public struct SparkFormMenuCustomRow: View {
     public let title: String
     public let required: Bool
@@ -533,11 +534,15 @@ public struct SparkFormMenuCustomRow: View {
     @Binding public var text: String
     public let customMenuTitle: String
     public let customPlaceholder: String
+    /// 菜单中「清空 / 未选」项文案；展示在预设选项之后、「自定义」之前。
+    public let unselectedMenuTitle: String
     public var keyboardVisible: Binding<Bool>?
     public let optionSystemImage: ((String) -> String?)?
     public let customAutofocus: Bool
 
     @FocusState private var customFocused: Bool
+    /// 在「绑定值为空」时区分未选菜单项与用户刚选了「自定义」尚未输入。
+    @State private var customChosenWhileTextEmpty = false
 
     public init(
         title: String,
@@ -546,6 +551,7 @@ public struct SparkFormMenuCustomRow: View {
         text: Binding<String>,
         customMenuTitle: String,
         customPlaceholder: String,
+        unselectedMenuTitle: String? = nil,
         keyboardVisible: Binding<Bool>? = nil,
         optionSystemImage: ((String) -> String?)? = nil,
         customAutofocus: Bool = false
@@ -556,6 +562,8 @@ public struct SparkFormMenuCustomRow: View {
         _text = text
         self.customMenuTitle = customMenuTitle
         self.customPlaceholder = customPlaceholder
+        self.unselectedMenuTitle = unselectedMenuTitle
+            ?? L10n.text("medical_record.forms.medical_case.option.none", fallback: "未选择")
         self.keyboardVisible = keyboardVisible
         self.optionSystemImage = optionSystemImage
         self.customAutofocus = customAutofocus
@@ -565,12 +573,11 @@ public struct SparkFormMenuCustomRow: View {
         sections.flatMap(\.options)
     }
 
-    private var hasMenu: Bool { flatOptions.isEmpty == false }
-
     private var currentPick: SparkFormMenuCustomPick {
-        guard hasMenu else { return .custom }
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-
+        if t.isEmpty {
+            return customChosenWhileTextEmpty ? .custom : .none
+        }
         if let hit = flatOptions.first(where: { $0 == t }) {
             return .option(hit)
         }
@@ -587,10 +594,16 @@ public struct SparkFormMenuCustomRow: View {
             get: { currentPick },
             set: { newPick in
                 switch newPick {
+                case .none:
+                    customChosenWhileTextEmpty = false
+                    customFocused = false
+                    text = ""
                 case .option(let option):
+                    customChosenWhileTextEmpty = false
                     customFocused = false
                     text = option
                 case .custom:
+                    customChosenWhileTextEmpty = true
                     if flatOptions.contains(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
                         text = ""
                     }
@@ -603,8 +616,8 @@ public struct SparkFormMenuCustomRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
                 Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.weight(.medium))
+                
                 if required {
                     Text("*")
                         .foregroundStyle(.red)
@@ -612,14 +625,15 @@ public struct SparkFormMenuCustomRow: View {
                 }
             }
 
-            if hasMenu {
-                menuAndOptionalField
-            } else {
-                soloCustomField
-            }
+            menuAndOptionalField
         }
         .onChange(of: customFocused) { focused in
             keyboardVisible?.wrappedValue = focused
+        }
+        .onChange(of: text) { newValue in
+            if customFocused, newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                customChosenWhileTextEmpty = false
+            }
         }
     }
 
@@ -627,6 +641,8 @@ public struct SparkFormMenuCustomRow: View {
         HStack(alignment: .center, spacing: 10) {
             menuPicker
 
+//            Spacer(minLength: 0)
+            
             if selectionIsCustom {
                 customInputField
             }
@@ -636,37 +652,34 @@ public struct SparkFormMenuCustomRow: View {
     private var menuPicker: some View {
         Picker("", selection: pickBinding) {
             ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                if let h = section.header, h.isEmpty == false {
-                    Section(header: Text(h)) {
-                        ForEach(section.options, id: \.self) { opt in
-                            pickerOptionLabel(opt)
-                                .tag(SparkFormMenuCustomPick.option(opt))
+                if section.options.isEmpty == false {
+                    if let h = section.header, h.isEmpty == false {
+                        Section(header: Text(h)) {
+                            ForEach(section.options, id: \.self) { opt in
+                                pickerOptionLabel(opt)
+                                    .tag(SparkFormMenuCustomPick.option(opt))
+                            }
                         }
-                    }
-                } else {
-                    Section {
-                        ForEach(section.options, id: \.self) { opt in
-                            pickerOptionLabel(opt)
-                                .tag(SparkFormMenuCustomPick.option(opt))
+                    } else {
+                        Section {
+                            ForEach(section.options, id: \.self) { opt in
+                                pickerOptionLabel(opt)
+                                    .tag(SparkFormMenuCustomPick.option(opt))
+                            }
                         }
                     }
                 }
             }
             Section {
+                Text(unselectedMenuTitle).tag(SparkFormMenuCustomPick.none)
                 Text(customMenuTitle).tag(SparkFormMenuCustomPick.custom)
             }
         }
         .pickerStyle(.menu)
         .labelsHidden()
         .frame(minWidth: selectionIsCustom ? 120 : 0, maxWidth: selectionIsCustom ? 160 : .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .frame(height: 44)
-        .background(Color(uiColor: .secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
-        )
+        .sparkFormTextFieldChrome(isFocused: false, isError: false)
+
     }
 
     @ViewBuilder
@@ -683,27 +696,12 @@ public struct SparkFormMenuCustomRow: View {
             .textInputAutocapitalizationIfAvailable(.never)
             .autocorrectionDisabledIfAvailable()
             .focused($customFocused)
-            .padding(.horizontal, 12)
-            .frame(height: 44)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(uiColor: .systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(
-                        customFocused ? Color.accentColor : Color(uiColor: .separator),
-                        lineWidth: customFocused ? 1.5 : 1
-                    )
-            )
+            .sparkFormTextFieldChrome(isFocused: customFocused, isError: false)
             .onAppear {
                 if customAutofocus {
                     customFocused = true
                 }
             }
-    }
-
-    private var soloCustomField: some View {
-        customInputField
     }
 }
 

@@ -740,26 +740,3 @@ struct ChatView: View {
     }
 
 }
-
-struct AdaptiveSheetHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 300
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        // Follow FoodPicker behavior: always use latest measured height.
-        value = nextValue()
-    }
-}
-
-extension View {
-    func readAdaptiveSheetHeight() -> some View {
-        overlay {
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: AdaptiveSheetHeightPreferenceKey.self,
-                    value: geometry.size.height
-                )
-            }
-        }
-    }
-
-}

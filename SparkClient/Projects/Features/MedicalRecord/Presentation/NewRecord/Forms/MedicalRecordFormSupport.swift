@@ -41,14 +41,15 @@ private struct SparkFormTextFieldChrome: ViewModifier {
         content
             .padding(.horizontal, 12)
             .frame(height: 44)
-            .background(Color(uiColor: .systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+//            .background(Color(uiColor: .systemBackground))
+//            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(borderColor, lineWidth: isFocused || isError ? 1.5 : 0)
+                    .stroke(borderColor, lineWidth: isFocused || isError ? 1.5 : 1)
             )
             .shadow(
-                color: Color.primary.opacity(isFocused ? 0.10 : 0.15),
+                color: Color.black.opacity(isFocused ? 0.10 : 0.15),
                 radius: isFocused ? 8 : 4,
                 y: 2
             )
@@ -60,8 +61,7 @@ private struct SparkFormTextFieldChrome: ViewModifier {
         return Color(uiColor: .separator)
     }
 }
-
-private extension View {
+extension View {
     func sparkFormTextFieldChrome(isFocused: Bool, isError: Bool) -> some View {
         modifier(SparkFormTextFieldChrome(isFocused: isFocused, isError: isError))
     }

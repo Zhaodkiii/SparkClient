@@ -363,32 +363,25 @@ enum SparkMedicalSyncAPI {
     struct RemoteMedicineBox: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
-        var drugName: String
+        var medicineName: String
         var medicineType: String?
-        var genericName: String
         var brandName: String
         var dosageForm: String
         var strength: String
-        var totalQuantity: Double
-        var remainingQuantity: Double
-        var unit: String
+        var totalQuantity: Double?
         var expireDate: Date?
-        var productionBatch: String
         var notes: String
         var extra: [String: String]?
         var updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
-            case id, member, strength, unit, notes, extra
-            case drugName = "drug_name"
+            case id, member, strength, notes, extra
+            case medicineName = "medicine_name"
             case medicineType = "medicine_type"
-            case genericName = "generic_name"
             case brandName = "brand_name"
             case dosageForm = "dosage_form"
             case totalQuantity = "total_quantity"
-            case remainingQuantity = "remaining_quantity"
             case expireDate = "expire_date"
-            case productionBatch = "production_batch"
             case updatedAt = "updated_at"
         }
     }

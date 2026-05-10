@@ -355,8 +355,8 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
 
     private var stockText: String? {
         guard let medicineBox else { return nil }
-        let remaining = medicineBox.remainingQuantity.formatted(.number.precision(.fractionLength(0...2)))
-        return "药箱剩余 \(remaining) \(medicineBox.unit)"
+        guard let q = medicineBox.totalQuantity else { return "药箱存量未填" }
+        return "药箱存量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
     }
 
     var body: some View {

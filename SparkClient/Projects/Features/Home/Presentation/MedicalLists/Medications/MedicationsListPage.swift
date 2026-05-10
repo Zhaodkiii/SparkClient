@@ -553,7 +553,7 @@ struct MedicationPlanFormView: View {
     }
 
     private var selectedMedicineBoxTitle: String {
-        selectedMedicineBox.map { $0.drugName.nilIfBlank ?? $0.genericName.nilIfBlank ?? "未命名药品" } ?? "选择药箱药品"
+        selectedMedicineBox.map { $0.medicineName.nilIfBlank ?? "未命名药品" } ?? "选择药箱药品"
     }
 
     private var selectedMedicineBoxSubtitle: String {
@@ -579,10 +579,7 @@ struct MedicationPlanFormView: View {
         draft.medicineBoxID = box?.id
         guard let box else { return }
         if draft.drugName.nilIfBlank == nil {
-            draft.drugName = box.drugName.nilIfBlank ?? box.genericName
-        }
-        if draft.doseUnit.nilIfBlank == nil {
-            draft.doseUnit = box.unit
+            draft.drugName = box.medicineName
         }
     }
 
@@ -685,6 +682,16 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
         MedicineBoxTypeCatalog.options(in: medicineBoxes)
     }
 
+    private func medicineBoxStrengthListSubtitle(_ strength: String) -> String? {
+        let raw = strength.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard raw.isEmpty == false else { return nil }
+        let spec = MedicineSpecification.parse(fromAPIStrength: raw)
+        if spec.hasStructuredContent {
+            return spec.displayString(prefersEnglish: SparkFormCatalogMenuLocale.prefersEnglish)
+        }
+        return raw
+    }
+
     var body: some View {
         List {
             Section {
@@ -718,10 +725,14 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                             } label: {
                                 HStack(spacing: 12) {
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(box.drugName.nilIfBlank ?? box.genericName.nilIfBlank ?? "未命名药品")
+                                        Text(box.medicineName.nilIfBlank ?? "未命名药品")
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundStyle(.primary)
-                                        Text([box.strength.nilIfBlank, box.dosageForm.nilIfBlank, stockText(box)].compactMap { $0 }.joined(separator: " · "))
+                                        Text([
+                                            medicineBoxStrengthListSubtitle(box.strength),
+                                            box.dosageForm.nilIfBlank,
+                                            stockText(box)
+                                        ].compactMap { $0 }.joined(separator: " · "))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                             .lineLimit(1)
@@ -769,6 +780,7 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                 memberID: memberID,
                 workflowAPI: workflowAPI,
                 typeOptions: medicineTypeOptions,
+                specOptionBoxes: medicineBoxes,
                 onServerSaved: upsertMedicineBox
             )
         }
@@ -1264,7 +1276,8 @@ private struct DetailRow: View {
 }
 
 private func stockText(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
-    "\(box.remainingQuantity.formatted(.number.precision(.fractionLength(0...2))))/\(box.totalQuantity.formatted(.number.precision(.fractionLength(0...2)))) \(box.unit)"
+    guard let q = box.totalQuantity else { return "总量未填" }
+    return "总量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
 }
 
 private func planStatusText(_ status: String) -> String {

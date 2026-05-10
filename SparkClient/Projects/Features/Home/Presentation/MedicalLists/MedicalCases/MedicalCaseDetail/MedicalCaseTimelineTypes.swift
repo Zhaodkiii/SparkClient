@@ -317,7 +317,7 @@ enum MedicalCaseTimelineEventBuilder {
             plan.dosePerTime.nilIfBlank,
             plan.frequencyText.nilIfBlank,
             plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank,
-            box.map { "\($0.remainingQuantity.formatted(.number.precision(.fractionLength(0...2)))) \($0.unit)" }
+            box?.totalQuantity.map { "存量 \($0.formatted(.number.precision(.fractionLength(0...2))))" }
         ]
         .compactMap { $0 }
         .joined(separator: " · ")

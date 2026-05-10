@@ -106,17 +106,13 @@ extension SparkMedicalSyncAPI.RemoteMedicineBox {
         MedicineBox(
             id: id,
             memberID: member,
-            drugName: drugName,
+            medicineName: medicineName,
             medicineType: medicineType,
-            genericName: genericName,
             brandName: brandName,
             dosageForm: dosageForm,
             strength: strength,
             totalQuantity: totalQuantity,
-            remainingQuantity: remainingQuantity,
-            unit: unit,
             expireDate: expireDate,
-            productionBatch: productionBatch,
             notes: notes,
             extra: extra ?? [:],
             updatedAt: updatedAt
