@@ -382,6 +382,8 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
             return .prescription // 处方
         case "medication":
             return .medication // 用药说明
+        case "medicine_box", "medicinebox":
+            return .medicineBox // 药品包装/药箱
         default:
             return .medicalReport // 默认：检查/检验报告
         }

@@ -683,7 +683,8 @@ final class AppContainer {
                 taskManager: taskManager,
                 logger: logger,
                 memberContextStore: memberContextStore,
-                notificationClient: notificationClient
+                notificationClient: notificationClient,
+                medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel()
             ),
             knowledgeDependencies: KnowledgeFeatureDependencies(
                 makeEditorViewModel: { [self] documentID in

@@ -23,6 +23,7 @@ extension MedicalDocumentUploadFlowStep {
         case medicalReport
         case prescription
         case medication
+        case medicineBox
     }
     
     /// 步骤完成的结果类型
@@ -56,6 +57,7 @@ extension MedicalDocumentUploadFlowStep {
                 case .medicalReport: return L10n.text("medical.upload.step.extract.subtitle.medical_report")
                 case .prescription: return L10n.text("medical.upload.step.extract.subtitle.prescription")
                 case .medication: return L10n.text("medical.upload.step.extract.subtitle.medication")
+                case .medicineBox: return L10n.text("medical.upload.step.extract.subtitle.medicine_box", fallback: "正在抽取药品包装信息")
                 }
             }()
             return (L10n.text("medical.upload.step.extract.running"), subtitle)

@@ -461,6 +461,8 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
                     )
                 ]
             )
+        case .medicineBoxes:
+            return .empty
         }
     }
 

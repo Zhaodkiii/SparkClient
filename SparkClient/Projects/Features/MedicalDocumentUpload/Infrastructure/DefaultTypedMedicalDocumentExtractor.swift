@@ -172,6 +172,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     private static func medicalDocumentKind(fromChatReportType raw: String) -> MedicalDocumentKind {
         switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "medication": return .medication
+        case "medicine_box", "medicinebox": return .medicineBox
         case "prescription": return .prescription
         case "exam_report": return .medicalReport
         case "medical_case": return .caseDocument
@@ -263,6 +264,19 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 throw ExtractionError.decodingFailed
             }
             return (.medication(draft), final.normalizedJSON)
+
+        case .medicineBox:
+            let final = try await extractStructured(
+                prompt: prompt,
+                scenario: .medicationExtraction,
+                kindLabel: "medicine_box",
+                as: [MedicineBoxRecognitionDraft].self,
+                cancellationToken: cancellationToken
+            )
+            guard let draft = final.decoded else {
+                throw ExtractionError.decodingFailed
+            }
+            return (.medicineBoxes(draft), final.normalizedJSON)
         }
     }
 

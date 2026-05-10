@@ -84,9 +84,9 @@ struct PromptLocalizer: Sendable {
             "ai.prompt.medical_document.type_recognition.template",
             fallback: """
             You are a medical document classifier.
-            Classify OCR text into one type only: case_document, health_exam_report, medical_report, prescription, medication.
+            Classify OCR text into one type only: case_document, health_exam_report, medical_report, prescription, medication, medicine_box.
             Return JSON only:
-            {"kind":"case_document|health_exam_report|medical_report|prescription|medication","confidence":0.0-1.0,"reason":"..."}
+            {"kind":"case_document|health_exam_report|medical_report|prescription|medication|medicine_box","confidence":0.0-1.0,"reason":"..."}
 
             OCR text:
             %@
@@ -125,6 +125,34 @@ struct PromptLocalizer: Sendable {
 
     func medicationExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat("ai.prompt.medication.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
+    }
+
+    func medicineBoxExtractionPrompt(ocrText: String) -> String {
+        l10n.promptFormat(
+            "ai.prompt.medicine_box.extraction.template",
+            fallback: """
+            You are a medication box extraction assistant. Extract an array of medicine box inventory items from OCR text.
+            Return JSON array only. Each item uses camelCase keys:
+            {
+              "medicineName":"required if visible",
+              "medicineType":"category text such as cold/fever, digestive, cough/throat, chronic, pediatric, or custom",
+              "brandName":"brand or trade name",
+              "dosageForm":"tablet/capsule/liquid/granule/ointment/injection/etc.",
+              "strength":"specification such as 0.5g x 24 tablets",
+              "doseUnit":"per-dose unit text when visible, e.g. mg, tablet, sachet",
+              "totalQuantity":"package count as text if visible, e.g. 24",
+              "expireDate":"yyyy-MM-dd if visible",
+              "notes":"usage/storage/label notes",
+              "extra":{},
+              "sortOrder":"1"
+            }
+            If multiple medicines are visible, return multiple objects. Do not invent hidden quantities or dates.
+
+            OCR text:
+            %@
+            """,
+            ocrText
+        )
     }
 
     /// 通用任务抽取提示：用于把自然语言整理为“任务生成前的结构化依据”。

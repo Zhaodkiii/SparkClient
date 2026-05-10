@@ -132,6 +132,289 @@ struct SparkFormTextRow: View {
     }
 }
 
+// MARK: - Sheet-backed picker row (opens modal / bottom sheet)
+
+/// 标签 + 可点击字段，用于「打开 Bottom Sheet 选择」类交互（药箱剂型、服药频次等）。
+struct SparkFormSheetPickerRow: View {
+    let title: String
+    let displayValue: String
+    let placeholder: String
+    var required: Bool = false
+    var showsValidationError: Bool = false
+    var onTap: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                if required {
+                    Text("*")
+                        .foregroundStyle(.red)
+                }
+            }
+            Button {
+                onTap()
+            } label: {
+                HStack(alignment: .center, spacing: 10) {
+                    Text(resolvedLabel)
+                        .font(.body)
+                        .foregroundStyle(isPlaceholder ? Color.secondary : Color.primary)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .sparkFormTextFieldChrome(isFocused: false, isError: showsValidationError)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var trimmedDisplay: String {
+        displayValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isPlaceholder: Bool {
+        trimmedDisplay.isEmpty
+    }
+
+    private var resolvedLabel: String {
+        isPlaceholder ? placeholder : displayValue
+    }
+}
+
+// MARK: - Medication plan reminder frequency (structured + summary text)
+
+enum MedicationReminderFrequencyType: String, CaseIterable, Identifiable, Sendable {
+    case daily = "daily"
+    case everyNDays = "every_n_days"
+    case weekly = "weekly"
+
+    var id: String { rawValue }
+
+    var segmentTitle: String {
+        switch self {
+        case .daily: return "每天"
+        case .everyNDays: return "每几天"
+        case .weekly: return "每周"
+        }
+    }
+}
+
+enum MedicationReminderFrequencySummary {
+    private static let weekdayOneLetter = ["", "一", "二", "三", "四", "五", "六", "日"]
+
+    fileprivate static func weekdayShortLabel(_ day: Int) -> String {
+        switch day {
+        case 1: return "一"
+        case 2: return "二"
+        case 3: return "三"
+        case 4: return "四"
+        case 5: return "五"
+        case 6: return "六"
+        case 7: return "日"
+        default: return "\(day)"
+        }
+    }
+
+    static func displayLine(type: MedicationReminderFrequencyType, everyNDays: Int, weekdays: Set<Int>) -> String {
+        switch type {
+        case .daily:
+            return "每天"
+        case .everyNDays:
+            let n = max(1, everyNDays)
+            return "每\(n)天"
+        case .weekly:
+            let sorted = weekdays.filter { (1...7).contains($0) }.sorted()
+            if sorted.isEmpty { return "每周" }
+            let labels = sorted.map { weekdayOneLetter[$0] }.joined(separator: "、")
+            return "每周 \(labels)"
+        }
+    }
+
+    static func isComplete(type: MedicationReminderFrequencyType, everyNDays: Int, weekdays: Set<Int>) -> Bool {
+        switch type {
+        case .daily:
+            return true
+        case .everyNDays:
+            return (1...365).contains(everyNDays)
+        case .weekly:
+            return weekdays.contains { (1...7).contains($0) }
+        }
+    }
+}
+
+struct MedicationReminderFrequencySheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let onConfirm: (MedicationReminderFrequencyType, Int, Set<Int>, String) -> Void
+
+    @State private var selectedType: MedicationReminderFrequencyType
+    @State private var everyNDays: Int
+    @State private var weekdaySet: Set<Int>
+    @State private var summaryText: String
+
+    init(
+        type: MedicationReminderFrequencyType,
+        everyNDays: Int,
+        weekdays: Set<Int>,
+        summaryText: String,
+        onConfirm: @escaping (MedicationReminderFrequencyType, Int, Set<Int>, String) -> Void
+    ) {
+        self.onConfirm = onConfirm
+        let n = min(max(everyNDays, 1), 365)
+        _selectedType = State(initialValue: type)
+        _everyNDays = State(initialValue: n)
+        _weekdaySet = State(initialValue: weekdays)
+        _summaryText = State(initialValue: summaryText)
+    }
+
+    private var canConfirm: Bool {
+        MedicationReminderFrequencySummary.isComplete(
+            type: selectedType,
+            everyNDays: everyNDays,
+            weekdays: weekdaySet
+        ) && summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    var body: some View {
+        CompatibleNavigationContainer(legacyStackStyle: true) {
+            AdaptiveToolSheetScrollView(bottomContentPadding: 0, extraChromeHeight: 120) {
+                VStack(alignment: .leading, spacing: 20) {
+                    typeSegment
+                    
+                    parameterSection
+                    
+                    
+                    SparkFormTextAreaRow(title: "说明（可编辑）", text: $summaryText, minHeight: 80, maxHeight: 160, placeholder: "根据上方选择自动生成，也可修改")
+
+                }
+                .padding()
+            }
+            .navigationTitle("服药频次")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.text("common.cancel", fallback: "取消")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("common.done", fallback: "完成")) {
+                        let n = min(max(everyNDays, 1), 365)
+                        onConfirm(selectedType, n, weekdaySet, summaryText.trimmingCharacters(in: .whitespacesAndNewlines))
+                        dismiss()
+                    }
+                    .disabled(!canConfirm)
+                }
+                
+            }
+        }
+        .onAppear {
+            if summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                applySummaryTemplateIfNeeded()
+            }
+        }
+        .onChange(of: selectedType) { _ in
+            applySummaryTemplateIfNeeded()
+        }
+        .onChange(of: everyNDays) { _ in
+            applySummaryTemplateIfNeeded()
+        }
+        .onChange(of: weekdaySet) { _ in
+            applySummaryTemplateIfNeeded()
+        }
+    }
+
+    private var typeSegment: some View {
+        HStack(spacing: 8) {
+            ForEach(MedicationReminderFrequencyType.allCases) { t in
+                Button {
+                    selectedType = t
+                } label: {
+                    Text(t.segmentTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(selectedType == t ? Color.accentColor : Color.primary)
+                        .background(
+                            selectedType == t
+                                ? Color.accentColor.opacity(0.14)
+                                : Color(uiColor: .secondarySystemFill),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var parameterSection: some View {
+        switch selectedType {
+        case .daily:
+            Text("每天服药")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+        case .everyNDays:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("间隔天数")
+                    .font(.subheadline.weight(.medium))
+                Picker("", selection: $everyNDays) {
+                    ForEach(1...365, id: \.self) { n in
+                        Text("每 \(n) 天").tag(n)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 180)
+                .clipped()
+            }
+        case .weekly:
+            VStack(alignment: .leading, spacing: 10) {
+                Text("选择星期（可多选）")
+                    .font(.subheadline.weight(.medium))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 8) {
+                    ForEach(1...7, id: \.self) { day in
+                        let on = weekdaySet.contains(day)
+                        Button {
+                            if on {
+                                weekdaySet.remove(day)
+                            } else {
+                                weekdaySet.insert(day)
+                            }
+                        } label: {
+                            Text(MedicationReminderFrequencySummary.weekdayShortLabel(day))
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .foregroundStyle(on ? Color.white : Color.primary)
+                                .background(
+                                    on ? Color.accentColor : Color(uiColor: .secondarySystemFill),
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private func applySummaryTemplateIfNeeded() {
+        summaryText = MedicationReminderFrequencySummary.displayLine(
+            type: selectedType,
+            everyNDays: everyNDays,
+            weekdays: weekdaySet
+        )
+    }
+}
+
 // MARK: - Growing text (UIKit)
 
 private struct SparkFormGrowingTextView: UIViewRepresentable {

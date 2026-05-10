@@ -39,6 +39,7 @@ struct HomeFeatureDependencies {
     let logger: Logger
     let memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
+    let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
 }
 
 struct KnowledgeFeatureDependencies {
@@ -56,7 +57,8 @@ extension HomeFeatureDependencies {
             taskManager: container.taskManager,
             logger: container.logger,
             memberContextStore: container.memberContextStore,
-            notificationClient: container.notificationClient
+            notificationClient: container.notificationClient,
+            medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel()
         )
     }
 }

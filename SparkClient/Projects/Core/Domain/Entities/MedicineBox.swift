@@ -8,6 +8,7 @@ struct MedicineBox: Identifiable, Codable, Equatable, Sendable {
     var brandName: String
     var dosageForm: String
     var strength: String
+    var doseUnit: String = ""
     var totalQuantity: Double?
     var expireDate: Date?
     var notes: String

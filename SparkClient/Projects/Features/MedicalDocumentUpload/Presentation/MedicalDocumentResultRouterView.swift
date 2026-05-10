@@ -9,6 +9,7 @@ struct MedicalDocumentResultRouterView: View {
     let saveReceipt: MedicalDocumentSaveReceipt?
     let onBack: () -> Void
     let onSelectMember: (Int?) -> Void
+    let onUpdateTypedResult: (MedicalDocumentTypedResult) -> Void
     let onSave: () -> Void
 
     var body: some View {
@@ -81,6 +82,15 @@ struct MedicalDocumentResultRouterView: View {
                 onBack: onBack,
                 onSave: onSave
             )
+        case .medicineBoxes:
+            MedicineBoxRecognitionResultView(
+                output: output,
+                isSaving: isSaving,
+                saveReceipt: saveReceipt,
+                onBack: onBack,
+                onUpdate: onUpdateTypedResult,
+                onSave: onSave
+            )
         }
     }
 
@@ -128,6 +138,8 @@ struct MedicalDocumentResultRouterView: View {
             return "处方"
         case .medication:
             return "用药"
+        case .medicineBoxes:
+            return "药箱"
         }
     }
 }

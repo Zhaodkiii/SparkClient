@@ -62,6 +62,8 @@ struct MedicalDocumentTypedResultScaffoldView: View {
             return "处方"
         case .medication:
             return "用药"
+        case .medicineBox:
+            return "药品"
         }
     }
 

@@ -83,6 +83,12 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
 
         case .medication(let lines):
             throw unsupportedMedicationDocumentError("medication rows: \(lines.count)")
+        case .medicineBoxes(let boxes):
+            return try await saveMedicineBoxes(
+                memberID: memberID,
+                drafts: boxes,
+                now: now
+            )
         }
     }
 
@@ -92,6 +98,79 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
             code: -2,
             userInfo: [NSLocalizedDescriptionKey: "旧处方批次/药品行保存链路已移除，请使用药箱、服药计划、服药记录资源保存。(\(context))"]
         )
+    }
+}
+
+private extension DefaultTypedMedicalDocumentSaver {
+    func saveMedicineBoxes(
+        memberID: Int,
+        drafts: [MedicineBoxRecognitionDraft],
+        now: Date
+    ) async throws -> MedicalDocumentSaveReceipt {
+        var savedIDs: [Int] = []
+        for draft in drafts {
+            let payload = MedicineBoxCreatePayload(
+                member: memberID,
+                medicineName: resolvedMedicineBoxName(draft),
+                medicineType: draft.medicineType?.nilIfBlank,
+                brandName: draft.brandName?.nilIfBlank ?? "",
+                dosageForm: draft.dosageForm?.nilIfBlank ?? "",
+                strength: draft.strength?.nilIfBlank ?? "",
+                doseUnit: draft.doseUnit?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+                totalQuantity: draft.totalQuantity.flatMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) },
+                expireDate: draft.expireDate?.nilIfBlank,
+                notes: draft.notes?.nilIfBlank ?? "",
+                extra: mergeTypedUploadExtra(draft.extra)
+            )
+            let saved = try await workflowAPI.create(
+                SparkMedicalSyncAPI.RemoteMedicineBox.self,
+                kind: .medicineBoxes,
+                body: payload
+            )
+            savedIDs.append(saved.id)
+        }
+        guard let firstID = savedIDs.first else {
+            throw NSError(
+                domain: "DefaultTypedMedicalDocumentSaver",
+                code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "未识别到可保存的药箱药品"]
+            )
+        }
+        return MedicalDocumentSaveReceipt(recordID: firstID, savedAt: now, isSuccess: true)
+    }
+
+    func resolvedMedicineBoxName(_ draft: MedicineBoxRecognitionDraft) -> String {
+        if let value = draft.medicineName?.nilIfBlank { return value }
+        if let value = draft.brandName?.nilIfBlank { return value }
+        return "未命名药品"
+    }
+}
+
+private struct MedicineBoxCreatePayload: Encodable {
+    let member: Int
+    let medicineName: String
+    let medicineType: String?
+    let brandName: String
+    let dosageForm: String
+    let strength: String
+    let doseUnit: String
+    let totalQuantity: Double?
+    let expireDate: String?
+    let notes: String
+    let extra: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case member
+        case medicineName = "medicine_name"
+        case medicineType = "medicine_type"
+        case brandName = "brand_name"
+        case dosageForm = "dosage_form"
+        case strength
+        case doseUnit = "dose_unit"
+        case totalQuantity = "total_quantity"
+        case expireDate = "expire_date"
+        case notes
+        case extra
     }
 }
 

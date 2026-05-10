@@ -74,6 +74,75 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
         return ""
     }
 
+    /// Backend `MedicineBox.dose_unit`: compact per-dose text — numeric `doseValue` + `doseUnit` when both set (e.g. `5mg`, `10片`).
+    var backendDoseUnitField: String {
+        if let legacy = rawLegacyStrength?.trimmingCharacters(in: .whitespacesAndNewlines), legacy.isEmpty == false {
+            return ""
+        }
+        let dv = doseValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let du = doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (dv.isEmpty, du.isEmpty) {
+        case (true, true): return ""
+        case (false, true): return dv
+        case (true, false): return du
+        case (false, false): return "\(dv)\(du)"
+        }
+    }
+
+    /// Leading numeric (optional one `.`) prefix vs remainder, for API `dose_unit` like `5mg` / `0.5g`.
+    static func splitLeadingDoseNumericPrefix(_ s: String) -> (String, String)? {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.isEmpty == false else { return nil }
+        var i = t.startIndex
+        var dotSeen = false
+        var sawDigit = false
+        while i < t.endIndex {
+            let c = t[i]
+            if c.isWholeNumber {
+                sawDigit = true
+                i = t.index(after: i)
+            } else if c == ".", !dotSeen, sawDigit {
+                dotSeen = true
+                i = t.index(after: i)
+            } else {
+                break
+            }
+        }
+        guard sawDigit else { return nil }
+        let num = String(t[..<i])
+        let rest = String(t[i...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (num, rest)
+    }
+
+    /// Parses a compact backend `dose_unit` string (e.g. `5mg`, `10片`, or unit-only `片`) into an editable numeric prefix and stored unit token.
+    static func doseValueAndStoredUnit(fromBackendDoseUnitField combined: String) -> (value: String, unit: String) {
+        let t = combined.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.isEmpty == false else { return ("", "") }
+        if let parts = splitLeadingDoseNumericPrefix(t) {
+            let unit = parts.1.isEmpty ? "" : MedicineSpecificationCatalog.storedDoseUnit(fromAny: parts.1)
+            return (parts.0, unit)
+        }
+        return ("", MedicineSpecificationCatalog.storedDoseUnit(fromAny: t))
+    }
+
+    /// Fills structured dose fields from OCR/API `dose_unit` when value or unit is still missing.
+    static func mergeDoseUnitFromAPI(_ raw: String?, into spec: inout MedicineSpecification) {
+        guard let raw else { return }
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.isEmpty == false else { return }
+        let dv = spec.doseValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let du = spec.doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+        if dv.isEmpty == false && du.isEmpty == false { return }
+        if let parts = splitLeadingDoseNumericPrefix(t) {
+            if dv.isEmpty, parts.0.isEmpty == false { spec.doseValue = parts.0 }
+            if du.isEmpty, parts.1.isEmpty == false {
+                spec.doseUnit = MedicineSpecificationCatalog.storedDoseUnit(fromAny: parts.1)
+            }
+        } else if du.isEmpty {
+            spec.doseUnit = MedicineSpecificationCatalog.storedDoseUnit(fromAny: t)
+        }
+    }
+
     /// Localized display for lists / previews (spaces in English where helpful).
     func displayString(prefersEnglish: Bool) -> String {
         if let legacy = rawLegacyStrength?.trimmingCharacters(in: .whitespacesAndNewlines), legacy.isEmpty == false {
@@ -334,6 +403,8 @@ enum MedicineSpecificationCatalog {
         for box in boxes {
             let spec = MedicineSpecification.parse(fromAPIStrength: box.strength)
             if spec.doseUnit.isEmpty == false { dose.append(spec.doseUnit) }
+            let apiDoseUnit = box.doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+            if apiDoseUnit.isEmpty == false { dose.append(apiDoseUnit) }
             if spec.packageUnit.isEmpty == false { inner.append(spec.packageUnit) }
             if spec.outerPackageUnit.isEmpty == false { outer.append(spec.outerPackageUnit) }
         }

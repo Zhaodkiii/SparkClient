@@ -58,6 +58,9 @@ struct MedicalDocumentUploadHostView: View {
                         onSelectMember: { memberID in
                             viewModel.updateResultMemberID(memberID)
                         },
+                        onUpdateTypedResult: { typedResult in
+                            viewModel.updateTypedResult(typedResult)
+                        },
                         onSave: {
                             Task {
                                 _ = await viewModel.saveResult()

@@ -65,32 +65,6 @@ struct SparkFormBottomBar: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            HStack(spacing: 12) {
-                if let cancelTitle {
-                    Button(action: onCancel) {
-                        Text(cancelTitle)
-                    }
-                    .buttonStyle(SparkFormBorderButtonStyle())
-                }
-
-                Button(action: onSave) {
-                    if let sys = saveSystemImage {
-                        Label(saveTitle, systemImage: sys)
-                            .labelStyle(.titleAndIcon)
-                    } else {
-                        Text(saveTitle)
-                    }
-                }
-                .buttonStyle(SparkFormPrimaryButtonStyle())
-                .disabled(!canSubmit)
-                .opacity(canSubmit ? 1 : 0.6)
-            }
-            .padding(12)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 10, y: 4)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
 
             if let keyboardVisible, keyboardVisible.wrappedValue {
                 HStack {
@@ -108,7 +82,36 @@ struct SparkFormBottomBar: View {
                     .padding(.trailing, 10)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                HStack(spacing: 12) {
+                    if let cancelTitle {
+                        Button(action: onCancel) {
+                            Text(cancelTitle)
+                        }
+                        .buttonStyle(SparkFormBorderButtonStyle())
+                    }
+
+                    Button(action: onSave) {
+                        if let sys = saveSystemImage {
+                            Label(saveTitle, systemImage: sys)
+                                .labelStyle(.titleAndIcon)
+                        } else {
+                            Text(saveTitle)
+                        }
+                    }
+                    .buttonStyle(SparkFormPrimaryButtonStyle())
+                    .disabled(!canSubmit)
+                    .opacity(canSubmit ? 1 : 0.6)
+                }
+                .padding(12)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: Color.black.opacity(scheme == .dark ? 0.35 : 0.12), radius: 10, y: 4)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
             }
+                
         }
         .animation(.easeInOut(duration: 0.2), value: keyboardVisible?.wrappedValue ?? false)
     }

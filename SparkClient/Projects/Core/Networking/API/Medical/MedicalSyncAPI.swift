@@ -368,18 +368,21 @@ enum SparkMedicalSyncAPI {
         var brandName: String
         var dosageForm: String
         var strength: String
+        var doseUnit: String = ""
         var totalQuantity: Double?
         var expireDate: Date?
         var notes: String
         var extra: [String: String]?
+        var attachments: [RemoteManagedFile]?
         var updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
-            case id, member, strength, notes, extra
+            case id, member, strength, notes, extra, attachments
             case medicineName = "medicine_name"
             case medicineType = "medicine_type"
             case brandName = "brand_name"
             case dosageForm = "dosage_form"
+            case doseUnit = "dose_unit"
             case totalQuantity = "total_quantity"
             case expireDate = "expire_date"
             case updatedAt = "updated_at"
@@ -412,7 +415,7 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 服药计划：独立的用药规则，可选关联药箱与处方。
-    struct RemoteMedicationPlan: Codable, Sendable, Equatable {
+    struct RemoteMedicationPlan: Sendable, Equatable {
         var id: Int
         var member: Int
         var medicalCase: Int?
@@ -422,35 +425,18 @@ enum SparkMedicalSyncAPI {
         var dosePerTime: String
         var doseValue: Double?
         var doseUnit: String
+        var frequencyType: String
+        var everyNDays: Int?
+        var weeklyWeekdays: [Int]
         var frequencyText: String
-        var frequencyCode: String
         var reminderTimes: [MedicationReminderTime]
         var startDate: Date
         var endDate: Date?
-        var durationDays: Int?
         var instructions: String
         var reminderEnabled: Bool
         var status: String
         var extra: [String: String]?
         var updatedAt: Date
-
-        enum CodingKeys: String, CodingKey {
-            case id, member, prescription, instructions, status, extra
-            case medicalCase = "medical_case"
-            case medicineBox = "medicine_box"
-            case drugName = "drug_name"
-            case dosePerTime = "dose_per_time"
-            case doseValue = "dose_value"
-            case doseUnit = "dose_unit"
-            case frequencyCode = "frequency_code"
-            case frequencyText = "frequency_text"
-            case reminderTimes = "reminder_times"
-            case startDate = "start_date"
-            case endDate = "end_date"
-            case durationDays = "duration_days"
-            case reminderEnabled = "reminder_enabled"
-            case updatedAt = "updated_at"
-        }
     }
 
     struct MedicationReminderTime: Codable, Sendable, Equatable {
@@ -672,5 +658,76 @@ enum SparkMedicalSyncAPI {
             case surgeries
             case followUps = "follow_ups"
         }
+    }
+}
+
+extension SparkMedicalSyncAPI.RemoteMedicationPlan: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, member, prescription, instructions, status, extra
+        case medicalCase = "medical_case"
+        case medicineBox = "medicine_box"
+        case drugName = "drug_name"
+        case dosePerTime = "dose_per_time"
+        case doseValue = "dose_value"
+        case doseUnit = "dose_unit"
+        case frequencyType = "frequency_type"
+        case everyNDays = "every_n_days"
+        case weeklyWeekdays = "weekly_weekdays"
+        case frequencyText = "frequency_text"
+        case reminderTimes = "reminder_times"
+        case startDate = "start_date"
+        case endDate = "end_date"
+        case reminderEnabled = "reminder_enabled"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        member = try c.decode(Int.self, forKey: .member)
+        medicalCase = try c.decodeIfPresent(Int.self, forKey: .medicalCase)
+        medicineBox = try c.decodeIfPresent(Int.self, forKey: .medicineBox)
+        prescription = try c.decodeIfPresent(Int.self, forKey: .prescription)
+        drugName = try c.decode(String.self, forKey: .drugName)
+        dosePerTime = try c.decode(String.self, forKey: .dosePerTime)
+        doseValue = try c.decodeIfPresent(Double.self, forKey: .doseValue)
+        doseUnit = try c.decodeIfPresent(String.self, forKey: .doseUnit) ?? "片"
+        frequencyType = try c.decodeIfPresent(String.self, forKey: .frequencyType) ?? "daily"
+        everyNDays = try c.decodeIfPresent(Int.self, forKey: .everyNDays)
+        weeklyWeekdays = try c.decodeIfPresent([Int].self, forKey: .weeklyWeekdays) ?? []
+        frequencyText = try c.decodeIfPresent(String.self, forKey: .frequencyText) ?? ""
+        reminderTimes = try c.decode([SparkMedicalSyncAPI.MedicationReminderTime].self, forKey: .reminderTimes)
+        startDate = try c.decode(Date.self, forKey: .startDate)
+        endDate = try c.decodeIfPresent(Date.self, forKey: .endDate)
+        instructions = try c.decodeIfPresent(String.self, forKey: .instructions) ?? ""
+        reminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .reminderEnabled) ?? true
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "active"
+        extra = try c.decodeIfPresent([String: String].self, forKey: .extra)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(member, forKey: .member)
+        try c.encodeIfPresent(medicalCase, forKey: .medicalCase)
+        try c.encodeIfPresent(medicineBox, forKey: .medicineBox)
+        try c.encodeIfPresent(prescription, forKey: .prescription)
+        try c.encode(drugName, forKey: .drugName)
+        try c.encode(dosePerTime, forKey: .dosePerTime)
+        try c.encodeIfPresent(doseValue, forKey: .doseValue)
+        try c.encode(doseUnit, forKey: .doseUnit)
+        try c.encode(frequencyType, forKey: .frequencyType)
+        try c.encodeIfPresent(everyNDays, forKey: .everyNDays)
+        try c.encode(weeklyWeekdays, forKey: .weeklyWeekdays)
+        try c.encode(frequencyText, forKey: .frequencyText)
+        try c.encode(reminderTimes, forKey: .reminderTimes)
+        try c.encode(startDate, forKey: .startDate)
+        try c.encodeIfPresent(endDate, forKey: .endDate)
+        try c.encode(instructions, forKey: .instructions)
+        try c.encode(reminderEnabled, forKey: .reminderEnabled)
+        try c.encode(status, forKey: .status)
+        try c.encodeIfPresent(extra, forKey: .extra)
+        try c.encode(updatedAt, forKey: .updatedAt)
     }
 }

@@ -54,7 +54,9 @@ struct HomeMedicalListView: View {
             MedicationsListPage(
                 completeData: completeData,
                 workflowAPI: dependencies.medicalWorkflowAPI,
-                memberContextStore: dependencies.memberContextStore
+                memberContextStore: dependencies.memberContextStore,
+                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                notificationClient: dependencies.notificationClient
             )
         }
     }

@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 private enum MedicationFilterType: String, Identifiable, CaseIterable {
     case active
@@ -23,6 +26,8 @@ struct MedicationsListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let workflowAPI: SparkMedicalWorkflowAPI
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    let notificationClient: any NotificationClient
 
     @State private var selectedFilter: MedicationFilterType = .active
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
@@ -35,11 +40,15 @@ struct MedicationsListPage: View {
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         workflowAPI: SparkMedicalWorkflowAPI,
-        memberContextStore: MemberContextStore
+        memberContextStore: MemberContextStore,
+        medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
+        notificationClient: any NotificationClient
     ) {
         self.completeData = completeData
         self.workflowAPI = workflowAPI
         self.memberContextStore = memberContextStore
+        self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
+        self.notificationClient = notificationClient
         _medicineBoxes = State(initialValue: completeData?.medicineBoxes ?? [])
         _medicationPlans = State(initialValue: completeData?.medicationPlans ?? [])
     }
@@ -105,6 +114,7 @@ struct MedicationsListPage: View {
                         medicineBoxes: medicineBoxes,
                         memberID: memberID,
                         workflowAPI: workflowAPI,
+                        viewModel: medicalDocumentUploadViewModel,
                         onMedicineBoxesChanged: { medicineBoxes = $0 }
                     )
                 } label: {
@@ -138,6 +148,7 @@ struct MedicationsListPage: View {
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,
                     workflowAPI: workflowAPI,
+                    notificationClient: notificationClient,
                     onMedicineBoxSaved: upsertMedicineBox,
                     onServerSaved: upsertMedicationPlan
                 )
@@ -190,6 +201,7 @@ struct MedicationsListPage: View {
                             records: recordsByPlanID[plan.id] ?? [],
                             memberID: memberID,
                             workflowAPI: workflowAPI,
+                            notificationClient: notificationClient,
                             onSaved: upsertMedicationPlan,
                             onDeleted: removeMedicationPlan,
                             onMedicineBoxSaved: upsertMedicineBox
@@ -333,6 +345,303 @@ private enum MedicationPlanSheetDestination: Identifiable {
     }
 }
 
+// MARK: - Medication plan dose (stepper + detail sheet)
+
+private struct MedicationPlanDoseValueStepperRow: View {
+    @Binding var text: String
+    @Binding var keyboardVisible: Bool
+
+    @FocusState private var isValueFocused: Bool
+
+    private static let minDose: Double = 1
+    private static let maxDose: Double = 9999
+    private static let step: Double = 1
+
+    private var controlFill: Color { Color(uiColor: .systemPurple).opacity(0.12) }
+    private var controlStroke: Color { Color(uiColor: .systemPurple).opacity(0.35) }
+    private var accentColor: Color { Color(uiColor: .systemPurple) }
+
+    private var numericValue: Double {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.isEmpty == false, let v = Double(t) else { return 0 }
+        return v
+    }
+
+    private var canDecrement: Bool {
+        numericValue > Self.minDose + 1e-9
+    }
+
+    private var canIncrement: Bool {
+        numericValue < Self.maxDose - 1e-9
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.text("medication_plan.form.dose_value", fallback: "剂量数值"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            HStack(spacing: 12) {
+                decrementButton
+                valueField
+                incrementButton
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: text)
+        .onChange(of: isValueFocused) { focused in
+            keyboardVisible = focused
+        }
+    }
+
+    private var decrementButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let v = Double(t), t.isEmpty == false else { return }
+            let next = max(Self.minDose, v - Self.step)
+            text = Self.formatDose(next)
+        } label: {
+            Image(systemName: "minus")
+                .font(.headline.weight(.semibold))
+                .imageScale(.medium)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(accentColor)
+                .frame(width: 32, height: 32)
+                .background(controlFill, in: Circle())
+                .overlay(Circle().strokeBorder(controlStroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(canDecrement == false)
+        .opacity(canDecrement ? 1 : 0.45)
+        .accessibilityLabel(L10n.text("medication_plan.form.dose_decrement", fallback: "减少剂量"))
+    }
+
+    private var incrementButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty {
+                text = Self.formatDose(Self.step)
+                return
+            }
+            let v = Double(t) ?? Self.minDose
+            let next = min(Self.maxDose, max(Self.minDose, v) + Self.step)
+            text = Self.formatDose(next)
+        } label: {
+            Image(systemName: "plus")
+                .font(.headline.weight(.bold))
+                .imageScale(.medium)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.white)
+                .frame(width: 32, height: 32)
+                .background(accentColor, in: Circle())
+                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(canIncrement == false)
+        .opacity(canIncrement ? 1 : 0.45)
+        .accessibilityLabel(L10n.text("medication_plan.form.dose_increment", fallback: "增加剂量"))
+    }
+
+    private var valueField: some View {
+        TextField(
+            L10n.text("medication_plan.form.dose_value_placeholder", fallback: "如 1"),
+            text: $text
+        )
+        .textFieldStyle(.plain)
+        .multilineTextAlignment(.center)
+        .focused($isValueFocused)
+        .keyboardType(.decimalPad)
+        .font(.title3.weight(.bold))
+        .monospacedDigit()
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 36)
+        .frame(maxWidth: .infinity)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color(uiColor: .separator).opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private static func formatDose(_ v: Double) -> String {
+        v.formatted(.number.precision(.fractionLength(0...3)))
+    }
+}
+
+private struct MedicationPlanDoseDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+//    @Binding var doseValue: String
+    @Binding var doseUnit: String
+    let specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
+
+    @State private var tempDoseValue = ""
+    @State private var tempDoseUnit = ""
+    @FocusState private var doseValueFocused: Bool
+
+    private static let selectedChip = Color(red: 79 / 255, green: 70 / 255, blue: 229 / 255)
+    private static let sheetHeaderChromeHeight: CGFloat = 72
+    private static let sheetFooterChromeHeight: CGFloat = 88
+
+    private var doseUnitLabels: [String] {
+        MedicineSpecificationCatalog.doseUnitMenuOptions(boxes: specOptionBoxes)
+    }
+
+    private var prefersEnglish: Bool {
+        SparkFormCatalogMenuLocale.prefersEnglish
+    }
+
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
+    }
+
+    private var trimmedTempDoseUnit: String {
+        tempDoseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        CompatibleNavigationContainer {
+            AdaptiveToolSheetScrollView(
+                bottomContentPadding: 12,
+                extraChromeHeight: Self.sheetHeaderChromeHeight + Self.sheetFooterChromeHeight
+            ) {
+                VStack(alignment: .leading, spacing: 0) {
+                    sheetFieldBlock(title: L10n.text("medical_record.medicine_box.spec.dose_value")) {
+                        HStack(spacing: prefersEnglish ? 6 : 0) {
+                            TextField("5", text: doseValueBinding)
+                                .textFieldStyle(.plain)
+                                .focused($doseValueFocused)
+                                .keyboardType(.decimalPad)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+
+                            if trimmedTempDoseUnit.isEmpty == false {
+                                Text(MedicineSpecificationCatalog.displayUnit(stored: trimmedTempDoseUnit, prefersEnglish: prefersEnglish))
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color.secondary)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .background(Color(uiColor: .systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+
+                    unitChipBlock(
+                        title: L10n.text("medical_record.medicine_box.spec.dose_unit"),
+                        labels: doseUnitLabels,
+                        isSelected: { label in
+                            MedicineSpecificationCatalog.storedDoseUnit(fromDisplay: label)
+                            == MedicineSpecificationCatalog.storedDoseUnit(fromAny: tempDoseUnit)
+                        },
+                        onSelect: { label in
+                            tempDoseUnit = MedicineSpecificationCatalog.storedDoseUnit(fromDisplay: label)
+                        }
+                    )
+                }
+                .background(Color(uiColor: .systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .navigationTitle(L10n.text("medication_plan.form.single_dose_sheet_title", fallback: "单次剂量数值"))
+            .navigationBarTitleDisplayMode(.inline)
+            .sparkKeyboardDoneToolbar {
+                SparkKeyboardDismiss.endEditing()
+            }
+            .sparkFormBottomBar(
+                canSubmit: true,
+                cancelTitle: L10n.text("common.cancel"),
+                saveTitle: L10n.text("common.done"),
+                saveSystemImage: "checkmark.circle.fill",
+                onCancel: {
+                    dismiss()
+                },
+                onSave: {
+                    doseUnit = tempDoseValue + tempDoseUnit
+                    dismiss()
+                }
+            )
+        }
+        .ignoresSafeArea()
+        .background(Color(uiColor: .systemGroupedBackground))
+        .onAppear {
+            let parts = MedicineSpecification.doseValueAndStoredUnit(fromBackendDoseUnitField: doseUnit)
+            tempDoseValue = parts.value
+            tempDoseUnit = parts.unit
+        }
+    }
+
+    private var doseValueBinding: Binding<String> {
+        Binding(
+            get: { tempDoseValue },
+            set: { tempDoseValue = $0 }
+        )
+    }
+
+    private func sheetFieldBlock(title: String, @ViewBuilder field: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.primary)
+            field()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(uiColor: .separator).opacity(0.35))
+        }
+    }
+
+    private func unitChipBlock(
+        title: String,
+        labels: [String],
+        isSelected: @escaping (String) -> Bool,
+        onSelect: @escaping (String) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.primary)
+                .padding(.top, 16)
+
+            LazyVGrid(columns: gridColumns, spacing: 10) {
+                ForEach(labels, id: \.self) { label in
+                    let selected = isSelected(label)
+                    Button {
+                        onSelect(label)
+                    } label: {
+                        Text(label)
+                            .font(.system(size: 14))
+                            .foregroundColor(selected ? .white : Color.primary.opacity(0.75))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.75)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 4)
+                            .background(selected ? Self.selectedChip : Color(uiColor: .secondarySystemBackground))
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color(uiColor: .separator).opacity(0.35))
+        }
+    }
+}
+
 struct MedicationPlanFormView: View {
     enum Mode {
         case create
@@ -345,6 +654,7 @@ struct MedicationPlanFormView: View {
     let mode: Mode
     let memberID: Int
     let workflowAPI: SparkMedicalWorkflowAPI
+    let notificationClient: any NotificationClient
     let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)?
 
@@ -353,21 +663,31 @@ struct MedicationPlanFormView: View {
     @State private var isSubmitting = false
     @State private var alertMessage: String?
     @State private var sheetKeyboardVisible = false
+    @State private var showReminderFrequencySheet = false
+    @State private var showDoseDetailSheet = false
+    /// Last `dosePerTime` produced from `doseValue`/`doseUnit`; used to avoid overwriting custom user text.
+    @State private var lastAutoSuggestedDosePerTime: String?
 
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
+
+    /// 在测量的滚动内容（内嵌导航 + sparkFormBottomBar ）外的 Chrome 浏览器，与 MedicineBoxFormView 的分离数学对齐。
+    private static let formSheetNavChromeHeight: CGFloat = 72
+    private static let formSheetBottomBarChromeHeight: CGFloat = 88
 
     init(
         mode: Mode,
         memberID: Int,
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         workflowAPI: SparkMedicalWorkflowAPI,
+        notificationClient: any NotificationClient,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)? = nil
     ) {
         self.mode = mode
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.notificationClient = notificationClient
         self.onMedicineBoxSaved = onMedicineBoxSaved
         self.onServerSaved = onServerSaved
         _medicineBoxes = State(initialValue: medicineBoxes)
@@ -391,9 +711,9 @@ struct MedicationPlanFormView: View {
         isSubmitting == false
         && draft.drugName.nilIfBlank != nil
         && draft.dosePerTime.nilIfBlank != nil
-        && draft.frequencyText.nilIfBlank != nil
+        && draft.isReminderFrequencyComplete
+        && draft.resolvedFrequencyText.nilIfBlank != nil
         && draft.reminderTimesError == nil
-        && draft.durationDaysValue != nil
         && (draft.hasEndDate == false || draft.endDate >= draft.startDate)
     }
 
@@ -407,14 +727,10 @@ struct MedicationPlanFormView: View {
     }
 
     var body: some View {
-        NavigationView {
+        CompatibleNavigationContainer {
             formContent
-                .sparkKeyboardDoneToolbar {
-                    SparkKeyboardDismiss.endEditing()
-                }
                 .navigationTitle(navigationTitle)
                 .navigationBarTitleDisplayMode(.inline)
-                .background(Color(uiColor: .systemGroupedBackground))
                 .sparkFormBottomBar(
                     canSubmit: canSubmit,
                     cancelTitle: L10n.text("common.cancel"),
@@ -431,6 +747,7 @@ struct MedicationPlanFormView: View {
                     }
                 )
         }
+        .background(Color(uiColor: .systemBackground))
         .interactiveDismissDisabled(isSubmitting)
         .alert("保存失败", isPresented: Binding(
             get: { alertMessage != nil },
@@ -440,10 +757,60 @@ struct MedicationPlanFormView: View {
         } message: {
             Text(alertMessage ?? "")
         }
+        .sheet(isPresented: $showReminderFrequencySheet) {
+            MedicationReminderFrequencySheet(
+                type: draft.reminderFrequencyType,
+                everyNDays: draft.everyNDays,
+                weekdays: draft.weeklyWeekdays,
+                summaryText: draft.frequencyText
+            ) { type, everyN, weekdays, text in
+                draft.reminderFrequencyType = type
+                draft.everyNDays = everyN
+                draft.weeklyWeekdays = weekdays
+                draft.frequencyText = text
+            }
+        }
+        .sheet(isPresented: $showDoseDetailSheet) {
+            MedicationPlanDoseDetailSheet(
+                doseUnit: $draft.doseUnit,
+                specOptionBoxes: medicineBoxes
+            )
+        }
+        .onAppear {
+            syncDosePerTimeWithDoseFields()
+        }
+        .onChange(of: draft.doseValue) { _ in
+            syncDosePerTimeWithDoseFields()
+        }
+        .onChange(of: draft.doseUnit) { _ in
+            syncDosePerTimeWithDoseFields()
+        }
+    }
+
+    private func currentSuggestedDosePerTimeLine() -> String {
+        MedicationPlanDraft.suggestedDosePerTimeLine(
+            doseValue: draft.doseValue,
+            doseUnit: draft.doseUnit,
+            prefersEnglish: SparkFormCatalogMenuLocale.prefersEnglish
+        )
+    }
+
+    private func syncDosePerTimeWithDoseFields() {
+        let suggested = currentSuggestedDosePerTimeLine()
+        let cur = draft.dosePerTime.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = lastAutoSuggestedDosePerTime?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldApply = cur.isEmpty || last.map { cur == $0 } == true
+        if shouldApply, draft.dosePerTime != suggested {
+            draft.dosePerTime = suggested
+        }
+        lastAutoSuggestedDosePerTime = suggested
     }
 
     private var formContent: some View {
-        ScrollView {
+        AdaptiveToolSheetScrollView(
+            bottomContentPadding: 0,
+            extraChromeHeight: Self.formSheetNavChromeHeight + Self.formSheetBottomBarChromeHeight
+        ) {
             VStack(spacing: 14) {
                 SparkFormCard(title: "关联药品", titleSystemImage: "pills.fill") {
                     NavigationLink {
@@ -479,77 +846,113 @@ struct MedicationPlanFormView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 12)
-                        .frame(minHeight: 56)
                         .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
+                
 
                 SparkFormCard(title: "用药规则", titleSystemImage: "calendar.badge.clock") {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 16) {
                         SparkFormTextRow(title: "药品名称", text: $draft.drugName, placeholder: "如 阿莫西林胶囊", required: true, keyboardVisible: $sheetKeyboardVisible)
-                        SparkFormTextRow(title: "单次剂量", text: $draft.dosePerTime, placeholder: "如 1片 / 5ml", required: true, keyboardVisible: $sheetKeyboardVisible)
+                                                
+                        
                         HStack(spacing: 12) {
-                            SparkFormTextRow(title: "剂量数值", text: $draft.doseValue, placeholder: "如 1", keyboardVisible: $sheetKeyboardVisible)
-                                .keyboardType(.decimalPad)
-                            SparkFormTextRow(title: "单位", text: $draft.doseUnit, placeholder: "片", keyboardVisible: $sheetKeyboardVisible)
+                            MedicationPlanDoseValueStepperRow(text: $draft.doseValue, keyboardVisible: $sheetKeyboardVisible)
+                            
+                            SparkFormSheetPickerRow(
+                                title: L10n.text("medication_plan.form.single_dose_sheet_title", fallback: "单次剂量单位"),
+                                displayValue: draft.doseUnit,
+                                placeholder: L10n.text("medication_plan.form.single_dose_sheet_placeholder", fallback: "设置单次剂量数值与单位"),
+                                onTap: {
+                                    showDoseDetailSheet = true
+                                }
+                            )
                         }
-                        SparkFormTextRow(title: "频次", text: $draft.frequencyText, placeholder: "如 每日3次", required: true, keyboardVisible: $sheetKeyboardVisible)
-                        SparkFormTextRow(title: "频次编码", text: $draft.frequencyCode, placeholder: "可选，如 tid", keyboardVisible: $sheetKeyboardVisible)
-                        SparkFormTextRow(title: "提醒时间", text: $draft.reminderTimesText, placeholder: "如 08:00, 12:00, 20:00", keyboardVisible: $sheetKeyboardVisible)
-                        if let reminderTimesError = draft.reminderTimesError {
-                            Text(reminderTimesError)
-                                .font(.caption)
-                                .foregroundStyle(Color(uiColor: .systemRed))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+//                            SparkFormTextRow(title: "单次剂量说明", text: $draft.dosePerTime, placeholder: "如 1片 / 5ml", required: true, keyboardVisible: $sheetKeyboardVisible)
+                        
+                           SparkFormSheetPickerRow(
+                               title: "服药频次",
+                               displayValue: draft.reminderFrequencyPickerDisplay,
+                               placeholder: "请选择提醒频率",
+                               required: true,
+                               showsValidationError: draft.isReminderFrequencyComplete == false
+                                   || draft.resolvedFrequencyText.nilIfBlank == nil
+                           ) {
+                               showReminderFrequencySheet = true
+                           }
+                        
+                        
+                           if #available(iOS 16.0, *) {
+                               MedicationReminderTimesSection(draft: $draft, notificationClient: notificationClient)
+                           } else {
+                               SparkFormCard(title: "提醒时间", titleSystemImage: "calendar") {
+                                   SparkFormTextRow(title: "提醒时间", text: $draft.reminderTimesText, placeholder: "如 08:00, 12:00, 20:00", keyboardVisible: $sheetKeyboardVisible)
+                                   if let reminderTimesError = draft.reminderTimesError {
+                                       Text(reminderTimesError)
+                                           .font(.caption)
+                                           .foregroundStyle(Color(uiColor: .systemRed))
+                                           .frame(maxWidth: .infinity, alignment: .leading)
+                                   }
+                               }
+                           }
+
+                        SparkFormTextAreaRow(title: "用药说明", text: $draft.instructions, minHeight: 80, maxHeight: 160, placeholder: "饭前/饭后、禁忌或医嘱备注", keyboardVisible: $sheetKeyboardVisible)
                     }
                 }
+                DisclosureGroup(
+                    content: {
+                        VStack(spacing: 16) {
+                            SparkFormCard(title: "疗程", titleSystemImage: "calendar") {
+                                VStack(spacing: 12) {
+                                    DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
+                                        .font(.subheadline.weight(.medium))
+                                        .padding(.horizontal, 12)
+                                        .frame(height: 44)
+                                        .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    Toggle("设置结束日期", isOn: $draft.hasEndDate)
+                                        .font(.subheadline.weight(.medium))
+                                    if draft.hasEndDate {
+                                        DatePicker("结束日期", selection: $draft.endDate, in: draft.startDate..., displayedComponents: .date)
+                                            .font(.subheadline.weight(.medium))
+                                            .padding(.horizontal, 12)
+                                            .frame(height: 44)
+                                            .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    }
+                                }
+                            }
 
-                SparkFormCard(title: "疗程", titleSystemImage: "calendar") {
-                    VStack(spacing: 12) {
-                        DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 12)
-                            .frame(height: 44)
-                            .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        Toggle("设置结束日期", isOn: $draft.hasEndDate)
-                            .font(.subheadline.weight(.medium))
-                        if draft.hasEndDate {
-                            DatePicker("结束日期", selection: $draft.endDate, in: draft.startDate..., displayedComponents: .date)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 12)
-                                .frame(height: 44)
-                                .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            SparkFormCard(title: "状态与提醒", titleSystemImage: "bell.badge.fill") {
+                                VStack(spacing: 12) {
+                                    Toggle("开启提醒", isOn: $draft.reminderEnabled)
+                                        .font(.subheadline.weight(.medium))
+                                    Picker("计划状态", selection: $draft.status) {
+                                        Text("执行中").tag("active")
+                                        Text("已暂停").tag("paused")
+                                        Text("已完成").tag("completed")
+                                        Text("已取消").tag("cancelled")
+                                    }
+                                    .pickerStyle(.segmented)
+                                }
+                            }
                         }
-                        SparkFormTextRow(title: "疗程天数", text: $draft.durationDays, placeholder: "可选，如 7", keyboardVisible: $sheetKeyboardVisible)
-                            .keyboardType(.numberPad)
-                    }
-                }
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    },
+                    label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "doc.text")
+                                .font(.headline)
+                                .foregroundStyle(Color.accentColor)
+                            Text("疗程与提醒⏰")
+                                .font(.headline)
 
-                SparkFormCard(title: "状态与提醒", titleSystemImage: "bell.badge.fill") {
-                    VStack(spacing: 12) {
-                        Toggle("开启提醒", isOn: $draft.reminderEnabled)
-                            .font(.subheadline.weight(.medium))
-                        Picker("计划状态", selection: $draft.status) {
-                            Text("执行中").tag("active")
-                            Text("已暂停").tag("paused")
-                            Text("已完成").tag("completed")
-                            Text("已取消").tag("cancelled")
                         }
-                        .pickerStyle(.segmented)
                     }
-                }
+                )
+                .padding(14)
 
-                SparkFormCard(title: "说明", titleSystemImage: "note.text") {
-                    SparkFormTextAreaRow(title: "用药说明", text: $draft.instructions, minHeight: 80, maxHeight: 160, placeholder: "饭前/饭后、禁忌或医嘱备注", keyboardVisible: $sheetKeyboardVisible)
-                }
             }
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(uiColor: .systemBackground)))
-            .padding(16)
-            .padding(.bottom, 86)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private var selectedMedicineBoxTitle: String {
@@ -566,6 +969,17 @@ struct MedicationPlanFormView: View {
         return detail.isEmpty ? "已关联药箱药品" : detail
     }
 
+//    private var medicationPlanDoseDetailDisplay: String {
+//        let dv = draft.doseValue.trimmingCharacters(in: .whitespacesAndNewlines)
+//        let du = draft.doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+//        let pref = SparkFormCatalogMenuLocale.prefersEnglish
+//        let unitDisplay = du.isEmpty ? "" : MedicineSpecificationCatalog.displayUnit(stored: du, prefersEnglish: pref)
+//        if dv.isEmpty, du.isEmpty { return "" }
+//        if dv.isEmpty { return unitDisplay }
+//        if du.isEmpty { return dv }
+//        return pref ? "\(dv) \(unitDisplay)" : "\(dv)\(unitDisplay)"
+//    }
+
     private func handleMedicineBoxSaved(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
         if let index = medicineBoxes.firstIndex(where: { $0.id == box.id }) {
             medicineBoxes[index] = box
@@ -580,6 +994,10 @@ struct MedicationPlanFormView: View {
         guard let box else { return }
         if draft.drugName.nilIfBlank == nil {
             draft.drugName = box.medicineName
+        }
+        let apiDose = box.doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !apiDose.isEmpty {
+            draft.doseUnit = apiDose
         }
     }
 
@@ -644,6 +1062,199 @@ struct MedicationPlanFormView: View {
         case .localEdit:
             return "localEdit"
         }
+    }
+}
+
+private enum MedicationReminderTimePickerRoute: Identifiable {
+    case add
+    case edit(index: Int)
+
+    var id: String {
+        switch self {
+        case .add:
+            return "add"
+        case .edit(let index):
+            return "edit_\(index)"
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+private struct MedicationReminderTimePickerSheet: View {
+    @Binding var selectedTime: Date
+    let onConfirm: () -> Void
+    @State private var tempTime: Date
+
+    init(selectedTime: Binding<Date>, onConfirm: @escaping () -> Void) {
+        self._selectedTime = selectedTime
+        self.onConfirm = onConfirm
+        self._tempTime = State(initialValue: selectedTime.wrappedValue)
+    }
+
+    var body: some View {
+        AdaptiveSheetContainer.fixed(
+            height: 260,
+            onCancel: {},
+            onConfirm: {
+                selectedTime = tempTime
+                onConfirm()
+            }
+        ) {
+            DatePicker(
+                "",
+                selection: $tempTime,
+                displayedComponents: .hourAndMinute
+            )
+            .datePickerStyle(.wheel)
+            .labelsHidden()
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+private struct MedicationReminderTimesSection: View {
+    @Binding var draft: MedicationPlanDraft
+    let notificationClient: any NotificationClient
+
+    @State private var timePickerRoute: MedicationReminderTimePickerRoute?
+    @State private var timePickerSelection = Date()
+
+    private var slots: [String] {
+        draft.orderedReminderTimeSlots
+    }
+
+    private var countSubtitle: String {
+        let n = slots.count
+        return "\(n) 次 / 天"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("用药时间")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 12)
+                Text(countSubtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    Button {
+                        timePickerSelection = defaultTimeForNewSlot()
+                        timePickerRoute = .add
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.secondary)
+                            .frame(width: 40, height: 40)
+                            .background(Color(uiColor: .systemBackground), in: Circle())
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("新增用药时间")
+
+                    ForEach(Array(slots.enumerated()), id: \.offset) { index, time in
+                        Menu {
+                            Button {
+                                timePickerSelection = MedicationPlanDraft.dateForReminderTimeToken(time)
+                                timePickerRoute = .edit(index: index)
+                            } label: {
+                                Label("编辑", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                removeSlot(at: index)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(time)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Color.primary)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.secondary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color(uiColor: .systemBackground), in: Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+                            )
+                        }
+                        .accessibilityLabel("用药时间 \(time)")
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            if let reminderTimesError = draft.reminderTimesError {
+                Text(reminderTimesError)
+                    .font(.caption)
+                    .foregroundStyle(Color(uiColor: .systemRed))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.top, 4)
+        .sheet(item: $timePickerRoute) { route in
+            MedicationReminderTimePickerSheet(selectedTime: $timePickerSelection) {
+                applyPickedTime(route: route)
+            }
+        }
+    }
+
+    private func defaultTimeForNewSlot() -> Date {
+        if let last = slots.last {
+            return MedicationPlanDraft.dateForReminderTimeToken(last)
+        }
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        c.hour = 8
+        c.minute = 0
+        return Calendar.current.date(from: c) ?? Date()
+    }
+
+    private func applyPickedTime(route: MedicationReminderTimePickerRoute) {
+        let picked = MedicationPlanDraft.reminderTimeString(from: timePickerSelection)
+        guard MedicationPlanDraft.isValidTimeText(picked) else { return }
+
+        var next = slots
+        switch route {
+        case .add:
+            if next.contains(picked) {
+                notificationClient.warning(
+                    "该提醒时间已存在",
+                    source: "medication.plan.reminder_times"
+                )
+                return
+            }
+            next.append(picked)
+        case .edit(let index):
+            guard next.indices.contains(index) else { return }
+            if let dup = next.firstIndex(of: picked), dup != index {
+                notificationClient.warning(
+                    "该提醒时间已存在",
+                    source: "medication.plan.reminder_times"
+                )
+                return
+            }
+            next[index] = picked
+        }
+        draft.replaceReminderTimeSlots(next)
+    }
+
+    private func removeSlot(at index: Int) {
+        var next = slots
+        guard next.indices.contains(index) else { return }
+        next.remove(at: index)
+        draft.replaceReminderTimeSlots(next)
     }
 }
 
@@ -807,13 +1418,14 @@ struct MedicationPlanDraft {
     var dosePerTime = ""
     var doseValue = ""
     var doseUnit = "片"
+    var reminderFrequencyType: MedicationReminderFrequencyType = .daily
+    var everyNDays: Int = 1
+    var weeklyWeekdays: Set<Int> = []
     var frequencyText = ""
-    var frequencyCode = ""
     var reminderTimesText = "08:00"
     var startDate = Date()
     var hasEndDate = false
     var endDate = Date()
-    var durationDays = ""
     var instructions = ""
     var reminderEnabled = true
     var status = "active"
@@ -828,15 +1440,23 @@ struct MedicationPlanDraft {
         dosePerTime = existing.dosePerTime
         doseValue = existing.doseValue.map { $0.formatted(.number.precision(.fractionLength(0...3))) } ?? ""
         doseUnit = existing.doseUnit
+        reminderFrequencyType = MedicationReminderFrequencyType(rawValue: existing.frequencyType) ?? .daily
+        everyNDays = min(max(existing.everyNDays ?? 1, 1), 365)
+        weeklyWeekdays = Set(existing.weeklyWeekdays.filter { (1...7).contains($0) })
         frequencyText = existing.frequencyText
-        frequencyCode = existing.frequencyCode
+        if frequencyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            frequencyText = MedicationReminderFrequencySummary.displayLine(
+                type: reminderFrequencyType,
+                everyNDays: everyNDays,
+                weekdays: weeklyWeekdays
+            )
+        }
         reminderTimesText = existing.reminderTimes.map(\.time).joined(separator: ", ")
         startDate = existing.startDate
         if let endDate = existing.endDate {
             hasEndDate = true
             self.endDate = endDate
         }
-        durationDays = existing.durationDays.map(String.init) ?? ""
         instructions = existing.instructions
         reminderEnabled = existing.reminderEnabled
         status = existing.status
@@ -846,9 +1466,46 @@ struct MedicationPlanDraft {
         doseValue.nilIfBlank.flatMap(Double.init)
     }
 
-    var durationDaysValue: Int? {
-        guard let value = durationDays.nilIfBlank else { return 0 }
-        return Int(value)
+    /// Human-readable `dose_per_time` line from structured fields, e.g. `1 / 5 ml` when both are set.
+    static func suggestedDosePerTimeLine(doseValue: String, doseUnit: String, prefersEnglish: Bool) -> String {
+        let dv = doseValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let du = doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+        let duDisp = du.isEmpty ? "" : MedicineSpecificationCatalog.displayUnit(stored: du, prefersEnglish: prefersEnglish)
+        switch (dv.isEmpty, duDisp.isEmpty) {
+        case (true, true): return ""
+        case (false, true): return dv
+        case (true, false): return duDisp
+        case (false, false): return "\(dv) / \(duDisp)"
+        }
+    }
+
+    var isReminderFrequencyComplete: Bool {
+        MedicationReminderFrequencySummary.isComplete(
+            type: reminderFrequencyType,
+            everyNDays: everyNDays,
+            weekdays: weeklyWeekdays
+        )
+    }
+
+    var resolvedFrequencyText: String {
+        if let manual = frequencyText.nilIfBlank {
+            return manual
+        }
+        return MedicationReminderFrequencySummary.displayLine(
+            type: reminderFrequencyType,
+            everyNDays: everyNDays,
+            weekdays: weeklyWeekdays
+        )
+    }
+
+    var reminderFrequencyPickerDisplay: String {
+        let line = resolvedFrequencyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if line.isEmpty == false { return line }
+        return MedicationReminderFrequencySummary.displayLine(
+            type: reminderFrequencyType,
+            everyNDays: everyNDays,
+            weekdays: weeklyWeekdays
+        )
     }
 
     var reminderTimesError: String? {
@@ -862,11 +1519,11 @@ struct MedicationPlanDraft {
         if dosePerTime.nilIfBlank == nil {
             return "请填写单次剂量"
         }
-        if frequencyText.nilIfBlank == nil {
-            return "请填写服药频次"
+        if isReminderFrequencyComplete == false {
+            return "请完整选择服药频次（每几天需选天数，每周需至少选一天）"
         }
-        if durationDaysValue == nil {
-            return "疗程天数必须是整数"
+        if resolvedFrequencyText.nilIfBlank == nil {
+            return "请填写或生成服药频次说明"
         }
         if let reminderTimesError {
             return reminderTimesError
@@ -882,6 +1539,10 @@ struct MedicationPlanDraft {
         if let error = reminderTimesResult.error {
             throw MedicationPlanFormError.invalidReminderTimes(error)
         }
+        let weeklyPayload: [Int] = {
+            guard reminderFrequencyType == .weekly else { return [] }
+            return weeklyWeekdays.filter { (1...7).contains($0) }.sorted()
+        }()
         return MedicationPlanPayload(
             member: memberID,
             medicalCase: medicalCaseID,
@@ -891,12 +1552,13 @@ struct MedicationPlanDraft {
             dosePerTime: dosePerTime.trimmed,
             doseValue: doseValueValue,
             doseUnit: doseUnit.nilIfBlank ?? "片",
-            frequencyText: frequencyText.trimmed,
-            frequencyCode: frequencyCode.nilIfBlank ?? "",
+            frequencyType: reminderFrequencyType.rawValue,
+            everyNDays: reminderFrequencyType == .everyNDays ? everyNDays : nil,
+            weeklyWeekdays: weeklyPayload,
+            frequencyText: resolvedFrequencyText.trimmed,
             reminderTimes: reminderTimesResult.times,
             startDate: MedicalDateCoding.encodeDateOnly(startDate),
             endDate: hasEndDate ? MedicalDateCoding.encodeDateOnly(endDate) : nil,
-            durationDays: durationDaysValue.flatMap { $0 > 0 ? $0 : nil },
             instructions: instructions.nilIfBlank ?? "",
             reminderEnabled: reminderEnabled,
             status: status,
@@ -922,7 +1584,7 @@ struct MedicationPlanDraft {
         return (result, nil)
     }
 
-    private static func isValidTimeText(_ value: String) -> Bool {
+    fileprivate static func isValidTimeText(_ value: String) -> Bool {
         let parts = value.split(separator: ":")
         guard parts.count == 2,
               let hour = Int(parts[0]),
@@ -930,6 +1592,68 @@ struct MedicationPlanDraft {
             return false
         }
         return (0...23).contains(hour) && (0...59).contains(minute)
+    }
+}
+
+extension MedicationPlanDraft {
+    /// 从当前文案中提取有效、去重后的 `HH:mm` 列表（用于用药时间 chips；无效片段被跳过，仍可由 `reminderTimesError` 提示整体验证）。
+    fileprivate var orderedReminderTimeSlots: [String] {
+        let rawItems = reminderTimesText
+            .components(separatedBy: CharacterSet(charactersIn: ",，、;； \n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+        var result: [String] = []
+        var seen = Set<String>()
+        for item in rawItems {
+            guard Self.isValidTimeText(item) else { continue }
+            let norm = Self.normalizedReminderTimeToken(item)
+            guard seen.insert(norm).inserted else { continue }
+            result.append(norm)
+        }
+        return result
+    }
+
+    fileprivate mutating func replaceReminderTimeSlots(_ slots: [String]) {
+        var seen = Set<String>()
+        var unique: [String] = []
+        for slot in slots {
+            let norm = Self.normalizedReminderTimeToken(slot)
+            guard Self.isValidTimeText(norm) else { continue }
+            if seen.insert(norm).inserted {
+                unique.append(norm)
+            }
+        }
+        unique.sort()
+        reminderTimesText = unique.isEmpty ? "" : unique.joined(separator: ", ")
+    }
+
+    fileprivate static func normalizedReminderTimeToken(_ value: String) -> String {
+        let parts = value.split(separator: ":")
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]),
+              (0...23).contains(hour),
+              (0...59).contains(minute) else {
+            return value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return String(format: "%02d:%02d", hour, minute)
+    }
+
+    fileprivate static func reminderTimeString(from date: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let h = min(max(c.hour ?? 0, 0), 23)
+        let m = min(max(c.minute ?? 0, 0), 59)
+        return String(format: "%02d:%02d", h, m)
+    }
+
+    fileprivate static func dateForReminderTimeToken(_ token: String) -> Date {
+        let parts = token.split(separator: ":")
+        let h = min(max(Int(parts[0]) ?? 8, 0), 23)
+        let m = parts.count > 1 ? min(max(Int(parts[1]) ?? 0, 0), 59) : 0
+        var c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        c.hour = h
+        c.minute = m
+        return Calendar.current.date(from: c) ?? Date()
     }
 }
 
@@ -942,12 +1666,13 @@ private struct MedicationPlanPayload: Encodable {
     let dosePerTime: String
     let doseValue: Double?
     let doseUnit: String
+    let frequencyType: String
+    let everyNDays: Int?
+    let weeklyWeekdays: [Int]
     let frequencyText: String
-    let frequencyCode: String
     let reminderTimes: [SparkMedicalSyncAPI.MedicationReminderTime]
     let startDate: String
     let endDate: String?
-    let durationDays: Int?
     let instructions: String
     let reminderEnabled: Bool
     let status: String
@@ -961,12 +1686,13 @@ private struct MedicationPlanPayload: Encodable {
         case dosePerTime = "dose_per_time"
         case doseValue = "dose_value"
         case doseUnit = "dose_unit"
+        case frequencyType = "frequency_type"
+        case everyNDays = "every_n_days"
+        case weeklyWeekdays = "weekly_weekdays"
         case frequencyText = "frequency_text"
-        case frequencyCode = "frequency_code"
         case reminderTimes = "reminder_times"
         case startDate = "start_date"
         case endDate = "end_date"
-        case durationDays = "duration_days"
         case reminderEnabled = "reminder_enabled"
     }
 
@@ -980,12 +1706,13 @@ private struct MedicationPlanPayload: Encodable {
         try container.encode(dosePerTime, forKey: .dosePerTime)
         try container.encodeNullable(doseValue, forKey: .doseValue)
         try container.encode(doseUnit, forKey: .doseUnit)
+        try container.encode(frequencyType, forKey: .frequencyType)
+        try container.encodeNullable(everyNDays, forKey: .everyNDays)
+        try container.encode(weeklyWeekdays, forKey: .weeklyWeekdays)
         try container.encode(frequencyText, forKey: .frequencyText)
-        try container.encode(frequencyCode, forKey: .frequencyCode)
         try container.encode(reminderTimes, forKey: .reminderTimes)
         try container.encode(startDate, forKey: .startDate)
         try container.encodeNullable(endDate, forKey: .endDate)
-        try container.encodeNullable(durationDays, forKey: .durationDays)
         try container.encode(instructions, forKey: .instructions)
         try container.encode(reminderEnabled, forKey: .reminderEnabled)
         try container.encode(status, forKey: .status)
@@ -1077,6 +1804,7 @@ private struct MedicationPlanDetailPage: View {
     let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     let memberID: Int?
     let workflowAPI: SparkMedicalWorkflowAPI
+    let notificationClient: any NotificationClient
     let onSaved: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
     let onDeleted: (Int) -> Void
     let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
@@ -1095,6 +1823,7 @@ private struct MedicationPlanDetailPage: View {
         records: [SparkMedicalSyncAPI.RemoteMedicationRecord],
         memberID: Int?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        notificationClient: any NotificationClient,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void,
         onDeleted: @escaping (Int) -> Void,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
@@ -1103,6 +1832,7 @@ private struct MedicationPlanDetailPage: View {
         self.records = records
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.notificationClient = notificationClient
         self.onSaved = onSaved
         self.onDeleted = onDeleted
         self.onMedicineBoxSaved = onMedicineBoxSaved
@@ -1200,6 +1930,7 @@ private struct MedicationPlanDetailPage: View {
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,
                     workflowAPI: workflowAPI,
+                    notificationClient: notificationClient,
                     onMedicineBoxSaved: handleMedicineBoxSaved,
                     onServerSaved: { saved in
                         currentPlan = saved
@@ -1346,7 +2077,9 @@ private extension KeyedEncodingContainer {
         MedicationsListPage(
             completeData: nil,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
-            memberContextStore: AppContainer.preview.memberContextStore
+            memberContextStore: AppContainer.preview.memberContextStore,
+            medicalDocumentUploadViewModel: AppContainer.preview.makeMedicalDocumentUploadViewModel(),
+            notificationClient: AppContainer.preview.notificationClient
         )
     }
 }

@@ -17,6 +17,10 @@ public struct SparkKeyboardDoneToolbar: ViewModifier {
                 Spacer()
                 Button(L10n.text("common.done"), action: dismiss)
             }
+            // ✅ 正确：键盘关闭按钮（单独 ToolbarItem + .keyboard）
+//              ToolbarItem(placement: .keyboard) {
+//                  Button(L10n.text("common.done"), action: dismiss)
+//              }
         }
     }
 }

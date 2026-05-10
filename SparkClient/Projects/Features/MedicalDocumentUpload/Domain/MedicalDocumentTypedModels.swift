@@ -59,7 +59,8 @@ enum MedicalDocumentKind: String, Codable, CaseIterable, Sendable {
     case healthExamReport // 体检报告（包含大量数值指标）
     case medicalReport    // 医疗报告（如 B超、CT、放射科报告）
     case prescription     // 处方单（用药清单与剂量）
-    case medication       // 药品说明/包装（侧重于单一药品信息）
+    case medication       // 用药计划/药品用法（原有流程，不改动）
+    case medicineBox      // 药品/药盒包装（用于加入药箱）
 }
 
 /// 报告类型识别结果：记录系统是如何判定文档类型的。
@@ -167,6 +168,21 @@ struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
 
 }
 
+/// 药箱药品抽取草稿：用于药盒/药瓶/说明书图片识别后批量加入药箱。
+struct MedicineBoxRecognitionDraft: Sendable, Equatable, Codable {
+    let medicineName: String?
+    let medicineType: String?
+    let brandName: String?
+    let dosageForm: String?
+    let strength: String?
+    let doseUnit: String?
+    let totalQuantity: String?
+    let expireDate: String?
+    let notes: String?
+    let extra: [String: String]?
+    @FlexibleOptionalString var sortOrder: String?
+}
+
 /// 处方批次抽取草稿（与 ``PrescriptionBatch`` / ``PrescriptionBatchSerializer`` 字段对齐；`member` 由上传信封提供）。
 struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     /// 关联病历 ID：由 App 在保存/编辑已有病例时注入；**不从** OCR 流式 JSON 解码（避免模型输出字符串与 `Int` 不一致）。
@@ -272,6 +288,7 @@ enum MedicalDocumentTypedResult: Sendable, Equatable {
     case medicalReport([MedicalReportRecognitionDraft])
     case prescription(PrescriptionRecognitionDraft)
     case medication([MedicationRecognitionDraft])
+    case medicineBoxes([MedicineBoxRecognitionDraft])
 }
 
 /// 最终输出模型：抽取流程的最终产物。

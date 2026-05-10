@@ -564,6 +564,7 @@ JSON
 
 【最终要求】
 只返回纯净JSON，不要任何其他内容。'\nOCR文本：\n%@";
+"ai.prompt.medicine_box.extraction.template" = "你是药箱药品识别助手。请从药盒、药瓶、泡罩、标签、说明书 OCR 文本中抽取药箱库存数据。只返回 JSON 数组，根节点必须是 [...]。\n\n每个元素只能使用 camelCase 键：medicineName、medicineType、brandName、dosageForm、strength、doseUnit、totalQuantity、expireDate、notes、extra、sortOrder。\n\n规则：\n1）一张图中出现多种药品时输出多条。\n2）medicineName 使用最清晰的通用名/商品名展示。\n3）medicineType 输出药品类型文本，如感冒发烧、胃肠消化、咳嗽咽痛、慢病用药、儿童用药，或自定义类型。\n4）strength 输出完整规格/包装描述，如 0.5g×24片。\n5）doseUnit 输出单次剂量单位文本（如 mg、g、片、袋），仅在标签中明确可见时填写，无则为空字符串。\n6）totalQuantity 仅在包装数量明确可见时填写字符串，如 24，无则为空字符串。\n7）expireDate 仅在有效期明确可见时使用 yyyy-MM-dd，无则为空字符串。\n8）notes 无内容时为空字符串。\n9）extra 无内容时必须为空对象 {}，绝对不能是字符串。\n10）sortOrder 固定为字符串数字 1。\n11）不要编造不可见数量、日期或疗效。\n12）无法识别药品时返回 []。\n13）只输出纯 JSON，不要 Markdown、解释、注释或代码块。\n\nOCR文本：\n%@";
 
 "ai.prompt.context.header" = "成员近期病历摘要（最近%d条）：";
 "ai.prompt.context.line" = "- [%@] %@：%@";

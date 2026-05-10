@@ -1,23 +1,33 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct MedicineBoxListPage: View {
     let medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     let memberID: Int?
     let workflowAPI: SparkMedicalWorkflowAPI
+    @ObservedObject var viewModel: MedicalDocumentUploadViewModel
     let onMedicineBoxesChanged: ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
 
     @State private var localMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var sheetDestination: MedicineBoxSheetDestination?
+    @State private var showingUploadSheet = false
+    @State private var showingUploadHost = false
 
     init(
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         memberID: Int?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        viewModel: MedicalDocumentUploadViewModel,
         onMedicineBoxesChanged: @escaping ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
     ) {
         self.medicineBoxes = medicineBoxes
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.viewModel = viewModel
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
         _localMedicineBoxes = State(initialValue: medicineBoxes)
     }
@@ -54,6 +64,23 @@ struct MedicineBoxListPage: View {
         }
         .navigationTitle("药箱")
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button {
+                showingUploadSheet = true
+            } label: {
+                Label("拍照添加药品", systemImage: "camera.fill")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color(uiColor: .systemPurple), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(memberID == nil)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -83,6 +110,16 @@ struct MedicineBoxListPage: View {
         .onChange(of: medicineBoxes) { newValue in
             localMedicineBoxes = newValue
         }
+        .sheet(isPresented: $showingUploadSheet) {
+            MedicineBoxUploadSheet { files in
+                startMedicineBoxRecognition(files: files)
+            }
+        }
+        .fullScreenCover(isPresented: $showingUploadHost) {
+            CompatibleNavigationContainer {
+                MedicalDocumentUploadHostView(viewModel: viewModel)
+            }
+        }
     }
 
     private func upsertMedicineBox(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
@@ -98,6 +135,12 @@ struct MedicineBoxListPage: View {
     private func removeMedicineBox(id: Int) {
         localMedicineBoxes.removeAll { $0.id == id }
         onMedicineBoxesChanged(localMedicineBoxes)
+    }
+
+    @MainActor
+    private func startMedicineBoxRecognition(files: [MedicalUploadLocalFile]) {
+        viewModel.prepareAndStart(files: files, kind: .medicineBox)
+        showingUploadHost = true
     }
 
     @ViewBuilder
@@ -294,6 +337,348 @@ private struct MedicineBoxDetailPage: View {
     }
 }
 
+private struct MedicineBoxUploadSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onConfirm: ([MedicalUploadLocalFile]) -> Void
+
+    @State private var localFiles: [MedicalUploadLocalFile] = []
+    @State private var showingCamera = false
+    @State private var showingPhotoPicker = false
+    @State private var showingPhotoLibrary = false
+    @State private var showingFileImporter = false
+    @State private var showCameraUnavailableAlert = false
+
+    private let logger: Logger = ConsoleLogger()
+
+    var body: some View {
+        CompatibleNavigationContainer {
+            AdaptiveToolSheetScrollView(bottomContentPadding: 0, extraChromeHeight: 120) {
+                VStack(alignment: .leading, spacing: 12) {
+                    header
+                    Divider()
+                    entryTiles
+                    if localFiles.isEmpty {
+                        placeholder
+                    } else {
+                        selectionPreview
+                    }
+                    Spacer(minLength: 8)
+                    
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
+            
+            .navigationTitle(L10n.text("medical.upload.medicine_box.sheet.title", fallback: "选择药品图片"))
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomBar
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.text("common.cancel")) {
+                        dismiss()
+                    }
+                }
+            }
+        
+        }
+        .sheet(isPresented: $showingCamera) {
+            KnowledgeImagePicker(
+                source: .camera,
+                onCancel: { showingCamera = false },
+                onImagePicked: { image in
+                    showingCamera = false
+                    if let file = saveUIImageToTemp(image: image, namePrefix: "medicine_box_camera") {
+                        localFiles.append(file)
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showingPhotoLibrary) {
+            KnowledgeImagePicker(
+                source: .photoLibrary,
+                onCancel: { showingPhotoLibrary = false },
+                onImagePicked: { image in
+                    showingPhotoLibrary = false
+                    if let file = saveUIImageToTemp(image: image, namePrefix: "medicine_box_photo") {
+                        localFiles.append(file)
+                    }
+                }
+            )
+        }
+        .fileImporter(
+            isPresented: $showingFileImporter,
+            allowedContentTypes: [.image, .pdf],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result else { return }
+            localFiles.append(contentsOf: urls.compactMap(copyToTempFile))
+        }
+        .overlay {
+            if #available(iOS 16.0, *) {
+                MedicineBoxPhotosPickerBridge(isPresented: $showingPhotoPicker) { files in
+                    localFiles.append(contentsOf: files)
+                }
+            }
+        }
+        .alert("无法打开相机", isPresented: $showCameraUnavailableAlert) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text("当前设备不支持相机。")
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.text("medical.upload.medicine_box.sheet.header", fallback: "选择上传方式"))
+                .font(.system(size: 17, weight: .semibold))
+            Text(L10n.text("medical.upload.medicine_box.sheet.subtitle", fallback: "可一次选择多张药盒、药瓶或说明书图片，确认后开始识别。"))
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var entryTiles: some View {
+        HStack(spacing: 12) {
+            medicineUploadTile(icon: "camera", title: "拍照上传", subtitle: "即时拍摄", tint: .blue) {
+                presentCamera()
+            }
+            medicineUploadTile(icon: "photo.on.rectangle", title: "照片上传", subtitle: "选择相册", tint: .purple) {
+                presentPhotoLibrary()
+            }
+            medicineUploadTile(icon: "doc", title: "文件上传", subtitle: "PDF/图片", tint: .green) {
+                showingFileImporter = true
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private var placeholder: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 40))
+                .foregroundStyle(.purple.opacity(0.65))
+            Text("尚未选择文件")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.purple)
+            Text("可拍照、从相册选择或上传 PDF/图片")
+                .font(.system(size: 12))
+                .foregroundStyle(.purple.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.purple.opacity(0.06)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(style: StrokeStyle(lineWidth: 2, dash: [6]))
+                .foregroundStyle(Color.purple.opacity(0.35))
+        )
+        .padding(.top, 6)
+    }
+
+    private var selectionPreview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("已选择")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("\(localFiles.count) 个文件")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                ForEach(localFiles) { file in
+                    VStack(spacing: 6) {
+                        Image(systemName: file.mimeType?.contains("image") == true ? "photo" : "doc.richtext")
+                            .font(.system(size: 28))
+                        Text(file.displayName)
+                            .font(.system(size: 11))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(height: 90)
+                    .frame(maxWidth: .infinity)
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                }
+            }
+            .padding(.vertical, 4)
+
+        }
+    }
+
+    private var bottomBar: some View {
+        HStack {
+            Button {
+                localFiles.removeAll()
+            } label: {
+                Label("清空", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+
+            Spacer()
+
+            Button {
+                onConfirm(localFiles)
+                dismiss()
+            } label: {
+                Label("开始识别", systemImage: "wand.and.stars")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(localFiles.isEmpty)
+        }
+        .padding( 10)
+    }
+
+    private func medicineUploadTile(icon: String, title: String, subtitle: String, tint: Color, action: @escaping () -> Void) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 22))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(tint)
+            Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundStyle(tint.opacity(0.8))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(tint.opacity(0.06)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(tint.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6]))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+    }
+
+    private func presentPhotoLibrary() {
+        if #available(iOS 16.0, *) {
+            showingPhotoPicker = true
+        } else {
+            showingPhotoLibrary = true
+        }
+    }
+
+    private func presentCamera() {
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            showingCamera = true
+        } else {
+            showCameraUnavailableAlert = true
+        }
+    }
+
+    private func saveUIImageToTemp(image: UIImage, namePrefix: String) -> MedicalUploadLocalFile? {
+        guard let data = image.jpegData(compressionQuality: 0.95) else { return nil }
+        return saveDataToTemp(data: data, preferredExtension: "jpg", namePrefix: namePrefix)
+    }
+
+    private func saveDataToTemp(data: Data, preferredExtension: String, namePrefix: String) -> MedicalUploadLocalFile? {
+        let filename = "\(namePrefix)_\(UUID().uuidString).\(preferredExtension)"
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: target, options: .atomic)
+            return MedicalUploadLocalFile(
+                url: target,
+                displayName: filename,
+                mimeType: UTType(filenameExtension: preferredExtension)?.preferredMIMEType
+            )
+        } catch {
+            logger.error("写入药箱识别临时文件失败：\(error.localizedDescription)", module: .medical)
+            return nil
+        }
+    }
+
+    private func copyToTempFile(url: URL) -> MedicalUploadLocalFile? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer {
+            if scoped { url.stopAccessingSecurityScopedResource() }
+        }
+        let ext = url.pathExtension.isEmpty ? "pdf" : url.pathExtension
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent("medicine_box_upload_\(UUID().uuidString).\(ext)")
+        do {
+            if FileManager.default.fileExists(atPath: target.path) {
+                try FileManager.default.removeItem(at: target)
+            }
+            try FileManager.default.copyItem(at: url, to: target)
+            return MedicalUploadLocalFile(
+                url: target,
+                displayName: url.lastPathComponent,
+                mimeType: UTType(filenameExtension: ext)?.preferredMIMEType
+            )
+        } catch {
+            logger.error("复制药箱识别文件失败：\(error.localizedDescription)", module: .medical)
+            return nil
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+private struct MedicineBoxPhotosPickerBridge: View {
+    @Binding var isPresented: Bool
+    let onFilesSelected: ([MedicalUploadLocalFile]) -> Void
+
+    @State private var selectedItems: [PhotosPickerItem] = []
+
+    private let logger: Logger = ConsoleLogger()
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .photosPicker(
+                isPresented: $isPresented,
+                selection: $selectedItems,
+                maxSelectionCount: 20,
+                matching: .images
+            )
+            .onChange(of: selectedItems) { newItems in
+                guard newItems.isEmpty == false else { return }
+                Task {
+                    let files = await convertPhotoItems(newItems)
+                    await MainActor.run {
+                        if files.isEmpty == false {
+                            onFilesSelected(files)
+                        }
+                        selectedItems = []
+                    }
+                }
+            }
+    }
+
+    private func convertPhotoItems(_ items: [PhotosPickerItem]) async -> [MedicalUploadLocalFile] {
+        var files: [MedicalUploadLocalFile] = []
+        for item in items {
+            do {
+                if let data = try await item.loadTransferable(type: Data.self),
+                   let file = saveDataToTemp(data: data, preferredExtension: "jpg", namePrefix: "medicine_box_photo") {
+                    files.append(file)
+                }
+            } catch {
+                logger.error("读取药箱相册图片失败：\(error.localizedDescription)", module: .medical)
+            }
+        }
+        return files
+    }
+
+    private func saveDataToTemp(data: Data, preferredExtension: String, namePrefix: String) -> MedicalUploadLocalFile? {
+        let filename = "\(namePrefix)_\(UUID().uuidString).\(preferredExtension)"
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: target, options: .atomic)
+            return MedicalUploadLocalFile(
+                url: target,
+                displayName: filename,
+                mimeType: UTType(filenameExtension: preferredExtension)?.preferredMIMEType
+            )
+        } catch {
+            logger.error("写入药箱相册临时文件失败：\(error.localizedDescription)", module: .medical)
+            return nil
+        }
+    }
+}
+
 struct MedicineBoxFormView: View {
     enum Mode {
         case create
@@ -444,7 +829,7 @@ struct MedicineBoxFormView: View {
                             optionSystemImage: MedicineBoxTypeCatalog.systemImage(for:),
                             customAutofocus: false
                         )
-                        MedicineBoxStrengthPickerRow(
+                        SparkFormSheetPickerRow(
                             title: L10n.text("medical_record.forms.field.dosage_form", fallback: "剂型"),
                             displayValue: MedicineBoxDosageFormCatalog.displayString(stored: draft.dosageForm),
                             placeholder: L10n.text("medical_record.medicine_box.dosage_form_sheet.placeholder", fallback: "请选择剂型")
@@ -452,12 +837,12 @@ struct MedicineBoxFormView: View {
                             showDosageFormSheet.toggle()
                         }
 
-                        MedicineBoxStrengthPickerRow(
+                        SparkFormSheetPickerRow(
                             title: L10n.text("medical_record.forms.field.strength"),
                             displayValue: draft.specification.displayString(prefersEnglish: SparkFormCatalogMenuLocale.prefersEnglish)
                                 .trimmingCharacters(in: .whitespacesAndNewlines),
                             placeholder: L10n.text("medical_record.medicine_box.strength_sheet.placeholder")
-                        ){
+                        ) {
                             showSpecificationSheet.toggle()
                         }
                         
@@ -550,60 +935,7 @@ struct MedicineBoxFormView: View {
     }
 }
 
-// MARK: - Specification sheet (structured fields; same row + sheet chrome as legacy strength picker)
-
-private struct MedicineBoxStrengthPickerRow: View {
-    let title: String
-    let displayValue: String
-    let placeholder: String
-//    @Binding var isPresented: Bool
-    var onTap: (() -> Void)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-            Button {
-                onTap()
-            } label: {
-                HStack(alignment: .center, spacing: 10) {
-                    Text(resolvedLabel)
-                        .font(.body)
-                        .foregroundStyle(isPlaceholder ? Color.secondary : Color.primary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .sparkFormTextFieldChrome(isFocused: false, isError: false)
-//                .padding(.horizontal, 12)
-//                .frame(minHeight: 44)
-//                .background(Color(uiColor: .systemBackground))
-//                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-//                .overlay(
-//                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-//                        .stroke(Color(uiColor: .separator), lineWidth: 1)
-//                )
-            }
-            .buttonStyle(.plain)
-        }
-
-    }
-
-    private var trimmedDisplay: String {
-        displayValue.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var isPlaceholder: Bool {
-        trimmedDisplay.isEmpty
-    }
-
-    private var resolvedLabel: String {
-        isPlaceholder ? placeholder : displayValue
-    }
-}
+// MARK: - Specification sheet (structured fields; `SparkFormSheetPickerRow` lives in `MedicalRecordFormSupport`)
 
 private struct MedicineBoxDosageFormPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -739,6 +1071,15 @@ private enum MedicineBoxDosageFormCatalog {
         return allForms.first { $0.storedValue == trimmed }?.displayName ?? trimmed
     }
 
+    static func storedValue(fromAny raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return "" }
+        if let item = allForms.first(where: { $0.storedValue == trimmed || $0.displayName == trimmed }) {
+            return item.storedValue
+        }
+        return trimmed
+    }
+
     private static var allForms: [Item] {
         commonForms + moreForms
     }
@@ -828,6 +1169,10 @@ private struct MedicineBoxSpecificationSheet: View {
         return t.isEmpty ? L10n.text("medical_record.medicine_box.spec.preview_empty") : t
     }
 
+    private var trimmedTempDoseUnit: String {
+        tempSpec.doseUnit.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         CompatibleNavigationContainer {
             AdaptiveToolSheetScrollView(
@@ -838,16 +1183,25 @@ private struct MedicineBoxSpecificationSheet: View {
                     legacyFreeformBlock
                     
                     sheetFieldBlock(title: L10n.text("medical_record.medicine_box.spec.dose_value")) {
-                        TextField("5", text: doseValueBinding)
-                            .textFieldStyle(.plain)
-                            .focused($doseValueFocused)
-                            .keyboardType(.decimalPad)
-                            .font(.system(size: 16))
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 44)
-                            .background(Color(uiColor: .systemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        HStack(spacing: prefersEnglish ? 6 : 0) {
+                            TextField("5", text: doseValueBinding)
+                                .textFieldStyle(.plain)
+                                .focused($doseValueFocused)
+                                .keyboardType(.decimalPad)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+
+                            if trimmedTempDoseUnit.isEmpty == false {
+                                Text(MedicineSpecificationCatalog.displayUnit(stored: trimmedTempDoseUnit, prefersEnglish: prefersEnglish))
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color.secondary)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .background(Color(uiColor: .systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     
                     unitChipBlock(
@@ -859,7 +1213,8 @@ private struct MedicineBoxSpecificationSheet: View {
                         },
                         onSelect: { label in
                             tempSpec.rawLegacyStrength = nil
-                            tempSpec.doseUnit = MedicineSpecificationCatalog.storedDoseUnit(fromDisplay: label)
+                            let doseUnit = MedicineSpecificationCatalog.storedDoseUnit(fromDisplay: label)
+                            tempSpec.doseUnit = doseUnit
                         }
                     )
                     
@@ -1071,6 +1426,27 @@ struct MedicineBoxDraft {
 
     init() {}
 
+    init(recognition: MedicineBoxRecognitionDraft) {
+        medicineName = recognition.medicineName?.trimmed ?? ""
+        medicineType = MedicineBoxTypeCatalog.storedValue(fromAny: recognition.medicineType)
+        brandName = recognition.brandName?.trimmed ?? ""
+        dosageForm = MedicineBoxDosageFormCatalog.storedValue(fromAny: recognition.dosageForm ?? "")
+        let rawStrength = recognition.strength?.trimmed ?? ""
+        let parsed = MedicineSpecification.parse(fromAPIStrength: rawStrength)
+        if parsed.hasStructuredContent {
+            specification = parsed
+        } else if rawStrength.isEmpty == false {
+            specification = MedicineSpecification(rawLegacyOnly: rawStrength)
+        }
+        totalQuantity = recognition.totalQuantity?.trimmed ?? ""
+        if let expire = recognition.expireDate?.nilIfBlank {
+            hasExpireDate = true
+            expireDate = Date.parseOrNow(expire)
+        }
+        notes = recognition.notes?.trimmed ?? ""
+        MedicineSpecification.mergeDoseUnitFromAPI(recognition.doseUnit, into: &specification)
+    }
+
     init(existing: SparkMedicalSyncAPI.RemoteMedicineBox) {
         medicineName = existing.medicineName
         medicineType = MedicineBoxTypeCatalog.storedValue(fromAny: existing.medicineType)
@@ -1084,6 +1460,7 @@ struct MedicineBoxDraft {
         } else {
             specification = MedicineSpecification()
         }
+        MedicineSpecification.mergeDoseUnitFromAPI(existing.doseUnit, into: &specification)
         if let q = existing.totalQuantity {
             totalQuantity = MedicineBoxDraft.formatQuantity(q)
         } else {
@@ -1117,6 +1494,7 @@ struct MedicineBoxDraft {
             brandName: brandName.nilIfBlank ?? "",
             dosageForm: dosageForm.nilIfBlank ?? "",
             strength: specification.storedStrengthString.nilIfBlank ?? "",
+            doseUnit: specification.backendDoseUnitField,
             totalQuantity: resolvedTotal,
             expireDate: hasExpireDate ? MedicalDateCoding.encodeDateOnly(expireDate) : nil,
             notes: notes.nilIfBlank ?? "",
@@ -1127,6 +1505,22 @@ struct MedicineBoxDraft {
     private static func formatQuantity(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...2)))
     }
+
+    func recognitionDraft(sortOrder: String? = nil) -> MedicineBoxRecognitionDraft {
+        MedicineBoxRecognitionDraft(
+            medicineName: medicineName.nilIfBlank,
+            medicineType: medicineType.nilIfBlank,
+            brandName: brandName.nilIfBlank,
+            dosageForm: dosageForm.nilIfBlank,
+            strength: specification.storedStrengthString.nilIfBlank,
+            doseUnit: specification.backendDoseUnitField.nilIfBlank,
+            totalQuantity: totalQuantity.nilIfBlank,
+            expireDate: hasExpireDate ? MedicalDateCoding.encodeDateOnly(expireDate) : nil,
+            notes: notes.nilIfBlank,
+            extra: nil,
+            sortOrder: sortOrder
+        )
+    }
 }
 
 private struct MedicineBoxPayload: Encodable {
@@ -1136,6 +1530,7 @@ private struct MedicineBoxPayload: Encodable {
     let brandName: String
     let dosageForm: String
     let strength: String
+    let doseUnit: String
     let totalQuantity: Double?
     let expireDate: String?
     let notes: String
@@ -1148,6 +1543,7 @@ private struct MedicineBoxPayload: Encodable {
         case brandName = "brand_name"
         case dosageForm = "dosage_form"
         case strength
+        case doseUnit = "dose_unit"
         case totalQuantity = "total_quantity"
         case expireDate = "expire_date"
         case notes
@@ -1162,6 +1558,7 @@ private struct MedicineBoxPayload: Encodable {
         try c.encode(brandName, forKey: .brandName)
         try c.encode(dosageForm, forKey: .dosageForm)
         try c.encode(strength, forKey: .strength)
+        try c.encode(doseUnit, forKey: .doseUnit)
         try c.encodeIfPresent(totalQuantity, forKey: .totalQuantity)
         try c.encodeIfPresent(expireDate, forKey: .expireDate)
         try c.encode(notes, forKey: .notes)

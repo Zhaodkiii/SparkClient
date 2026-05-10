@@ -67,7 +67,7 @@ struct AdaptiveToolSheetHeightModifier: ViewModifier {
     @State private var selectedDetent: PresentationDetent = .height(AdaptiveSheetHeightPreferenceKey.defaultValue)
 
     private var maxFittedHeight: CGFloat {
-        UIScreen.main.bounds.height * 0.72
+        UIScreen.main.bounds.height * 0.8
     }
 
     private var fittedHeight: CGFloat {

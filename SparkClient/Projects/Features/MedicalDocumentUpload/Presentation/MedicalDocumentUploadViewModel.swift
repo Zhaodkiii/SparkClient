@@ -318,6 +318,24 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         }
     }
 
+    func updateTypedResult(_ typedResult: MedicalDocumentTypedResult) {
+        guard let output = typedOutput else { return }
+        typedOutput = MedicalDocumentTypedExtractionOutput(
+            envelope: output.envelope,
+            typedResult: typedResult,
+            extractedJSON: output.extractedJSON,
+            payloadPreview: output.payloadPreview
+        )
+    }
+
+    func prepareAndStart(files: [MedicalUploadLocalFile], kind: MedicalDocumentKind) {
+        reset()
+        selectedKind = kind
+        setSelectedFiles(files)
+        stage = .processing
+        startRecognitionTask()
+    }
+
 
     /// 将界面与中间态恢复为初始：清空文件、结果、进度与上传缓存，就诊人名称回读当前上下文。
     func reset() {
@@ -422,6 +440,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             return .prescription
         case .medication:
             return .medication
+        case .medicineBox:
+            return .medicineBox
         }
     }
     

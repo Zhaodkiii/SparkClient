@@ -15,12 +15,13 @@ struct MedicationPlan: Identifiable, Codable, Equatable, Sendable {
     var dosePerTime: String
     var doseValue: Double?
     var doseUnit: String
+    var frequencyType: String
+    var everyNDays: Int?
+    var weeklyWeekdays: [Int]
     var frequencyText: String
-    var frequencyCode: String
     var reminderTimes: [ReminderTime]
     var startDate: Date
     var endDate: Date?
-    var durationDays: Int?
     var instructions: String
     var reminderEnabled: Bool
     var status: String
