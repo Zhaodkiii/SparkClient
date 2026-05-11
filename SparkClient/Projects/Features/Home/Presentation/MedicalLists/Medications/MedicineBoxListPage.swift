@@ -9,6 +9,7 @@ struct MedicineBoxListPage: View {
     let medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     let memberID: Int?
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
     let onMedicineBoxesChanged: ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
 
@@ -21,12 +22,14 @@ struct MedicineBoxListPage: View {
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         memberID: Int?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
         viewModel: MedicalDocumentUploadViewModel,
         onMedicineBoxesChanged: @escaping ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
     ) {
         self.medicineBoxes = medicineBoxes
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.viewModel = viewModel
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
         _localMedicineBoxes = State(initialValue: medicineBoxes)
@@ -53,6 +56,7 @@ struct MedicineBoxListPage: View {
                             typeOptions: medicineTypeOptions,
                             specOptionBoxes: localMedicineBoxes,
                             workflowAPI: workflowAPI,
+                            fileTransferService: fileTransferService,
                             onSaved: upsertMedicineBox,
                             onDeleted: removeMedicineBox
                         )
@@ -99,6 +103,7 @@ struct MedicineBoxListPage: View {
                     mode: destination.formMode,
                     memberID: memberID,
                     workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
                     typeOptions: medicineTypeOptions,
                     specOptionBoxes: localMedicineBoxes,
                     onServerSaved: upsertMedicineBox
@@ -212,6 +217,7 @@ private struct MedicineBoxDetailPage: View {
     let typeOptions: [String]
     let specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
     let onSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onDeleted: (Int) -> Void
 
@@ -227,6 +233,7 @@ private struct MedicineBoxDetailPage: View {
         typeOptions: [String],
         specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onDeleted: @escaping (Int) -> Void
     ) {
@@ -234,6 +241,7 @@ private struct MedicineBoxDetailPage: View {
         self.typeOptions = typeOptions
         self.specOptionBoxes = specOptionBoxes
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.onSaved = onSaved
         self.onDeleted = onDeleted
         _currentBox = State(initialValue: box)
@@ -261,6 +269,16 @@ private struct MedicineBoxDetailPage: View {
                     Text(currentBox.notes)
                         .font(.body)
                         .foregroundStyle(.primary)
+                }
+            }
+
+            if let attachments = currentBox.attachments, attachments.isEmpty == false {
+                Section("附件") {
+                    MedicalAttachmentGridPreview(
+                        attachments: attachments,
+                        fileTransferService: fileTransferService
+                    )
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
             }
         }
@@ -291,6 +309,7 @@ private struct MedicineBoxDetailPage: View {
                 mode: .serverEdit(existing: currentBox),
                 memberID: currentBox.member,
                 workflowAPI: workflowAPI,
+                fileTransferService: fileTransferService,
                 typeOptions: typeOptions,
                 specOptionBoxes: specOptionBoxes,
                 onServerSaved: { saved in
@@ -337,8 +356,14 @@ private struct MedicineBoxDetailPage: View {
     }
 }
 
-private struct MedicineBoxUploadSheet: View {
+struct MedicineBoxUploadSheet: View {
     @Environment(\.dismiss) private var dismiss
+    let title: String
+    let headerTitle: String
+    let headerSubtitle: String
+    let emptyTitle: String
+    let emptySubtitle: String
+    let fileNamePrefix: String
     let onConfirm: ([MedicalUploadLocalFile]) -> Void
 
     @State private var localFiles: [MedicalUploadLocalFile] = []
@@ -347,8 +372,27 @@ private struct MedicineBoxUploadSheet: View {
     @State private var showingPhotoLibrary = false
     @State private var showingFileImporter = false
     @State private var showCameraUnavailableAlert = false
+    @State private var filePreviewSelection: FilePreviewInput?
 
     private let logger: Logger = ConsoleLogger()
+
+    init(
+        title: String = L10n.text("medical.upload.medicine_box.sheet.title", fallback: "选择药品图片"),
+        headerTitle: String = L10n.text("medical.upload.medicine_box.sheet.header", fallback: "选择上传方式"),
+        headerSubtitle: String = L10n.text("medical.upload.medicine_box.sheet.subtitle", fallback: "可一次选择多张药盒、药瓶或说明书图片，确认后开始识别。"),
+        emptyTitle: String = "尚未选择文件",
+        emptySubtitle: String = "可拍照、从相册选择或上传 PDF/图片",
+        fileNamePrefix: String = "medicine_box",
+        onConfirm: @escaping ([MedicalUploadLocalFile]) -> Void
+    ) {
+        self.title = title
+        self.headerTitle = headerTitle
+        self.headerSubtitle = headerSubtitle
+        self.emptyTitle = emptyTitle
+        self.emptySubtitle = emptySubtitle
+        self.fileNamePrefix = fileNamePrefix
+        self.onConfirm = onConfirm
+    }
 
     var body: some View {
         CompatibleNavigationContainer {
@@ -369,7 +413,7 @@ private struct MedicineBoxUploadSheet: View {
                 .padding(.top, 12)
             }
             
-            .navigationTitle(L10n.text("medical.upload.medicine_box.sheet.title", fallback: "选择药品图片"))
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
@@ -389,7 +433,7 @@ private struct MedicineBoxUploadSheet: View {
                 onCancel: { showingCamera = false },
                 onImagePicked: { image in
                     showingCamera = false
-                    if let file = saveUIImageToTemp(image: image, namePrefix: "medicine_box_camera") {
+                    if let file = saveUIImageToTemp(image: image, namePrefix: "\(fileNamePrefix)_camera") {
                         localFiles.append(file)
                     }
                 }
@@ -401,7 +445,7 @@ private struct MedicineBoxUploadSheet: View {
                 onCancel: { showingPhotoLibrary = false },
                 onImagePicked: { image in
                     showingPhotoLibrary = false
-                    if let file = saveUIImageToTemp(image: image, namePrefix: "medicine_box_photo") {
+                    if let file = saveUIImageToTemp(image: image, namePrefix: "\(fileNamePrefix)_photo") {
                         localFiles.append(file)
                     }
                 }
@@ -427,13 +471,14 @@ private struct MedicineBoxUploadSheet: View {
         } message: {
             Text("当前设备不支持相机。")
         }
+        .unifiedFilePreview(selection: $filePreviewSelection)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(L10n.text("medical.upload.medicine_box.sheet.header", fallback: "选择上传方式"))
+            Text(headerTitle)
                 .font(.system(size: 17, weight: .semibold))
-            Text(L10n.text("medical.upload.medicine_box.sheet.subtitle", fallback: "可一次选择多张药盒、药瓶或说明书图片，确认后开始识别。"))
+            Text(headerSubtitle)
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -459,10 +504,10 @@ private struct MedicineBoxUploadSheet: View {
             Image(systemName: "square.and.arrow.up")
                 .font(.system(size: 40))
                 .foregroundStyle(.purple.opacity(0.65))
-            Text("尚未选择文件")
+            Text(emptyTitle)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.purple)
-            Text("可拍照、从相册选择或上传 PDF/图片")
+            Text(emptySubtitle)
                 .font(.system(size: 12))
                 .foregroundStyle(.purple.opacity(0.8))
         }
@@ -487,20 +532,16 @@ private struct MedicineBoxUploadSheet: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(localFiles) { file in
-                    VStack(spacing: 6) {
-                        Image(systemName: file.mimeType?.contains("image") == true ? "photo" : "doc.richtext")
-                            .font(.system(size: 28))
-                        Text(file.displayName)
-                            .font(.system(size: 11))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(height: 90)
-                    .frame(maxWidth: .infinity)
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                spacing: 12
+            ) {
+                ForEach(BuildMedicalDocumentPreviewItemsUseCase().execute(files: localFiles)) { item in
+                    MedicalDocumentFilePreviewSquareCard(
+                        item: item,
+                        onPreview: { filePreviewSelection = item },
+                        onDelete: { localFiles.removeAll { $0.id == item.id } }
+                    )
                 }
             }
             .padding(.vertical, 4)
@@ -691,6 +732,7 @@ struct MedicineBoxFormView: View {
     let mode: Mode
     let memberID: Int
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService?
     let typeOptions: [String]
     let specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     let onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicineBox) -> Void)?
@@ -701,6 +743,8 @@ struct MedicineBoxFormView: View {
     @State private var sheetKeyboardVisible = false
     @State private var showDosageFormSheet = false
     @State private var showSpecificationSheet = false
+    @State private var pendingAttachmentFiles: [MedicalUploadLocalFile] = []
+    @State private var localAttachmentPreview: FilePreviewInput?
 
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
@@ -713,6 +757,7 @@ struct MedicineBoxFormView: View {
         mode: Mode,
         memberID: Int,
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService? = nil,
         typeOptions: [String] = MedicineBoxTypeCatalog.defaultStoredOptions,
         specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = [],
         onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicineBox) -> Void)? = nil
@@ -720,6 +765,7 @@ struct MedicineBoxFormView: View {
         self.mode = mode
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.typeOptions = MedicineBoxTypeCatalog.mergedOptions(typeOptions)
         self.specOptionBoxes = specOptionBoxes
         self.onServerSaved = onServerSaved
@@ -772,6 +818,7 @@ struct MedicineBoxFormView: View {
         .interactiveDismissDisabled(isSubmitting)
 //        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(uiColor: .systemBackground)))
         .background(Color(uiColor: .systemBackground))
+        .unifiedFilePreview(selection: $localAttachmentPreview)
 
 
         .alert("保存失败", isPresented: Binding(
@@ -800,6 +847,7 @@ struct MedicineBoxFormView: View {
             extraChromeHeight: Self.formSheetNavChromeHeight + Self.formSheetBottomBarChromeHeight
         ) {
             VStack(spacing: 14) {
+      
                 SparkFormCard(title: "药品信息", titleSystemImage: "pills.fill") {
                     VStack(spacing: 12) {
                         SparkFormTextRow(title: "药品名称", text: $draft.medicineName, placeholder: "如 对乙酰氨基酚或泰诺林", required: true, keyboardVisible: $sheetKeyboardVisible)
@@ -813,7 +861,6 @@ struct MedicineBoxFormView: View {
 //                                    .padding(.horizontal, 12)
 //                                    .frame(height: 44)
                                     .sparkFormTextFieldChrome(isFocused: false, isError: false)
-
 //                                    .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                         }
@@ -858,8 +905,89 @@ struct MedicineBoxFormView: View {
                     SparkFormTextAreaRow(title: "备注", text: $draft.notes, minHeight: 80, maxHeight: 160, placeholder: "用法、存放位置或注意事项", keyboardVisible: $sheetKeyboardVisible)
                 }
 
+                if fileTransferService != nil {
+                    attachmentFormCard
+                }
+
             }
         }
+    }
+
+    private var attachmentFormCard: some View {
+        SparkFormCard(title: "附件", titleSystemImage: "paperclip") {
+            VStack(alignment: .leading, spacing: 12) {
+                if let fileTransferService, draft.attachments.isEmpty == false {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("已保存附件")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+
+                        MedicalAttachmentListView(
+                            attachments: draft.attachments,
+                            fileTransferService: fileTransferService
+                        )
+                    }
+                }
+
+                if pendingAttachmentFiles.isEmpty == false {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("待上传附件")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
+                            spacing: 12
+                        ) {
+                            ForEach(BuildMedicalDocumentPreviewItemsUseCase().execute(files: pendingAttachmentFiles)) { item in
+                                MedicalDocumentFilePreviewSquareCard(
+                                    item: item,
+                                    onPreview: { localAttachmentPreview = item },
+                                    onDelete: { pendingAttachmentFiles.removeAll { $0.id == item.id } }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                attachmentPickerButton
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var attachmentPickerButton: some View {
+        if #available(iOS 16.0, *) {
+            MedicalDocumentFilePickerMenu(
+                buttonContent: { addAttachmentButtonLabel },
+                onFilesSelected: appendAttachmentFiles
+            )
+        } else {
+            MedicalDocumentLegacyFilePickerMenu(
+                buttonContent: { addAttachmentButtonLabel },
+                onFilesSelected: appendAttachmentFiles
+            )
+        }
+    }
+
+    private var addAttachmentButtonLabel: some View {
+        Label("添加附件", systemImage: "plus.circle.fill")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Color.accentColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.28), style: StrokeStyle(lineWidth: 1, dash: [5]))
+            )
+    }
+
+    private func appendAttachmentFiles(_ files: [MedicalUploadLocalFile]) {
+        pendingAttachmentFiles.append(contentsOf: files)
     }
 
     private var medicineTypeBinding: Binding<String> {
@@ -889,7 +1017,9 @@ struct MedicineBoxFormView: View {
         defer { isSubmitting = false }
 
         do {
-            let payload = try draft.payload(memberID: memberID)
+            let uploadedFileIDs = try await uploadPendingAttachmentsIfNeeded()
+            let fileIDs = draft.attachments.map(\.id) + uploadedFileIDs
+            let payload = try draft.payload(memberID: memberID, fileIds: fileIDs)
             let saved: SparkMedicalSyncAPI.RemoteMedicineBox
             switch mode {
             case .create:
@@ -921,6 +1051,15 @@ struct MedicineBoxFormView: View {
             return false
         }
         return true
+    }
+
+    private func uploadPendingAttachmentsIfNeeded() async throws -> [Int] {
+        guard pendingAttachmentFiles.isEmpty == false else { return [] }
+        guard let fileTransferService else { return [] }
+
+        let uploader = UploadMedicalDocumentFilesUseCase(fileTransferService: fileTransferService)
+        let uploaded = try await uploader.execute(memberID: memberID, files: pendingAttachmentFiles)
+        return uploaded.map(\.remoteFile.id)
     }
 
     private var modeLogLabel: String {
@@ -1423,6 +1562,7 @@ struct MedicineBoxDraft {
     var hasExpireDate = false
     var expireDate = Date()
     var notes = ""
+    var attachments: [SparkMedicalSyncAPI.RemoteManagedFile] = []
 
     init() {}
 
@@ -1471,13 +1611,14 @@ struct MedicineBoxDraft {
             self.expireDate = expireDate
         }
         notes = existing.notes
+        attachments = existing.attachments ?? []
     }
 
     var totalQuantityValue: Double? {
         Double(totalQuantity.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    fileprivate func payload(memberID: Int) throws -> MedicineBoxPayload {
+    fileprivate func payload(memberID: Int, fileIds: [Int] = []) throws -> MedicineBoxPayload {
         let trimmedQty = totalQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedTotal: Double?
         if trimmedQty.isEmpty {
@@ -1498,7 +1639,8 @@ struct MedicineBoxDraft {
             totalQuantity: resolvedTotal,
             expireDate: hasExpireDate ? MedicalDateCoding.encodeDateOnly(expireDate) : nil,
             notes: notes.nilIfBlank ?? "",
-            extra: [:]
+            extra: [:],
+            fileIds: fileIds
         )
     }
 
@@ -1535,6 +1677,7 @@ private struct MedicineBoxPayload: Encodable {
     let expireDate: String?
     let notes: String
     let extra: [String: String]
+    let fileIds: [Int]
 
     enum CodingKeys: String, CodingKey {
         case member
@@ -1548,6 +1691,7 @@ private struct MedicineBoxPayload: Encodable {
         case expireDate = "expire_date"
         case notes
         case extra
+        case fileIds = "file_ids"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1563,6 +1707,7 @@ private struct MedicineBoxPayload: Encodable {
         try c.encodeIfPresent(expireDate, forKey: .expireDate)
         try c.encode(notes, forKey: .notes)
         try c.encode(extra, forKey: .extra)
+        try c.encode(fileIds, forKey: .fileIds)
     }
 }
 

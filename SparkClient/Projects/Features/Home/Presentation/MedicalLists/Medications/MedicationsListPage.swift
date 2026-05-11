@@ -25,6 +25,7 @@ private enum MedicationFilterType: String, Identifiable, CaseIterable {
 struct MedicationsListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let notificationClient: any NotificationClient
@@ -33,6 +34,8 @@ struct MedicationsListPage: View {
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
     @State private var sheetDestination: MedicationPlanSheetDestination?
+    @State private var showingUploadSheet = false
+    @State private var showingUploadHost = false
 
     private let logger: Logger = ConsoleLogger()
     private let logModule = LogModule.home
@@ -40,12 +43,14 @@ struct MedicationsListPage: View {
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
         notificationClient: any NotificationClient
     ) {
         self.completeData = completeData
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
         self.notificationClient = notificationClient
@@ -103,7 +108,9 @@ struct MedicationsListPage: View {
                 medicationListContent
             }
         }
-        .overlay(bottomActionBar, alignment: .bottom)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomActionBar
+        }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
         .navigationBarTitleDisplayMode(.inline)
@@ -114,6 +121,7 @@ struct MedicationsListPage: View {
                         medicineBoxes: medicineBoxes,
                         memberID: memberID,
                         workflowAPI: workflowAPI,
+                        fileTransferService: fileTransferService,
                         viewModel: medicalDocumentUploadViewModel,
                         onMedicineBoxesChanged: { medicineBoxes = $0 }
                     )
@@ -148,6 +156,7 @@ struct MedicationsListPage: View {
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,
                     workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
                     notificationClient: notificationClient,
                     onMedicineBoxSaved: upsertMedicineBox,
                     onServerSaved: upsertMedicationPlan
@@ -157,6 +166,23 @@ struct MedicationsListPage: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .sheet(isPresented: $showingUploadSheet) {
+            MedicineBoxUploadSheet(
+                title: L10n.text("medical.upload.medication_plan.sheet.title", fallback: "选择服药计划图片"),
+                headerTitle: L10n.text("medical.upload.medication_plan.sheet.header", fallback: "选择上传方式"),
+                headerSubtitle: L10n.text("medical.upload.medication_plan.sheet.subtitle", fallback: "可一次选择多张处方、药品说明或服药计划图片，确认后开始识别。"),
+                emptyTitle: L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件"),
+                emptySubtitle: L10n.text("medical.upload.medication_plan.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片"),
+                fileNamePrefix: "medication_plan"
+            ) { files in
+                startMedicationPlanRecognition(files: files)
+            }
+        }
+        .fullScreenCover(isPresented: $showingUploadHost) {
+            CompatibleNavigationContainer {
+                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
         }
     }
@@ -201,6 +227,7 @@ struct MedicationsListPage: View {
                             records: recordsByPlanID[plan.id] ?? [],
                             memberID: memberID,
                             workflowAPI: workflowAPI,
+                            fileTransferService: fileTransferService,
                             notificationClient: notificationClient,
                             onSaved: upsertMedicationPlan,
                             onDeleted: removeMedicationPlan,
@@ -252,21 +279,49 @@ struct MedicationsListPage: View {
                 .background(Color(uiColor: .separator).opacity(0.2))
 
             VStack(spacing: 12) {
-                Button {
-                    sheetDestination = .create
-                } label: {
-                    Text(L10n.text("home.medical.list.medications.action.add_plan", fallback: "新增服药计划"))
-                        .font(.headline)
-                        .foregroundStyle(Color.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Color(uiColor: .systemPurple),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
+                GeometryReader { proxy in
+                    HStack(spacing: 12) {
+                        Button {
+                            sheetDestination = .create
+                        } label: {
+                            Label(L10n.text("home.medical.list.medications.action.manual_add", fallback: "手动添加"), systemImage: "plus")
+                                .font(.headline)
+                                .foregroundStyle(Color(uiColor: .systemPurple))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(
+                                    Color(uiColor: .systemPurple).opacity(0.1),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color(uiColor: .systemPurple).opacity(0.22), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(memberID == nil)
+                        .frame(width: max(112, proxy.size.width * 0.34))
+
+                        Button {
+                            showingUploadSheet = true
+                        } label: {
+                            Label(L10n.text("home.medical.list.medications.action.camera_add_plan", fallback: "拍摄添加计划"), systemImage: "camera.fill")
+                                .font(.headline)
+                                .foregroundStyle(Color.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(
+                                    Color(uiColor: .systemPurple),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(memberID == nil)
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(memberID == nil)
+                .frame(height: 52)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -293,6 +348,12 @@ struct MedicationsListPage: View {
         } else {
             medicineBoxes.insert(box, at: 0)
         }
+    }
+
+    @MainActor
+    private func startMedicationPlanRecognition(files: [MedicalUploadLocalFile]) {
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicationPlan)
+        showingUploadHost = true
     }
 
     private func statusRank(_ status: String) -> Int {
@@ -654,6 +715,7 @@ struct MedicationPlanFormView: View {
     let mode: Mode
     let memberID: Int
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
     let notificationClient: any NotificationClient
     let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)?
@@ -680,6 +742,7 @@ struct MedicationPlanFormView: View {
         memberID: Int,
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
         notificationClient: any NotificationClient,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)? = nil
@@ -687,6 +750,7 @@ struct MedicationPlanFormView: View {
         self.mode = mode
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.notificationClient = notificationClient
         self.onMedicineBoxSaved = onMedicineBoxSaved
         self.onServerSaved = onServerSaved
@@ -819,6 +883,7 @@ struct MedicationPlanFormView: View {
                             medicineBoxes: medicineBoxes,
                             selectedMedicineBoxID: draft.medicineBoxID,
                             workflowAPI: workflowAPI,
+                            fileTransferService: fileTransferService,
                             onMedicineBoxSaved: handleMedicineBoxSaved,
                             onSelect: applyMedicineBoxSelection
                         )
@@ -1261,6 +1326,7 @@ private struct MedicationReminderTimesSection: View {
 private struct MedicationPlanMedicineBoxPickerPage: View {
     let memberID: Int
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
     let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onSelect: (SparkMedicalSyncAPI.RemoteMedicineBox?) -> Void
 
@@ -1274,11 +1340,13 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         selectedMedicineBoxID: Int?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onSelect: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox?) -> Void
     ) {
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.onMedicineBoxSaved = onMedicineBoxSaved
         self.onSelect = onSelect
         _medicineBoxes = State(initialValue: medicineBoxes)
@@ -1390,6 +1458,7 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                 mode: destination.formMode,
                 memberID: memberID,
                 workflowAPI: workflowAPI,
+                fileTransferService: fileTransferService,
                 typeOptions: medicineTypeOptions,
                 specOptionBoxes: medicineBoxes,
                 onServerSaved: upsertMedicineBox
@@ -1804,6 +1873,7 @@ private struct MedicationPlanDetailPage: View {
     let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     let memberID: Int?
     let workflowAPI: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
     let notificationClient: any NotificationClient
     let onSaved: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
     let onDeleted: (Int) -> Void
@@ -1823,6 +1893,7 @@ private struct MedicationPlanDetailPage: View {
         records: [SparkMedicalSyncAPI.RemoteMedicationRecord],
         memberID: Int?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
         notificationClient: any NotificationClient,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void,
         onDeleted: @escaping (Int) -> Void,
@@ -1832,6 +1903,7 @@ private struct MedicationPlanDetailPage: View {
         self.records = records
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
         self.notificationClient = notificationClient
         self.onSaved = onSaved
         self.onDeleted = onDeleted
@@ -1930,6 +2002,7 @@ private struct MedicationPlanDetailPage: View {
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,
                     workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
                     notificationClient: notificationClient,
                     onMedicineBoxSaved: handleMedicineBoxSaved,
                     onServerSaved: { saved in
@@ -2077,6 +2150,7 @@ private extension KeyedEncodingContainer {
         MedicationsListPage(
             completeData: nil,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+            fileTransferService: AppContainer.preview.fileTransferService,
             memberContextStore: AppContainer.preview.memberContextStore,
             medicalDocumentUploadViewModel: AppContainer.preview.makeMedicalDocumentUploadViewModel(),
             notificationClient: AppContainer.preview.notificationClient
