@@ -59,7 +59,7 @@ enum MedicalDocumentKind: String, Codable, CaseIterable, Sendable {
     case healthExamReport // 体检报告（包含大量数值指标）
     case medicalReport    // 医疗报告（如 B超、CT、放射科报告）
     case prescription     // 处方单（用药清单与剂量）
-    case medication       // 用药计划/药品用法（原有流程，不改动）
+    case medicationPlan   // 用药计划（抽取药箱 + 服药计划组合）
     case medicineBox      // 药品/药盒包装（用于加入药箱）
 }
 
@@ -140,32 +140,98 @@ struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
     let details: [MedicalReportItem] // 指标明细
 }
 
-// MARK: - 用药：与 `Medication` ORM 对齐的抽取行（处方明细与单一药品文档共用）
+// MARK: - 用药计划：药箱 + 服药计划组合抽取行
 
-/// 与 ``Medication`` 字段一一对应；流式 JSON 解码依赖 `JSONDecoder.keyDecodingStrategy == .convertFromSnakeCase`。
+/// 与 ``MedicineBox`` + ``MedicationPlan`` 字段对齐；流式 JSON 解码依赖 `JSONDecoder.keyDecodingStrategy == .convertFromSnakeCase`。
 /// 注意：数值字段使用 String? 以兼容 OCR 脏数据，后续通过扩展方法转换为实际数值。
-struct MedicationRecognitionDraft: Sendable, Equatable, Codable {
-    let genericName: String?
+struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
+    /// 药箱字段：用于同步创建/关联 MedicineBox。
+    let medicineName: String?
+    let medicineType: String?
+    let totalQuantity: String?
+    let expireDate: String?
+    let medicineBox: MedicineBoxRecognitionDraft?
+
     let brandName: String?
-    let drugName: String?
     let dosageForm: String?
     let strength: String?
-    let route: String?
+    let doseUnit: String?
+
+    /// 服药计划字段：用于创建 MedicationPlan。
     let dosePerTime: String?
     let doseValue: String?          // OCR 原始字符串，如 "1", "0.5", "1g"
-    let doseUnit: String?
     let frequencyCode: String?
-    let period: String?
+    let frequencyType: String?
+    let everyNDays: String?
+    let weeklyWeekdays: [Int]?
     let timesPerPeriod: String?     // OCR 原始字符串，如 "2", "3次", "每日2次"
     let frequencyText: String?
     let durationDays: String?       // OCR 原始字符串，如 "7", "7天"
+    let startDate: String?
+    let endDate: String?
     let instructions: String?
     let reminderEnabled: Bool?
     let reminderTimes: [String]?
+    let status: String?
     /// 批次内排序；流式 JSON 常为字符串
     @FlexibleOptionalString var sortOrder: String?
     let extra: [String: String]?
 
+    init(
+        medicineName: String? = nil,
+        medicineType: String? = nil,
+        totalQuantity: String? = nil,
+        expireDate: String? = nil,
+        medicineBox: MedicineBoxRecognitionDraft? = nil,
+        brandName: String? = nil,
+        dosageForm: String? = nil,
+        strength: String? = nil,
+        dosePerTime: String? = nil,
+        doseValue: String? = nil,
+        doseUnit: String? = nil,
+        frequencyCode: String? = nil,
+        frequencyType: String? = nil,
+        everyNDays: String? = nil,
+        weeklyWeekdays: [Int]? = nil,
+        timesPerPeriod: String? = nil,
+        frequencyText: String? = nil,
+        durationDays: String? = nil,
+        startDate: String? = nil,
+        endDate: String? = nil,
+        instructions: String? = nil,
+        reminderEnabled: Bool? = nil,
+        reminderTimes: [String]? = nil,
+        status: String? = nil,
+        sortOrder: String? = nil,
+        extra: [String: String]? = nil
+    ) {
+        self.medicineName = medicineName
+        self.medicineType = medicineType
+        self.totalQuantity = totalQuantity
+        self.expireDate = expireDate
+        self.medicineBox = medicineBox
+        self.brandName = brandName
+        self.dosageForm = dosageForm
+        self.strength = strength
+        self.doseUnit = doseUnit
+        self.dosePerTime = dosePerTime
+        self.doseValue = doseValue
+        self.frequencyCode = frequencyCode
+        self.frequencyType = frequencyType
+        self.everyNDays = everyNDays
+        self.weeklyWeekdays = weeklyWeekdays
+        self.timesPerPeriod = timesPerPeriod
+        self.frequencyText = frequencyText
+        self.durationDays = durationDays
+        self.startDate = startDate
+        self.endDate = endDate
+        self.instructions = instructions
+        self.reminderEnabled = reminderEnabled
+        self.reminderTimes = reminderTimes
+        self.status = status
+        self._sortOrder = FlexibleOptionalString(wrappedValue: sortOrder)
+        self.extra = extra
+    }
 }
 
 /// 药箱药品抽取草稿：用于药盒/药瓶/说明书图片识别后批量加入药箱。
@@ -197,7 +263,7 @@ struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     let auditedAt: String?
     let extra: [String: String]?
     /// 批次内药品行；缺省或省略时按空数组处理。
-    let medications: [MedicationRecognitionDraft]?
+    let medications: [MedicationPlanRecognitionDraft]?
 
 }
 
@@ -287,7 +353,7 @@ enum MedicalDocumentTypedResult: Sendable, Equatable {
     case healthExamReport(HealthExamRecognitionDraft)
     case medicalReport([MedicalReportRecognitionDraft])
     case prescription(PrescriptionRecognitionDraft)
-    case medication([MedicationRecognitionDraft])
+    case medicationPlan([MedicationPlanRecognitionDraft])
     case medicineBoxes([MedicineBoxRecognitionDraft])
 }
 

@@ -1,33 +1,36 @@
 import SwiftUI
 
-/// 单条用药识别草稿：字段与 `MedicationRecognitionDraft` 对齐。
+/// 单条用药识别草稿：字段与 `MedicationPlanRecognitionDraft` 对齐。
 struct MedicationFormView: View {
     enum Mode {
         case create
-        case serverEdit(existing: MedicationRecognitionDraft)
-        case localEdit(existing: MedicationRecognitionDraft, onSubmit: (MedicationRecognitionDraft) -> Void)
+        case serverEdit(existing: MedicationPlanRecognitionDraft)
+        case localEdit(existing: MedicationPlanRecognitionDraft, onSubmit: (MedicationPlanRecognitionDraft) -> Void)
     }
 
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (MedicationRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (MedicationRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: (@MainActor (MedicationPlanRecognitionDraft) async throws -> Void)?
+    let onServerSubmit: (@MainActor (MedicationPlanRecognitionDraft) async throws -> Void)?
 
-    @State private var drugName = ""
-    @State private var genericName = ""
+    @State private var medicineName = ""
+    @State private var medicineType = ""
     @State private var brandName = ""
     @State private var dosageForm = ""
     @State private var strength = ""
-    @State private var route = ""
+    @State private var totalQuantity = ""
+    @State private var expireDate = ""
     @State private var dosePerTime = ""
     @State private var doseValue = ""
     @State private var doseUnit = ""
     @State private var frequencyCode = ""
-    @State private var period = ""
+    @State private var frequencyType = "daily"
     @State private var timesPerPeriod = ""
     @State private var frequencyText = ""
     @State private var durationDays = ""
+    @State private var startDate = ""
+    @State private var endDate = ""
     @State private var instructions = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -36,55 +39,61 @@ struct MedicationFormView: View {
     private let formLogModule: LogModule = .medical
     private let seedSortOrder: String
 
-    init(mode: Mode, onCreateSubmit: (@MainActor (MedicationRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (MedicationRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: (@MainActor (MedicationPlanRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (MedicationPlanRecognitionDraft) async throws -> Void)? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
 
-        let seed: MedicationRecognitionDraft
+        let seed: MedicationPlanRecognitionDraft
         switch mode {
         case .create:
-            seed = .init(genericName: nil, brandName: nil, drugName: nil, dosageForm: nil, strength: nil, route: nil, dosePerTime: nil, doseValue: nil, doseUnit: nil, frequencyCode: nil, period: nil, timesPerPeriod: nil, frequencyText: nil, durationDays: nil, instructions: nil, reminderEnabled: false, reminderTimes: [], sortOrder: "0", extra: nil)
+            seed = .init(medicineName: nil, medicineType: nil, totalQuantity: nil, expireDate: nil, brandName: nil, dosageForm: nil, strength: nil, dosePerTime: nil, doseValue: nil, doseUnit: nil, frequencyCode: nil, frequencyType: "daily", timesPerPeriod: nil, frequencyText: nil, durationDays: nil, startDate: nil, endDate: nil, instructions: nil, reminderEnabled: false, reminderTimes: [], sortOrder: "0", extra: nil)
             seedSortOrder = "0"
         case .serverEdit(let existing), .localEdit(let existing, _):
             seed = existing
             seedSortOrder = existing.sortOrder ?? "0"
         }
 
-        _drugName = State(initialValue: seed.drugName ?? "")
-        _genericName = State(initialValue: seed.genericName ?? "")
+        _medicineName = State(initialValue: seed.medicineName ?? seed.medicineBox?.medicineName ?? seed.brandName ?? "")
+        _medicineType = State(initialValue: seed.medicineType ?? seed.medicineBox?.medicineType ?? "")
         _brandName = State(initialValue: seed.brandName ?? "")
         _dosageForm = State(initialValue: seed.dosageForm ?? "")
         _strength = State(initialValue: seed.strength ?? "")
-        _route = State(initialValue: seed.route ?? "")
+        _totalQuantity = State(initialValue: seed.totalQuantity ?? seed.medicineBox?.totalQuantity ?? "")
+        _expireDate = State(initialValue: seed.expireDate ?? seed.medicineBox?.expireDate ?? "")
         _dosePerTime = State(initialValue: seed.dosePerTime ?? "")
         _doseValue = State(initialValue: seed.doseValue ?? "")
         _doseUnit = State(initialValue: seed.doseUnit ?? "")
         _frequencyCode = State(initialValue: seed.frequencyCode ?? "")
-        _period = State(initialValue: seed.period ?? "")
+        _frequencyType = State(initialValue: seed.frequencyType ?? "daily")
         _timesPerPeriod = State(initialValue: seed.timesPerPeriod ?? "")
         _frequencyText = State(initialValue: seed.frequencyText ?? "")
         _durationDays = State(initialValue: seed.durationDays ?? "")
+        _startDate = State(initialValue: seed.startDate ?? "")
+        _endDate = State(initialValue: seed.endDate ?? "")
         _instructions = State(initialValue: seed.instructions ?? "")
     }
 
     var body: some View {
         ScrollView {
             SparkFormCard(title: navTitle) {
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.drug_name"), text: $drugName)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.generic_name"), text: $genericName)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medicine_box.field.name", fallback: "药品名称"), text: $medicineName)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medicine_box.field.type", fallback: "药品类型"), text: $medicineType)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.brand_name"), text: $brandName)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dosage_form"), text: $dosageForm)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.strength"), text: $strength)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.route"), text: $route)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medicine_box.field.total_quantity", fallback: "总数量"), text: $totalQuantity)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medicine_box.field.expire_date", fallback: "有效期"), text: $expireDate)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_per_time"), text: $dosePerTime)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_value"), text: $doseValue)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_unit"), text: $doseUnit)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.frequency_code"), text: $frequencyCode)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.period"), text: $period)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medication_plan.field.frequency_type", fallback: "频次类型"), text: $frequencyType)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.times_per_period"), text: $timesPerPeriod)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.frequency_text"), text: $frequencyText)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.duration_days"), text: $durationDays)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medication_plan.field.start_date", fallback: "开始日期"), text: $startDate)
+                SparkFormTextRow(title: L10n.text("home.medical.list.medication_plan.field.end_date", fallback: "结束日期"), text: $endDate)
                 SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.instructions"), text: $instructions)
             }
             .padding(16)
@@ -131,8 +140,8 @@ struct MedicationFormView: View {
         }
     }
 
-    private var outputDraft: MedicationRecognitionDraft {
-        .init(genericName: genericName.nilIfBlank, brandName: brandName.nilIfBlank, drugName: drugName.nilIfBlank, dosageForm: dosageForm.nilIfBlank, strength: strength.nilIfBlank, route: route.nilIfBlank, dosePerTime: dosePerTime.nilIfBlank, doseValue: doseValue.nilIfBlank, doseUnit: doseUnit.nilIfBlank, frequencyCode: frequencyCode.nilIfBlank, period: period.nilIfBlank, timesPerPeriod: timesPerPeriod.nilIfBlank, frequencyText: frequencyText.nilIfBlank, durationDays: durationDays.nilIfBlank, instructions: instructions.nilIfBlank, reminderEnabled: false, reminderTimes: [], sortOrder: seedSortOrder, extra: nil)
+    private var outputDraft: MedicationPlanRecognitionDraft {
+        .init(medicineName: medicineName.nilIfBlank, medicineType: medicineType.nilIfBlank, totalQuantity: totalQuantity.nilIfBlank, expireDate: expireDate.nilIfBlank, brandName: brandName.nilIfBlank, dosageForm: dosageForm.nilIfBlank, strength: strength.nilIfBlank, dosePerTime: dosePerTime.nilIfBlank, doseValue: doseValue.nilIfBlank, doseUnit: doseUnit.nilIfBlank, frequencyCode: frequencyCode.nilIfBlank, frequencyType: frequencyType.nilIfBlank, timesPerPeriod: timesPerPeriod.nilIfBlank, frequencyText: frequencyText.nilIfBlank, durationDays: durationDays.nilIfBlank, startDate: startDate.nilIfBlank, endDate: endDate.nilIfBlank, instructions: instructions.nilIfBlank, reminderEnabled: false, reminderTimes: [], sortOrder: seedSortOrder, extra: nil)
     }
 
     private func saveNow() {

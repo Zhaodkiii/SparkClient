@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MedicationMemberConfirmSectionView: View {
     let memberID: Int?
-    let medications: [MedicationRecognitionDraft]
+    let medications: [MedicationPlanRecognitionDraft]
 
     var body: some View {
         MedicationResultSectionCard(
@@ -25,9 +25,9 @@ struct MedicationMemberConfirmSectionView: View {
 }
 
 struct MedicationListSectionView: View {
-    let medications: [MedicationRecognitionDraft]
+    let medications: [MedicationPlanRecognitionDraft]
     let onBatchEdit: () -> Void
-    let onEditItem: (Int, MedicationRecognitionDraft) -> Void
+    let onEditItem: (Int, MedicationPlanRecognitionDraft) -> Void
 
     var body: some View {
         MedicationResultSectionCard(
@@ -57,19 +57,19 @@ struct MedicationListSectionView: View {
         }
     }
 
-    private func row(index: Int, item: MedicationRecognitionDraft) -> some View {
+    private func row(index: Int, item: MedicationPlanRecognitionDraft) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "capsule")
                 .font(.caption)
                 .foregroundStyle(Color(uiColor: .systemIndigo))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.drugName ?? item.genericName ?? L10n.text("medical.upload.result.medication.unnamed"))
+                Text(item.medicineName ?? item.medicineBox?.medicineName ?? item.brandName ?? L10n.text("medical.upload.result.medication.unnamed"))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                let detail = [item.strength, item.frequencyText, item.instructions]
+                let detail = [item.medicineType, item.strength, item.frequencyText, item.instructions]
                     .compactMap { $0?.nilIfBlank }
                     .joined(separator: " · ")
                 if detail.isEmpty == false {

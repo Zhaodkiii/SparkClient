@@ -10,8 +10,8 @@ struct MedicationMultiCreateView: View {
 
     struct MedicationItemDraft: Identifiable {
         var id = UUID()
-        var drugName: String = ""
-        var genericName: String = ""
+        var medicineName: String = ""
+        var medicineType: String = ""
         var strength: String = ""
         var frequencyText: String = ""
         var dosePerTime: String = ""
@@ -60,7 +60,7 @@ struct MedicationMultiCreateView: View {
         _batchNo = State(initialValue: seed.batchNo ?? "")
         _status = State(initialValue: seed.status ?? "active")
         _items = State(initialValue: (seed.medications ?? []).map {
-            MedicationItemDraft(drugName: $0.drugName ?? "", genericName: $0.genericName ?? "", strength: $0.strength ?? "", frequencyText: $0.frequencyText ?? "", dosePerTime: $0.dosePerTime ?? "")
+            MedicationItemDraft(medicineName: $0.medicineName ?? $0.medicineBox?.medicineName ?? $0.brandName ?? "", medicineType: $0.medicineType ?? $0.medicineBox?.medicineType ?? "", strength: $0.strength ?? "", frequencyText: $0.frequencyText ?? "", dosePerTime: $0.dosePerTime ?? "")
         })
     }
 
@@ -84,8 +84,8 @@ struct MedicationMultiCreateView: View {
 
                     ForEach($items) { $item in
                         VStack(alignment: .leading, spacing: 6) {
-                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.drug_name"), text: $item.drugName)
-                            SparkFormTextRow(title: L10n.text("medical_record.forms.field.generic_name"), text: $item.genericName)
+                            SparkFormTextRow(title: L10n.text("home.medical.list.medicine_box.field.name", fallback: "药品名称"), text: $item.medicineName)
+                            SparkFormTextRow(title: L10n.text("home.medical.list.medicine_box.field.type", fallback: "药品类型"), text: $item.medicineType)
                             SparkFormTextRow(title: L10n.text("medical_record.forms.field.strength"), text: $item.strength)
                             SparkFormTextRow(title: L10n.text("medical_record.forms.field.frequency_text"), text: $item.frequencyText)
                             SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_per_time"), text: $item.dosePerTime)
@@ -141,18 +141,15 @@ struct MedicationMultiCreateView: View {
 
     private var outputDraft: PrescriptionRecognitionDraft {
         let meds = items.enumerated().map { index, item in
-            MedicationRecognitionDraft(
-                genericName: item.genericName.nilIfBlank,
-                brandName: nil,
-                drugName: item.drugName.nilIfBlank,
+            MedicationPlanRecognitionDraft(
+                medicineName: item.medicineName.nilIfBlank,
+                medicineType: item.medicineType.nilIfBlank,
                 dosageForm: nil,
                 strength: item.strength.nilIfBlank,
-                route: nil,
                 dosePerTime: item.dosePerTime.nilIfBlank,
                 doseValue: nil,
                 doseUnit: nil,
                 frequencyCode: nil,
-                period: nil,
                 timesPerPeriod: nil,
                 frequencyText: item.frequencyText.nilIfBlank,
                 durationDays: nil,

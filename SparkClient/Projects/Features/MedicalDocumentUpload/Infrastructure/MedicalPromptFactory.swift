@@ -39,7 +39,7 @@ struct MedicalPromptFactory: MedicalPromptBuilding {
             return localizer.medicalReportExtractionPrompt(ocrText: input.mergedOCRText)
         case .prescription:
             return localizer.prescriptionExtractionPrompt(ocrText: input.mergedOCRText)
-        case .medication:
+        case .medicationPlan:
             return localizer.medicationExtractionPrompt(ocrText: input.mergedOCRText)
         case .medicineBox:
             return localizer.medicineBoxExtractionPrompt(ocrText: input.mergedOCRText)

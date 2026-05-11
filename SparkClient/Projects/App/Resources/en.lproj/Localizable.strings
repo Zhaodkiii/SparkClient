@@ -848,6 +848,7 @@
 "common.normal" = "Normal";
 "common.prescription" = "Prescription";
 "common.medication" = "Medication";
+"common.medicationPlan" = "Medication Plan";
 "common.name" = "Name";
 "common.title" = "Title";
 "common.result" = "Result";
@@ -1119,6 +1120,8 @@
 "medical.upload.type_selection.prescription.subtitle" = "Drug name, dosage, timing";
 "medical.upload.type_selection.medication" = "Upload medication record";
 "medical.upload.type_selection.medication.subtitle" = "Long-term medication tracking";
+"medical.upload.type_selection.medicationPlan" = "Upload medication plan";
+"medical.upload.type_selection.medicationPlan.subtitle" = "Recognize medicine inventory and medication rules";
 
 // MARK: - Action Buttons
 "medical.upload.action.cancel" = "Cancel";

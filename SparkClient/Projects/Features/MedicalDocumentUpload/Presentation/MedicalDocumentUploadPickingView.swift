@@ -425,8 +425,8 @@ private extension MedicalDocumentKind {
             return L10n.text("medical.upload.kind.medical_report")
         case .prescription:
             return L10n.text("common.prescription")
-        case .medication:
-            return L10n.text("common.medication")
+        case .medicationPlan:
+            return L10n.text("common.medicationPlan")
         case .medicineBox:
             return L10n.text("home.medical.list.medicine_box.title", fallback: "药品")
         }
@@ -440,7 +440,7 @@ private extension MedicalDocumentKind {
         case .healthExamReport: return "heart.text.square.fill"
         case .medicalReport: return "doc.text.fill"
         case .prescription: return "pills.fill"
-        case .medication: return "capsule.fill"
+        case .medicationPlan: return "capsule.fill"
         case .medicineBox: return "shippingbox.fill"
         }
     }

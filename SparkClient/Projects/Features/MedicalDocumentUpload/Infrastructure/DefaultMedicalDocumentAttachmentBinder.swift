@@ -45,7 +45,7 @@ struct DefaultMedicalDocumentAttachmentBinder: MedicalDocumentAttachmentBinding,
             return "examination_report"
         case .prescription:
             return "prescription_batch"
-        case .medication:
+        case .medicationPlan:
             return "medication"
         case .medicineBox:
             return "medicine_box"

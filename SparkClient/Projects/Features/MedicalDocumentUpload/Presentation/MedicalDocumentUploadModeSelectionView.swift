@@ -87,7 +87,7 @@ private struct ModeSelectionCard: View {
             return Color(.systemGreen)
         case .medicalReport:
             return Color(.systemOrange)
-        case .prescription, .medication:
+        case .prescription, .medicationPlan:
             return Color(.systemRed)
         case .medicineBox:
             return Color(.systemPurple)
@@ -105,7 +105,7 @@ private struct ModeSelectionCard: View {
             return "heart.text.square.fill"
         case .medicalReport:
             return "doc.text.fill"
-        case .prescription, .medication:
+        case .prescription, .medicationPlan:
             return "pills.fill"
         case .medicineBox:
             return "shippingbox.fill"
@@ -125,8 +125,8 @@ private struct ModeSelectionCard: View {
             return L10n.text("medical.upload.type_selection.medical_report")
         case .prescription:
             return L10n.text("medical.upload.type_selection.prescription")
-        case .medication:
-            return L10n.text("medical.upload.type_selection.medication")
+        case .medicationPlan:
+            return L10n.text("medical.upload.type_selection.medicationPlan")
         case .medicineBox:
             return L10n.text("home.medical.list.medicine_box.title", fallback: "药品")
         case .auto:
@@ -145,8 +145,8 @@ private struct ModeSelectionCard: View {
             return L10n.text("medical.upload.type_selection.medical_report.subtitle")
         case .prescription:
             return L10n.text("medical.upload.type_selection.prescription.subtitle")
-        case .medication:
-            return L10n.text("medical.upload.type_selection.medication.subtitle")
+        case .medicationPlan:
+            return L10n.text("medical.upload.type_selection.medicationPlan.subtitle")
         case .medicineBox:
             return L10n.text("medical.upload.type_selection.medicine_box.subtitle", fallback: "识别药盒、药瓶、包装或说明书")
         case .auto:

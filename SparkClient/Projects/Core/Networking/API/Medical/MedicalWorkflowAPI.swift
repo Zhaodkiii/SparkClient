@@ -296,6 +296,110 @@ struct SparkMedicalWorkflowAPI {
         }
     }
 
+    struct MedicationPlanBundleSavePayload: Encodable, Sendable {
+        let member: Int
+        let medicalCase: Int?
+        let prescriptionID: Int?
+        let prescription: PrescriptionPayload?
+        let items: [MedicationPlanBundleItemPayload]
+        let fileIds: [Int]
+
+        enum CodingKeys: String, CodingKey {
+            case member
+            case medicalCase = "medical_case"
+            case prescriptionID = "prescription_id"
+            case prescription
+            case items
+            case fileIds = "file_ids"
+        }
+    }
+
+    struct PrescriptionPayload: Encodable, Sendable {
+        let medicalCase: Int?
+        let prescriberName: String?
+        let institutionName: String?
+        let prescribedAt: String?
+        let diagnosis: String?
+        let prescriptionNo: String?
+        let status: String
+        let extra: [String: String]
+
+        enum CodingKeys: String, CodingKey {
+            case medicalCase = "medical_case"
+            case prescriberName = "prescriber_name"
+            case institutionName = "institution_name"
+            case prescribedAt = "prescribed_at"
+            case diagnosis
+            case prescriptionNo = "prescription_no"
+            case status
+            case extra
+        }
+    }
+
+    struct MedicationPlanBundleItemPayload: Encodable, Sendable {
+        let medicineBox: MedicineBoxPayload
+        let drugName: String
+        let dosePerTime: String
+        let doseValue: String?
+        let doseUnit: String
+        let frequencyType: String
+        let everyNDays: Int?
+        let weeklyWeekdays: [Int]
+        let frequencyText: String
+        let reminderTimes: [String]
+        let startDate: String
+        let endDate: String?
+        let instructions: String
+        let reminderEnabled: Bool
+        let status: String
+        let extra: [String: String]
+
+        enum CodingKeys: String, CodingKey {
+            case medicineBox = "medicine_box"
+            case drugName = "drug_name"
+            case dosePerTime = "dose_per_time"
+            case doseValue = "dose_value"
+            case doseUnit = "dose_unit"
+            case frequencyType = "frequency_type"
+            case everyNDays = "every_n_days"
+            case weeklyWeekdays = "weekly_weekdays"
+            case frequencyText = "frequency_text"
+            case reminderTimes = "reminder_times"
+            case startDate = "start_date"
+            case endDate = "end_date"
+            case instructions
+            case reminderEnabled = "reminder_enabled"
+            case status
+            case extra
+        }
+    }
+
+    struct MedicineBoxPayload: Encodable, Sendable {
+        let medicineType: String?
+        let medicineName: String
+        let brandName: String
+        let dosageForm: String
+        let strength: String
+        let doseUnit: String
+        let totalQuantity: String?
+        let expireDate: String?
+        let notes: String
+        let extra: [String: String]
+
+        enum CodingKeys: String, CodingKey {
+            case medicineType = "medicine_type"
+            case medicineName = "medicine_name"
+            case brandName = "brand_name"
+            case dosageForm = "dosage_form"
+            case strength
+            case doseUnit = "dose_unit"
+            case totalQuantity = "total_quantity"
+            case expireDate = "expire_date"
+            case notes
+            case extra
+        }
+    }
+
     /// 通用「仅返回 id」的响应解码结构。
     private struct IDResponse: Decodable { let id: Int }
 
@@ -337,6 +441,10 @@ struct SparkMedicalWorkflowAPI {
     /// 独立新增检查/检验报告（不创建病例）；成功返回报告记录 ID。
     func createMedicalReport(_ payload: MedicalReportSavePayload) async throws -> Int {
         try await post(path: "/api/v1/medical/workflows/medical-reports/create/", body: payload, decode: IDResponse.self).id
+    }
+
+    func saveMedicationPlanBundle(_ payload: MedicationPlanBundleSavePayload) async throws -> Int {
+        try await post(path: "/api/v1/medical/workflows/medication-plans/save/", body: payload, decode: IDResponse.self).id
     }
 
     // MARK: - Unified Resource CRUD (`/api/v1/medical/resources/?kind=...`)

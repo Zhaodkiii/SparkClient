@@ -848,6 +848,7 @@
 "common.normal" = "正常";
 "common.prescription" = "处方";
 "common.medication" = "用药";
+"common.medicationPlan" = "服药计划";
 "common.name" = "名称";
 "common.title" = "标题";
 "common.result" = "结果";
@@ -1119,6 +1120,8 @@
 "medical.upload.type_selection.prescription.subtitle" = "药品名称、用法用量、用药时间";
 "medical.upload.type_selection.medication" = "上传用药记录";
 "medical.upload.type_selection.medication.subtitle" = "长期用药、用药依从性";
+"medical.upload.type_selection.medicationPlan" = "上传服药计划";
+"medical.upload.type_selection.medicationPlan.subtitle" = "识别药箱药品与用药规则";
 
 // MARK: - 操作按钮
 "medical.upload.action.cancel" = "取消";

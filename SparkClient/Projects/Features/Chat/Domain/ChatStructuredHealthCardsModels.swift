@@ -332,7 +332,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
         // 根据抽取结果类型，生成对应类型的卡片
         switch output.typedResult {
         // MARK: 用药卡片
-        case .medication(let lines):
+        case .medicationPlan(let lines):
             let rows = lines.compactMap { line -> MedicationChatCardPayload? in
                 guard let json = encode(line) else { return nil }
                 // 获取药品名称
@@ -466,9 +466,9 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
         }
     }
 
-    /// 获取用药卡片显示名称（优先级：药品名 -> 通用名 -> 商品名）
-    private static func medicationDisplayName(for line: MedicationRecognitionDraft) -> String {
-        let candidates = [line.drugName, line.genericName, line.brandName]
+    /// 获取用药计划卡片显示名称（优先级：本行药名 -> 嵌套药箱药名 -> 商品名）。
+    private static func medicationDisplayName(for line: MedicationPlanRecognitionDraft) -> String {
+        let candidates = [line.medicineName, line.medicineBox?.medicineName, line.brandName]
         for c in candidates {
             if let s = c?.trimmingCharacters(in: .whitespacesAndNewlines), s.isEmpty == false { return s }
         }

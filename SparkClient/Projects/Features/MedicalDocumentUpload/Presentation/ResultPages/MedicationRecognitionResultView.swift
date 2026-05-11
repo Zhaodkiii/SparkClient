@@ -16,7 +16,7 @@ struct MedicationRecognitionResultView: View {
             onBack: onBack,
             onSave: onSave
         )
-        .navigationTitle(L10n.text("common.medication"))
+        .navigationTitle(L10n.text("common.medicationPlan"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -61,25 +61,24 @@ private extension MedicalDocumentTypedExtractionOutput {
                 ],
                 rawOCRText: "",
                 typeResolution: MedicalDocumentTypeResolution(
-                    kind: .medication,
+                    kind: .medicationPlan,
                     confidence: 0.91,
                     source: .ai,
                     reason: "命中药品结构化字段"
                 )
             ),
-            typedResult: .medication([
-                MedicationRecognitionDraft(
-                    genericName: "氯雷他定",
+            typedResult: .medicationPlan([
+                MedicationPlanRecognitionDraft(
+                    medicineName: "氯雷他定片",
+                    medicineType: "抗过敏用药",
                     brandName: nil,
-                    drugName: "氯雷他定片",
                     dosageForm: "片剂",
                     strength: "10mg",
-                    route: "口服",
                     dosePerTime: "1 片",
                     doseValue: "1",
                     doseUnit: "片",
                     frequencyCode: "QD",
-                    period: "日",
+                    frequencyType: "daily",
                     timesPerPeriod: "1",
                     frequencyText: "每日 1 次",
                     durationDays: "7",

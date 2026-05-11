@@ -1610,12 +1610,12 @@ final class ChatDetailViewModel: ObservableObject {
 
         switch item {
         case .medication:
-            guard let draft = decodeStructuredHealthCardDraft(MedicationRecognitionDraft.self, from: data) else { return nil }
+            guard let draft = decodeStructuredHealthCardDraft(MedicationPlanRecognitionDraft.self, from: data) else { return nil }
             return makeStructuredHealthCardSaveOutput(
                 memberID: memberID,
-                kind: .medication,
+                kind: .medicationPlan,
                 rawText: item.rawTrace,
-                typedResult: .medication([draft]),
+                typedResult: .medicationPlan([draft]),
                 extractedJSON: item.draftJSON
             )
         case .prescription:

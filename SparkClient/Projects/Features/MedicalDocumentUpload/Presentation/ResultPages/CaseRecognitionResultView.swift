@@ -117,18 +117,17 @@ private extension MedicalDocumentTypedExtractionOutput {
                             auditedAt: nil,
                             extra: nil,
                             medications: [
-                                MedicationRecognitionDraft(
-                                    genericName: "布洛芬",
+                                MedicationPlanRecognitionDraft(
+                                    medicineName: "布洛芬缓释胶囊",
+                                    medicineType: "止痛退热",
                                     brandName: nil,
-                                    drugName: "布洛芬缓释胶囊",
                                     dosageForm: "胶囊",
                                     strength: "300mg",
-                                    route: "口服",
                                     dosePerTime: "1 粒",
                                     doseValue: "1",
                                     doseUnit: "粒",
                                     frequencyCode: "BID",
-                                    period: "日",
+                                    frequencyType: "daily",
                                     timesPerPeriod: "2",
                                     frequencyText: "每日 2 次",
                                     durationDays: "5",

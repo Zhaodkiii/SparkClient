@@ -74,7 +74,7 @@ struct MedicalDocumentResultRouterView: View {
                 onBack: onBack,
                 onSave: onSave
             )
-        case .medication:
+        case .medicationPlan:
             MedicationRecognitionResultView(
                 output: output,
                 isSaving: isSaving,
@@ -136,7 +136,7 @@ struct MedicalDocumentResultRouterView: View {
             return "医疗报告"
         case .prescription:
             return "处方"
-        case .medication:
+        case .medicationPlan:
             return "用药"
         case .medicineBoxes:
             return "药箱"

@@ -124,7 +124,7 @@ enum CaseRecognitionLocalEditor: Identifiable {
     case symptom(SymptomRecognitionDraft)
     case surgery(SurgeryRecognitionDraft)
     case medicationBatch(PrescriptionRecognitionDraft)
-    case medicationItem(batchIndex: Int, itemIndex: Int, draft: MedicationRecognitionDraft)
+    case medicationItem(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft)
     case followUp(FollowUpRecognitionDraft)
     case exam(index: Int, draft: MedicalReportRecognitionDraft)
 

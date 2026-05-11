@@ -4,7 +4,7 @@ struct CaseTreatmentPlanSectionView: View {
     let batches: [PrescriptionRecognitionDraft]
     let followUps: [FollowUpRecognitionDraft]
     let onEditBatch: (PrescriptionRecognitionDraft) -> Void
-    let onEditMedicationItem: (Int, Int, MedicationRecognitionDraft) -> Void
+    let onEditMedicationItem: (Int, Int, MedicationPlanRecognitionDraft) -> Void
     let onEditFollowUp: (FollowUpRecognitionDraft) -> Void
 
     var body: some View {
@@ -70,7 +70,7 @@ struct CaseTreatmentPlanSectionView: View {
                         Image(systemName: "capsule")
                             .font(.caption)
                             .foregroundStyle(Color(uiColor: .systemIndigo))
-                        Text(medPair.element.drugName ?? medPair.element.genericName ?? "未命名药品")
+                        Text(medPair.element.medicineName ?? medPair.element.medicineBox?.medicineName ?? medPair.element.brandName ?? "未命名药品")
                             .font(.callout)
                             .foregroundStyle(.primary)
                             .lineLimit(1)

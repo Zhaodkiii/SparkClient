@@ -438,8 +438,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             return .medicalReport
         case .prescription:
             return .prescription
-        case .medication:
-            return .medication
+        case .medicationPlan:
+            return .medicationPlan
         case .medicineBox:
             return .medicineBox
         }

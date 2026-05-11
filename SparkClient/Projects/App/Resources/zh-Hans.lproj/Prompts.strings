@@ -1,7 +1,7 @@
 "ai.prompt.chat.system" = "你是 Spark 健康助手，请优先提供准确、简洁、可执行的健康建议，并使用用户语言回复。\n{{CURRENT_DATE}}";
 "ai.prompt.chat.deep_thinking" = "请逐步深入推理：先简要展开推理过程，再给出明确结论。";
 "ai.prompt.medical_document.extraction.template" = "你是医疗文档抽取助手。请从 OCR 文本中抽取结构化 JSON，只输出 JSON。\n需包含字段：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR文本：\n%@";
-"ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication。\n仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
+"ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication_plan、medicine_box。\n仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication_plan|medicine_box\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
 "ai.prompt.medical_case.extraction.template" = "
 从用户提供的中文病历、就诊记录、OCR 文本中抽取完整病例汇总信息，仅输出纯净 JSON，禁止任何解释、前后缀、Markdown、注释、代码块围栏、无关文本。
 【最高优先级】
@@ -69,23 +69,42 @@ json
             'auditedAt': '字符串，yyyy-MM-dd格式，无则省略',
             'medications': [
                 {
+                    'medicineName': '字符串，药箱药品名称，无则省略',
+                    'medicineType': '字符串，药品类型或自定义类型，无则省略',
                     'genericName': '字符串，药品通用名，无则省略',
                     'brandName': '字符串，药品品牌名，无则省略',
                     'drugName': '字符串，药品名称，无则省略',
                     'dosageForm': '字符串，剂型，无则省略',
                     'strength': '字符串，药品规格，无则省略',
+                    'totalQuantity': '字符串，药箱总数量，无则省略',
+                    'expireDate': '字符串，药品有效期yyyy-MM-dd，无则省略',
                     'route': '字符串，给药途径，无则省略',
                     'dosePerTime': '字符串，单次剂量描述，无则省略',
                     'doseValue': '字符串，单次剂量数值，无则省略',
                     'doseUnit': '字符串，剂量单位，无则省略',
                     'frequencyCode': '字符串，频次编码，无则省略',
+                    'frequencyType': '字符串，仅允许daily/every_n_days/weekly，无则daily',
+                    'everyNDays': '字符串，每几天一次，无则省略',
+                    'weeklyWeekdays': ['整数，1=周一…7=周日，无则省略'],
                     'period': '字符串，频次周期，无则省略',
                     'timesPerPeriod': '字符串，周期内次数，无则省略',
                     'frequencyText': '字符串，标准化频次，无则省略',
                     'durationDays': '字符串，用药天数，无则省略',
+                    'startDate': '字符串，计划开始日期yyyy-MM-dd，无则省略',
+                    'endDate': '字符串，计划结束日期yyyy-MM-dd，无则省略',
                     'instructions': '字符串，用药说明，无则省略',
                     'reminderEnabled': '布尔值，仅允许true/false，无则省略',
-                    'reminderTimes': ['字符串，提醒时间，格式HH:mm']
+                    'reminderTimes': ['字符串，提醒时间，格式HH:mm'],
+                    'medicineBox': {
+                        'medicineName': '字符串，药箱药品名称，无则省略',
+                        'medicineType': '字符串，药品类型或自定义类型，无则省略',
+                        'brandName': '字符串，品牌名，无则省略',
+                        'dosageForm': '字符串，剂型，无则省略',
+                        'strength': '字符串，规格，无则省略',
+                        'doseUnit': '字符串，库存单位/剂量单位，无则省略',
+                        'totalQuantity': '字符串，总数量，无则省略',
+                        'expireDate': '字符串，有效期yyyy-MM-dd，无则省略'
+                    }
                 }
             ]
         }
@@ -339,41 +358,79 @@ JSON
 
 {
 
-'genericName': '药品通用名（无则省略）',
+'medicineName': '药箱药品名称（必填，优先完整药品名称；可与通用名+商品名合并为一条可读名称）',
 
-'brandName': '药品品牌名 / 商品名（无则省略）',
+'medicineType': '药品类型（如：感冒发烧、胃肠消化、慢病用药，或自定义类型，无则省略）',
 
-'drugName': '药品名称（无则省略）',
+'brandName': '品牌名/商品名（无则省略）',
 
-'dosageForm': '剂型（如：片剂、胶囊、注射液，无则省略）',
+'dosageForm': '剂型（如：片剂、胶囊、颗粒、注射液、软膏，无则省略）',
 
-'strength': '药品规格（如：20mg、5ml，无则省略）',
+'strength': '规格（如：20mg、0.5g×24粒、10ml，无则省略）',
 
-'route': '给药途径（如：口服、外用、静脉注射，无则省略）',
+'doseUnit': '剂量/库存单位（如：片、粒、袋、ml、mg，无则省略）',
 
-'dosePerTime': '单次剂量描述（如：1 片、2 粒，无则省略）',
+'totalQuantity': '药箱总数量（字符串，仅包装或处方明确可见时填写，无则省略）',
 
-'doseValue': '单次剂量数值（字符串，如，无则省略）',
+'expireDate': '有效期（yyyy-MM-dd，仅明确可见时填写，无则省略）',
 
-'doseUnit': '剂量单位（如：mg、ml、片，无则省略）',
+'dosePerTime': '单次剂量描述（如：1片、2粒、半袋，无则省略）',
 
-'frequencyCode': '频次编码（如：qd、bid，无则省略）',
+'doseValue': '单次剂量数值（字符串，无则省略）',
 
-'period': '频次周期（如：日、晚、周，无则省略）',
+'frequencyCode': '频次编码（如：qd、bid、tid、qn，无则省略）',
 
-'timesPerPeriod': '周期内次数（字符串，如无则省略）',
+'frequencyType': '频次类型，仅允许 daily、every_n_days、weekly，无则填 daily',
 
-'frequencyText': '标准化频次文本（无则省略）',
+'everyNDays': '每几天一次（字符串，仅 frequencyType=every_n_days 时填写）',
+
+'weeklyWeekdays': ['每周服药星期，整数 1-7，1=周一，7=周日'],
+
+'timesPerPeriod': '周期内次数（字符串，无则省略）',
+
+'frequencyText': '标准化频次文本（如：每日一次、每日两次、每周一三五，无则省略）',
 
 'durationDays': '用药天数（字符串，无则省略）',
 
-'instructions': '用药说明 / 注意事项（无则省略）',
+'startDate': '计划开始日期（yyyy-MM-dd，无则省略）',
 
-'reminderEnabled': '是否开启提醒（布尔值 true/false，无则省略）',
+'endDate': '计划结束日期（yyyy-MM-dd，无则省略）',
 
-'reminderTimes': ['提醒时间（如：08:00、20:00）']
+'instructions': '用药说明/注意事项（无则省略）',
+
+'reminderEnabled': '是否开启提醒（布尔值true/false，无则省略）',
+
+'reminderTimes': ['提醒时间（如：08:00、20:00）'],
+
+'medicineBox': {
+
+'medicineName': '药箱药品名称（无则省略）',
+
+'medicineType': '药品类型（无则省略）',
+
+'brandName': '品牌名（无则省略）',
+
+'dosageForm': '剂型（无则省略）',
+
+'strength': '规格（无则省略）',
+
+'doseUnit': '单位（无则省略）',
+
+'totalQuantity': '总数量（字符串，无则省略）',
+
+'expireDate': '有效期 yyyy-MM-dd（无则省略）',
+
+'notes': '药箱备注（无则省略）',
 
 'extra': {}
+
+},
+
+'status': '计划状态，仅允许 active、paused、completed、cancelled，无则填 active',
+
+'extra': {},
+
+'sortOrder': '排序序号字符串'
 
 }
 
@@ -388,9 +445,10 @@ JSON
     1    输出必须是单个合法 JSON 对象，禁止数组包裹根结构。
     2    无值字段直接省略，严禁出现 null、空字符串 ''、空数组 []、空对象 {}。
     3    键名必须与上述结构完全一致（区分大小写，驼峰式命名），禁止新增未定义键。
-    4    数值字段统一使用字符串格式：timesPerPeriod、durationDays 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
-    5    medications 为药品明细数组，无有效药品则整段省略。
-    6    禁止输出 medicalCase：关联病历 ID 由 App 在提交保存时绑定，OCR 抽取阶段不得包含该键。
+    4    字符串化数值字段：totalQuantity、doseValue、everyNDays、timesPerPeriod、durationDays、sortOrder 等以字符串输出；布尔 reminderEnabled 仅 true/false；日期 yyyy-MM-dd；提醒时间 HH:mm。
+    5    medications 每条必须含 medicineName（必填），键名与「服药计划抽取」模板（ai.prompt.medication.extraction.template）中单条元素白名单一致，禁止另增未定义键。
+    6    medications 为药品明细数组，无有效药品则整段省略。
+    7    禁止输出 medicalCase：关联病历 ID 由 App 在提交保存时绑定，OCR 抽取阶段不得包含该键。
 
 【处方批次字段抽取规则】
 
@@ -405,21 +463,18 @@ JSON
 
 【药品明细（medications）抽取规则】
 
-    •    genericName：药品通用名称（如：布洛芬、阿莫西林）。
-    •    brandName：商品名 / 品牌名（如：芬必得、999）。
-    •    drugName：完整药品名称（通用名 + 品牌名合并，无则省略）。
-    •    dosageForm：药剂剂型（片剂、胶囊、颗粒、注射液、软膏等）。
-    •    strength：药品规格（20mg、10ml、500mg / 片等）。
-    •    route：给药方式（口服、饭后口服、外用、静脉滴注等）。
-    •    dosePerTime：单次服用剂量描述（1 片、2 粒、半袋等）。
-    •    doseValue：单次剂量（字符串）。
-    •    doseUnit：剂量单位（片、粒、mg、ml 等）。
-    •    frequencyCode：医学频次缩写（qd、bid、tid、qn 等）。
-    •    period：频次周期（日、晚、周、隔日等）。
-    •    timesPerPeriod：周期内用药次数（字符串）。
-    •    frequencyText：标准化频次（每日一次、每日两次、每晚一次、按需等）。
-    •    durationDays：用药总天数（字符串）。
-    •    instructions：用药嘱托、注意事项、服用方式。
+    •    medicineName：药品主展示名，**必填**；优先完整药名（通用名+剂型/规格可读组合），仅有商品名或仅有通用名时填最清晰的一条，勿留空。
+    •    medicineType：分类或场景标签，不确定可省略。
+    •    brandName：商品名 / 品牌名。
+    •    dosageForm、strength、doseUnit：剂型、规格、单位。
+    •    totalQuantity、expireDate：仅当包装或处方中明确可见时填写。
+    •    dosePerTime、doseValue：单次剂量描述与数值（字符串）。
+    •    frequencyCode、frequencyType、everyNDays、weeklyWeekdays、timesPerPeriod、frequencyText：频次；frequencyType 仅 daily / every_n_days / weekly，无法判断用 daily。
+    •    durationDays、startDate、endDate：疗程与计划日期，无则省略。
+    •    instructions：用药嘱托、注意事项、服用方式（外用/口服等可写在此处）。
+    •    medicineBox：药箱侧字段，可与同级字段重复药名/规格以便落库；无额外信息可整段省略。
+    •    status：计划状态，无则 active。
+    •    sortOrder：批次内顺序字符串（如 0、1、2）。
     •    reminderEnabled：仅当文本明确要求用药提醒时填 true，否则省略。
     •    reminderTimes：每日提醒时间数组，格式 HH:mm，无则省略。
 
@@ -445,7 +500,7 @@ JSON
 【中药处方特殊规则】
 
     1    识别到中药方剂时，medications 数组中作为单条药品输出。
-    2    genericName 填 '中药处方'。
+    2    medicineName 填 '中药处方'。
     3    instructions 填写所有药材 + 剂量，用、分隔。
     4    其余字段按实际抽取，无则省略。
 
@@ -462,7 +517,7 @@ JSON
     3    数值、布尔字段类型正确。
     4    频次文本仅使用标准化内容。
     5    medications 数组结构完整，元素键名正确。
-    6    仅保留白名单内的键名。会话放
+    6    仅保留白名单内的键名。
 
 【最终要求】
 
@@ -472,31 +527,50 @@ JSON
 
 
 
-"ai.prompt.medication.extraction.template" = "你是专业药品处方信息抽取引擎。
-任务：从用户提供的中文处方/医嘱/OCR文本中抽取【一种或多种】药品信息，**严格按照我指定的JSON结构输出合法JSON数组**，禁止任何解释、前后缀、Markdown、注释、代码块围栏。
+"ai.prompt.medication.extraction.template" = "你是专业药箱与服药计划信息抽取引擎。
+任务：从用户提供的中文处方/医嘱/药品说明/OCR文本中抽取【一种或多种】药箱药品 + 服药计划组合信息，**严格按照我指定的JSON结构输出合法JSON数组**，禁止任何解释、前后缀、Markdown、注释、代码块围栏。
 
 ================================================================
 【输出结构：必须严格使用以下键名】
 [
   {
-    'genericName': '药品通用名（无则省略）',
-    'brandName': '药品品牌名/商品名（无则省略）',
-    'drugName': '药品名称（无则省略）',
-    'dosageForm': '剂型（如：片剂、胶囊、注射液，无则省略）',
-    'strength': '药品规格（如：20mg、5ml，无则省略）',
-    'route': '给药途径（如：口服、外用、静脉注射，无则省略）',
-    'dosePerTime': '单次剂量描述（如：1片、2粒，无则省略）',
+    'medicineName': '药箱药品名称（必填，优先完整药品名称）',
+    'medicineType': '药品类型（如：感冒发烧、胃肠消化、慢病用药，或自定义类型，无则省略）',
+    'brandName': '品牌名/商品名（无则省略）',
+    'dosageForm': '剂型（如：片剂、胶囊、颗粒、注射液、软膏，无则省略）',
+    'strength': '规格（如：20mg、0.5g×24粒、10ml，无则省略）',
+    'doseUnit': '剂量/库存单位（如：片、粒、袋、ml、mg，无则省略）',
+    'totalQuantity': '药箱总数量（字符串，仅明确可见时填写，无则省略）',
+    'expireDate': '有效期（yyyy-MM-dd，仅明确可见时填写，无则省略）',
+    'dosePerTime': '单次剂量描述（如：1片、2粒、半袋，无则省略）',
     'doseValue': '单次剂量数值（字符串，无则省略）',
-    'doseUnit': '剂量单位（如：mg、ml、片，无则省略）',
-    'frequencyCode': '频次编码（如：qd、bid，无则省略）',
-    'period': '频次周期（如：日、晚、周，无则省略）',
-    'timesPerPeriod': '周期内次数（字符串,无则省略）',
-    'frequencyText': '标准化频次文本（无则省略）',
+    'frequencyCode': '频次编码（如：qd、bid、tid、qn，无则省略）',
+    'frequencyType': '频次类型，仅允许 daily、every_n_days、weekly，无则填 daily',
+    'everyNDays': '每几天一次（字符串，仅 frequencyType=every_n_days 时填写）',
+    'weeklyWeekdays': ['每周服药星期，整数 1-7，1=周一，7=周日'],
+    'timesPerPeriod': '周期内次数（字符串，无则省略）',
+    'frequencyText': '标准化频次文本（如：每日一次、每日两次、每周一三五，无则省略）',
     'durationDays': '用药天数（字符串，无则省略）',
+    'startDate': '计划开始日期（yyyy-MM-dd，无则省略）',
+    'endDate': '计划结束日期（yyyy-MM-dd，无则省略）',
     'instructions': '用药说明/注意事项（无则省略）',
     'reminderEnabled': '是否开启提醒（布尔值true/false，无则省略）',
     'reminderTimes': ['提醒时间（如：08:00、20:00）'],
-    'extra': {}
+    'medicineBox': {
+      'medicineName': '药箱药品名称（无则省略）',
+      'medicineType': '药品类型（无则省略）',
+      'brandName': '品牌名（无则省略）',
+      'dosageForm': '剂型（无则省略）',
+      'strength': '规格（无则省略）',
+      'doseUnit': '单位（无则省略）',
+      'totalQuantity': '总数量（字符串，无则省略）',
+      'expireDate': '有效期 yyyy-MM-dd（无则省略）',
+      'notes': '药箱备注（无则省略）',
+      'extra': {}
+    },
+    'status': '计划状态，仅允许 active、paused、completed、cancelled，无则填 active',
+    'extra': {},
+    'sortOrder': '排序序号字符串'
   }
 ]
 ================================================================
@@ -505,54 +579,54 @@ JSON
 1. 输出必须是合法 JSON 数组，即使只有一种药品也要用 [ ] 包裹。
 2. 无值字段**直接省略**，严禁出现null、空字符串''、空数组[]、空对象{}。
 3. 键名必须与上述结构完全一致，区分大小写，禁止新增未定义键。
-4. 数值字段统一使用字符串格式：doseValue、timesPerPeriod、durationDays 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
-5. 日期、时间、文本保持原文清洗后格式，无有效信息直接省略。
+4. 数值字段统一使用字符串格式：totalQuantity、doseValue、everyNDays、timesPerPeriod、durationDays、sortOrder 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
+5. 日期统一 yyyy-MM-dd；提醒时间统一 HH:mm。
+6. medicineBox 是药箱库存信息；同级字段是服药计划展示与规则信息，两者可重复药名/规格以便分别落库。
 
 【字段抽取规则】
-- genericName：药品通用名称（如：布洛芬、阿莫西林）。
-- brandName：商品名/品牌名（如：芬必得、999）。
-- drugName：完整药品名称（通用名+品牌名合并，无则省略）。
-- dosageForm：药剂剂型（片剂、胶囊、颗粒、注射液、软膏等）。
-- strength：药品规格（20mg、10ml、500mg/片等）。
-- route：给药方式（口服、饭后口服、外用、静脉滴注等）。
-- dosePerTime：单次服用剂量描述（1片、2粒、半袋等）。
-- doseValue：单次剂量（字符串）。
-- doseUnit：剂量单位（片、粒、mg、ml等）。
-- frequencyCode：医学频次缩写（qd、bid、tid、qn等）。
-- period：频次周期（日、晚、周、隔日等）。
-- timesPerPeriod：周期内用药次数（字符串）。
-- frequencyText：标准化频次（每日一次、每日两次、每晚一次、按需等）。
-- durationDays：用药总天数（字符串）。
-- instructions：用药嘱托、注意事项、服用方式。
-- reminderEnabled：仅当文本明确要求用药提醒时填true，否则省略。
-- reminderTimes：每日提醒时间数组，格式HH:mm，无则省略。
-- extra：扩展信息，无则省略。
+- medicineName：药品展示名称，优先完整药品名称，其次商品名/通用名。
+- medicineType：药品类型或自定义分类，不确定可省略。
+- brandName：商品名/品牌名。
+- dosageForm：药剂剂型。
+- strength：药品规格或包装规格。
+- doseUnit：剂量单位或库存单位。
+- totalQuantity：药盒/处方明确可见的总数量，禁止猜测。
+- expireDate：药盒/标签明确可见的有效期，禁止猜测。
+- dosePerTime：单次服用剂量描述。
+- doseValue：单次剂量数值。
+- frequencyCode：医学频次缩写。
+- frequencyType：每日用药填 daily；间隔几天填 every_n_days；每周指定星期填 weekly。
+- weeklyWeekdays：仅 weekly 模式填写，1=周一…7=周日。
+- frequencyText：标准化频次文本。
+- startDate/endDate/durationDays：按处方、医嘱或文本明确内容抽取。
+- instructions：服用方式、饭前饭后、注意事项等。
+- reminderTimes：仅当文本中有明确时间点时填写。
+- medicineBox：承载药箱库存字段，用于独立创建 MedicineBox。
 
 【抽取范围与去噪】
-1. 仅抽取处方中药品信息，忽略科室、费用、药房、盖章、编号、医保、收费等无关噪声。
+1. 仅抽取药品库存与服药计划相关信息，忽略科室、费用、药房、盖章、编号、医保、收费等无关噪声。
 2. 清洗OCR错误字符、多余符号、非药学描述文字。
-3. 厂家、品牌信息仅保留有效名称，去除修饰符、括号内容。
-4. 同名药品多行信息合并为一条，不同药品独立输出为数组元素。
+3. 同名药品多行信息合并为一条，不同药品独立输出为数组元素。
+4. 包装数量、有效期、提醒时间不可凭空编造。
 
 【频次标准化规则】
-仅当可明确判读时填写frequencyText，否则省略：
-- 1/日、qd → 每日一次
-- 2/日、bid → 每日两次
-- 3/日、tid → 每日三次
-- 1/晚、qn → 每晚一次
-- 隔日一次 → 隔日一次
-- 1/周 → 每周一次
-- 必要时、prn → 按需
+- 1/日、qd → frequencyType=daily，frequencyText=每日一次
+- 2/日、bid → frequencyType=daily，frequencyText=每日两次
+- 3/日、tid → frequencyType=daily，frequencyText=每日三次
+- 1/晚、qn → frequencyType=daily，frequencyText=每晚一次
+- 隔日一次 → frequencyType=every_n_days，everyNDays=2
+- 每周一次 → frequencyType=weekly 或 daily 以原文为准
+- 必要时、prn → frequencyText=按需
 
 【中药处方特殊规则】
 1. 识别到中药方剂时，作为单条药品输出。
-2. genericName 填 '中药处方'。
+2. medicineName 填 '中药处方'。
 3. instructions 填写所有药材+剂量，用、分隔。
 4. 其余字段按实际抽取，无则省略。
 
 【健壮性与兜底】
 1. 信息冲突时，以处方正文、医嘱核心描述优先。
-2. 若完全无法抽取有效药品信息，输出空数组 []。
+2. 若完全无法抽取有效用药计划信息，输出空数组 []。
 3. 禁止错误归类，禁止凭空编造信息。
 
 【输出前强制自检】

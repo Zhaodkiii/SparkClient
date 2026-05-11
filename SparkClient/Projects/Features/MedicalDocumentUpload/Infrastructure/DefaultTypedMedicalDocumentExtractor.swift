@@ -171,7 +171,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     /// 与 `HealthClient` `generate_structured_health_card` 的 `report_type` 对齐。
     private static func medicalDocumentKind(fromChatReportType raw: String) -> MedicalDocumentKind {
         switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "medication": return .medication
+        case "medication", "medication_plan", "medicationplan": return .medicationPlan
         case "medicine_box", "medicinebox": return .medicineBox
         case "prescription": return .prescription
         case "exam_report": return .medicalReport
@@ -252,18 +252,18 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             return (.prescription(draft), final.normalizedJSON)
 
         // 用药单
-        case .medication:
+        case .medicationPlan:
             let final = try await extractStructured(
                 prompt: prompt,
                 scenario: .medicationExtraction,
                 kindLabel: "medication",
-                as: [MedicationRecognitionDraft].self,
+                as: [MedicationPlanRecognitionDraft].self,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
                 throw ExtractionError.decodingFailed
             }
-            return (.medication(draft), final.normalizedJSON)
+            return (.medicationPlan(draft), final.normalizedJSON)
 
         case .medicineBox:
             let final = try await extractStructured(

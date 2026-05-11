@@ -35,7 +35,7 @@ struct PrescriptionMemberConfirmSectionView: View {
 struct PrescriptionBatchListSectionView: View {
     let batch: PrescriptionRecognitionDraft
     let onEditBatch: () -> Void
-    let onEditMedication: (Int, MedicationRecognitionDraft) -> Void
+    let onEditMedication: (Int, MedicationPlanRecognitionDraft) -> Void
 
     var body: some View {
         let meds = batch.medications ?? []
@@ -66,14 +66,14 @@ struct PrescriptionBatchListSectionView: View {
         }
     }
 
-    private func medicationRow(index: Int, draft: MedicationRecognitionDraft) -> some View {
+    private func medicationRow(index: Int, draft: MedicationPlanRecognitionDraft) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "capsule")
                 .font(.caption)
                 .foregroundStyle(Color(uiColor: .systemIndigo))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(draft.drugName ?? draft.genericName ?? L10n.text("medical.upload.result.medication.unnamed"))
+                Text(draft.medicineName ?? draft.medicineBox?.medicineName ?? draft.brandName ?? L10n.text("medical.upload.result.medication.unnamed"))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)

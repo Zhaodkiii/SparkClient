@@ -7,7 +7,7 @@ struct MedicationRecognitionResultContentView: View {
     let onBack: () -> Void
     let onSave: () -> Void
 
-    @State private var medications: [MedicationRecognitionDraft]
+    @State private var medications: [MedicationPlanRecognitionDraft]
     @State private var localEditor: MedicationResultLocalEditor?
 
     private let logger: Logger = ConsoleLogger()
@@ -26,7 +26,7 @@ struct MedicationRecognitionResultContentView: View {
         self.onBack = onBack
         self.onSave = onSave
 
-        if case .medication(let meds) = output.typedResult {
+        if case .medicationPlan(let meds) = output.typedResult {
             _medications = State(initialValue: meds)
         } else {
             _medications = State(initialValue: [])

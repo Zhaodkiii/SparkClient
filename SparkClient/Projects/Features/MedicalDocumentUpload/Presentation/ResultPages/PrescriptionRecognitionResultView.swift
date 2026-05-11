@@ -80,18 +80,17 @@ private extension MedicalDocumentTypedExtractionOutput {
                     auditedAt: nil,
                     extra: nil,
                     medications: [
-                        MedicationRecognitionDraft(
-                            genericName: "阿莫西林",
+                        MedicationPlanRecognitionDraft(
+                            medicineName: "阿莫西林胶囊",
+                            medicineType: "抗感染用药",
                             brandName: nil,
-                            drugName: "阿莫西林胶囊",
                             dosageForm: "胶囊",
                             strength: "0.5g",
-                            route: "口服",
                             dosePerTime: "1 粒",
                             doseValue: "1",
                             doseUnit: "粒",
                             frequencyCode: "TID",
-                            period: "日",
+                            frequencyType: "daily",
                             timesPerPeriod: "3",
                             frequencyText: "每日 3 次",
                             durationDays: "5",

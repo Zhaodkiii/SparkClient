@@ -78,11 +78,20 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
             return receipt
 
         case .prescription(let draft):
-            let title = draft.diagnosis ?? draft.institutionName ?? "prescription"
-            throw unsupportedMedicationDocumentError(title)
+            return try await savePrescriptionWithPlans(
+                memberID: memberID,
+                draft: draft,
+                envelope: output.envelope,
+                now: now
+            )
 
-        case .medication(let lines):
-            throw unsupportedMedicationDocumentError("medication rows: \(lines.count)")
+        case .medicationPlan(let lines):
+            return try await saveMedicationPlans(
+                memberID: memberID,
+                drafts: lines,
+                envelope: output.envelope,
+                now: now
+            )
         case .medicineBoxes(let boxes):
             return try await saveMedicineBoxes(
                 memberID: memberID,
@@ -92,16 +101,55 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
         }
     }
 
-    private func unsupportedMedicationDocumentError(_ context: String) -> NSError {
-        NSError(
-            domain: "DefaultTypedMedicalDocumentSaver",
-            code: -2,
-            userInfo: [NSLocalizedDescriptionKey: "旧处方批次/药品行保存链路已移除，请使用药箱、服药计划、服药记录资源保存。(\(context))"]
-        )
-    }
 }
 
 private extension DefaultTypedMedicalDocumentSaver {
+    func saveMedicationPlans(
+        memberID: Int,
+        drafts: [MedicationPlanRecognitionDraft],
+        envelope: MedicalDocumentRecognitionEnvelope,
+        now: Date
+    ) async throws -> MedicalDocumentSaveReceipt {
+        let payload = SparkMedicalWorkflowAPI.MedicationPlanBundleSavePayload(
+            member: memberID,
+            medicalCase: nil,
+            prescriptionID: nil,
+            prescription: nil,
+            items: buildMedicationPlanBundleItems(drafts, now: now),
+            fileIds: extractSourceFileIds(from: envelope)
+        )
+        let id = try await workflowAPI.saveMedicationPlanBundle(payload)
+        return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
+    }
+
+    func savePrescriptionWithPlans(
+        memberID: Int,
+        draft: PrescriptionRecognitionDraft,
+        envelope: MedicalDocumentRecognitionEnvelope,
+        now: Date
+    ) async throws -> MedicalDocumentSaveReceipt {
+        let prescription = SparkMedicalWorkflowAPI.PrescriptionPayload(
+            medicalCase: draft.medicalCase,
+            prescriberName: draft.prescriberName,
+            institutionName: draft.institutionName,
+            prescribedAt: draft.prescribedAt,
+            diagnosis: draft.diagnosis,
+            prescriptionNo: draft.batchNo,
+            status: draft.status ?? "active",
+            extra: mergeTypedUploadExtra(draft.extra)
+        )
+        let payload = SparkMedicalWorkflowAPI.MedicationPlanBundleSavePayload(
+            member: memberID,
+            medicalCase: draft.medicalCase,
+            prescriptionID: nil,
+            prescription: prescription,
+            items: buildMedicationPlanBundleItems(draft.medications ?? [], now: now),
+            fileIds: extractSourceFileIds(from: envelope)
+        )
+        let id = try await workflowAPI.saveMedicationPlanBundle(payload)
+        return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
+    }
+
     func saveMedicineBoxes(
         memberID: Int,
         drafts: [MedicineBoxRecognitionDraft],
@@ -143,6 +191,66 @@ private extension DefaultTypedMedicalDocumentSaver {
         if let value = draft.medicineName?.nilIfBlank { return value }
         if let value = draft.brandName?.nilIfBlank { return value }
         return "未命名药品"
+    }
+
+    func buildMedicationPlanBundleItems(
+        _ drafts: [MedicationPlanRecognitionDraft],
+        now: Date
+    ) -> [SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload] {
+        drafts.enumerated().map { index, draft in
+            let box = draft.medicineBox
+            let medicineName = box?.medicineName?.nilIfBlank
+                ?? draft.medicineName?.nilIfBlank
+                ?? draft.brandName?.nilIfBlank
+                ?? "未命名药品"
+            let doseUnit = draft.doseUnit?.nilIfBlank ?? box?.doseUnit?.nilIfBlank ?? "片"
+            let dosePerTime = draft.dosePerTime?.nilIfBlank
+                ?? [draft.doseValue?.nilIfBlank, doseUnit].compactMap { $0 }.joined(separator: " ")
+                .nilIfBlank
+                ?? "按医嘱"
+            let startDate = draft.startDate?.nilIfBlank ?? now.toDateOnly()
+            let frequencyType = normalizedFrequencyType(draft.frequencyType)
+            return SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload(
+                medicineBox: SparkMedicalWorkflowAPI.MedicineBoxPayload(
+                    medicineType: box?.medicineType?.nilIfBlank ?? draft.medicineType?.nilIfBlank,
+                    medicineName: medicineName,
+                    brandName: box?.brandName?.nilIfBlank ?? draft.brandName?.nilIfBlank ?? "",
+                    dosageForm: box?.dosageForm?.nilIfBlank ?? draft.dosageForm?.nilIfBlank ?? "",
+                    strength: box?.strength?.nilIfBlank ?? draft.strength?.nilIfBlank ?? "",
+                    doseUnit: doseUnit,
+                    totalQuantity: box?.totalQuantity?.nilIfBlank ?? draft.totalQuantity?.nilIfBlank,
+                    expireDate: box?.expireDate?.nilIfBlank ?? draft.expireDate?.nilIfBlank,
+                    notes: box?.notes?.nilIfBlank ?? "",
+                    extra: mergeTypedUploadExtra(box?.extra)
+                ),
+                drugName: medicineName,
+                dosePerTime: dosePerTime,
+                doseValue: draft.doseValue?.nilIfBlank,
+                doseUnit: doseUnit,
+                frequencyType: frequencyType,
+                everyNDays: draft.everyNDays.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) },
+                weeklyWeekdays: draft.weeklyWeekdays ?? [],
+                frequencyText: draft.frequencyText?.nilIfBlank ?? draft.frequencyCode?.nilIfBlank ?? "按医嘱",
+                reminderTimes: draft.reminderTimes ?? [],
+                startDate: startDate,
+                endDate: draft.endDate?.nilIfBlank,
+                instructions: draft.instructions?.nilIfBlank ?? "",
+                reminderEnabled: draft.reminderEnabled ?? false,
+                status: draft.status?.nilIfBlank ?? "active",
+                extra: mergeTypedUploadExtra((draft.extra ?? [:]).merging(["sort_order": "\(index)"]) { current, _ in current })
+            )
+        }
+    }
+
+    func normalizedFrequencyType(_ raw: String?) -> String {
+        switch raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "every_n_days", "interval", "间隔":
+            return "every_n_days"
+        case "weekly", "week", "每周":
+            return "weekly"
+        default:
+            return "daily"
+        }
     }
 }
 
@@ -213,13 +321,6 @@ private extension DefaultTypedMedicalDocumentSaver {
         }
         merged["source"] = "typed_upload"
         return merged
-    }
-
-    func resolvedDrugDisplayName(_ line: MedicationRecognitionDraft) -> String {
-        if let s = line.drugName?.trimmingCharacters(in: .whitespacesAndNewlines), s.isEmpty == false { return s }
-        if let s = line.genericName?.trimmingCharacters(in: .whitespacesAndNewlines), s.isEmpty == false { return s }
-        if let s = line.brandName?.trimmingCharacters(in: .whitespacesAndNewlines), s.isEmpty == false { return s }
-        return ""
     }
 
     // MARK: 构建体检报告保存参数

@@ -135,7 +135,7 @@ struct DefaultMedicalDocumentRecognizer: MedicalDocumentRecognizer, Sendable {
         case .medicalExam:
             return .medicalReport
         case .medication:
-            return .medication
+            return .medicationPlan
         case .general, .none:
             return .auto
         }

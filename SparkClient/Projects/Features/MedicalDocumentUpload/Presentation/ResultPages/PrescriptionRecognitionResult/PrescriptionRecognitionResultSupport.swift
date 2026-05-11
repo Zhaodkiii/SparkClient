@@ -119,7 +119,7 @@ struct PrescriptionResultLocalAttachmentItem: Identifiable {
 
 enum PrescriptionResultLocalEditor: Identifiable {
     case batch(PrescriptionRecognitionDraft)
-    case medication(index: Int, draft: MedicationRecognitionDraft)
+    case medication(index: Int, draft: MedicationPlanRecognitionDraft)
 
     var id: String {
         switch self {
