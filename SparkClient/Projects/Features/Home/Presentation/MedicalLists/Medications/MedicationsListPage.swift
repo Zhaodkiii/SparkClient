@@ -25,37 +25,50 @@ private enum MedicationFilterType: String, Identifiable, CaseIterable {
 struct MedicationsListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let workflowAPI: SparkMedicalWorkflowAPI
+    let medicalQueryAPI: SparkMedicalQueryAPI
     let fileTransferService: FileTransferService
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let notificationClient: any NotificationClient
+    let logger: Logger
+    let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
+    let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
 
     @State private var selectedFilter: MedicationFilterType = .active
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
+    @State private var todayMedicationRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     @State private var sheetDestination: MedicationPlanSheetDestination?
     @State private var showingUploadSheet = false
     @State private var showingUploadHost = false
 
-    private let logger: Logger = ConsoleLogger()
     private let logModule = LogModule.home
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
-        notificationClient: any NotificationClient
+        notificationClient: any NotificationClient,
+        logger: Logger,
+        onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
+        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
     ) {
         self.completeData = completeData
         self.workflowAPI = workflowAPI
+        self.medicalQueryAPI = medicalQueryAPI
         self.fileTransferService = fileTransferService
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
         self.notificationClient = notificationClient
+        self.logger = logger
+        self.onMedicationPlansChanged = onMedicationPlansChanged
+        self.onMedicineBoxesChanged = onMedicineBoxesChanged
         _medicineBoxes = State(initialValue: completeData?.medicineBoxes ?? [])
         _medicationPlans = State(initialValue: completeData?.medicationPlans ?? [])
+        _todayMedicationRecords = State(initialValue: completeData?.todayMedicationRecords ?? [])
     }
 
     private var memberID: Int? {
@@ -67,7 +80,7 @@ struct MedicationsListPage: View {
     }
 
     private var recordsByPlanID: [Int: [SparkMedicalSyncAPI.RemoteMedicationRecord]] {
-        Dictionary(grouping: completeData?.todayMedicationRecords ?? [], by: \.plan)
+        Dictionary(grouping: todayMedicationRecords, by: \.plan)
     }
 
     private var sortedPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
@@ -97,93 +110,157 @@ struct MedicationsListPage: View {
     }
 
     var body: some View {
+        contentWithLifecycle
+            .sheet(item: $sheetDestination) { destination in
+                medicationPlanSheetContent(for: destination)
+            }
+            .sheet(isPresented: $showingUploadSheet) {
+                medicationUploadSheet
+            }
+            .fullScreenCover(isPresented: $showingUploadHost) {
+                uploadHostView
+            }
+    }
+
+    private var contentWithLifecycle: some View {
+        contentChrome
+            .onAppear(perform: logAppear)
+            .onChange(of: selectedFilter, perform: handleFilterChange)
+            .onChange(of: completeData?.medicineBoxes ?? [], perform: handleMedicineBoxesChange)
+            .onChange(of: completeData?.medicationPlans ?? [], perform: handleMedicationPlansChange)
+            .onChange(of: completeData?.todayMedicationRecords ?? [], perform: handleMedicationRecordsChange)
+    }
+
+    private var contentChrome: some View {
+        contentRoot
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomActionBar
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    AnyView(executionCenterToolbarLink)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    AnyView(medicineBoxToolbarLink)
+                }
+            }
+    }
+
+    private var contentRoot: some View {
         VStack(spacing: 0) {
             filterTabBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
-            if filteredPlans.isEmpty {
-                emptyStateView
-            } else {
-                medicationListContent
-            }
+            medicationScrollableContent
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomActionBar
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink {
-                    MedicineBoxListPage(
-                        medicineBoxes: medicineBoxes,
-                        memberID: memberID,
-                        workflowAPI: workflowAPI,
-                        fileTransferService: fileTransferService,
-                        viewModel: medicalDocumentUploadViewModel,
-                        onMedicineBoxesChanged: { medicineBoxes = $0 }
-                    )
-                } label: {
-                    Label("药箱", systemImage: "pills.fill")
-                        .font(.footnote.weight(.semibold))
-                }
-            }
-        }
-        .onAppear {
-            logger.info(
-                "打开服药计划列表 filter=\(selectedFilter.rawValue) total=\(sortedPlans.count) filtered=\(filteredPlans.count)",
-                module: logModule
+    }
+
+    private func logAppear() {
+        logger.info(
+            "打开服药计划列表 filter=\(selectedFilter.rawValue) total=\(sortedPlans.count) filtered=\(filteredPlans.count)",
+            module: logModule
+        )
+    }
+
+    private func handleFilterChange(_ newValue: MedicationFilterType) {
+        logger.info(
+            "切换服药计划筛选 filter=\(newValue.rawValue) filtered=\(filteredPlans.count)",
+            module: logModule
+        )
+    }
+
+    private func handleMedicineBoxesChange(_ newValue: [SparkMedicalSyncAPI.RemoteMedicineBox]) {
+        medicineBoxes = newValue
+    }
+
+    private func handleMedicationPlansChange(_ newValue: [SparkMedicalSyncAPI.RemoteMedicationPlan]) {
+        medicationPlans = newValue
+    }
+
+    private func handleMedicationRecordsChange(_ newValue: [SparkMedicalSyncAPI.RemoteMedicationRecord]) {
+        todayMedicationRecords = newValue
+    }
+
+    @ViewBuilder
+    private func medicationPlanSheetContent(for destination: MedicationPlanSheetDestination) -> some View {
+        if let memberID {
+            MedicationPlanFormView(
+                mode: destination.formMode,
+                memberID: memberID,
+                medicineBoxes: medicineBoxes,
+                workflowAPI: workflowAPI,
+                fileTransferService: fileTransferService,
+                notificationClient: notificationClient,
+                onMedicineBoxSaved: upsertMedicineBox,
+                onServerSaved: upsertMedicationPlan
             )
+        } else {
+            Text("请先选择成员")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onChange(of: selectedFilter) { newValue in
-            logger.info(
-                "切换服药计划筛选 filter=\(newValue.rawValue) filtered=\(filteredPlans.count)",
-                module: logModule
+    }
+
+    private var medicationUploadSheet: some View {
+        MedicineBoxUploadSheet(
+            title: L10n.text("medical.upload.medication_plan.sheet.title", fallback: "选择服药计划图片"),
+            headerTitle: L10n.text("medical.upload.medication_plan.sheet.header", fallback: "选择上传方式"),
+            headerSubtitle: L10n.text("medical.upload.medication_plan.sheet.subtitle", fallback: "可一次选择多张处方、药品说明或服药计划图片，确认后开始识别。"),
+            emptyTitle: L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件"),
+            emptySubtitle: L10n.text("medical.upload.medication_plan.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片"),
+            fileNamePrefix: "medication_plan"
+        ) { files in
+            startMedicationPlanRecognition(files: files)
+        }
+    }
+
+    private var uploadHostView: some View {
+        CompatibleNavigationContainer {
+            MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+        }
+    }
+
+    private var executionCenterToolbarLink: some View {
+        NavigationLink {
+            MedicationExecutionCenterPage(
+                medicationPlans: medicationPlans,
+                medicineBoxes: medicineBoxes,
+                initialRecords: todayMedicationRecords,
+                memberID: memberID,
+                medicalQueryAPI: medicalQueryAPI,
+                workflowAPI: workflowAPI,
+                fileTransferService: fileTransferService,
+                notificationClient: notificationClient,
+                logger: logger
             )
+        } label: {
+            Label("执行", systemImage: "checklist.checked")
+                .font(.footnote.weight(.semibold))
         }
-        .onChange(of: completeData?.medicineBoxes ?? []) { newValue in
-            medicineBoxes = newValue
-        }
-        .onChange(of: completeData?.medicationPlans ?? []) { newValue in
-            medicationPlans = newValue
-        }
-        .sheet(item: $sheetDestination) { destination in
-            if let memberID {
-                MedicationPlanFormView(
-                    mode: destination.formMode,
-                    memberID: memberID,
-                    medicineBoxes: medicineBoxes,
-                    workflowAPI: workflowAPI,
-                    fileTransferService: fileTransferService,
-                    notificationClient: notificationClient,
-                    onMedicineBoxSaved: upsertMedicineBox,
-                    onServerSaved: upsertMedicationPlan
-                )
-            } else {
-                Text("请先选择成员")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .sheet(isPresented: $showingUploadSheet) {
-            MedicineBoxUploadSheet(
-                title: L10n.text("medical.upload.medication_plan.sheet.title", fallback: "选择服药计划图片"),
-                headerTitle: L10n.text("medical.upload.medication_plan.sheet.header", fallback: "选择上传方式"),
-                headerSubtitle: L10n.text("medical.upload.medication_plan.sheet.subtitle", fallback: "可一次选择多张处方、药品说明或服药计划图片，确认后开始识别。"),
-                emptyTitle: L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件"),
-                emptySubtitle: L10n.text("medical.upload.medication_plan.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片"),
-                fileNamePrefix: "medication_plan"
-            ) { files in
-                startMedicationPlanRecognition(files: files)
-            }
-        }
-        .fullScreenCover(isPresented: $showingUploadHost) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
-            }
+        .disabled(memberID == nil)
+    }
+
+    private var medicineBoxToolbarLink: some View {
+        NavigationLink {
+            MedicineBoxListPage(
+                medicineBoxes: medicineBoxes,
+                memberID: memberID,
+                workflowAPI: workflowAPI,
+                medicalQueryAPI: medicalQueryAPI,
+                fileTransferService: fileTransferService,
+                viewModel: medicalDocumentUploadViewModel,
+                notificationClient: notificationClient,
+                logger: logger,
+                onMedicineBoxesChanged: updateMedicineBoxes
+            )
+        } label: {
+            Label("药箱", systemImage: "pills.fill")
+                .font(.footnote.weight(.semibold))
         }
     }
 
@@ -216,41 +293,51 @@ struct MedicationsListPage: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedFilter)
     }
 
-    private var medicationListContent: some View {
+    private var medicationScrollableContent: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredPlans, id: \.id) { plan in
-                    NavigationLink {
-                        MedicationPlanDetailPage(
-                            plan: plan,
-                            medicineBoxes: medicineBoxes,
-                            records: recordsByPlanID[plan.id] ?? [],
-                            memberID: memberID,
-                            workflowAPI: workflowAPI,
-                            fileTransferService: fileTransferService,
-                            notificationClient: notificationClient,
-                            onSaved: upsertMedicationPlan,
-                            onDeleted: removeMedicationPlan,
-                            onMedicineBoxSaved: upsertMedicineBox
-                        )
-                    } label: {
-                        MedicationPlanCard(
-                            plan: plan,
-                            medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
-                            records: recordsByPlanID[plan.id] ?? []
-                        )
+            if filteredPlans.isEmpty {
+                emptyStateView
+                    .frame(maxWidth: .infinity, minHeight: 360)
+                    .padding(.vertical, 24)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredPlans, id: \.id) { plan in
+                        NavigationLink {
+                            MedicationPlanDetailPage(
+                                plan: plan,
+                                medicineBoxes: medicineBoxes,
+                                records: recordsByPlanID[plan.id] ?? [],
+                                memberID: memberID,
+                                workflowAPI: workflowAPI,
+                                fileTransferService: fileTransferService,
+                                notificationClient: notificationClient,
+                                onSaved: upsertMedicationPlan,
+                                onDeleted: removeMedicationPlan,
+                                onMedicineBoxSaved: upsertMedicineBox
+                            )
+                        } label: {
+                            MedicationPlanCard(
+                                plan: plan,
+                                medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
+                                records: recordsByPlanID[plan.id] ?? [],
+                                fileTransferService: fileTransferService
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                }
 
-                Text(L10n.text("home.medical.list.medications.footer.no_more", fallback: "没有更多了"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 8)
-                    .padding(.bottom, 96)
+                    Text(L10n.text("home.medical.list.medications.footer.no_more", fallback: "没有更多了"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                        .padding(.bottom, 96)
+                }
             }
+        }
+        .refreshable {
+            await refreshMedicationPlans()
         }
     }
 
@@ -335,11 +422,13 @@ struct MedicationsListPage: View {
         } else {
             medicationPlans.insert(plan, at: 0)
         }
+        onMedicationPlansChanged?(medicationPlans)
         sheetDestination = nil
     }
 
     private func removeMedicationPlan(id: Int) {
         medicationPlans.removeAll { $0.id == id }
+        onMedicationPlansChanged?(medicationPlans)
     }
 
     private func upsertMedicineBox(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
@@ -347,6 +436,37 @@ struct MedicationsListPage: View {
             medicineBoxes[index] = box
         } else {
             medicineBoxes.insert(box, at: 0)
+        }
+        onMedicineBoxesChanged?(medicineBoxes)
+    }
+
+    private func updateMedicineBoxes(_ boxes: [SparkMedicalSyncAPI.RemoteMedicineBox]) {
+        medicineBoxes = boxes
+        onMedicineBoxesChanged?(boxes)
+    }
+
+    @MainActor
+    private func refreshMedicationPlans() async {
+        guard let memberID else {
+            logger.warning("服药计划下拉刷新跳过：缺少成员 ID", module: logModule)
+            return
+        }
+
+        let startedAt = Date()
+        logger.info("服药计划下拉刷新开始 memberID=\(memberID)", module: logModule)
+
+        do {
+            // 下拉刷新只拉取服药计划列表，并只回写首页 completeData.medicationPlans 缓存字段。
+            let plans = try await medicalQueryAPI.listMedicationPlans(memberID: memberID)
+            medicationPlans = plans
+            onMedicationPlansChanged?(plans)
+            logger.info(
+                "服药计划下拉刷新完成 memberID=\(memberID) count=\(plans.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
+                module: logModule
+            )
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.medication_plans.refresh")
+            logger.warning("服药计划下拉刷新失败 memberID=\(memberID) error=\(error.localizedDescription)", module: logModule)
         }
     }
 
@@ -1804,9 +1924,17 @@ private struct MedicationPlanCard: View {
     let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
     let medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox?
     let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
+    let fileTransferService: FileTransferService
 
     private var takenCount: Int {
         records.filter { $0.status == "taken" }.count
+    }
+
+    private var imageAttachment: SparkMedicalSyncAPI.RemoteManagedFile? {
+        if let boxAttachment = medicineBox?.attachments?.first(where: \.isMedicationImageLike) {
+            return boxAttachment
+        }
+        return plan.attachments?.first(where: \.isMedicationImageLike)
     }
 
     private var subtitle: String {
@@ -1822,11 +1950,12 @@ private struct MedicationPlanCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "pills.fill")
-                    .font(.headline)
-                    .foregroundStyle(Color(uiColor: .systemBlue))
-                    .frame(width: 40, height: 40)
-                    .background(Color(uiColor: .systemBlue).opacity(0.10), in: Circle())
+                MedicationImageGlyph(
+                    seed: plan.id,
+                    attachment: imageAttachment,
+                    fileTransferService: fileTransferService
+                )
+                .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(plan.drugName.nilIfBlank ?? "未命名药品")
@@ -2150,10 +2279,12 @@ private extension KeyedEncodingContainer {
         MedicationsListPage(
             completeData: nil,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+            medicalQueryAPI: AppContainer.preview.backend.medicalQuery,
             fileTransferService: AppContainer.preview.fileTransferService,
             memberContextStore: AppContainer.preview.memberContextStore,
             medicalDocumentUploadViewModel: AppContainer.preview.makeMedicalDocumentUploadViewModel(),
-            notificationClient: AppContainer.preview.notificationClient
+            notificationClient: AppContainer.preview.notificationClient,
+            logger: AppContainer.preview.logger
         )
     }
 }

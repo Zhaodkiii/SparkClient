@@ -8,7 +8,7 @@ enum HomeMedicalListRoute: Hashable {
     case medicationPlans
 }
 
-/// 医疗列表总入口：直接消费 `/complete-data/`，不额外发起网络请求。
+/// 医疗列表总入口：首屏直接消费 `/complete-data/`，列表内按需刷新对应资源。
 struct HomeMedicalListView: View {
     let route: HomeMedicalListRoute
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
@@ -16,6 +16,8 @@ struct HomeMedicalListView: View {
     let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     let onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?
     let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
+    let onMedicationPlansUpdated: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
+    let onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
 
     var body: some View {
         switch route {
@@ -23,9 +25,12 @@ struct HomeMedicalListView: View {
             MedicalCasesListPage(
                 completeData: completeData,
                 workflowAPI: dependencies.medicalWorkflowAPI,
+                medicalQueryAPI: dependencies.medicalQueryAPI,
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
+                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
                 notificationClient: dependencies.notificationClient,
+                logger: dependencies.logger,
                 onCasesUpdated: onMedicalCasesUpdated
             )
         case .healthExamReports:
@@ -36,6 +41,7 @@ struct HomeMedicalListView: View {
                 logger: dependencies.logger,
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
+                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
                 notificationClient: dependencies.notificationClient,
                 onReportsUpdated: onHealthExamReportsUpdated
             )
@@ -46,6 +52,7 @@ struct HomeMedicalListView: View {
                 logger: dependencies.logger,
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
+                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
                 notificationClient: dependencies.notificationClient,
                 onReportsUpdated: onExaminationReportsUpdated,
                 onMedicalCasesUpdated: onMedicalCasesUpdated
@@ -54,10 +61,14 @@ struct HomeMedicalListView: View {
             MedicationsListPage(
                 completeData: completeData,
                 workflowAPI: dependencies.medicalWorkflowAPI,
+                medicalQueryAPI: dependencies.medicalQueryAPI,
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
-                notificationClient: dependencies.notificationClient
+                notificationClient: dependencies.notificationClient,
+                logger: dependencies.logger,
+                onMedicationPlansChanged: onMedicationPlansUpdated,
+                onMedicineBoxesChanged: onMedicineBoxesUpdated
             )
         }
     }
@@ -65,14 +76,14 @@ struct HomeMedicalListView: View {
 
 #Preview("Medical Lists Light") {
     CompatibleNavigationContainer {
-        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
+        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onMedicationPlansUpdated: nil, onMedicineBoxesUpdated: nil)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medical Lists Dark") {
     CompatibleNavigationContainer {
-        HomeMedicalListView(route: .medicationPlans, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil)
+        HomeMedicalListView(route: .medicationPlans, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onMedicationPlansUpdated: nil, onMedicineBoxesUpdated: nil)
     }
     .preferredColorScheme(.dark)
 }

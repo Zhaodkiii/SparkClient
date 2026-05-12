@@ -9,8 +9,11 @@ struct MedicineBoxListPage: View {
     let medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     let memberID: Int?
     let workflowAPI: SparkMedicalWorkflowAPI
+    let medicalQueryAPI: SparkMedicalQueryAPI
     let fileTransferService: FileTransferService
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
+    let notificationClient: any NotificationClient
+    let logger: Logger
     let onMedicineBoxesChanged: ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
 
     @State private var localMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
@@ -22,15 +25,21 @@ struct MedicineBoxListPage: View {
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         memberID: Int?,
         workflowAPI: SparkMedicalWorkflowAPI,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         fileTransferService: FileTransferService,
         viewModel: MedicalDocumentUploadViewModel,
+        notificationClient: any NotificationClient,
+        logger: Logger,
         onMedicineBoxesChanged: @escaping ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
     ) {
         self.medicineBoxes = medicineBoxes
         self.memberID = memberID
         self.workflowAPI = workflowAPI
+        self.medicalQueryAPI = medicalQueryAPI
         self.fileTransferService = fileTransferService
         self.viewModel = viewModel
+        self.notificationClient = notificationClient
+        self.logger = logger
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
         _localMedicineBoxes = State(initialValue: medicineBoxes)
     }
@@ -61,10 +70,13 @@ struct MedicineBoxListPage: View {
                             onDeleted: removeMedicineBox
                         )
                     } label: {
-                        MedicineBoxRow(box: box)
+                        MedicineBoxRow(box: box, fileTransferService: fileTransferService)
                     }
                 }
             }
+        }
+        .refreshable {
+            await refreshMedicineBoxes()
         }
         .navigationTitle("药箱")
         .navigationBarTitleDisplayMode(.inline)
@@ -143,6 +155,31 @@ struct MedicineBoxListPage: View {
     }
 
     @MainActor
+    private func refreshMedicineBoxes() async {
+        guard let memberID else {
+            logger.warning("药箱下拉刷新跳过：缺少成员 ID", module: .home)
+            return
+        }
+
+        let startedAt = Date()
+        logger.info("药箱下拉刷新开始 memberID=\(memberID)", module: .home)
+
+        do {
+            // 下拉刷新只拉取药箱列表，并只回写首页 completeData.medicineBoxes 缓存字段。
+            let boxes = try await medicalQueryAPI.listMedicineBoxes(memberID: memberID)
+            localMedicineBoxes = boxes
+            onMedicineBoxesChanged(boxes)
+            logger.info(
+                "药箱下拉刷新完成 memberID=\(memberID) count=\(boxes.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
+                module: .home
+            )
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.medicine_boxes.refresh")
+            logger.warning("药箱下拉刷新失败 memberID=\(memberID) error=\(error.localizedDescription)", module: .home)
+        }
+    }
+
+    @MainActor
     private func startMedicineBoxRecognition(files: [MedicalUploadLocalFile]) {
         viewModel.prepareAndStart(files: files, kind: .medicineBox)
         showingUploadHost = true
@@ -188,24 +225,41 @@ enum MedicineBoxSheetDestination: Identifiable {
 
 private struct MedicineBoxRow: View {
     let box: SparkMedicalSyncAPI.RemoteMedicineBox
+    let fileTransferService: FileTransferService
+
+    private var imageAttachment: SparkMedicalSyncAPI.RemoteManagedFile? {
+        box.attachments?.first(where: \.isMedicationImageLike)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(box.medicineName.nilIfBlank ?? "未命名药品")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(medicineBoxStockText(box))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            Text([medicineStrengthText(box.strength), box.dosageForm.nilIfBlank, medicineTypeText(box.medicineType)].compactMap { $0 }.joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if let expireDate = box.expireDate {
-                Text("有效期 \(expireDate.formatted(date: .numeric, time: .omitted))")
+        HStack(alignment: .top, spacing: 12) {
+            MedicationImageGlyph(
+                seed: box.id,
+                attachment: imageAttachment,
+                fileTransferService: fileTransferService
+            )
+            .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(box.medicineName.nilIfBlank ?? "未命名药品")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(medicineBoxStockText(box))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text([medicineStrengthText(box.strength), box.dosageForm.nilIfBlank, medicineTypeText(box.medicineType)].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if let expireDate = box.expireDate {
+                    Text("有效期 \(expireDate.formatted(date: .numeric, time: .omitted))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -364,6 +418,7 @@ struct MedicineBoxUploadSheet: View {
     let emptyTitle: String
     let emptySubtitle: String
     let fileNamePrefix: String
+    let maxFileCount: Int
     let onConfirm: ([MedicalUploadLocalFile]) -> Void
 
     @State private var localFiles: [MedicalUploadLocalFile] = []
@@ -373,6 +428,7 @@ struct MedicineBoxUploadSheet: View {
     @State private var showingFileImporter = false
     @State private var showCameraUnavailableAlert = false
     @State private var filePreviewSelection: FilePreviewInput?
+    @State private var fileLimitMessage: String?
 
     private let logger: Logger = ConsoleLogger()
 
@@ -383,6 +439,7 @@ struct MedicineBoxUploadSheet: View {
         emptyTitle: String = "尚未选择文件",
         emptySubtitle: String = "可拍照、从相册选择或上传 PDF/图片",
         fileNamePrefix: String = "medicine_box",
+        maxFileCount: Int = 5,
         onConfirm: @escaping ([MedicalUploadLocalFile]) -> Void
     ) {
         self.title = title
@@ -391,6 +448,7 @@ struct MedicineBoxUploadSheet: View {
         self.emptyTitle = emptyTitle
         self.emptySubtitle = emptySubtitle
         self.fileNamePrefix = fileNamePrefix
+        self.maxFileCount = max(1, maxFileCount)
         self.onConfirm = onConfirm
     }
 
@@ -457,12 +515,16 @@ struct MedicineBoxUploadSheet: View {
             allowsMultipleSelection: true
         ) { result in
             guard case .success(let urls) = result else { return }
-            localFiles.append(contentsOf: urls.compactMap(copyToTempFile))
+            appendFiles(urls.compactMap(copyToTempFile))
         }
         .overlay {
             if #available(iOS 16.0, *) {
-                MedicineBoxPhotosPickerBridge(isPresented: $showingPhotoPicker) { files in
-                    localFiles.append(contentsOf: files)
+                MedicineBoxPhotosPickerBridge(
+                    isPresented: $showingPhotoPicker,
+                    maxSelectionCount: remainingFileSlots,
+                    fileNamePrefix: fileNamePrefix
+                ) { files in
+                    appendFiles(files)
                 }
             }
         }
@@ -470,6 +532,14 @@ struct MedicineBoxUploadSheet: View {
             Button("好", role: .cancel) {}
         } message: {
             Text("当前设备不支持相机。")
+        }
+        .alert("文件数量已达上限", isPresented: Binding(
+            get: { fileLimitMessage != nil },
+            set: { if !$0 { fileLimitMessage = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(fileLimitMessage ?? "")
         }
         .unifiedFilePreview(selection: $filePreviewSelection)
     }
@@ -493,7 +563,7 @@ struct MedicineBoxUploadSheet: View {
                 presentPhotoLibrary()
             }
             medicineUploadTile(icon: "doc", title: "文件上传", subtitle: "PDF/图片", tint: .green) {
-                showingFileImporter = true
+                presentFileImporter()
             }
         }
         .padding(.top, 6)
@@ -528,7 +598,7 @@ struct MedicineBoxUploadSheet: View {
                 Text("已选择")
                     .font(.system(size: 14, weight: .semibold))
                 Spacer()
-                Text("\(localFiles.count) 个文件")
+                Text("\(localFiles.count)/\(maxFileCount) 个文件")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -572,6 +642,10 @@ struct MedicineBoxUploadSheet: View {
         .padding( 10)
     }
 
+    private var remainingFileSlots: Int {
+        max(0, maxFileCount - localFiles.count)
+    }
+
     private func medicineUploadTile(icon: String, title: String, subtitle: String, tint: Color, action: @escaping () -> Void) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
@@ -596,6 +670,7 @@ struct MedicineBoxUploadSheet: View {
     }
 
     private func presentPhotoLibrary() {
+        guard ensureCanAddMoreFiles() else { return }
         if #available(iOS 16.0, *) {
             showingPhotoPicker = true
         } else {
@@ -603,7 +678,13 @@ struct MedicineBoxUploadSheet: View {
         }
     }
 
+    private func presentFileImporter() {
+        guard ensureCanAddMoreFiles() else { return }
+        showingFileImporter = true
+    }
+
     private func presentCamera() {
+        guard ensureCanAddMoreFiles() else { return }
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             showingCamera = true
         } else {
@@ -654,11 +735,39 @@ struct MedicineBoxUploadSheet: View {
             return nil
         }
     }
+
+    private func appendFiles(_ files: [MedicalUploadLocalFile]) {
+        guard files.isEmpty == false else { return }
+        let slots = remainingFileSlots
+        guard slots > 0 else {
+            showFileLimitMessage()
+            return
+        }
+
+        localFiles.append(contentsOf: files.prefix(slots))
+        if files.count > slots {
+            showFileLimitMessage()
+        }
+    }
+
+    private func ensureCanAddMoreFiles() -> Bool {
+        guard remainingFileSlots > 0 else {
+            showFileLimitMessage()
+            return false
+        }
+        return true
+    }
+
+    private func showFileLimitMessage() {
+        fileLimitMessage = "最多可选择 \(maxFileCount) 个文件。"
+    }
 }
 
 @available(iOS 16.0, *)
 private struct MedicineBoxPhotosPickerBridge: View {
     @Binding var isPresented: Bool
+    let maxSelectionCount: Int
+    let fileNamePrefix: String
     let onFilesSelected: ([MedicalUploadLocalFile]) -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -671,7 +780,7 @@ private struct MedicineBoxPhotosPickerBridge: View {
             .photosPicker(
                 isPresented: $isPresented,
                 selection: $selectedItems,
-                maxSelectionCount: 20,
+                maxSelectionCount: max(1, maxSelectionCount),
                 matching: .images
             )
             .onChange(of: selectedItems) { newItems in
@@ -693,7 +802,7 @@ private struct MedicineBoxPhotosPickerBridge: View {
         for item in items {
             do {
                 if let data = try await item.loadTransferable(type: Data.self),
-                   let file = saveDataToTemp(data: data, preferredExtension: "jpg", namePrefix: "medicine_box_photo") {
+                   let file = saveDataToTemp(data: data, preferredExtension: "jpg", namePrefix: "\(fileNamePrefix)_photo") {
                     files.append(file)
                 }
             } catch {

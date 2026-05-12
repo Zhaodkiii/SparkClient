@@ -4,9 +4,12 @@ import SwiftUI
 struct ExaminationReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments>
     private let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    private let medicalQueryAPI: SparkMedicalQueryAPI
+    private let logger: Logger
     private let fileTransferService: FileTransferService
     private let medicalResourceAPI: SparkMedicalWorkflowAPI
     @ObservedObject private var memberContextStore: MemberContextStore
+    @ObservedObject private var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     private let notificationClient: any NotificationClient
     private let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     /// 当前成员 ID；`complete-data` 缺失时为 0，此时不展示新增入口。
@@ -15,6 +18,8 @@ struct ExaminationReportsListPage: View {
     @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
     @State private var isPresentingAddExamSheet = false
+    @State private var showingUploadSheet = false
+    @State private var showingUploadHost = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -22,15 +27,19 @@ struct ExaminationReportsListPage: View {
         logger: Logger,
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
+        medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
         notificationClient: any NotificationClient,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil,
         onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)? = nil
     ) {
         self.completeData = completeData
         self.memberID = completeData?.memberId ?? 0
+        self.medicalQueryAPI = medicalQueryAPI
+        self.logger = logger
         self.fileTransferService = fileTransferService
         self.medicalResourceAPI = SparkMedicalWorkflowAPI(configuration: medicalQueryAPI.configuration)
         self.memberContextStore = memberContextStore
+        self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
         self.notificationClient = notificationClient
         self.onMedicalCasesUpdated = onMedicalCasesUpdated
         _viewModel = StateObject(
@@ -101,22 +110,16 @@ struct ExaminationReportsListPage: View {
                 examinationContent
                     .padding(.top, 8)
             }
+            .refreshable {
+                await refreshReports()
+            }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.examination_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if memberID > 0 {
-                Button {
-                    isPresentingAddExamSheet = true
-                } label: {
-                    Label(L10n.text("home.medical.list.examination.action.add"), systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(uiColor: .systemGroupedBackground))
+                bottomActionBar
             }
         }
         .sheet(isPresented: $isPresentingAddExamSheet) {
@@ -134,6 +137,77 @@ struct ExaminationReportsListPage: View {
                     }
                 })
             }
+        }
+        .sheet(isPresented: $showingUploadSheet) {
+            MedicineBoxUploadSheet(
+                title: L10n.text("medical.upload.examination_report.sheet.title", fallback: "选择检查报告图片"),
+                headerTitle: L10n.text("medical.upload.examination_report.sheet.header", fallback: "选择上传方式"),
+                headerSubtitle: L10n.text("medical.upload.examination_report.sheet.subtitle", fallback: "可一次选择多张检查、检验或影像报告图片，确认后开始识别。"),
+                emptyTitle: L10n.text("medical.upload.examination_report.sheet.empty.title", fallback: "尚未选择文件"),
+                emptySubtitle: L10n.text("medical.upload.examination_report.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片"),
+                fileNamePrefix: "examination_report"
+            ) { files in
+                startExaminationReportRecognition(files: files)
+            }
+        }
+        .fullScreenCover(isPresented: $showingUploadHost) {
+            CompatibleNavigationContainer {
+                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+            }
+        }
+    }
+
+    private var bottomActionBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .background(Color(uiColor: .separator).opacity(0.2))
+
+            VStack(spacing: 12) {
+                GeometryReader { proxy in
+                    HStack(spacing: 12) {
+                        Button {
+                            isPresentingAddExamSheet = true
+                        } label: {
+                            Label(L10n.text("home.medical.list.examination.action.manual_add", fallback: "手动添加"), systemImage: "plus")
+                                .font(.headline)
+                                .foregroundStyle(Color(uiColor: .systemBlue))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(
+                                    Color(uiColor: .systemBlue).opacity(0.1),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color(uiColor: .systemBlue).opacity(0.22), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: max(112, proxy.size.width * 0.34))
+
+                        Button {
+                            showingUploadSheet = true
+                        } label: {
+                            Label(L10n.text("home.medical.list.examination.action.camera_add_report", fallback: "拍摄添加报告"), systemImage: "camera.fill")
+                                .font(.headline)
+                                .foregroundStyle(Color.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(
+                                    Color(uiColor: .systemBlue),
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(height: 52)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
         }
     }
 
@@ -189,6 +263,36 @@ struct ExaminationReportsListPage: View {
     private func handleMedicalCaseDeleted(_ deletedID: Int) {
         let cases = (completeData?.medicalCases ?? []).filter { $0.id != deletedID }
         onMedicalCasesUpdated?(cases)
+    }
+
+    @MainActor
+    private func refreshReports() async {
+        guard memberID > 0 else {
+            logger.warning("检查报告列表下拉刷新跳过：缺少成员 ID", module: .home)
+            return
+        }
+
+        let startedAt = Date()
+        logger.info("检查报告列表下拉刷新开始 memberID=\(memberID)", module: .home)
+
+        do {
+            // 下拉刷新只拉取检查报告列表，并只回写首页 completeData.examinationReports 缓存字段。
+            let refreshedReports = try await medicalQueryAPI.listExaminationReportsWithAttachments(memberID: memberID)
+            viewModel.replaceReports(refreshedReports)
+            logger.info(
+                "检查报告列表下拉刷新完成 memberID=\(memberID) count=\(refreshedReports.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
+                module: .home
+            )
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.examination_reports.refresh")
+            logger.warning("检查报告列表下拉刷新失败 memberID=\(memberID) error=\(error.localizedDescription)", module: .home)
+        }
+    }
+
+    @MainActor
+    private func startExaminationReportRecognition(files: [MedicalUploadLocalFile]) {
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicalReport)
+        showingUploadHost = true
     }
 }
 

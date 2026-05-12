@@ -26,6 +26,11 @@ struct SparkMedicalQueryAPI {
         try await resources.list([SparkMedicalSyncAPI.RemoteMedicalCase].self, kind: .cases, query: memberQuery(memberID))
     }
 
+    /// 查询病历列表摘要（含列表展示所需附件/症状/用药字段）。
+    func listMedicalCaseSummaries(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCaseSummary] {
+        try await resources.list([SparkMedicalSyncAPI.RemoteMedicalCaseSummary].self, kind: .cases, query: memberQuery(memberID))
+    }
+
     /// 查询症状（按成员、病历可选过滤）。
     func listSymptoms(memberID: Int? = nil, medicalCaseID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteSymptom] {
         try await resources.list(
@@ -67,9 +72,19 @@ struct SparkMedicalQueryAPI {
         try await resources.list([SparkMedicalSyncAPI.RemoteHealthExamReport].self, kind: .healthExamReports, query: memberQuery(memberID))
     }
 
+    /// 查询体检报告列表摘要（含附件；明细仍由列表页懒加载）。
+    func listHealthExamReportsWithAttachments(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments] {
+        try await resources.list([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments].self, kind: .healthExamReports, query: memberQuery(memberID))
+    }
+
     /// 查询检查报告（按成员可选过滤）。
     func listExaminationReports(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteExaminationReport] {
         try await resources.list([SparkMedicalSyncAPI.RemoteExaminationReport].self, kind: .examinationReports, query: memberQuery(memberID))
+    }
+
+    /// 查询检查报告列表摘要（含附件；明细仍由列表页懒加载）。
+    func listExaminationReportsWithAttachments(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments] {
+        try await resources.list([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments].self, kind: .examinationReports, query: memberQuery(memberID))
     }
 
     /// 查询体检/检查明细（按成员及业务维度可选过滤）。

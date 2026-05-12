@@ -436,6 +436,7 @@ enum SparkMedicalSyncAPI {
         var reminderEnabled: Bool
         var status: String
         var extra: [String: String]?
+        var attachments: [RemoteManagedFile]?
         var updatedAt: Date
     }
 
@@ -663,7 +664,7 @@ enum SparkMedicalSyncAPI {
 
 extension SparkMedicalSyncAPI.RemoteMedicationPlan: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, member, prescription, instructions, status, extra
+        case id, member, prescription, instructions, status, extra, attachments
         case medicalCase = "medical_case"
         case medicineBox = "medicine_box"
         case drugName = "drug_name"
@@ -703,6 +704,7 @@ extension SparkMedicalSyncAPI.RemoteMedicationPlan: Codable {
         reminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .reminderEnabled) ?? true
         status = try c.decodeIfPresent(String.self, forKey: .status) ?? "active"
         extra = try c.decodeIfPresent([String: String].self, forKey: .extra)
+        attachments = try c.decodeIfPresent([SparkMedicalSyncAPI.RemoteManagedFile].self, forKey: .attachments)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
     }
 
@@ -728,6 +730,7 @@ extension SparkMedicalSyncAPI.RemoteMedicationPlan: Codable {
         try c.encode(reminderEnabled, forKey: .reminderEnabled)
         try c.encode(status, forKey: .status)
         try c.encodeIfPresent(extra, forKey: .extra)
+        try c.encodeIfPresent(attachments, forKey: .attachments)
         try c.encode(updatedAt, forKey: .updatedAt)
     }
 }

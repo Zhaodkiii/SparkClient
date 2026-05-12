@@ -215,6 +215,16 @@ struct HomeView: View {
                                 viewModel.updateMedicalCompleteData { completeData in
                                     completeData.examinationReports = reports
                                 }
+                            },
+                            onMedicationPlansUpdated: { plans in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.medicationPlans = plans
+                                }
+                            },
+                            onMedicineBoxesUpdated: { boxes in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.medicineBoxes = boxes
+                                }
                             }
                         )
                         .hidesMainTabBarWhenPushed()

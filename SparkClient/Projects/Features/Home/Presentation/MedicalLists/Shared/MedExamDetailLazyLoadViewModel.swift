@@ -95,6 +95,11 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
         onReportsUpdated?(reports)
     }
 
+    func replaceReports(_ newReports: [Report]) {
+        reports = newReports
+        onReportsUpdated?(reports)
+    }
+
     func prependReport(_ report: Report) {
         reports.insert(report, at: 0)
         onReportsUpdated?(reports)
