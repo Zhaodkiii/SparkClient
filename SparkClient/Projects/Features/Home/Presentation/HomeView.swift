@@ -221,6 +221,11 @@ struct HomeView: View {
                                     completeData.medicationPlans = plans
                                 }
                             },
+                            onPrescriptionsUpdated: { prescriptions in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.prescriptions = prescriptions
+                                }
+                            },
                             onMedicineBoxesUpdated: { boxes in
                                 viewModel.updateMedicalCompleteData { completeData in
                                     completeData.medicineBoxes = boxes

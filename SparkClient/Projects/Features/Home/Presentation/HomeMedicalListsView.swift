@@ -17,6 +17,7 @@ struct HomeMedicalListView: View {
     let onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?
     let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
     let onMedicationPlansUpdated: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
+    let onPrescriptionsUpdated: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
 
     var body: some View {
@@ -68,6 +69,7 @@ struct HomeMedicalListView: View {
                 notificationClient: dependencies.notificationClient,
                 logger: dependencies.logger,
                 onMedicationPlansChanged: onMedicationPlansUpdated,
+                onPrescriptionsChanged: onPrescriptionsUpdated,
                 onMedicineBoxesChanged: onMedicineBoxesUpdated
             )
         }
@@ -76,14 +78,14 @@ struct HomeMedicalListView: View {
 
 #Preview("Medical Lists Light") {
     CompatibleNavigationContainer {
-        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onMedicationPlansUpdated: nil, onMedicineBoxesUpdated: nil)
+        HomeMedicalListView(route: .medicalCases, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onMedicationPlansUpdated: nil, onPrescriptionsUpdated: nil, onMedicineBoxesUpdated: nil)
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medical Lists Dark") {
     CompatibleNavigationContainer {
-        HomeMedicalListView(route: .medicationPlans, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onMedicationPlansUpdated: nil, onMedicineBoxesUpdated: nil)
+        HomeMedicalListView(route: .medicationPlans, completeData: nil, dependencies: .preview, onMedicalCasesUpdated: nil, onHealthExamReportsUpdated: nil, onExaminationReportsUpdated: nil, onMedicationPlansUpdated: nil, onPrescriptionsUpdated: nil, onMedicineBoxesUpdated: nil)
     }
     .preferredColorScheme(.dark)
 }

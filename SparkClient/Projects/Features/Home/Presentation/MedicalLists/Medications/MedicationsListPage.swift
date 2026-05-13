@@ -22,6 +22,32 @@ private enum MedicationFilterType: String, Identifiable, CaseIterable {
     }
 }
 
+private enum MedicationListItem: Identifiable {
+    case prescription(id: Int, prescription: SparkMedicalSyncAPI.RemotePrescription?, plans: [SparkMedicalSyncAPI.RemoteMedicationPlan])
+    case standalonePlan(SparkMedicalSyncAPI.RemoteMedicationPlan)
+
+    var id: String {
+        switch self {
+        case .prescription(let id, _, _):
+            return "prescription_\(id)"
+        case .standalonePlan(let plan):
+            return "plan_\(plan.id)"
+        }
+    }
+
+    var sortDate: Date {
+        switch self {
+        case .prescription(_, let prescription, let plans):
+            return prescription?.prescribedAt
+                ?? plans.map(\.startDate).max()
+                ?? prescription?.updatedAt
+                ?? .distantPast
+        case .standalonePlan(let plan):
+            return plan.startDate
+        }
+    }
+}
+
 struct MedicationsListPage: View {
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let workflowAPI: SparkMedicalWorkflowAPI
@@ -32,10 +58,12 @@ struct MedicationsListPage: View {
     let notificationClient: any NotificationClient
     let logger: Logger
     let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
+    let onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
 
     @State private var selectedFilter: MedicationFilterType = .active
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
+    @State private var prescriptions: [SparkMedicalSyncAPI.RemotePrescription]
     @State private var medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
     @State private var todayMedicationRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     @State private var sheetDestination: MedicationPlanSheetDestination?
@@ -54,6 +82,7 @@ struct MedicationsListPage: View {
         notificationClient: any NotificationClient,
         logger: Logger,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
+        onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)? = nil,
         onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
     ) {
         self.completeData = completeData
@@ -65,8 +94,10 @@ struct MedicationsListPage: View {
         self.notificationClient = notificationClient
         self.logger = logger
         self.onMedicationPlansChanged = onMedicationPlansChanged
+        self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
         _medicineBoxes = State(initialValue: completeData?.medicineBoxes ?? [])
+        _prescriptions = State(initialValue: completeData?.prescriptions ?? [])
         _medicationPlans = State(initialValue: completeData?.medicationPlans ?? [])
         _todayMedicationRecords = State(initialValue: completeData?.todayMedicationRecords ?? [])
     }
@@ -83,6 +114,10 @@ struct MedicationsListPage: View {
         Dictionary(grouping: todayMedicationRecords, by: \.plan)
     }
 
+    private var prescriptionsByID: [Int: SparkMedicalSyncAPI.RemotePrescription] {
+        Dictionary(uniqueKeysWithValues: prescriptions.map { ($0.id, $0) })
+    }
+
     private var sortedPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
         medicationPlans.sorted { lhs, rhs in
             if lhs.status == rhs.status {
@@ -92,15 +127,39 @@ struct MedicationsListPage: View {
         }
     }
 
-    private var filteredPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
-        sortedPlans.filter { plan in
+    private var sortedItems: [MedicationListItem] {
+        let linkedPlans = sortedPlans.filter { $0.prescription != nil }
+        let plansByPrescriptionID = Dictionary(grouping: linkedPlans) { plan in
+            plan.prescription ?? 0
+        }
+
+        var items: [MedicationListItem] = []
+        let prescriptionIDs = Set(prescriptions.map(\.id)).union(plansByPrescriptionID.keys)
+        for prescriptionID in prescriptionIDs {
+            let plans = plansByPrescriptionID[prescriptionID] ?? []
+            if prescriptionsByID[prescriptionID] != nil || plans.isEmpty == false {
+                items.append(.prescription(id: prescriptionID, prescription: prescriptionsByID[prescriptionID], plans: plans))
+            }
+        }
+
+        for plan in sortedPlans where plan.prescription == nil {
+            items.append(.standalonePlan(plan))
+        }
+
+        return items.sorted { $0.sortDate > $1.sortDate }
+    }
+
+    private var filteredItems: [MedicationListItem] {
+        sortedItems.filter { item in
             switch selectedFilter {
             case .active:
-                return plan.status == "active" && isPlanInDateRange(plan)
+                return item.plans.contains { $0.status == "active" && isPlanInDateRange($0) }
             case .notStarted:
-                return plan.status == "paused" || plan.startDate > today
+                return item.plans.contains { $0.status == "paused" || $0.startDate > today }
             case .completed:
-                return plan.status == "completed" || plan.status == "cancelled" || isPlanEnded(plan)
+                return item.plans.isEmpty == false && item.plans.allSatisfy {
+                    $0.status == "completed" || $0.status == "cancelled" || isPlanEnded($0)
+                }
             }
         }
     }
@@ -127,6 +186,7 @@ struct MedicationsListPage: View {
             .onAppear(perform: logAppear)
             .onChange(of: selectedFilter, perform: handleFilterChange)
             .onChange(of: completeData?.medicineBoxes ?? [], perform: handleMedicineBoxesChange)
+            .onChange(of: completeData?.prescriptions ?? [], perform: handlePrescriptionsChange)
             .onChange(of: completeData?.medicationPlans ?? [], perform: handleMedicationPlansChange)
             .onChange(of: completeData?.todayMedicationRecords ?? [], perform: handleMedicationRecordsChange)
     }
@@ -161,20 +221,24 @@ struct MedicationsListPage: View {
 
     private func logAppear() {
         logger.info(
-            "打开服药计划列表 filter=\(selectedFilter.rawValue) total=\(sortedPlans.count) filtered=\(filteredPlans.count)",
+            "打开服药计划列表 filter=\(selectedFilter.rawValue) total=\(sortedItems.count) filtered=\(filteredItems.count)",
             module: logModule
         )
     }
 
     private func handleFilterChange(_ newValue: MedicationFilterType) {
         logger.info(
-            "切换服药计划筛选 filter=\(newValue.rawValue) filtered=\(filteredPlans.count)",
+            "切换服药计划筛选 filter=\(newValue.rawValue) filtered=\(filteredItems.count)",
             module: logModule
         )
     }
 
     private func handleMedicineBoxesChange(_ newValue: [SparkMedicalSyncAPI.RemoteMedicineBox]) {
         medicineBoxes = newValue
+    }
+
+    private func handlePrescriptionsChange(_ newValue: [SparkMedicalSyncAPI.RemotePrescription]) {
+        prescriptions = newValue
     }
 
     private func handleMedicationPlansChange(_ newValue: [SparkMedicalSyncAPI.RemoteMedicationPlan]) {
@@ -295,37 +359,60 @@ struct MedicationsListPage: View {
 
     private var medicationScrollableContent: some View {
         ScrollView {
-            if filteredPlans.isEmpty {
+            if filteredItems.isEmpty {
                 emptyStateView
                     .frame(maxWidth: .infinity, minHeight: 360)
                     .padding(.vertical, 24)
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(filteredPlans, id: \.id) { plan in
-                        NavigationLink {
-                            MedicationPlanDetailPage(
-                                plan: plan,
-                                medicineBoxes: medicineBoxes,
-                                records: recordsByPlanID[plan.id] ?? [],
-                                memberID: memberID,
-                                workflowAPI: workflowAPI,
-                                fileTransferService: fileTransferService,
-                                notificationClient: notificationClient,
-                                onSaved: upsertMedicationPlan,
-                                onDeleted: removeMedicationPlan,
-                                onMedicineBoxSaved: upsertMedicineBox
-                            )
-                        } label: {
-                            MedicationPlanCard(
-                                plan: plan,
-                                medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
-                                records: recordsByPlanID[plan.id] ?? [],
-                                fileTransferService: fileTransferService
-                            )
+                    ForEach(filteredItems) { item in
+                        switch item {
+                        case .prescription(_, let prescription, let plans):
+                            NavigationLink {
+                                MedicationPrescriptionDetailPage(
+                                    prescription: prescription,
+                                    plans: plans,
+                                    medicineBoxes: medicineBoxes,
+                                    recordsByPlanID: recordsByPlanID,
+                                    memberID: memberID,
+                                    completeData: completeData,
+                                    memberContextStore: memberContextStore,
+                                    workflowAPI: workflowAPI,
+                                    fileTransferService: fileTransferService,
+                                    notificationClient: notificationClient,
+                                    onPrescriptionSaved: upsertPrescription,
+                                    onPrescriptionDeleted: removePrescription,
+                                    onPlanSaved: upsertMedicationPlan,
+                                    onPlanDeleted: removeMedicationPlan
+                                )
+                            } label: {
+                                MedicationPrescriptionCard(
+                                    prescription: prescription,
+                                    plans: plans,
+                                    medicineBoxesByID: medicineBoxesByID,
+                                    recordsByPlanID: recordsByPlanID,
+                                    fileTransferService: fileTransferService,
+                                    planDestination: planDetailPage
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        case .standalonePlan(let plan):
+                            NavigationLink {
+                                planDetailPage(for: plan)
+                            } label: {
+                                MedicationPlanCard(
+                                    plan: plan,
+                                    medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
+                                    records: recordsByPlanID[plan.id] ?? [],
+                                    fileTransferService: fileTransferService
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
                     }
 
                     Text(L10n.text("home.medical.list.medications.footer.no_more", fallback: "没有更多了"))
@@ -339,6 +426,23 @@ struct MedicationsListPage: View {
         .refreshable {
             await refreshMedicationPlans()
         }
+    }
+
+    private func planDetailPage(for plan: SparkMedicalSyncAPI.RemoteMedicationPlan) -> some View {
+        MedicationPlanDetailPage(
+            plan: plan,
+            medicineBoxes: medicineBoxes,
+            records: recordsByPlanID[plan.id] ?? [],
+            memberID: memberID,
+            completeData: completeData,
+            memberContextStore: memberContextStore,
+            workflowAPI: workflowAPI,
+            fileTransferService: fileTransferService,
+            notificationClient: notificationClient,
+            onSaved: upsertMedicationPlan,
+            onDeleted: removeMedicationPlan,
+            onMedicineBoxSaved: upsertMedicineBox
+        )
     }
 
     private var emptyStateView: some View {
@@ -431,6 +535,20 @@ struct MedicationsListPage: View {
         onMedicationPlansChanged?(medicationPlans)
     }
 
+    private func upsertPrescription(_ prescription: SparkMedicalSyncAPI.RemotePrescription) {
+        if let index = prescriptions.firstIndex(where: { $0.id == prescription.id }) {
+            prescriptions[index] = prescription
+        } else {
+            prescriptions.insert(prescription, at: 0)
+        }
+        onPrescriptionsChanged?(prescriptions)
+    }
+
+    private func removePrescription(id: Int) {
+        prescriptions.removeAll { $0.id == id }
+        onPrescriptionsChanged?(prescriptions)
+    }
+
     private func upsertMedicineBox(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
         if let index = medicineBoxes.firstIndex(where: { $0.id == box.id }) {
             medicineBoxes[index] = box
@@ -456,12 +574,15 @@ struct MedicationsListPage: View {
         logger.info("服药计划下拉刷新开始 memberID=\(memberID)", module: logModule)
 
         do {
-            // 下拉刷新只拉取服药计划列表，并只回写首页 completeData.medicationPlans 缓存字段。
-            let plans = try await medicalQueryAPI.listMedicationPlans(memberID: memberID)
+            async let refreshedPlans = medicalQueryAPI.listMedicationPlans(memberID: memberID)
+            async let refreshedPrescriptions = medicalQueryAPI.listPrescriptions(memberID: memberID)
+            let (plans, prescriptionRows) = try await (refreshedPlans, refreshedPrescriptions)
             medicationPlans = plans
+            prescriptions = prescriptionRows
             onMedicationPlansChanged?(plans)
+            onPrescriptionsChanged?(prescriptionRows)
             logger.info(
-                "服药计划下拉刷新完成 memberID=\(memberID) count=\(plans.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
+                "服药计划下拉刷新完成 memberID=\(memberID) plans=\(plans.count) prescriptions=\(prescriptionRows.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
                 module: logModule
             )
         } catch {
@@ -500,6 +621,17 @@ struct MedicationsListPage: View {
             return false
         }
         return endDate < today
+    }
+}
+
+private extension MedicationListItem {
+    var plans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
+        switch self {
+        case .prescription(_, _, let plans):
+            return plans
+        case .standalonePlan(let plan):
+            return [plan]
+        }
     }
 }
 
@@ -1920,6 +2052,210 @@ private enum MedicationPlanFormError: LocalizedError {
     }
 }
 
+private struct MedicationPrescriptionCard<Destination: View>: View {
+    let prescription: SparkMedicalSyncAPI.RemotePrescription?
+    let plans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
+    let medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox]
+    let recordsByPlanID: [Int: [SparkMedicalSyncAPI.RemoteMedicationRecord]]
+    let fileTransferService: FileTransferService
+    @ViewBuilder let planDestination: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Destination
+
+    private var title: String {
+        prescription?.institutionName.nilIfBlank ?? "处方批次"
+    }
+
+    private var subtitleItems: [String] {
+        [
+            prescription?.prescriberName.nilIfBlank.map { "医生：\($0)" },
+            prescription?.prescriptionNo?.nilIfBlank.map { "处方号：\($0)" },
+            prescriptionDateText
+        ].compactMap { $0 }
+    }
+
+    private var prescriptionDateText: String? {
+        guard let date = prescription?.prescribedAt else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+
+            if let diagnosis = prescription?.diagnosis.nilIfBlank {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("诊断")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(uiColor: .systemBlue))
+                    Text(diagnosis)
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .background(Color(uiColor: .systemBlue).opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color(uiColor: .systemBlue).opacity(0.18), lineWidth: 1)
+                )
+            }
+
+            Divider()
+
+            HStack(spacing: 8) {
+                Text("用药（\(plans.count)种）")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let status = prescription?.status.nilIfBlank {
+                    Text(prescriptionStatusText(status))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(uiColor: .systemPurple))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(uiColor: .systemPurple).opacity(0.12), in: Capsule())
+                }
+            }
+
+            if plans.isEmpty {
+                Text("暂无关联用药计划")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 10)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(plans, id: \.id) { plan in
+                        NavigationLink {
+                            planDestination(plan)
+                        } label: {
+                            MedicationPrescriptionPlanRow(
+                                plan: plan,
+                                medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
+                                records: recordsByPlanID[plan.id] ?? [],
+                                fileTransferService: fileTransferService
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(uiColor: .systemPurple).opacity(0.14), lineWidth: 1)
+        )
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(uiColor: .systemPurple), Color(uiColor: .systemIndigo)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 42, height: 42)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if subtitleItems.isEmpty == false {
+                    Text(subtitleItems.joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer(minLength: 8)
+        }
+    }
+}
+
+private struct MedicationPrescriptionPlanRow: View {
+    let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
+    let medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox?
+    let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
+    let fileTransferService: FileTransferService
+
+    private var takenCount: Int {
+        records.filter { $0.status == "taken" }.count
+    }
+
+    private var imageAttachment: SparkMedicalSyncAPI.RemoteManagedFile? {
+        if let boxAttachment = medicineBox?.attachments?.first(where: \.isMedicationImageLike) {
+            return boxAttachment
+        }
+        return plan.attachments?.first(where: \.isMedicationImageLike)
+    }
+
+    private var subtitle: String {
+        [
+            plan.dosePerTime.nilIfBlank,
+            plan.frequencyText.nilIfBlank,
+            plan.reminderEnabled ? plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank : nil
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            MedicationImageGlyph(
+                seed: plan.id,
+                attachment: imageAttachment,
+                fileTransferService: fileTransferService
+            )
+            .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(plan.drugName.nilIfBlank ?? "未命名药品")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(subtitle.isEmpty ? "暂无补充信息" : subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(planStatusText(plan.status))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(statusColor(plan.status))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(statusColor(plan.status).opacity(0.12), in: Capsule())
+
+                HStack(spacing: 4) {
+                    Image(systemName: plan.reminderEnabled ? "bell.fill" : "bell.slash")
+                    Text("\(takenCount)/\(records.count)")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 private struct MedicationPlanCard: View {
     let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
     let medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox?
@@ -1997,217 +2333,6 @@ private struct MedicationPlanCard: View {
     }
 }
 
-private struct MedicationPlanDetailPage: View {
-    let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
-    let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
-    let memberID: Int?
-    let workflowAPI: SparkMedicalWorkflowAPI
-    let fileTransferService: FileTransferService
-    let notificationClient: any NotificationClient
-    let onSaved: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
-    let onDeleted: (Int) -> Void
-    let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var currentPlan: SparkMedicalSyncAPI.RemoteMedicationPlan
-    @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
-    @State private var showingEditSheet = false
-    @State private var showingDeleteConfirm = false
-    @State private var isDeleting = false
-    @State private var alertMessage: String?
-
-    init(
-        plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
-        medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
-        records: [SparkMedicalSyncAPI.RemoteMedicationRecord],
-        memberID: Int?,
-        workflowAPI: SparkMedicalWorkflowAPI,
-        fileTransferService: FileTransferService,
-        notificationClient: any NotificationClient,
-        onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void,
-        onDeleted: @escaping (Int) -> Void,
-        onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
-    ) {
-        self.plan = plan
-        self.records = records
-        self.memberID = memberID
-        self.workflowAPI = workflowAPI
-        self.fileTransferService = fileTransferService
-        self.notificationClient = notificationClient
-        self.onSaved = onSaved
-        self.onDeleted = onDeleted
-        self.onMedicineBoxSaved = onMedicineBoxSaved
-        _currentPlan = State(initialValue: plan)
-        _medicineBoxes = State(initialValue: medicineBoxes)
-    }
-
-    private var sortedRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] {
-        records.sorted { $0.scheduledAt < $1.scheduledAt }
-    }
-
-    private var medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox? {
-        currentPlan.medicineBox.flatMap { id in
-            medicineBoxes.first(where: { $0.id == id })
-        }
-    }
-
-    var body: some View {
-        List {
-            Section("服药计划") {
-                DetailRow(title: "药品", value: currentPlan.drugName)
-                DetailRow(title: "剂量", value: currentPlan.dosePerTime)
-                DetailRow(title: "频次", value: currentPlan.frequencyText)
-                DetailRow(title: "提醒", value: currentPlan.reminderTimes.map(\.time).joined(separator: ", "))
-                DetailRow(title: "状态", value: planStatusText(currentPlan.status))
-                if let medicineBox {
-                    DetailRow(title: "药箱剩余", value: stockText(medicineBox))
-                }
-                if currentPlan.instructions.isEmpty == false {
-                    DetailRow(title: "说明", value: currentPlan.instructions)
-                }
-            }
-
-            Section("服药记录") {
-                if sortedRecords.isEmpty {
-                    Text("暂无服药记录")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(sortedRecords, id: \.id) { record in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(record.scheduledAt.formatted(date: .omitted, time: .shortened))
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer()
-                                Text(recordStatusText(record.status))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(record.status == "taken" ? Color(uiColor: .systemGreen) : Color(uiColor: .secondaryLabel))
-                            }
-                            Text("计划剂量 \(record.plannedDose)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let takenAt = record.takenAt {
-                                Text("实际时间 \(takenAt.formatted(date: .omitted, time: .shortened))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if record.actualDose.isEmpty == false {
-                                Text("实际剂量 \(record.actualDose)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-        }
-        .navigationTitle(currentPlan.drugName.nilIfBlank ?? "服药计划")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button {
-                        showingEditSheet = true
-                    } label: {
-                        Label("编辑", systemImage: "pencil")
-                    }
-                    .disabled(memberID == nil)
-
-                    Button(role: .destructive) {
-                        showingDeleteConfirm = true
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .disabled(isDeleting)
-            }
-        }
-        .sheet(isPresented: $showingEditSheet) {
-            if let memberID {
-                MedicationPlanFormView(
-                    mode: .serverEdit(existing: currentPlan),
-                    memberID: memberID,
-                    medicineBoxes: medicineBoxes,
-                    workflowAPI: workflowAPI,
-                    fileTransferService: fileTransferService,
-                    notificationClient: notificationClient,
-                    onMedicineBoxSaved: handleMedicineBoxSaved,
-                    onServerSaved: { saved in
-                        currentPlan = saved
-                        onSaved(saved)
-                        showingEditSheet = false
-                    }
-                )
-            } else {
-                Text("请先选择成员")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .alert("确认删除", isPresented: $showingDeleteConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) {
-                Task { await deleteCurrentPlan() }
-            }
-        } message: {
-            Text("删除后该服药计划及关联记录将不再显示。")
-        }
-        .alert("操作失败", isPresented: Binding(
-            get: { alertMessage != nil },
-            set: { if !$0 { alertMessage = nil } }
-        )) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text(alertMessage ?? "")
-        }
-        .onChange(of: plan) { newValue in
-            currentPlan = newValue
-        }
-    }
-
-    private func handleMedicineBoxSaved(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
-        if let index = medicineBoxes.firstIndex(where: { $0.id == box.id }) {
-            medicineBoxes[index] = box
-        } else {
-            medicineBoxes.insert(box, at: 0)
-        }
-        onMedicineBoxSaved(box)
-    }
-
-    @MainActor
-    private func deleteCurrentPlan() async {
-        guard isDeleting == false else { return }
-        isDeleting = true
-        defer { isDeleting = false }
-
-        do {
-            try await workflowAPI.delete(kind: .medicationPlans, id: currentPlan.id)
-            onDeleted(currentPlan.id)
-            dismiss()
-        } catch {
-            alertMessage = error.localizedDescription
-        }
-    }
-}
-
-private struct DetailRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 16)
-            Text(value.isEmpty ? "未填写" : value)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-}
-
 private func stockText(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
     guard let q = box.totalQuantity else { return "总量未填" }
     return "总量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
@@ -2219,6 +2344,25 @@ private func planStatusText(_ status: String) -> String {
         return "执行中"
     case "paused":
         return "未开始"
+    case "completed":
+        return "已完成"
+    case "cancelled":
+        return "已取消"
+    default:
+        return status
+    }
+}
+
+private func prescriptionStatusText(_ status: String) -> String {
+    switch status {
+    case "active":
+        return "有效"
+    case "draft":
+        return "草稿"
+    case "paid":
+        return "已支付"
+    case "dispensed":
+        return "已发药"
     case "completed":
         return "已完成"
     case "cancelled":

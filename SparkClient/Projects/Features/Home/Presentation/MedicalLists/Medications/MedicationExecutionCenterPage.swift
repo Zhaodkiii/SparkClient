@@ -117,22 +117,22 @@ struct MedicationExecutionCenterPage: View {
                     dateStripIndicatorFrame = frame
                 }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
+//        .navigationBarBackButtonHidden(true)
         .navigationTitle("用药")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.title3.weight(.semibold))
-                        .imageScale(.large)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("返回")
-            }
-        }
+//        .toolbar {
+//            ToolbarItem(placement: .navigationBarLeading) {
+//                Button {
+//                    dismiss()
+//                } label: {
+//                    Image(systemName: "chevron.left")
+//                        .font(.title3.weight(.semibold))
+//                        .imageScale(.large)
+//                }
+//                .buttonStyle(.plain)
+//                .accessibilityLabel("返回")
+//            }
+//        }
         .overlay {
             if isLoading || isSaving {
                 ProgressView()
