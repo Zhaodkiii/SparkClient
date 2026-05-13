@@ -6,11 +6,70 @@ struct MedicalCaseTimelineEditDestination: View {
     let memberID: Int
     let medicalCaseID: Int
     let workflowAPI: SparkMedicalWorkflowAPI
+    var fileTransferService: FileTransferService
+    var notificationClient: any NotificationClient
     let eventID: String
     let onRecordRemoved: (String) -> Void
 
+    init(
+        route: MedicalCaseTimelineEditRoute,
+        memberID: Int,
+        medicalCaseID: Int,
+        workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
+        notificationClient: any NotificationClient,
+        eventID: String,
+        onRecordRemoved: @escaping (String) -> Void
+    ) {
+        self.route = route
+        self.memberID = memberID
+        self.medicalCaseID = medicalCaseID
+        self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
+        self.notificationClient = notificationClient
+        self.eventID = eventID
+        self.onRecordRemoved = onRecordRemoved
+    }
+
     var body: some View {
         switch route {
+        case .prescription(let prescription, let plans):
+            MedicalTimelineDeleteShell(
+                resourceKind: .prescriptions,
+                resourceID: prescription.id,
+                workflowAPI: workflowAPI,
+                onDeleted: { onRecordRemoved(eventID) }
+            ) {
+                MedicationPrescriptionEditPage(
+                    prescription: prescription,
+                    plans: plans,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    notificationClient: notificationClient,
+                    onSaved: { _ in },
+                    onPlanUnlinked: { _ in }
+                )
+            }
+
+        case .medicationPlan(let plan, let medicineBoxes):
+            MedicalTimelineDeleteShell(
+                resourceKind: .medicationPlans,
+                resourceID: plan.id,
+                workflowAPI: workflowAPI,
+                onDeleted: { onRecordRemoved(eventID) }
+            ) {
+                MedicationPlanFormView(
+                    mode: .serverEdit(existing: plan),
+                    memberID: memberID,
+                    medicineBoxes: medicineBoxes,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    notificationClient: notificationClient,
+                    onMedicineBoxSaved: { _ in },
+                    onServerSaved: { _ in }
+                )
+            }
+
         case .examination(let report, _):
             MedicalTimelineDeleteShell(
                 resourceKind: .examinationReports,
@@ -125,6 +184,8 @@ struct MedicalCaseTimelineEditDestination: View {
             memberID: 1,
             medicalCaseID: 42,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+            fileTransferService: AppContainer.preview.fileTransferService,
+            notificationClient: AppContainer.preview.notificationClient,
             eventID: "examination-5",
             onRecordRemoved: { _ in }
         )
@@ -155,6 +216,8 @@ struct MedicalCaseTimelineEditDestination: View {
             memberID: 1,
             medicalCaseID: 42,
             workflowAPI: AppContainer.preview.backend.medicalWorkflow,
+            fileTransferService: AppContainer.preview.fileTransferService,
+            notificationClient: AppContainer.preview.notificationClient,
             eventID: "symptom-14",
             onRecordRemoved: { _ in }
         )

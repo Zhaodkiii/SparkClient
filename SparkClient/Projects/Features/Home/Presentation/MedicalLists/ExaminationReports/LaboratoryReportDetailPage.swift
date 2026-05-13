@@ -3,6 +3,13 @@ import SwiftUI
 /// 实验室检查明细页：参考 `LabPanelView` 的表格式阅读体验。
 struct LaboratoryReportDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    var navigationTitleOverride: String? = nil
+
+    private var resolvedNavigationTitle: String {
+        navigationTitleOverride?.nonEmpty
+            ?? report.itemName?.nonEmpty
+            ?? L10n.text("home.medical.list.examination_reports.title")
+    }
 
     private var detailItems: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
         (report.medExamDetails ?? []).sorted { lhs, rhs in
@@ -28,7 +35,7 @@ struct LaboratoryReportDetailPage: View {
             .padding(.horizontal, 8)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(report.itemName?.nonEmpty ?? L10n.text("home.medical.list.examination_reports.title"))
+        .navigationTitle(resolvedNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

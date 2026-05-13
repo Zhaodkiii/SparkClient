@@ -401,10 +401,11 @@ enum SparkMedicalSyncAPI {
         var prescriptionNo: String?
         var status: String
         var extra: [String: String]?
+        var attachments: [RemoteManagedFile]?
         var updatedAt: Date
 
         enum CodingKeys: String, CodingKey {
-            case id, member, diagnosis, status, extra
+            case id, member, diagnosis, status, extra, attachments
             case medicalCase = "medical_case"
             case prescriberName = "prescriber_name"
             case institutionName = "institution_name"

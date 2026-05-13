@@ -3,6 +3,13 @@ import SwiftUI
 /// 病理检查明细页：强调结果与病理诊断。
 struct PathologyReportDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    var navigationTitleOverride: String? = nil
+
+    private var resolvedNavigationTitle: String {
+        navigationTitleOverride?.nonEmpty
+            ?? report.itemName?.nonEmpty
+            ?? L10n.text("home.medical.list.examination.category.pathology")
+    }
 
     private var detailItems: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
         (report.medExamDetails ?? []).sorted { lhs, rhs in
@@ -23,7 +30,7 @@ struct PathologyReportDetailPage: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(report.itemName?.nonEmpty ?? L10n.text("home.medical.list.examination.category.pathology"))
+        .navigationTitle(resolvedNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -21,6 +21,10 @@ struct MedicationPrescriptionEditPage: View {
     @State private var isSaving = false
     @State private var unlinkingPlanIDs: Set<Int> = []
     @State private var alertMessage: String?
+    @State private var formKeyboardVisible = false
+
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
 
     init(
         prescription: SparkMedicalSyncAPI.RemotePrescription,
@@ -52,10 +56,10 @@ struct MedicationPrescriptionEditPage: View {
             VStack(spacing: 16) {
                 SparkFormCard(title: "处方信息", titleSystemImage: "doc.text.fill") {
                     VStack(spacing: 14) {
-                        SparkFormTextRow(title: "开方机构", text: $institutionName, placeholder: "医院、门诊或药房")
-                        SparkFormTextRow(title: "开方医生", text: $prescriberName, placeholder: "医生姓名")
-                        SparkFormTextRow(title: "处方编号", text: $prescriptionNo, placeholder: "处方号 / 流水号")
-                        SparkFormTextAreaRow(title: "诊断", text: $diagnosis, minHeight: 88, maxHeight: 180, placeholder: "诊断或临床说明")
+                        SparkFormTextRow(title: "开方机构", text: $institutionName, placeholder: "医院、门诊或药房", keyboardVisible: $formKeyboardVisible)
+                        SparkFormTextRow(title: "开方医生", text: $prescriberName, placeholder: "医生姓名", keyboardVisible: $formKeyboardVisible)
+                        SparkFormTextRow(title: "处方编号", text: $prescriptionNo, placeholder: "处方号 / 流水号", keyboardVisible: $formKeyboardVisible)
+                        SparkFormTextAreaRow(title: "诊断", text: $diagnosis, minHeight: 88, maxHeight: 180, placeholder: "诊断或临床说明", keyboardVisible: $formKeyboardVisible)
                     }
                 }
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -87,36 +91,34 @@ struct MedicationPrescriptionEditPage: View {
                 linkedMedicationSection
             }
             .padding(16)
-            .padding(.bottom, 96)
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("编辑处方")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("取消") {
-                    dismiss()
-                }
-                .disabled(isSaving)
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button {
-                    Task { await savePrescription() }
-                } label: {
-                    if isSaving {
-                        ProgressView()
-                    } else {
-                        Text("保存")
-                    }
-                }
-                .disabled(isSaving)
-            }
-        }
+        .sparkFormBottomBar(
+            canSubmit: !isSaving,
+            saveTitle: saveTitle,
+            keyboardVisible: $formKeyboardVisible,
+            onCancel: {
+                formLog.info("MedicationPrescriptionEditPage: cancel tapped prescriptionId=\(prescription.id)", module: formLogModule)
+                dismiss()
+            },
+            onSave: { saveNow() }
+        )
         .alert("保存失败", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
             Button("好", role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
+    }
+
+    private var saveTitle: String {
+        L10n.text("common.save", fallback: "保存")
+    }
+
+    private func saveNow() {
+        formLog.info("MedicationPrescriptionEditPage: save started prescriptionId=\(prescription.id)", module: formLogModule)
+        Task { await savePrescription() }
     }
 
     private var linkedMedicationSection: some View {

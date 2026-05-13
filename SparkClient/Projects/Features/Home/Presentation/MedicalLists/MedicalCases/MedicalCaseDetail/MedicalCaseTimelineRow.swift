@@ -7,9 +7,42 @@ struct MedicalCaseTimelineRow: View {
     let isLast: Bool
     let memberID: Int
     let medicalCaseID: Int
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    var memberContextStore: MemberContextStore
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
+    var notificationClient: any NotificationClient
     var onTimelineEventRemoved: ((String) -> Void)?
+    var logger: Logger? = nil
+    var onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
+
+    init(
+        event: MedicalCaseTimelineEvent,
+        isLast: Bool,
+        memberID: Int,
+        medicalCaseID: Int,
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
+        memberContextStore: MemberContextStore,
+        workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
+        notificationClient: any NotificationClient,
+        logger: Logger? = nil,
+        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil,
+        onTimelineEventRemoved: ((String) -> Void)? = nil
+    ) {
+        self.event = event
+        self.isLast = isLast
+        self.memberID = memberID
+        self.medicalCaseID = medicalCaseID
+        self.completeData = completeData
+        self.memberContextStore = memberContextStore
+        self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
+        self.notificationClient = notificationClient
+        self.logger = logger
+        self.onExaminationReportsUpdated = onExaminationReportsUpdated
+        self.onTimelineEventRemoved = onTimelineEventRemoved
+    }
 
     private var shell: MedicalCaseTimelinePalette {
         event.kind.palette
@@ -70,6 +103,8 @@ struct MedicalCaseTimelineRow: View {
                                 memberID: memberID,
                                 medicalCaseID: medicalCaseID,
                                 workflowAPI: workflowAPI,
+                                fileTransferService: fileTransferService,
+                                notificationClient: notificationClient,
                                 eventID: event.id,
                                 onRecordRemoved: { id in
                                     onTimelineEventRemoved?(id)
@@ -105,6 +140,126 @@ struct MedicalCaseTimelineRow: View {
     }
 
     private var timelineCard: some View {
+        Group {
+            if hasDetailDestination {
+                NavigationLink {
+                    timelineDetailDestination
+                        .hidesMainTabBarWhenPushed()
+                } label: {
+                    timelineCardContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                timelineCardContent
+            }
+        }
+    }
+
+    private var hasDetailDestination: Bool {
+        switch event.kind {
+        case .prescription:
+            return event.prescription != nil
+        case .medication:
+            return event.medicationPlan != nil
+        case .examination:
+            return event.examination != nil
+        default:
+            return false
+        }
+    }
+
+    @ViewBuilder
+    private var timelineDetailDestination: some View {
+        switch event.kind {
+        case .prescription:
+            if let prescription = event.prescription {
+                MedicationPrescriptionDetailPage(
+                    prescription: prescription,
+                    plans: event.nestedMedicationPlans,
+                    medicineBoxes: medicineBoxes,
+                    recordsByPlanID: recordsByPlanID,
+                    memberID: memberID,
+                    completeData: completeData,
+                    memberContextStore: memberContextStore,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    notificationClient: notificationClient,
+                    onPrescriptionSaved: { _ in },
+                    onPrescriptionDeleted: { _ in onTimelineEventRemoved?(event.id) },
+                    onPlanSaved: { _ in },
+                    onPlanDeleted: { id in onTimelineEventRemoved?("medication-plan-\(id)") }
+                )
+            }
+        case .medication:
+            if let plan = event.medicationPlan {
+                MedicationPlanDetailPage(
+                    plan: plan,
+                    medicineBoxes: medicineBoxes,
+                    records: recordsByPlanID[plan.id] ?? [],
+                    memberID: memberID,
+                    completeData: completeData,
+                    memberContextStore: memberContextStore,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    notificationClient: notificationClient,
+                    onSaved: { _ in },
+                    onDeleted: { _ in onTimelineEventRemoved?(event.id) },
+                    onMedicineBoxSaved: { _ in }
+                )
+            }
+        case .examination(let category):
+            if let examination = event.examination {
+                MedicalCaseTimelineExaminationDetailHost(
+                    report: examination,
+                    category: category,
+                    medicalQueryAPI: SparkMedicalQueryAPI(configuration: workflowAPI.configuration),
+                    completeData: completeData,
+                    fileTransferService: fileTransferService,
+                    workflowAPI: workflowAPI,
+                    memberContextStore: memberContextStore,
+                    notificationClient: notificationClient,
+                    logger: logger,
+                    onExaminationReportsUpdated: onExaminationReportsUpdated
+                )
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] {
+        completeData?.medicineBoxes ?? Array(event.medicineBoxesByID.values)
+    }
+
+    private var recordsByPlanID: [Int: [SparkMedicalSyncAPI.RemoteMedicationRecord]] {
+        Dictionary(grouping: completeData?.todayMedicationRecords ?? [], by: \.plan)
+    }
+
+    private func medicationPlanSummaryRow(
+        plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
+        onPlanDeletedFromDetail: @escaping (Int) -> Void
+    ) -> some View {
+        PrescriptionMedicationPlanSummaryRow(
+            plan: plan,
+            medicineBox: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] },
+            records: recordsByPlanID[plan.id] ?? [],
+            fileTransferService: fileTransferService,
+            planDetailNavigation: PrescriptionMedicationPlanSummaryRow.PlanDetailNavigation(
+                medicineBoxes: medicineBoxes,
+                memberID: memberID,
+                completeData: completeData,
+                memberContextStore: memberContextStore,
+                workflowAPI: workflowAPI,
+                notificationClient: notificationClient,
+                onPlanSaved: { _ in },
+                onPlanDeleted: onPlanDeletedFromDetail,
+                onMedicineBoxSaved: { _ in },
+                onMedicineBoxDeleted: nil
+            )
+        )
+    }
+
+    private var timelineCardContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(event.title)
                 .font(.subheadline.weight(.semibold))
@@ -185,10 +340,9 @@ struct MedicalCaseTimelineRow: View {
 
                 VStack(spacing: 8) {
                     ForEach(plans, id: \.id) { plan in
-                        MedicalCaseMedicationPlanInlineRow(
-                            plan: plan,
-                            medicineBox: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] }
-                        )
+                        medicationPlanSummaryRow(plan: plan) { id in
+                            onTimelineEventRemoved?("medication-plan-\(id)")
+                        }
                     }
                 }
             }
@@ -197,10 +351,9 @@ struct MedicalCaseTimelineRow: View {
 
     private func medicationPlanBody(plan: SparkMedicalSyncAPI.RemoteMedicationPlan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            MedicalCaseMedicationPlanInlineRow(
-                plan: plan,
-                medicineBox: plan.medicineBox.flatMap { event.medicineBoxesByID[$0] }
-            )
+            medicationPlanSummaryRow(plan: plan) { _ in
+                onTimelineEventRemoved?(event.id)
+            }
 
             if plan.instructions.nilIfBlank != nil {
                 Text(plan.instructions)
@@ -333,75 +486,151 @@ struct MedicalCaseTimelineRow: View {
     }
 }
 
-private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
-    var detailText: String {
-        impression?.nonEmpty ?? findings?.nonEmpty ?? ""
-    }
-}
+/// 病例时间轴进入检查详情：`complete-data` 摘要可能未带 `medExamDetails`；与列表页懒加载一致，仅在 `nil` 时请求并回写首页检查报告缓存。
+private struct MedicalCaseTimelineExaminationDetailHost: View {
+    let initialReport: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    let category: ExaminationReportCategory
+    let medicalQueryAPI: SparkMedicalQueryAPI
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let fileTransferService: FileTransferService
+    let workflowAPI: SparkMedicalWorkflowAPI
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
+    let logger: Logger?
+    let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
 
-private struct MedicalCaseMedicationPlanInlineRow: View {
-    let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
-    let medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox?
+    @State private var report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    @State private var isLoadingDetails = false
 
-    private var secondaryLine: String {
-        [
-            plan.dosePerTime.nilIfBlank,
-            plan.frequencyText.nilIfBlank,
-            plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
-    }
-
-    private var stockText: String? {
-        guard let medicineBox else { return nil }
-        guard let q = medicineBox.totalQuantity else { return "药箱存量未填" }
-        return "药箱存量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
+    init(
+        report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
+        category: ExaminationReportCategory,
+        medicalQueryAPI: SparkMedicalQueryAPI,
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        fileTransferService: FileTransferService,
+        workflowAPI: SparkMedicalWorkflowAPI,
+        memberContextStore: MemberContextStore,
+        notificationClient: any NotificationClient,
+        logger: Logger?,
+        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
+    ) {
+        self.initialReport = report
+        self.category = category
+        self.medicalQueryAPI = medicalQueryAPI
+        self.completeData = completeData
+        self.fileTransferService = fileTransferService
+        self.workflowAPI = workflowAPI
+        _memberContextStore = ObservedObject(wrappedValue: memberContextStore)
+        self.notificationClient = notificationClient
+        self.logger = logger
+        self.onExaminationReportsUpdated = onExaminationReportsUpdated
+        _report = State(initialValue: report)
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(systemName: "pills.fill")
-                .font(.caption)
-                .foregroundStyle(Color(uiColor: .systemIndigo))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(plan.drugName.nilIfBlank ?? "未命名药品")
-                    .font(.callout)
-                    .foregroundStyle(.primary)
-                if secondaryLine.isEmpty == false {
-                    Text(secondaryLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let stockText {
-                    Text(stockText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+        detailContent
+            .overlay {
+                if isLoadingDetails {
+                    ZStack {
+                        Color(uiColor: .systemGroupedBackground).opacity(0.35)
+                        VStack(spacing: 10) {
+                            ProgressView()
+                            Text(L10n.text("home.medical.list.details.loading"))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
-            Spacer(minLength: 0)
-            Text(planStatusText(plan.status))
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .padding(8)
-        .background(Color(uiColor: .systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .task(id: initialReport.id) {
+                await loadDetailsIfNeeded()
+            }
     }
 
-    private func planStatusText(_ status: String) -> String {
-        switch status {
-        case "active":
-            return "执行中"
-        case "paused":
-            return "已暂停"
-        case "completed":
-            return "已完成"
-        case "cancelled":
-            return "已取消"
-        default:
-            return status
+    @ViewBuilder
+    private var detailContent: some View {
+        ExaminationReportSummaryDetailPage(
+            report: $report,
+            category: category,
+            fileTransferService: fileTransferService,
+            workflowAPI: workflowAPI,
+            completeData: completeData,
+            memberContextStore: memberContextStore,
+            notificationClient: notificationClient,
+            onMedicalCaseLinked: { merged in
+                patchCompleteDataCacheIfPossible(merged: merged)
+            },
+            onMedicalCaseUpdated: nil,
+            onMedicalCaseDeleted: nil
+        )
+    }
+
+    private func loadDetailsIfNeeded() async {
+        guard report.medExamDetails == nil else { return }
+        guard isLoadingDetails == false else { return }
+        isLoadingDetails = true
+        defer { isLoadingDetails = false }
+
+        let memberID = report.member
+        let reportID = report.id
+        logger?.info(
+            "病例时间轴检查明细加载开始 reportID=\(reportID) memberID=\(memberID)",
+            module: LogModule.home
+        )
+
+        do {
+            let rows = try await medicalQueryAPI.listMedExamDetails(memberID: memberID, businessID: reportID)
+            let filtered = Self.filterMedExamRows(rows)
+            var merged = report
+            merged.medExamDetails = filtered
+            await MainActor.run {
+                report = merged
+                patchCompleteDataCacheIfPossible(merged: merged)
+            }
+            logger?.info(
+                "病例时间轴检查明细加载完成 reportID=\(reportID) count=\(filtered.count)",
+                module: LogModule.home
+            )
+        } catch {
+            logger?.warning(
+                "病例时间轴检查明细加载失败 reportID=\(reportID) error=\(error.localizedDescription)",
+                module: LogModule.home
+            )
         }
+    }
+
+    private func patchCompleteDataCacheIfPossible(merged: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) {
+        guard let onExaminationReportsUpdated else { return }
+        var list = completeData?.examinationReports ?? []
+        if let idx = list.firstIndex(where: { $0.id == merged.id }) {
+            list[idx] = merged
+        } else {
+            list.insert(merged, at: 0)
+        }
+        onExaminationReportsUpdated(list)
+    }
+
+    private static func filterMedExamRows(
+        _ rows: [SparkMedicalSyncAPI.RemoteMedExamDetail]
+    ) -> [SparkMedicalSyncAPI.RemoteMedExamDetail] {
+        let accepted = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.acceptedBusinessTypes
+            .map { $0.lowercased() }
+        let filtered = rows.filter { row in
+            let normalized = row.businessType.lowercased()
+            return accepted.contains(normalized) || rows.count == 1
+        }
+        return filtered.sorted { lhs, rhs in
+            if lhs.sortOrder == rhs.sortOrder {
+                return lhs.id < rhs.id
+            }
+            return lhs.sortOrder < rhs.sortOrder
+        }
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+    var detailText: String {
+        impression?.nonEmpty ?? findings?.nonEmpty ?? ""
     }
 }
 
@@ -419,8 +648,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: false,
         memberID: 1,
         medicalCaseID: 1,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -441,8 +673,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: false,
         memberID: 1,
         medicalCaseID: 1,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -488,8 +723,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -535,8 +773,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -582,8 +823,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -620,8 +864,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -661,8 +908,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -698,8 +948,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()
@@ -737,8 +990,11 @@ private struct MedicalCaseMedicationPlanInlineRow: View {
         isLast: true,
         memberID: 1,
         medicalCaseID: 42,
+        completeData: nil,
+        memberContextStore: AppContainer.preview.memberContextStore,
         workflowAPI: AppContainer.preview.backend.medicalWorkflow,
         fileTransferService: AppContainer.preview.fileTransferService,
+        notificationClient: AppContainer.preview.notificationClient,
         onTimelineEventRemoved: nil
     )
     .padding()

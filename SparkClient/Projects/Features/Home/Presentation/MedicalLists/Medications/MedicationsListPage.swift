@@ -441,7 +441,8 @@ struct MedicationsListPage: View {
             notificationClient: notificationClient,
             onSaved: upsertMedicationPlan,
             onDeleted: removeMedicationPlan,
-            onMedicineBoxSaved: upsertMedicineBox
+            onMedicineBoxSaved: upsertMedicineBox,
+            onMedicineBoxDeleted: removeMedicineBoxFromList
         )
     }
 
@@ -555,6 +556,11 @@ struct MedicationsListPage: View {
         } else {
             medicineBoxes.insert(box, at: 0)
         }
+        onMedicineBoxesChanged?(medicineBoxes)
+    }
+
+    private func removeMedicineBoxFromList(_ id: Int) {
+        medicineBoxes.removeAll { $0.id == id }
         onMedicineBoxesChanged?(medicineBoxes)
     }
 

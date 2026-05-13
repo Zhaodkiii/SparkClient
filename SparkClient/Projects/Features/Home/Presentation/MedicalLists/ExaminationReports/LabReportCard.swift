@@ -82,30 +82,6 @@ struct LabReportCard: View {
             }
 
             cardContentSection
-            MedicalResourceMedicalCaseLinkSection(
-                memberID: item.member,
-                medicalCaseID: item.medicalRecord,
-                resourceKind: .examinationReports,
-                resourceID: item.id,
-                patchField: .medicalRecord,
-                workflowAPI: medicalResourceAPI,
-                fileTransferService: fileTransferService,
-                completeData: completeData,
-                memberContextStore: memberContextStore,
-                notificationClient: notificationClient,
-                linkedTitle: L10n.text("home.medical.list.examination.linked_case.title", fallback: "已关联病历"),
-                linkedSubtitle: L10n.text("home.medical.list.examination.linked_case.subtitle", fallback: "点击查看关联病历详情"),
-                unlinkedTitle: L10n.text("home.medical.list.examination.unlinked_case.title", fallback: "关联病历"),
-                unlinkedSubtitle: L10n.text("home.medical.list.examination.unlinked_case.subtitle", fallback: "把这份检查报告归入一次就诊或病例"),
-                onResourceUpdated: { (updated: SparkMedicalSyncAPI.RemoteExaminationReport) in
-                    var merged = item
-                    merged.medicalRecord = updated.medicalRecord
-                    merged.updatedAt = updated.updatedAt
-                    onMedicalCaseLinked?(merged)
-                },
-                onMedicalCaseUpdated: onMedicalCaseUpdated,
-                onMedicalCaseDeleted: onMedicalCaseDeleted
-            )
         }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -198,6 +174,13 @@ struct LabReportCard: View {
             report: item,
             category: category,
             resources: medicalResourceAPI,
+            fileTransferService: fileTransferService,
+            completeData: completeData,
+            memberContextStore: memberContextStore,
+            notificationClient: notificationClient,
+            onMedicalCaseLinked: onMedicalCaseLinked,
+            onMedicalCaseUpdated: onMedicalCaseUpdated,
+            onMedicalCaseDeleted: onMedicalCaseDeleted,
             onDeleted: onDeleted
         )
     }
@@ -470,9 +453,16 @@ struct LabReportCard: View {
 }
 
 private struct ExaminationReportDetailHostPage: View {
-    let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    @State private var report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
     let category: ExaminationReportCategory
     let resources: SparkMedicalWorkflowAPI
+    let fileTransferService: FileTransferService
+    let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    @ObservedObject var memberContextStore: MemberContextStore
+    let notificationClient: any NotificationClient
+    var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
+    var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
+    var onMedicalCaseDeleted: ((Int) -> Void)?
     var onDeleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -483,6 +473,32 @@ private struct ExaminationReportDetailHostPage: View {
 
     private var mutationService: ExaminationReportServerMutationService {
         .init(resources: resources)
+    }
+
+    init(
+        report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
+        category: ExaminationReportCategory,
+        resources: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        memberContextStore: MemberContextStore,
+        notificationClient: any NotificationClient,
+        onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?,
+        onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?,
+        onMedicalCaseDeleted: ((Int) -> Void)?,
+        onDeleted: ((Int) -> Void)? = nil
+    ) {
+        _report = State(initialValue: report)
+        self.category = category
+        self.resources = resources
+        self.fileTransferService = fileTransferService
+        self.completeData = completeData
+        _memberContextStore = ObservedObject(wrappedValue: memberContextStore)
+        self.notificationClient = notificationClient
+        self.onMedicalCaseLinked = onMedicalCaseLinked
+        self.onMedicalCaseUpdated = onMedicalCaseUpdated
+        self.onMedicalCaseDeleted = onMedicalCaseDeleted
+        self.onDeleted = onDeleted
     }
 
     private var existingDraft: MedicalReportRecognitionDraft {
@@ -514,20 +530,19 @@ private struct ExaminationReportDetailHostPage: View {
         )
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch category {
-        case .laboratory:
-            LaboratoryReportDetailPage(report: report)
-        case .imaging:
-            ImagingReportDetailPage(report: report)
-        case .pathology:
-            PathologyReportDetailPage(report: report)
-        }
-    }
-
     var body: some View {
-        content
+        ExaminationReportSummaryDetailPage(
+            report: $report,
+            category: category,
+            fileTransferService: fileTransferService,
+            workflowAPI: resources,
+            completeData: completeData,
+            memberContextStore: memberContextStore,
+            notificationClient: notificationClient,
+            onMedicalCaseLinked: onMedicalCaseLinked,
+            onMedicalCaseUpdated: onMedicalCaseUpdated,
+            onMedicalCaseDeleted: onMedicalCaseDeleted
+        )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

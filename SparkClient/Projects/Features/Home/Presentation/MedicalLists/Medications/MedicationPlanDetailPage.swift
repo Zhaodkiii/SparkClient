@@ -12,6 +12,7 @@ struct MedicationPlanDetailPage: View {
     let onSaved: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
     let onDeleted: (Int) -> Void
     let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
+    var onMedicineBoxDeleted: ((Int) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
 
@@ -36,6 +37,7 @@ struct MedicationPlanDetailPage: View {
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void,
         onDeleted: @escaping (Int) -> Void,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
+        onMedicineBoxDeleted: ((Int) -> Void)? = nil,
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil,
         onMedicalCaseDeleted: ((Int) -> Void)? = nil
     ) {
@@ -50,6 +52,7 @@ struct MedicationPlanDetailPage: View {
         self.onSaved = onSaved
         self.onDeleted = onDeleted
         self.onMedicineBoxSaved = onMedicineBoxSaved
+        self.onMedicineBoxDeleted = onMedicineBoxDeleted
         self.onMedicalCaseUpdated = onMedicalCaseUpdated
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
         _currentPlan = State(initialValue: plan)
@@ -75,7 +78,47 @@ struct MedicationPlanDetailPage: View {
                 MedicationPlanDetailInfoRow(title: "提醒", value: currentPlan.reminderTimes.map(\.time).joined(separator: ", "))
                 MedicationPlanDetailInfoRow(title: "状态", value: medicationPlanDetailStatusLabel(currentPlan.status))
                 if let medicineBox {
-                    MedicationPlanDetailInfoRow(title: "药箱剩余", value: medicationPlanDetailStockText(medicineBox))
+                    NavigationLink {
+                        MedicineBoxDetailPage(
+                            box: medicineBox,
+                            typeOptions: MedicineBoxTypeCatalog.options(in: medicineBoxes),
+                            specOptionBoxes: medicineBoxes,
+                            workflowAPI: workflowAPI,
+                            fileTransferService: fileTransferService,
+                            onSaved: handleMedicineBoxSaved,
+                            onDeleted: handleMedicineBoxDeleted
+                        )
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "shippingbox.fill")
+                                .font(.headline)
+                                .foregroundStyle(Color(uiColor: .systemPurple))
+                                .frame(width: 36, height: 36)
+                                .background(Color(uiColor: .systemPurple).opacity(0.12), in: Circle())
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(medicationPlanDetailLinkedBoxTitle(medicineBox))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text(medicationPlanDetailLinkedBoxSubtitle(medicineBox))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                } else if currentPlan.medicineBox != nil {
+                    MedicationPlanDetailInfoRow(title: "药箱药品", value: "信息暂不可用，请同步药箱列表后重试")
                 }
                 if currentPlan.instructions.isEmpty == false {
                     MedicationPlanDetailInfoRow(title: "说明", value: currentPlan.instructions)
@@ -103,6 +146,16 @@ struct MedicationPlanDetailPage: View {
                     onMedicalCaseUpdated: onMedicalCaseUpdated,
                     onMedicalCaseDeleted: onMedicalCaseDeleted
                 )
+            }
+
+            if let attachments = currentPlan.attachments, attachments.isEmpty == false {
+                Section("附件") {
+                    MedicalAttachmentGridPreview(
+                        attachments: attachments,
+                        fileTransferService: fileTransferService
+                    )
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                }
             }
 
             Section("服药记录") {
@@ -215,6 +268,11 @@ struct MedicationPlanDetailPage: View {
         onMedicineBoxSaved(box)
     }
 
+    private func handleMedicineBoxDeleted(_ id: Int) {
+        medicineBoxes.removeAll { $0.id == id }
+        onMedicineBoxDeleted?(id)
+    }
+
     @MainActor
     private func deleteCurrentPlan() async {
         guard isDeleting == false else { return }
@@ -249,6 +307,17 @@ private struct MedicationPlanDetailInfoRow: View {
 private func medicationPlanDetailStockText(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
     guard let q = box.totalQuantity else { return "总量未填" }
     return "总量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
+}
+
+private func medicationPlanDetailLinkedBoxTitle(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
+    box.medicineName.nilIfBlank ?? "未命名药品"
+}
+
+private func medicationPlanDetailLinkedBoxSubtitle(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
+    let detail = [box.strength.nilIfBlank, box.dosageForm.nilIfBlank, medicationPlanDetailStockText(box)]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    return detail.isEmpty ? "已关联药箱药品" : detail
 }
 
 private func medicationPlanDetailStatusLabel(_ status: String) -> String {

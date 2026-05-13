@@ -17,6 +17,8 @@ struct MedicalCaseDetailPage: View {
     let notificationClient: any NotificationClient
     let onUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
     let onDeleted: (Int) -> Void
+    var logger: Logger? = nil
+    var onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
 
     @State private var showingAttachments = false
     @State private var dismissedTimelineEventIDs: Set<String> = []
@@ -37,7 +39,9 @@ struct MedicalCaseDetailPage: View {
         memberContextStore: MemberContextStore,
         notificationClient: any NotificationClient,
         onUpdated: @escaping (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void,
-        onDeleted: @escaping (Int) -> Void
+        onDeleted: @escaping (Int) -> Void,
+        logger: Logger? = nil,
+        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     ) {
         self.item = item
         self.completeData = completeData
@@ -47,6 +51,8 @@ struct MedicalCaseDetailPage: View {
         self.notificationClient = notificationClient
         self.onUpdated = onUpdated
         self.onDeleted = onDeleted
+        self.logger = logger
+        self.onExaminationReportsUpdated = onExaminationReportsUpdated
         _currentItem = State(initialValue: item)
     }
 
@@ -202,8 +208,13 @@ struct MedicalCaseDetailPage: View {
                         isLast: index == timelineEvents.count - 1,
                         memberID: currentItem.member,
                         medicalCaseID: currentItem.id,
+                        completeData: completeData,
+                        memberContextStore: memberContextStore,
                         workflowAPI: workflowAPI,
                         fileTransferService: fileTransferService,
+                        notificationClient: notificationClient,
+                        logger: logger,
+                        onExaminationReportsUpdated: onExaminationReportsUpdated,
                         onTimelineEventRemoved: { id in
                             dismissedTimelineEventIDs.insert(id)
                         }

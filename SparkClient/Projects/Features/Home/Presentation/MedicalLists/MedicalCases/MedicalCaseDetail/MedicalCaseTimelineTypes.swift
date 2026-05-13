@@ -2,6 +2,8 @@ import Foundation
 
 /// 时间轴「编辑」路由：用于 `NavigationLink` 目标与删除资源。
 enum MedicalCaseTimelineEditRoute: Equatable {
+    case prescription(SparkMedicalSyncAPI.RemotePrescription, plans: [SparkMedicalSyncAPI.RemoteMedicationPlan])
+    case medicationPlan(SparkMedicalSyncAPI.RemoteMedicationPlan, medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox])
     case examination(SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments, category: ExaminationReportCategory)
     case symptom(SparkMedicalSyncAPI.RemoteSymptom)
     case visit(SparkMedicalSyncAPI.RemoteVisit)
@@ -10,6 +12,10 @@ enum MedicalCaseTimelineEditRoute: Equatable {
 
     var deleteResource: (kind: SparkMedicalResourceKind, id: Int)? {
         switch self {
+        case .prescription(let prescription, _):
+            return (.prescriptions, prescription.id)
+        case .medicationPlan(let plan, _):
+            return (.medicationPlans, plan.id)
         case .examination(let report, _):
             return (.examinationReports, report.id)
         case .symptom(let row):
@@ -135,8 +141,9 @@ enum MedicalCaseTimelineEventBuilder {
         let prescriptionsForCase = (completeData?.prescriptions ?? []).filter { $0.medicalCase == item.id }
         var nestedPlanIDs = Set<Int>()
 
+        let allMedicationPlans = completeData?.medicationPlans ?? []
         for prescription in prescriptionsForCase {
-            let nestedPlans = plansForCase
+            let nestedPlans = allMedicationPlans
                 .filter { $0.prescription == prescription.id }
                 .sorted { $0.startDate > $1.startDate }
             nestedPlanIDs.formUnion(nestedPlans.map(\.id))
@@ -155,7 +162,8 @@ enum MedicalCaseTimelineEventBuilder {
                     statusBadgeText: nil,
                     prescription: prescription,
                     nestedMedicationPlans: nestedPlans,
-                    medicineBoxesByID: medicineBoxesByID
+                    medicineBoxesByID: medicineBoxesByID,
+                    editRoute: .prescription(prescription, plans: nestedPlans)
                 )
             )
         }
@@ -170,7 +178,8 @@ enum MedicalCaseTimelineEventBuilder {
                     date: plan.startDate,
                     statusBadgeText: nil,
                     medicationPlan: plan,
-                    medicineBoxesByID: medicineBoxesByID
+                    medicineBoxesByID: medicineBoxesByID,
+                    editRoute: .medicationPlan(plan, medicineBoxes: Array(medicineBoxesByID.values))
                 )
             )
         }

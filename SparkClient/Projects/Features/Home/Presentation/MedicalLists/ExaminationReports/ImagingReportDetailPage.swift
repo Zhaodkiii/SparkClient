@@ -3,6 +3,13 @@ import SwiftUI
 /// 影像检查明细页：聚合部位、模态、结果与诊断。
 struct ImagingReportDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
+    var navigationTitleOverride: String? = nil
+
+    private var resolvedNavigationTitle: String {
+        navigationTitleOverride?.nonEmpty
+            ?? report.itemName?.nonEmpty
+            ?? L10n.text("home.medical.list.examination.category.imaging")
+    }
 
     private var detailItems: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
         (report.medExamDetails ?? []).sorted { lhs, rhs in
@@ -23,7 +30,7 @@ struct ImagingReportDetailPage: View {
         }
         .listStyle(.insetGrouped)
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(report.itemName?.nonEmpty ?? L10n.text("home.medical.list.examination.category.imaging"))
+        .navigationTitle(resolvedNavigationTitle)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

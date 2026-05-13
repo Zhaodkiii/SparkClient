@@ -11,6 +11,7 @@ struct MedicalCasesListPage: View {
     let notificationClient: any NotificationClient
     let logger: Logger
     let onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
+    let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
 
     @State private var rows: [SparkMedicalSyncAPI.RemoteMedicalCaseSummary]
     @State private var showingCreateSheet = false
@@ -26,7 +27,8 @@ struct MedicalCasesListPage: View {
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
         notificationClient: any NotificationClient,
         logger: Logger,
-        onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
+        onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?,
+        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     ) {
         self.completeData = completeData
         self.workflowAPI = workflowAPI
@@ -37,6 +39,7 @@ struct MedicalCasesListPage: View {
         self.notificationClient = notificationClient
         self.logger = logger
         self.onCasesUpdated = onCasesUpdated
+        self.onExaminationReportsUpdated = onExaminationReportsUpdated
         _rows = State(initialValue: completeData?.medicalCases ?? [])
     }
 
@@ -53,6 +56,8 @@ struct MedicalCasesListPage: View {
                         fileTransferService: fileTransferService,
                         memberContextStore: memberContextStore,
                         notificationClient: notificationClient,
+                        logger: logger,
+                        onExaminationReportsUpdated: onExaminationReportsUpdated,
                         onUpdated: upsertCase,
                         onDeleted: removeCase
                     )

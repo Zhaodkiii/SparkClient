@@ -32,7 +32,8 @@ struct HomeMedicalListView: View {
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
                 notificationClient: dependencies.notificationClient,
                 logger: dependencies.logger,
-                onCasesUpdated: onMedicalCasesUpdated
+                onCasesUpdated: onMedicalCasesUpdated,
+                onExaminationReportsUpdated: onExaminationReportsUpdated
             )
         case .healthExamReports:
             HealthExamReportsListPage(

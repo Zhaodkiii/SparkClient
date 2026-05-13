@@ -8,6 +8,8 @@ struct MedicalRecordCard: View {
     let fileTransferService: FileTransferService
     @ObservedObject var memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
+    var logger: Logger? = nil
+    var onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     let onUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
     let onDeleted: (Int) -> Void
     var maxChips: Int = 8
@@ -69,7 +71,9 @@ struct MedicalRecordCard: View {
                 memberContextStore: memberContextStore,
                 notificationClient: notificationClient,
                 onUpdated: onUpdated,
-                onDeleted: onDeleted
+                onDeleted: onDeleted,
+                logger: logger,
+                onExaminationReportsUpdated: onExaminationReportsUpdated
             )
             .hidesMainTabBarWhenPushed()
         } label: {

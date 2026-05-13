@@ -266,7 +266,7 @@ private struct MedicineBoxRow: View {
     }
 }
 
-private struct MedicineBoxDetailPage: View {
+struct MedicineBoxDetailPage: View {
     let box: SparkMedicalSyncAPI.RemoteMedicineBox
     let typeOptions: [String]
     let specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]

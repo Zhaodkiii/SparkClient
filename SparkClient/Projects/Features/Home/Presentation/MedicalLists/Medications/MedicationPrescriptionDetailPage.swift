@@ -71,6 +71,7 @@ struct MedicationPrescriptionDetailPage: View {
             VStack(alignment: .leading, spacing: 16) {
                 headerCard
                 diagnosisCard
+                attachmentsSection
                 medicationSection
             }
             .padding(16)
@@ -218,6 +219,22 @@ struct MedicationPrescriptionDetailPage: View {
     }
 
     @ViewBuilder
+    private var attachmentsSection: some View {
+        if let attachments = currentPrescription?.attachments, attachments.isEmpty == false {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("附件", systemImage: "paperclip")
+                    .font(.headline)
+                MedicalAttachmentGridPreview(
+                    attachments: attachments,
+                    fileTransferService: fileTransferService
+                )
+            }
+            .padding(16)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
     private var diagnosisCard: some View {
         if let diagnosis = currentPrescription?.diagnosis.nilIfBlank {
             VStack(alignment: .leading, spacing: 8) {
@@ -262,7 +279,29 @@ struct MedicationPrescriptionDetailPage: View {
                             plan: plan,
                             medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
                             records: recordsByPlanID[plan.id] ?? [],
-                            fileTransferService: fileTransferService
+                            fileTransferService: fileTransferService,
+                            planDetailNavigation: PrescriptionMedicationPlanSummaryRow.PlanDetailNavigation(
+                                medicineBoxes: Array(medicineBoxesByID.values),
+                                memberID: memberID,
+                                completeData: completeData,
+                                memberContextStore: memberContextStore,
+                                workflowAPI: workflowAPI,
+                                notificationClient: notificationClient,
+                                onPlanSaved: { updated in
+                                    if let idx = currentPlans.firstIndex(where: { $0.id == updated.id }) {
+                                        currentPlans[idx] = updated
+                                    }
+                                    onPlanSaved(updated)
+                                },
+                                onPlanDeleted: { id in
+                                    currentPlans.removeAll { $0.id == id }
+                                    onPlanDeleted(id)
+                                },
+                                onMedicineBoxSaved: { box in
+                                    medicineBoxesByID[box.id] = box
+                                },
+                                onMedicineBoxDeleted: nil
+                            )
                         )
                     }
                 }
@@ -347,74 +386,6 @@ struct MedicationPrescriptionDetailPage: View {
     }
 }
 
-private struct PrescriptionMedicationPlanSummaryRow: View {
-    let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
-    let medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox?
-    let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
-    let fileTransferService: FileTransferService
-
-    private var takenCount: Int {
-        records.filter { $0.status == "taken" }.count
-    }
-
-    private var imageAttachment: SparkMedicalSyncAPI.RemoteManagedFile? {
-        if let boxAttachment = medicineBox?.attachments?.first(where: \.isMedicationImageLike) {
-            return boxAttachment
-        }
-        return plan.attachments?.first(where: \.isMedicationImageLike)
-    }
-
-    private var subtitle: String {
-        [
-            plan.dosePerTime.nilIfBlank,
-            plan.frequencyText.nilIfBlank,
-            plan.reminderEnabled ? plan.reminderTimes.map(\.time).joined(separator: ", ").nilIfBlank : nil
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            MedicationImageGlyph(
-                seed: plan.id,
-                attachment: imageAttachment,
-                fileTransferService: fileTransferService
-            )
-            .frame(width: 38, height: 38)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(plan.drugName.nilIfBlank ?? "未命名药品")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Text(subtitle.isEmpty ? "暂无补充信息" : subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(medicationPlanStatusText(plan.status))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(medicationPlanStatusColor(plan.status))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(medicationPlanStatusColor(plan.status).opacity(0.12), in: Capsule())
-
-                Text("\(takenCount)/\(records.count)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-}
-
 private struct PrescriptionDetailInfoRow: View {
     let title: String
     let value: String
@@ -449,36 +420,6 @@ private func prescriptionStatusText(_ status: String) -> String {
         return "已取消"
     default:
         return status
-    }
-}
-
-private func medicationPlanStatusText(_ status: String) -> String {
-    switch status {
-    case "active":
-        return "执行中"
-    case "paused":
-        return "未开始"
-    case "completed":
-        return "已完成"
-    case "cancelled":
-        return "已取消"
-    default:
-        return status
-    }
-}
-
-private func medicationPlanStatusColor(_ status: String) -> Color {
-    switch status {
-    case "active":
-        return Color(uiColor: .systemBlue)
-    case "paused":
-        return Color(uiColor: .systemOrange)
-    case "completed":
-        return Color(uiColor: .systemGreen)
-    case "cancelled":
-        return Color(uiColor: .systemGray)
-    default:
-        return Color(uiColor: .secondaryLabel)
     }
 }
 
