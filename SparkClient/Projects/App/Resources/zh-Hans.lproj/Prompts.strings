@@ -2,194 +2,198 @@
 "ai.prompt.chat.deep_thinking" = "请逐步深入推理：先简要展开推理过程，再给出明确结论。";
 "ai.prompt.medical_document.extraction.template" = "你是医疗文档抽取助手。请从 OCR 文本中抽取结构化 JSON，只输出 JSON。\n需包含字段：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR文本：\n%@";
 "ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication_plan、medicine_box。\n仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication_plan|medicine_box\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
+
+
 "ai.prompt.medical_case.extraction.template" = "
-从用户提供的中文病历、就诊记录、OCR 文本中抽取完整病例汇总信息，仅输出纯净 JSON，禁止任何解释、前后缀、Markdown、注释、代码块围栏、无关文本。
-【最高优先级】
-字段类型锁死：symptom、visit、surgery 仅允许为单个 JSON 对象（Dictionary），绝对禁止输出数组；仅以下字段允许为数组类型：followUps、prescriptionBatches、examinationReports、details、reminderTimes，其余字段严禁使用数组。
-JSON 语法强制规范：所有键名、字符串必须使用双引号''，绝对禁止使用单引号''；必须输出完整闭合的单个 JSON 对象，禁止流式截断、半闭合结构、尾随逗号，保证 JSON 语法 100% 合法。
-空值零容忍规则：无有效值的字段直接从 JSON 中彻底删除，严禁出现null、空字符串''、空数组[]、空对象{}；无有效数据的顶级键，直接整段省略，禁止保留空结构。
-键名完全对齐：严格使用指定的驼峰式键名，禁止新增、修改、拼写错误键名，与 Swift 模型完全一致。
-【输出结构：与 Swift 模型 100% 对齐，类型不可修改】
-json
+# 任务指令
+从用户提供的中文病历、就诊记录、纸质病历OCR文本、检查报告原文中，抽取结构化病例全量信息。**仅输出纯净标准JSON**，禁止任何解释、说明、前后缀、Markdown、代码块围栏、注释、多余文字、换行冗余描述。
+
+# 全局最高强制约束（模型必须优先遵守）
+## 1. JSON语法硬性锁死
+1. 所有键名、字符串统一使用**双引号**，严禁单引号；
+2. 输出**单个完整闭合JSON根对象**，无截断、无半闭合、无尾随逗号，JSON语法100%合法可直接解析；
+3. 禁止新增、修改、拼写错误任何驼峰键名，严格与后端Django模型、Swift模型完全对齐。
+
+## 2. 数据结构类型锁死
+1. 固定为**单个JSON对象**（禁止数组）：symptom、visit、surgery；
+2. 固定为**数组类型**（仅允许以下字段）：followUps、prescriptions、examinationReports、details、reminderTimes、weeklyWeekdays；
+3. 其余所有顶级/子级字段**严禁使用数组**，严格遵循结构定义。
+
+## 3. 空值零容忍规则
+1. 无有效实际内容的字段**直接从JSON中彻底删除**；
+2. 严禁出现：null、空字符串''、空数组[]、空对象{}；
+3. 无数据的顶级对象/数组键，直接整键省略，禁止保留空结构占位。
+
+## 4. 全局数据类型强制规范
+1. 日期类字段：统一格式化 `yyyy-MM-dd`，仅保留日期，舍弃时分秒/时区，无法解析则直接省略字段；
+2. 布尔类字段：仅小写 true/false，禁止加引号、禁止字符串形式；
+3. 数值类字段（ageAtVisit、durationValue、doseValue、totalQuantity、everyNDays等）：统一**字符串格式**输出，禁止数字类型，适配后端Decimal/整型入库；
+4. 枚举类字段：严格限定给定可选值，禁止自定义、禁止直译口语，无匹配则省略字段；
+5. 多值文本（诊断、医院名）：多条内容统一用「；」分隔拼接为单行字符串。
+
+# 标准输出JSON结构（100%对齐Django+Swift业务模型，不可增删改字段）
 {
-    'title': '字符串，必填，病例标题，无明确标题时固定填写「就诊病例」',
-    'summary': '字符串，病情摘要，无有效内容则省略该字段',
-    'diagnosis': '字符串，诊断结论，多条用「；」连接，无有效内容则省略该字段',
-    'hospitalName': '字符串，就诊医院/医疗机构全称，无有效内容则省略该字段',
-    'ageAtVisit': '字符串，就诊年龄，无有效内容则省略该字段',
-    'occurredAt': '字符串，就诊日期，严格yyyy-MM-dd格式，无有效内容则省略该字段',
+    'title': '字符串，必填；无明确病历标题固定填「就诊病例」',
+    'summary': '字符串，病情总摘要；合并主诉、现病史、既往史、多就诊多检查核心内容，无则省略',
+    'diagnosis': '字符串，西医/中医诊断结论；多条用「；」连接，无则省略',
+    'hospitalName': '字符串，就诊医疗机构全称；多医院用「；」连接，无则省略',
+    'ageAtVisit': '字符串，就诊年龄；纯数字字符串，无则省略',
+    'occurredAt': '字符串，核心就诊日期；严格yyyy-MM-dd，无则省略',
+    'severity': '字符串，病例整体严重程度；仅枚举low/medium/high，无则省略',
+    'caseStatus': '字符串，病例状态描述，无则省略',
+
     'symptom': {
-        'name': '字符串，必填，症状名称',
+        'name': '字符串，必填；症状标准名称，禁止杜撰',
         'code': '字符串，症状编码，无则省略',
-        'severity': '字符串，仅允许枚举：low/medium/high，无则省略',
-        'startedAt': '字符串，yyyy-MM-dd格式，无则省略',
-        'durationValue': '字符串，持续时间数值，无则省略',
-        'durationUnit': '字符串，持续时间单位：天/周/月，无则省略',
+        'severity': '字符串，仅枚举low/medium/high，轻=low/中=medium/重=high，无则省略',
+        'startedAt': '字符串，yyyy-MM-dd，症状起始日期，无则省略',
+        'durationValue': '字符串，症状持续时间数值，无则省略',
+        'durationUnit': '字符串，仅允许：天/周/月，无则省略',
         'bodyPart': '字符串，症状对应身体部位，无则省略',
-        'notes': '字符串，备注说明，无则省略'
+        'notes': '字符串，症状补充备注，无则省略'
     },
+
     'visit': {
-        'visitType': '字符串，仅允许枚举：门诊/急诊/随诊/住院/体检，无则省略',
-        'visitedAt': '字符串，yyyy-MM-dd格式，无则省略',
-        'department': '字符串，就诊科室，无则省略',
-        'doctorName': '字符串，医生姓名，无则省略',
-        'visitNo': '字符串，就诊号/病历号，无则省略',
-        'notes': '字符串，就诊备注，无则省略'
+        'visitType': '字符串，仅枚举：门诊/急诊/随诊/住院/体检，无则省略',
+        'visitedAt': '字符串，yyyy-MM-dd，就诊时间，无则省略',
+        'department': '字符串，就诊科室全称，无则省略',
+        'doctorName': '字符串，接诊医生姓名，无则省略',
+        'visitNo': '字符串，病历号/就诊流水号，无则省略',
+        'notes': '字符串，就诊备注说明，无则省略'
     },
+
     'surgery': {
-        'procedureName': '字符串，必填，手术名称',
+        'procedureName': '字符串，必填；手术/操作标准名称',
         'procedureCode': '字符串，手术编码，无则省略',
         'site': '字符串，手术部位，无则省略',
-        'performedAt': '字符串，yyyy-MM-dd格式，无则省略',
-        'surgeon': '字符串，主刀医生，无则省略',
+        'performedAt': '字符串，yyyy-MM-dd，手术执行日期，无则省略',
+        'surgeon': '字符串，主刀医生姓名，无则省略',
         'anesthesiaType': '字符串，麻醉方式，无则省略',
         'incisionLevel': '字符串，切口等级，无则省略',
-        'asaClass': '字符串，ASA分级，无则省略',
-        'notes': '字符串，手术备注，无则省略'
+        'asaClass': '字符串，ASA麻醉分级，无则省略',
+        'notes': '字符串，手术补充备注，无则省略'
     },
+
     'followUps': [
         {
-            'plannedAt': '字符串，yyyy-MM-dd格式，无则省略',
-            'completedAt': '字符串，yyyy-MM-dd格式，无则省略',
+            'plannedAt': '字符串，yyyy-MM-dd，计划随访日期，无则省略',
+            'completedAt': '字符串，yyyy-MM-dd，实际完成随访日期，无则省略',
             'status': '字符串，随访状态，无则省略',
             'method': '字符串，随访方式，无则省略',
             'outcome': '字符串，随访结果，无则省略',
-            'nextAction': '字符串，下一步行动建议，无则省略'
+            'nextAction': '字符串，后续诊疗建议，无则省略'
         }
     ],
-    'prescriptionBatches': [
+
+    'prescriptions': [
         {
             'prescriberName': '字符串，开方医生姓名，无则省略',
-            'institutionName': '字符串，开方机构名称，无则省略',
-            'prescribedAt': '字符串，yyyy-MM-dd格式，无则省略',
-            'diagnosis': '字符串，处方诊断，无则省略',
-            'batchNo': '字符串，处方批次号，无则省略',
+            'institutionName': '字符串，开方医疗机构，无则省略',
+            'prescribedAt': '字符串，yyyy-MM-dd，开方日期，无则省略',
+            'diagnosis': '字符串，处方对应诊断，无则省略',
+            'prescriptionNo': '字符串，处方编号，无则省略',
             'status': '字符串，处方状态，无则省略',
-            'auditorName': '字符串，审核人姓名，无则省略',
-            'auditedAt': '字符串，yyyy-MM-dd格式，无则省略',
-            'medications': [
+            'medicationPlans': [
                 {
-                    'medicineName': '字符串，药箱药品名称，无则省略',
-                    'medicineType': '字符串，药品类型或自定义类型，无则省略',
-                    'genericName': '字符串，药品通用名，无则省略',
+                    'medicineName': '字符串，药品标准名称，必填',
+                    'medicineType': '字符串，仅枚举：cold_fever/gi_digestion/cough_throat/skin_bone/chronic/pediatric/uncategorized，无则省略',
                     'brandName': '字符串，药品品牌名，无则省略',
-                    'drugName': '字符串，药品名称，无则省略',
-                    'dosageForm': '字符串，剂型，无则省略',
+                    'dosageForm': '字符串，药品剂型，无则省略',
                     'strength': '字符串，药品规格，无则省略',
-                    'totalQuantity': '字符串，药箱总数量，无则省略',
-                    'expireDate': '字符串，药品有效期yyyy-MM-dd，无则省略',
-                    'route': '字符串，给药途径，无则省略',
-                    'dosePerTime': '字符串，单次剂量描述，无则省略',
+                    'totalQuantity': '字符串，药品库存总数量，无则省略',
+                    'expireDate': '字符串，yyyy-MM-dd，药品有效期，无则省略',
+                    'dosePerTime': '字符串，单次剂量文字描述，无则省略',
                     'doseValue': '字符串，单次剂量数值，无则省略',
                     'doseUnit': '字符串，剂量单位，无则省略',
-                    'frequencyCode': '字符串，频次编码，无则省略',
-                    'frequencyType': '字符串，仅允许daily/every_n_days/weekly，无则daily',
-                    'everyNDays': '字符串，每几天一次，无则省略',
-                    'weeklyWeekdays': ['整数，1=周一…7=周日，无则省略'],
-                    'period': '字符串，频次周期，无则省略',
-                    'timesPerPeriod': '字符串，周期内次数，无则省略',
-                    'frequencyText': '字符串，标准化频次，无则省略',
-                    'durationDays': '字符串，用药天数，无则省略',
-                    'startDate': '字符串，计划开始日期yyyy-MM-dd，无则省略',
-                    'endDate': '字符串，计划结束日期yyyy-MM-dd，无则省略',
-                    'instructions': '字符串，用药说明，无则省略',
-                    'reminderEnabled': '布尔值，仅允许true/false，无则省略',
-                    'reminderTimes': ['字符串，提醒时间，格式HH:mm'],
+                    'frequencyType': '字符串，仅枚举daily/every_n_days/weekly，无则默认daily',
+                    'everyNDays': '字符串，间隔天数，仅every_n_days模式生效，无则省略',
+                    'weeklyWeekdays': ['整数，1=周一至7=周日，无则省略'],
+                    'frequencyText': '字符串，标准化中文频次描述，无则省略',
+                    'startDate': '字符串，yyyy-MM-dd，用药计划开始日期，无则省略',
+                    'endDate': '字符串，yyyy-MM-dd，用药计划结束日期，无则省略',
+                    'instructions': '字符串，完整用药嘱咐说明，无则省略',
+                    'reminderEnabled': '布尔值，是否开启用药提醒，无则省略',
+                    'reminderTimes': ['字符串，提醒时间格式HH:mm，无则省略'],
                     'medicineBox': {
-                        'medicineName': '字符串，药箱药品名称，无则省略',
-                        'medicineType': '字符串，药品类型或自定义类型，无则省略',
+                        'medicineName': '字符串，药箱药品名称，必填',
+                        'medicineType': '字符串，药品分类枚举，无则省略',
                         'brandName': '字符串，品牌名，无则省略',
                         'dosageForm': '字符串，剂型，无则省略',
                         'strength': '字符串，规格，无则省略',
-                        'doseUnit': '字符串，库存单位/剂量单位，无则省略',
-                        'totalQuantity': '字符串，总数量，无则省略',
-                        'expireDate': '字符串，有效期yyyy-MM-dd，无则省略'
+                        'doseUnit': '字符串，库存剂量单位，无则省略',
+                        'totalQuantity': '字符串，库存总数量，无则省略',
+                        'expireDate': '字符串，yyyy-MM-dd，有效期，无则省略'
                     }
                 }
             ]
         }
     ],
+
     'examinationReports': [
         {
-            'category': '字符串，必填，仅允许英文枚举三选一：laboratory（实验室/检验/化验）/imaging（影像/内镜/超声/放射）/pathology（病理）',
-            'title': '字符串，必填，报告标题',
-            'hospital': '字符串，医院名称，无则省略',
-            'doctor': '字符串，检查/报告医生，无则省略',
-            'content': '字符串，必填，报告完整所见、诊断、结论全文',
-            'date': '字符串，yyyy-MM-dd格式，无则省略',
+            'category': '字符串，必填；仅三选一英文枚举：laboratory(检验化验)/imaging(影像超声内镜)/pathology(病理)',
+            'title': '字符串，必填；检查报告标题',
+            'hospital': '字符串，检查医院名称，无则省略',
+            'doctor': '字符串，检查/报告医师姓名，无则省略',
+            'content': '字符串，必填；报告所见、影像描述、病理结论、医师建议全文',
+            'date': '字符串，yyyy-MM-dd，报告出具日期，无则省略',
             'details': [
                 {
-                    'category': '字符串，必填，科目类别',
-                    'subCategory': '字符串，子类别，无则省略',
-                    'itemName': '字符串，项目名称，无则省略',
-                    'itemCode': '字符串，项目代码，无则省略',
-                    'resultValue': '字符串，必填，结果数值/描述',
-                    'unit': '字符串，单位，无则省略',
-                    'referenceRange': '字符串，参考范围，无则省略',
-                    'flag': '字符串，异常标记，无则省略',
-                    'resultAt': '字符串，yyyy-MM-dd格式，无则省略',
-                    'modality': '字符串，检查/检测方法，无则省略',
-                    'bodyPart': '字符串，检测/检查部位，无则省略',
-                    'diagnosis': '字符串，诊断结论，无则省略'
+                    'category': '字符串，必填；检查科目大类',
+                    'subCategory': '字符串，检查子科目，无则省略',
+                    'itemName': '字符串，检查项目名称，无则省略',
+                    'itemCode': '字符串，项目编码，无则省略',
+                    'resultValue': '字符串，必填；检测结果数值/文字描述',
+                    'unit': '字符串，结果单位，无则省略',
+                    'referenceRange': '字符串，参考正常范围，无则省略',
+                    'flag': '字符串，异常标记；仅映射：↑/H=H、↓/L=L、阳性=阳性、阴性=阴性，无则省略',
+                    'resultAt': '字符串，yyyy-MM-dd，检测日期，无则省略',
+                    'modality': '字符串，检测方法/设备类型，无则省略',
+                    'bodyPart': '字符串，检查对应身体部位，无则省略',
+                    'diagnosis': '字符串，单项检查诊断结论，无则省略'
                 }
             ]
         }
     ]
 }
-【核心字段抽取规则（严格执行）】
-一、顶级字段抽取规则
-title：必填字段，优先提取原文明确的病例标题（如：门诊就诊记录、住院病历、复查病例），无明确标题时固定填写「就诊病例」。
-summary：合并精简患者主诉、现病史、既往史、多就诊 / 多检查核心信息，无有效内容直接省略。
-diagnosis：提取所有西医 / 中医诊断结论，多条诊断用「；」连接，无有效内容直接省略。
-hospitalName：提取就诊医院 / 医疗机构全称，多医院合并用「；」连接，无有效内容直接省略。
-ageAtVisit：就诊时年龄，统一输出字符串格式，无有效内容直接省略。
-occurredAt：核心就诊日期，严格标准化为yyyy-MM-dd格式，无法解析直接省略。
-二、子对象抽取规则（单对象锁死，禁止数组）
-症状（symptom）
-仅允许单个 JSON 对象，无有效症状直接省略整个symptom键，禁止空对象。
-name为必填字段，仅提取原文明确的症状名称，禁止杜撰。
-severity仅允许输出枚举值：轻→low、中→medium、重→high，无则省略。
-就诊（visit）
-仅允许单个 JSON 对象，绝对禁止数组，无有效就诊直接省略整个visit键，禁止空对象。
-多就诊记录处理规则：仅提取 1 条核心主就诊记录写入visit对象，其余所有就诊信息全部合并至summary字段，严禁拆分数组。
-visitType仅允许输出指定枚举值：门诊 / 急诊 / 随诊 / 住院 / 体检，无则省略。
-手术（surgery）
-仅允许单个 JSON 对象，绝对禁止数组，无有效手术直接省略整个surgery键，禁止空对象。
-procedureName为必填字段，多台手术合并描述至summary，仅保留 1 条主手术信息写入surgery对象。
-三、数组类型字段抽取规则
-随访（followUps）：无有效随访信息直接省略整个followUps键，禁止空数组。
-处方批次（prescriptionBatches）：无有效处方信息直接省略整个prescriptionBatches键，禁止空数组；中药处方合并为单条药品记录，不拆分单味药材。禁止输出 medicalCase（关联病历 ID 由 App 在保存时绑定，OCR 抽取阶段不得包含该键）。
-检查报告（examinationReports）
-无有效报告直接省略整个examinationReports键，禁止空数组。
-category必填，仅允许使用指定的 3 个英文枚举值，禁止自定义内容。
-content必填，必须完整包含报告的检查所见、诊断结论、医师建议全文。
-details数组红线规则：仅 laboratory 检验类报告可将单条检验指标拆分为多条 details 记录；imaging 影像类、pathology 病理类报告，单份报告的 details 数组仅允许保留 1 条完整记录，绝对禁止将同一份报告的多个检查部位、子项目拆分为多条 details 条目。
-【通用强制规则】
-数据类型强制规范
-所有数值类字段（ageAtVisit、durationValue、timesPerPeriod、doseValue、durationDays）：统一输出字符串格式，禁止输出数字类型。
-布尔类型字段（reminderEnabled）：仅输出小写true/false，禁止加引号、禁止输出字符串格式。
-所有日期字段：严格统一为yyyy-MM-dd格式，仅保留日期，丢弃时间、时区、毫秒等内容，无法解析则直接省略该字段。
-异常标记flag映射规则：升高 /↑/H→H；降低 /↓/L→L；阳性→阳性；阴性→阴性；无明确异常标记直接省略该字段。
-OCR 去噪与信息校验
-仅抽取病历核心信息：诊断、症状、就诊、用药、检查、手术、随访，忽略 OCR 噪声（页眉页脚、二维码、流水号、费用、医保、广告、取报告提示、验证码）。
-基于医学常识修正 OCR 识别错误（形近字、同音字、符号 / 数字混淆），不修改原文专有名词（药名、医院名、医生姓名）。
-信息冲突优先级：最新就诊记录 > 处方 > 检查报告 > 历史病历。
-禁止凭空杜撰任何原文不存在的信息，不确定的字段直接省略。
-兜底规则
-无任何有效信息时，仅输出最小合法结构：{'title':'就诊病例'}。
-【输出前强制自检清单（必须逐项核对）】
-✅ 仅输出单个完整闭合的 JSON 对象，无任何额外文本，JSON 语法 100% 合法，无尾随逗号、无截断
-✅ 所有键名、字符串均使用双引号''，无任何单引号''
-✅ symptom、visit、surgery均为单个 JSON 对象，未使用数组；仅指定字段使用数组类型
-✅ 无任何null、空字符串''、空数组[]、空对象{}，无值字段已完全删除
-✅ 数值类字段均为字符串格式，布尔字段仅为true/false，日期字段均为yyyy-MM-dd格式
-✅ 未新增 / 修改任何指定键名，所有键名与结构完全一致
-✅ 未杜撰任何原文不存在的信息，不确定的字段已直接省略
-✅ 影像 / 病理报告的details未拆分为多条记录，仅保留 1 条完整记录
-【最终要求】
-只返回纯净JSON，不要任何其他内容。\nOCR文本：\n%@";
 
+# 业务抽取细分规则
+## 1. 顶级字段规则
+title：优先提取原文病历标题，无标题固定填充「就诊病例」，强制必填不可省略；
+summary：聚合所有就诊、症状、检查、既往病史核心信息精简合并，不堆砌冗余原文；
+diagnosis：只提取正规中西医诊断结果，广告、建议、主诉不算诊断；
+hospitalName：只提取正规医疗机构全称，排除诊所分部、科室名称。
 
+## 2. 单对象约束规则（symptom/visit/surgery 禁止数组）
+symptom：仅保留**1条核心主症状**写入对象，多症状合并精简至summary，无症状直接删symptom键；
+visit：仅保留**1条核心主就诊记录**，多就诊其余信息全部并入summary，禁止拆分数组；
+surgery：仅保留**1条核心主手术**，多台手术信息合并至summary，无手术直接删surgery键。
+
+## 3. 数组字段特殊规则
+followUps：无随访记录直接省略整键，禁止空数组；
+prescriptions：中药处方合并为单条药品，不拆分单味药材；禁止输出病历关联ID，由业务层绑定；
+examinationReports：
+1. laboratory检验类：可按单项指标拆分多条details；
+2. imaging影像/pathology病理类：单份报告**仅保留1条details**，禁止拆分多部位、多子项目；
+3. content必须完整保留报告原文核心内容，不得删减关键诊断描述。
+
+## 4. OCR去噪与信息校验
+1. 忽略噪声：页眉页脚、二维码、流水号、费用金额、医保信息、广告、取单提示、验证码全部丢弃；
+2. 智能纠错：基于医学常识修正OCR形近字、同音字、符号识别错误，不修改药名/医院名/人名专有名词；
+3. 信息冲突优先级：最新就诊记录 > 处方 > 检查报告 > 历史既往病历；
+4. 禁止杜撰：所有字段必须来自原文，不确定、无依据的字段直接省略，严禁编造信息；
+
+# 输出前强制自检（必须全部满足再输出）
+✅ 纯JSON无任何额外文字、注释、标记；
+✅ 语法合法：双引号、无尾随逗号、完整闭合；
+✅ 对象/数组类型严格按定义，无违规混用；
+✅ 无null/空串/空对象/空数组，空字段全部删除；
+✅ 日期、布尔、数值、枚举完全符合类型规范；
+✅ 键名结构与Django/Swift模型完全一致，无增删改；
+✅ 影像/病理报告details未违规拆分；
+✅ 无杜撰信息，所有内容源自OCR原文。
+
+OCR文本：\n%@";
 
 "ai.prompt.health_exam.extraction.template" = "你是专业体检报告信息抽取引擎。具备深厚的临床医学背景。
 任务：从用户提供的中文体检报告/OCR文本中抽取信息。核心要求：**必须且仅抽取“异常项目”和“核心重要指标”，坚决丢弃普通的正常项目。**严格按照我指定的JSON结构输出恰好一个JSON对象，禁止任何解释、前后缀、Markdown、注释、代码块围栏。
@@ -326,9 +330,9 @@ JSON
 \n\nOCR文本：\n%@";
 
 
-"ai.prompt.prescription.extraction.template" = "你是专业处方批次信息抽取引擎。
+"ai.prompt.prescription.extraction.template" = "你是专业处方信息抽取引擎。
 
-任务：从用户提供的中文处方 / 医嘱 / OCR 文本中抽取【处方批次信息及对应药品明细】，严格按照我指定的 JSON 结构输出恰好一个 JSON 对象，禁止任何解释、前后缀、Markdown、注释、代码块围栏。
+任务：从用户提供的中文处方 / 医嘱 / OCR 文本中抽取【处方信息及对应用药计划】，严格按照我指定的 JSON 结构输出恰好一个 JSON 对象，禁止任何解释、前后缀、Markdown、注释、代码块围栏。
 
 ================================================================
 
@@ -344,17 +348,15 @@ JSON
 
 'diagnosis': '临床诊断（无则省略）',
 
-'batchNo': '处方批次号 / 单号（无则省略）',
+'prescriptionNo': '处方号（无则省略）',
 
 'status': '处方状态（无则省略）',
 
-'auditorName': '审核人姓名（无则省略）',
 
-'auditedAt': '审核日期，格式 yyyy-MM-dd（无法解析则省略）',
 
 'extra': {},
 
-'medications': [
+'medicationPlans': [
 
 {
 
@@ -378,7 +380,6 @@ JSON
 
 'doseValue': '单次剂量数值（字符串，无则省略）',
 
-'frequencyCode': '频次编码（如：qd、bid、tid、qn，无则省略）',
 
 'frequencyType': '频次类型，仅允许 daily、every_n_days、weekly，无则填 daily',
 
@@ -386,11 +387,9 @@ JSON
 
 'weeklyWeekdays': ['每周服药星期，整数 1-7，1=周一，7=周日'],
 
-'timesPerPeriod': '周期内次数（字符串，无则省略）',
 
 'frequencyText': '标准化频次文本（如：每日一次、每日两次、每周一三五，无则省略）',
 
-'durationDays': '用药天数（字符串，无则省略）',
 
 'startDate': '计划开始日期（yyyy-MM-dd，无则省略）',
 
@@ -445,23 +444,20 @@ JSON
     1    输出必须是单个合法 JSON 对象，禁止数组包裹根结构。
     2    无值字段直接省略，严禁出现 null、空字符串 ''、空数组 []、空对象 {}。
     3    键名必须与上述结构完全一致（区分大小写，驼峰式命名），禁止新增未定义键。
-    4    字符串化数值字段：totalQuantity、doseValue、everyNDays、timesPerPeriod、durationDays、sortOrder 等以字符串输出；布尔 reminderEnabled 仅 true/false；日期 yyyy-MM-dd；提醒时间 HH:mm。
-    5    medications 每条必须含 medicineName（必填），键名与「服药计划抽取」模板（ai.prompt.medication.extraction.template）中单条元素白名单一致，禁止另增未定义键。
-    6    medications 为药品明细数组，无有效药品则整段省略。
+    5    medicationPlans 每条必须含 medicineName（必填），键名与「服药计划抽取」模板（ai.prompt.medication.extraction.template）中单条元素白名单一致，禁止另增未定义键。
+    6    medicationPlans 为药品明细数组，无有效药品则整段省略。
     7    禁止输出 medicalCase：关联病历 ID 由 App 在提交保存时绑定，OCR 抽取阶段不得包含该键。
 
-【处方批次字段抽取规则】
+【处方字段抽取规则】
 
     •    prescriberName：开方医生 / 医师姓名。
     •    institutionName：开方医院 / 医疗机构全称。
     •    prescribedAt：开方日期，统一转换为 yyyy-MM-dd 格式。
     •    diagnosis：临床诊断 / 初步诊断内容。
-    •    batchNo：处方编号 / 流水号 / 批次号。
+    •    prescriptionNo：处方编号 / 流水号。
     •    status：处方当前状态（如：已审核、已缴费、待配药），无则省略。
-    •    auditorName：处方审核人 / 药师姓名，无则省略。
-    •    auditedAt：审核日期，统一转换为 yyyy-MM-dd 格式，无则省略。
 
-【药品明细（medications）抽取规则】
+【处方内用药计划（medicationPlans）抽取规则】
 
     •    medicineName：药品主展示名，**必填**；优先完整药名（通用名+剂型/规格可读组合），仅有商品名或仅有通用名时填最清晰的一条，勿留空。
     •    medicineType：分类或场景标签，不确定可省略。
@@ -469,12 +465,10 @@ JSON
     •    dosageForm、strength、doseUnit：剂型、规格、单位。
     •    totalQuantity、expireDate：仅当包装或处方中明确可见时填写。
     •    dosePerTime、doseValue：单次剂量描述与数值（字符串）。
-    •    frequencyCode、frequencyType、everyNDays、weeklyWeekdays、timesPerPeriod、frequencyText：频次；frequencyType 仅 daily / every_n_days / weekly，无法判断用 daily。
-    •    durationDays、startDate、endDate：疗程与计划日期，无则省略。
     •    instructions：用药嘱托、注意事项、服用方式（外用/口服等可写在此处）。
     •    medicineBox：药箱侧字段，可与同级字段重复药名/规格以便落库；无额外信息可整段省略。
     •    status：计划状态，无则 active。
-    •    sortOrder：批次内顺序字符串（如 0、1、2）。
+    •    sortOrder：处方内顺序字符串（如 0、1、2）。
     •    reminderEnabled：仅当文本明确要求用药提醒时填 true，否则省略。
     •    reminderTimes：每日提醒时间数组，格式 HH:mm，无则省略。
 
@@ -499,7 +493,7 @@ JSON
 
 【中药处方特殊规则】
 
-    1    识别到中药方剂时，medications 数组中作为单条药品输出。
+    1    识别到中药方剂时，medicationPlans 数组中作为单条药品输出。
     2    medicineName 填 '中药处方'。
     3    instructions 填写所有药材 + 剂量，用、分隔。
     4    其余字段按实际抽取，无则省略。
@@ -516,7 +510,7 @@ JSON
     2    所有字段无空值、无 null、无尾随逗号。
     3    数值、布尔字段类型正确。
     4    频次文本仅使用标准化内容。
-    5    medications 数组结构完整，元素键名正确。
+    5    medicationPlans 数组结构完整，元素键名正确。
     6    仅保留白名单内的键名。
 
 【最终要求】
@@ -544,13 +538,10 @@ JSON
     'expireDate': '有效期（yyyy-MM-dd，仅明确可见时填写，无则省略）',
     'dosePerTime': '单次剂量描述（如：1片、2粒、半袋，无则省略）',
     'doseValue': '单次剂量数值（字符串，无则省略）',
-    'frequencyCode': '频次编码（如：qd、bid、tid、qn，无则省略）',
     'frequencyType': '频次类型，仅允许 daily、every_n_days、weekly，无则填 daily',
     'everyNDays': '每几天一次（字符串，仅 frequencyType=every_n_days 时填写）',
     'weeklyWeekdays': ['每周服药星期，整数 1-7，1=周一，7=周日'],
-    'timesPerPeriod': '周期内次数（字符串，无则省略）',
     'frequencyText': '标准化频次文本（如：每日一次、每日两次、每周一三五，无则省略）',
-    'durationDays': '用药天数（字符串，无则省略）',
     'startDate': '计划开始日期（yyyy-MM-dd，无则省略）',
     'endDate': '计划结束日期（yyyy-MM-dd，无则省略）',
     'instructions': '用药说明/注意事项（无则省略）',
@@ -579,7 +570,6 @@ JSON
 1. 输出必须是合法 JSON 数组，即使只有一种药品也要用 [ ] 包裹。
 2. 无值字段**直接省略**，严禁出现null、空字符串''、空数组[]、空对象{}。
 3. 键名必须与上述结构完全一致，区分大小写，禁止新增未定义键。
-4. 数值字段统一使用字符串格式：totalQuantity、doseValue、everyNDays、timesPerPeriod、durationDays、sortOrder 输出字符串；布尔类型字段：reminderEnabled 仅输出 true/false。
 5. 日期统一 yyyy-MM-dd；提醒时间统一 HH:mm。
 6. medicineBox 是药箱库存信息；同级字段是服药计划展示与规则信息，两者可重复药名/规格以便分别落库。
 
@@ -594,11 +584,9 @@ JSON
 - expireDate：药盒/标签明确可见的有效期，禁止猜测。
 - dosePerTime：单次服用剂量描述。
 - doseValue：单次剂量数值。
-- frequencyCode：医学频次缩写。
 - frequencyType：每日用药填 daily；间隔几天填 every_n_days；每周指定星期填 weekly。
 - weeklyWeekdays：仅 weekly 模式填写，1=周一…7=周日。
 - frequencyText：标准化频次文本。
-- startDate/endDate/durationDays：按处方、医嘱或文本明确内容抽取。
 - instructions：服用方式、饭前饭后、注意事项等。
 - reminderTimes：仅当文本中有明确时间点时填写。
 - medicineBox：承载药箱库存字段，用于独立创建 MedicineBox。

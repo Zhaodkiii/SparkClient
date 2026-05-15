@@ -149,7 +149,7 @@ enum AILocalScenarioBundleBuilder {
                 relatedTaskCodes: model.relatedTaskCodes,
                 isDefault: false,
                 temperature: scenario == .chat ? 0.6 : 0.2,
-                maxTokens: 4096,
+                maxTokens: 14096,
                 baseModelName: model.baseModelName,
                 localFilename: model.localFilename
             )

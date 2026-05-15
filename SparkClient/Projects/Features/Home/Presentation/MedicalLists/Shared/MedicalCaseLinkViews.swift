@@ -110,10 +110,6 @@ struct MedicalCaseLinkRow: View {
 
     private var rowContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Divider()
-                .opacity(0.35)
-                .padding(.horizontal, 16)
-
             HStack(spacing: 14) {
                 Image(systemName: isLinked ? "link.circle.fill" : "link.badge.plus")
                     .font(.body.weight(.semibold))
@@ -141,7 +137,7 @@ struct MedicalCaseLinkRow: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.secondary.opacity(0.8))
             }
-            .padding(16)
+//            .padding(16)
             .contentShape(Rectangle())
         }
     }

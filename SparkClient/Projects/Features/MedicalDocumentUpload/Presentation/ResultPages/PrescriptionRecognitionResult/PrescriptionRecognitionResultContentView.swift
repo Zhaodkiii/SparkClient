@@ -35,12 +35,10 @@ struct PrescriptionRecognitionResultContentView: View {
                 institutionName: nil,
                 prescribedAt: nil,
                 diagnosis: nil,
-                batchNo: nil,
+                prescriptionNo: nil,
                 status: nil,
-                auditorName: nil,
-                auditedAt: nil,
                 extra: nil,
-                medications: []
+                medicationPlans: []
             ))
         }
     }
@@ -94,7 +92,7 @@ struct PrescriptionRecognitionResultContentView: View {
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: batch.medications?.count ?? 0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: batch.medicationPlans?.count ?? 0)
         .fullScreenCover(item: $localEditor) { editor in
             CompatibleNavigationContainer {
                 editorDestination(editor)
@@ -130,7 +128,7 @@ struct PrescriptionRecognitionResultContentView: View {
         case .batch(let existing):
             MedicationMultiCreateView(
                 mode: .localEdit(existing: existing, onSubmit: { updated in
-                    logger.info("Prescription result: local batch updated meds=\(updated.medications?.count ?? 0)", module: logModule)
+                    logger.info("Prescription result: local batch updated meds=\(updated.medicationPlans?.count ?? 0)", module: logModule)
                     batch = updated
                 })
             )
@@ -138,7 +136,7 @@ struct PrescriptionRecognitionResultContentView: View {
         case .medication(let index, let med):
             MedicationFormView(
                 mode: .localEdit(existing: med, onSubmit: { updated in
-                    var meds = batch.medications ?? []
+                    var meds = batch.medicationPlans ?? []
                     guard meds.indices.contains(index) else { return }
                     meds[index] = updated
                     batch = PrescriptionRecognitionDraft(
@@ -147,12 +145,10 @@ struct PrescriptionRecognitionResultContentView: View {
                         institutionName: batch.institutionName,
                         prescribedAt: batch.prescribedAt,
                         diagnosis: batch.diagnosis,
-                        batchNo: batch.batchNo,
+                        prescriptionNo: batch.prescriptionNo,
                         status: batch.status,
-                        auditorName: batch.auditorName,
-                        auditedAt: batch.auditedAt,
                         extra: batch.extra,
-                        medications: meds
+                        medicationPlans: meds
                     )
                     logger.info("Prescription result: local medication updated index=\(index)", module: logModule)
                 })

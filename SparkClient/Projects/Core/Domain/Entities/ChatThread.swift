@@ -84,7 +84,7 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         currentModelName: String? = nil,
         temperature: Double = 0.6,
         topP: Double = 1.0,
-        maxTokens: Int = 4096,
+        maxTokens: Int = 14096,
         maxMessages: Int = 20,
         rolePrompt: String = "",
         imageDeliveryModeRaw: String? = nil,

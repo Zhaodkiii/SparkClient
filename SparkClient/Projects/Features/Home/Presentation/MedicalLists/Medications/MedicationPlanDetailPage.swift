@@ -71,13 +71,9 @@ struct MedicationPlanDetailPage: View {
 
     var body: some View {
         List {
-            Section("服药计划") {
-                MedicationPlanDetailInfoRow(title: "药品", value: currentPlan.drugName)
-                MedicationPlanDetailInfoRow(title: "剂量", value: currentPlan.dosePerTime)
-                MedicationPlanDetailInfoRow(title: "频次", value: currentPlan.frequencyText)
-                MedicationPlanDetailInfoRow(title: "提醒", value: currentPlan.reminderTimes.map(\.time).joined(separator: ", "))
-                MedicationPlanDetailInfoRow(title: "状态", value: medicationPlanDetailStatusLabel(currentPlan.status))
-                if let medicineBox {
+         
+            if let medicineBox {
+                Section("关联药品") {
                     NavigationLink {
                         MedicineBoxDetailPage(
                             box: medicineBox,
@@ -95,7 +91,7 @@ struct MedicationPlanDetailPage: View {
                                 .foregroundStyle(Color(uiColor: .systemPurple))
                                 .frame(width: 36, height: 36)
                                 .background(Color(uiColor: .systemPurple).opacity(0.12), in: Circle())
-
+                            
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(medicationPlanDetailLinkedBoxTitle(medicineBox))
                                     .font(.subheadline.weight(.semibold))
@@ -105,21 +101,22 @@ struct MedicationPlanDetailPage: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
-
-                            Spacer(minLength: 0)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
                         .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                } else if currentPlan.medicineBox != nil {
-                    MedicationPlanDetailInfoRow(title: "药箱药品", value: "信息暂不可用，请同步药箱列表后重试")
                 }
+             
+            }else if currentPlan.medicineBox != nil {
+                MedicationPlanDetailInfoRow(title: "药箱药品", value: "信息暂不可用，请同步药箱列表后重试")
+            }
+            
+            Section("服药计划") {
+                MedicationPlanDetailInfoRow(title: "药品", value: currentPlan.drugName)
+                MedicationPlanDetailInfoRow(title: "剂量", value: currentPlan.dosePerTime)
+                MedicationPlanDetailInfoRow(title: "频次", value: currentPlan.frequencyText)
+                MedicationPlanDetailInfoRow(title: "提醒", value: currentPlan.reminderTimes.map(\.time).joined(separator: ", "))
+                MedicationPlanDetailInfoRow(title: "状态", value: medicationPlanDetailStatusLabel(currentPlan.status))
                 if currentPlan.instructions.isEmpty == false {
                     MedicationPlanDetailInfoRow(title: "说明", value: currentPlan.instructions)
                 }
@@ -147,7 +144,7 @@ struct MedicationPlanDetailPage: View {
                     onMedicalCaseDeleted: onMedicalCaseDeleted
                 )
             }
-
+            
             if let attachments = currentPlan.attachments, attachments.isEmpty == false {
                 Section("附件") {
                     MedicalAttachmentGridPreview(

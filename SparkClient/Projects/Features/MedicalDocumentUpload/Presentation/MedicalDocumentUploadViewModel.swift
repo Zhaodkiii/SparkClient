@@ -227,7 +227,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             }
             fail(.extract) // 标记抽取流程失败
             errorMessage = error.localizedDescription // 给 UI 展示错误信息
-            logger.error("Typed 识别流程失败：\(error.localizedDescription)", module: .medical)
+            logger.error("Typed 识别流程失败：\(error)", module: .medical)
         }
     }
 

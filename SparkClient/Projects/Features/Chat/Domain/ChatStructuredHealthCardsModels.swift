@@ -278,7 +278,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
             visit: nil,
             surgery: nil,
             followUps: nil,
-            prescriptionBatches: nil,
+            prescriptions: nil,
             examinationReports: nil
         )
         
@@ -343,7 +343,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
                     .filter { $0.isEmpty == false }
                     .joined(separator: " ")
                 // 拼接用法用量：每次剂量 + 服用频率
-                let dosage = [line.dosePerTime, line.frequencyText ?? line.frequencyCode]
+                let dosage = [line.dosePerTime, line.frequencyText]
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { $0.isEmpty == false }
                     .joined(separator: " · ")

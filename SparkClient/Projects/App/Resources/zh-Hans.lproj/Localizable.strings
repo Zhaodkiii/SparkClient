@@ -1223,7 +1223,7 @@
 "medical_record.forms.field.prescriber" = "开方医生";
 "medical_record.forms.field.institution" = "机构";
 "medical_record.forms.field.prescribed_at" = "开方时间";
-"medical_record.forms.field.batch_no" = "批次号";
+"medical_record.forms.field.batch_no" = "处方号";
 "medical_record.forms.field.procedure_name" = "手术名称";
 "medical_record.forms.field.procedure_code" = "手术编码";
 "medical_record.forms.field.site" = "部位";

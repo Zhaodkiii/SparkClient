@@ -36,7 +36,7 @@ struct ChatView: View {
         currentModelName: nil,
         temperature: 0.6,
         topP: 1.0,
-        maxTokens: 4096,
+        maxTokens: 14096,
         maxMessages: 20,
         rolePrompt: "",
         imageDeliveryMode: .directMultimodal

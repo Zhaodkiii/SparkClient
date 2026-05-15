@@ -1223,7 +1223,7 @@
 "medical_record.forms.field.prescriber" = "Prescriber";
 "medical_record.forms.field.institution" = "Institution";
 "medical_record.forms.field.prescribed_at" = "Prescribed at";
-"medical_record.forms.field.batch_no" = "Batch number";
+"medical_record.forms.field.batch_no" = "Prescription No.";
 "medical_record.forms.field.procedure_name" = "Procedure";
 "medical_record.forms.field.procedure_code" = "Procedure code";
 "medical_record.forms.field.site" = "Site";
@@ -1421,7 +1421,7 @@
 "medical.upload.result.attachments.count" = "%d items";
 "medical.upload.result.attachments.empty" = "No attachments";
 
-"medical.upload.result.prescription.batch_no" = "Batch No.";
+"medical.upload.result.prescription.batch_no" = "Prescription No.";
 "medical.upload.result.prescription.hospital" = "Institution";
 "medical.upload.result.prescription.prescriber" = "Prescriber";
 "medical.upload.result.prescription.batch_section.title" = "Prescription batch";

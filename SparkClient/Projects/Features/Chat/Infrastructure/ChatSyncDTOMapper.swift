@@ -12,7 +12,7 @@ enum ChatSyncEngineDTOMapper: Sendable {
             currentModelName: remote.currentModelName,
             temperature: remote.temperature ?? 0.6,
             topP: remote.topP ?? 1.0,
-            maxTokens: remote.maxTokens ?? 4096,
+            maxTokens: remote.maxTokens ?? 14096,
             maxMessages: remote.maxMessages ?? 20,
             rolePrompt: remote.rolePrompt ?? "",
             imageDeliveryModeRaw: remote.imageDeliveryModeRaw,

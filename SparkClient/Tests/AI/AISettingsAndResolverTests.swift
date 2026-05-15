@@ -143,7 +143,7 @@ final class AISettingsAndResolverTests: XCTestCase {
                     aiToolScenarios: [],
                     isDefault: true,
                     temperature: 0.2,
-                    maxTokens: 4096
+                    maxTokens: 14096
                 )
             ]
         )

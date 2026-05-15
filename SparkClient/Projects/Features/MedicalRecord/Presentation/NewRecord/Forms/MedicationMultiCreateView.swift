@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 处方批次 + 多条药品行：用于批量录入 `PrescriptionRecognitionDraft`。
+/// 处方 + 多条用药计划：用于批量录入 `PrescriptionRecognitionDraft`。
 struct MedicationMultiCreateView: View {
     enum Mode {
         case create
@@ -27,7 +27,7 @@ struct MedicationMultiCreateView: View {
     @State private var institutionName = ""
     @State private var prescribedAt = ""
     @State private var diagnosis = ""
-    @State private var batchNo = ""
+    @State private var prescriptionNo = ""
     @State private var status = "active"
     @State private var items: [MedicationItemDraft] = []
     @State private var isSaving = false
@@ -46,7 +46,7 @@ struct MedicationMultiCreateView: View {
         let seed: PrescriptionRecognitionDraft
         switch mode {
         case .create:
-            seed = .init(medicalCase: createMedicalCaseID, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, batchNo: nil, status: "active", auditorName: nil, auditedAt: nil, extra: nil, medications: [])
+            seed = .init(medicalCase: createMedicalCaseID, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, prescriptionNo: nil, status: "active", extra: nil, medicationPlans: [])
             seedMedicalCase = createMedicalCaseID
         case .serverEdit(let existing), .localEdit(let existing, _):
             seed = existing
@@ -57,9 +57,9 @@ struct MedicationMultiCreateView: View {
         _institutionName = State(initialValue: seed.institutionName ?? "")
         _prescribedAt = State(initialValue: seed.prescribedAt ?? "")
         _diagnosis = State(initialValue: seed.diagnosis ?? "")
-        _batchNo = State(initialValue: seed.batchNo ?? "")
+        _prescriptionNo = State(initialValue: seed.prescriptionNo ?? "")
         _status = State(initialValue: seed.status ?? "active")
-        _items = State(initialValue: (seed.medications ?? []).map {
+        _items = State(initialValue: (seed.medicationPlans ?? []).map {
             MedicationItemDraft(medicineName: $0.medicineName ?? $0.medicineBox?.medicineName ?? $0.brandName ?? "", medicineType: $0.medicineType ?? $0.medicineBox?.medicineType ?? "", strength: $0.strength ?? "", frequencyText: $0.frequencyText ?? "", dosePerTime: $0.dosePerTime ?? "")
         })
     }
@@ -72,7 +72,7 @@ struct MedicationMultiCreateView: View {
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.institution"), text: $institutionName)
                     SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescribed_at"), text: $prescribedAt)
                     SparkFormTextRow(title: L10n.text("common.diagnosis"), text: $diagnosis)
-                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $batchNo)
+                    SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $prescriptionNo)
                     SparkFormTextRow(title: L10n.text("common.status"), text: $status)
                 }
 
@@ -149,10 +149,7 @@ struct MedicationMultiCreateView: View {
                 dosePerTime: item.dosePerTime.nilIfBlank,
                 doseValue: nil,
                 doseUnit: nil,
-                frequencyCode: nil,
-                timesPerPeriod: nil,
                 frequencyText: item.frequencyText.nilIfBlank,
-                durationDays: nil,
                 instructions: nil,
                 reminderEnabled: false,
                 reminderTimes: [],
@@ -166,12 +163,10 @@ struct MedicationMultiCreateView: View {
             institutionName: institutionName.nilIfBlank,
             prescribedAt: prescribedAt.nilIfBlank,
             diagnosis: diagnosis.nilIfBlank,
-            batchNo: batchNo.nilIfBlank,
+            prescriptionNo: prescriptionNo.nilIfBlank,
             status: status.nilIfBlank,
-            auditorName: nil,
-            auditedAt: nil,
             extra: nil,
-            medications: meds
+            medicationPlans: meds
         )
     }
 

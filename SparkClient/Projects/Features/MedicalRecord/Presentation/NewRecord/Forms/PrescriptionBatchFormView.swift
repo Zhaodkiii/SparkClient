@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 处方批次（无明细药品列表）识别草稿。
+/// 处方（无明细用药计划列表）识别草稿。
 struct PrescriptionBatchFormView: View {
     enum Mode {
         case create
@@ -18,7 +18,7 @@ struct PrescriptionBatchFormView: View {
     @State private var institutionName = ""
     @State private var prescribedAt = ""
     @State private var diagnosis = ""
-    @State private var batchNo = ""
+    @State private var prescriptionNo = ""
     @State private var status = "active"
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -34,7 +34,7 @@ struct PrescriptionBatchFormView: View {
         let seed: PrescriptionRecognitionDraft
         switch mode {
         case .create:
-            seed = .init(medicalCase: nil, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, batchNo: nil, status: "active", auditorName: nil, auditedAt: nil, extra: nil, medications: [])
+            seed = .init(medicalCase: nil, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, prescriptionNo: nil, status: "active", extra: nil, medicationPlans: [])
         case .serverEdit(let existing), .localEdit(let existing, _): seed = existing
         }
 
@@ -42,7 +42,7 @@ struct PrescriptionBatchFormView: View {
         _institutionName = State(initialValue: seed.institutionName ?? "")
         _prescribedAt = State(initialValue: seed.prescribedAt ?? "")
         _diagnosis = State(initialValue: seed.diagnosis ?? "")
-        _batchNo = State(initialValue: seed.batchNo ?? "")
+        _prescriptionNo = State(initialValue: seed.prescriptionNo ?? "")
         _status = State(initialValue: seed.status ?? "active")
     }
 
@@ -53,7 +53,7 @@ struct PrescriptionBatchFormView: View {
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.institution"), text: $institutionName)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.prescribed_at"), text: $prescribedAt)
                 SparkFormTextRow(title: L10n.text("common.diagnosis"), text: $diagnosis)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $batchNo)
+                SparkFormTextRow(title: L10n.text("medical_record.forms.field.batch_no"), text: $prescriptionNo)
                 SparkFormTextRow(title: L10n.text("common.status"), text: $status)
             }
             .padding(16)
@@ -101,7 +101,7 @@ struct PrescriptionBatchFormView: View {
     }
 
     private var outputDraft: PrescriptionRecognitionDraft {
-        .init(medicalCase: nil, prescriberName: prescriberName.nilIfBlank, institutionName: institutionName.nilIfBlank, prescribedAt: prescribedAt.nilIfBlank, diagnosis: diagnosis.nilIfBlank, batchNo: batchNo.nilIfBlank, status: status.nilIfBlank, auditorName: nil, auditedAt: nil, extra: nil, medications: [])
+        .init(medicalCase: nil, prescriberName: prescriberName.nilIfBlank, institutionName: institutionName.nilIfBlank, prescribedAt: prescribedAt.nilIfBlank, diagnosis: diagnosis.nilIfBlank, prescriptionNo: prescriptionNo.nilIfBlank, status: status.nilIfBlank, extra: nil, medicationPlans: [])
     }
 
     private func saveNow() {

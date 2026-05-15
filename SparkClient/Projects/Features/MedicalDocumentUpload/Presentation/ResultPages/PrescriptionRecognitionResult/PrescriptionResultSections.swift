@@ -17,7 +17,7 @@ struct PrescriptionMemberConfirmSectionView: View {
                 )
                 PrescriptionResultInfoLine(
                     title: L10n.text("medical.upload.result.prescription.batch_no"),
-                    value: batch.batchNo ?? ""
+                    value: batch.prescriptionNo ?? ""
                 )
                 PrescriptionResultInfoLine(
                     title: L10n.text("medical.upload.result.prescription.hospital"),
@@ -38,7 +38,7 @@ struct PrescriptionBatchListSectionView: View {
     let onEditMedication: (Int, MedicationPlanRecognitionDraft) -> Void
 
     var body: some View {
-        let meds = batch.medications ?? []
+        let meds = batch.medicationPlans ?? []
         PrescriptionResultSectionCard(
             title: L10n.text("medical.upload.result.prescription.batch_section.title"),
             subtitle: L10n.text("medical.upload.result.prescription.batch_section.subtitle"),

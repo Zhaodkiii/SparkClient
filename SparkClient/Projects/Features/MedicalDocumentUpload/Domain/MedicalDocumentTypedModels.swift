@@ -160,13 +160,10 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
     /// 服药计划字段：用于创建 MedicationPlan。
     let dosePerTime: String?
     let doseValue: String?          // OCR 原始字符串，如 "1", "0.5", "1g"
-    let frequencyCode: String?
     let frequencyType: String?
     let everyNDays: String?
     let weeklyWeekdays: [Int]?
-    let timesPerPeriod: String?     // OCR 原始字符串，如 "2", "3次", "每日2次"
     let frequencyText: String?
-    let durationDays: String?       // OCR 原始字符串，如 "7", "7天"
     let startDate: String?
     let endDate: String?
     let instructions: String?
@@ -189,13 +186,10 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         dosePerTime: String? = nil,
         doseValue: String? = nil,
         doseUnit: String? = nil,
-        frequencyCode: String? = nil,
         frequencyType: String? = nil,
         everyNDays: String? = nil,
         weeklyWeekdays: [Int]? = nil,
-        timesPerPeriod: String? = nil,
         frequencyText: String? = nil,
-        durationDays: String? = nil,
         startDate: String? = nil,
         endDate: String? = nil,
         instructions: String? = nil,
@@ -216,13 +210,10 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         self.doseUnit = doseUnit
         self.dosePerTime = dosePerTime
         self.doseValue = doseValue
-        self.frequencyCode = frequencyCode
         self.frequencyType = frequencyType
         self.everyNDays = everyNDays
         self.weeklyWeekdays = weeklyWeekdays
-        self.timesPerPeriod = timesPerPeriod
         self.frequencyText = frequencyText
-        self.durationDays = durationDays
         self.startDate = startDate
         self.endDate = endDate
         self.instructions = instructions
@@ -249,7 +240,7 @@ struct MedicineBoxRecognitionDraft: Sendable, Equatable, Codable {
     @FlexibleOptionalString var sortOrder: String?
 }
 
-/// 处方批次抽取草稿（与 ``PrescriptionBatch`` / ``PrescriptionBatchSerializer`` 字段对齐；`member` 由上传信封提供）。
+/// 处方抽取草稿（与 SparkService ``Prescription`` + ``MedicationPlan`` 字段对齐；`member` 由上传信封提供）。
 struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     /// 关联病历 ID：由 App 在保存/编辑已有病例时注入；**不从** OCR 流式 JSON 解码（避免模型输出字符串与 `Int` 不一致）。
     let medicalCase: Int?
@@ -257,13 +248,11 @@ struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     let institutionName: String?
     let prescribedAt: String?
     let diagnosis: String?
-    let batchNo: String?
+    let prescriptionNo: String?
     let status: String?
-    let auditorName: String?
-    let auditedAt: String?
     let extra: [String: String]?
-    /// 批次内药品行；缺省或省略时按空数组处理。
-    let medications: [MedicationPlanRecognitionDraft]?
+    /// 处方内用药计划；缺省或省略时按空数组处理。
+    let medicationPlans: [MedicationPlanRecognitionDraft]?
 
 }
 
@@ -337,8 +326,8 @@ struct CaseRecognitionDraft: Sendable, Equatable, Codable {
     let surgery: SurgeryRecognitionDraft?
     /// 子项：随访
     let followUps: [FollowUpRecognitionDraft]?
-    /// 子项：处方批次（含批次内药品行）
-    let prescriptionBatches: [PrescriptionRecognitionDraft]?
+    /// 子项：处方（含处方内用药计划）
+    let prescriptions: [PrescriptionRecognitionDraft]?
     /// 子项：检查/检验报告（与独立「医疗报告」类型共用草稿模型）
     let examinationReports: [MedicalReportRecognitionDraft]?
 }

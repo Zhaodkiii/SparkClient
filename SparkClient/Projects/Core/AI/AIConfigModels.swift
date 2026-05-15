@@ -230,7 +230,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
     var relatedTaskCodes: [String]
     var isDefault: Bool = false
     var temperature: Double = 0.2
-    var maxTokens: Int = 4096
+    var maxTokens: Int = 14096
     var baseModelName: String?
     var localFilename: String?
 
@@ -338,7 +338,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         relatedTaskCodes: [String] = [],
         isDefault: Bool = false,
         temperature: Double = 0.2,
-        maxTokens: Int = 4096,
+        maxTokens: Int = 14096,
         baseModelName: String? = nil,
         localFilename: String? = nil
     ) {

@@ -59,7 +59,7 @@ struct CaseTreatmentPlanSectionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            let meds = batch.medications ?? []
+            let meds = batch.medicationPlans ?? []
             if meds.isEmpty {
                 Text("暂无药品")
                     .font(.callout)

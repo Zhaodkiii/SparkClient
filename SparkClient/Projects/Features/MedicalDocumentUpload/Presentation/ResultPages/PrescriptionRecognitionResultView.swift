@@ -74,12 +74,10 @@ private extension MedicalDocumentTypedExtractionOutput {
                     institutionName: "仁和医院",
                     prescribedAt: "2026-04-12",
                     diagnosis: "上呼吸道感染",
-                    batchNo: "RX-2201",
+                    prescriptionNo: "RX-2201",
                     status: "active",
-                    auditorName: nil,
-                    auditedAt: nil,
                     extra: nil,
-                    medications: [
+                    medicationPlans: [
                         MedicationPlanRecognitionDraft(
                             medicineName: "阿莫西林胶囊",
                             medicineType: "抗感染用药",
@@ -89,11 +87,8 @@ private extension MedicalDocumentTypedExtractionOutput {
                             dosePerTime: "1 粒",
                             doseValue: "1",
                             doseUnit: "粒",
-                            frequencyCode: "TID",
                             frequencyType: "daily",
-                            timesPerPeriod: "3",
                             frequencyText: "每日 3 次",
-                            durationDays: "5",
                             instructions: "饭后",
                             reminderEnabled: false,
                             reminderTimes: [],

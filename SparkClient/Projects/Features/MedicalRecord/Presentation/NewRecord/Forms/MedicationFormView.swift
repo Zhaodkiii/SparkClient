@@ -24,11 +24,8 @@ struct MedicationFormView: View {
     @State private var dosePerTime = ""
     @State private var doseValue = ""
     @State private var doseUnit = ""
-    @State private var frequencyCode = ""
     @State private var frequencyType = "daily"
-    @State private var timesPerPeriod = ""
     @State private var frequencyText = ""
-    @State private var durationDays = ""
     @State private var startDate = ""
     @State private var endDate = ""
     @State private var instructions = ""
@@ -47,7 +44,7 @@ struct MedicationFormView: View {
         let seed: MedicationPlanRecognitionDraft
         switch mode {
         case .create:
-            seed = .init(medicineName: nil, medicineType: nil, totalQuantity: nil, expireDate: nil, brandName: nil, dosageForm: nil, strength: nil, dosePerTime: nil, doseValue: nil, doseUnit: nil, frequencyCode: nil, frequencyType: "daily", timesPerPeriod: nil, frequencyText: nil, durationDays: nil, startDate: nil, endDate: nil, instructions: nil, reminderEnabled: false, reminderTimes: [], sortOrder: "0", extra: nil)
+            seed = .init(medicineName: nil, medicineType: nil, totalQuantity: nil, expireDate: nil, brandName: nil, dosageForm: nil, strength: nil, dosePerTime: nil, doseValue: nil, doseUnit: nil, frequencyType: "daily", frequencyText: nil, startDate: nil, endDate: nil, instructions: nil, reminderEnabled: false, reminderTimes: [], sortOrder: "0", extra: nil)
             seedSortOrder = "0"
         case .serverEdit(let existing), .localEdit(let existing, _):
             seed = existing
@@ -64,11 +61,8 @@ struct MedicationFormView: View {
         _dosePerTime = State(initialValue: seed.dosePerTime ?? "")
         _doseValue = State(initialValue: seed.doseValue ?? "")
         _doseUnit = State(initialValue: seed.doseUnit ?? "")
-        _frequencyCode = State(initialValue: seed.frequencyCode ?? "")
         _frequencyType = State(initialValue: seed.frequencyType ?? "daily")
-        _timesPerPeriod = State(initialValue: seed.timesPerPeriod ?? "")
         _frequencyText = State(initialValue: seed.frequencyText ?? "")
-        _durationDays = State(initialValue: seed.durationDays ?? "")
         _startDate = State(initialValue: seed.startDate ?? "")
         _endDate = State(initialValue: seed.endDate ?? "")
         _instructions = State(initialValue: seed.instructions ?? "")
@@ -87,11 +81,8 @@ struct MedicationFormView: View {
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_per_time"), text: $dosePerTime)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_value"), text: $doseValue)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.dose_unit"), text: $doseUnit)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.frequency_code"), text: $frequencyCode)
                 SparkFormTextRow(title: L10n.text("home.medical.list.medication_plan.field.frequency_type", fallback: "频次类型"), text: $frequencyType)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.times_per_period"), text: $timesPerPeriod)
                 SparkFormTextRow(title: L10n.text("medical_record.forms.field.frequency_text"), text: $frequencyText)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.duration_days"), text: $durationDays)
                 SparkFormTextRow(title: L10n.text("home.medical.list.medication_plan.field.start_date", fallback: "开始日期"), text: $startDate)
                 SparkFormTextRow(title: L10n.text("home.medical.list.medication_plan.field.end_date", fallback: "结束日期"), text: $endDate)
                 SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.instructions"), text: $instructions)
@@ -141,7 +132,7 @@ struct MedicationFormView: View {
     }
 
     private var outputDraft: MedicationPlanRecognitionDraft {
-        .init(medicineName: medicineName.nilIfBlank, medicineType: medicineType.nilIfBlank, totalQuantity: totalQuantity.nilIfBlank, expireDate: expireDate.nilIfBlank, brandName: brandName.nilIfBlank, dosageForm: dosageForm.nilIfBlank, strength: strength.nilIfBlank, dosePerTime: dosePerTime.nilIfBlank, doseValue: doseValue.nilIfBlank, doseUnit: doseUnit.nilIfBlank, frequencyCode: frequencyCode.nilIfBlank, frequencyType: frequencyType.nilIfBlank, timesPerPeriod: timesPerPeriod.nilIfBlank, frequencyText: frequencyText.nilIfBlank, durationDays: durationDays.nilIfBlank, startDate: startDate.nilIfBlank, endDate: endDate.nilIfBlank, instructions: instructions.nilIfBlank, reminderEnabled: false, reminderTimes: [], sortOrder: seedSortOrder, extra: nil)
+        .init(medicineName: medicineName.nilIfBlank, medicineType: medicineType.nilIfBlank, totalQuantity: totalQuantity.nilIfBlank, expireDate: expireDate.nilIfBlank, brandName: brandName.nilIfBlank, dosageForm: dosageForm.nilIfBlank, strength: strength.nilIfBlank, dosePerTime: dosePerTime.nilIfBlank, doseValue: doseValue.nilIfBlank, doseUnit: doseUnit.nilIfBlank, frequencyType: frequencyType.nilIfBlank, frequencyText: frequencyText.nilIfBlank, startDate: startDate.nilIfBlank, endDate: endDate.nilIfBlank, instructions: instructions.nilIfBlank, reminderEnabled: false, reminderTimes: [], sortOrder: seedSortOrder, extra: nil)
     }
 
     private func saveNow() {

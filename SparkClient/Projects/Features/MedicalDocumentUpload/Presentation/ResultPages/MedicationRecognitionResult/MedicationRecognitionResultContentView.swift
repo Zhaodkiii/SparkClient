@@ -7,7 +7,7 @@ struct MedicationRecognitionResultContentView: View {
     let onBack: () -> Void
     let onSave: () -> Void
 
-    @State private var medications: [MedicationPlanRecognitionDraft]
+    @State private var medicationPlans: [MedicationPlanRecognitionDraft]
     @State private var localEditor: MedicationResultLocalEditor?
 
     private let logger: Logger = ConsoleLogger()
@@ -27,9 +27,9 @@ struct MedicationRecognitionResultContentView: View {
         self.onSave = onSave
 
         if case .medicationPlan(let meds) = output.typedResult {
-            _medications = State(initialValue: meds)
+            _medicationPlans = State(initialValue: meds)
         } else {
-            _medications = State(initialValue: [])
+            _medicationPlans = State(initialValue: [])
         }
     }
 
@@ -44,12 +44,10 @@ struct MedicationRecognitionResultContentView: View {
             institutionName: nil,
             prescribedAt: nil,
             diagnosis: nil,
-            batchNo: nil,
+            prescriptionNo: nil,
             status: "active",
-            auditorName: nil,
-            auditedAt: nil,
             extra: nil,
-            medications: medications
+            medicationPlans: medicationPlans
         )
     }
 
@@ -58,11 +56,11 @@ struct MedicationRecognitionResultContentView: View {
             VStack(alignment: .leading, spacing: 16) {
                 MedicationMemberConfirmSectionView(
                     memberID: output.envelope.memberID,
-                    medications: medications
+                    medications: medicationPlans
                 )
 
                 MedicationListSectionView(
-                    medications: medications,
+                    medications: medicationPlans,
                     onBatchEdit: {
                         logger.info("Medication result: open local batch editor", module: logModule)
                         localEditor = .batch(syntheticBatch)
@@ -98,7 +96,7 @@ struct MedicationRecognitionResultContentView: View {
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: medications.count)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: medicationPlans.count)
         .fullScreenCover(item: $localEditor) { editor in
             CompatibleNavigationContainer {
                 editorDestination(editor)
@@ -134,16 +132,16 @@ struct MedicationRecognitionResultContentView: View {
         case .batch(let batch):
             MedicationMultiCreateView(
                 mode: .localEdit(existing: batch, onSubmit: { updated in
-                    medications = updated.medications ?? []
-                    logger.info("Medication result: local batch updated meds=\(medications.count)", module: logModule)
+                    medicationPlans = updated.medicationPlans ?? []
+                    logger.info("Medication result: local batch updated meds=\(medicationPlans.count)", module: logModule)
                 })
             )
 
         case .item(let index, let item):
             MedicationFormView(
                 mode: .localEdit(existing: item, onSubmit: { updated in
-                    guard medications.indices.contains(index) else { return }
-                    medications[index] = updated
+                    guard medicationPlans.indices.contains(index) else { return }
+                    medicationPlans[index] = updated
                     logger.info("Medication result: local item updated index=\(index)", module: logModule)
                 })
             )

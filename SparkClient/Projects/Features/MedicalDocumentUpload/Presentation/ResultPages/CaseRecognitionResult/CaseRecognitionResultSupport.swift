@@ -157,7 +157,7 @@ extension CaseRecognitionDraft {
             + (visit == nil ? 0 : 1)
             + (surgery == nil ? 0 : 1)
             + ((followUps?.isEmpty == false) ? 1 : 0)
-            + ((prescriptionBatches?.isEmpty == false) ? 1 : 0)
+            + ((prescriptions?.isEmpty == false) ? 1 : 0)
             + ((examinationReports?.isEmpty == false) ? 1 : 0)
     }
 }

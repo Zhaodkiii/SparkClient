@@ -37,7 +37,7 @@ struct CaseRecognitionResultContentView: View {
                 visit: nil,
                 surgery: nil,
                 followUps: nil,
-                prescriptionBatches: nil,
+                prescriptions: nil,
                 examinationReports: nil
             ))
         }
@@ -74,7 +74,7 @@ struct CaseRecognitionResultContentView: View {
                 )
 
                 CaseTreatmentPlanSectionView(
-                    batches: draft.prescriptionBatches ?? [],
+                    batches: draft.prescriptions ?? [],
                     followUps: draft.followUps ?? [],
                     onEditBatch: { localEditor = .medicationBatch($0) },
                     onEditMedicationItem: { batchIndex, itemIndex, item in
@@ -151,7 +151,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: updated,
                         surgery: draft.surgery,
                         followUps: draft.followUps,
-                        prescriptionBatches: draft.prescriptionBatches,
+                        prescriptions: draft.prescriptions,
                         examinationReports: draft.examinationReports
                     )
                 })
@@ -171,7 +171,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: draft.visit,
                         surgery: draft.surgery,
                         followUps: draft.followUps,
-                        prescriptionBatches: draft.prescriptionBatches,
+                        prescriptions: draft.prescriptions,
                         examinationReports: draft.examinationReports
                     )
                 })
@@ -191,7 +191,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: draft.visit,
                         surgery: updated,
                         followUps: draft.followUps,
-                        prescriptionBatches: draft.prescriptionBatches,
+                        prescriptions: draft.prescriptions,
                         examinationReports: draft.examinationReports
                     )
                 })
@@ -200,7 +200,7 @@ struct CaseRecognitionResultContentView: View {
         case .medicationBatch(let batchDraft):
             MedicationMultiCreateView(
                 mode: .localEdit(existing: batchDraft, onSubmit: { updated in
-                    var items = draft.prescriptionBatches ?? []
+                    var items = draft.prescriptions ?? []
                     if let index = items.firstIndex(of: batchDraft) {
                         items[index] = updated
                     }
@@ -215,7 +215,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: draft.visit,
                         surgery: draft.surgery,
                         followUps: draft.followUps,
-                        prescriptionBatches: items,
+                        prescriptions: items,
                         examinationReports: draft.examinationReports
                     )
                 })
@@ -224,10 +224,10 @@ struct CaseRecognitionResultContentView: View {
         case .medicationItem(let batchIndex, let itemIndex, let medDraft):
             MedicationFormView(
                 mode: .localEdit(existing: medDraft, onSubmit: { updated in
-                    var batches = draft.prescriptionBatches ?? []
+                    var batches = draft.prescriptions ?? []
                     guard batches.indices.contains(batchIndex) else { return }
                     var batch = batches[batchIndex]
-                    var meds = batch.medications ?? []
+                    var meds = batch.medicationPlans ?? []
                     guard meds.indices.contains(itemIndex) else { return }
                     meds[itemIndex] = updated
                     batch = PrescriptionRecognitionDraft(
@@ -236,12 +236,10 @@ struct CaseRecognitionResultContentView: View {
                         institutionName: batch.institutionName,
                         prescribedAt: batch.prescribedAt,
                         diagnosis: batch.diagnosis,
-                        batchNo: batch.batchNo,
+                        prescriptionNo: batch.prescriptionNo,
                         status: batch.status,
-                        auditorName: batch.auditorName,
-                        auditedAt: batch.auditedAt,
                         extra: batch.extra,
-                        medications: meds
+                        medicationPlans: meds
                     )
                     batches[batchIndex] = batch
                     draft = CaseRecognitionDraft(
@@ -255,7 +253,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: draft.visit,
                         surgery: draft.surgery,
                         followUps: draft.followUps,
-                        prescriptionBatches: batches,
+                        prescriptions: batches,
                         examinationReports: draft.examinationReports
                     )
                 })
@@ -279,7 +277,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: draft.visit,
                         surgery: draft.surgery,
                         followUps: followUps,
-                        prescriptionBatches: draft.prescriptionBatches,
+                        prescriptions: draft.prescriptions,
                         examinationReports: draft.examinationReports
                     )
                 })
@@ -302,7 +300,7 @@ struct CaseRecognitionResultContentView: View {
                         visit: draft.visit,
                         surgery: draft.surgery,
                         followUps: draft.followUps,
-                        prescriptionBatches: draft.prescriptionBatches,
+                        prescriptions: draft.prescriptions,
                         examinationReports: reports
                     )
                 })

@@ -134,7 +134,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             institutionName: draft.institutionName,
             prescribedAt: draft.prescribedAt,
             diagnosis: draft.diagnosis,
-            prescriptionNo: draft.batchNo,
+            prescriptionNo: draft.prescriptionNo,
             status: draft.status ?? "active",
             extra: mergeTypedUploadExtra(draft.extra)
         )
@@ -143,7 +143,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             medicalCase: draft.medicalCase,
             prescriptionID: nil,
             prescription: prescription,
-            items: buildMedicationPlanBundleItems(draft.medications ?? [], now: now),
+            items: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], now: now),
             fileIds: extractSourceFileIds(from: envelope)
         )
         let id = try await workflowAPI.saveMedicationPlanBundle(payload)
@@ -230,7 +230,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 frequencyType: frequencyType,
                 everyNDays: draft.everyNDays.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) },
                 weeklyWeekdays: draft.weeklyWeekdays ?? [],
-                frequencyText: draft.frequencyText?.nilIfBlank ?? draft.frequencyCode?.nilIfBlank ?? "按医嘱",
+                frequencyText: draft.frequencyText?.nilIfBlank ?? "按医嘱",
                 reminderTimes: draft.reminderTimes ?? [],
                 startDate: startDate,
                 endDate: draft.endDate?.nilIfBlank,
@@ -530,6 +530,7 @@ private extension DefaultTypedMedicalDocumentSaver {
         let surgeryRequest = draft.surgery?.toCreateRequest()
         let followUpRequest = draft.followUps?.first.map { $0.toCreateRequest() }
         let examReports = draft.examinationReports?.map { $0.toExaminationReportCreateRequest() }
+        let prescriptions = buildPrescriptionCreateRequests(draft.prescriptions ?? [], now: now)
 
         let request = CombinedMedicalCreateRequest(
             member: MemberCreateRequestWithId(
@@ -546,6 +547,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             surgery: surgeryRequest,
             followUp: followUpRequest,
             examinationReports: examReports,
+            prescriptions: prescriptions.isEmpty ? nil : prescriptions,
             sourceFileIds: sourceFileIds
         )
 
@@ -559,6 +561,24 @@ private extension DefaultTypedMedicalDocumentSaver {
             savedAt: now,
             isSuccess: true
         )
+    }
+
+    func buildPrescriptionCreateRequests(
+        _ drafts: [PrescriptionRecognitionDraft],
+        now: Date
+    ) -> [PrescriptionCreateRequest] {
+        drafts.map { draft in
+            PrescriptionCreateRequest(
+                prescriberName: draft.prescriberName?.nilIfBlank,
+                institutionName: draft.institutionName?.nilIfBlank,
+                prescribedAt: draft.prescribedAt?.nilIfBlank,
+                diagnosis: draft.diagnosis?.nilIfBlank,
+                prescriptionNo: draft.prescriptionNo?.nilIfBlank,
+                status: draft.status?.nilIfBlank ?? "active",
+                extra: mergeTypedUploadExtra(draft.extra),
+                medicationPlans: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], now: now)
+            )
+        }
     }
 
     /// 使用体检专用工作流保存（`POST /api/v1/medical/workflows/health-exams/save/`），不创建病历组合包。

@@ -199,6 +199,29 @@ struct ExaminationReportCreateRequest: Encodable, Sendable {
     }
 }
 
+/// 组合创建处方请求（与 `Prescription` 字段对齐，内含处方下的 `MedicationPlan` 行）
+struct PrescriptionCreateRequest: Encodable, Sendable {
+    let prescriberName: String?
+    let institutionName: String?
+    let prescribedAt: String?
+    let diagnosis: String?
+    let prescriptionNo: String?
+    let status: String?
+    let extra: [String: String]?
+    let medicationPlans: [SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload]
+
+    enum CodingKeys: String, CodingKey {
+        case prescriberName = "prescriber_name"
+        case institutionName = "institution_name"
+        case prescribedAt = "prescribed_at"
+        case diagnosis
+        case prescriptionNo = "prescription_no"
+        case status
+        case extra
+        case medicationPlans = "medication_plans"
+    }
+}
+
 /// 组合创建请求（一次性创建所有医疗信息）
 /// 参考 HealthClient 的 SeverMedicalCreateRequest 模式
 struct CombinedMedicalCreateRequest: Encodable, Sendable {
@@ -224,6 +247,9 @@ struct CombinedMedicalCreateRequest: Encodable, Sendable {
     /// 检查报告列表（可选）
     let examinationReports: [ExaminationReportCreateRequest]?
 
+    /// 处方列表（可选），每条处方内含用药计划
+    let prescriptions: [PrescriptionCreateRequest]?
+
     /// 源文件 ID 列表（用于绑定附件）
     let sourceFileIds: [Int]?
 
@@ -235,6 +261,7 @@ struct CombinedMedicalCreateRequest: Encodable, Sendable {
         case surgery
         case followUp = "follow_up"
         case examinationReports = "examination_reports"
+        case prescriptions
         case sourceFileIds = "source_file_ids"
     }
 }
@@ -250,6 +277,9 @@ struct CombinedMedicalCreateResponse: Decodable, Sendable {
     let surgeryId: Int?
     let followUpId: Int?
     let examinationReportIds: [Int]?
+    let prescriptionIds: [Int]?
+    let medicineBoxIds: [Int]?
+    let medicationPlanIds: [Int]?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -260,6 +290,9 @@ struct CombinedMedicalCreateResponse: Decodable, Sendable {
         case surgeryId = "surgery_id"
         case followUpId = "follow_up_id"
         case examinationReportIds = "examination_report_ids"
+        case prescriptionIds = "prescription_ids"
+        case medicineBoxIds = "medicine_box_ids"
+        case medicationPlanIds = "medication_plan_ids"
         case createdAt = "created_at"
     }
 }

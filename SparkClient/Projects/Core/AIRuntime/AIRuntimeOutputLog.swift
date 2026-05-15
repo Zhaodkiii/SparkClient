@@ -10,7 +10,7 @@ enum AIRuntimeOutputLog: Sendable {
     ) {
         let finish = response.finishReason ?? "-"
         let textLen = response.text.count
-        let snippet = LogMessageSanitizer.singleLineSnippet(response.text,limit: 3000)
+        let snippet = LogMessageSanitizer.singleLineSnippet(response.text,limit: 13000)
         let message = "AI输出 scenario=\(scenario.rawValue) source=\(inferenceSource) model=\(response.model) finish=\(finish) textLen=\(textLen) preview=\(snippet)"
         logger.debug(message, module: .aiConfig)
     }

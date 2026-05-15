@@ -104,19 +104,17 @@ private extension MedicalDocumentTypedExtractionOutput {
                             nextAction: "复查血常规"
                         )
                     ],
-                    prescriptionBatches: [
+                    prescriptions: [
                         PrescriptionRecognitionDraft(
                             medicalCase: 1,
                             prescriberName: "王医生",
                             institutionName: "仁和医院",
                             prescribedAt: "2026-04-12",
                             diagnosis: "上呼吸道感染",
-                            batchNo: "RX-1200",
+                            prescriptionNo: "RX-1200",
                             status: "active",
-                            auditorName: nil,
-                            auditedAt: nil,
                             extra: nil,
-                            medications: [
+                            medicationPlans: [
                                 MedicationPlanRecognitionDraft(
                                     medicineName: "布洛芬缓释胶囊",
                                     medicineType: "止痛退热",
@@ -126,11 +124,8 @@ private extension MedicalDocumentTypedExtractionOutput {
                                     dosePerTime: "1 粒",
                                     doseValue: "1",
                                     doseUnit: "粒",
-                                    frequencyCode: "BID",
                                     frequencyType: "daily",
-                                    timesPerPeriod: "2",
                                     frequencyText: "每日 2 次",
-                                    durationDays: "5",
                                     instructions: "饭后服",
                                     reminderEnabled: false,
                                     reminderTimes: [],

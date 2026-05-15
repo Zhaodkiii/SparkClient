@@ -101,9 +101,9 @@ struct PromptLocalizer: Sendable {
             fallback: """
             You are a medical case extraction assistant. Output a single JSON object only (no markdown).
             Top-level fields: title (required string), summary, diagnosis, hospitalName, ageAtVisit (string like "28"), occurredAt (ISO or yyyy-MM-dd).
-            Optional single objects (omit if unknown): symptom, visit, surgery; optional arrays: followUps, prescriptionBatches, examinationReports.
+            Optional single objects (omit if unknown): symptom, visit, surgery; optional arrays: followUps, prescriptions, examinationReports.
             Use camelCase keys. symptom/visit/surgery match the app models (e.g. symptom.name, visit.department, surgery.procedureName).
-            For medications in prescriptionBatches: doseValue, timesPerPeriod, durationDays should be strings (e.g. "1", "0.5", "2", "7").
+            For medicationPlans in prescriptions: doseValue and everyNDays should be strings (e.g. "1", "0.5", "2").
             OCR text:
             %@
             """,
