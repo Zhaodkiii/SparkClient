@@ -38,6 +38,10 @@ final class OnboardingAgentSetupViewModel: ObservableObject {
         aiSettingsViewModel.snapshot.promptRepo
     }
 
+    var scenarioBindings: [AIScenarioModelBinding] {
+        aiSettingsViewModel.snapshot.scenarioBindings
+    }
+
     func loadIfNeeded() async {
         guard didLoad == false else { return }
         didLoad = true
@@ -83,7 +87,8 @@ final class OnboardingAgentSetupViewModel: ObservableObject {
         systemPrompt: String,
         aiScenarios: [String],
         aiToolScenarios: [String],
-        relatedTaskCodes: [String]
+        relatedTaskCodes: [String],
+        scenarioBindings: [AIScenarioModelBinding]
     ) {
         Task {
             _ = await aiSettingsViewModel.createLocalAgentAndPersist(
@@ -93,7 +98,8 @@ final class OnboardingAgentSetupViewModel: ObservableObject {
                 systemPrompt: systemPrompt,
                 aiScenarios: aiScenarios,
                 aiToolScenarios: aiToolScenarios,
-                relatedTaskCodes: relatedTaskCodes
+                relatedTaskCodes: relatedTaskCodes,
+                scenarioBindings: scenarioBindings
             )
         }
     }
@@ -106,7 +112,8 @@ final class OnboardingAgentSetupViewModel: ObservableObject {
         systemPrompt: String,
         aiScenarios: [String],
         aiToolScenarios: [String],
-        relatedTaskCodes: [String]
+        relatedTaskCodes: [String],
+        scenarioBindings: [AIScenarioModelBinding]
     ) {
         Task {
             _ = await aiSettingsViewModel.updateLocalAgentAndPersist(
@@ -117,8 +124,15 @@ final class OnboardingAgentSetupViewModel: ObservableObject {
                 systemPrompt: systemPrompt,
                 aiScenarios: aiScenarios,
                 aiToolScenarios: aiToolScenarios,
-                relatedTaskCodes: relatedTaskCodes
+                relatedTaskCodes: relatedTaskCodes,
+                scenarioBindings: scenarioBindings
             )
+        }
+    }
+
+    func persistScenarioBindingChange(_ change: ModelScenarioBindingPersistenceChange) {
+        Task {
+            _ = await aiSettingsViewModel.persistScenarioBindingChange(change)
         }
     }
 

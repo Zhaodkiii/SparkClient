@@ -288,7 +288,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     var icon: String
     var briefDescription: String
     var characterDesign: String
-    var aiScenarios: [String]
     var aiToolScenarios: [String]
     var relatedTaskCodes: [String]
     var baseModelName: String?
@@ -326,12 +325,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         set { systemProvision = newValue ?? "" }
     }
 
-    /// 场景选择：可为空，表示不限定场景。
-    var selectedAIScenarios: Set<AIScenario> {
-        get { Set(aiScenarios.compactMap(AIScenario.init(rawValue:))) }
-        set { aiScenarios = newValue.map(\.rawValue).sorted() }
-    }
-
     /// 工具选择：空数组视为“默认全选”，哨兵值视为“明确全不选”。
     var selectedToolNames: Set<String> {
         get {
@@ -364,7 +357,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         icon: String = "",
         briefDescription: String = "",
         characterDesign: String = "",
-        aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
         relatedTaskCodes: [String] = [],
         baseModelName: String? = nil,
@@ -393,7 +385,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         self.icon = icon
         self.briefDescription = briefDescription
         self.characterDesign = characterDesign
-        self.aiScenarios = aiScenarios
         self.aiToolScenarios = aiToolScenarios
         self.relatedTaskCodes = relatedTaskCodes
         self.baseModelName = baseModelName
@@ -426,7 +417,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         priceTier: Int = 0,
         supportsText: Bool = true,
         reasoningControllable: Bool = false,
-        aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
         relatedTaskCodes: [String] = []
     ) {
@@ -452,7 +442,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
             icon: iconSymbol ?? "",
             briefDescription: "",
             characterDesign: "",
-            aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
             relatedTaskCodes: relatedTaskCodes,
             baseModelName: baseModelName,
@@ -484,7 +473,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         case icon
         case briefDescription
         case characterDesign
-        case aiScenarios
         case aiToolScenarios
         case relatedTaskCodes
         case baseModelName
@@ -518,7 +506,6 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? ""
         briefDescription = try container.decodeIfPresent(String.self, forKey: .briefDescription) ?? ""
         characterDesign = try container.decodeIfPresent(String.self, forKey: .characterDesign) ?? ""
-        aiScenarios = try container.decodeIfPresent([String].self, forKey: .aiScenarios) ?? []
         aiToolScenarios = try container.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
         relatedTaskCodes = try container.decodeIfPresent([String].self, forKey: .relatedTaskCodes) ?? []
         baseModelName = try container.decodeIfPresent(String.self, forKey: .baseModelName)
@@ -533,6 +520,67 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
 
     var isLocalAgent: Bool {
         providerID == LocalModelService.localProviderID && identity == .agent
+    }
+}
+
+struct AIScenarioModelBinding: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var ownerAccountID: Int64
+    var scenario: String
+    var identity: AIModelIdentity
+    var modelID: UUID
+    var temperature: Double
+    var maxTokens: Int
+    var position: Int
+    var isDefault: Bool
+    var isActive: Bool
+    var systemProvision: String
+    var briefDescription: String
+    var aiToolScenarios: [String]
+    var relatedTaskCodes: [String]
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        ownerAccountID: Int64 = 0,
+        scenario: String,
+        identity: AIModelIdentity = .model,
+        modelID: UUID,
+        temperature: Double = 0.2,
+        maxTokens: Int = 2048,
+        position: Int = 0,
+        isDefault: Bool = false,
+        isActive: Bool = true,
+        systemProvision: String = "",
+        briefDescription: String = "",
+        aiToolScenarios: [String] = [],
+        relatedTaskCodes: [String] = [],
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.ownerAccountID = ownerAccountID
+        self.scenario = scenario
+        self.identity = identity
+        self.modelID = modelID
+        self.temperature = temperature
+        self.maxTokens = maxTokens
+        self.position = position
+        self.isDefault = isDefault
+        self.isActive = isActive
+        self.systemProvision = systemProvision
+        self.briefDescription = briefDescription
+        self.aiToolScenarios = aiToolScenarios
+        self.relatedTaskCodes = relatedTaskCodes
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+extension AIScenarioModelBinding {
+    var scenarioKey: AIScenario? {
+        AIScenario(rawValue: scenario)
     }
 }
 

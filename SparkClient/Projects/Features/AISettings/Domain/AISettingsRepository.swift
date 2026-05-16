@@ -9,6 +9,10 @@ protocol AISettingsRepository: Sendable {
     func save(snapshot: AISettingsSnapshot, ownerAccountID: Int64?) async throws
     /// 单条更新模型目录（按 `id` upsert）。
     func saveModel(_ model: AllModels) async throws
+    /// 单条更新场景绑定（按 `id` upsert）。
+    func saveScenarioBinding(_ binding: AIScenarioModelBinding, ownerAccountID: Int64?) async throws
+    /// 删除场景绑定（按 `id`）。
+    func deleteScenarioBinding(id: UUID, ownerAccountID: Int64?) async throws
     /// 单条更新厂商配置（按 `id` upsert）。
     func saveProvider(_ provider: APIKeys) async throws
     /// 单条更新联网搜索厂商配置（按 `id` upsert）。

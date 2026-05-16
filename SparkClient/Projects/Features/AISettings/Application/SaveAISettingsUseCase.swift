@@ -11,6 +11,14 @@ struct SaveAISettingsUseCase: Sendable {
         try await repository.saveModel(model)
     }
 
+    func execute(scenarioBinding: AIScenarioModelBinding, ownerAccountID: Int64? = nil) async throws {
+        try await repository.saveScenarioBinding(scenarioBinding, ownerAccountID: ownerAccountID)
+    }
+
+    func executeDeletedScenarioBinding(id: UUID, ownerAccountID: Int64? = nil) async throws {
+        try await repository.deleteScenarioBinding(id: id, ownerAccountID: ownerAccountID)
+    }
+
     func execute(provider: APIKeys) async throws {
         try await repository.saveProvider(provider)
     }

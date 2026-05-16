@@ -4,17 +4,20 @@ import SwiftUI
 struct ModelsSettingsAgentSheet: View {
     let baseModels: [AllModels]
     var editingAgent: AllModels?
+    var scenarioBindings: [AIScenarioModelBinding] = []
     var smallTasks: [SmallTask] = []
     var promptTooling: AISettingsPromptTooling = .unavailable
     var promptTemplates: [PromptRepo] = []
-    let onCreate: (String, String, String, String, [String], [String], [String]) -> Void
-    let onUpdate: ((UUID, String, String, String, String, [String], [String], [String]) -> Void)?
+    let onCreate: (String, String, String, String, [String], [String], [String], [AIScenarioModelBinding]) -> Void
+    let onUpdate: ((UUID, String, String, String, String, [String], [String], [String], [AIScenarioModelBinding]) -> Void)?
+    var onPersistScenarioBindings: ((ModelScenarioBindingPersistenceChange) -> Void)?
 
     @State private var displayName = ""
     @State private var iconSymbol = "stethoscope"
     @State private var selectedBaseModelName = ""
     @State private var systemPrompt = ""
-    @State private var selectedScenarioRawValues: Set<String> = []
+    @State private var draftAgentID = UUID()
+    @State private var draftScenarioBindings: [AIScenarioModelBinding] = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
     @State private var selectedTaskCodes: Set<String> = []
     @State private var showIconPicker = false
@@ -97,16 +100,24 @@ struct ModelsSettingsAgentSheet: View {
 
             Section(L10n.text("ai_settings.models.online.section.usage")) {
                 NavigationLink {
-                    MultiSelectOptionsView(
-                        title: L10n.text("ai_settings.models.online.field.scenarios"),
-                        options: AIScenario.allCases.map { ($0.rawValue, $0.localizedTitle) },
-                        selectedValues: $selectedScenarioRawValues
+                    ModelScenarioBindingsEditorView(
+                        scenarioBindings: $draftScenarioBindings,
+                        modelID: editingAgent?.id ?? draftAgentID,
+                        identity: .agent,
+                        defaultSystemProvision: systemPrompt,
+                        defaultToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
+                        defaultRelatedTaskCodes: selectedTaskCodes.sorted(),
+                        smallTasks: smallTasks,
+                        onPersist: { change in
+                            guard editingAgent != nil else { return }
+                            onPersistScenarioBindings?(change)
+                        }
                     )
                 } label: {
                     HStack {
                         Text(L10n.text("ai_settings.models.online.field.scenarios"))
                         Spacer()
-                        Text(selectedScenarioSummary)
+                        Text("\(draftScenarioBindings.filter { $0.modelID == (editingAgent?.id ?? draftAgentID) }.count)")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -142,9 +153,10 @@ struct ModelsSettingsAgentSheet: View {
                             iconSymbol,
                             selectedBaseModelName,
                             systemPrompt,
-                            selectedScenarioRawValues.sorted(),
+                            scenarioRawValues,
                             SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
-                            selectedTaskCodes.sorted()
+                            selectedTaskCodes.sorted(),
+                            draftScenarioBindings
                         )
                     } else {
                         onCreate(
@@ -152,9 +164,10 @@ struct ModelsSettingsAgentSheet: View {
                             iconSymbol,
                             selectedBaseModelName,
                         systemPrompt,
-                        selectedScenarioRawValues.sorted(),
+                        scenarioRawValues,
                         SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
-                        selectedTaskCodes.sorted()
+                        selectedTaskCodes.sorted(),
+                        draftScenarioBindings
                     )
                     }
                     dismiss()
@@ -207,7 +220,7 @@ struct ModelsSettingsAgentSheet: View {
                 iconSymbol = agent.iconSymbol ?? "stethoscope"
                 selectedBaseModelName = agent.baseModelName ?? ""
                 systemPrompt = agent.systemPrompt ?? ""
-                selectedScenarioRawValues = Set(agent.aiScenarios)
+                draftScenarioBindings = scenarioBindings.filter { $0.modelID == agent.id }
                 selectedToolNames = agent.selectedToolNames
                 selectedTaskCodes = Set(agent.relatedTaskCodes)
             } else if selectedBaseModelName.isEmpty, let first = baseModels.first {
@@ -247,11 +260,11 @@ struct ModelsSettingsAgentSheet: View {
         systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
-    private var selectedScenarioSummary: String {
-        if selectedScenarioRawValues.isEmpty {
-            return L10n.text("ai_settings.models.online.selection.none")
-        }
-        return "\(selectedScenarioRawValues.count)"
+    private var scenarioRawValues: [String] {
+        draftScenarioBindings
+            .filter { $0.modelID == (editingAgent?.id ?? draftAgentID) && $0.isActive }
+            .map(\.scenario)
+            .sorted()
     }
 
     private var selectedToolsSummary: String {

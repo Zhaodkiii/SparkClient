@@ -138,11 +138,12 @@ struct ModelsSettingsMainRow: View {
                 ModelsSettingsAgentSheet(
                     baseModels: viewModel.snapshot.allModels.filter { $0.identity == .model && $0.isHidden == false },
                     editingAgent: model,
+                    scenarioBindings: viewModel.snapshot.scenarioBindings,
                     smallTasks: viewModel.effectiveSmallTasks,
                     promptTooling: viewModel.promptTooling,
                     promptTemplates: viewModel.snapshot.promptRepo,
-                    onCreate: { _, _, _, _, _, _, _ in },
-                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
+                    onCreate: { _, _, _, _, _, _, _, _ in },
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes, scenarioBindings in
                         Task {
                             await viewModel.updateLocalAgentAndPersist(
                                 id: id,
@@ -152,8 +153,14 @@ struct ModelsSettingsMainRow: View {
                                 systemPrompt: systemPrompt,
                                 aiScenarios: aiScenarios,
                                 aiToolScenarios: aiToolScenarios,
-                                relatedTaskCodes: relatedTaskCodes
+                                relatedTaskCodes: relatedTaskCodes,
+                                scenarioBindings: scenarioBindings
                             )
+                        }
+                    },
+                    onPersistScenarioBindings: { change in
+                        Task {
+                            await viewModel.persistScenarioBindingChange(change)
                         }
                     }
                 )

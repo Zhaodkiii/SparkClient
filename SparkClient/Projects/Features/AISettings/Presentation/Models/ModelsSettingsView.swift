@@ -159,10 +159,11 @@ struct ModelsSettingsView: View {
                 ModelsSettingsAgentSheet(
                     baseModels: baseModelsForAgent,
                     editingAgent: editingAgent,
+                    scenarioBindings: viewModel.snapshot.scenarioBindings,
                     smallTasks: viewModel.effectiveSmallTasks,
                     promptTooling: viewModel.promptTooling,
                     promptTemplates: viewModel.snapshot.promptRepo,
-                    onCreate: { displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
+                    onCreate: { displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes, scenarioBindings in
                         Task {
                             await viewModel.createLocalAgentAndPersist(
                                 displayName: displayName,
@@ -171,11 +172,12 @@ struct ModelsSettingsView: View {
                                 systemPrompt: systemPrompt,
                                 aiScenarios: aiScenarios,
                                 aiToolScenarios: aiToolScenarios,
-                                relatedTaskCodes: relatedTaskCodes
+                                relatedTaskCodes: relatedTaskCodes,
+                                scenarioBindings: scenarioBindings
                             )
                         }
                     },
-                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes in
+                    onUpdate: { id, displayName, iconSymbol, baseModelName, systemPrompt, aiScenarios, aiToolScenarios, relatedTaskCodes, scenarioBindings in
                         Task {
                             await viewModel.updateLocalAgentAndPersist(
                                 id: id,
@@ -185,8 +187,15 @@ struct ModelsSettingsView: View {
                                 systemPrompt: systemPrompt,
                                 aiScenarios: aiScenarios,
                                 aiToolScenarios: aiToolScenarios,
-                                relatedTaskCodes: relatedTaskCodes
+                                relatedTaskCodes: relatedTaskCodes,
+                                scenarioBindings: scenarioBindings
                             )
+                        }
+                    },
+                    onPersistScenarioBindings: { change in
+                        guard editingAgent != nil else { return }
+                        Task {
+                            await viewModel.persistScenarioBindingChange(change)
                         }
                     }
                 )

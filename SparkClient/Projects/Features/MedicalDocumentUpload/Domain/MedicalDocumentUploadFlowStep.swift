@@ -2,35 +2,48 @@ import Foundation
 
 // MARK: - 流程步骤枚举
 
-/// 上传识别流程中的业务步骤
-/// rawValue 与 MedicalDocumentUploadStep.id 保持一致
+/// 医疗文档上传【完整流程步骤】枚举
+/// 定义文档从上传到保存的全流程阶段，按执行顺序排列
 enum MedicalDocumentUploadFlowStep: String, CaseIterable, Sendable {
+    /// 1. 文件上传（上传本地文件到服务器）
     case upload
+    
+    /// 2. OCR 文字识别（对图片/文档进行光学字符提取）
     case ocr
+    
+    /// 3. 文档类型识别（自动识别文档是病历/处方/体检报告等）
     case typeRecognition = "type_recognition"
+    
+    /// 4. 关键信息提取（从文档中抽取结构化数据）
     case extract
+    
+    /// 5. 数据保存（将识别结果保存到后端数据库）
     case save
 }
 
 // MARK: - 步骤变体
 
+import Foundation
+
 extension MedicalDocumentUploadFlowStep {
-    /// 步骤开始的变体，用于区分不同文档类型的文案
+    /// 步骤开始时的展示变体
+    /// 用于根据不同的【文档类型】显示不同的标题/提示文案
     enum StartVariant: Sendable {
-        case `default`
-        case caseDocument
-        case healthExamReport
-        case medicalReport
-        case prescription
-        case medicationPlan
-        case medicineBox
+        case `default`          // 默认类型
+        case caseDocument       // 病例文档
+        case healthExamReport   // 体检报告
+        case medicalReport      // 医疗报告
+        case prescription       // 处方
+        case medicationPlan     // 用药计划
+        case medicineBox        // 药箱
     }
     
-    /// 步骤完成的结果类型
+    /// 步骤执行完成后的结果类型
+    /// 用于标记当前步骤最终的执行状态
     enum CompletionOutcome: Equatable, Sendable {
-        case success
-        case skipped
-        case failed
+        case success    // 执行成功
+        case skipped    // 已跳过
+        case failed     // 执行失败
     }
 }
 

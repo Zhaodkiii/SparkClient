@@ -14,7 +14,6 @@ struct EditSparkModelSheet: View {
     @State private var reasoningControllable = false
     @State private var supportsToolUse = false
     @State private var supportsImageGen = false
-    @State private var selectedScenarioRawValues: Set<String> = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
     @State private var selectedTaskCodes: Set<String> = []
     @State private var showIconPicker = false
@@ -54,16 +53,26 @@ struct EditSparkModelSheet: View {
                 if canEditCapabilities {
                     Section(L10n.text("ai_settings.models.online.section.usage")) {
                         NavigationLink {
-                            MultiSelectOptionsView(
-                                title: L10n.text("ai_settings.models.online.field.scenarios"),
-                                options: AIScenario.allCases.map { ($0.rawValue, $0.localizedTitle) },
-                                selectedValues: $selectedScenarioRawValues
-                            )
+                            if let model {
+                                ModelScenarioBindingsEditorView(
+                                    scenarioBindings: $viewModel.snapshot.scenarioBindings,
+                                    modelID: model.id,
+                                    identity: model.identity,
+                                    defaultSystemProvision: model.systemProvision,
+                                    defaultBriefDescription: model.briefDescription,
+                                    defaultToolScenarios: model.aiToolScenarios,
+                                    defaultRelatedTaskCodes: model.relatedTaskCodes,
+                                    smallTasks: viewModel.snapshot.smallTasks,
+                                    onPersist: { change in
+                                        Task { await viewModel.persistScenarioBindingChange(change) }
+                                    }
+                                )
+                            }
                         } label: {
                             HStack {
                                 Text(L10n.text("ai_settings.models.online.field.scenarios"))
                                 Spacer()
-                                Text(selectedScenarioSummary)
+                                Text("\(scenarioBindingCount)")
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -138,7 +147,6 @@ struct EditSparkModelSheet: View {
         reasoningControllable = m.reasoningControllable
         supportsToolUse = m.supportsToolUse
         supportsImageGen = m.supportsImageGen
-        selectedScenarioRawValues = Set(m.aiScenarios)
         selectedToolNames = m.selectedToolNames
         selectedTaskCodes = Set(m.relatedTaskCodes)
     }
@@ -157,7 +165,6 @@ struct EditSparkModelSheet: View {
             m.reasoningControllable = reasoningControllable
             m.supportsToolUse = supportsToolUse
             m.supportsImageGen = supportsImageGen
-            m.aiScenarios = selectedScenarioRawValues.sorted()
             m.aiToolScenarios = SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
             m.relatedTaskCodes = selectedTaskCodes.sorted()
         }
@@ -169,18 +176,18 @@ struct EditSparkModelSheet: View {
         }
     }
 
-    private var selectedScenarioSummary: String {
-        if selectedScenarioRawValues.isEmpty {
-            return L10n.text("ai_settings.models.online.selection.none")
-        }
-        return "\(selectedScenarioRawValues.count)"
-    }
-
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
             return L10n.text("common.all")
         }
         return "\(selectedToolNames.count)/\(total)"
+    }
+
+    private var scenarioBindingCount: Int {
+        guard let identity = model?.identity else { return 0 }
+        return viewModel.snapshot.scenarioBindings.filter {
+            $0.modelID == modelID && $0.identity == identity
+        }.count
     }
 }

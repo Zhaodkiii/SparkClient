@@ -34,6 +34,45 @@ enum AISettingsSeedLoader {
         }
     }
 
+    static func loadScenarioBindings(bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
+        guard let models = loadAllModels(bundle: bundle) else { return nil }
+        return loadScenarioBindings(for: models, bundle: bundle)
+    }
+
+    static func loadScenarioBindings(for models: [AllModels], bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
+        guard
+            let data = data(named: "AllModels", bundle: bundle),
+            let rows = try? decoder.decode([AllModelSeedRow].self, from: data)
+        else {
+            return nil
+        }
+        var positions: [String: Int] = [:]
+        var hasDefault: Set<String> = []
+        return zip(rows, models).flatMap { row, model in
+            row.aiScenarios.compactMap { scenarioRaw in
+                guard AIScenario(rawValue: scenarioRaw) != nil else { return nil }
+                let position = positions[scenarioRaw, default: 0]
+                positions[scenarioRaw] = position + 1
+                let isDefault = hasDefault.contains(scenarioRaw) == false
+                if isDefault {
+                    hasDefault.insert(scenarioRaw)
+                }
+                return AIScenarioModelBinding(
+                    scenario: scenarioRaw,
+                    identity: model.identity,
+                    modelID: model.id,
+                    temperature: scenarioRaw == AIScenario.chat.rawValue ? 0.6 : 0.2,
+                    maxTokens: 14096,
+                    position: position,
+                    isDefault: isDefault,
+                    systemProvision: row.systemProvision,
+                    briefDescription: row.briefDescription,
+                    aiToolScenarios: row.aiToolScenarios
+                )
+            }
+        }
+    }
+
     private static func data(named resource: String, bundle: Bundle) -> Data? {
         if let url = bundle.url(forResource: resource, withExtension: "json", subdirectory: "AISettings") {
             return try? Data(contentsOf: url)
@@ -119,7 +158,6 @@ private struct AllModelSeedRow: Decodable {
             icon: icon,
             briefDescription: briefDescription,
             characterDesign: characterDesign,
-            aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
             source: AIRecordSource(rawValue: (source ?? "system").lowercased()) ?? .system
         )

@@ -35,7 +35,8 @@ struct AddOnlineModelSheet: View {
     @State private var supportsToolUse = false
     @State private var supportsImageGen = false
     @State private var selectedProviderID = ""
-    @State private var selectedScenarioRawValues: Set<String> = []
+    @State private var draftModelID = UUID()
+    @State private var draftScenarioBindings: [AIScenarioModelBinding] = []
     @State private var selectedToolNames: Set<String> = Set(SparkToolName.all)
     @State private var hasAppliedInitialDraft = false
     @State private var showAlert = false
@@ -138,16 +139,18 @@ struct AddOnlineModelSheet: View {
                 }
                 Section(L10n.text("ai_settings.models.online.section.usage")) {
                     NavigationLink {
-                        MultiSelectOptionsView(
-                            title: L10n.text("ai_settings.models.online.field.scenarios"),
-                            options: AIScenario.allCases.map { ($0.rawValue, $0.localizedTitle) },
-                            selectedValues: $selectedScenarioRawValues
+                        ModelScenarioBindingsEditorView(
+                            scenarioBindings: $draftScenarioBindings,
+                            modelID: draftModelID,
+                            identity: .model,
+                            defaultToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
+                            smallTasks: viewModel.snapshot.smallTasks
                         )
                     } label: {
                         HStack {
                             Text(L10n.text("ai_settings.models.online.field.scenarios"))
                             Spacer()
-                            Text(selectedScenarioSummary)
+                            Text("\(draftScenarioBindings.filter { $0.modelID == draftModelID }.count)")
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -332,13 +335,6 @@ struct AddOnlineModelSheet: View {
         })
     }
 
-    private var selectedScenarioSummary: String {
-        if selectedScenarioRawValues.isEmpty {
-            return L10n.text("ai_settings.models.online.selection.none")
-        }
-        return "\(selectedScenarioRawValues.count)"
-    }
-
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
@@ -361,7 +357,19 @@ struct AddOnlineModelSheet: View {
         reasoningControllable = initialDraft.reasoningControllable
         supportsToolUse = initialDraft.supportsToolUse
         supportsImageGen = initialDraft.supportsImageGen
-        selectedScenarioRawValues = Set(initialDraft.aiScenarios)
+        draftScenarioBindings = initialDraft.aiScenarios.enumerated().compactMap { index, scenarioRaw in
+            guard let scenario = AIScenario(rawValue: scenarioRaw) else { return nil }
+            return AIScenarioModelBinding(
+                scenario: scenario.rawValue,
+                identity: .model,
+                modelID: draftModelID,
+                temperature: scenario == .chat ? 0.6 : 0.2,
+                maxTokens: 2048,
+                position: index,
+                isDefault: true,
+                aiToolScenarios: initialDraft.aiToolScenarios
+            )
+        }
         selectedToolNames = SparkToolName.selectedSet(fromStoredToolNames: initialDraft.aiToolScenarios)
     }
 
@@ -400,8 +408,10 @@ struct AddOnlineModelSheet: View {
                 reasoningControllable: reasoningControllable,
                 supportsToolUse: supportsToolUse,
                 supportsImageGen: supportsImageGen,
-                aiScenarios: selectedScenarioRawValues.sorted(),
-                aiToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames)
+                aiScenarios: draftScenarioBindings.map(\.scenario).sorted(),
+                aiToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
+                modelID: draftModelID,
+                scenarioBindings: draftScenarioBindings
             )
             if didSave {
                 await MainActor.run { dismiss() }

@@ -5,10 +5,11 @@ final class AISettingsAndResolverTests: XCTestCase {
     func testScenarioResolverPrefersRuntimeOverride() async throws {
         let runtimeStore = AIRuntimeStore()
         let resolver = ScenarioPolicyResolver()
+        let seedModels = AISettingsSeedCatalog.getModelList()
         let bundles = AILocalScenarioBundleBuilder.buildCollection(
-            allModels: AISettingsSeedCatalog.getModelList(),
+            allModels: seedModels,
             apiKeys: AISettingsSeedCatalog.getAPIKeyList(),
-            scenarioDefaults: [:]
+            scenarioBindings: AISettingsSeedCatalog.getScenarioBindings(for: seedModels)
         )
 
         let override = AIScenarioConfig(
@@ -35,6 +36,34 @@ final class AISettingsAndResolverTests: XCTestCase {
     func testAPIKeysSeedJSONDecodesToNonEmptyCatalog() {
         let keys = AISettingsSeedCatalog.getAPIKeyList()
         XCTAssertFalse(keys.isEmpty, "APIKeys.json 应解码为非空；若为 0 检查 APIKeySeedRow.CodingKeys 与 snake_case。")
+    }
+
+    func testLocalBundleDoesNotInferModelsWithoutScenarioBindings() {
+        let model = AllModels(
+            name: "local-chat",
+            displayName: "Local Chat",
+            identity: .model,
+            position: 0,
+            providerID: LocalModelService.localProviderID,
+            company: LocalModelService.localCompany,
+            isHidden: false,
+            supportsSearch: false,
+            supportsMultimodal: false,
+            supportsReasoning: false,
+            supportsToolUse: false,
+            supportsVoiceGen: false,
+            supportsImageGen: false,
+            source: .custom
+        )
+
+        let bundles = AILocalScenarioBundleBuilder.buildCollection(
+            allModels: [model],
+            apiKeys: [],
+            scenarioBindings: []
+        )
+
+        XCTAssertTrue(bundles.bundle(for: .chat).models.isEmpty)
+        XCTAssertTrue(bundles.bundle(for: .medicalCaseExtraction).models.isEmpty)
     }
 
     func testTrialPolicyFallsBackToDefaultFlagWhenNoSelection() {

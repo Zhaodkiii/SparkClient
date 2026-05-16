@@ -5,29 +5,29 @@ enum AILocalScenarioBundleBuilder {
     /// - Parameters:
     ///   - allModels: 用户模型目录（已启用条目参与组合）。
     ///   - apiKeys: 厂商密钥（按稳定 `providerID` 匹配）。
-    ///   - scenarioDefaults: 场景级用户默认模型名（scenario rawValue -> model name）；不存在或无效时回退到本场景列表首条。
+    ///   - scenarioBindings: 场景级模型绑定；不存在时该场景返回空列表。
     static func buildCollection(
         allModels: [AllModels],
         apiKeys: [APIKeys],
-        scenarioDefaults: [String: String]
+        scenarioBindings: [AIScenarioModelBinding]
     ) -> AIScenarioRemoteBundlesCollection {
         AIScenarioRemoteBundlesCollection(
-            chat: buildBundle(for: .chat, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            embedding: buildBundle(for: .embedding, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            voice: buildBundle(for: .voice, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            medicalStructuredExtraction: buildBundle(for: .medicalStructuredExtraction, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            medicalDocumentTypeRecognition: buildBundle(for: .medicalDocumentTypeRecognition, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            medicalCaseExtraction: buildBundle(for: .medicalCaseExtraction, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            healthExamExtraction: buildBundle(for: .healthExamExtraction, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            medicalReportExtraction: buildBundle(for: .medicalReportExtraction, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            prescriptionExtraction: buildBundle(for: .prescriptionExtraction, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            medicationExtraction: buildBundle(for: .medicationExtraction, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            optimizationText: buildBundle(for: .optimizationText, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            optimizationVisual: buildBundle(for: .optimizationVisual, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            contextFolding: buildBundle(for: .contextFolding, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            router: buildBundle(for: .router, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            modelConfig: buildBundle(for: .modelConfig, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults),
-            reportInterpretation: buildBundle(for: .reportInterpretation, allModels: allModels, apiKeys: apiKeys, scenarioDefaults: scenarioDefaults)
+            chat: buildBundle(for: .chat, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            embedding: buildBundle(for: .embedding, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            voice: buildBundle(for: .voice, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            medicalStructuredExtraction: buildBundle(for: .medicalStructuredExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            medicalDocumentTypeRecognition: buildBundle(for: .medicalDocumentTypeRecognition, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            medicalCaseExtraction: buildBundle(for: .medicalCaseExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            healthExamExtraction: buildBundle(for: .healthExamExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            medicalReportExtraction: buildBundle(for: .medicalReportExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            prescriptionExtraction: buildBundle(for: .prescriptionExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            medicationExtraction: buildBundle(for: .medicationExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            optimizationText: buildBundle(for: .optimizationText, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            optimizationVisual: buildBundle(for: .optimizationVisual, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            contextFolding: buildBundle(for: .contextFolding, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            router: buildBundle(for: .router, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            modelConfig: buildBundle(for: .modelConfig, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            reportInterpretation: buildBundle(for: .reportInterpretation, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings)
         )
     }
 
@@ -35,20 +35,14 @@ enum AILocalScenarioBundleBuilder {
         for scenario: AIScenario,
         allModels: [AllModels],
         apiKeys: [APIKeys],
-        scenarioDefaults: [String: String]
+        scenarioBindings: [AIScenarioModelBinding]
     ) -> AIScenarioRemoteBundle {
-        let rows = localRows(for: scenario, allModels: allModels, apiKeys: apiKeys)
+        let rows = localRows(for: scenario, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings)
         guard rows.isEmpty == false else {
             return AIScenarioRemoteBundle(defaultModelName: "", models: [])
         }
-        let preferredName = scenarioDefaults[scenario.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultName: String = {
-            if let preferredName, preferredName.isEmpty == false,
-               rows.contains(where: { $0.name == preferredName })
-            {
-                return preferredName
-            }
-            return rows.first?.name ?? ""
+            rows.first(where: { $0.isDefault })?.name ?? rows.first?.name ?? ""
         }()
         let models = rows.map { row in
             var m = row
@@ -61,61 +55,19 @@ enum AILocalScenarioBundleBuilder {
     private static func localRows(
         for scenario: AIScenario,
         allModels: [AllModels],
-        apiKeys: [APIKeys]
+        apiKeys: [APIKeys],
+        scenarioBindings: [AIScenarioModelBinding]
     ) -> [AIScenarioRemoteModelRow] {
-        let enabledModels = allModels
-            .filter { $0.isEnabled }
-            .filter { model in
-                let scenarios = Set(model.aiScenarios)
-                if scenarios.contains(scenario.rawValue) {
-                    return true
-                }
-                if scenarios.isEmpty {
-                    switch scenario {
-                    case .chat:
-                        return model.supportsTextGen
-                    case .embedding:
-                        let lowerName = model.name.lowercased()
-                        return lowerName.contains("embedding") || lowerName.hasPrefix("text-embedding") || lowerName.contains("bge")
-                    case .voice:
-                        return model.supportsVoiceGen
-                    default:
-                        return false
-                    }
-                }
-                return false
-            }
-            .sorted { lhs, rhs in
-                if lhs.position != rhs.position {
-                    return lhs.position < rhs.position
-                }
-                return lhs.displayName < rhs.displayName
+        let modelsByID = Dictionary(uniqueKeysWithValues: allModels.map { ($0.id, $0) })
+        let bindings = scenarioBindings
+            .filter { $0.scenario == scenario.rawValue && $0.isActive }
+            .sorted {
+                if $0.position != $1.position { return $0.position < $1.position }
+                return $0.id.uuidString < $1.id.uuidString
             }
 
-        let fallbackModels: [AllModels]
-        switch scenario {
-        case .chat:
-            fallbackModels = enabledModels
-        case .embedding:
-            fallbackModels = enabledModels.isEmpty
-                ? allModels.filter {
-                    $0.isEnabled &&
-                    ($0.name.lowercased().contains("embedding") || $0.name.lowercased().hasPrefix("text-embedding") || $0.name.lowercased().contains("bge"))
-                }
-                : enabledModels
-        case .voice:
-            fallbackModels = enabledModels.isEmpty
-                ? allModels.filter { $0.isEnabled && $0.supportsVoiceGen }
-                : enabledModels
-        default:
-            fallbackModels = enabledModels.isEmpty
-                ? allModels.filter { $0.isEnabled && $0.supportsTextGen }
-                : enabledModels
-        }
-
-        let modelsToUse = fallbackModels.isEmpty ? allModels.filter { $0.isEnabled && $0.supportsTextGen } : fallbackModels
-
-        return modelsToUse.compactMap { model in
+        return bindings.compactMap { binding in
+            guard let model = modelsByID[binding.modelID], model.isEnabled else { return nil }
             let provider = apiKeys.first {
                 $0.providerID == model.providerID
                     && $0.isEnabled
@@ -140,16 +92,16 @@ enum AILocalScenarioBundleBuilder {
                 supportsDeepReasoning: model.supportsReasoning,
                 reasoningControllable: model.supportReasoningChange,
                 priceTier: model.price,
-                systemProvision: blankToNil(model.systemProvision),
+                systemProvision: blankToNil(binding.systemProvision) ?? blankToNil(model.systemProvision),
                 icon: blankToNil(model.icon),
-                briefDescription: blankToNil(model.briefDescription),
+                briefDescription: blankToNil(binding.briefDescription) ?? blankToNil(model.briefDescription),
                 source: model.source.rawValue,
-                aiScenarios: model.aiScenarios,
-                aiToolScenarios: model.aiToolScenarios,
-                relatedTaskCodes: model.relatedTaskCodes,
-                isDefault: false,
-                temperature: scenario == .chat ? 0.6 : 0.2,
-                maxTokens: 14096,
+                aiScenarios: [scenario.rawValue],
+                aiToolScenarios: binding.aiToolScenarios.isEmpty ? model.aiToolScenarios : binding.aiToolScenarios,
+                relatedTaskCodes: binding.relatedTaskCodes.isEmpty ? model.relatedTaskCodes : binding.relatedTaskCodes,
+                isDefault: binding.isDefault,
+                temperature: binding.temperature,
+                maxTokens: binding.maxTokens,
                 baseModelName: model.baseModelName,
                 localFilename: model.localFilename
             )

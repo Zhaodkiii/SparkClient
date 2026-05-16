@@ -3,36 +3,67 @@ import SwiftUI
 import UIKit
 #endif
 
+/// 用药执行中心页面（主视图）
+/// 展示用户当日/选定日期的用药计划、待执行用药、已完成用药记录，支持日期切换、用药记录提交
 struct MedicationExecutionCenterPage: View {
+    // MARK: - 外部传入依赖数据
+    /// 远程用药计划列表
     let medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
+    /// 远程药箱列表
     let medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
+    /// 初始加载的用药记录
     let initialRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord]
+    /// 家庭成员ID
     let memberID: Int?
+    /// 医疗查询接口
     let medicalQueryAPI: SparkMedicalQueryAPI
+    /// 医疗工作流接口
     let workflowAPI: SparkMedicalWorkflowAPI
+    /// 文件传输服务
     let fileTransferService: FileTransferService
+    /// 通知客户端
     let notificationClient: any NotificationClient
+    /// 日志工具
     let logger: Logger
 
+    // MARK: - 环境与状态变量
+    /// 页面关闭环境变量
     @Environment(\.dismiss) private var dismiss
+    /// 当前选中的日期
     @State private var selectedDate = Date()
+    /// 用药记录数据源
     @State private var records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
+    /// 是否正在加载数据
     @State private var isLoading = false
+    /// 是否正在保存数据
     @State private var isSaving = false
+    /// 用药记录弹窗上下文
     @State private var logSheet: MedicationExecutionLogSheetContext?
+    /// 日期条每个日期项的位置信息
     @State private var dateStripItemFrames: [String: CGRect] = [:]
+    /// 日期条可视区域
     @State private var dateStripViewport: CGRect = .zero
+    /// 日期条指示器位置
     @State private var dateStripIndicatorFrame: CGRect = .zero
 
+    /// 日期条是否正在拖拽
     @State private var isDateStripDragging = false
+    /// 日期条自动对齐任务
     @State private var dateStripSettleTask: Task<Void, Never>?
+    /// 日期条对齐操作抑制截止时间
     @State private var dateStripSettleSuppressedUntil: Date?
 
+    // MARK: - 常量配置
+    /// 日历实例
     private let calendar = Calendar.current
+    /// 日志模块
     private let logModule = LogModule.home
+    /// 日期条坐标空间名称
     private let dateStripCoordinateSpace = "MedicationExecutionDateStrip"
+    /// 日期条单个日期项宽度
     private let dateStripItemWidth: CGFloat = 56
 
+    // MARK: - 初始化方法
     init(
         medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan],
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
@@ -53,13 +84,17 @@ struct MedicationExecutionCenterPage: View {
         self.fileTransferService = fileTransferService
         self.notificationClient = notificationClient
         self.logger = logger
+        // 初始化State变量
         _records = State(initialValue: initialRecords)
     }
 
+    // MARK: - 计算属性
+    /// 当前选中日期的当天起始时间
     private var selectedDayStart: Date {
         calendar.startOfDay(for: selectedDate)
     }
 
+    /// 日期条展示的日期列表（前后各45天）
     private var dateStripDays: [MedicationExecutionDateItem] {
         (-45...45).compactMap { offset in
             guard let date = calendar.date(byAdding: .day, value: offset, to: Date()) else {
@@ -69,6 +104,7 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
+    /// 当日所有计划用药剂量
     private var scheduledDoses: [MedicationExecutionDose] {
         MedicationExecutionPlanner.scheduledDoses(
             plans: medicationPlans,
@@ -79,14 +115,17 @@ struct MedicationExecutionCenterPage: View {
         )
     }
 
+    /// 待执行的用药剂量
     private var pendingDoses: [MedicationExecutionDose] {
         scheduledDoses.filter { $0.isCompleted == false }
     }
 
+    /// 已完成的用药剂量
     private var completedDoses: [MedicationExecutionDose] {
         scheduledDoses.filter(\.isCompleted)
     }
 
+    /// 按需用药计划（无固定提醒时间）
     private var asNeededPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
         medicationPlans
             .filter { MedicationExecutionPlanner.isPlanActive($0, on: selectedDayStart, calendar: calendar) }
@@ -94,16 +133,19 @@ struct MedicationExecutionCenterPage: View {
             .sorted { $0.drugName < $1.drugName }
     }
 
+    /// 按ID分组的药箱字典
     private var medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox] {
         Dictionary(uniqueKeysWithValues: medicineBoxes.map { ($0.id, $0) })
     }
 
+    // MARK: - 主视图内容
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                dateHeader
-                dateStrip
-                recordSection
+                dateHeader       // 日期标题栏
+                dateStrip        // 横向日期选择条
+                recordSection    // 用药记录区域
+                // 有已完成记录时展示
                 if completedDoses.isEmpty == false {
                     completedSection
                 }
@@ -112,27 +154,18 @@ struct MedicationExecutionCenterPage: View {
             .padding(.top, 20)
             .padding(.bottom, 32)
         }
+        // 设置坐标空间，用于日期条布局计算
         .coordinateSpace(name: dateStripCoordinateSpace)
-                .onPreferenceChange(MedicationExecutionDateStripIndicatorFramePreferenceKey.self) { frame in
-                    dateStripIndicatorFrame = frame
-                }
+        .onPreferenceChange(MedicationExecutionDateStripIndicatorFramePreferenceKey.self) { frame in
+            dateStripIndicatorFrame = frame
+        }
+        // 页面背景
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-//        .navigationBarBackButtonHidden(true)
+        // 导航栏配置
         .navigationTitle("用药")
         .navigationBarTitleDisplayMode(.inline)
-//        .toolbar {
-//            ToolbarItem(placement: .navigationBarLeading) {
-//                Button {
-//                    dismiss()
-//                } label: {
-//                    Image(systemName: "chevron.left")
-//                        .font(.title3.weight(.semibold))
-//                        .imageScale(.large)
-//                }
-//                .buttonStyle(.plain)
-//                .accessibilityLabel("返回")
-//            }
-//        }
+        
+        // 加载/保存时展示进度指示器
         .overlay {
             if isLoading || isSaving {
                 ProgressView()
@@ -141,6 +174,7 @@ struct MedicationExecutionCenterPage: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
+        // 用药记录弹窗
         .sheet(item: $logSheet) { context in
             MedicationExecutionLogSheet(
                 context: context,
@@ -152,14 +186,18 @@ struct MedicationExecutionCenterPage: View {
                 }
             )
         }
+        // 页面出现时加载当日记录
         .task {
             await loadRecords(for: selectedDayStart, preferInitialRecords: true)
         }
+        // 选中日期变化时重新加载记录
         .onChange(of: selectedDayStart) { newValue in
             Task { await loadRecords(for: newValue, preferInitialRecords: false) }
         }
     }
 
+    // MARK: - 子视图：日期标题栏
+    /// 顶部日期标题（展示年月日+星期/今天）
     private var dateHeader: some View {
         VStack(spacing: 12) {
             Text(Self.longDateTitle(selectedDayStart, calendar: calendar))
@@ -167,16 +205,18 @@ struct MedicationExecutionCenterPage: View {
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
 
+            // 下拉指示器箭头
             Image(systemName: "arrowtriangle.down.fill")
                 .font(.title3)
                 .foregroundStyle(.primary)
                 .medicationExecutionDateStripIndicatorFrame(in: dateStripCoordinateSpace)
 
-
             Divider()
         }
     }
 
+    // MARK: - 子视图：横向日期选择条
+    /// 可滑动、自动对齐的日期选择条
     private var dateStrip: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -208,30 +248,33 @@ struct MedicationExecutionCenterPage: View {
                 .padding(.vertical, 4)
             }
             .medicationExecutionDateStripViewportFrame(in: dateStripCoordinateSpace)
+            // 监听日期项布局变化
             .onPreferenceChange(MedicationExecutionDateStripItemFramePreferenceKey.self) { frames in
                 dateStripItemFrames = frames
                 scheduleDateStripSettleEvaluation(proxy: proxy)
             }
+            // 监听可视区域变化
             .onPreferenceChange(MedicationExecutionDateStripViewportFramePreferenceKey.self) { frame in
                 dateStripViewport = frame
                 scheduleDateStripSettleEvaluation(proxy: proxy)
             }
+            // 拖拽手势
             .simultaneousGesture(
                 DragGesture(minimumDistance: 4)
                     .onChanged { _ in
                         isDateStripDragging = true
                     }
                     .onEnded { _ in
-                        // Finger lifted while content may still be decelerating: do not snap here.
-                        // Let preference updates keep moving the debounce window; snap once ~idle (see `scheduleDateStripSettleEvaluation`).
                         isDateStripDragging = false
                         scheduleDateStripSettleEvaluation(proxy: proxy)
                     }
             )
+            // 页面出现时滚动到今日
             .onAppear {
                 dateStripSettleSuppressedUntil = Date().addingTimeInterval(0.45)
                 proxy.scrollTo(MedicationExecutionDateItem.id(for: selectedDayStart, calendar: calendar), anchor: .center)
             }
+            // 选中日期变化时自动滚动居中
             .onChange(of: selectedDayStart) { newValue in
                 if isDateStripDragging == false {
                     dateStripSettleSuppressedUntil = Date().addingTimeInterval(0.45)
@@ -245,17 +288,19 @@ struct MedicationExecutionCenterPage: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedDayStart)
     }
 
+    /// 日期条左右内边距（保证居中显示）
     private var dateStripSidePadding: CGFloat {
         guard dateStripViewport.width > 0 else { return 20 }
         return max(20, (dateStripViewport.width - dateStripItemWidth) / 2)
     }
 
+    /// 日期条对齐目标中心点X坐标
     private var dateStripSnapTargetX: CGFloat {
          guard dateStripIndicatorFrame.width > 0 else { return dateStripViewport.midX }
          return dateStripIndicatorFrame.midX
      }
-    /// After inertial scroll, geometry preferences stop updating for a short interval; then snap the strip and align `selectedDate` with the item directly under the header arrow.
-
+    
+    /// 延迟执行日期条自动对齐（惯性滚动结束后）
     private func scheduleDateStripSettleEvaluation(proxy: ScrollViewProxy) {
         if isDateStripDragging { return }
         dateStripSettleTask?.cancel()
@@ -269,7 +314,7 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
-    /// Picks the date dot closest to the header arrow center, updates `selectedDate` when the day changes, and scrolls so that dot is centered under the arrow (same idea as ContactScrollAnimation: geometry + `scrollTo`).
+    /// 执行日期条自动对齐到中心日期项
     private func applyDateStripSnapToCenterItem(proxy: ScrollViewProxy, playHaptics: Bool) {
         isDateStripDragging = false
         guard dateStripViewport.width > 0, dateStripItemFrames.isEmpty == false else { return }
@@ -277,35 +322,41 @@ struct MedicationExecutionCenterPage: View {
         dateStripSettleSuppressedUntil = Date().addingTimeInterval(0.4)
 
         let centerX = dateStripSnapTargetX
+        // 找到距离中心点最近的日期项
         guard let snappedID = dateStripItemFrames.min(by: {
             abs($0.value.midX - centerX) < abs($1.value.midX - centerX)
         })?.key else {
             return
         }
 
+        // 更新选中日期
         if let snappedItem = dateStripDays.first(where: { $0.id == snappedID }),
            calendar.isDate(snappedItem.date, inSameDayAs: selectedDayStart) == false {
             if playHaptics {
                 impact(style: .light)
             }
             selectedDate = snappedItem.date
-            // `onChange(of: selectedDayStart)` performs the matching `scrollTo` with animation.
         } else {
+            // 无日期变化，仅滚动居中
             withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
                 proxy.scrollTo(snappedID, anchor: .center)
             }
         }
     }
 
+    // MARK: - 子视图：用药记录区域
+    /// 待执行用药 + 按需用药模块
     private var recordSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("记录")
                 .font(.title2.weight(.bold))
                 .foregroundStyle(.primary)
 
+            // 无待执行任务时展示完成卡片
             if pendingDoses.isEmpty {
                 MedicationExecutionAllDoneCard()
             } else {
+                // 按时间分组展示待执行用药
                 VStack(spacing: 14) {
                     ForEach(MedicationExecutionPlanner.groupByTime(pendingDoses), id: \.timeText) { group in
                         MedicationExecutionPendingCard(
@@ -313,6 +364,7 @@ struct MedicationExecutionCenterPage: View {
                             doses: group.doses,
                             fileTransferService: fileTransferService,
                             onAdd: {
+                                // 打开记录弹窗
                                 logSheet = MedicationExecutionLogSheetContext(
                                     title: "记录于 \(group.timeText)",
                                     date: selectedDayStart,
@@ -324,6 +376,7 @@ struct MedicationExecutionCenterPage: View {
                 }
             }
 
+            // 有按需用药计划时展示
             if asNeededPlans.isEmpty == false {
                 MedicationExecutionAsNeededCard {
                     let doses = asNeededPlans.enumerated().map { index, plan in
@@ -341,6 +394,8 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
+    // MARK: - 子视图：已完成用药区域
+    /// 已完成用药记录列表
     private var completedSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("已记录")
@@ -365,31 +420,38 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
+    // MARK: - 数据加载
+    /// 加载指定日期的用药记录
     @MainActor
     private func loadRecords(for day: Date, preferInitialRecords: Bool) async {
         guard let memberID else { return }
+        // 优先使用初始记录（今日）
         if preferInitialRecords && calendar.isDateInToday(day) && initialRecords.isEmpty == false {
             records = initialRecords
             return
         }
 
         isLoading = true
-        defer { isLoading = false }
+        defer { isLoading = false } // 方法结束后自动关闭loading
 
         do {
             let start = calendar.startOfDay(for: day)
             let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+            // 请求接口获取记录
             records = try await medicalQueryAPI.listMedicationRecords(
                 memberID: memberID,
                 scheduledFrom: start,
                 scheduledTo: end
             )
         } catch {
+            // 错误提示与日志
             notificationClient.error(error.localizedDescription, title: "加载服药记录失败", source: "medical.medication_execution.load")
             logger.warning("用药执行中心加载记录失败 error=\(error.localizedDescription)", module: logModule)
         }
     }
 
+    // MARK: - 数据保存
+    /// 保存用户选择的用药状态
     @MainActor
     private func saveSelections(
         _ selections: [MedicationExecutionDose.ID: MedicationDoseLogStatus],
@@ -397,6 +459,7 @@ struct MedicationExecutionCenterPage: View {
     ) async {
         guard isSaving == false else { return }
         let selectedDoses = doses.filter { selections[$0.id] != nil }
+        // 无选中项直接关闭弹窗
         guard selectedDoses.isEmpty == false else {
             logSheet = nil
             return
@@ -406,19 +469,21 @@ struct MedicationExecutionCenterPage: View {
         defer { isSaving = false }
 
         do {
+            // 批量保存选中的用药记录
             for dose in selectedDoses {
                 guard let status = selections[dose.id] else { continue }
                 let saved = try await saveDose(dose, status: status)
-                upsertRecord(saved)
+                upsertRecord(saved) // 更新本地数据源
             }
             logSheet = nil
-            impact(style: .medium)
+            impact(style: .medium) // 震动反馈
         } catch {
             notificationClient.error(error.localizedDescription, title: "记录用药失败", source: "medical.medication_execution.save")
             logger.warning("用药执行中心保存状态失败 error=\(error.localizedDescription)", module: logModule)
         }
     }
 
+    /// 保存单条用药剂量记录（新增/更新）
     private func saveDose(
         _ dose: MedicationExecutionDose,
         status: MedicationDoseLogStatus
@@ -426,6 +491,7 @@ struct MedicationExecutionCenterPage: View {
         let takenAt = status == .taken ? MedicalDateCoding.encodeISO8601(Date()) : nil
         let actualDose = status == .taken ? dose.plannedDose : ""
 
+        // 已有记录 → 更新
         if let record = dose.record {
             let payload = MedicationRecordUpdatePayload(
                 takenAt: takenAt,
@@ -442,6 +508,7 @@ struct MedicationExecutionCenterPage: View {
             )
         }
 
+        // 无记录 → 新增
         let payload = MedicationRecordCreatePayload(
             member: dose.plan.member,
             plan: dose.plan.id,
@@ -462,6 +529,7 @@ struct MedicationExecutionCenterPage: View {
         )
     }
 
+    /// 更新本地记录数组（存在则更新，不存在则添加）
     private func upsertRecord(_ record: SparkMedicalSyncAPI.RemoteMedicationRecord) {
         if let index = records.firstIndex(where: { $0.id == record.id }) {
             records[index] = record
@@ -470,12 +538,15 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
+    // MARK: - 工具方法
+    /// 震动反馈
     private func impact(style: UIImpactFeedbackGenerator.FeedbackStyle) {
         #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: style).impactOccurred()
         #endif
     }
 
+    /// 格式化日期标题（x月x日 星期几/今天）
     private static func longDateTitle(_ date: Date, calendar: Calendar) -> String {
         let comps = calendar.dateComponents([.month, .day], from: date)
         let month = comps.month ?? 1

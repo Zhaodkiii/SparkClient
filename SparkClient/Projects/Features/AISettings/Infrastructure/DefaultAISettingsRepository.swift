@@ -9,6 +9,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         static let provider = "AIProviderEntity"
         static let searchProvider = "AISearchProviderEntity"
         static let model = "AIModelEntity"
+        static let scenarioBinding = "AIScenarioModelBindingEntity"
         static let smallTask = "AISmallTaskEntity"
         static let promptRepo = "PromptRepoEntity"
         static let seedState = "AISettingsSeedStateEntity"
@@ -52,9 +53,15 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         static let icon = "icon"
         static let briefDescription = "briefDescription"
         static let characterDesign = "characterDesign"
-        static let aiScenariosData = "aiScenariosData"
         static let aiToolScenariosData = "aiToolScenariosData"
         static let relatedTaskCodesData = "relatedTaskCodesData"
+        static let scenario = "scenario"
+        static let modelID = "modelID"
+        static let temperature = "temperature"
+        static let maxTokens = "maxTokens"
+        static let isDefault = "isDefault"
+        static let isActive = "isActive"
+        static let createdAt = "createdAt"
         static let baseModelName = "baseModelName"
         static let localFilename = "localFilename"
         static let code = "code"
@@ -163,6 +170,64 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         try await coreDataStack.performBackgroundTask { context in
             try self.upsertModel(model, ownerAccountID: ownerAccountID, context: context)
         }
+    }
+
+    func saveScenarioBinding(_ binding: AIScenarioModelBinding, ownerAccountID explicitAccountID: Int64?) async throws {
+        let ownerAccountID: Int64?
+        if let explicitAccountID {
+            ownerAccountID = explicitAccountID
+        } else {
+            ownerAccountID = await currentOwnerAccountID()
+        }
+        guard let ownerAccountID else {
+            logger.info("未登录，跳过场景绑定单条持久化", module: .aiConfig)
+            return
+        }
+        try await coreDataStack.performBackgroundTask { context in
+            var copy = binding
+            copy.ownerAccountID = ownerAccountID
+            if copy.isDefault {
+                try self.clearDefaultScenarioBindings(
+                    scenario: copy.scenario,
+                    excludingID: copy.id,
+                    ownerAccountID: ownerAccountID,
+                    context: context
+                )
+            }
+            try self.upsertScenarioBinding(copy, ownerAccountID: ownerAccountID, context: context)
+        }
+        logger.info(
+            "AI 场景绑定单条写链路完成 ownerAccountID=\(ownerAccountID) id=\(binding.id)",
+            module: .aiConfig
+        )
+    }
+
+    func deleteScenarioBinding(id: UUID, ownerAccountID explicitAccountID: Int64?) async throws {
+        let ownerAccountID: Int64?
+        if let explicitAccountID {
+            ownerAccountID = explicitAccountID
+        } else {
+            ownerAccountID = await currentOwnerAccountID()
+        }
+        guard let ownerAccountID else {
+            logger.info("未登录，跳过场景绑定删除持久化", module: .aiConfig)
+            return
+        }
+        try await coreDataStack.performBackgroundTask { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.scenarioBinding)
+            request.fetchLimit = 1
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                self.ownerPredicate(ownerAccountID),
+                NSPredicate(format: "\(Field.id) == %@", id as CVarArg),
+            ])
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
+        }
+        logger.info(
+            "AI 场景绑定删除链路完成 ownerAccountID=\(ownerAccountID) id=\(id)",
+            module: .aiConfig
+        )
     }
 
     func saveProvider(_ provider: APIKeys) async throws {
@@ -290,8 +355,10 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
         guard needsFirstInit else { return false }
 
+        let seedModels = AISettingsSeedCatalog.getModelList()
         let seedSnapshot = AISettingsSnapshot(
-            allModels: AISettingsSeedCatalog.getModelList(),
+            allModels: seedModels,
+            scenarioBindings: AISettingsSeedCatalog.getScenarioBindings(for: seedModels),
             apiKeys: AISettingsSeedCatalog.getAPIKeyList(),
             smallTasks: [],
             searchKeys: AISettingsSeedCatalog.getSearchKeyList()
@@ -330,6 +397,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             try self.replaceProviders(snapshot.apiKeys, ownerAccountID: ownerAccountID, context: context)
             try self.replaceSearchKeys(snapshot.searchKeys, ownerAccountID: ownerAccountID, context: context)
             try self.replaceModels(snapshot.allModels, ownerAccountID: ownerAccountID, context: context)
+            try self.replaceScenarioBindings(snapshot.scenarioBindings, ownerAccountID: ownerAccountID, context: context)
             try self.replaceSmallTasks(snapshot.smallTasks, ownerAccountID: ownerAccountID, context: context)
             try self.replacePromptRepo(snapshot.promptRepo, ownerAccountID: ownerAccountID, context: context)
             try self.upsertSeedState(ownerAccountID: ownerAccountID, context: context)
@@ -341,13 +409,14 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             "AI loadSnapshot 读链路：Core Data fetch AIProviderEntity + AISearchProviderEntity + AIModelEntity + AISmallTaskEntity + PromptRepoEntity ownerAccountID=\(ownerAccountID)",
             module: .aiConfig
         )
-        let stored = try await coreDataStack.performBackgroundTask { context -> ([APIKeys], [SearchKeys], [AllModels], [SmallTask], [PromptRepo]) in
+        let stored = try await coreDataStack.performBackgroundTask { context -> ([APIKeys], [SearchKeys], [AllModels], [AIScenarioModelBinding], [SmallTask], [PromptRepo]) in
             let apiKeys = try self.fetchProviders(ownerAccountID: ownerAccountID, context: context)
             let searchKeys = try self.fetchSearchKeys(ownerAccountID: ownerAccountID, context: context)
             let allModels = try self.fetchModels(ownerAccountID: ownerAccountID, context: context)
+            let scenarioBindings = try self.fetchScenarioBindings(ownerAccountID: ownerAccountID, context: context)
             let smallTasks = try self.fetchSmallTasks(ownerAccountID: ownerAccountID, context: context)
             let promptRepo = try self.fetchPromptRepo(ownerAccountID: ownerAccountID, context: context)
-            return (apiKeys, searchKeys, allModels, smallTasks, promptRepo)
+            return (apiKeys, searchKeys, allModels, scenarioBindings, smallTasks, promptRepo)
         }
         let hasStoredPreferencesPayload = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)) != nil
         let preferences = loadDecodedPreferencesPayload(ownerAccountID: ownerAccountID)
@@ -359,14 +428,15 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         )
         let prefsSource = hasStoredPreferencesPayload ? "UserDefaults 已存在载荷" : "UserDefaults 使用默认偏好"
         logger.debug(
-            "AI loadSnapshot 读链路完成 ownerAccountID=\(ownerAccountID) 读到 厂商Key=\(stored.0.count) 搜索厂商=\(searchKeys.count) 模型=\(stored.2.count) 小任务=\(stored.3.count) 提示词=\(stored.4.count)；偏好：\(prefsSource)",
+            "AI loadSnapshot 读链路完成 ownerAccountID=\(ownerAccountID) 读到 厂商Key=\(stored.0.count) 搜索厂商=\(searchKeys.count) 模型=\(stored.2.count) 场景绑定=\(stored.3.count) 小任务=\(stored.4.count) 提示词=\(stored.5.count)；偏好：\(prefsSource)",
             module: .aiConfig
         )
         var snapshot = AISettingsSnapshot(
             allModels: stored.2,
+            scenarioBindings: stored.3,
             apiKeys: stored.0,
-            smallTasks: stored.3,
-            promptRepo: stored.4,
+            smallTasks: stored.4,
+            promptRepo: stored.5,
             preferences: preferences
         )
         snapshot.searchKeys = searchKeys
@@ -467,6 +537,23 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         )
         for model in allModels {
             try upsertModel(model, ownerAccountID: ownerAccountID, context: context)
+        }
+    }
+
+    private func replaceScenarioBindings(
+        _ bindings: [AIScenarioModelBinding],
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
+        let desiredIDs = Set(bindings.map(\.id))
+        try deleteObjectsMissingFromSnapshot(
+            entityName: EntityName.scenarioBinding,
+            desiredIDs: desiredIDs,
+            ownerAccountID: ownerAccountID,
+            context: context
+        )
+        for binding in normalizedDefaultBindings(bindings, ownerAccountID: ownerAccountID) {
+            try upsertScenarioBinding(binding, ownerAccountID: ownerAccountID, context: context)
         }
     }
 
@@ -601,13 +688,62 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         object.setValue(model.icon, forKey: Field.icon)
         object.setValue(model.briefDescription, forKey: Field.briefDescription)
         object.setValue(model.characterDesign, forKey: Field.characterDesign)
-        object.setValue(try encodeStringArray(model.aiScenarios), forKey: Field.aiScenariosData)
         object.setValue(try encodeStringArray(model.aiToolScenarios), forKey: Field.aiToolScenariosData)
         object.setValue(try encodeStringArray(model.relatedTaskCodes), forKey: Field.relatedTaskCodesData)
         object.setValue(model.baseModelName, forKey: Field.baseModelName)
         object.setValue(model.localFilename, forKey: Field.localFilename)
         object.setValue(model.source.rawValue, forKey: Field.source)
         object.setValue(model.timestamp, forKey: Field.timestamp)
+    }
+
+    private func upsertScenarioBinding(
+        _ binding: AIScenarioModelBinding,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.scenarioBinding)
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "\(Field.id) == %@", binding.id as CVarArg),
+        ])
+        let object = try context.fetch(request).first
+            ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.scenarioBinding, into: context)
+        object.setValue(binding.id, forKey: Field.id)
+        object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+        object.setValue(binding.scenario, forKey: Field.scenario)
+        object.setValue(binding.identity.rawValue, forKey: Field.identity)
+        object.setValue(binding.modelID, forKey: Field.modelID)
+        object.setValue(binding.temperature, forKey: Field.temperature)
+        object.setValue(Int32(binding.maxTokens), forKey: Field.maxTokens)
+        object.setValue(Int32(binding.position), forKey: Field.position)
+        object.setValue(binding.isDefault, forKey: Field.isDefault)
+        object.setValue(binding.isActive, forKey: Field.isActive)
+        object.setValue(binding.systemProvision, forKey: Field.systemProvision)
+        object.setValue(binding.briefDescription, forKey: Field.briefDescription)
+        object.setValue(try encodeStringArray(binding.aiToolScenarios), forKey: Field.aiToolScenariosData)
+        object.setValue(try encodeStringArray(binding.relatedTaskCodes), forKey: Field.relatedTaskCodesData)
+        object.setValue(binding.createdAt, forKey: Field.createdAt)
+        object.setValue(binding.updatedAt, forKey: Field.updatedAt)
+    }
+
+    private func clearDefaultScenarioBindings(
+        scenario: String,
+        excludingID: UUID,
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.scenarioBinding)
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "\(Field.scenario) == %@", scenario),
+            NSPredicate(format: "\(Field.isDefault) == YES"),
+            NSPredicate(format: "\(Field.id) != %@", excludingID as CVarArg),
+        ])
+        for object in try context.fetch(request) {
+            object.setValue(false, forKey: Field.isDefault)
+            object.setValue(Date(), forKey: Field.updatedAt)
+        }
     }
 
     private func upsertSmallTask(
@@ -772,13 +908,46 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
                 icon: object.value(forKey: Field.icon) as? String ?? "",
                 briefDescription: object.value(forKey: Field.briefDescription) as? String ?? "",
                 characterDesign: object.value(forKey: Field.characterDesign) as? String ?? "",
-                aiScenarios: try decodeStringArray(object.value(forKey: Field.aiScenariosData) as? Data),
                 aiToolScenarios: try decodeStringArray(object.value(forKey: Field.aiToolScenariosData) as? Data),
                 relatedTaskCodes: try decodeStringArray(object.value(forKey: Field.relatedTaskCodesData) as? Data),
                 baseModelName: object.value(forKey: Field.baseModelName) as? String,
                 localFilename: object.value(forKey: Field.localFilename) as? String,
                 source: AIRecordSource(rawValue: object.value(forKey: Field.source) as? String ?? "") ?? .system,
                 timestamp: object.value(forKey: Field.timestamp) as? Date ?? Date()
+            )
+        }
+    }
+
+    private func fetchScenarioBindings(
+        ownerAccountID: Int64,
+        context: NSManagedObjectContext
+    ) throws -> [AIScenarioModelBinding] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.scenarioBinding)
+        request.predicate = ownerPredicate(ownerAccountID)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: Field.scenario, ascending: true),
+            NSSortDescriptor(key: Field.position, ascending: true),
+            NSSortDescriptor(key: Field.createdAt, ascending: true),
+        ]
+
+        return try context.fetch(request).map { object in
+            AIScenarioModelBinding(
+                id: object.value(forKey: Field.id) as? UUID ?? UUID(),
+                ownerAccountID: object.value(forKey: Field.ownerAccountID) as? Int64 ?? ownerAccountID,
+                scenario: object.value(forKey: Field.scenario) as? String ?? AIScenario.chat.rawValue,
+                identity: AIModelIdentity(rawValue: object.value(forKey: Field.identity) as? String ?? "") ?? .model,
+                modelID: object.value(forKey: Field.modelID) as? UUID ?? UUID(),
+                temperature: object.value(forKey: Field.temperature) as? Double ?? 0.2,
+                maxTokens: Int(object.value(forKey: Field.maxTokens) as? Int32 ?? 2048),
+                position: Int(object.value(forKey: Field.position) as? Int32 ?? 0),
+                isDefault: object.value(forKey: Field.isDefault) as? Bool ?? false,
+                isActive: object.value(forKey: Field.isActive) as? Bool ?? true,
+                systemProvision: object.value(forKey: Field.systemProvision) as? String ?? "",
+                briefDescription: object.value(forKey: Field.briefDescription) as? String ?? "",
+                aiToolScenarios: try decodeStringArray(object.value(forKey: Field.aiToolScenariosData) as? Data),
+                relatedTaskCodes: try decodeStringArray(object.value(forKey: Field.relatedTaskCodesData) as? Data),
+                createdAt: object.value(forKey: Field.createdAt) as? Date ?? Date(),
+                updatedAt: object.value(forKey: Field.updatedAt) as? Date ?? Date()
             )
         }
     }
@@ -858,5 +1027,24 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
     private func decodeStringArray(_ data: Data?) throws -> [String] {
         guard let data else { return [] }
         return try decoder.decode([String].self, from: data)
+    }
+
+    private func normalizedDefaultBindings(
+        _ bindings: [AIScenarioModelBinding],
+        ownerAccountID: Int64
+    ) -> [AIScenarioModelBinding] {
+        var seenDefaults: Set<String> = []
+        return bindings.map { binding in
+            var copy = binding
+            copy.ownerAccountID = ownerAccountID
+            if copy.isDefault {
+                if seenDefaults.contains(copy.scenario) {
+                    copy.isDefault = false
+                } else {
+                    seenDefaults.insert(copy.scenario)
+                }
+            }
+            return copy
+        }
     }
 }

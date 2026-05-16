@@ -4,14 +4,13 @@ import Foundation
 /// 已登录冷启动：`AppBootstrapper.bootstrapIfNeeded(for:)` 以 `UserSession.accountID` 调用 `AIConfigCenter.prewarm` 写入运行时缓存；设置页 `AISettingsViewModel` 应传入同一 `ownerAccountID` 加载目录，避免依赖会话快照解析顺序。
 struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var allModels: [AllModels]
+    var scenarioBindings: [AIScenarioModelBinding]
     var apiKeys: [APIKeys]
     var smallTasks: [SmallTask]
     /// 检索与知识相关本地偏好。
     var searchToolPreferences: AISearchToolPreferences
     /// 本地搜索配置版本；仅用于客户端内缓存失效、审计与工具消费，不参与服务端同步。
     var searchConfigRevision: SearchRuntimeConfigRevision
-    /// 场景级默认模型（`AIScenario.rawValue` -> 模型 `name`）。
-    var scenarioDefaultModels: [String: String]
     /// 场景级模型来源选择（`AIScenario.rawValue` -> `AIModelSelectionSource.rawValue`）。
     var scenarioModelSources: [String: AIModelSelectionSource]
     /// 输入栏中隐藏的试用模型名（仅本地偏好）。
@@ -27,11 +26,11 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
 
     init(
         allModels: [AllModels],
+        scenarioBindings: [AIScenarioModelBinding] = [],
         apiKeys: [APIKeys],
         smallTasks: [SmallTask] = [],
         searchToolPreferences: AISearchToolPreferences = AISettingsDefaults.searchToolPreferences,
         searchConfigRevision: SearchRuntimeConfigRevision = SearchRuntimeConfigRevision(),
-        scenarioDefaultModels: [String: String] = [:],
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
         trial: AITrialState = .inactive,
@@ -43,11 +42,11 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
         translationDic: [TranslationDic] = []
     ) {
         self.allModels = allModels
+        self.scenarioBindings = scenarioBindings
         self.apiKeys = apiKeys
         self.smallTasks = smallTasks
         self.searchToolPreferences = searchToolPreferences
         self.searchConfigRevision = searchConfigRevision
-        self.scenarioDefaultModels = scenarioDefaultModels
         self.scenarioModelSources = scenarioModelSources
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
         self.trial = trial
@@ -62,11 +61,11 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     /// 内存默认态：目录数据以 Core Data 为准，不在此处读取 `AllModels.json` / `APIKeys.json`。
     static let `default` = AISettingsSnapshot(
         allModels: [],
+        scenarioBindings: [],
         apiKeys: [],
         smallTasks: [],
         searchToolPreferences: AISettingsDefaults.searchToolPreferences,
         searchConfigRevision: SearchRuntimeConfigRevision(),
-        scenarioDefaultModels: [:],
         scenarioModelSources: [:],
         trialChatPickerDisabledModelNames: [],
         trial: .inactive,
@@ -90,9 +89,9 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
     }
 
     func scenarioDefaultModelName(for scenario: AIScenario) -> String? {
-        let value = scenarioDefaultModels[scenario.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let value, value.isEmpty == false else { return nil }
-        return value
+        scenarioBindings
+            .first { $0.scenario == scenario.rawValue && $0.isActive && $0.isDefault }
+            .flatMap { binding in allModels.first { $0.id == binding.modelID }?.name }
     }
 
     func scenarioModelSource(for scenario: AIScenario) -> AIModelSelectionSource {
@@ -101,10 +100,12 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
 
     mutating func setScenarioDefaultModelName(_ modelName: String?, for scenario: AIScenario) {
         let trimmed = modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if trimmed.isEmpty {
-            scenarioDefaultModels.removeValue(forKey: scenario.rawValue)
-        } else {
-            scenarioDefaultModels[scenario.rawValue] = trimmed
+        guard trimmed.isEmpty == false,
+              let model = allModels.first(where: { $0.name == trimmed })
+        else { return }
+        for index in scenarioBindings.indices where scenarioBindings[index].scenario == scenario.rawValue {
+            scenarioBindings[index].isDefault = scenarioBindings[index].modelID == model.id
+            scenarioBindings[index].updatedAt = Date()
         }
     }
 
@@ -163,7 +164,6 @@ extension AISettingsSnapshot {
     struct PreferencesPayload: Codable, Equatable, Sendable {
         var searchToolPreferences: AISearchToolPreferences
         var searchConfigRevision: SearchRuntimeConfigRevision
-        var scenarioDefaultModels: [String: String]
         var scenarioModelSources: [String: AIModelSelectionSource]
         var trialChatPickerDisabledModelNames: [String]
         var trial: AITrialState
@@ -176,7 +176,6 @@ extension AISettingsSnapshot {
         static let `default` = PreferencesPayload(
             searchToolPreferences: AISettingsDefaults.searchToolPreferences,
             searchConfigRevision: SearchRuntimeConfigRevision(),
-            scenarioDefaultModels: [:],
             scenarioModelSources: [:],
             trialChatPickerDisabledModelNames: [],
             trial: .inactive,
@@ -190,7 +189,6 @@ extension AISettingsSnapshot {
         init(
             searchToolPreferences: AISearchToolPreferences,
             searchConfigRevision: SearchRuntimeConfigRevision,
-            scenarioDefaultModels: [String: String],
             scenarioModelSources: [String: AIModelSelectionSource],
             trialChatPickerDisabledModelNames: [String],
             trial: AITrialState,
@@ -202,7 +200,6 @@ extension AISettingsSnapshot {
         ) {
             self.searchToolPreferences = searchToolPreferences
             self.searchConfigRevision = searchConfigRevision
-            self.scenarioDefaultModels = scenarioDefaultModels
             self.scenarioModelSources = scenarioModelSources
             self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
             self.trial = trial
@@ -217,7 +214,6 @@ extension AISettingsSnapshot {
             case searchToolPreferences
             case searchConfigRevision
             case userInfo
-            case scenarioDefaultModels
             case scenarioModelSources
             case trialChatPickerDisabledModelNames
             case trial
@@ -259,7 +255,6 @@ extension AISettingsSnapshot {
             searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .searchConfigRevision)
                 ?? SearchRuntimeConfigRevision()
 
-            scenarioDefaultModels = try container.decodeIfPresent([String: String].self, forKey: .scenarioDefaultModels) ?? [:]
             scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .scenarioModelSources) ?? [:]
             trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
             trial = try container.decodeIfPresent(AITrialState.self, forKey: .trial) ?? .inactive
@@ -274,7 +269,6 @@ extension AISettingsSnapshot {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(searchToolPreferences, forKey: .searchToolPreferences)
             try container.encode(searchConfigRevision, forKey: .searchConfigRevision)
-            try container.encode(scenarioDefaultModels, forKey: .scenarioDefaultModels)
             try container.encode(scenarioModelSources, forKey: .scenarioModelSources)
             try container.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
             try container.encode(trial, forKey: .trial)
@@ -291,7 +285,6 @@ extension AISettingsSnapshot {
         PreferencesPayload(
             searchToolPreferences: searchToolPreferences,
             searchConfigRevision: searchConfigRevision,
-            scenarioDefaultModels: scenarioDefaultModels,
             scenarioModelSources: scenarioModelSources,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
             trial: trial,
@@ -306,6 +299,7 @@ extension AISettingsSnapshot {
     /// 用 Core Data 中的目录数据与已解码的偏好载荷组装完整快照。
     init(
         allModels: [AllModels],
+        scenarioBindings: [AIScenarioModelBinding] = [],
         apiKeys: [APIKeys],
         smallTasks: [SmallTask] = [],
         promptRepo: [PromptRepo],
@@ -313,11 +307,11 @@ extension AISettingsSnapshot {
     ) {
         self.init(
             allModels: allModels,
+            scenarioBindings: scenarioBindings,
             apiKeys: apiKeys,
             smallTasks: smallTasks,
             searchToolPreferences: preferences.searchToolPreferences,
             searchConfigRevision: preferences.searchConfigRevision,
-            scenarioDefaultModels: preferences.scenarioDefaultModels,
             scenarioModelSources: preferences.scenarioModelSources,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
             trial: preferences.trial,

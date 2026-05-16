@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24512" systemVersion="25D2128" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
     <entity name="AIModelEntity" representedClassName="AIModelEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="aiScenariosData" optional="YES" attributeType="Binary"/>
         <attribute name="aiToolScenariosData" optional="YES" attributeType="Binary"/>
         <attribute name="baseModelName" optional="YES" attributeType="String"/>
         <attribute name="briefDescription" attributeType="String" defaultValueString=""/>
@@ -68,6 +67,24 @@
     <entity name="AIScenarioBundleCacheEntity" representedClassName="AIScenarioBundleCacheEntity" syncable="YES" codeGenerationType="class">
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="payloadData" optional="YES" attributeType="Binary"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="AIScenarioModelBindingEntity" representedClassName="AIScenarioModelBindingEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="aiToolScenariosData" optional="YES" attributeType="Binary"/>
+        <attribute name="briefDescription" attributeType="String" defaultValueString=""/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="identity" attributeType="String" defaultValueString="model"/>
+        <attribute name="isActive" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="isDefault" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="maxTokens" attributeType="Integer 32" defaultValueString="2048" usesScalarValueType="YES"/>
+        <attribute name="modelID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="position" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="relatedTaskCodesData" optional="YES" attributeType="Binary"/>
+        <attribute name="scenario" attributeType="String" defaultValueString="chat"/>
+        <attribute name="systemProvision" attributeType="String" defaultValueString=""/>
+        <attribute name="temperature" attributeType="Double" defaultValueString="0.2" usesScalarValueType="YES"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="AISettingsSeedStateEntity" representedClassName="AISettingsSeedStateEntity" syncable="YES" codeGenerationType="class">

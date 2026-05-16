@@ -436,7 +436,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
             "bodyPart": "头部",
             "notes": "伴视物旋转，体位改变症状明显，伴恶心呕吐，每次持续2小时后自行缓解，无肢体活动障碍，无行走不稳"
         },
-        "visit": {
+        "visit":“ {
             "visitType": "门诊",
             "visitedAt": "2025-08-02",
             "department": "神经内科门诊",

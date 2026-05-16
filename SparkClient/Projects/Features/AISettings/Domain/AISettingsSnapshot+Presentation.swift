@@ -10,7 +10,7 @@ extension AISettingsSnapshot {
         return AILocalScenarioBundleBuilder.buildCollection(
             allModels: allModels,
             apiKeys: apiKeys,
-            scenarioDefaults: scenarioDefaultModels
+            scenarioBindings: scenarioBindings
         )
     }
 

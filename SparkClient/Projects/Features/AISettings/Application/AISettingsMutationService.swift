@@ -140,7 +140,6 @@ struct ModelCatalogCoordinator: Sendable {
             priceTier: baseModel.priceTier,
             supportsText: baseModel.supportsText,
             reasoningControllable: baseModel.reasoningControllable,
-            aiScenarios: aiScenarios,
             aiToolScenarios: aiToolScenarios,
             relatedTaskCodes: relatedTaskCodes
         )
@@ -166,7 +165,6 @@ struct ModelCatalogCoordinator: Sendable {
         model.iconSymbol = iconSymbol
         model.baseModelName = baseModelName
         model.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        model.aiScenarios = aiScenarios.sorted()
         model.selectedToolNames = Set(aiToolScenarios)
         model.relatedTaskCodes = relatedTaskCodes.sorted()
         if let base = snapshot.allModels.first(where: { $0.name == baseModelName && $0.identity == .model }) {

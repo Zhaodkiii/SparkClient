@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 各业务场景模型：以本地目录合成的 bundle 为准，显式默认写入 `scenarioDefaultModels`。
+/// 各业务场景模型：以本地绑定表为准，默认模型与参数直接写入 binding。
 struct AIScenarioConfigEditorView: View {
     @Binding var snapshot: AISettingsSnapshot
 
@@ -38,8 +38,23 @@ struct AIScenarioConfigEditorView: View {
                         value: String(repeating: "•", count: min(key.count, 8))
                     )
                 }
-                readOnlyField(title: L10n.text("ai_settings.temperature"), value: String(format: "%.2f", row.temperature))
-                readOnlyField(title: L10n.text("ai_settings.max_tokens"), value: "\(row.maxTokens)")
+                if let binding = bindingForSelectedRow(row, scenario: scenario) {
+                    Stepper(
+                        "\(L10n.text("ai_settings.temperature")) \(String(format: "%.2f", binding.temperature))",
+                        value: bindingDoubleValue(bindingID: binding.id, keyPath: \.temperature),
+                        in: 0...2,
+                        step: 0.05
+                    )
+                    Stepper(
+                        "\(L10n.text("ai_settings.max_tokens")) \(binding.maxTokens)",
+                        value: bindingIntValue(bindingID: binding.id, keyPath: \.maxTokens),
+                        in: 256...32768,
+                        step: 256
+                    )
+                } else {
+                    readOnlyField(title: L10n.text("ai_settings.temperature"), value: String(format: "%.2f", row.temperature))
+                    readOnlyField(title: L10n.text("ai_settings.max_tokens"), value: "\(row.maxTokens)")
+                }
             } else {
                 Text(L10n.text("ai_settings.scenario_model_picker"))
                     .foregroundStyle(.secondary)
@@ -74,6 +89,45 @@ struct AIScenarioConfigEditorView: View {
                 var next = snapshot
                 next.setScenarioDefaultModelName(newValue, for: scenario)
                 snapshot = next
+            }
+        )
+    }
+
+    private func bindingForSelectedRow(_ row: AIScenarioRemoteModelRow, scenario: AIScenario) -> AIScenarioModelBinding? {
+        guard let model = snapshot.allModels.first(where: { $0.name == row.name }) else { return nil }
+        return snapshot.scenarioBindings.first {
+            $0.scenario == scenario.rawValue && $0.modelID == model.id && $0.isActive
+        }
+    }
+
+    private func bindingDoubleValue(
+        bindingID: UUID,
+        keyPath: WritableKeyPath<AIScenarioModelBinding, Double>
+    ) -> Binding<Double> {
+        Binding(
+            get: {
+                snapshot.scenarioBindings.first(where: { $0.id == bindingID })?[keyPath: keyPath] ?? 0.2
+            },
+            set: { newValue in
+                guard let index = snapshot.scenarioBindings.firstIndex(where: { $0.id == bindingID }) else { return }
+                snapshot.scenarioBindings[index][keyPath: keyPath] = newValue
+                snapshot.scenarioBindings[index].updatedAt = Date()
+            }
+        )
+    }
+
+    private func bindingIntValue(
+        bindingID: UUID,
+        keyPath: WritableKeyPath<AIScenarioModelBinding, Int>
+    ) -> Binding<Int> {
+        Binding(
+            get: {
+                snapshot.scenarioBindings.first(where: { $0.id == bindingID })?[keyPath: keyPath] ?? 2048
+            },
+            set: { newValue in
+                guard let index = snapshot.scenarioBindings.firstIndex(where: { $0.id == bindingID }) else { return }
+                snapshot.scenarioBindings[index][keyPath: keyPath] = newValue
+                snapshot.scenarioBindings[index].updatedAt = Date()
             }
         )
     }

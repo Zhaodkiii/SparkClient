@@ -7,6 +7,14 @@ enum AISettingsSeedCatalog {
         AISettingsSeedLoader.loadAllModels() ?? []
     }
 
+    static func getScenarioBindings() -> [AIScenarioModelBinding] {
+        AISettingsSeedLoader.loadScenarioBindings() ?? []
+    }
+
+    static func getScenarioBindings(for models: [AllModels]) -> [AIScenarioModelBinding] {
+        AISettingsSeedLoader.loadScenarioBindings(for: models) ?? []
+    }
+
     static func getAPIKeyList() -> [APIKeys] {
         AISettingsSeedLoader.loadAPIKeys() ?? []
     }

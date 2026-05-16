@@ -24,7 +24,7 @@ actor AIRuntimeConfigStore {
         localBundles = AILocalScenarioBundleBuilder.buildCollection(
             allModels: snapshot.allModels,
             apiKeys: snapshot.apiKeys,
-            scenarioDefaults: snapshot.scenarioDefaultModels
+            scenarioBindings: snapshot.scenarioBindings
         )
         localSmallTasks = snapshot.smallTasks.filter { $0.source == .local }
         cachedSearchConfig = Result { try SearchRuntimeConfigResolver.resolve(from: snapshot) }
@@ -115,23 +115,7 @@ actor AIRuntimeConfigStore {
         guard let local = localBundles else {
             throw AIConfigError.runtimeNotBootstrapped
         }
-        var merged = AIRuntimeConfigAssembler.merge(local: local, pro: proBundles)
-//        let fallbackDefaults = cachedSnapshot?.scenarioDefaultModels ?? [:]
-//        for scenario in AIScenario.allCases {
-//            let preferredModelName = fallbackDefaults[scenario.rawValue]
-//            guard let preferredModelName,
-//                  preferredModelName.isEmpty == false
-//            else { continue }
-//            var bundle = merged.bundle(for: scenario)
-//            guard bundle.models.contains(where: { $0.name == preferredModelName }) else { continue }
-//            bundle.defaultModelName = preferredModelName
-//            bundle.models = bundle.models.map { row in
-//                var normalized = row
-//                normalized.isDefault = (row.name == preferredModelName)
-//                return normalized
-//            }
-//            merged.setBundle(bundle, for: scenario)
-//        }
+        let merged = AIRuntimeConfigAssembler.merge(local: local, pro: proBundles)
         return merged
     }
 

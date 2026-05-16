@@ -296,7 +296,9 @@ final class AISettingsViewModel: ObservableObject {
         supportsToolUse: Bool,
         supportsImageGen: Bool,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        modelID: UUID = UUID(),
+        scenarioBindings: [AIScenarioModelBinding]? = nil
     ) -> AllModels? {
         // 数据清洗与格式处理
         let baseName = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -330,6 +332,7 @@ final class AISettingsViewModel: ObservableObject {
         
         // 创建模型对象
         let model = AllModels(
+            id: modelID,
             name: uniqueName,
             displayName: uniqueDisplay,
             identity: .model,
@@ -348,11 +351,15 @@ final class AISettingsViewModel: ObservableObject {
             priceTier: tier,
             supportsText: supportsText,
             reasoningControllable: reasoningControllable,
-            aiScenarios: aiScenarios,
             aiToolScenarios: normalizedToolScenarios
         )
         
         snapshot.allModels.append(model)
+        if let scenarioBindings {
+            appendPreparedScenarioBindings(scenarioBindings, for: model)
+        } else {
+            appendScenarioBindings(for: model, scenarios: aiScenarios, aiToolScenarios: normalizedToolScenarios)
+        }
         return model
     }
 
@@ -402,6 +409,7 @@ final class AISettingsViewModel: ObservableObject {
     func deleteModelAndPersist(id: UUID) async -> Bool {
         do {
             try modelCoordinator.deleteModel(id: id, in: &snapshot)
+            snapshot.scenarioBindings.removeAll { $0.modelID == id }
             return await persistSnapshotNowReturningBool()
         } catch {
             errorMessage = error.localizedDescription
@@ -538,7 +546,55 @@ final class AISettingsViewModel: ObservableObject {
     @discardableResult
     func replaceModelAndPersist(_ model: AllModels) async -> Bool {
         replaceModel(model)
-        return await persistModelNow(modelID: model.id)
+        return await persistSnapshotNowReturningBool()
+    }
+
+    @discardableResult
+    func persistScenarioBindingsNow() async -> Bool {
+        await persistSnapshotNowReturningBool()
+    }
+
+    @discardableResult
+    func persistScenarioBindingChange(_ change: ModelScenarioBindingPersistenceChange) async -> Bool {
+        applyScenarioBindingChange(change)
+        return await persistScenarioBindingChangeNowReturningBool(change)
+    }
+
+    @discardableResult
+    func replaceScenarioBindingsAndPersist(
+        modelID: UUID,
+        identity: AIModelIdentity,
+        bindings: [AIScenarioModelBinding]
+    ) async -> Bool {
+        snapshot.scenarioBindings.removeAll { $0.modelID == modelID && $0.identity == identity }
+        for binding in bindings where AIScenario(rawValue: binding.scenario) != nil {
+            var copy = binding
+            copy.modelID = modelID
+            copy.identity = identity
+            copy.updatedAt = Date()
+            snapshot.scenarioBindings.append(copy)
+        }
+        return await persistSnapshotNowReturningBool()
+    }
+
+    private func applyScenarioBindingChange(_ change: ModelScenarioBindingPersistenceChange) {
+        if let deletedID = change.deletedID {
+            snapshot.scenarioBindings.removeAll { $0.id == deletedID }
+        }
+        if let binding = change.upserted, AIScenario(rawValue: binding.scenario) != nil {
+            if binding.isDefault {
+                for index in snapshot.scenarioBindings.indices where snapshot.scenarioBindings[index].scenario == binding.scenario {
+                    guard snapshot.scenarioBindings[index].id != binding.id else { continue }
+                    snapshot.scenarioBindings[index].isDefault = false
+                    snapshot.scenarioBindings[index].updatedAt = Date()
+                }
+            }
+            if let index = snapshot.scenarioBindings.firstIndex(where: { $0.id == binding.id }) {
+                snapshot.scenarioBindings[index] = binding
+            } else {
+                snapshot.scenarioBindings.append(binding)
+            }
+        }
     }
 
     /// 显隐切换：先改缓存，再单条落库（模型）
@@ -573,7 +629,9 @@ final class AISettingsViewModel: ObservableObject {
         supportsToolUse: Bool,
         supportsImageGen: Bool,
         aiScenarios: [String] = [],
-        aiToolScenarios: [String] = []
+        aiToolScenarios: [String] = [],
+        modelID: UUID = UUID(),
+        scenarioBindings: [AIScenarioModelBinding]? = nil
     ) async -> Bool {
         guard let model = appendOnlineModel(
             name: name,
@@ -589,11 +647,13 @@ final class AISettingsViewModel: ObservableObject {
             supportsToolUse: supportsToolUse,
             supportsImageGen: supportsImageGen,
             aiScenarios: aiScenarios,
-            aiToolScenarios: aiToolScenarios
+            aiToolScenarios: aiToolScenarios,
+            modelID: modelID,
+            scenarioBindings: scenarioBindings
         ) else {
             return false
         }
-        return await persistModelNow(modelID: model.id)
+        return await persistSnapshotNowReturningBool()
     }
 
     // MARK: - 本地智能体管理
@@ -606,7 +666,8 @@ final class AISettingsViewModel: ObservableObject {
         systemPrompt: String,
         aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
-        relatedTaskCodes: [String] = []
+        relatedTaskCodes: [String] = [],
+        scenarioBindings: [AIScenarioModelBinding]? = nil
     ) {
         modelCoordinator.updateLocalAgent(
             id: id,
@@ -619,6 +680,13 @@ final class AISettingsViewModel: ObservableObject {
             relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         )
+        if let model = snapshot.allModels.first(where: { $0.id == id }) {
+            if let scenarioBindings {
+                replacePreparedScenarioBindings(scenarioBindings, for: model, relatedTaskCodes: relatedTaskCodes)
+            } else {
+                replaceScenarioBindings(for: model, scenarios: aiScenarios, aiToolScenarios: aiToolScenarios, relatedTaskCodes: relatedTaskCodes)
+            }
+        }
     }
 
     /// 更新本地智能体并立即单条持久化到数据库
@@ -631,7 +699,8 @@ final class AISettingsViewModel: ObservableObject {
         systemPrompt: String,
         aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
-        relatedTaskCodes: [String] = []
+        relatedTaskCodes: [String] = [],
+        scenarioBindings: [AIScenarioModelBinding]? = nil
     ) async -> Bool {
         modelCoordinator.updateLocalAgent(
             id: id,
@@ -644,7 +713,14 @@ final class AISettingsViewModel: ObservableObject {
             relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         )
-        return await persistModelNow(modelID: id)
+        if let model = snapshot.allModels.first(where: { $0.id == id }) {
+            if let scenarioBindings {
+                replacePreparedScenarioBindings(scenarioBindings, for: model, relatedTaskCodes: relatedTaskCodes)
+            } else {
+                replaceScenarioBindings(for: model, scenarios: aiScenarios, aiToolScenarios: aiToolScenarios, relatedTaskCodes: relatedTaskCodes)
+            }
+        }
+        return await persistSnapshotNowReturningBool()
     }
 
     /// 移除本地模型（包含文件删除与配置清理）
@@ -663,10 +739,8 @@ final class AISettingsViewModel: ObservableObject {
         }
         
         // 清空使用该模型的场景默认配置
-        for scenario in AIScenario.allCases {
-            if snapshot.scenarioDefaultModelName(for: scenario) == model.name {
-                snapshot.setScenarioDefaultModelName(nil, for: scenario)
-            }
+        snapshot.scenarioBindings.removeAll { binding in
+            binding.modelID == model.id || snapshot.allModels.contains { $0.id == binding.modelID && $0.baseModelName == model.name }
         }
     }
 
@@ -711,7 +785,8 @@ final class AISettingsViewModel: ObservableObject {
         systemPrompt: String,
         aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
-        relatedTaskCodes: [String] = []
+        relatedTaskCodes: [String] = [],
+        scenarioBindings: [AIScenarioModelBinding]? = nil
     ) {
         modelCoordinator.createLocalAgent(
             displayName: displayName,
@@ -723,6 +798,13 @@ final class AISettingsViewModel: ObservableObject {
             relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         )
+        if let agent = snapshot.allModels.last, agent.identity == .agent {
+            if let scenarioBindings {
+                appendPreparedScenarioBindings(scenarioBindings, for: agent)
+            } else {
+                appendScenarioBindings(for: agent, scenarios: aiScenarios, aiToolScenarios: aiToolScenarios)
+            }
+        }
     }
 
     /// 创建本地智能体并立即单条持久化到数据库
@@ -734,7 +816,8 @@ final class AISettingsViewModel: ObservableObject {
         systemPrompt: String,
         aiScenarios: [String] = [],
         aiToolScenarios: [String] = [],
-        relatedTaskCodes: [String] = []
+        relatedTaskCodes: [String] = [],
+        scenarioBindings: [AIScenarioModelBinding]? = nil
     ) async -> Bool {
         guard let agent = modelCoordinator.createLocalAgent(
             displayName: displayName,
@@ -746,7 +829,12 @@ final class AISettingsViewModel: ObservableObject {
             relatedTaskCodes: relatedTaskCodes,
             in: &snapshot
         ) else { return false }
-        return await persistModelNow(modelID: agent.id)
+        if let scenarioBindings {
+            appendPreparedScenarioBindings(scenarioBindings, for: agent)
+        } else {
+            appendScenarioBindings(for: agent, scenarios: aiScenarios, aiToolScenarios: aiToolScenarios)
+        }
+        return await persistSnapshotNowReturningBool()
     }
 
     func upsertLocalSmallTaskAndPersist(_ task: SmallTask) async -> Bool {
@@ -795,6 +883,7 @@ final class AISettingsViewModel: ObservableObject {
             snapshot.allModels[index].isHidden = false
             snapshot.allModels[index].source = .custom
             snapshot.allModels[index].timestamp = Date()
+            appendScenarioBindings(for: snapshot.allModels[index], scenarios: [AIScenario.chat.rawValue], aiToolScenarios: SparkToolName.all)
             return
         }
 
@@ -823,6 +912,76 @@ final class AISettingsViewModel: ObservableObject {
                 timestamp: Date()
             )
         )
+        if let model = snapshot.allModels.last {
+            appendScenarioBindings(for: model, scenarios: [AIScenario.chat.rawValue], aiToolScenarios: SparkToolName.all)
+        }
+    }
+
+    private func appendScenarioBindings(for model: AllModels, scenarios: [String], aiToolScenarios: [String]) {
+        let validScenarios = scenarios.compactMap(AIScenario.init(rawValue:)).map(\.rawValue)
+        for scenarioRaw in validScenarios {
+            guard snapshot.scenarioBindings.contains(where: {
+                $0.scenario == scenarioRaw && $0.modelID == model.id && $0.identity == model.identity
+            }) == false else { continue }
+            let existing = snapshot.scenarioBindings.filter { $0.scenario == scenarioRaw }
+            let binding = AIScenarioModelBinding(
+                scenario: scenarioRaw,
+                identity: model.identity,
+                modelID: model.id,
+                temperature: scenarioRaw == AIScenario.chat.rawValue ? 0.6 : 0.2,
+                maxTokens: 14096,
+                position: (existing.map(\.position).max() ?? -1) + 1,
+                isDefault: existing.contains(where: { $0.isDefault }) == false,
+                systemProvision: model.systemProvision,
+                briefDescription: model.briefDescription,
+                aiToolScenarios: aiToolScenarios
+            )
+            snapshot.scenarioBindings.append(binding)
+        }
+    }
+
+    private func appendPreparedScenarioBindings(_ bindings: [AIScenarioModelBinding], for model: AllModels) {
+        for binding in bindings where AIScenario(rawValue: binding.scenario) != nil {
+            guard snapshot.scenarioBindings.contains(where: {
+                $0.scenario == binding.scenario && $0.modelID == model.id && $0.identity == model.identity
+            }) == false else { continue }
+            var copy = binding
+            copy.modelID = model.id
+            copy.identity = model.identity
+            copy.aiToolScenarios = copy.aiToolScenarios.isEmpty ? model.aiToolScenarios : copy.aiToolScenarios
+            copy.relatedTaskCodes = copy.relatedTaskCodes.isEmpty ? model.relatedTaskCodes : copy.relatedTaskCodes
+            copy.updatedAt = Date()
+            snapshot.scenarioBindings.append(copy)
+        }
+    }
+
+    private func replaceScenarioBindings(
+        for model: AllModels,
+        scenarios: [String],
+        aiToolScenarios: [String],
+        relatedTaskCodes: [String]
+    ) {
+        snapshot.scenarioBindings.removeAll { $0.modelID == model.id && $0.identity == model.identity }
+        appendScenarioBindings(for: model, scenarios: scenarios, aiToolScenarios: aiToolScenarios)
+        for index in snapshot.scenarioBindings.indices where snapshot.scenarioBindings[index].modelID == model.id {
+            snapshot.scenarioBindings[index].relatedTaskCodes = relatedTaskCodes.sorted()
+            snapshot.scenarioBindings[index].updatedAt = Date()
+        }
+    }
+
+    private func replacePreparedScenarioBindings(
+        _ bindings: [AIScenarioModelBinding],
+        for model: AllModels,
+        relatedTaskCodes: [String]
+    ) {
+        snapshot.scenarioBindings.removeAll { $0.modelID == model.id && $0.identity == model.identity }
+        appendPreparedScenarioBindings(bindings, for: model)
+        for index in snapshot.scenarioBindings.indices where snapshot.scenarioBindings[index].modelID == model.id {
+            if snapshot.scenarioBindings[index].relatedTaskCodes.isEmpty {
+                snapshot.scenarioBindings[index].relatedTaskCodes = relatedTaskCodes.sorted()
+            }
+            snapshot.scenarioBindings[index].updatedAt = Date()
+        }
     }
 
     /// 标准化远程模型key（去除空格、前缀，转小写）
@@ -907,6 +1066,37 @@ final class AISettingsViewModel: ObservableObject {
         do {
             try await saveUseCase.execute(model: model)
             markPersistedModel(model)
+            hasUnsavedChanges = snapshot != lastPersistedSnapshot
+            await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
+            await refreshEffectiveSmallTasks()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// 单独持久化场景绑定变更：只 upsert 当前变更行，并按 id 删除指定行。
+    @discardableResult
+    private func persistScenarioBindingChangeNowReturningBool(_ change: ModelScenarioBindingPersistenceChange) async -> Bool {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            if let deletedID = change.deletedID {
+                try await saveUseCase.executeDeletedScenarioBinding(
+                    id: deletedID,
+                    ownerAccountID: ownerAccountIDForLoad
+                )
+            }
+            if let binding = change.upserted, AIScenario(rawValue: binding.scenario) != nil {
+                try await saveUseCase.execute(
+                    scenarioBinding: binding,
+                    ownerAccountID: ownerAccountIDForLoad
+                )
+            }
+            markPersistedScenarioBindingChange(change)
             hasUnsavedChanges = snapshot != lastPersistedSnapshot
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             await refreshEffectiveSmallTasks()
@@ -1048,6 +1238,26 @@ final class AISettingsViewModel: ObservableObject {
             lastPersistedSnapshot.apiKeys[index] = provider
         } else {
             lastPersistedSnapshot.apiKeys.append(provider)
+        }
+    }
+
+    private func markPersistedScenarioBindingChange(_ change: ModelScenarioBindingPersistenceChange) {
+        if let deletedID = change.deletedID {
+            lastPersistedSnapshot.scenarioBindings.removeAll { $0.id == deletedID }
+        }
+        if let binding = change.upserted {
+            if binding.isDefault {
+                for index in lastPersistedSnapshot.scenarioBindings.indices where lastPersistedSnapshot.scenarioBindings[index].scenario == binding.scenario {
+                    guard lastPersistedSnapshot.scenarioBindings[index].id != binding.id else { continue }
+                    lastPersistedSnapshot.scenarioBindings[index].isDefault = false
+                    lastPersistedSnapshot.scenarioBindings[index].updatedAt = Date()
+                }
+            }
+            if let index = lastPersistedSnapshot.scenarioBindings.firstIndex(where: { $0.id == binding.id }) {
+                lastPersistedSnapshot.scenarioBindings[index] = binding
+            } else {
+                lastPersistedSnapshot.scenarioBindings.append(binding)
+            }
         }
     }
 

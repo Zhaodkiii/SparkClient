@@ -216,6 +216,7 @@ private struct StepRow: View {
             }
             
             Spacer()
+            // 更具不同的类型展示 具体的结果
         }
     }
 }

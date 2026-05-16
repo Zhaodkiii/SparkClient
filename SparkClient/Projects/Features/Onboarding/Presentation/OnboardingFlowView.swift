@@ -274,6 +274,7 @@ private struct OnboardingAgentSetupStep: View {
                 case .create:
                     ModelsSettingsAgentSheet(
                         baseModels: viewModel.baseModels,
+                        scenarioBindings: viewModel.scenarioBindings,
                         smallTasks: viewModel.smallTasks,
                         promptTooling: viewModel.promptTooling,
                         promptTemplates: viewModel.promptTemplates,
@@ -284,11 +285,15 @@ private struct OnboardingAgentSetupStep: View {
                     ModelsSettingsAgentSheet(
                         baseModels: viewModel.baseModels,
                         editingAgent: agent,
+                        scenarioBindings: viewModel.scenarioBindings,
                         smallTasks: viewModel.smallTasks,
                         promptTooling: viewModel.promptTooling,
                         promptTemplates: viewModel.promptTemplates,
                         onCreate: viewModel.createCustomAgent,
-                        onUpdate: viewModel.updateAgent
+                        onUpdate: viewModel.updateAgent,
+                        onPersistScenarioBindings: { change in
+                            viewModel.persistScenarioBindingChange(change)
+                        }
                     )
                 }
             }
