@@ -1,6 +1,17 @@
 import Combine
 import Foundation
 
+private enum RecognitionPipelineError: LocalizedError {
+    case missingCheckpoint(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingCheckpoint(let name):
+            return "缺少\(name)检查点，请从上一步重新识别"
+        }
+    }
+}
+
 /// 医疗单据上传与「Typed」识别流程的界面状态：选文件 → 上传/OCR/类型/抽取 → 展示结果 → 保存并绑定附件。
 ///
 /// - 依赖用例完成 I/O 与领域逻辑，本类型只编排 `stage`、`progress` 与用户可写状态。
@@ -15,6 +26,13 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         case picking
         case processing
         case result
+    }
+
+    struct RecognitionModelOption: Identifiable, Equatable {
+        let name: String
+        let displayName: String
+
+        var id: String { name }
     }
 
     // MARK: - Published state
@@ -36,6 +54,12 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     @Published var saveReceipt: MedicalDocumentSaveReceipt?
     /// 用户选择的文书类型；`.auto` 时由服务端/模型推断。
     @Published var selectedKind: MedicalDocumentKind = .auto
+    @Published private(set) var pipelineOCRText: String?
+    @Published private(set) var typeResolution: MedicalDocumentTypeResolution?
+    @Published private(set) var failedStep: MedicalDocumentUploadFlowStep?
+    @Published private(set) var extractModelOptions: [RecognitionModelOption] = []
+    @Published var overrideDocumentKindForRetry: MedicalDocumentKind?
+    @Published var preferredExtractModelName: String?
 
     // MARK: - Dependencies
 
@@ -45,6 +69,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     private let saveUseCase: SaveTypedMedicalDocumentUseCase
     private let bindUseCase: BindUploadedFilesToMedicalBusinessUseCase
     private let buildPreviewUseCase: BuildMedicalDocumentPreviewItemsUseCase
+    private let loadEffectiveScenarioBundles: (@Sendable () async throws -> AIScenarioRemoteBundlesCollection)?
     private let logger: Logger
     /// 最近一次识别流程中已上传的文件，供保存成功后与业务单据绑定。
     private var uploadedFiles: [UploadedMedicalDocumentFile] = []
@@ -61,6 +86,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         saveUseCase: SaveTypedMedicalDocumentUseCase,
         bindUseCase: BindUploadedFilesToMedicalBusinessUseCase,
         buildPreviewUseCase: BuildMedicalDocumentPreviewItemsUseCase = BuildMedicalDocumentPreviewItemsUseCase(),
+        loadEffectiveScenarioBundles: (@Sendable () async throws -> AIScenarioRemoteBundlesCollection)? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.memberContextStore = memberContextStore
@@ -69,6 +95,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.saveUseCase = saveUseCase
         self.bindUseCase = bindUseCase
         self.buildPreviewUseCase = buildPreviewUseCase
+        self.loadEffectiveScenarioBundles = loadEffectiveScenarioBundles
         self.logger = logger
         self.selectedMemberName = memberContextStore.context.selectedMember?.name
     }
@@ -86,6 +113,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     func setSelectedFiles(_ files: [MedicalUploadLocalFile]) {
         selectedFiles = files
         previewItems = buildPreviewUseCase.execute(files: files)
+        clearPipelineCheckpoints()
         errorMessage = nil
         logger.info("已更新待识别文件，数量=\(files.count)", module: .medical)
     }
@@ -94,6 +122,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     func removeFile(id: UUID) {
         selectedFiles.removeAll { $0.id == id }
         previewItems = buildPreviewUseCase.execute(files: selectedFiles)
+        clearPipelineCheckpoints()
         logger.info("已移除文件，剩余数量=\(selectedFiles.count)", module: .medical)
     }
 
@@ -108,6 +137,17 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
         recognitionTask = Task { [weak self] in
             await self?.startRecognition()
+        }
+    }
+
+    func resumeRecognitionTask() {
+        guard recognitionTask == nil else {
+            logger.debug("忽略重复续跑请求：已有识别任务运行中", module: .medical)
+            return
+        }
+
+        recognitionTask = Task { [weak self] in
+            await self?.resumeRecognition()
         }
     }
 
@@ -126,6 +166,14 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 开始【医疗文档上传 + OCR + AI 抽取】全流程
     /// 作用：触发整个上传识别流水线（上传文件 → OCR → 类型判定 → AI 抽取 → 展示结果）
     func startRecognition() async {
+        await runRecognitionPipeline(startingAt: .upload, resetForFreshRun: true)
+    }
+
+    func resumeRecognition() async {
+        await runRecognitionPipeline(startingAt: failedStep ?? .upload, resetForFreshRun: false)
+    }
+
+    private func runRecognitionPipeline(startingAt requestedStartStep: MedicalDocumentUploadFlowStep, resetForFreshRun: Bool) async {
         // MARK: 1. 前置校验：必须选择就诊成员（患者）
         // 从全局状态中获取当前选中的患者，没有则直接报错返回
         guard let member = memberContextStore.context.selectedMember else {
@@ -140,17 +188,20 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         selectedMemberName = member.name
         // 清空之前的错误信息
         errorMessage = nil
-        // 清空上一次的识别结果
         typedOutput = nil
-        // 清空上一次的保存回执
         saveReceipt = nil
-        // 将页面状态设置为：处理中（展示加载动画）
         stage = .processing
 
         // MARK: 2. 初始化进度条模型（用于 UI 展示进度）
-        progress = createProgress()
+        if resetForFreshRun || progress == nil {
+            clearPipelineCheckpoints()
+            progress = createProgress()
+        } else {
+            prepareProgressForRetry(from: requestedStartStep)
+        }
         // 关闭“手动选择模式”标记
         needsManualModeSelection = false
+        failedStep = nil
         let cancellationToken = AIRuntimeCancellationToken()
         recognitionCancellationToken = cancellationToken
         defer {
@@ -167,67 +218,123 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         )
 
         // MARK: 4. 执行核心流程（try 捕获所有异常）
+        var currentStep = requestedStartStep
         do {
-            // ------------------------------
-            // 步骤1：调用用例，上传本地文件到服务器
-            // ------------------------------
-            uploadedFiles = try await uploadFilesUseCase.execute(
-                memberID: member.id,
-                files: selectedFiles
-            )
-            try cancellationToken.checkCancellation()
-            logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", module: .medical)
+            if shouldRun(.upload, from: requestedStartStep) {
+                currentStep = .upload
+                start(.upload, variant: kindToVariant(selectedKind))
+                uploadedFiles = try await uploadFilesUseCase.execute(
+                    memberID: member.id,
+                    files: selectedFiles
+                )
+                try cancellationToken.checkCancellation()
+                logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", module: .medical)
+                complete(.upload, outcome: .success, resultSummary: "已上传 \(uploadedFiles.count) 个文件")
+            } else if uploadedFiles.isEmpty == false {
+                complete(.upload, outcome: .skipped, resultSummary: "沿用 \(uploadedFiles.count) 个已上传文件")
+            }
 
-            // 标记：上传步骤完成 → 成功
-            complete(.upload, outcome: .success)
-            // 标记：开始执行 OCR 步骤，并根据文档类型展示对应图标/样式
-            start(.ocr, variant: kindToVariant(selectedKind))
+            if shouldRun(.ocr, from: requestedStartStep) {
+                currentStep = .ocr
+                start(.ocr, variant: kindToVariant(selectedKind))
+                let ocrText = try await extractUseCase.mergeOCRText(
+                    files: selectedFiles,
+                    cancellationToken: cancellationToken
+                )
+                try cancellationToken.checkCancellation()
+                pipelineOCRText = ocrText
+                complete(
+                    .ocr,
+                    outcome: .success,
+                    resultSummary: "约 \(ocrText.count) 字",
+                    detailKind: .ocrFullText
+                )
+            } else if let ocrText = pipelineOCRText {
+                complete(
+                    .ocr,
+                    outcome: .skipped,
+                    resultSummary: "沿用约 \(ocrText.count) 字",
+                    detailKind: .ocrFullText
+                )
+            }
 
-            // ------------------------------
-            // 步骤2：调用核心用例 → 执行 OCR + 类型判定 + AI 结构化抽取
-            // ------------------------------
-            let output = try await extractUseCase.execute(
+            guard let mergedOCRText = pipelineOCRText else {
+                throw RecognitionPipelineError.missingCheckpoint("OCR")
+            }
+
+            if shouldRun(.typeRecognition, from: requestedStartStep) {
+                currentStep = .typeRecognition
+                start(.typeRecognition, variant: kindToVariant(selectedKind))
+                let kindForRetry = overrideDocumentKindForRetry ?? selectedKind
+                let resolution = try await extractUseCase.resolveType(
+                    selectedKind: kindForRetry,
+                    mergedOCRText: mergedOCRText,
+                    cancellationToken: cancellationToken
+                )
+                try cancellationToken.checkCancellation()
+                typeResolution = resolution
+                if kindForRetry != .auto {
+                    selectedKind = kindForRetry
+                }
+                complete(
+                    .typeRecognition,
+                    outcome: .success,
+                    resultSummary: "\(resolution.kind.localizedUploadLabel) · \(resolution.source.localizedUploadLabel)"
+                )
+            } else if let resolution = typeResolution {
+                complete(
+                    .typeRecognition,
+                    outcome: .skipped,
+                    resultSummary: "\(resolution.kind.localizedUploadLabel) · 沿用"
+                )
+            }
+
+            guard let resolution = typeResolution else {
+                throw RecognitionPipelineError.missingCheckpoint("类型识别")
+            }
+
+            currentStep = .extract
+            let extractScenario = scenario(for: resolution.kind)
+            await refreshExtractModelOptions(for: extractScenario)
+            let modelSummary = modelDisplayName(for: preferredExtractModelName) ?? "默认模型"
+            start(.extract, variant: kindToVariant(resolution.kind))
+            updateStepResultSummary(.extract, resultSummary: "\(scenarioLabel(for: extractScenario)) · \(modelSummary)")
+            let output = try await extractUseCase.extractStructured(
                 memberID: member.id,
                 files: selectedFiles,
-                selectedKind: selectedKind,
+                mergedOCRText: mergedOCRText,
+                resolution: resolution,
+                preferredModelName: preferredExtractModelName,
                 cancellationToken: cancellationToken
             )
             try cancellationToken.checkCancellation()
+            complete(
+                .extract,
+                outcome: .success,
+                resultSummary: "\(scenarioLabel(for: extractScenario)) · \(modelSummary)"
+            )
 
-            // ------------------------------
-            // 步骤3：标记所有子流程完成
-            // ------------------------------
-            complete(.ocr, outcome: .success)            // OCR 完成
-            complete(.typeRecognition, outcome: .success) // 文档类型判定完成
-            complete(.extract, outcome: .success)         // AI 抽取完成
-
-            // ------------------------------
-            // 步骤4：流程全部成功 → 保存结果并切换到结果页面
-            // ------------------------------
-            typedOutput = output // 保存结构化结果给 UI
-            stage = .result      // 切换页面状态：展示结果页
+            typedOutput = output
+            stage = .result
             logger.info(
                 "Typed 识别流程完成，resolvedKind=\(output.envelope.typeResolution.kind.rawValue)",
                 module: .medical
             )
         } catch is CancellationError {
-            // 用户主动中断不作为失败展示；UI 回到 picking，底层 AI 流已通过取消令牌结束。
             if recognitionCancellationToken === cancellationToken {
                 resetRecognitionState()
                 stage = .picking
             }
             logger.info("Typed 识别流程已取消", module: .medical)
         } catch {
-            // ------------------------------
-            // 任意步骤失败 → 进入失败处理
-            // ------------------------------
             if recognitionCancellationToken !== cancellationToken {
                 logger.debug("忽略过期识别任务错误：\(error.localizedDescription)", module: .medical)
                 return
             }
-            fail(.extract) // 标记抽取流程失败
-            errorMessage = error.localizedDescription // 给 UI 展示错误信息
-            logger.error("Typed 识别流程失败：\(error)", module: .medical)
+            failedStep = currentStep
+            fail(currentStep)
+            errorMessage = error.localizedDescription
+            logger.error("Typed 识别流程失败 step=\(currentStep.rawValue)：\(error)", module: .medical)
         }
     }
 
@@ -353,6 +460,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         errorMessage = nil
         selectedKind = .auto
         uploadedFiles = []
+        clearPipelineCheckpoints()
         selectedMemberName = memberContextStore.context.selectedMember?.name
         logger.info("已重置医疗上传流程", module: .medical)
     }
@@ -365,6 +473,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         progress = nil
         needsManualModeSelection = false
         errorMessage = nil
+        failedStep = nil
         // 注意：不重置 selectedFiles、previewItems 和 uploadedFiles，保留用户选择的文件
         logger.info("已重置识别状态（保留已选文件）", module: .medical)
     }
@@ -472,6 +581,104 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         return min(max(seconds, 48), 900)
     }
 
+    private func clearPipelineCheckpoints() {
+        uploadedFiles = []
+        pipelineOCRText = nil
+        typeResolution = nil
+        failedStep = nil
+        overrideDocumentKindForRetry = nil
+        preferredExtractModelName = nil
+        extractModelOptions = []
+    }
+
+    private func shouldRun(_ step: MedicalDocumentUploadFlowStep, from startStep: MedicalDocumentUploadFlowStep) -> Bool {
+        step.pipelineOrder >= startStep.pipelineOrder
+    }
+
+    private func prepareProgressForRetry(from step: MedicalDocumentUploadFlowStep) {
+        guard var currentProgress = progress else { return }
+        for idx in currentProgress.steps.indices {
+            guard let flowStep = MedicalDocumentUploadFlowStep(rawValue: currentProgress.steps[idx].id) else { continue }
+            if flowStep.pipelineOrder < step.pipelineOrder {
+                currentProgress.steps[idx].state = .done
+            } else {
+                currentProgress.steps[idx].state = .idle
+            }
+        }
+        currentProgress.statusLabel = L10n.text("medical.upload.status.processing")
+        progress = currentProgress
+    }
+
+    private func updateStepResultSummary(
+        _ step: MedicalDocumentUploadFlowStep,
+        resultSummary: String?,
+        detailKind: MedicalDocumentUploadStepDetailKind? = nil
+    ) {
+        guard var currentProgress = progress,
+              let idx = currentProgress.steps.firstIndex(where: { $0.id == step.rawValue })
+        else { return }
+        currentProgress.steps[idx].resultSummary = resultSummary
+        currentProgress.steps[idx].detailKind = detailKind
+        progress = currentProgress
+    }
+
+    private func refreshExtractModelOptions(for scenario: AIScenario) async {
+        guard let loadEffectiveScenarioBundles else {
+            extractModelOptions = []
+            return
+        }
+        do {
+            let bundles = try await loadEffectiveScenarioBundles()
+            extractModelOptions = bundles.bundle(for: scenario).models.map {
+                RecognitionModelOption(name: $0.name, displayName: $0.displayName.isEmpty ? $0.name : $0.displayName)
+            }
+        } catch {
+            extractModelOptions = []
+            logger.warning("加载抽取模型列表失败：\(error.localizedDescription)", module: .medical)
+        }
+    }
+
+    private func modelDisplayName(for preferredModelName: String?) -> String? {
+        if let preferredModelName,
+           let option = extractModelOptions.first(where: { $0.name == preferredModelName })
+        {
+            return option.displayName
+        }
+        return extractModelOptions.first?.displayName
+    }
+
+    private func scenario(for kind: MedicalDocumentKind) -> AIScenario {
+        switch kind {
+        case .caseDocument:
+            return .medicalCaseExtraction
+        case .healthExamReport:
+            return .healthExamExtraction
+        case .medicalReport, .auto:
+            return .medicalReportExtraction
+        case .prescription:
+            return .prescriptionExtraction
+        case .medicationPlan, .medicineBox:
+            return .medicationExtraction
+        }
+    }
+
+    private func scenarioLabel(for scenario: AIScenario) -> String {
+        switch scenario {
+        case .medicalCaseExtraction:
+            return "病历抽取"
+        case .healthExamExtraction:
+            return "体检抽取"
+        case .medicalReportExtraction:
+            return "报告抽取"
+        case .prescriptionExtraction:
+            return "处方抽取"
+        case .medicationExtraction:
+            return "用药抽取"
+        default:
+            return "结构化抽取"
+        }
+    }
+
     // MARK: - Errors
 
     /// 统一保存失败提示：若有 HTTP 后端文案则拼接本地化模板，否则退回 `localizedDescription`。
@@ -529,7 +736,12 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
         logger.debug("开始步骤: \(step.rawValue)", module: .medical)
     }
     
-    func complete(_ step: MedicalDocumentUploadFlowStep, outcome: MedicalDocumentUploadFlowStep.CompletionOutcome) {
+    func complete(
+        _ step: MedicalDocumentUploadFlowStep,
+        outcome: MedicalDocumentUploadFlowStep.CompletionOutcome,
+        resultSummary: String? = nil,
+        detailKind: MedicalDocumentUploadStepDetailKind? = nil
+    ) {
         guard var currentProgress = progress else { return }
         
         let presentation = step.completionPresentation(outcome: outcome)
@@ -538,6 +750,8 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
             currentProgress.steps[idx].state = .done
             currentProgress.steps[idx].title = presentation.title
             currentProgress.steps[idx].subtitle = presentation.subtitle
+            currentProgress.steps[idx].resultSummary = resultSummary
+            currentProgress.steps[idx].detailKind = detailKind
         } else {
             // 步骤不存在，添加为已完成
             let completedStep = MedicalDocumentUploadStep(
@@ -545,7 +759,9 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
                 title: presentation.title,
                 subtitle: presentation.subtitle,
                 state: .done,
-                estimatedSeconds: nil
+                estimatedSeconds: nil,
+                resultSummary: resultSummary,
+                detailKind: detailKind
             )
             currentProgress.steps.append(completedStep)
         }
@@ -571,9 +787,44 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
             )
             currentProgress.steps.append(failedStep)
         }
+        currentProgress.statusLabel = L10n.text("medical.upload.status.failed")
         
         progress = currentProgress
         logger.debug("步骤失败: \(step.rawValue)", module: .medical)
+    }
+}
+
+extension MedicalDocumentKind {
+    var localizedUploadLabel: String {
+        switch self {
+        case .auto:
+            return L10n.text("medical.upload.kind.auto")
+        case .caseDocument:
+            return L10n.text("medical.upload.kind.case")
+        case .healthExamReport:
+            return L10n.text("medical.upload.kind.health_exam")
+        case .medicalReport:
+            return L10n.text("medical.upload.kind.medical_report")
+        case .prescription:
+            return L10n.text("common.prescription")
+        case .medicationPlan:
+            return L10n.text("common.medicationPlan")
+        case .medicineBox:
+            return L10n.text("home.medical.list.medicine_box.title", fallback: "药品")
+        }
+    }
+}
+
+private extension MedicalDocumentTypeResolution.Source {
+    var localizedUploadLabel: String {
+        switch self {
+        case .manual:
+            return "手动"
+        case .localRules:
+            return "规则"
+        case .ai:
+            return "AI"
+        }
     }
 }
 

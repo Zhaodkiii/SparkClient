@@ -9,8 +9,13 @@ import SwiftUI
 struct MedicalDocumentUploadProgressContainerView: View {
     @Binding var progress: MedicalDocumentUploadProgress?
     @Binding var needsManualModeSelection: Bool
+    let ocrText: String?
+    let extractModelOptions: [MedicalDocumentUploadViewModel.RecognitionModelOption]
+    @Binding var overrideDocumentKindForRetry: MedicalDocumentKind?
+    @Binding var preferredExtractModelName: String?
     var onCancel: (() -> Void)? = nil
     var onRestart: (() -> Void)? = nil
+    var onRetryFromFailedStep: (() -> Void)? = nil
     var onReturnToPicker: (() -> Void)? = nil
     var onSelectMode: ((MedicalDocumentKind) -> Void)? = nil
     
@@ -19,15 +24,25 @@ struct MedicalDocumentUploadProgressContainerView: View {
     init(
         progress: Binding<MedicalDocumentUploadProgress?>,
         needsManualModeSelection: Binding<Bool>,
+        ocrText: String?,
+        extractModelOptions: [MedicalDocumentUploadViewModel.RecognitionModelOption],
+        overrideDocumentKindForRetry: Binding<MedicalDocumentKind?>,
+        preferredExtractModelName: Binding<String?>,
         onCancel: (() -> Void)? = nil,
         onRestart: (() -> Void)? = nil,
+        onRetryFromFailedStep: (() -> Void)? = nil,
         onReturnToPicker: (() -> Void)? = nil,
         onSelectMode: ((MedicalDocumentKind) -> Void)? = nil
     ) {
         self._progress = progress
         self._needsManualModeSelection = needsManualModeSelection
+        self.ocrText = ocrText
+        self.extractModelOptions = extractModelOptions
+        self._overrideDocumentKindForRetry = overrideDocumentKindForRetry
+        self._preferredExtractModelName = preferredExtractModelName
         self.onCancel = onCancel
         self.onRestart = onRestart
+        self.onRetryFromFailedStep = onRetryFromFailedStep
         self.onReturnToPicker = onReturnToPicker
         self.onSelectMode = onSelectMode
         
@@ -51,8 +66,13 @@ struct MedicalDocumentUploadProgressContainerView: View {
                 // 显示进度视图
                 MedicalDocumentUploadProgressView(
                     viewModel: viewModel,
+                    ocrText: ocrText,
+                    extractModelOptions: extractModelOptions,
+                    overrideDocumentKindForRetry: $overrideDocumentKindForRetry,
+                    preferredExtractModelName: $preferredExtractModelName,
                     onCancel: onCancel,
                     onRestart: onRestart,
+                    onRetryFromFailedStep: onRetryFromFailedStep,
                     onReturnToPicker: onReturnToPicker
                 )
             } else {

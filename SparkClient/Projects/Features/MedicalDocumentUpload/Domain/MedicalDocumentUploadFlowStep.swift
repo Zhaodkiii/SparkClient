@@ -138,7 +138,12 @@ protocol MedicalDocumentUploadStepReporter: AnyObject {
     /// - Parameters:
     ///   - step: 要完成的步骤
     ///   - outcome: 完成结果
-    func complete(_ step: MedicalDocumentUploadFlowStep, outcome: MedicalDocumentUploadFlowStep.CompletionOutcome)
+    func complete(
+        _ step: MedicalDocumentUploadFlowStep,
+        outcome: MedicalDocumentUploadFlowStep.CompletionOutcome,
+        resultSummary: String?,
+        detailKind: MedicalDocumentUploadStepDetailKind?
+    )
     
     /// 标记某个步骤失败
     /// - Parameter step: 失败的步骤
@@ -151,5 +156,21 @@ extension MedicalDocumentUploadStepReporter {
     /// 默认变体的开始步骤方法
     func start(_ step: MedicalDocumentUploadFlowStep) {
         start(step, variant: .default)
+    }
+
+    func complete(_ step: MedicalDocumentUploadFlowStep, outcome: MedicalDocumentUploadFlowStep.CompletionOutcome) {
+        complete(step, outcome: outcome, resultSummary: nil, detailKind: nil)
+    }
+}
+
+extension MedicalDocumentUploadFlowStep {
+    var pipelineOrder: Int {
+        switch self {
+        case .upload: return 0
+        case .ocr: return 1
+        case .typeRecognition: return 2
+        case .extract: return 3
+        case .save: return 4
+        }
     }
 }

@@ -18,6 +18,26 @@ protocol MedicalDocumentTypeResolving: Sendable {
 }
 
 protocol TypedMedicalDocumentExtracting: Sendable {
+    func mergeOCRText(
+        files: [MedicalUploadLocalFile],
+        cancellationToken: AIRuntimeCancellationToken?
+    ) async throws -> String
+
+    func resolveType(
+        selectedKind: MedicalDocumentKind,
+        mergedOCRText: String,
+        cancellationToken: AIRuntimeCancellationToken?
+    ) async throws -> MedicalDocumentTypeResolution
+
+    func extractStructured(
+        memberID: Int,
+        files: [MedicalUploadLocalFile],
+        mergedOCRText: String,
+        resolution: MedicalDocumentTypeResolution,
+        preferredModelName: String?,
+        cancellationToken: AIRuntimeCancellationToken?
+    ) async throws -> MedicalDocumentTypedExtractionOutput
+
     func extract(
         memberID: Int,
         files: [MedicalUploadLocalFile],

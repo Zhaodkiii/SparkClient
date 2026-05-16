@@ -26,14 +26,22 @@ struct MedicalDocumentUploadHostView: View {
                 MedicalDocumentUploadProgressContainerView(
                     progress: $viewModel.progress,
                     needsManualModeSelection: $viewModel.needsManualModeSelection,
+                    ocrText: viewModel.pipelineOCRText,
+                    extractModelOptions: viewModel.extractModelOptions,
+                    overrideDocumentKindForRetry: $viewModel.overrideDocumentKindForRetry,
+                    preferredExtractModelName: $viewModel.preferredExtractModelName,
                     onCancel: {
                         // 取消识别流程，重置到选择状态但保留文件，并停止后台 AI 抽取。
                         viewModel.cancelRecognition()
                     },
                     onRestart: {
-                        // 重新识别，保留已选文件
+                        // 全量重新识别，保留已选文件但清空检查点
                         viewModel.resetRecognitionState()
                         viewModel.startRecognitionTask()
+                    },
+                    onRetryFromFailedStep: {
+                        // 从失败步骤继续，复用已经成功的检查点
+                        viewModel.resumeRecognitionTask()
                     },
                     onReturnToPicker: {
                         // 返回文件选择界面

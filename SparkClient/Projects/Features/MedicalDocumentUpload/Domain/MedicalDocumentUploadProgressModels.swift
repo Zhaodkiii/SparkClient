@@ -10,6 +10,10 @@ enum MedicalDocumentUploadStepState: String, Equatable, Sendable {
     case failed     // 失败
 }
 
+enum MedicalDocumentUploadStepDetailKind: String, Equatable, Sendable {
+    case ocrFullText
+}
+
 // MARK: - 步骤模型
 /// 医疗文档上传【单个步骤】模型
 /// 描述上传流程中的一个具体执行步骤（如：文件准备、文件上传、服务器校验等）
@@ -28,6 +32,30 @@ struct MedicalDocumentUploadStep: Identifiable, Equatable, Sendable {
     
     /// 预估执行耗时（单位：秒，可选）
     var estimatedSeconds: Int?
+
+    /// 步骤完成后展示在右侧或副区域的短结果摘要。
+    var resultSummary: String?
+
+    /// 可点击详情类型，例如 OCR 全文。
+    var detailKind: MedicalDocumentUploadStepDetailKind?
+
+    init(
+        id: String,
+        title: String,
+        subtitle: String?,
+        state: MedicalDocumentUploadStepState,
+        estimatedSeconds: Int?,
+        resultSummary: String? = nil,
+        detailKind: MedicalDocumentUploadStepDetailKind? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.state = state
+        self.estimatedSeconds = estimatedSeconds
+        self.resultSummary = resultSummary
+        self.detailKind = detailKind
+    }
     
     /// Equatable 协议实现：判断两个上传步骤是否相等
     /// 用于视图刷新、状态对比等场景
@@ -36,7 +64,9 @@ struct MedicalDocumentUploadStep: Identifiable, Equatable, Sendable {
         lhs.title == rhs.title &&
         lhs.subtitle == rhs.subtitle &&
         lhs.state == rhs.state &&
-        lhs.estimatedSeconds == rhs.estimatedSeconds
+        lhs.estimatedSeconds == rhs.estimatedSeconds &&
+        lhs.resultSummary == rhs.resultSummary &&
+        lhs.detailKind == rhs.detailKind
     }
 }
 

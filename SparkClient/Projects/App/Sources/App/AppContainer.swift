@@ -614,6 +614,9 @@ final class AppContainer {
             extractUseCase: extractTypedMedicalDocumentUseCase,
             saveUseCase: saveTypedMedicalDocumentUseCase,
             bindUseCase: bindUploadedFilesToMedicalBusinessUseCase,
+            loadEffectiveScenarioBundles: { [aiConfigCenter] in
+                try await aiConfigCenter.effectiveScenarioBundles()
+            },
             logger: logger
         )
         cachedMedicalDocumentUploadViewModel = created

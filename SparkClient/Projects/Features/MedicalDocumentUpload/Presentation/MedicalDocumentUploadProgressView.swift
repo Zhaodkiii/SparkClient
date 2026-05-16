@@ -5,15 +5,29 @@ import SwiftUI
 /// 支持动态操作按钮（取消/返回/重试）根据整体状态自动切换
 struct MedicalDocumentUploadProgressView: View {
     @ObservedObject var viewModel: MedicalDocumentUploadProgressViewModel
+    let ocrText: String?
+    let extractModelOptions: [MedicalDocumentUploadViewModel.RecognitionModelOption]
+    @Binding var overrideDocumentKindForRetry: MedicalDocumentKind?
+    @Binding var preferredExtractModelName: String?
     var onCancel: (() -> Void)? = nil
     var onRestart: (() -> Void)? = nil
+    var onRetryFromFailedStep: (() -> Void)? = nil
     var onReturnToPicker: (() -> Void)? = nil
+    @State private var isShowingOCRText = false
     
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
             
-            ProgressCardView(viewModel: viewModel)
+            ProgressCardView(
+                viewModel: viewModel,
+                extractModelOptions: extractModelOptions,
+                overrideDocumentKindForRetry: $overrideDocumentKindForRetry,
+                preferredExtractModelName: $preferredExtractModelName,
+                onShowOCRText: {
+                    isShowingOCRText = true
+                }
+            )
             
             Spacer()
             
@@ -22,6 +36,18 @@ struct MedicalDocumentUploadProgressView: View {
         }
         .padding(.horizontal, 20)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isShowingOCRText) {
+            CompatibleNavigationContainer {
+                ScrollView {
+                    Text(ocrText?.isEmpty == false ? ocrText! : "暂无 OCR 内容")
+                        .font(.system(.body, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                .navigationTitle("OCR 全文")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
     }
     
     // MARK: - 操作按钮
@@ -55,7 +81,15 @@ struct MedicalDocumentUploadProgressView: View {
                 Button {
                     onRestart?()
                 } label: {
-                    Text(L10n.text("medical.upload.action.restart"))
+                    Text("从头重来")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    onRetryFromFailedStep?()
+                } label: {
+                    Text("继续识别")
                         .font(.subheadline)
                 }
                 .buttonStyle(.borderedProminent)
@@ -76,6 +110,10 @@ struct MedicalDocumentUploadProgressView: View {
 /// 使用渐变边框和阴影增强视觉层次
 private struct ProgressCardView: View {
     @ObservedObject var viewModel: MedicalDocumentUploadProgressViewModel
+    let extractModelOptions: [MedicalDocumentUploadViewModel.RecognitionModelOption]
+    @Binding var overrideDocumentKindForRetry: MedicalDocumentKind?
+    @Binding var preferredExtractModelName: String?
+    var onShowOCRText: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -181,7 +219,13 @@ private struct ProgressCardView: View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(viewModel.progress.steps.indices, id: \.self) { idx in
                 let step = viewModel.progress.steps[idx]
-                StepRow(step: step)
+                StepRow(
+                    step: step,
+                    extractModelOptions: extractModelOptions,
+                    overrideDocumentKindForRetry: $overrideDocumentKindForRetry,
+                    preferredExtractModelName: $preferredExtractModelName,
+                    onShowOCRText: onShowOCRText
+                )
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(String(format: L10n.text("medical.upload.a11y.step"), idx + 1, step.title))
                     .accessibilityValue(step.state.rawValue)
@@ -196,6 +240,10 @@ private struct ProgressCardView: View {
 /// 包含状态图标、标题和可选的副标题
 private struct StepRow: View {
     let step: MedicalDocumentUploadStep
+    let extractModelOptions: [MedicalDocumentUploadViewModel.RecognitionModelOption]
+    @Binding var overrideDocumentKindForRetry: MedicalDocumentKind?
+    @Binding var preferredExtractModelName: String?
+    var onShowOCRText: () -> Void
     
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -216,8 +264,78 @@ private struct StepRow: View {
             }
             
             Spacer()
-            // 更具不同的类型展示 具体的结果
+            trailing
         }
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if let resultSummary = step.resultSummary {
+                Text(resultSummary)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            if step.detailKind == .ocrFullText {
+                Button("查看") {
+                    onShowOCRText()
+                }
+                .font(.caption.weight(.semibold))
+            }
+
+            if step.state == .failed {
+                failedControl
+            }
+            
+            
+        }
+    }
+
+    @ViewBuilder
+    private var failedControl: some View {
+        if step.id == MedicalDocumentUploadFlowStep.typeRecognition.rawValue {
+            Menu {
+                ForEach(MedicalDocumentKind.allCases.filter { $0 != .auto }, id: \.self) { kind in
+                    Button {
+                        overrideDocumentKindForRetry = kind
+                    } label: {
+                        Label(kind.localizedUploadLabel, systemImage: overrideDocumentKindForRetry == kind ? "checkmark" : "doc.text")
+                    }
+                }
+            } label: {
+                Label(overrideDocumentKindForRetry?.localizedUploadLabel ?? "改类型", systemImage: "square.and.pencil")
+                    .font(.caption.weight(.semibold))
+            }
+        } else if step.id == MedicalDocumentUploadFlowStep.extract.rawValue, extractModelOptions.isEmpty == false {
+            Menu {
+                Button {
+                    preferredExtractModelName = nil
+                } label: {
+                    Label("默认模型", systemImage: preferredExtractModelName == nil ? "checkmark" : "cpu")
+                }
+                ForEach(extractModelOptions) { option in
+                    Button {
+                        preferredExtractModelName = option.name
+                    } label: {
+                        Label(option.displayName, systemImage: preferredExtractModelName == option.name ? "checkmark" : "cpu")
+                    }
+                }
+            } label: {
+                Label(selectedModelLabel, systemImage: "slider.horizontal.3")
+                    .font(.caption.weight(.semibold))
+            }
+        }
+    }
+
+    private var selectedModelLabel: String {
+        guard let preferredExtractModelName,
+              let option = extractModelOptions.first(where: { $0.name == preferredExtractModelName })
+        else {
+            return "改模型"
+        }
+        return option.displayName
     }
 }
 

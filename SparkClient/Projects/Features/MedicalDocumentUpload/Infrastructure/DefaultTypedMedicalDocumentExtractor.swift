@@ -64,39 +64,81 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         selectedKind: MedicalDocumentKind,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
-#if DEBUG
-        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
-        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: selectedKind)
-#endif
+//#if DEBUG && MEDICAL_FAKE_EXTRACTION
+//        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
+//        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: selectedKind)
+//#endif
         try cancellationToken?.checkCancellation()
         logger.info("typed 抽取开始，文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
 
         // 1. 对所有上传文件执行OCR，并把所有文本合并成一段完整文本
-        let mergedOCR = try await buildMergedOCRText(files: files, cancellationToken: cancellationToken)
+        let mergedOCR = try await mergeOCRText(files: files, cancellationToken: cancellationToken)
         try cancellationToken?.checkCancellation()
         
         // 2. 根据用户选择类型 + OCR文本，最终确定文档类型（病例/体检/处方等）
-        let resolution = try await typeResolver.resolve(
+        let resolution = try await resolveType(
             selectedKind: selectedKind,
             mergedOCRText: mergedOCR,
             cancellationToken: cancellationToken
         )
         try cancellationToken?.checkCancellation()
-        // 解析出最终判定的文档类型
+
+        return try await extractStructured(
+            memberID: memberID,
+            files: files,
+            mergedOCRText: mergedOCR,
+            resolution: resolution,
+            preferredModelName: nil,
+            cancellationToken: cancellationToken
+        )
+    }
+
+    func mergeOCRText(
+        files: [MedicalUploadLocalFile],
+        cancellationToken: AIRuntimeCancellationToken? = nil
+    ) async throws -> String {
+        try await buildMergedOCRText(files: files, cancellationToken: cancellationToken)
+    }
+
+    func resolveType(
+        selectedKind: MedicalDocumentKind,
+        mergedOCRText: String,
+        cancellationToken: AIRuntimeCancellationToken? = nil
+    ) async throws -> MedicalDocumentTypeResolution {
+        try await typeResolver.resolve(
+            selectedKind: selectedKind,
+            mergedOCRText: mergedOCRText,
+            cancellationToken: cancellationToken
+        )
+    }
+
+    func extractStructured(
+        memberID: Int,
+        files: [MedicalUploadLocalFile],
+        mergedOCRText: String,
+        resolution: MedicalDocumentTypeResolution,
+        preferredModelName: String? = nil,
+        cancellationToken: AIRuntimeCancellationToken? = nil
+    ) async throws -> MedicalDocumentTypedExtractionOutput {
+        try cancellationToken?.checkCancellation()
         let kind = resolution.kind
-        
         // 3. 根据文档类型，生成对应的AI抽取提示词（Prompt）
-        let prompt = promptFactory.extractionPrompt(for: MedicalPromptInput(kind: kind, mergedOCRText: mergedOCR))
+        let prompt = promptFactory.extractionPrompt(for: MedicalPromptInput(kind: kind, mergedOCRText: mergedOCRText))
         
         // 4. 调用AI，执行结构化抽取，得到类型化结果 + 标准JSON
-        let extraction = try await extractTypedResult(kind: kind, prompt: prompt, cancellationToken: cancellationToken)
+        let extraction = try await extractTypedResult(
+            kind: kind,
+            prompt: prompt,
+            preferredModelName: preferredModelName,
+            cancellationToken: cancellationToken
+        )
         let extractedJSON = extraction.json
         
         // 5. 构建识别信封：保存本次抽取的所有原始信息（用于溯源、审计、重试）
         let envelope = MedicalDocumentRecognitionEnvelope(
             memberID: memberID,
             sourceFiles: files,
-            rawOCRText: mergedOCR,
+            rawOCRText: mergedOCRText,
             typeResolution: resolution
         )
         
@@ -190,6 +232,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     private func extractTypedResult(
         kind: MedicalDocumentKind,
         prompt: String,
+        preferredModelName: String? = nil,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> (typed: MedicalDocumentTypedResult, json: String) {
         try cancellationToken?.checkCancellation()
@@ -202,6 +245,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: .medicalCaseExtraction,
                 kindLabel: "case_document",
                 as: CaseRecognitionDraft.self,
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
@@ -216,6 +260,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: .healthExamExtraction,
                 kindLabel: "health_exam_report",
                 as: HealthExamRecognitionDraft.self,
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
@@ -230,6 +275,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: .medicalReportExtraction,
                 kindLabel: "medical_report",
                 as: [MedicalReportRecognitionDraft].self,
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
@@ -244,6 +290,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: .prescriptionExtraction,
                 kindLabel: "prescription",
                 as: PrescriptionRecognitionDraft.self,
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
@@ -258,6 +305,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: .medicationExtraction,
                 kindLabel: "medication",
                 as: [MedicationPlanRecognitionDraft].self,
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
@@ -271,6 +319,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: .medicationExtraction,
                 kindLabel: "medicine_box",
                 as: [MedicineBoxRecognitionDraft].self,
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
@@ -294,6 +343,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         scenario: AIScenario,
         kindLabel: String,
         as type: T.Type,
+        preferredModelName: String? = nil,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> StructuredJSONStreamFinal<T> {
         try cancellationToken?.checkCancellation()
@@ -304,6 +354,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 scenario: scenario,
                 messages: [AIRuntimeMessage(role: .user, content: prompt)],
                 reasoning: .disabled, // 关闭推理加速，保证输出稳定JSON
+                preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
         )
