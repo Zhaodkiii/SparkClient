@@ -112,7 +112,6 @@
                     'startDate': '字符串，yyyy-MM-dd，用药计划开始日期，无则省略',
                     'endDate': '字符串，yyyy-MM-dd，用药计划结束日期，无则省略',
                     'instructions': '字符串，完整用药嘱咐说明，无则省略',
-                    'reminderEnabled': '布尔值，是否开启用药提醒，无则省略',
                     'reminderTimes': ['字符串，提醒时间格式HH:mm，无则省略'],
                     'medicineBox': {
                         'medicineName': '字符串，药箱药品名称，必填',
@@ -397,8 +396,6 @@ JSON
 
 'instructions': '用药说明/注意事项（无则省略）',
 
-'reminderEnabled': '是否开启提醒（布尔值true/false，无则省略）',
-
 'reminderTimes': ['提醒时间（如：08:00、20:00）'],
 
 'medicineBox': {
@@ -469,7 +466,6 @@ JSON
     •    medicineBox：药箱侧字段，可与同级字段重复药名/规格以便落库；无额外信息可整段省略。
     •    status：计划状态，无则 active。
     •    sortOrder：处方内顺序字符串（如 0、1、2）。
-    •    reminderEnabled：仅当文本明确要求用药提醒时填 true，否则省略。
     •    reminderTimes：每日提醒时间数组，格式 HH:mm，无则省略。
 
 【抽取范围与去噪】

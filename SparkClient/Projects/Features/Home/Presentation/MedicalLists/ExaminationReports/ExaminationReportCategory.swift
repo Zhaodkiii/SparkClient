@@ -41,41 +41,32 @@ enum ExaminationReportCategory: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// 分类规则：
-    /// 1. 优先按后端 `category` / `subCategory` 的标准值匹配；
-    /// 2. 匹配不上时，再根据摘要字段做轻量分类；
-    /// 3. 最终兜底归为实验室检查。
-    func matches(_ report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Bool {
-        if let direct = directCategory(from: report) {
-            return direct == self
-        }
+    static func from(_ value: String?) -> ExaminationReportCategory {
+        category(fromText: [value])
+    }
 
-        let haystack = [
+    static func category(for report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> ExaminationReportCategory {
+        category(fromText: [
+            report.category,
+            report.subCategory,
             report.itemName,
             report.findings,
             report.impression,
             report.extra?["summary"],
             report.extra?["abstract"]
-        ]
-        .compactMap { $0?.lowercased() }
-        .joined(separator: " ")
-
-        switch self {
-        case .laboratory:
-            return haystack.contains("检验")
-                || haystack.contains("实验")
-                || haystack.contains("lab")
-                || haystack.contains("化验")
-                || matchesNone(of: [.imaging, .pathology], report: report)
-        case .imaging:
-            return ["影像", "超声", "ct", "mr", "mri", "放射", "x线", "b超", "彩超"].contains { haystack.contains($0) }
-        case .pathology:
-            return haystack.contains("病理") || haystack.contains("pathology")
-        }
+        ])
     }
 
-    private func directCategory(from report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> ExaminationReportCategory? {
-        let candidates = [report.category, report.subCategory]
+    /// 分类规则：
+    /// 1. 优先按后端 `category` / `subCategory` 的标准值匹配；
+    /// 2. 匹配不上时，再根据摘要字段做轻量分类；
+    /// 3. 最终兜底归为实验室检查。
+    func matches(_ report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Bool {
+        Self.category(for: report) == self
+    }
+
+    private static func directCategory(from values: [String?]) -> ExaminationReportCategory? {
+        let candidates = values
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
 
         for candidate in candidates {
@@ -94,31 +85,22 @@ enum ExaminationReportCategory: String, CaseIterable, Identifiable, Hashable {
         return nil
     }
 
-    private func matchesNone(
-        of categories: [ExaminationReportCategory],
-        report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
-    ) -> Bool {
-        categories.allSatisfy { $0.matchesDirectly(report) == false }
-    }
-
-    private func matchesDirectly(_ report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Bool {
-        let haystack = [
-            report.itemName,
-            report.findings,
-            report.impression,
-            report.extra?["summary"],
-            report.extra?["abstract"]
-        ]
-        .compactMap { $0?.lowercased() }
-        .joined(separator: " ")
-
-        switch self {
-        case .laboratory:
-            return ["检验", "实验", "lab", "化验"].contains { haystack.contains($0) }
-        case .imaging:
-            return ["影像", "超声", "ct", "mr", "mri", "放射", "x线", "b超", "彩超"].contains { haystack.contains($0) }
-        case .pathology:
-            return haystack.contains("病理") || haystack.contains("pathology")
+    private static func category(fromText values: [String?]) -> ExaminationReportCategory {
+        if let direct = directCategory(from: values) {
+            return direct
         }
+
+        let haystack = values
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .joined(separator: " ")
+
+        if ["影像", "超声", "ct", "mr", "mri", "放射", "x线", "b超", "彩超", "image"].contains(where: { haystack.contains($0) }) {
+            return .imaging
+        }
+        if haystack.contains("病理") || haystack.contains("pathology") || haystack.contains("path") {
+            return .pathology
+        }
+        return .laboratory
     }
+
 }

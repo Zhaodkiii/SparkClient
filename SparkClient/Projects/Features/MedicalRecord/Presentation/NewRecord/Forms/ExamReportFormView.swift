@@ -8,36 +8,6 @@ struct ExamReportFormView: View {
         case localEdit(existing: MedicalReportRecognitionDraft, onSubmit: (MedicalReportRecognitionDraft) -> Void)
     }
 
-    enum PageType: String, CaseIterable {
-        case laboratory
-        case imaging
-        case pathology
-
-        var segmentTitle: String {
-            switch self {
-            case .laboratory: return L10n.text("medical_record.forms.exam_report.segment.laboratory")
-            case .imaging: return L10n.text("medical_record.forms.exam_report.segment.imaging")
-            case .pathology: return L10n.text("medical_record.forms.exam_report.segment.pathology")
-            }
-        }
-
-        var itemLabel: String {
-            switch self {
-            case .laboratory: return L10n.text("medical_record.forms.exam_report.label.lab")
-            case .imaging: return L10n.text("medical_record.forms.exam_report.label.imaging")
-            case .pathology: return L10n.text("medical_record.forms.exam_report.label.pathology")
-            }
-        }
-
-        var menuSystemImage: String {
-            switch self {
-            case .laboratory: return "flask"
-            case .imaging: return "camera.viewfinder"
-            case .pathology: return "microscope"
-            }
-        }
-    }
-
     struct ItemDraft: Identifiable, Equatable {
         var id: UUID
         var category: String
@@ -91,7 +61,7 @@ struct ExamReportFormView: View {
     let onCreateSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)?
     let onServerSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)?
 
-    @State private var pageType: PageType
+    @State private var pageType: ExaminationReportCategory
     @State private var category: String
     @State private var title: String
     @State private var hospital: String
@@ -128,7 +98,7 @@ struct ExamReportFormView: View {
             seed = existing
         }
 
-        let pageType = ExamReportFormView.detectPageType(seed.category)
+        let pageType = ExaminationReportCategory.from(seed.category)
         _pageType = State(initialValue: pageType)
         _category = State(initialValue: seed.category ?? pageType.rawValue)
         _title = State(initialValue: seed.title)
@@ -198,9 +168,12 @@ struct ExamReportFormView: View {
                                     L10n.text("medical_record.forms.exam_report.field.exam_type"),
                                     selection: $pageType
                                 ) {
-                                    ForEach(PageType.allCases, id: \.self) { type in
-                                        Label(type.segmentTitle, systemImage: type.menuSystemImage)
-                                            .tag(type)
+                                    ForEach(ExaminationReportCategory.allCases, id: \.self) { type in
+                                        Label(
+                                            L10n.text(type.titleKey),
+                                            systemImage: type.icon
+                                        )
+                                        .tag(type)
                                     }
                                 }
                                 .pickerStyle(.menu)
@@ -528,13 +501,6 @@ struct ExamReportFormView: View {
                 isSaving = false
             }
         }
-    }
-
-    private static func detectPageType(_ category: String?) -> PageType {
-        let lower = (category ?? "").lowercased()
-        if lower.contains("path") || lower.contains("病理") { return .pathology }
-        if lower.contains("image") || lower.contains("影像") || lower.contains("ct") || lower.contains("mr") { return .imaging }
-        return .laboratory
     }
 
     private static let examDayFormatter: DateFormatter = {

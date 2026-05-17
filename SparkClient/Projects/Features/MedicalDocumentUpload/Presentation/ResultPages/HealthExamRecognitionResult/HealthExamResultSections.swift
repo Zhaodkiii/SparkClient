@@ -16,14 +16,14 @@ struct HealthExamMemberSectionView: View {
     }
 
     var body: some View {
-        HealthExamResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.member.title"),
             subtitle: L10n.text("medical.upload.result.member.subtitle"),
             systemImage: "person.crop.circle.badge.checkmark"
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 memberRow
-                HealthExamResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.total_count"),
                     value: "\(draft.items.count)"
                 )
@@ -61,7 +61,7 @@ struct HealthExamMemberSectionView: View {
                 }
             }
         } else {
-            HealthExamResultInfoLine(
+            MedicalDocumentResultInfoLine(
                 title: L10n.text("medical.upload.result.member.title"),
                 value: selectedMemberName
             )
@@ -74,7 +74,7 @@ struct HealthExamBasicInfoSectionView: View {
     var onEdit: (() -> Void)?
 
     var body: some View {
-        HealthExamResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.health_exam.basic_info.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.basic_info.subtitle"),
             systemImage: "doc.text",
@@ -82,23 +82,23 @@ struct HealthExamBasicInfoSectionView: View {
             action: onEdit
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                HealthExamResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.institution"),
                     value: draft.institutionName ?? ""
                 )
-                HealthExamResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.report_no"),
                     value: draft.reportNo ?? ""
                 )
-                HealthExamResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.exam_date"),
                     value: draft.examDate ?? ""
                 )
-                HealthExamResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.exam_type"),
                     value: draft.examType ?? ""
                 )
-                HealthExamResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.summary"),
                     value: draft.summary ?? ""
                 )
@@ -113,7 +113,7 @@ struct HealthExamRiskOverviewCard: View {
     let lowCount: Int
 
     var body: some View {
-        HealthExamResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.health_exam.overview.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.overview.subtitle"),
             systemImage: "exclamationmark.triangle"
@@ -153,7 +153,7 @@ struct HealthExamSummaryRow: View {
     let onSelect: (HealthExamResultSummaryFilter) -> Void
 
     var body: some View {
-        HealthExamResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.health_exam.summary.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.summary.subtitle"),
             systemImage: "sum"
@@ -198,7 +198,7 @@ struct HealthExamCategoryGroupsSectionView: View {
     @Binding var expandedCategories: Set<String>
 
     var body: some View {
-        HealthExamResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.health_exam.groups.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.groups.subtitle"),
             systemImage: "list.bullet.rectangle"
@@ -319,7 +319,7 @@ struct HealthExamAttachmentsSectionView: View {
     @State private var selectedPreview: FilePreviewInput?
 
     var body: some View {
-        HealthExamResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.attachments.title"),
             subtitle: L10n.text("medical.upload.result.attachments.subtitle"),
             systemImage: "paperclip",
@@ -358,7 +358,7 @@ struct HealthExamAttachmentsSectionView: View {
         .unifiedFilePreview(selection: $selectedPreview)
     }
 
-    private func row(_ item: HealthExamResultLocalAttachmentItem) -> some View {
+    private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

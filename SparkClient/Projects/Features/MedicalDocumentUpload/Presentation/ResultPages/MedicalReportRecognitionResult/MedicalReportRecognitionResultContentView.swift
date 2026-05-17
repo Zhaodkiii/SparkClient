@@ -34,8 +34,14 @@ struct MedicalReportRecognitionResultContentView: View {
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
 
     /// 附件（上传的检查报告照片）
-    private var attachments: [MedicalReportResultLocalAttachmentItem] {
-        output.envelope.sourceFiles.map { MedicalReportResultLocalAttachmentItem(file: $0) }
+    private var attachments: [MedicalDocumentLocalAttachmentItem] {
+        output.envelope.sourceFiles.map { MedicalDocumentLocalAttachmentItem(file: $0) }
+    }
+
+    private func matchedAttachments(for ids: [UUID]) -> [MedicalDocumentLocalAttachmentItem] {
+        guard ids.isEmpty == false else { return [] }
+        let idSet = Set(ids)
+        return attachments.filter { idSet.contains($0.id) }
     }
 
     var body: some View {
@@ -55,6 +61,7 @@ struct MedicalReportRecognitionResultContentView: View {
                 /// 支持点击编辑每一份报告
                 MedicalReportCardsSectionView(
                     reports: reports,
+                    attachmentsForIDs: matchedAttachments(for:),
                     onEdit: { index, draft in
                         logger.info("Medical report result: open local editor index=\(index)", module: logModule)
                         localEditor = .report(index: index, draft: draft) // 打开编辑页
@@ -66,13 +73,14 @@ struct MedicalReportRecognitionResultContentView: View {
 
                 // MARK: 5. 保存成功回执（显示记录ID）
                 if let saveReceipt {
-                    MedicalReportResultSectionCard(
+                    MedicalDocumentResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
                         subtitle: L10n.text("medical.upload.result.common.save_success"),
                         systemImage: "checkmark.circle",
+            tintColor: Color(uiColor: .systemTeal),
                         badgeText: L10n.text("medical.upload.result.common.saved")
                     ) {
-                        MedicalReportResultInfoLine(
+                        MedicalDocumentResultInfoLine(
                             title: L10n.text("medical.upload.result.common.record_id"),
                             value: "\(saveReceipt.recordID)"
                         )

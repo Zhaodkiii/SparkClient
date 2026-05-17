@@ -2,11 +2,11 @@ import SwiftUI
 
 struct CaseVisitInfoSectionView: View {
     let visit: VisitRecognitionDraft?
-    let attachments: [CaseLocalAttachmentItem]
+    let attachments: [MedicalDocumentLocalAttachmentItem]
     let onEdit: (VisitRecognitionDraft) -> Void
 
     var body: some View {
-        CaseSectionCard(
+        MedicalDocumentResultSectionCard(
             title: "就诊信息",
             subtitle: "时间、科室、医师等基础要素",
             systemImage: "stethoscope",
@@ -19,11 +19,11 @@ struct CaseVisitInfoSectionView: View {
         ) {
             if let visit {
                 VStack(alignment: .leading, spacing: 10) {
-                    CaseInfoLine(title: "就诊类型", value: visit.visitType ?? "")
-                    CaseInfoLine(title: "就诊时间", value: visit.visitedAt ?? "")
-                    CaseInfoLine(title: "科室", value: visit.department ?? "")
-                    CaseInfoLine(title: "医生", value: visit.doctorName ?? "")
-                    CaseInfoLine(title: "备注", value: visit.notes ?? "")
+                    MedicalDocumentResultInfoLine(title: "就诊类型", value: visit.visitType ?? "")
+                    MedicalDocumentResultInfoLine(title: "就诊时间", value: visit.visitedAt ?? "")
+                    MedicalDocumentResultInfoLine(title: "科室", value: visit.department ?? "")
+                    MedicalDocumentResultInfoLine(title: "医生", value: visit.doctorName ?? "")
+                    MedicalDocumentResultInfoLine(title: "备注", value: visit.notes ?? "")
                     CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachments)
                 }
             } else {

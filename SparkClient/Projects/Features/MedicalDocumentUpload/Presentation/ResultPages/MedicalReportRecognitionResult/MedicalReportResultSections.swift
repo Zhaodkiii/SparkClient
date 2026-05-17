@@ -5,17 +5,18 @@ struct MedicalReportMemberSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
 
     var body: some View {
-        MedicalReportResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.member.title"),
             subtitle: L10n.text("medical.upload.result.member.subtitle"),
-            systemImage: "person.crop.circle.badge.checkmark"
+            systemImage: "person.crop.circle.badge.checkmark",
+            tintColor: Color(uiColor: .systemTeal)
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                MedicalReportResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.member.id"),
                     value: memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
                 )
-                MedicalReportResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.medical_report.total_count"),
                     value: "\(reports.count)"
                 )
@@ -27,18 +28,19 @@ struct MedicalReportMemberSectionView: View {
 struct MedicalReportStatsSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
 
-    private var counts: [(MedicalReportDraftCategory, Int)] {
-        MedicalReportDraftCategory.allCases.map { category in
-            let count = reports.filter { MedicalReportDraftCategory.from($0.category) == category }.count
+    private var counts: [(ExaminationReportCategory, Int)] {
+        ExaminationReportCategory.allCases.map { category in
+            let count = reports.filter { ExaminationReportCategory.from($0.category) == category }.count
             return (category, count)
         }
     }
 
     var body: some View {
-        MedicalReportResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.medical_report.stats.title"),
             subtitle: L10n.text("medical.upload.result.medical_report.stats.subtitle"),
-            systemImage: "chart.bar"
+            systemImage: "chart.bar",
+            tintColor: Color(uiColor: .systemTeal)
         ) {
             HStack(spacing: 10) {
                 ForEach(counts, id: \.0.rawValue) { item in
@@ -48,12 +50,12 @@ struct MedicalReportStatsSectionView: View {
         }
     }
 
-    private func statChip(category: MedicalReportDraftCategory, value: Int) -> some View {
+    private func statChip(category: ExaminationReportCategory, value: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: category.iconName)
+                Image(systemName: category.icon)
                     .font(.caption)
-                    .foregroundStyle(category.accentColor)
+                    .foregroundStyle(category.color)
                 Text(L10n.text(category.titleKey))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -75,13 +77,15 @@ struct MedicalReportStatsSectionView: View {
 
 struct MedicalReportCardsSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
+    var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
     let onEdit: (Int, MedicalReportRecognitionDraft) -> Void
 
     var body: some View {
-        MedicalReportResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.medical_report.cards.title"),
             subtitle: L10n.text("medical.upload.result.medical_report.cards.subtitle"),
             systemImage: "doc.text.magnifyingglass",
+            tintColor: Color(uiColor: .systemTeal),
             badgeText: String(
                 format: L10n.text("medical.upload.result.medical_report.total_format"),
                 locale: .current,
@@ -89,20 +93,20 @@ struct MedicalReportCardsSectionView: View {
             )
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(MedicalReportDraftCategory.allCases, id: \.rawValue) { category in
+                ForEach(ExaminationReportCategory.allCases, id: \.rawValue) { category in
                     categoryBlock(category)
                 }
             }
         }
     }
 
-    private func categoryBlock(_ category: MedicalReportDraftCategory) -> some View {
-        let indexed = reports.enumerated().filter { MedicalReportDraftCategory.from($0.element.category) == category }
+    private func categoryBlock(_ category: ExaminationReportCategory) -> some View {
+        let indexed = reports.enumerated().filter { ExaminationReportCategory.from($0.element.category) == category }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: category.iconName)
+                Image(systemName: category.icon)
                     .font(.caption)
-                    .foregroundStyle(category.accentColor)
+                    .foregroundStyle(category.color)
                 Text(L10n.text(category.titleKey))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -131,7 +135,7 @@ struct MedicalReportCardsSectionView: View {
         }
     }
 
-    private func reportRow(index: Int, report: MedicalReportRecognitionDraft, category: MedicalReportDraftCategory) -> some View {
+    private func reportRow(index: Int, report: MedicalReportRecognitionDraft, category: ExaminationReportCategory) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(report.title)
@@ -168,8 +172,15 @@ struct MedicalReportCardsSectionView: View {
                     )
                 )
                 .font(.caption)
-                .foregroundStyle(category.accentColor)
+                .foregroundStyle(category.color)
                 .monospacedDigit()
+            }
+
+            if let attachmentsForIDs {
+                CaseMatchedAttachmentsGridView(
+                    title: "匹配附件",
+                    attachments: attachmentsForIDs(report.attachmentFileIds)
+                )
             }
         }
         .padding(12)
@@ -181,15 +192,16 @@ struct MedicalReportCardsSectionView: View {
 }
 
 struct MedicalReportAttachmentsSectionView: View {
-    let attachments: [MedicalReportResultLocalAttachmentItem]
+    let attachments: [MedicalDocumentLocalAttachmentItem]
 
     @State private var selectedPreview: FilePreviewInput?
 
     var body: some View {
-        MedicalReportResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.attachments.title"),
             subtitle: L10n.text("medical.upload.result.attachments.subtitle"),
             systemImage: "paperclip",
+            tintColor: Color(uiColor: .systemTeal),
             badgeText: String(
                 format: L10n.text("medical.upload.result.attachments.count"),
                 locale: .current,
@@ -217,7 +229,7 @@ struct MedicalReportAttachmentsSectionView: View {
         .unifiedFilePreview(selection: $selectedPreview)
     }
 
-    private func row(_ item: MedicalReportResultLocalAttachmentItem) -> some View {
+    private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

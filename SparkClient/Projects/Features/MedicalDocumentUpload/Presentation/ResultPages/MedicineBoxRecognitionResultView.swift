@@ -25,8 +25,8 @@ struct MedicineBoxRecognitionResultView: View {
     }
 
     /// 附件列表（上传的药盒照片/OCR文件）
-    private var attachments: [MedicationResultLocalAttachmentItem] {
-        output.envelope.sourceFiles.map { MedicationResultLocalAttachmentItem(file: $0) }
+    private var attachments: [MedicalDocumentLocalAttachmentItem] {
+        output.envelope.sourceFiles.map { MedicalDocumentLocalAttachmentItem(file: $0) }
     }
 
     private var isSaving: Bool { viewModel.isSaving }
@@ -49,28 +49,30 @@ struct MedicineBoxRecognitionResultView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // MARK: - 成员信息区域
-                MedicationResultSectionCard(
+                MedicalDocumentResultSectionCard(
                     title: L10n.text("medical.upload.result.medicine_box.member.title", fallback: "确认成员"),
                     subtitle: L10n.text("medical.upload.result.medicine_box.member.subtitle", fallback: "保存后会加入该成员的药箱"),
-                    systemImage: "person.crop.circle.badge.checkmark"
+                    systemImage: "person.crop.circle.badge.checkmark",
+            tintColor: Color(uiColor: .systemTeal)
                 ) {
                     // 成员ID
-                    MedicationResultInfoLine(
+                    MedicalDocumentResultInfoLine(
                         title: L10n.text("medical.upload.result.member.id"),
                         value: output.envelope.memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
                     )
                     // 药品总数量
-                    MedicationResultInfoLine(
+                    MedicalDocumentResultInfoLine(
                         title: L10n.text("medical.upload.result.medicine_box.total_count", fallback: "药品数量"),
                         value: "\(items.count)"
                     )
                 }
 
                 // MARK: - 药品列表区域
-                MedicationResultSectionCard(
+                MedicalDocumentResultSectionCard(
                     title: L10n.text("medical.upload.result.medicine_box.section.title", fallback: "药箱药品"),
                     subtitle: L10n.text("medical.upload.result.medicine_box.section.subtitle", fallback: "可逐条编辑识别结果后保存"),
                     systemImage: "shippingbox.fill",
+            tintColor: Color(uiColor: .systemTeal),
                     badgeText: String(format: L10n.text("medical.upload.result.medication.count_format"), locale: .current, items.count)
                 ) {
                     if items.isEmpty {
@@ -93,13 +95,14 @@ struct MedicineBoxRecognitionResultView: View {
 
                 // MARK: - 保存成功回执区域
                 if let saveReceipt {
-                    MedicationResultSectionCard(
+                    MedicalDocumentResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
                         subtitle: L10n.text("medical.upload.result.common.save_success"),
                         systemImage: "checkmark.circle",
+            tintColor: Color(uiColor: .systemTeal),
                         badgeText: L10n.text("medical.upload.result.common.saved")
                     ) {
-                        MedicationResultInfoLine(
+                        MedicalDocumentResultInfoLine(
                             title: L10n.text("medical.upload.result.common.record_id"),
                             value: "\(saveReceipt.recordID)"
                         )

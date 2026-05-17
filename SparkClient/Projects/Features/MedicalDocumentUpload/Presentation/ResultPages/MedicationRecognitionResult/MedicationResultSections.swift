@@ -5,17 +5,18 @@ struct MedicationMemberConfirmSectionView: View {
     let medications: [MedicationPlanRecognitionDraft]
 
     var body: some View {
-        MedicationResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.member.title"),
             subtitle: L10n.text("medical.upload.result.member.subtitle"),
-            systemImage: "person.crop.circle.badge.checkmark"
+            systemImage: "person.crop.circle.badge.checkmark",
+            tintColor: Color(uiColor: .systemTeal)
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                MedicationResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.member.id"),
                     value: memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
                 )
-                MedicationResultInfoLine(
+                MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.medication.total_count"),
                     value: "\(medications.count)"
                 )
@@ -26,14 +27,16 @@ struct MedicationMemberConfirmSectionView: View {
 
 struct MedicationListSectionView: View {
     let medications: [MedicationPlanRecognitionDraft]
+    var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
     let onBatchEdit: () -> Void
     let onEditItem: (Int, MedicationPlanRecognitionDraft) -> Void
 
     var body: some View {
-        MedicationResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.medication.section.title"),
             subtitle: L10n.text("medical.upload.result.medication.section.subtitle"),
             systemImage: "pills",
+            tintColor: Color(uiColor: .systemTeal),
             badgeText: String(
                 format: L10n.text("medical.upload.result.medication.count_format"),
                 locale: .current,
@@ -58,34 +61,43 @@ struct MedicationListSectionView: View {
     }
 
     private func row(index: Int, item: MedicationPlanRecognitionDraft) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "capsule")
-                .font(.caption)
-                .foregroundStyle(Color(uiColor: .systemIndigo))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "capsule")
+                    .font(.caption)
+                    .foregroundStyle(Color(uiColor: .systemIndigo))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.medicineName ?? item.medicineBox?.medicineName ?? item.brandName ?? L10n.text("medical.upload.result.medication.unnamed"))
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                let detail = [item.medicineType, item.strength, item.frequencyText, item.instructions]
-                    .compactMap { $0?.nilIfBlank }
-                    .joined(separator: " · ")
-                if detail.isEmpty == false {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.medicineName ?? item.medicineBox?.medicineName ?? item.brandName ?? L10n.text("medical.upload.result.medication.unnamed"))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
+
+                    let detail = [item.medicineType, item.strength, item.frequencyText, item.instructions]
+                        .compactMap { $0?.nilIfBlank }
+                        .joined(separator: " · ")
+                    if detail.isEmpty == false {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+
+                Spacer()
+
+                Button(L10n.text("common.edit")) {
+                    onEditItem(index, item)
+                }
+                .font(.caption.weight(.semibold))
             }
 
-            Spacer()
-
-            Button(L10n.text("common.edit")) {
-                onEditItem(index, item)
+            if let attachmentsForIDs {
+                CaseMatchedAttachmentsGridView(
+                    title: "药品附件",
+                    attachments: attachmentsForIDs(item.attachmentFileIds)
+                )
             }
-            .font(.caption.weight(.semibold))
         }
         .padding(12)
         .background(
@@ -96,15 +108,16 @@ struct MedicationListSectionView: View {
 }
 
 struct MedicationAttachmentsSectionView: View {
-    let attachments: [MedicationResultLocalAttachmentItem]
+    let attachments: [MedicalDocumentLocalAttachmentItem]
 
     @State private var selectedPreview: FilePreviewInput?
 
     var body: some View {
-        MedicationResultSectionCard(
+        MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.attachments.title"),
             subtitle: L10n.text("medical.upload.result.attachments.subtitle"),
             systemImage: "paperclip",
+            tintColor: Color(uiColor: .systemTeal),
             badgeText: String(
                 format: L10n.text("medical.upload.result.attachments.count"),
                 locale: .current,
@@ -132,7 +145,7 @@ struct MedicationAttachmentsSectionView: View {
         .unifiedFilePreview(selection: $selectedPreview)
     }
 
-    private func row(_ item: MedicationResultLocalAttachmentItem) -> some View {
+    private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

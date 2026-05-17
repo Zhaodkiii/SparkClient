@@ -44,8 +44,14 @@ struct PrescriptionRecognitionResultContentView: View {
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
 
     /// 附件（上传的处方照片）
-    private var attachments: [PrescriptionResultLocalAttachmentItem] {
-        output.envelope.sourceFiles.map { PrescriptionResultLocalAttachmentItem(file: $0) }
+    private var attachments: [MedicalDocumentLocalAttachmentItem] {
+        output.envelope.sourceFiles.map { MedicalDocumentLocalAttachmentItem(file: $0) }
+    }
+
+    private func matchedAttachments(for ids: [UUID]) -> [MedicalDocumentLocalAttachmentItem] {
+        guard ids.isEmpty == false else { return [] }
+        let idSet = Set(ids)
+        return attachments.filter { idSet.contains($0.id) }
     }
 
     var body: some View {
@@ -61,12 +67,13 @@ struct PrescriptionRecognitionResultContentView: View {
                 /// 展示：医院、医生、诊断、药品清单
                 /// 支持：编辑整个处方 / 编辑单个药品
                 PrescriptionBatchListSectionView(
-                    batch: batch,
-                    onEditBatch: {
+                    batches: [batch],
+                    attachmentsForIDs: matchedAttachments(for:),
+                    onEditBatch: { _, batch in
                         logger.info("Prescription result: open local batch editor", module: logModule)
                         localEditor = .batch(batch) // 打开处方编辑页
                     },
-                    onEditMedication: { index, item in
+                    onEditMedication: { _, index, item in
                         logger.info("Prescription result: open local medication editor index=\(index)", module: logModule)
                         localEditor = .medication(index: index, draft: item) // 打开单个药品编辑页
                     }
@@ -77,13 +84,13 @@ struct PrescriptionRecognitionResultContentView: View {
 
                 // MARK: 4. 保存成功回执（显示记录ID）
                 if let saveReceipt {
-                    PrescriptionResultSectionCard(
+                    MedicalDocumentResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
                         subtitle: L10n.text("medical.upload.result.common.save_success"),
                         systemImage: "checkmark.circle",
                         badgeText: L10n.text("medical.upload.result.common.saved")
                     ) {
-                        PrescriptionResultInfoLine(
+                        MedicalDocumentResultInfoLine(
                             title: L10n.text("medical.upload.result.common.record_id"),
                             value: "\(saveReceipt.recordID)"
                         )

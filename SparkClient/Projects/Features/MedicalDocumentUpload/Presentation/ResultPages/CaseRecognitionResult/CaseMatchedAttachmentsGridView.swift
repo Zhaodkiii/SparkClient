@@ -2,37 +2,43 @@ import SwiftUI
 
 struct CaseMatchedAttachmentsGridView: View {
     let title: String?
-    let attachments: [CaseLocalAttachmentItem]
+    let attachments: [MedicalDocumentLocalAttachmentItem]
 
     @State private var selectedPreview: FilePreviewInput?
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
 
     var body: some View {
-        if attachments.isEmpty == false {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            
+            HStack {
                 if let title, title.isEmpty == false {
                     Label(title, systemImage: "paperclip")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
 
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(attachments) { item in
-                        Button {
-                            selectedPreview = item.previewInput
-                        } label: {
-                            gridCard(item)
-                        }
-                        .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                
+                // 附件管理 回调
+            }
+        
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(attachments) { item in
+                    Button {
+                        selectedPreview = item.previewInput
+                    } label: {
+                        gridCard(item)
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            .unifiedFilePreview(selection: $selectedPreview)
         }
+        .unifiedFilePreview(selection: $selectedPreview)
+
     }
 
-    private func gridCard(_ item: CaseLocalAttachmentItem) -> some View {
+    private func gridCard(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
         GeometryReader { geometry in
             let cardSize = geometry.size.width
 

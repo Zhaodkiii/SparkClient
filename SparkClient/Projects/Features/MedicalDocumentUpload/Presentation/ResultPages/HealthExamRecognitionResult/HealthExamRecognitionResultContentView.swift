@@ -22,7 +22,7 @@ struct HealthExamRecognitionResultContentView: View {
         self.viewModel = viewModel
         let output = viewModel.typedOutput!
         self.memberContextStore = memberContextStore
-        self.attachmentSource = .local(output.envelope.sourceFiles.map { HealthExamResultLocalAttachmentItem(file: $0) })
+        self.attachmentSource = .local(output.envelope.sourceFiles.map { MedicalDocumentLocalAttachmentItem(file: $0) })
         self.mode = .recognition
         _selectedMemberID = State(initialValue: output.envelope.memberID)
 
@@ -155,13 +155,13 @@ struct HealthExamRecognitionResultContentView: View {
                 HealthExamAttachmentsSectionView(source: attachmentSource)
 
                 if mode.isEditable, let saveReceipt {
-                    HealthExamResultSectionCard(
+                    MedicalDocumentResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
                         subtitle: L10n.text("medical.upload.result.common.save_success"),
                         systemImage: "checkmark.circle",
                         badgeText: L10n.text("medical.upload.result.common.saved")
                     ) {
-                        HealthExamResultInfoLine(
+                        MedicalDocumentResultInfoLine(
                             title: L10n.text("medical.upload.result.common.record_id"),
                             value: "\(saveReceipt.recordID)"
                         )

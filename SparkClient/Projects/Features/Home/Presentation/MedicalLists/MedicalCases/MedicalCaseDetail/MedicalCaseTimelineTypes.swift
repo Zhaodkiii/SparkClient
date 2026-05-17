@@ -187,7 +187,7 @@ enum MedicalCaseTimelineEventBuilder {
         let examinationsForCase = (completeData?.examinationReports ?? []).filter { $0.medicalRecord == item.id }
         for report in examinationsForCase {
             let rowDate = report.reportedAt ?? report.performedAt ?? report.updatedAt ?? report.createdAt ?? date
-            let category = ExaminationReportCategoryMatcher.category(for: report)
+            let category = ExaminationReportCategory.category(for: report)
             let title = report.itemName?.nonEmpty
                 ?? report.subCategory?.nonEmpty
                 ?? report.category?.nonEmpty
@@ -396,52 +396,5 @@ private enum MedicalCaseCardStatus {
         case .unknown:
             return L10n.text("home.medical.list.medical_case.status.unknown")
         }
-    }
-}
-
-/// 检查报告分类匹配器：根据报告字段推断分类。
-private enum ExaminationReportCategoryMatcher {
-    static func category(for report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> ExaminationReportCategory {
-        if let direct = directCategory(from: report) {
-            return direct
-        }
-
-        let haystack = [
-            report.itemName,
-            report.category,
-            report.subCategory,
-            report.findings,
-            report.impression,
-            report.extra?["summary"]
-        ]
-        .compactMap { $0?.lowercased() }
-        .joined(separator: " ")
-
-        if ["影像", "超声", "ct", "mr", "mri", "放射", "x线", "b超", "彩超"].contains(where: { haystack.contains($0) }) {
-            return .imaging
-        }
-        if haystack.contains("病理") || haystack.contains("pathology") {
-            return .pathology
-        }
-        return .laboratory
-    }
-
-    private static func directCategory(from report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> ExaminationReportCategory? {
-        let candidates = [report.category, report.subCategory]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-
-        for candidate in candidates {
-            switch candidate {
-            case "laboratory", "lab", "实验室检查", "检验", "化验":
-                return .laboratory
-            case "imaging", "image", "影像", "影像学检查":
-                return .imaging
-            case "pathology", "病理", "病理检查":
-                return .pathology
-            default:
-                continue
-            }
-        }
-        return nil
     }
 }

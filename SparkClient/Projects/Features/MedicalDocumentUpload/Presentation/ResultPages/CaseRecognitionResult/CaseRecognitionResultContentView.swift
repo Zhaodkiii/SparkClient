@@ -45,11 +45,11 @@ struct CaseRecognitionResultContentView: View {
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
 
     /// 附件：上传的病历照片 / 扫描件
-    private var localAttachments: [CaseLocalAttachmentItem] {
-        output.envelope.sourceFiles.map { CaseLocalAttachmentItem(file: $0) }
+    private var localAttachments: [MedicalDocumentLocalAttachmentItem] {
+        output.envelope.sourceFiles.map { MedicalDocumentLocalAttachmentItem(file: $0) }
     }
 
-    private func matchedAttachments(for ids: [UUID]) -> [CaseLocalAttachmentItem] {
+    private func matchedAttachments(for ids: [UUID]) -> [MedicalDocumentLocalAttachmentItem] {
         guard ids.isEmpty == false else { return [] }
         let idSet = Set(ids)
         return localAttachments.filter { idSet.contains($0.id) }
@@ -82,7 +82,7 @@ struct CaseRecognitionResultContentView: View {
                 )
 
                 // MARK: 4. 检查报告列表区域
-                CaseExamReportsSectionView(
+                MedicalReportCardsSectionView(
                     reports: draft.examinationReports ?? [],
                     attachmentsForIDs: matchedAttachments(for:),
                     onEdit: { index, report in
@@ -107,13 +107,13 @@ struct CaseRecognitionResultContentView: View {
 
                 // MARK: 7. 保存成功回执（显示记录ID）
                 if let saveReceipt {
-                    CaseSectionCard(
+                    MedicalDocumentResultSectionCard(
                         title: "保存状态",
                         subtitle: "已提交到后端",
                         systemImage: "checkmark.circle",
                         badgeText: "成功"
                     ) {
-                        CaseInfoLine(title: "记录 ID", value: "\(saveReceipt.recordID)")
+                        MedicalDocumentResultInfoLine(title: "记录 ID", value: "\(saveReceipt.recordID)")
                     }
                 }
             }

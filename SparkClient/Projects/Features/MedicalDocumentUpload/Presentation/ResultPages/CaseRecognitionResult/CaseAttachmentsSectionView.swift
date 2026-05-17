@@ -1,12 +1,12 @@
 import SwiftUI
 
 struct CaseAttachmentsSectionView: View {
-    let attachments: [CaseLocalAttachmentItem]
+    let attachments: [MedicalDocumentLocalAttachmentItem]
 
     @State private var selectedPreview: FilePreviewInput?
 
     var body: some View {
-        CaseSectionCard(
+        MedicalDocumentResultSectionCard(
             title: "附件管理",
             subtitle: "附件列表复用公共预览能力",
             systemImage: "paperclip",
@@ -33,7 +33,7 @@ struct CaseAttachmentsSectionView: View {
         .unifiedFilePreview(selection: $selectedPreview)
     }
 
-    private func row(_ item: CaseLocalAttachmentItem) -> some View {
+    private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

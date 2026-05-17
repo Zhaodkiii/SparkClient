@@ -2,9 +2,9 @@ import SwiftUI
 
 struct CaseHistoryDiagnosisSectionView: View {
     let draft: CaseRecognitionDraft
-    let caseAttachments: [CaseLocalAttachmentItem]
-    let symptomAttachments: [CaseLocalAttachmentItem]
-    let surgeryAttachments: [CaseLocalAttachmentItem]
+    let caseAttachments: [MedicalDocumentLocalAttachmentItem]
+    let symptomAttachments: [MedicalDocumentLocalAttachmentItem]
+    let surgeryAttachments: [MedicalDocumentLocalAttachmentItem]
     let onEditSymptom: (SymptomRecognitionDraft) -> Void
     let onEditSurgery: (SurgeryRecognitionDraft) -> Void
 
@@ -13,14 +13,14 @@ struct CaseHistoryDiagnosisSectionView: View {
     }
 
     var body: some View {
-        CaseSectionCard(
+        MedicalDocumentResultSectionCard(
             title: "病史与诊断",
             subtitle: "展示优先，编辑为辅",
             systemImage: "waveform.path.ecg.rectangle",
             badgeText: hasContent ? "已识别" : "待补充"
         ) {
                 VStack(alignment: .leading, spacing: 12) {
-                    CaseInfoLine(title: "诊断结论", value: draft.diagnosis ?? "")
+                    MedicalDocumentResultInfoLine(title: "诊断结论", value: draft.diagnosis ?? "")
                     CaseMatchedAttachmentsGridView(title: "病历附件", attachments: caseAttachments)
 
                     if let symptom = draft.symptom {
@@ -53,7 +53,7 @@ struct CaseHistoryDiagnosisSectionView: View {
     private func block(
         title: String,
         detail: [String?],
-        attachments: [CaseLocalAttachmentItem],
+        attachments: [MedicalDocumentLocalAttachmentItem],
         onEdit: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
