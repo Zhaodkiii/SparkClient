@@ -4,14 +4,8 @@ import SwiftUI
 ///
 /// **三态管理**：
 /// - `.picking`: 显示 MedicalDocumentUploadPickingView，用户选择文件和类型
-/// - `.processing`: 显示 MedicalDocumentUploadProgressContainerView，展示识别进度
+/// - `.processing`: 显示模式选择或识别进度
 /// - `.result`: 显示 MedicalDocumentResultRouterView，展示识别结果
-///
-/// **进度阶段回调**：
-/// - `onCancel`: 取消当前识别流程
-/// - `onRestart`: 重新识别（保留已选文件）
-/// - `onReturnToPicker`: 返回文件选择界面
-/// - `onSelectMode`: 手动选择文档类型（当自动识别失败时）
 struct MedicalDocumentUploadHostView: View {
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
     @Environment(\.dismiss) private var dismiss
@@ -22,40 +16,18 @@ struct MedicalDocumentUploadHostView: View {
             case .picking:
                 MedicalDocumentUploadPickingView(viewModel: viewModel)
             case .processing:
-                // 使用新的进度容器视图，支持类型选择和进度展示
-                MedicalDocumentUploadProgressContainerView(
-                    progress: $viewModel.progress,
-                    needsManualModeSelection: $viewModel.needsManualModeSelection,
-                    ocrText: viewModel.pipelineOCRText,
-                    extractModelOptions: viewModel.extractModelOptions,
-                    overrideDocumentKindForRetry: $viewModel.overrideDocumentKindForRetry,
-                    preferredExtractModelName: $viewModel.preferredExtractModelName,
-                    onCancel: {
-                        // 取消识别流程，重置到选择状态但保留文件，并停止后台 AI 抽取。
-                        viewModel.cancelRecognition()
-                    },
-                    onRestart: {
-                        // 全量重新识别，保留已选文件但清空检查点
-                        viewModel.resetRecognitionState()
-                        viewModel.startRecognitionTask()
-                    },
-                    onRetryFromFailedStep: {
-                        // 从失败步骤继续，复用已经成功的检查点
-                        viewModel.resumeRecognitionTask()
-                    },
-                    onReturnToPicker: {
-                        // 返回文件选择界面
-                        viewModel.resetRecognitionState()
-                        viewModel.stage = .picking
-                    },
-                    onSelectMode: { kind in
-                        // 用户手动选择了文档类型
+                if viewModel.needsManualModeSelection {
+                    MedicalDocumentUploadModeSelectionView { kind in
                         viewModel.selectedKind = kind
                         viewModel.needsManualModeSelection = false
-                        // 继续识别流程
                         viewModel.startRecognitionTask()
                     }
-                )
+                } else if viewModel.progress != nil {
+                    MedicalDocumentUploadProgressView(viewModel: viewModel)
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             case .result:
                 if let output = viewModel.typedOutput {
                     MedicalDocumentResultRouterView(

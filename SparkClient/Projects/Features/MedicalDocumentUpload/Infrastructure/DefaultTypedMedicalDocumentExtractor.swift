@@ -64,10 +64,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         selectedKind: MedicalDocumentKind,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
-//#if DEBUG && MEDICAL_FAKE_EXTRACTION
-//        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
-//        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: selectedKind)
-//#endif
+#if DEBUG
+        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
+        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: selectedKind)
+#endif
         try cancellationToken?.checkCancellation()
         logger.info("typed 抽取开始，文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
 
@@ -487,7 +487,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
             "bodyPart": "头部",
             "notes": "伴视物旋转，体位改变症状明显，伴恶心呕吐，每次持续2小时后自行缓解，无肢体活动障碍，无行走不稳"
         },
-        "visit":“ {
+        "visit": {
             "visitType": "门诊",
             "visitedAt": "2025-08-02",
             "department": "神经内科门诊",
