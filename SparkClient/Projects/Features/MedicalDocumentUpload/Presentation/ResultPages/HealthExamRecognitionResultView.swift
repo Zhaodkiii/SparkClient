@@ -2,7 +2,9 @@ import SwiftUI
 
 /// 体检报告识别结果页（模块化：ResultPages/HealthExamRecognitionResult）
 struct HealthExamRecognitionResultView: View {
-    private let content: HealthExamRecognitionResultContentView
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+    private let detailContent: HealthExamRecognitionResultContentView?
+    private let memberContextStore: MemberContextStore?
     private let title: String
     private let mode: HealthExamResultMode
     private let detailReportID: Int?
@@ -15,23 +17,12 @@ struct HealthExamRecognitionResultView: View {
     @State private var isDeleting = false
 
     init(
-        output: MedicalDocumentTypedExtractionOutput,
-        memberContextStore: MemberContextStore,
-        isSaving: Bool,
-        saveReceipt: MedicalDocumentSaveReceipt?,
-        onBack: @escaping () -> Void,
-        onSelectMember: @escaping (Int?) -> Void,
-        onSave: @escaping () -> Void
+        viewModel: MedicalDocumentUploadViewModel,
+        memberContextStore: MemberContextStore
     ) {
-        self.content = HealthExamRecognitionResultContentView(
-            output: output,
-            memberContextStore: memberContextStore,
-            isSaving: isSaving,
-            saveReceipt: saveReceipt,
-            onBack: onBack,
-            onSelectMember: onSelectMember,
-            onSave: onSave
-        )
+        self.viewModel = viewModel
+        self.detailContent = nil
+        self.memberContextStore = memberContextStore
         self.title = L10n.text("medical.upload.result.health_exam.nav_title")
         self.mode = .recognition
         self.detailReportID = nil
@@ -48,11 +39,13 @@ struct HealthExamRecognitionResultView: View {
         notificationClient: any NotificationClient,
         onDeleted: ((Int) -> Void)? = nil
     ) {
-        self.content = HealthExamRecognitionResultContentView(
+        self.viewModel = .preview()
+        self.detailContent = HealthExamRecognitionResultContentView(
             item: item,
             fileTransferService: fileTransferService,
             memberContextStore: memberContextStore
         )
+        self.memberContextStore = nil
         self.title = item.institutionName?.nonEmpty ?? L10n.text("home.medical.list.health_exam_reports.title")
         self.mode = .detail
         self.detailReportID = item.id
@@ -63,23 +56,35 @@ struct HealthExamRecognitionResultView: View {
 
     var body: some View {
         content
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                toolbarActionMenu
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    toolbarActionMenu
+                }
             }
-        }
-        .alert(
-            L10n.text("home.medical.list.health_exam.delete.confirm_title", fallback: "删除体检报告？"),
-            isPresented: $isShowingDeleteConfirm
-        ) {
-            Button(L10n.text("common.delete"), role: .destructive) {
-                Task { await deleteDetailReport() }
+            .alert(
+                L10n.text("home.medical.list.health_exam.delete.confirm_title", fallback: "删除体检报告？"),
+                isPresented: $isShowingDeleteConfirm
+            ) {
+                Button(L10n.text("common.delete"), role: .destructive) {
+                    Task { await deleteDetailReport() }
+                }
+                Button(L10n.text("common.cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.text("home.medical.list.health_exam.delete.confirm_message", fallback: "删除后该报告将从列表中移除。"))
             }
-            Button(L10n.text("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.text("home.medical.list.health_exam.delete.confirm_message", fallback: "删除后该报告将从列表中移除。"))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let detailContent {
+            detailContent
+        } else if viewModel.typedOutput != nil, let memberContextStore {
+            HealthExamRecognitionResultContentView(
+                viewModel: viewModel,
+                memberContextStore: memberContextStore
+            )
         }
     }
 
@@ -138,13 +143,8 @@ struct HealthExamRecognitionResultView: View {
 #Preview("Health exam result - Light") {
     CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
-            output: .previewHealthExamOutput,
-            memberContextStore: MemberContextStore(),
-            isSaving: false,
-            saveReceipt: nil,
-            onBack: {},
-            onSelectMember: { _ in },
-            onSave: {}
+            viewModel: .preview(output: .previewHealthExamOutput),
+            memberContextStore: MemberContextStore()
         )
     }
     .preferredColorScheme(.light)
@@ -153,13 +153,8 @@ struct HealthExamRecognitionResultView: View {
 #Preview("Health exam result - Dark") {
     CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
-            output: .previewHealthExamOutput,
-            memberContextStore: MemberContextStore(),
-            isSaving: false,
-            saveReceipt: nil,
-            onBack: {},
-            onSelectMember: { _ in },
-            onSave: {}
+            viewModel: .preview(output: .previewHealthExamOutput),
+            memberContextStore: MemberContextStore()
         )
     }
     .preferredColorScheme(.dark)

@@ -29,24 +29,8 @@ struct MedicalDocumentUploadHostView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             case .result:
-                if let output = viewModel.typedOutput {
-                    MedicalDocumentResultRouterView(
-                        output: output,
-                        isSaving: viewModel.isSaving,
-                        saveReceipt: viewModel.saveReceipt,
-                        onBack: { viewModel.reset() },
-                        onSelectMember: { memberID in
-                            viewModel.updateResultMemberID(memberID)
-                        },
-                        onUpdateTypedResult: { typedResult in
-                            viewModel.updateTypedResult(typedResult)
-                        },
-                        onSave: {
-                            Task {
-                                _ = await viewModel.saveResult()
-                            }
-                        }
-                    )
+                if viewModel.typedOutput != nil {
+                    MedicalDocumentResultRouterView(viewModel: viewModel)
                 }
             }
         }

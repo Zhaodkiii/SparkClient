@@ -2,6 +2,9 @@ import SwiftUI
 
 struct CaseHistoryDiagnosisSectionView: View {
     let draft: CaseRecognitionDraft
+    let caseAttachments: [CaseLocalAttachmentItem]
+    let symptomAttachments: [CaseLocalAttachmentItem]
+    let surgeryAttachments: [CaseLocalAttachmentItem]
     let onEditSymptom: (SymptomRecognitionDraft) -> Void
     let onEditSurgery: (SurgeryRecognitionDraft) -> Void
 
@@ -16,18 +19,19 @@ struct CaseHistoryDiagnosisSectionView: View {
             systemImage: "waveform.path.ecg.rectangle",
             badgeText: hasContent ? "已识别" : "待补充"
         ) {
-            VStack(alignment: .leading, spacing: 12) {
-                CaseInfoLine(title: "诊断结论", value: draft.diagnosis ?? "")
+                VStack(alignment: .leading, spacing: 12) {
+                    CaseInfoLine(title: "诊断结论", value: draft.diagnosis ?? "")
+                    CaseMatchedAttachmentsGridView(title: "病历附件", attachments: caseAttachments)
 
-                if let symptom = draft.symptom {
-                    block(title: symptom.name, detail: [
-                        symptom.severity,
-                        symptom.bodyPart,
-                        symptom.startedAt,
-                        symptom.notes
-                    ]) {
-                        onEditSymptom(symptom)
-                    }
+                    if let symptom = draft.symptom {
+                        block(title: symptom.name, detail: [
+                            symptom.severity,
+                            symptom.bodyPart,
+                            symptom.startedAt,
+                            symptom.notes
+                        ], attachments: symptomAttachments) {
+                            onEditSymptom(symptom)
+                        }
                 } else {
                     emptyHint("暂无主诉症状")
                 }
@@ -35,18 +39,23 @@ struct CaseHistoryDiagnosisSectionView: View {
                 if let surgery = draft.surgery {
                     block(title: surgery.procedureName, detail: [
                         surgery.site,
-                        surgery.surgeon,
-                        surgery.performedAt,
-                        surgery.notes
-                    ]) {
-                        onEditSurgery(surgery)
-                    }
+                            surgery.surgeon,
+                            surgery.performedAt,
+                            surgery.notes
+                        ], attachments: surgeryAttachments) {
+                            onEditSurgery(surgery)
+                        }
                 }
             }
         }
     }
 
-    private func block(title: String, detail: [String?], onEdit: @escaping () -> Void) -> some View {
+    private func block(
+        title: String,
+        detail: [String?],
+        attachments: [CaseLocalAttachmentItem],
+        onEdit: @escaping () -> Void
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text(title)
@@ -64,6 +73,8 @@ struct CaseHistoryDiagnosisSectionView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachments)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

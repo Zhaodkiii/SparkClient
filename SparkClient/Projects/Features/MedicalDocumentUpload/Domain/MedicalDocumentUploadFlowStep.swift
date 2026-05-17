@@ -18,6 +18,7 @@ struct MedicalDocumentUploadFlowStep: Equatable, Sendable {
         case ocr
         case typeRecognition = "type_recognition"
         case extract
+        case attachmentBinding = "attachment_binding"
         case save
     }
 
@@ -66,6 +67,8 @@ extension MedicalDocumentUploadFlowStep.Kind {
             return (L10n.text("medical.upload.step.type.running"), L10n.text("medical.upload.step.type.subtitle"))
         case .extract:
             return (L10n.text("medical.upload.step.extract.running"), L10n.text("medical.upload.step.extract.subtitle.default"))
+        case .attachmentBinding:
+            return (L10n.text("medical.upload.step.attachment_binding.running", fallback: "正在匹配附件"), nil)
         case .save:
             return (L10n.text("medical.upload.step.save.running"), nil)
         }
@@ -92,6 +95,11 @@ extension MedicalDocumentUploadFlowStep.Kind {
             return (L10n.text("medical.upload.step.extract.completed"), nil)
         case (.extract, .failed):
             return (L10n.text("medical.upload.step.extract.failed"), nil)
+
+        case (.attachmentBinding, .success), (.attachmentBinding, .skipped):
+            return (L10n.text("medical.upload.step.attachment_binding.completed", fallback: "附件匹配完成"), nil)
+        case (.attachmentBinding, .failed):
+            return (L10n.text("medical.upload.step.attachment_binding.failed", fallback: "附件匹配失败"), nil)
 
         case (.save, .success), (.save, .skipped):
             return (L10n.text("medical.upload.step.save.completed"), nil)
@@ -130,7 +138,8 @@ extension MedicalDocumentUploadFlowStep.Kind {
         case .ocr: return 1
         case .typeRecognition: return 2
         case .extract: return 3
-        case .save: return 4
+        case .attachmentBinding: return 4
+        case .save: return 5
         }
     }
 }

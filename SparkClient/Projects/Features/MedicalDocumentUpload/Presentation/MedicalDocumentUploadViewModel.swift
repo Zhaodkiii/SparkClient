@@ -121,10 +121,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 日志记录器
     private let logger: Logger
 
-    /// 最近一次流程中已成功上传的文件列表
-    /// 用于保存成功后与业务单据做绑定关联
-    private var uploadedFiles: [UploadedMedicalDocumentFile] = []
-
     /// 当前正在执行的 上传/OCR/AI识别 任务
     /// 取消时会中断任务并触发取消令牌
     private var recognitionTask: Task<Void, Never>?
@@ -302,27 +298,34 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 // 标记步骤开始
                 start(.upload)
                 // 执行文件上传
-                uploadedFiles = try await uploadFilesUseCase.execute(
+                let uploadedFiles = try await uploadFilesUseCase.execute(
                     memberID: member.id,
                     files: selectedFiles
                 )
+                selectedFiles = uploadedFiles
                 // 检查是否触发了任务取消
                 try cancellationToken.checkCancellation()
                 logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", module: .medical)
                 // 标记步骤完成
                 complete(.upload, outcome: .success, resultSummary: "已上传 \(uploadedFiles.count) 个文件")
-            } else if !uploadedFiles.isEmpty {
+            } else if selectedFiles.contains(where: { $0.remoteFile != nil }) {
                 // 已有上传文件，直接沿用
-                complete(.upload, outcome: .skipped, resultSummary: "沿用 \(uploadedFiles.count) 个已上传文件")
+                let uploadedCount = selectedFiles.filter { $0.remoteFile != nil }.count
+                complete(.upload, outcome: .skipped, resultSummary: "沿用 \(uploadedCount) 个已上传文件")
             }
 
             // ====================== 步骤2：OCR 文字提取 ======================
             if shouldRun(.ocr, from: requestedStartStep) {
                 currentStep = .ocr
                 start(.ocr)
-                // 执行 OCR 识别并合并文本
-                let ocrText = try await extractUseCase.mergeOCRText(
+                // 执行 OCR 识别，写回每个本地文件后再合并文本
+                let ocrFiles = try await extractUseCase.recognizeOCRFiles(
                     files: selectedFiles,
+                    cancellationToken: cancellationToken
+                )
+                selectedFiles = ocrFiles
+                let ocrText = try await extractUseCase.mergeOCRText(
+                    files: ocrFiles,
                     cancellationToken: cancellationToken
                 )
                 try cancellationToken.checkCancellation()
@@ -417,17 +420,30 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 resultSummary: "\(scenarioLabel(for: extractScenario)) · \(modelSummary)"
             )
 
+            // ====================== 步骤5：业务附件匹配 ======================
+            currentStep = .attachmentBinding
+            start(.attachmentBinding)
+            let matchedOutput = MedicalDocumentAttachmentBusinessMatcher.matchAndUpdate(
+                files: selectedFiles,
+                output: output
+            )
+            complete(
+                .attachmentBinding,
+                outcome: .success,
+                resultSummary: "已匹配 \(selectedFiles.compactMap { $0.remoteFile?.id }.count) 个附件"
+            )
+
             // 保存最终识别结果
-            typedOutput = output
+            typedOutput = matchedOutput
             // 停止进度条动画
             stopProgressTimer()
             // 切换到结果展示状态
             stage = .result
             logger.info(
-                "Typed 识别流程完成，resolvedKind=\(output.envelope.typeResolution.kind.rawValue)",
+                "Typed 识别流程完成，resolvedKind=\(matchedOutput.envelope.typeResolution.kind.rawValue)",
                 module: .medical
             )
-            
+
         } catch is CancellationError {
             // 处理用户主动取消任务的情况
             if recognitionCancellationToken === cancellationToken {
@@ -495,18 +511,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 module: .medical
             )
 
-            // 执行附件绑定：将已上传文件与单据关联
-            await bindUseCase.execute(
-                uploadedFiles: uploadedFiles,
-                kind: typedOutput.envelope.typeResolution.kind,
-                receipt: receipt
-            )
-
-            logger.info(
-                "附件绑定完成 已上传文件数=\(uploadedFiles.count) recordID=\(receipt.recordID)",
-                module: .medical
-            )
-
             // 保存+绑定全部成功
             return true
         } catch {
@@ -521,31 +525,45 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         }
     }
 
+    /// 更新医疗文档结果中的会员ID
+    /// - Parameter memberID: 待设置的会员ID（可选值）
     func updateResultMemberID(_ memberID: Int?) {
+        // 安全解包当前输出对象，为空则直接返回
         guard let output = typedOutput else { return }
+        
+        // 重新构建输出对象：仅更新信封中的 memberID，其他数据保持不变
         typedOutput = MedicalDocumentTypedExtractionOutput(
+            // 重建信封信息：仅更新会员ID，保留源文件、OCR文本、类型解析结果
             envelope: MedicalDocumentRecognitionEnvelope(
-                memberID: memberID,
-                sourceFiles: output.envelope.sourceFiles,
-                rawOCRText: output.envelope.rawOCRText,
-                typeResolution: output.envelope.typeResolution
+                memberID: memberID,                // 更新为新的会员ID
+                sourceFiles: output.envelope.sourceFiles,  // 保留原文件源
+                rawOCRText: output.envelope.rawOCRText,    // 保留原OCR原始文本
+                typeResolution: output.envelope.typeResolution // 保留原类型解析结果
             ),
-            typedResult: output.typedResult,
-            extractedJSON: output.extractedJSON,
-            payloadPreview: output.payloadPreview
+            typedResult: output.typedResult,      // 保留原识别结果
+            extractedJSON: output.extractedJSON,  // 保留原提取的JSON数据
+            payloadPreview: output.payloadPreview // 保留原载荷预览
         )
+        
+        // 根据会员ID查询并设置选中的会员名称（无ID则清空）
         selectedMemberName = memberID.flatMap { id in
+            // 从会员上下文存储中，根据ID匹配对应的会员并获取名称
             memberContextStore.context.members.first(where: { $0.id == id })?.name
         }
     }
 
+    /// 更新已识别的文档结果
+    /// - Parameter typedResult: 新的医疗文档识别结果
     func updateTypedResult(_ typedResult: MedicalDocumentTypedResult) {
+        // 安全解包当前输出对象，为空则直接返回
         guard let output = typedOutput else { return }
+        
+        // 使用原有输出数据 + 新识别结果，重新构建并赋值输出对象
         typedOutput = MedicalDocumentTypedExtractionOutput(
-            envelope: output.envelope,
-            typedResult: typedResult,
-            extractedJSON: output.extractedJSON,
-            payloadPreview: output.payloadPreview
+            envelope: output.envelope,            // 保留原信封信息
+            typedResult: typedResult,             // 替换为新的识别结果
+            extractedJSON: output.extractedJSON,  // 保留原提取的JSON数据
+            payloadPreview: output.payloadPreview // 保留原载荷预览信息
         )
     }
 
@@ -574,7 +592,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         saveReceipt = nil
         errorMessage = nil
         selectedKind = .auto
-        uploadedFiles = []
         clearPipelineCheckpoints()
         selectedMemberName = memberContextStore.context.selectedMember?.name
         logger.info("已重置医疗上传流程", module: .medical)
@@ -591,7 +608,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         errorMessage = nil
         failedStep = nil
         stepStartedAt = [:]
-        // 注意：不重置 selectedFiles、previewItems 和 uploadedFiles，保留用户选择的文件
+        // 注意：不重置 selectedFiles 和 previewItems，保留用户选择的文件及其中的上传/OCR结果
         logger.info("已重置识别状态（保留已选文件）", module: .medical)
     }
 
@@ -643,7 +660,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     }
 
     private func clearPipelineCheckpoints() {
-        uploadedFiles = []
         pipelineOCRText = nil
         typeResolution = nil
         failedStep = nil
@@ -836,31 +852,55 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
 // MARK: - StepReporter 协议实现
 
+// MARK: - 医疗文档上传步骤上报 扩展
+/// 让上传ViewModel遵循步骤上报协议，统一处理上传流程的步骤状态更新
 extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
+
+    /// 开始执行某个上传步骤
+    /// - Parameter step: 当前要开始执行的步骤类型
     func start(_ step: MedicalDocumentUploadFlowStep.Kind) {
+        // 取出当前进度，为空则直接返回
         guard var currentProgress = progress else { return }
 
+        // 确保进度中包含所有标准流程步骤（补全缺失的步骤）
         ensurePipelineSteps(in: &currentProgress)
+        
+        // 遍历所有步骤，更新状态
         for idx in currentProgress.steps.indices {
             let kind = currentProgress.steps[idx].flowStep.kind
+            
             if kind == step {
+                // 当前要执行的步骤 → 标记为运行中
                 currentProgress.steps[idx].flowStep.outcome = .running
-            } else if kind.pipelineOrder < step.pipelineOrder,
-                      currentProgress.steps[idx].flowStep.outcome.isTerminalSuccess == false,
-                      currentProgress.steps[idx].flowStep.outcome.isFailed == false {
+            }
+            else if kind.pipelineOrder < step.pipelineOrder,
+                    // 前置步骤未成功、未失败 → 自动标记为成功
+                    currentProgress.steps[idx].flowStep.outcome.isTerminalSuccess == false,
+                    currentProgress.steps[idx].flowStep.outcome.isFailed == false {
                 currentProgress.steps[idx].flowStep.outcome = .success
-            } else if currentProgress.steps[idx].flowStep.outcome.isRunning {
+            }
+            else if currentProgress.steps[idx].flowStep.outcome.isRunning {
+                // 其他正在运行的步骤 → 重置为等待中，并清空结果
                 currentProgress.steps[idx].flowStep.outcome = .pending
                 currentProgress.steps[idx].resultSummary = nil
             }
         }
 
+        // 记录步骤开始时间
         recordStepStart(step)
+        // 更新界面提示文字：处理中
         currentProgress.statusLabel = L10n.text("medical.upload.status.processing")
+        // 保存最新进度
         progress = currentProgress
+        // 日志输出
         logger.debug("开始步骤: \(step.rawValue)", module: .medical)
     }
 
+    /// 完成某个上传步骤（成功/跳过）
+    /// - Parameters:
+    ///   - step: 完成的步骤
+    ///   - outcome: 完成结果（成功/跳过）
+    ///   - resultSummary: 结果描述文本（可选）
     func complete(
         _ step: MedicalDocumentUploadFlowStep.Kind,
         outcome: MedicalDocumentUploadFlowStep.CompletionOutcome,
@@ -868,35 +908,53 @@ extension MedicalDocumentUploadViewModel: MedicalDocumentUploadStepReporter {
     ) {
         guard var currentProgress = progress else { return }
 
+        // 确保步骤完整
         ensurePipelineSteps(in: &currentProgress)
+        // 计算步骤耗时
         finalizeStepElapsed(step, in: &currentProgress)
 
+        // 找到对应步骤并更新结果和描述
         if let idx = currentProgress.steps.firstIndex(where: { $0.flowStep.kind == step }) {
             currentProgress.steps[idx].flowStep.outcome = outcome
             currentProgress.steps[idx].resultSummary = resultSummary
         }
 
+        // 保存进度
         progress = currentProgress
         logger.debug("完成步骤 step=\(step.rawValue)", module: .medical)
     }
 
+    /// 某个上传步骤执行失败
+    /// - Parameter step: 失败的步骤
     func fail(_ step: MedicalDocumentUploadFlowStep.Kind) {
         guard var currentProgress = progress else { return }
 
         ensurePipelineSteps(in: &currentProgress)
         finalizeStepElapsed(step, in: &currentProgress)
+        
+        // 找到步骤并标记为失败
         if let idx = currentProgress.steps.firstIndex(where: { $0.flowStep.kind == step }) {
             currentProgress.steps[idx].flowStep.outcome = .failed
         }
+        
+        // 更新界面提示：上传失败
         currentProgress.statusLabel = L10n.text("medical.upload.status.failed")
 
         progress = currentProgress
+        // 停止进度计时
         stopProgressTimer()
         logger.debug("步骤失败: \(step.rawValue)", module: .medical)
     }
 
+    // MARK: - 私有工具方法
+    
+    /// 确保进度对象中包含所有标准上传流程步骤
+    /// 不存在的步骤会自动创建，保持步骤顺序固定
+    /// - Parameter currentProgress: 要校验/补全的进度对象
     private func ensurePipelineSteps(in currentProgress: inout MedicalDocumentUploadProgress) {
+        // 把现有步骤转成字典，方便按类型查找
         let existing = Dictionary(uniqueKeysWithValues: currentProgress.steps.map { ($0.flowStep.kind, $0) })
+        // 用标准步骤列表重建步骤数组：已存在的复用，不存在的新建
         currentProgress.steps = MedicalDocumentUploadFlowStep.Kind.pipelineSteps.map { kind in
             existing[kind] ?? MedicalDocumentUploadStep(kind: kind)
         }
@@ -996,6 +1054,13 @@ extension MedicalDocumentUploadViewModel {
             bindUseCase: BindUploadedFilesToMedicalBusinessUseCase(binder: binder),
             aiConfigCenter: AppContainer.preview.aiConfigCenter
         )
+    }
+
+    static func preview(output: MedicalDocumentTypedExtractionOutput) -> MedicalDocumentUploadViewModel {
+        let viewModel = preview()
+        viewModel.stage = .result
+        viewModel.typedOutput = output
+        return viewModel
     }
 }
 #endif

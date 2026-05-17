@@ -2,20 +2,18 @@ import SwiftUI
 
 /// 用药识别结果页（模块化：ResultPages/MedicationRecognitionResult）
 struct MedicationRecognitionResultView: View {
-    let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSave: () -> Void
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+
+    init(viewModel: MedicalDocumentUploadViewModel) {
+        self.viewModel = viewModel
+    }
 
     var body: some View {
-        MedicationRecognitionResultContentView(
-            output: output,
-            isSaving: isSaving,
-            saveReceipt: saveReceipt,
-            onBack: onBack,
-            onSave: onSave
-        )
+        Group {
+            if viewModel.typedOutput != nil {
+                MedicationRecognitionResultContentView(viewModel: viewModel)
+            }
+        }
         .navigationTitle(L10n.text("common.medicationPlan"))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -23,26 +21,14 @@ struct MedicationRecognitionResultView: View {
 
 #Preview("Medication result - Light") {
     CompatibleNavigationContainer {
-        MedicationRecognitionResultView(
-            output: .previewMedicationOutput,
-            isSaving: false,
-            saveReceipt: nil,
-            onBack: {},
-            onSave: {}
-        )
+        MedicationRecognitionResultView(viewModel: .preview(output: .previewMedicationOutput))
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Medication result - Dark") {
     CompatibleNavigationContainer {
-        MedicationRecognitionResultView(
-            output: .previewMedicationOutput,
-            isSaving: false,
-            saveReceipt: nil,
-            onBack: {},
-            onSave: {}
-        )
+        MedicationRecognitionResultView(viewModel: .preview(output: .previewMedicationOutput))
     }
     .preferredColorScheme(.dark)
 }

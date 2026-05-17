@@ -4,7 +4,7 @@ struct BindUploadedFilesToMedicalBusinessUseCase: Sendable {
     let binder: any MedicalDocumentAttachmentBinding
 
     func execute(
-        uploadedFiles: [UploadedMedicalDocumentFile],
+        uploadedFiles: [MedicalUploadLocalFile],
         kind: MedicalDocumentKind,
         receipt: MedicalDocumentSaveReceipt
     ) async {

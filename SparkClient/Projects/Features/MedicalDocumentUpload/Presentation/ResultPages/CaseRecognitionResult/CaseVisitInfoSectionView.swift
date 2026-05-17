@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CaseVisitInfoSectionView: View {
     let visit: VisitRecognitionDraft?
+    let attachments: [CaseLocalAttachmentItem]
     let onEdit: (VisitRecognitionDraft) -> Void
 
     var body: some View {
@@ -23,6 +24,7 @@ struct CaseVisitInfoSectionView: View {
                     CaseInfoLine(title: "科室", value: visit.department ?? "")
                     CaseInfoLine(title: "医生", value: visit.doctorName ?? "")
                     CaseInfoLine(title: "备注", value: visit.notes ?? "")
+                    CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachments)
                 }
             } else {
                 Text("暂无就诊信息")

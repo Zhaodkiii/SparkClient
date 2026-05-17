@@ -3,6 +3,7 @@ import SwiftUI
 struct CaseTreatmentPlanSectionView: View {
     let batches: [PrescriptionRecognitionDraft]
     let followUps: [FollowUpRecognitionDraft]
+    let attachmentsForIDs: ([UUID]) -> [CaseLocalAttachmentItem]
     let onEditBatch: (PrescriptionRecognitionDraft) -> Void
     let onEditMedicationItem: (Int, Int, MedicationPlanRecognitionDraft) -> Void
     let onEditFollowUp: (FollowUpRecognitionDraft) -> Void
@@ -66,22 +67,31 @@ struct CaseTreatmentPlanSectionView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(meds.enumerated()), id: \.offset) { medPair in
-                    HStack(spacing: 8) {
-                        Image(systemName: "capsule")
-                            .font(.caption)
-                            .foregroundStyle(Color(uiColor: .systemIndigo))
-                        Text(medPair.element.medicineName ?? medPair.element.medicineBox?.medicineName ?? medPair.element.brandName ?? "未命名药品")
-                            .font(.callout)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Spacer()
-                        Button("编辑") {
-                            onEditMedicationItem(index, medPair.offset, medPair.element)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "capsule")
+                                .font(.caption)
+                                .foregroundStyle(Color(uiColor: .systemIndigo))
+                            Text(medPair.element.medicineName ?? medPair.element.medicineBox?.medicineName ?? medPair.element.brandName ?? "未命名药品")
+                                .font(.callout)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Spacer()
+                            Button("编辑") {
+                                onEditMedicationItem(index, medPair.offset, medPair.element)
+                            }
+                            .font(.caption.weight(.semibold))
                         }
-                        .font(.caption.weight(.semibold))
+
+                        CaseMatchedAttachmentsGridView(
+                            title: "药品附件",
+                            attachments: attachmentsForIDs(medPair.element.attachmentFileIds)
+                        )
                     }
                 }
             }
+
+            CaseMatchedAttachmentsGridView(title: "处方附件", attachments: attachmentsForIDs(batch.attachmentFileIds))
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -111,6 +121,8 @@ struct CaseTreatmentPlanSectionView: View {
             Text(detail.isEmpty ? "-" : detail)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+            CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachmentsForIDs(item.attachmentFileIds))
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

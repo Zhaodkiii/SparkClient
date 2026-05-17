@@ -116,7 +116,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             prescriptionID: nil,
             prescription: nil,
             items: buildMedicationPlanBundleItems(drafts, now: now),
-            fileIds: extractSourceFileIds(from: envelope)
+            fileIds: fileIds(from: drafts.flatMap(\.attachmentFileIds), envelope: envelope)
         )
         let id = try await workflowAPI.saveMedicationPlanBundle(payload)
         return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
@@ -144,7 +144,10 @@ private extension DefaultTypedMedicalDocumentSaver {
             prescriptionID: nil,
             prescription: prescription,
             items: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], now: now),
-            fileIds: extractSourceFileIds(from: envelope)
+            fileIds: fileIds(
+                from: draft.attachmentFileIds + (draft.medicationPlans ?? []).flatMap(\.attachmentFileIds),
+                envelope: envelope
+            )
         )
         let id = try await workflowAPI.saveMedicationPlanBundle(payload)
         return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
@@ -436,6 +439,7 @@ private extension DefaultTypedMedicalDocumentSaver {
         memberID: Int,
         drafts: [MedicalReportRecognitionDraft],
         sourceFileIds: [Int],
+        envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) throws -> [SparkMedicalWorkflowAPI.MedicalReportSavePayload] {
         guard drafts.isEmpty == false else {
@@ -500,7 +504,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 modality: "",
                 bodyPart: "",
                 diagnosis: "",
-                fileIds: sourceFileIds,
+                fileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope, fallback: sourceFileIds),
                 details: detailRows
             )
         }
@@ -588,7 +592,7 @@ private extension DefaultTypedMedicalDocumentSaver {
         envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) async throws -> MedicalDocumentSaveReceipt {
-        let fileIds = extractSourceFileIds(from: envelope)
+        let fileIds = fileIds(from: draft.attachmentFileIds, envelope: envelope)
         let payload = buildHealthExamPayload(
             memberID: memberID,
             draft: draft,
@@ -620,6 +624,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             memberID: memberID,
             drafts: drafts,
             sourceFileIds: sourceFileIds,
+            envelope: envelope,
             now: now
         )
 
@@ -649,9 +654,25 @@ private extension DefaultTypedMedicalDocumentSaver {
 
     /// 从信封中提取源文件 ID
     func extractSourceFileIds(from envelope: MedicalDocumentRecognitionEnvelope) -> [Int] {
-        // 这里假设 MedicalUploadLocalFile 有 remoteFileId 属性
-        // 实际实现需要根据真实的数据结构调整
-        return []
+        envelope.sourceFiles.compactMap { $0.remoteFile?.id }
+    }
+
+    func fileIds(
+        from matchedLocalFileIds: [UUID],
+        envelope: MedicalDocumentRecognitionEnvelope,
+        fallback: [Int]? = nil
+    ) -> [Int] {
+        let remoteIDByLocalID = Dictionary(
+            uniqueKeysWithValues: envelope.sourceFiles.compactMap { file in
+                file.remoteFile.map { (file.id, $0.id) }
+            }
+        )
+        let uniqueMatchedIds = matchedLocalFileIds.compactMap { remoteIDByLocalID[$0] }.reduce(into: [Int]()) { result, id in
+            if result.contains(id) == false {
+                result.append(id)
+            }
+        }
+        return uniqueMatchedIds.isEmpty ? (fallback ?? extractSourceFileIds(from: envelope)) : uniqueMatchedIds
     }
 
 }

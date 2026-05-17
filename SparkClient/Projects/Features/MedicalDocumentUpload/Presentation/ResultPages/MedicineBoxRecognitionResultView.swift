@@ -1,30 +1,22 @@
 import SwiftUI
 
+/// 药盒识别结果页面
+/// 功能：展示AI识别的药品信息 → 支持编辑 → 保存到个人药箱
 struct MedicineBoxRecognitionResultView: View {
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+    /// 医疗文档结构化提取输出（AI识别的原始结果）
     let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onUpdate: (MedicalDocumentTypedResult) -> Void
-    let onSave: () -> Void
 
+    /// 药品列表草稿数据（可编辑）
     @State private var items: [MedicineBoxRecognitionDraft]
+    /// 当前正在编辑的药品项（弹出编辑页）
     @State private var editingItem: MedicineBoxRecognitionEditor?
 
-    init(
-        output: MedicalDocumentTypedExtractionOutput,
-        isSaving: Bool,
-        saveReceipt: MedicalDocumentSaveReceipt?,
-        onBack: @escaping () -> Void,
-        onUpdate: @escaping (MedicalDocumentTypedResult) -> Void,
-        onSave: @escaping () -> Void
-    ) {
+    init(viewModel: MedicalDocumentUploadViewModel) {
+        self.viewModel = viewModel
+        let output = viewModel.typedOutput!
         self.output = output
-        self.isSaving = isSaving
-        self.saveReceipt = saveReceipt
-        self.onBack = onBack
-        self.onUpdate = onUpdate
-        self.onSave = onSave
+
         if case .medicineBoxes(let boxes) = output.typedResult {
             _items = State(initialValue: boxes)
         } else {
@@ -32,28 +24,49 @@ struct MedicineBoxRecognitionResultView: View {
         }
     }
 
+    /// 附件列表（上传的药盒照片/OCR文件）
     private var attachments: [MedicationResultLocalAttachmentItem] {
         output.envelope.sourceFiles.map { MedicationResultLocalAttachmentItem(file: $0) }
+    }
+
+    private var isSaving: Bool { viewModel.isSaving }
+
+    private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+
+    private func onBack() {
+        viewModel.reset()
+    }
+
+    private func onUpdate(_ typedResult: MedicalDocumentTypedResult) {
+        viewModel.updateTypedResult(typedResult)
+    }
+
+    private func onSave() {
+        Task { _ = await viewModel.saveResult() }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // MARK: - 成员信息区域
                 MedicationResultSectionCard(
                     title: L10n.text("medical.upload.result.medicine_box.member.title", fallback: "确认成员"),
                     subtitle: L10n.text("medical.upload.result.medicine_box.member.subtitle", fallback: "保存后会加入该成员的药箱"),
                     systemImage: "person.crop.circle.badge.checkmark"
                 ) {
+                    // 成员ID
                     MedicationResultInfoLine(
                         title: L10n.text("medical.upload.result.member.id"),
                         value: output.envelope.memberID.map(String.init) ?? L10n.text("medical.upload.member.not_selected")
                     )
+                    // 药品总数量
                     MedicationResultInfoLine(
                         title: L10n.text("medical.upload.result.medicine_box.total_count", fallback: "药品数量"),
                         value: "\(items.count)"
                     )
                 }
 
+                // MARK: - 药品列表区域
                 MedicationResultSectionCard(
                     title: L10n.text("medical.upload.result.medicine_box.section.title", fallback: "药箱药品"),
                     subtitle: L10n.text("medical.upload.result.medicine_box.section.subtitle", fallback: "可逐条编辑识别结果后保存"),
@@ -61,11 +74,13 @@ struct MedicineBoxRecognitionResultView: View {
                     badgeText: String(format: L10n.text("medical.upload.result.medication.count_format"), locale: .current, items.count)
                 ) {
                     if items.isEmpty {
+                        // 无药品时展示空状态
                         Text(L10n.text("medical.upload.result.medicine_box.empty", fallback: "暂无药品"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     } else {
                         VStack(spacing: 8) {
+                            // 遍历展示所有药品
                             ForEach(Array(items.enumerated()), id: \.offset) { pair in
                                 itemRow(index: pair.offset, item: pair.element)
                             }
@@ -73,8 +88,10 @@ struct MedicineBoxRecognitionResultView: View {
                     }
                 }
 
+                // MARK: - 附件（照片）区域
                 MedicationAttachmentsSectionView(attachments: attachments)
 
+                // MARK: - 保存成功回执区域
                 if let saveReceipt {
                     MedicationResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
@@ -94,16 +111,19 @@ struct MedicineBoxRecognitionResultView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.medicine_box.title", fallback: "药箱"))
         .navigationBarTitleDisplayMode(.inline)
+        // 底部固定操作栏
         .safeAreaInset(edge: .bottom) {
             bottomBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
+        // 弹出药品编辑页面
         .fullScreenCover(item: $editingItem) { editor in
             MedicineBoxFormView(
                 mode: .localEdit(existing: MedicineBoxDraft(recognition: editor.item), onSubmit: { draft in
                     guard items.indices.contains(editor.index) else { return }
+                    // 保存编辑后的药品信息
                     items[editor.index] = draft.recognitionDraft(sortOrder: editor.item.sortOrder)
                     onUpdate(.medicineBoxes(items))
                 }),
@@ -111,16 +131,20 @@ struct MedicineBoxRecognitionResultView: View {
                 workflowAPI: AppContainer.preview.backend.medicalWorkflow
             )
         }
+        // 监听药品列表变化，自动通知上层更新
         .onChange(of: items) { newValue in
             onUpdate(.medicineBoxes(newValue))
         }
     }
 
+    // MARK: - 底部工具栏（返回 + 保存）
     private var bottomBar: some View {
         HStack(spacing: 12) {
+            // 返回按钮
             Button(L10n.text("medical.upload.result.common.back"), action: onBack)
                 .buttonStyle(.bordered)
 
+            // 保存按钮
             Button {
                 onUpdate(.medicineBoxes(items))
                 onSave()
@@ -134,25 +158,30 @@ struct MedicineBoxRecognitionResultView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isSaving || items.isEmpty)
+            .disabled(isSaving || items.isEmpty) // 保存中/无药品 时禁用
         }
     }
 
+    // MARK: - 单行药品条目
+    /// 展示单个药品信息 + 编辑按钮
     private func itemRow(index: Int, item: MedicineBoxRecognitionDraft) -> some View {
         HStack(spacing: 10) {
+            // 药品图标
             Image(systemName: "capsule")
                 .font(.caption)
                 .foregroundStyle(Color(uiColor: .systemPurple))
 
             VStack(alignment: .leading, spacing: 4) {
+                // 药品名称
                 Text(item.medicineName?.nilIfBlank ?? L10n.text("medical.upload.result.medication.unnamed"))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                // 药品详情：规格 + 剂型 + 有效期
                 let detail = [item.strength, item.dosageForm, item.expireDate]
                     .compactMap { $0?.nilIfBlank }
                     .joined(separator: " · ")
-                if detail.isEmpty == false {
+                if !detail.isEmpty {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -162,6 +191,7 @@ struct MedicineBoxRecognitionResultView: View {
 
             Spacer()
 
+            // 编辑按钮
             Button(L10n.text("common.edit")) {
                 editingItem = MedicineBoxRecognitionEditor(index: index, item: item)
             }
@@ -175,9 +205,11 @@ struct MedicineBoxRecognitionResultView: View {
     }
 }
 
+// MARK: - 药品编辑对象（用于弹窗标识）
+/// 标识当前正在编辑的药品索引和数据
 private struct MedicineBoxRecognitionEditor: Identifiable {
-    let index: Int
-    let item: MedicineBoxRecognitionDraft
+    let index: Int          // 药品在列表中的下标
+    let item: MedicineBoxRecognitionDraft  // 药品数据
 
     var id: String { "medicine-box-\(index)" }
 }

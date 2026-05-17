@@ -20,12 +20,12 @@ struct UploadMedicalDocumentFilesUseCase: Sendable {
     /// - Parameters:
     ///   - memberID: 成员 ID（用于业务关联）
     ///   - files: 需要上传的本地文件对象数组
-    /// - Returns: 包含本地信息与远程记录对照的已上传文件数组
+    /// - Returns: 带远程文件记录的本地文件数组
     func execute(
         memberID: Int,
         files: [MedicalUploadLocalFile]
-    ) async throws -> [UploadedMedicalDocumentFile] {
-        var output: [UploadedMedicalDocumentFile] = []
+    ) async throws -> [MedicalUploadLocalFile] {
+        var output: [MedicalUploadLocalFile] = []
         
         // 遍历所有待上传的本地文件
         for file in files {
@@ -44,8 +44,8 @@ struct UploadMedicalDocumentFilesUseCase: Sendable {
                 )
             )
             
-            // 3. 将本地原始信息与服务器返回的远程记录 (record) 封装在一起
-            output.append(UploadedMedicalDocumentFile(localFile: file, remoteFile: record))
+            // 3. 将服务器返回的远程记录 (record) 写回本地文件模型
+            output.append(file.withRemoteFile(record))
         }
         
         // 4. 记录上传成功的统计日志

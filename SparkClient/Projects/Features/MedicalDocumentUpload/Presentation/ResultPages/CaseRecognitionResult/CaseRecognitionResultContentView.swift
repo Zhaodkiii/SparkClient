@@ -1,28 +1,26 @@
+
 import SwiftUI
 
+/// 【病历/病例文档】识别结果页面
+/// 功能：AI 识别完整病历 → 展示就诊全流程信息 → 支持精细化编辑 → 保存
+/// 这是医疗模块中数据最全、结构最复杂的结果页
 struct CaseRecognitionResultContentView: View {
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+    /// AI 结构化提取输出结果
     let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSave: () -> Void
 
+    /// 病历草稿（单例对象，一份上传对应一份完整病历）
     @State private var draft: CaseRecognitionDraft
+    /// 本地编辑弹窗（支持多达8种编辑项：症状/就诊/手术/报告/处方/药品/随访等）
     @State private var localEditor: CaseRecognitionLocalEditor?
 
-    init(
-        output: MedicalDocumentTypedExtractionOutput,
-        isSaving: Bool,
-        saveReceipt: MedicalDocumentSaveReceipt?,
-        onBack: @escaping () -> Void,
-        onSave: @escaping () -> Void
-    ) {
+    /// 初始化：从 AI 识别结果中加载病历数据
+    init(viewModel: MedicalDocumentUploadViewModel) {
+        self.viewModel = viewModel
+        let output = viewModel.typedOutput!
         self.output = output
-        self.isSaving = isSaving
-        self.saveReceipt = saveReceipt
-        self.onBack = onBack
-        self.onSave = onSave
 
+        // 从识别结果中加载病历，无数据则创建默认空病历
         if case .caseDocument(let caseDraft) = output.typedResult {
             _draft = State(initialValue: caseDraft)
         } else {
@@ -43,48 +41,71 @@ struct CaseRecognitionResultContentView: View {
         }
     }
 
+    private var isSaving: Bool { viewModel.isSaving }
+    private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+
+    /// 附件：上传的病历照片 / 扫描件
     private var localAttachments: [CaseLocalAttachmentItem] {
         output.envelope.sourceFiles.map { CaseLocalAttachmentItem(file: $0) }
+    }
+
+    private func matchedAttachments(for ids: [UUID]) -> [CaseLocalAttachmentItem] {
+        guard ids.isEmpty == false else { return [] }
+        let idSet = Set(ids)
+        return localAttachments.filter { idSet.contains($0.id) }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // MARK: 1. 成员信息区域（归属家庭成员）
                 CaseMemberInfoSectionView(
                     memberID: output.envelope.memberID,
                     draft: draft
                 )
 
+                // MARK: 2. 病史 & 诊断区域
                 CaseHistoryDiagnosisSectionView(
                     draft: draft,
-                    onEditSymptom: { localEditor = .symptom($0) },
-                    onEditSurgery: { localEditor = .surgery($0) }
+                    caseAttachments: matchedAttachments(for: draft.attachmentFileIds),
+                    symptomAttachments: matchedAttachments(for: draft.symptom?.attachmentFileIds ?? []),
+                    surgeryAttachments: matchedAttachments(for: draft.surgery?.attachmentFileIds ?? []),
+                    onEditSymptom: { localEditor = .symptom($0) },    // 编辑症状
+                    onEditSurgery: { localEditor = .surgery($0) }     // 编辑手术史
                 )
 
+                // MARK: 3. 就诊信息区域
                 CaseVisitInfoSectionView(
                     visit: draft.visit,
-                    onEdit: { localEditor = .visit($0) }
+                    attachments: matchedAttachments(for: draft.visit?.attachmentFileIds ?? []),
+                    onEdit: { localEditor = .visit($0) }              // 编辑就诊记录
                 )
 
+                // MARK: 4. 检查报告列表区域
                 CaseExamReportsSectionView(
                     reports: draft.examinationReports ?? [],
+                    attachmentsForIDs: matchedAttachments(for:),
                     onEdit: { index, report in
-                        localEditor = .exam(index: index, draft: report)
+                        localEditor = .exam(index: index, draft: report) // 编辑单份检查报告
                     }
                 )
 
+                // MARK: 5. 治疗方案区域（处方 + 用药 + 随访）
                 CaseTreatmentPlanSectionView(
                     batches: draft.prescriptions ?? [],
                     followUps: draft.followUps ?? [],
-                    onEditBatch: { localEditor = .medicationBatch($0) },
-                    onEditMedicationItem: { batchIndex, itemIndex, item in
+                    attachmentsForIDs: matchedAttachments(for:),
+                    onEditBatch: { localEditor = .medicationBatch($0) },        // 编辑整张开方
+                    onEditMedicationItem: { batchIndex, itemIndex, item in       // 编辑单个药品
                         localEditor = .medicationItem(batchIndex: batchIndex, itemIndex: itemIndex, draft: item)
                     },
-                    onEditFollowUp: { localEditor = .followUp($0) }
+                    onEditFollowUp: { localEditor = .followUp($0) }             // 编辑随访计划
                 )
 
+                // MARK: 6. 附件展示（病历原图）
                 CaseAttachmentsSectionView(attachments: localAttachments)
 
+                // MARK: 7. 保存成功回执（显示记录ID）
                 if let saveReceipt {
                     CaseSectionCard(
                         title: "保存状态",
@@ -99,13 +120,16 @@ struct CaseRecognitionResultContentView: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        // 底部固定工具栏：返回 + 保存
         .safeAreaInset(edge: .bottom) {
             bottomBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
+        // 数据变化时动画
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: draft.infoDensityCount)
+        // 全屏编辑弹窗
         .fullScreenCover(item: $localEditor) { editor in
             CompatibleNavigationContainer {
                 localEditorDestination(editor)
@@ -113,13 +137,16 @@ struct CaseRecognitionResultContentView: View {
         }
     }
 
+    // MARK: - 底部工具栏
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            Button("返回", action: onBack)
+            Button("返回") {
+                viewModel.reset()
+            }
                 .buttonStyle(.bordered)
 
             Button {
-                onSave()
+                submitSave()
             } label: {
                 Group {
                     if isSaving {
@@ -134,9 +161,16 @@ struct CaseRecognitionResultContentView: View {
         }
     }
 
+    private func submitSave() {
+        viewModel.updateTypedResult(.caseDocument(draft))
+        Task { _ = await viewModel.saveResult() }
+    }
+
+    // MARK: - 编辑页面路由（支持8种精细化编辑）
     @ViewBuilder
     private func localEditorDestination(_ editor: CaseRecognitionLocalEditor) -> some View {
         switch editor {
+        // 1. 编辑就诊信息
         case .visit(let visitDraft):
             VisitFormView(
                 mode: .localEdit(existing: visitDraft, onSubmit: { updated in
@@ -147,6 +181,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: draft.symptom,
                         visit: updated,
                         surgery: draft.surgery,
@@ -157,6 +192,7 @@ struct CaseRecognitionResultContentView: View {
                 })
             )
 
+        // 2. 编辑症状
         case .symptom(let symptomDraft):
             SymptomFormView(
                 mode: .localEdit(existing: symptomDraft, onSubmit: { updated in
@@ -167,6 +203,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: updated,
                         visit: draft.visit,
                         surgery: draft.surgery,
@@ -177,6 +214,7 @@ struct CaseRecognitionResultContentView: View {
                 })
             )
 
+        // 3. 编辑手术史
         case .surgery(let surgeryDraft):
             SurgeryFormView(
                 mode: .localEdit(existing: surgeryDraft, onSubmit: { updated in
@@ -187,6 +225,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: draft.symptom,
                         visit: draft.visit,
                         surgery: updated,
@@ -197,6 +236,7 @@ struct CaseRecognitionResultContentView: View {
                 })
             )
 
+        // 4. 编辑整组处方
         case .medicationBatch(let batchDraft):
             MedicationMultiCreateView(
                 mode: .localEdit(existing: batchDraft, onSubmit: { updated in
@@ -211,6 +251,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: draft.symptom,
                         visit: draft.visit,
                         surgery: draft.surgery,
@@ -221,6 +262,7 @@ struct CaseRecognitionResultContentView: View {
                 })
             )
 
+        // 5. 编辑处方中的单个药品
         case .medicationItem(let batchIndex, let itemIndex, let medDraft):
             MedicationFormView(
                 mode: .localEdit(existing: medDraft, onSubmit: { updated in
@@ -239,7 +281,8 @@ struct CaseRecognitionResultContentView: View {
                         prescriptionNo: batch.prescriptionNo,
                         status: batch.status,
                         extra: batch.extra,
-                        medicationPlans: meds
+                        medicationPlans: meds,
+                        attachmentFileIds: batch.attachmentFileIds
                     )
                     batches[batchIndex] = batch
                     draft = CaseRecognitionDraft(
@@ -249,6 +292,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: draft.symptom,
                         visit: draft.visit,
                         surgery: draft.surgery,
@@ -259,6 +303,7 @@ struct CaseRecognitionResultContentView: View {
                 })
             )
 
+        // 6. 编辑随访计划
         case .followUp(let followDraft):
             FollowUpFormView(
                 mode: .localEdit(existing: followDraft, onSubmit: { updated in
@@ -273,6 +318,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: draft.symptom,
                         visit: draft.visit,
                         surgery: draft.surgery,
@@ -283,6 +329,7 @@ struct CaseRecognitionResultContentView: View {
                 })
             )
 
+        // 7. 编辑检查报告
         case .exam(let index, let examDraft):
             ExamReportFormView(
                 mode: .localEdit(existing: examDraft, onSubmit: { updated in
@@ -296,6 +343,7 @@ struct CaseRecognitionResultContentView: View {
                         hospitalName: draft.hospitalName,
                         ageAtVisit: draft.ageAtVisit,
                         occurredAt: draft.occurredAt,
+                        attachmentFileIds: draft.attachmentFileIds,
                         symptom: draft.symptom,
                         visit: draft.visit,
                         surgery: draft.surgery,

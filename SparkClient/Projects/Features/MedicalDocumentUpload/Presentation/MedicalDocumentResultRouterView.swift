@@ -3,94 +3,32 @@ import SwiftUI
 /// 分类型结果页路由：作为抽取结果入口，使用 NavigationLink 跳转到对应的结果页面模块。
 struct MedicalDocumentResultRouterView: View {
     @EnvironmentObject private var memberContextStore: MemberContextStore
-
-    let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSelectMember: (Int?) -> Void
-    let onUpdateTypedResult: (MedicalDocumentTypedResult) -> Void
-    let onSave: () -> Void
+    @ObservedObject var viewModel: MedicalDocumentUploadViewModel
 
     var body: some View {
         destinationView
-//        ScrollView {
-//            VStack(alignment: .leading, spacing: 16) {
-//                headerCard
-//
-//                NavigationLink {
-//                    destinationView
-//                } label: {
-//                    routeCard
-//                }
-//                .buttonStyle(.plain)
-//
-//                Button("返回上传") {
-//                    onBack()
-//                }
-//                .buttonStyle(.bordered)
-//            }
-//            .padding(16)
-//        }
-//        .background(Color(uiColor: .systemGroupedBackground))
-//        .navigationTitle("抽取结果")
-//        .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder
     private var destinationView: some View {
-        switch output.typedResult {
-        case .caseDocument:
-            CaseRecognitionResultView(
-                output: output,
-                isSaving: isSaving,
-                saveReceipt: saveReceipt,
-                onBack: onBack,
-                onSave: onSave
-            )
-        case .healthExamReport:
-            HealthExamRecognitionResultView(
-                output: output,
-                memberContextStore: memberContextStore,
-                isSaving: isSaving,
-                saveReceipt: saveReceipt,
-                onBack: onBack,
-                onSelectMember: onSelectMember,
-                onSave: onSave
-            )
-        case .medicalReport:
-            MedicalReportRecognitionResultView(
-                output: output,
-                isSaving: isSaving,
-                saveReceipt: saveReceipt,
-                onBack: onBack,
-                onSave: onSave
-            )
-        case .prescription:
-            PrescriptionRecognitionResultView(
-                output: output,
-                isSaving: isSaving,
-                saveReceipt: saveReceipt,
-                onBack: onBack,
-                onSave: onSave
-            )
-        case .medicationPlan:
-            MedicationRecognitionResultView(
-                output: output,
-                isSaving: isSaving,
-                saveReceipt: saveReceipt,
-                onBack: onBack,
-                onSave: onSave
-            )
-        case .medicineBoxes:
-            MedicineBoxRecognitionResultView(
-                output: output,
-                isSaving: isSaving,
-                saveReceipt: saveReceipt,
-                onBack: onBack,
-                onUpdate: onUpdateTypedResult,
-                onSave: onSave
-            )
+        if let output = viewModel.typedOutput {
+            switch output.typedResult {
+            case .caseDocument:
+                CaseRecognitionResultView(viewModel: viewModel)
+            case .healthExamReport:
+                HealthExamRecognitionResultView(
+                    viewModel: viewModel,
+                    memberContextStore: memberContextStore
+                )
+            case .medicalReport:
+                MedicalReportRecognitionResultView(viewModel: viewModel)
+            case .prescription:
+                PrescriptionRecognitionResultView(viewModel: viewModel)
+            case .medicationPlan:
+                MedicationRecognitionResultView(viewModel: viewModel)
+            case .medicineBoxes:
+                MedicineBoxRecognitionResultView(viewModel: viewModel)
+            }
         }
     }
 
@@ -127,6 +65,7 @@ struct MedicalDocumentResultRouterView: View {
     }
 
     private var routeLabel: String {
+        guard let output = viewModel.typedOutput else { return "" }
         switch output.typedResult {
         case .caseDocument:
             return "病例"

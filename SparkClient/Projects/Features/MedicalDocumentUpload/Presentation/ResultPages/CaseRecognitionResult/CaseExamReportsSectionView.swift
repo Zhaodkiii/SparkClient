@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CaseExamReportsSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
+    let attachmentsForIDs: ([UUID]) -> [CaseLocalAttachmentItem]
     let onEdit: (Int, MedicalReportRecognitionDraft) -> Void
 
     var body: some View {
@@ -52,13 +53,21 @@ struct CaseExamReportsSectionView: View {
                     .padding(.bottom, 2)
             } else {
                 ForEach(indexed, id: \.offset) { pair in
-                    reportCard(index: pair.offset, report: pair.element)
+                    reportCard(
+                        index: pair.offset,
+                        report: pair.element,
+                        attachments: attachmentsForIDs(pair.element.attachmentFileIds)
+                    )
                 }
             }
         }
     }
 
-    private func reportCard(index: Int, report: MedicalReportRecognitionDraft) -> some View {
+    private func reportCard(
+        index: Int,
+        report: MedicalReportRecognitionDraft,
+        attachments: [CaseLocalAttachmentItem]
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text(report.title)
@@ -92,6 +101,8 @@ struct CaseExamReportsSectionView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
+
+            CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachments)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

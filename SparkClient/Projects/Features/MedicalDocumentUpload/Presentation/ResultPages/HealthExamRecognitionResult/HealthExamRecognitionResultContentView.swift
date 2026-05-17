@@ -1,14 +1,10 @@
 import SwiftUI
 
 struct HealthExamRecognitionResultContentView: View {
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
     @ObservedObject var memberContextStore: MemberContextStore
     let attachmentSource: HealthExamResultAttachmentSource
     let mode: HealthExamResultMode
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSelectMember: (Int?) -> Void
-    let onSave: () -> Void
 
     @State private var draft: HealthExamRecognitionDraft
     @State private var selectedMemberID: Int?
@@ -20,22 +16,14 @@ struct HealthExamRecognitionResultContentView: View {
     private let logModule: LogModule = .medical
 
     init(
-        output: MedicalDocumentTypedExtractionOutput,
-        memberContextStore: MemberContextStore,
-        isSaving: Bool,
-        saveReceipt: MedicalDocumentSaveReceipt?,
-        onBack: @escaping () -> Void,
-        onSelectMember: @escaping (Int?) -> Void,
-        onSave: @escaping () -> Void
+        viewModel: MedicalDocumentUploadViewModel,
+        memberContextStore: MemberContextStore
     ) {
+        self.viewModel = viewModel
+        let output = viewModel.typedOutput!
         self.memberContextStore = memberContextStore
         self.attachmentSource = .local(output.envelope.sourceFiles.map { HealthExamResultLocalAttachmentItem(file: $0) })
         self.mode = .recognition
-        self.isSaving = isSaving
-        self.saveReceipt = saveReceipt
-        self.onBack = onBack
-        self.onSelectMember = onSelectMember
-        self.onSave = onSave
         _selectedMemberID = State(initialValue: output.envelope.memberID)
 
         if case .healthExamReport(let report) = output.typedResult {
@@ -57,17 +45,16 @@ struct HealthExamRecognitionResultContentView: View {
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore
     ) {
+        self.viewModel = .preview()
         self.memberContextStore = memberContextStore
         self.attachmentSource = .remote(item.attachments ?? [], fileTransferService)
         self.mode = .detail
-        self.isSaving = false
-        self.saveReceipt = nil
-        self.onBack = {}
-        self.onSelectMember = { _ in }
-        self.onSave = {}
         _selectedMemberID = State(initialValue: item.member)
         _draft = State(initialValue: HealthExamRecognitionDraft(remoteReport: item))
     }
+
+    private var isSaving: Bool { viewModel.isSaving }
+    private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
 
     private var indexedItems: [HealthExamRiskDisplayItem] {
         draft.items.enumerated().map { pair in
@@ -127,7 +114,7 @@ struct HealthExamRecognitionResultContentView: View {
                     draft: draft,
                     onSelectMember: mode.isEditable ? { memberID in
                         selectedMemberID = memberID
-                        onSelectMember(memberID)
+                        viewModel.updateResultMemberID(memberID)
                     } : nil
                 )
 
@@ -208,12 +195,14 @@ struct HealthExamRecognitionResultContentView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            Button(L10n.text("medical.upload.result.common.back"), action: onBack)
+            Button(L10n.text("medical.upload.result.common.back")) {
+                viewModel.reset()
+            }
                 .buttonStyle(.bordered)
 
             Button {
                 logger.info("Health exam result: submit save tapped", module: logModule)
-                onSave()
+                submitSave()
             } label: {
                 Group {
                     if isSaving {
@@ -226,6 +215,12 @@ struct HealthExamRecognitionResultContentView: View {
             .buttonStyle(.borderedProminent)
             .disabled(isSaving)
         }
+    }
+
+    private func submitSave() {
+        viewModel.updateResultMemberID(selectedMemberID)
+        viewModel.updateTypedResult(.healthExamReport(draft))
+        Task { _ = await viewModel.saveResult() }
     }
 
     @ViewBuilder

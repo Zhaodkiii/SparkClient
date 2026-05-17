@@ -97,7 +97,27 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         files: [MedicalUploadLocalFile],
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> String {
-        try await buildMergedOCRText(files: files, cancellationToken: cancellationToken)
+        let filesWithOCR = try await recognizeOCRFiles(files: files, cancellationToken: cancellationToken)
+        return buildMergedOCRText(files: filesWithOCR)
+    }
+
+    func recognizeOCRFiles(
+        files: [MedicalUploadLocalFile],
+        cancellationToken: AIRuntimeCancellationToken? = nil
+    ) async throws -> [MedicalUploadLocalFile] {
+        var output: [MedicalUploadLocalFile] = []
+        for (idx, file) in files.enumerated() {
+            try cancellationToken?.checkCancellation()
+            if let ocrText = file.ocrText, ocrText.isEmpty == false {
+                output.append(file)
+                continue
+            }
+            logger.info("开始 OCR 识别 fileIndex=\(idx + 1)/\(files.count) name=\(file.displayName)", module: .medical)
+            let ocr = try await recognize(file: file)
+            try cancellationToken?.checkCancellation()
+            output.append(file.withOCRText(ocr.text))
+        }
+        return output
     }
 
     func resolveType(
@@ -122,6 +142,11 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     ) async throws -> MedicalDocumentTypedExtractionOutput {
         try cancellationToken?.checkCancellation()
         let kind = resolution.kind
+//#if DEBUG
+//        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
+//        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: kind)
+//#endif
+        
         // 3. 根据文档类型，生成对应的AI抽取提示词（Prompt）
         let prompt = promptFactory.extractionPrompt(for: MedicalPromptInput(kind: kind, mergedOCRText: mergedOCRText))
         
@@ -377,19 +402,11 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 
     // MARK: - OCR 合并处理
     /// 私有方法：遍历所有文件 → 执行OCR → 拼接成一段完整文本
-    private func buildMergedOCRText(
-        files: [MedicalUploadLocalFile],
-        cancellationToken: AIRuntimeCancellationToken?
-    ) async throws -> String {
+    private func buildMergedOCRText(files: [MedicalUploadLocalFile]) -> String {
         var chunks: [String] = []
-        // 遍历文件，逐个识别
         for (idx, file) in files.enumerated() {
-            try cancellationToken?.checkCancellation()
-            logger.info("开始 OCR 识别 fileIndex=\(idx + 1)/\(files.count) name=\(file.displayName)", module: .medical)
-            let ocr = try await recognize(file: file)
-            try cancellationToken?.checkCancellation()
             // 给每个文件的OCR加标题分隔，方便AI区分来源
-            chunks.append("=== File \(idx + 1): \(file.displayName) ===\n\(ocr.text)")
+            chunks.append("=== File \(idx + 1): \(file.displayName) ===\n\(file.ocrText ?? "")")
         }
         // 用换行拼接所有文本
         return chunks.joined(separator: "\n\n")

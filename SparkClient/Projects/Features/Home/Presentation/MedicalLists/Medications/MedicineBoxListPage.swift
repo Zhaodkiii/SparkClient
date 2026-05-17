@@ -1168,7 +1168,7 @@ struct MedicineBoxFormView: View {
 
         let uploader = UploadMedicalDocumentFilesUseCase(fileTransferService: fileTransferService)
         let uploaded = try await uploader.execute(memberID: memberID, files: pendingAttachmentFiles)
-        return uploaded.map(\.remoteFile.id)
+        return uploaded.compactMap { $0.remoteFile?.id }
     }
 
     private var modeLogLabel: String {

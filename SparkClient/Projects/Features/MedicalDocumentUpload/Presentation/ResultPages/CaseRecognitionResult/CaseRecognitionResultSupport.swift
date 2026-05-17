@@ -117,6 +117,17 @@ struct CaseLocalAttachmentItem: Identifiable {
         }
         return "doc"
     }
+
+    var tintColor: Color {
+        let ext = (displayName as NSString).pathExtension.lowercased()
+        if mimeType?.contains("pdf") == true || ext == "pdf" {
+            return Color(uiColor: .systemRed)
+        }
+        if mimeType?.contains("image") == true || ["png", "jpg", "jpeg", "heic", "webp"].contains(ext) {
+            return Color(uiColor: .systemBlue)
+        }
+        return Color(uiColor: .systemIndigo)
+    }
 }
 
 enum CaseRecognitionLocalEditor: Identifiable {

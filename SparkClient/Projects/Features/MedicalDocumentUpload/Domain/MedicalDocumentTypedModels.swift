@@ -13,7 +13,7 @@ struct FlexibleOptionalString: Codable, Sendable, Equatable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if try container.decodeNil() {
+        if container.decodeNil() {
             wrappedValue = nil
             return
         }
@@ -42,10 +42,42 @@ struct FlexibleOptionalString: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+@propertyWrapper
+struct DefaultEmptyUUIDArray: Codable, Sendable, Equatable, Hashable {
+    var wrappedValue: [UUID]
+
+    init(wrappedValue: [UUID] = []) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            wrappedValue = []
+        } else if let uuids = try? container.decode([UUID].self) {
+            wrappedValue = uuids
+        } else if let strings = try? container.decode([String].self) {
+            wrappedValue = strings.compactMap(UUID.init(uuidString:))
+        } else {
+            wrappedValue = []
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+}
+
 extension KeyedDecodingContainer {
     /// 让 `@FlexibleOptionalString` 在键缺失时自动回落为 nil，避免触发 keyNotFound。
     func decode(_ type: FlexibleOptionalString.Type, forKey key: Key) throws -> FlexibleOptionalString {
         try decodeIfPresent(type, forKey: key) ?? FlexibleOptionalString(wrappedValue: nil)
+    }
+
+    /// 让 `@DefaultEmptyUUIDArray` 在键缺失时自动回落为空数组。
+    func decode(_ type: DefaultEmptyUUIDArray.Type, forKey key: Key) throws -> DefaultEmptyUUIDArray {
+        try decodeIfPresent(type, forKey: key) ?? DefaultEmptyUUIDArray()
     }
 }
 
@@ -90,12 +122,6 @@ struct MedicalDocumentRecognitionEnvelope: Sendable, Equatable {
     let typeResolution: MedicalDocumentTypeResolution // 类型判定结论
 }
 
-/// 文件映射：将本地选择的文件对象与服务端生成的持久化记录进行绑定。
-struct UploadedMedicalDocumentFile: Sendable, Equatable {
-    let localFile: MedicalUploadLocalFile // 本地临时文件
-    let remoteFile: ManagedFileRecord     // 服务端数据库记录（包含文件 ID、URL 等）
-}
-
 // MARK: - 结构化数据草稿 (Drafts)
 
 /// 医疗报告通用指标项
@@ -114,6 +140,7 @@ struct MedicalReportItem: Sendable, Equatable, Codable {
     let bodyPart: String?      // 检测部位
     let diagnosis: String?     // 医生对该项的诊断
     let extra: [String: String]? // 其他扩展信息
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
     /// 排序序号（保持与原件一致）；流式 JSON 常为字符串 `"4"`，亦可能为数字
     @FlexibleOptionalString var sortOrder: String?
 
@@ -127,6 +154,7 @@ struct HealthExamRecognitionDraft: Sendable, Equatable, Codable {
     let examType: String?        // 体检类型
     let summary: String?         // 体检综述/建议
     let items: [MedicalReportItem] // 指标明细列表
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 /// 医疗报告抽取草稿（适用于 CT、超声等影像学报告）
@@ -138,6 +166,7 @@ struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
     let content: String     // 报告详情/描述内容
     let date: String?         // 检查日期
     let details: [MedicalReportItem] // 指标明细
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 // MARK: - 用药计划：药箱 + 服药计划组合抽取行
@@ -173,6 +202,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
     /// 批次内排序；流式 JSON 常为字符串
     @FlexibleOptionalString var sortOrder: String?
     let extra: [String: String]?
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 
     init(
         medicineName: String? = nil,
@@ -197,7 +227,8 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         reminderTimes: [String]? = nil,
         status: String? = nil,
         sortOrder: String? = nil,
-        extra: [String: String]? = nil
+        extra: [String: String]? = nil,
+        attachmentFileIds: [UUID] = []
     ) {
         self.medicineName = medicineName
         self.medicineType = medicineType
@@ -222,6 +253,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         self.status = status
         self._sortOrder = FlexibleOptionalString(wrappedValue: sortOrder)
         self.extra = extra
+        self._attachmentFileIds = DefaultEmptyUUIDArray(wrappedValue: attachmentFileIds)
     }
 }
 
@@ -238,6 +270,7 @@ struct MedicineBoxRecognitionDraft: Sendable, Equatable, Codable {
     let notes: String?
     let extra: [String: String]?
     @FlexibleOptionalString var sortOrder: String?
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 /// 处方抽取草稿（与 SparkService ``Prescription`` + ``MedicationPlan`` 字段对齐；`member` 由上传信封提供）。
@@ -252,7 +285,8 @@ struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     let status: String?
     let extra: [String: String]?
     /// 处方内用药计划；缺省或省略时按空数组处理。
-    let medicationPlans: [MedicationPlanRecognitionDraft]?
+    var medicationPlans: [MedicationPlanRecognitionDraft]?
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 
 }
 
@@ -269,6 +303,7 @@ struct SymptomRecognitionDraft: Sendable, Equatable, Codable {
     let durationUnit: String?     // 持续时间单位 (天/周/月等)
     let bodyPart: String?         // 身体部位
     let notes: String?            // 备注说明
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 /// 就诊信息抽取草稿（与 ``Visit`` 字段语义对齐）。
@@ -280,6 +315,7 @@ struct VisitRecognitionDraft: Sendable, Equatable, Codable {
     let doctorName: String?       // 医生姓名
     let visitNo: String?          // 就诊号/病历号
     let notes: String?            // 备注
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 /// 手术信息抽取草稿（与 ``Surgery`` 字段语义对齐）。
@@ -294,6 +330,7 @@ struct SurgeryRecognitionDraft: Sendable, Equatable, Codable {
     let incisionLevel: String?    // 切口等级
     let asaClass: String?         // ASA 分级
     let notes: String?            // 备注
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 /// 随访信息抽取草稿（与 ``FollowUp`` 字段语义对齐）。
@@ -305,6 +342,7 @@ struct FollowUpRecognitionDraft: Sendable, Equatable, Codable {
     let method: String?           // 随访方式
     let outcome: String?          // 随访结果
     let nextAction: String?       // 下一步行动建议
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 
 /// 病例抽取草稿（汇总结构，与 `RecognizedMedical` 语义对齐）。
@@ -317,19 +355,21 @@ struct CaseRecognitionDraft: Sendable, Equatable, Codable {
     let ageAtVisit: String? // 就诊年龄 → `age_at_visit`
     /// 就诊日期（原始字符串，如 ISO 日期）；主档无列时写入保存 `extra["occurred_at"]`。
     let occurredAt: String?
+    @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 
     /// 子项：症状（单条；与组合创建 API `symptom` 对齐）
-    let symptom: SymptomRecognitionDraft?
+    var symptom: SymptomRecognitionDraft?
     /// 子项：就诊（单条；与组合创建 API `visit` 对齐）
-    let visit: VisitRecognitionDraft?
+    var visit: VisitRecognitionDraft?
     /// 子项：手术（单条；与组合创建 API `surgery` 对齐）
-    let surgery: SurgeryRecognitionDraft?
+    var surgery: SurgeryRecognitionDraft?
     /// 子项：随访
-    let followUps: [FollowUpRecognitionDraft]?
+    var followUps: [FollowUpRecognitionDraft]?
     /// 子项：处方（含处方内用药计划）
-    let prescriptions: [PrescriptionRecognitionDraft]?
+    var prescriptions: [PrescriptionRecognitionDraft]?
     /// 子项：检查/检验报告（与独立「医疗报告」类型共用草稿模型）
-    let examinationReports: [MedicalReportRecognitionDraft]?
+    var examinationReports: [MedicalReportRecognitionDraft]?
+
 }
 
 // MARK: - 最终输出封装

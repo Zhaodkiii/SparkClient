@@ -2,20 +2,18 @@ import SwiftUI
 
 /// 病例识别结果页（按模块拆分至 ResultPages/CaseRecognitionResult）
 struct CaseRecognitionResultView: View {
-    let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSave: () -> Void
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+
+    init(viewModel: MedicalDocumentUploadViewModel) {
+        self.viewModel = viewModel
+    }
 
     var body: some View {
-        CaseRecognitionResultContentView(
-            output: output,
-            isSaving: isSaving,
-            saveReceipt: saveReceipt,
-            onBack: onBack,
-            onSave: onSave
-        )
+        Group {
+            if viewModel.typedOutput != nil {
+                CaseRecognitionResultContentView(viewModel: viewModel)
+            }
+        }
         .navigationTitle("病例")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -23,26 +21,14 @@ struct CaseRecognitionResultView: View {
 
 #Preview("Case result - Light") {
     CompatibleNavigationContainer {
-        CaseRecognitionResultView(
-            output: .previewCase,
-            isSaving: false,
-            saveReceipt: nil,
-            onBack: {},
-            onSave: {}
-        )
+        CaseRecognitionResultView(viewModel: .preview(output: .previewCase))
     }
     .preferredColorScheme(.light)
 }
 
 #Preview("Case result - Dark") {
     CompatibleNavigationContainer {
-        CaseRecognitionResultView(
-            output: .previewCase,
-            isSaving: false,
-            saveReceipt: nil,
-            onBack: {},
-            onSave: {}
-        )
+        CaseRecognitionResultView(viewModel: .preview(output: .previewCase))
     }
     .preferredColorScheme(.dark)
 }

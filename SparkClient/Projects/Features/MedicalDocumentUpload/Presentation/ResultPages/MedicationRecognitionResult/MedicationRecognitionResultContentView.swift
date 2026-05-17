@@ -1,31 +1,28 @@
 import SwiftUI
 
+/// 用药方案 / 服药计划 识别结果页面
+/// 功能：展示AI识别的【用药计划】（药品 + 用法用量 + 服用时长）→ 支持编辑 → 保存
 struct MedicationRecognitionResultContentView: View {
+    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+    /// AI 结构化提取结果
     let output: MedicalDocumentTypedExtractionOutput
-    let isSaving: Bool
-    let saveReceipt: MedicalDocumentSaveReceipt?
-    let onBack: () -> Void
-    let onSave: () -> Void
 
+    /// 用药方案列表（核心：药品 + 怎么吃 + 吃多久）
     @State private var medicationPlans: [MedicationPlanRecognitionDraft]
+    /// 本地编辑弹窗（批量编辑 / 单个药品编辑）
     @State private var localEditor: MedicationResultLocalEditor?
 
+    /// 日志工具
     private let logger: Logger = ConsoleLogger()
     private let logModule: LogModule = .medical
 
-    init(
-        output: MedicalDocumentTypedExtractionOutput,
-        isSaving: Bool,
-        saveReceipt: MedicalDocumentSaveReceipt?,
-        onBack: @escaping () -> Void,
-        onSave: @escaping () -> Void
-    ) {
+    /// 初始化：从 AI 输出中提取【用药计划】数据
+    init(viewModel: MedicalDocumentUploadViewModel) {
+        self.viewModel = viewModel
+        let output = viewModel.typedOutput!
         self.output = output
-        self.isSaving = isSaving
-        self.saveReceipt = saveReceipt
-        self.onBack = onBack
-        self.onSave = onSave
 
+        // 从识别结果中取出用药计划，无数据则为空数组
         if case .medicationPlan(let meds) = output.typedResult {
             _medicationPlans = State(initialValue: meds)
         } else {
@@ -33,10 +30,16 @@ struct MedicationRecognitionResultContentView: View {
         }
     }
 
+    private var isSaving: Bool { viewModel.isSaving }
+    private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+
+    /// 附件（上传的用药单照片）
     private var attachments: [MedicationResultLocalAttachmentItem] {
         output.envelope.sourceFiles.map { MedicationResultLocalAttachmentItem(file: $0) }
     }
 
+    /// 合成一个虚拟处方（为了复用已有的批量编辑页面）
+    /// 把用药计划包装成 PrescriptionRecognitionDraft，兼容旧的编辑组件
     private var syntheticBatch: PrescriptionRecognitionDraft {
         PrescriptionRecognitionDraft(
             medicalCase: nil,
@@ -54,25 +57,31 @@ struct MedicationRecognitionResultContentView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // MARK: 1. 成员确认区域（归属哪个家庭成员）
                 MedicationMemberConfirmSectionView(
                     memberID: output.envelope.memberID,
                     medications: medicationPlans
                 )
 
+                // MARK: 2. 用药计划列表（核心展示区）
+                /// 展示所有识别出的用药方案
+                /// 支持：批量编辑全部药品 / 编辑单个药品
                 MedicationListSectionView(
                     medications: medicationPlans,
                     onBatchEdit: {
                         logger.info("Medication result: open local batch editor", module: logModule)
-                        localEditor = .batch(syntheticBatch)
+                        localEditor = .batch(syntheticBatch) // 打开批量编辑
                     },
                     onEditItem: { index, item in
                         logger.info("Medication result: open local item editor index=\(index)", module: logModule)
-                        localEditor = .item(index: index, draft: item)
+                        localEditor = .item(index: index, draft: item) // 打开单个编辑
                     }
                 )
 
+                // MARK: 3. 附件（原图）
                 MedicationAttachmentsSectionView(attachments: attachments)
 
+                // MARK: 4. 保存成功回执（显示记录ID）
                 if let saveReceipt {
                     MedicationResultSectionCard(
                         title: L10n.text("medical.upload.result.common.save_status"),
@@ -90,13 +99,16 @@ struct MedicationRecognitionResultContentView: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        // 底部固定工具栏：返回 + 保存
         .safeAreaInset(edge: .bottom) {
             bottomBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
+        // 药品数量变化动画
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: medicationPlans.count)
+        // 全屏编辑弹窗
         .fullScreenCover(item: $localEditor) { editor in
             CompatibleNavigationContainer {
                 editorDestination(editor)
@@ -104,14 +116,19 @@ struct MedicationRecognitionResultContentView: View {
         }
     }
 
+    // MARK: - 底部工具栏
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            Button(L10n.text("medical.upload.result.common.back"), action: onBack)
+            // 返回按钮
+            Button(L10n.text("medical.upload.result.common.back")) {
+                viewModel.reset()
+            }
                 .buttonStyle(.bordered)
 
+            // 保存按钮
             Button {
                 logger.info("Medication result: submit save tapped", module: logModule)
-                onSave()
+                submitSave()
             } label: {
                 Group {
                     if isSaving {
@@ -122,13 +139,20 @@ struct MedicationRecognitionResultContentView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isSaving)
+            .disabled(isSaving) // 保存中禁用
         }
     }
 
+    private func submitSave() {
+        viewModel.updateTypedResult(.medicationPlan(medicationPlans))
+        Task { _ = await viewModel.saveResult() }
+    }
+
+    // MARK: - 编辑页面路由
     @ViewBuilder
     private func editorDestination(_ editor: MedicationResultLocalEditor) -> some View {
         switch editor {
+        // 批量编辑（复用处方编辑页）
         case .batch(let batch):
             MedicationMultiCreateView(
                 mode: .localEdit(existing: batch, onSubmit: { updated in
@@ -137,6 +161,7 @@ struct MedicationRecognitionResultContentView: View {
                 })
             )
 
+        // 编辑单个用药计划
         case .item(let index, let item):
             MedicationFormView(
                 mode: .localEdit(existing: item, onSubmit: { updated in

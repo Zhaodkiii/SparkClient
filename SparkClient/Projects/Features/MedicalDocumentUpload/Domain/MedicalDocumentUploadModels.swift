@@ -8,17 +8,45 @@ struct MedicalUploadLocalFile: Identifiable, Equatable, Sendable {
     let url: URL             // 文件在设备沙盒或系统选择器中的本地路径
     let displayName: String   // 用于在界面上显示的文件名
     let mimeType: String?    // 文件的媒体类型（如 "image/jpeg", "application/pdf"）
+    let ocrText: String?     // 单文件 OCR 识别结果
+    let remoteFile: ManagedFileRecord? // 上传成功后的远端文件记录
 
     init(
         id: UUID = UUID(),
         url: URL,
         displayName: String,
-        mimeType: String? = nil
+        mimeType: String? = nil,
+        ocrText: String? = nil,
+        remoteFile: ManagedFileRecord? = nil
     ) {
         self.id = id
         self.url = url
         self.displayName = displayName
         self.mimeType = mimeType
+        self.ocrText = ocrText
+        self.remoteFile = remoteFile
+    }
+
+    func withOCRText(_ text: String?) -> MedicalUploadLocalFile {
+        MedicalUploadLocalFile(
+            id: id,
+            url: url,
+            displayName: displayName,
+            mimeType: mimeType,
+            ocrText: text,
+            remoteFile: remoteFile
+        )
+    }
+
+    func withRemoteFile(_ file: ManagedFileRecord?) -> MedicalUploadLocalFile {
+        MedicalUploadLocalFile(
+            id: id,
+            url: url,
+            displayName: displayName,
+            mimeType: mimeType,
+            ocrText: ocrText,
+            remoteFile: file
+        )
     }
 }
 
