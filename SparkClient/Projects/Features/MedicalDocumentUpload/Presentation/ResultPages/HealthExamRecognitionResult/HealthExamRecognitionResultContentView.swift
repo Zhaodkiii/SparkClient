@@ -196,7 +196,7 @@ struct HealthExamRecognitionResultContentView: View {
     private var bottomBar: some View {
         HStack(spacing: 12) {
             Button(L10n.text("medical.upload.result.common.back")) {
-                viewModel.reset()
+                viewModel.reset(keepAttachments: true)
             }
                 .buttonStyle(.bordered)
 

@@ -72,7 +72,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         logger.info("typed 抽取开始，文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
 
         // 1. 对所有上传文件执行OCR，并把所有文本合并成一段完整文本
-        let mergedOCR = try await mergeOCRText(files: files, cancellationToken: cancellationToken)
+        let mergedOCR = try await mergeOCRText(files: files, reRecognizeAll: false, cancellationToken: cancellationToken)
         try cancellationToken?.checkCancellation()
         
         // 2. 根据用户选择类型 + OCR文本，最终确定文档类型（病例/体检/处方等）
@@ -95,28 +95,46 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 
     func mergeOCRText(
         files: [MedicalUploadLocalFile],
+        reRecognizeAll: Bool = false,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> String {
-        let filesWithOCR = try await recognizeOCRFiles(files: files, cancellationToken: cancellationToken)
+        let filesWithOCR = try await recognizeOCRFiles(
+            files: files,
+            reRecognizeAll: reRecognizeAll,
+            cancellationToken: cancellationToken
+        )
         return buildMergedOCRText(files: filesWithOCR)
     }
 
     func recognizeOCRFiles(
         files: [MedicalUploadLocalFile],
+        reRecognizeAll: Bool = false,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> [MedicalUploadLocalFile] {
         var output: [MedicalUploadLocalFile] = []
+        var recognizedCount = 0
+        var skippedCount = 0
         for (idx, file) in files.enumerated() {
             try cancellationToken?.checkCancellation()
-            if let ocrText = file.ocrText, ocrText.isEmpty == false {
+            if reRecognizeAll == false, let ocrText = file.ocrText, ocrText.isEmpty == false {
+                logger.info(
+                    "已有 OCR 记录，跳过识别 fileIndex=\(idx + 1)/\(files.count) name=\(file.displayName)",
+                    module: .medical
+                )
                 output.append(file)
+                skippedCount += 1
                 continue
             }
             logger.info("开始 OCR 识别 fileIndex=\(idx + 1)/\(files.count) name=\(file.displayName)", module: .medical)
             let ocr = try await recognize(file: file)
             try cancellationToken?.checkCancellation()
             output.append(file.withOCRText(ocr.text))
+            recognizedCount += 1
         }
+        logger.info(
+            "单文件 OCR 完成，total=\(output.count) 新识别=\(recognizedCount) 跳过=\(skippedCount)",
+            module: .medical
+        )
         return output
     }
 

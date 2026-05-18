@@ -3,6 +3,7 @@ import SwiftUI
 struct CaseMatchedAttachmentsGridView: View {
     let title: String?
     let attachments: [MedicalDocumentLocalAttachmentItem]
+    var onManage: (() -> Void)? = nil
 
     @State private var selectedPreview: FilePreviewInput?
 
@@ -20,17 +21,39 @@ struct CaseMatchedAttachmentsGridView: View {
 
                 Spacer(minLength: 0)
                 
-                // 附件管理 回调
+                if let onManage {
+                    Button {
+                        onManage()
+                    } label: {
+                        Label("管理", systemImage: "paperclip.badge.plus")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .font(.caption.weight(.semibold))
+                }
             }
         
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(attachments) { item in
+            if attachments.isEmpty {
+                if onManage != nil {
                     Button {
-                        selectedPreview = item.previewInput
+                        onManage?()
                     } label: {
-                        gridCard(item)
+                        Label("手动关联附件", systemImage: "paperclip.badge.plus")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
+                }
+            } else {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(attachments) { item in
+                        Button {
+                            selectedPreview = item.previewInput
+                        } label: {
+                            gridCard(item)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }

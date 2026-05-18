@@ -48,6 +48,16 @@ struct MedicalUploadLocalFile: Identifiable, Equatable, Sendable {
             remoteFile: file
         )
     }
+
+    var previewInput: FilePreviewInput {
+        FilePreviewInput(
+            id: id,
+            fileURL: url,
+            displayName: displayName,
+            mimeType: mimeType,
+            utTypeIdentifier: nil
+        )
+    }
 }
 
 /// 医疗文档的上传/处理模式

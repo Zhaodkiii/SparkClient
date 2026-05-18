@@ -7,6 +7,9 @@ struct CaseHistoryDiagnosisSectionView: View {
     let surgeryAttachments: [MedicalDocumentLocalAttachmentItem]
     let onEditSymptom: (SymptomRecognitionDraft) -> Void
     let onEditSurgery: (SurgeryRecognitionDraft) -> Void
+    var onManageCaseAttachments: (() -> Void)?
+    var onManageSymptomAttachments: (() -> Void)?
+    var onManageSurgeryAttachments: (() -> Void)?
 
     private var hasContent: Bool {
         draft.symptom != nil || draft.surgery != nil || draft.diagnosis?.nilIfBlank != nil
@@ -21,7 +24,11 @@ struct CaseHistoryDiagnosisSectionView: View {
         ) {
                 VStack(alignment: .leading, spacing: 12) {
                     MedicalDocumentResultInfoLine(title: "诊断结论", value: draft.diagnosis ?? "")
-                    CaseMatchedAttachmentsGridView(title: "病历附件", attachments: caseAttachments)
+                    CaseMatchedAttachmentsGridView(
+                        title: "病历附件",
+                        attachments: caseAttachments,
+                        onManage: onManageCaseAttachments
+                    )
 
                     if let symptom = draft.symptom {
                         block(title: symptom.name, detail: [
@@ -29,7 +36,7 @@ struct CaseHistoryDiagnosisSectionView: View {
                             symptom.bodyPart,
                             symptom.startedAt,
                             symptom.notes
-                        ], attachments: symptomAttachments) {
+                        ], attachments: symptomAttachments, onManageAttachments: onManageSymptomAttachments) {
                             onEditSymptom(symptom)
                         }
                 } else {
@@ -42,7 +49,7 @@ struct CaseHistoryDiagnosisSectionView: View {
                             surgery.surgeon,
                             surgery.performedAt,
                             surgery.notes
-                        ], attachments: surgeryAttachments) {
+                        ], attachments: surgeryAttachments, onManageAttachments: onManageSurgeryAttachments) {
                             onEditSurgery(surgery)
                         }
                 }
@@ -54,6 +61,7 @@ struct CaseHistoryDiagnosisSectionView: View {
         title: String,
         detail: [String?],
         attachments: [MedicalDocumentLocalAttachmentItem],
+        onManageAttachments: (() -> Void)?,
         onEdit: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -74,7 +82,11 @@ struct CaseHistoryDiagnosisSectionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachments)
+            CaseMatchedAttachmentsGridView(
+                title: "匹配附件",
+                attachments: attachments,
+                onManage: onManageAttachments
+            )
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

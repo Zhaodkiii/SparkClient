@@ -7,6 +7,9 @@ struct CaseTreatmentPlanSectionView: View {
     let onEditBatch: (PrescriptionRecognitionDraft) -> Void
     let onEditMedicationItem: (Int, Int, MedicationPlanRecognitionDraft) -> Void
     let onEditFollowUp: (FollowUpRecognitionDraft) -> Void
+    var onManageBatchAttachments: ((Int, PrescriptionRecognitionDraft) -> Void)?
+    var onManageMedicationAttachments: ((Int, Int, MedicationPlanRecognitionDraft) -> Void)?
+    var onManageFollowUpAttachments: ((Int, FollowUpRecognitionDraft) -> Void)?
 
     var body: some View {
         PrescriptionBatchListSectionView(
@@ -25,7 +28,10 @@ struct CaseTreatmentPlanSectionView: View {
             },
             onEditFollowUp: { item in
                 onEditFollowUp(item)
-            }
+            },
+            onManageBatchAttachments: onManageBatchAttachments,
+            onManageMedicationAttachments: onManageMedicationAttachments,
+            onManageFollowUpAttachments: onManageFollowUpAttachments
         )
     }
 }

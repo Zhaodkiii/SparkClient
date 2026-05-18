@@ -128,3 +128,286 @@ struct MedicalDocumentLocalAttachmentItem: Identifiable {
         return Color(uiColor: .systemIndigo)
     }
 }
+
+extension Array where Element == MedicalDocumentLocalAttachmentItem {
+    /// 排除已关联到具体业务条目的附件，仅保留未关联项。
+    func excludingAssociatedIDs(_ associatedIDs: Set<UUID>) -> [MedicalDocumentLocalAttachmentItem] {
+        guard associatedIDs.isEmpty == false else { return self }
+        return filter { associatedIDs.contains($0.id) == false }
+    }
+}
+
+extension PrescriptionRecognitionDraft {
+    var associatedAttachmentFileIDs: Set<UUID> {
+        var ids = Set(attachmentFileIds)
+        for plan in medicationPlans ?? [] {
+            ids.formUnion(plan.attachmentFileIds)
+        }
+        return ids
+    }
+}
+
+extension CaseRecognitionDraft {
+    var associatedAttachmentFileIDs: Set<UUID> {
+        var ids = Set(attachmentFileIds)
+        if let symptom {
+            ids.formUnion(symptom.attachmentFileIds)
+        }
+        if let visit {
+            ids.formUnion(visit.attachmentFileIds)
+        }
+        if let surgery {
+            ids.formUnion(surgery.attachmentFileIds)
+        }
+        for report in examinationReports ?? [] {
+            ids.formUnion(report.attachmentFileIds)
+        }
+        for prescription in prescriptions ?? [] {
+            ids.formUnion(prescription.associatedAttachmentFileIDs)
+        }
+        for followUp in followUps ?? [] {
+            ids.formUnion(followUp.attachmentFileIds)
+        }
+        return ids
+    }
+}
+
+extension Array where Element == MedicalReportRecognitionDraft {
+    var associatedAttachmentFileIDs: Set<UUID> {
+        Set(flatMap(\.attachmentFileIds))
+    }
+}
+
+extension Array where Element == MedicationPlanRecognitionDraft {
+    var associatedAttachmentFileIDs: Set<UUID> {
+        Set(flatMap(\.attachmentFileIds))
+    }
+}
+
+extension Array where Element == MedicineBoxRecognitionDraft {
+    var associatedAttachmentFileIDs: Set<UUID> {
+        Set(flatMap(\.attachmentFileIds))
+    }
+}
+
+/// 识别结果页底部：仅展示尚未关联到具体业务条目的源文件附件。
+struct MedicalDocumentUnlinkedAttachmentsSectionView: View {
+    let attachments: [MedicalDocumentLocalAttachmentItem]
+    var tintColor: Color = Color(uiColor: .systemTeal)
+
+    @State private var selectedPreview: FilePreviewInput?
+
+    var body: some View {
+        if attachments.isEmpty {
+            EmptyView()
+        } else {
+            MedicalDocumentResultSectionCard(
+                title: L10n.text("medical.upload.result.attachments.title"),
+                subtitle: L10n.text("medical.upload.result.attachments.unlinked.subtitle"),
+                systemImage: "paperclip",
+                tintColor: tintColor,
+                badgeText: String(
+                    format: L10n.text("medical.upload.result.attachments.count"),
+                    locale: .current,
+                    attachments.count
+                )
+            ) {
+                VStack(spacing: 8) {
+                    ForEach(attachments) { item in
+                        Button {
+                            selectedPreview = item.previewInput
+                        } label: {
+                            row(item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .unifiedFilePreview(selection: $selectedPreview)
+        }
+    }
+
+    private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+                    .frame(width: 40, height: 40)
+                Image(systemName: item.symbolName)
+                    .font(.headline)
+                    .foregroundStyle(Color(uiColor: .systemBlue))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(item.fileURL.lastPathComponent)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+    }
+}
+
+struct MedicalDocumentAttachmentAssociationSheet: View {
+    let title: String
+    let localAttachments: [MedicalDocumentLocalAttachmentItem]
+    let selectedIDs: [UUID]
+    let onSubmit: ([UUID]) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedIDSet: Set<UUID>
+    @State private var selectedPreview: FilePreviewInput?
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+
+    init(
+        title: String,
+        localAttachments: [MedicalDocumentLocalAttachmentItem],
+        selectedIDs: [UUID],
+        onSubmit: @escaping ([UUID]) -> Void
+    ) {
+        self.title = title
+        self.localAttachments = localAttachments
+        self.selectedIDs = selectedIDs
+        self.onSubmit = onSubmit
+        _selectedIDSet = State(initialValue: Set(selectedIDs))
+    }
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                if localAttachments.isEmpty {
+                    Text("暂无可关联附件")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                } else {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(localAttachments) { item in
+                            attachmentCard(item)
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.text("common.cancel")) {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("common.done")) {
+                        let orderedIDs = localAttachments.map(\.id).filter { selectedIDSet.contains($0) }
+                        onSubmit(orderedIDs)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .unifiedFilePreview(selection: $selectedPreview)
+    }
+
+    private func attachmentCard(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
+        let isSelected = selectedIDSet.contains(item.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                toggle(item.id)
+            } label: {
+                ZStack(alignment: .topTrailing) {
+                    thumbnail(item)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.85), isSelected ? Color.accentColor : Color.black.opacity(0.45))
+                        .padding(6)
+                }
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: 6) {
+                Text(item.displayName)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    selectedPreview = item.previewInput
+                } label: {
+                    Image(systemName: "eye")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    private func thumbnail(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
+        GeometryReader { geometry in
+            let size = geometry.size.width
+            ZStack {
+                if item.previewInput.isImage {
+                    LocalFileImageThumbnail(url: item.fileURL)
+                        .frame(width: size, height: size)
+                        .clipped()
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: item.symbolName)
+                            .font(.system(size: min(size * 0.3, 32)))
+                            .foregroundStyle(item.tintColor)
+                        Text(item.displayName)
+                            .font(.system(size: min(size * 0.11, 11)))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(width: size, height: size)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                }
+            }
+            .frame(width: size, height: size)
+            .background(Color(uiColor: .tertiarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected(item.id) ? Color.accentColor : Color(uiColor: .separator), lineWidth: isSelected(item.id) ? 2 : 0.5)
+            )
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+
+    private func toggle(_ id: UUID) {
+        if selectedIDSet.contains(id) {
+            selectedIDSet.remove(id)
+        } else {
+            selectedIDSet.insert(id)
+        }
+    }
+
+    private func isSelected(_ id: UUID) -> Bool {
+        selectedIDSet.contains(id)
+    }
+}

@@ -11,6 +11,7 @@ struct PrescriptionRecognitionResultContentView: View {
     @State private var batch: PrescriptionRecognitionDraft
     /// 本地编辑弹窗（编辑处方 / 编辑单个药品）
     @State private var localEditor: PrescriptionResultLocalEditor?
+    @State private var attachmentTarget: PrescriptionAttachmentTarget?
 
     /// 日志工具
     private let logger: Logger = ConsoleLogger()
@@ -54,6 +55,10 @@ struct PrescriptionRecognitionResultContentView: View {
         return attachments.filter { idSet.contains($0.id) }
     }
 
+    private var unlinkedAttachments: [MedicalDocumentLocalAttachmentItem] {
+        attachments.excludingAssociatedIDs(batch.associatedAttachmentFileIDs)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -76,11 +81,17 @@ struct PrescriptionRecognitionResultContentView: View {
                     onEditMedication: { _, index, item in
                         logger.info("Prescription result: open local medication editor index=\(index)", module: logModule)
                         localEditor = .medication(index: index, draft: item) // 打开单个药品编辑页
+                    },
+                    onManageBatchAttachments: { _, _ in
+                        attachmentTarget = .batch
+                    },
+                    onManageMedicationAttachments: { _, index, _ in
+                        attachmentTarget = .medication(index: index)
                     }
                 )
 
-                // MARK: 3. 附件（处方照片）
-                PrescriptionAttachmentsSectionView(attachments: attachments)
+                // MARK: 3. 未关联业务的源文件附件
+                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
 
                 // MARK: 4. 保存成功回执（显示记录ID）
                 if let saveReceipt {
@@ -115,6 +126,14 @@ struct PrescriptionRecognitionResultContentView: View {
                 editorDestination(editor)
             }
         }
+        .sheet(item: $attachmentTarget) { target in
+            MedicalDocumentAttachmentAssociationSheet(
+                title: target.title,
+                localAttachments: attachments,
+                selectedIDs: attachmentIDs(for: target),
+                onSubmit: { applyAttachmentIDs($0, to: target) }
+            )
+        }
     }
 
     // MARK: - 底部工具栏
@@ -122,7 +141,7 @@ struct PrescriptionRecognitionResultContentView: View {
         HStack(spacing: 12) {
             // 返回按钮
             Button(L10n.text("medical.upload.result.common.back")) {
-                viewModel.reset()
+                viewModel.reset(keepAttachments: true)
             }
                 .buttonStyle(.bordered)
 
@@ -147,6 +166,45 @@ struct PrescriptionRecognitionResultContentView: View {
     private func submitSave() {
         viewModel.updateTypedResult(.prescription(batch))
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func attachmentIDs(for target: PrescriptionAttachmentTarget) -> [UUID] {
+        switch target {
+        case .batch:
+            return batch.attachmentFileIds
+        case .medication(let index):
+            guard let meds = batch.medicationPlans, meds.indices.contains(index) else { return [] }
+            return meds[index].attachmentFileIds
+        }
+    }
+
+    private func applyAttachmentIDs(_ ids: [UUID], to target: PrescriptionAttachmentTarget) {
+        removeAttachmentIDs(ids, except: target)
+
+        switch target {
+        case .batch:
+            batch.attachmentFileIds = ids
+        case .medication(let index):
+            var meds = batch.medicationPlans ?? []
+            guard meds.indices.contains(index) else { return }
+            meds[index].attachmentFileIds = ids
+            batch.medicationPlans = meds
+        }
+    }
+
+    private func removeAttachmentIDs(_ ids: [UUID], except target: PrescriptionAttachmentTarget) {
+        let idSet = Set(ids)
+        guard idSet.isEmpty == false else { return }
+
+        if target.id != PrescriptionAttachmentTarget.batch.id {
+            batch.attachmentFileIds.removeAll { idSet.contains($0) }
+        }
+
+        var meds = batch.medicationPlans ?? []
+        for index in meds.indices where target.id != PrescriptionAttachmentTarget.medication(index: index).id {
+            meds[index].attachmentFileIds.removeAll { idSet.contains($0) }
+        }
+        batch.medicationPlans = meds
     }
 
     // MARK: - 编辑页面路由
@@ -181,7 +239,8 @@ struct PrescriptionRecognitionResultContentView: View {
                         prescriptionNo: batch.prescriptionNo,
                         status: batch.status,
                         extra: batch.extra,
-                        medicationPlans: meds
+                        medicationPlans: meds,
+                        attachmentFileIds: batch.attachmentFileIds
                     )
                     logger.info("Prescription result: local medication updated index=\(index)", module: logModule)
                 })

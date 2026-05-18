@@ -11,6 +11,7 @@ struct MedicalReportRecognitionResultContentView: View {
     @State private var reports: [MedicalReportRecognitionDraft]
     /// 本地编辑弹窗（编辑单份报告）
     @State private var localEditor: MedicalReportResultLocalEditor?
+    @State private var attachmentTarget: MedicalReportAttachmentTarget?
 
     /// 日志工具
     private let logger: Logger = ConsoleLogger()
@@ -44,6 +45,10 @@ struct MedicalReportRecognitionResultContentView: View {
         return attachments.filter { idSet.contains($0.id) }
     }
 
+    private var unlinkedAttachments: [MedicalDocumentLocalAttachmentItem] {
+        attachments.excludingAssociatedIDs(reports.associatedAttachmentFileIDs)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -65,11 +70,14 @@ struct MedicalReportRecognitionResultContentView: View {
                     onEdit: { index, draft in
                         logger.info("Medical report result: open local editor index=\(index)", module: logModule)
                         localEditor = .report(index: index, draft: draft) // 打开编辑页
+                    },
+                    onManageAttachments: { index, _ in
+                        attachmentTarget = MedicalReportAttachmentTarget(index: index)
                     }
                 )
 
-                // MARK: 4. 附件（报告原图）
-                MedicalReportAttachmentsSectionView(attachments: attachments)
+                // MARK: 4. 未关联业务的源文件附件
+                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
 
                 // MARK: 5. 保存成功回执（显示记录ID）
                 if let saveReceipt {
@@ -105,6 +113,18 @@ struct MedicalReportRecognitionResultContentView: View {
                 editorDestination(editor)
             }
         }
+        .sheet(item: $attachmentTarget) { target in
+            MedicalDocumentAttachmentAssociationSheet(
+                title: target.title,
+                localAttachments: attachments,
+                selectedIDs: reports.indices.contains(target.index) ? reports[target.index].attachmentFileIds : [],
+                onSubmit: { ids in
+                    guard reports.indices.contains(target.index) else { return }
+                    removeAttachmentIDs(ids, except: target.index)
+                    reports[target.index].attachmentFileIds = ids
+                }
+            )
+        }
     }
 
     // MARK: - 底部工具栏
@@ -112,7 +132,7 @@ struct MedicalReportRecognitionResultContentView: View {
         HStack(spacing: 12) {
             // 返回按钮
             Button(L10n.text("medical.upload.result.common.back")) {
-                viewModel.reset()
+                viewModel.reset(keepAttachments: true)
             }
                 .buttonStyle(.bordered)
 
@@ -137,6 +157,15 @@ struct MedicalReportRecognitionResultContentView: View {
     private func submitSave() {
         viewModel.updateTypedResult(.medicalReport(reports))
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func removeAttachmentIDs(_ ids: [UUID], except targetIndex: Int) {
+        let idSet = Set(ids)
+        guard idSet.isEmpty == false else { return }
+
+        for index in reports.indices where index != targetIndex {
+            reports[index].attachmentFileIds.removeAll { idSet.contains($0) }
+        }
     }
 
     // MARK: - 编辑页面路由

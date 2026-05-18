@@ -44,6 +44,9 @@ struct PrescriptionBatchListSectionView: View {
     let onEditBatch: (Int, PrescriptionRecognitionDraft) -> Void
     let onEditMedication: (Int, Int, MedicationPlanRecognitionDraft) -> Void
     var onEditFollowUp: ((FollowUpRecognitionDraft) -> Void)?
+    var onManageBatchAttachments: ((Int, PrescriptionRecognitionDraft) -> Void)?
+    var onManageMedicationAttachments: ((Int, Int, MedicationPlanRecognitionDraft) -> Void)?
+    var onManageFollowUpAttachments: ((Int, FollowUpRecognitionDraft) -> Void)?
 
     var body: some View {
         MedicalDocumentResultSectionCard(
@@ -86,8 +89,8 @@ struct PrescriptionBatchListSectionView: View {
                                 )
                         }
 
-                        ForEach(Array(followUps.enumerated()), id: \.offset) { _, item in
-                            followUpCard(item)
+                        ForEach(Array(followUps.enumerated()), id: \.offset) { pair in
+                            followUpCard(index: pair.offset, item: pair.element)
                         }
                     }
                 }
@@ -147,7 +150,10 @@ struct PrescriptionBatchListSectionView: View {
             if let attachmentsForIDs {
                 CaseMatchedAttachmentsGridView(
                     title: "处方附件",
-                    attachments: attachmentsForIDs(batch.attachmentFileIds)
+                    attachments: attachmentsForIDs(batch.attachmentFileIds),
+                    onManage: {
+                        onManageBatchAttachments?(index, batch)
+                    }
                 )
             }
         }
@@ -194,7 +200,10 @@ struct PrescriptionBatchListSectionView: View {
             if let attachmentsForIDs {
                 CaseMatchedAttachmentsGridView(
                     title: "药品附件",
-                    attachments: attachmentsForIDs(draft.attachmentFileIds)
+                    attachments: attachmentsForIDs(draft.attachmentFileIds),
+                    onManage: {
+                        onManageMedicationAttachments?(batchIndex, itemIndex, draft)
+                    }
                 )
             }
         }
@@ -205,7 +214,7 @@ struct PrescriptionBatchListSectionView: View {
         )
     }
 
-    private func followUpCard(_ item: FollowUpRecognitionDraft) -> some View {
+    private func followUpCard(index: Int, item: FollowUpRecognitionDraft) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text(item.method ?? "随访")
@@ -230,7 +239,10 @@ struct PrescriptionBatchListSectionView: View {
             if let attachmentsForIDs {
                 CaseMatchedAttachmentsGridView(
                     title: "匹配附件",
-                    attachments: attachmentsForIDs(item.attachmentFileIds)
+                    attachments: attachmentsForIDs(item.attachmentFileIds),
+                    onManage: {
+                        onManageFollowUpAttachments?(index, item)
+                    }
                 )
             }
         }
@@ -252,78 +264,5 @@ struct PrescriptionBatchListSectionView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(uiColor: .secondarySystemGroupedBackground))
             )
-    }
-}
-
-struct PrescriptionAttachmentsSectionView: View {
-    let attachments: [MedicalDocumentLocalAttachmentItem]
-
-    @State private var selectedPreview: FilePreviewInput?
-
-    var body: some View {
-        MedicalDocumentResultSectionCard(
-            title: L10n.text("medical.upload.result.attachments.title"),
-            subtitle: L10n.text("medical.upload.result.attachments.subtitle"),
-            systemImage: "paperclip",
-            badgeText: String(
-                format: L10n.text("medical.upload.result.attachments.count"),
-                locale: .current,
-                attachments.count
-            )
-        ) {
-            if attachments.isEmpty {
-                Text(L10n.text("medical.upload.result.attachments.empty"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(attachments) { item in
-                        Button {
-                            selectedPreview = item.previewInput
-                        } label: {
-                            attachmentRow(item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .unifiedFilePreview(selection: $selectedPreview)
-    }
-
-    private func attachmentRow(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemBackground))
-                    .frame(width: 40, height: 40)
-                Image(systemName: item.symbolName)
-                    .font(.headline)
-                    .foregroundStyle(Color(uiColor: .systemBlue))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(item.fileURL.lastPathComponent)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
     }
 }

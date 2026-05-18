@@ -13,6 +13,7 @@ struct CaseRecognitionResultContentView: View {
     @State private var draft: CaseRecognitionDraft
     /// 本地编辑弹窗（支持多达8种编辑项：症状/就诊/手术/报告/处方/药品/随访等）
     @State private var localEditor: CaseRecognitionLocalEditor?
+    @State private var attachmentTarget: CaseRecognitionAttachmentTarget?
 
     /// 初始化：从 AI 识别结果中加载病历数据
     init(viewModel: MedicalDocumentUploadViewModel) {
@@ -55,6 +56,11 @@ struct CaseRecognitionResultContentView: View {
         return localAttachments.filter { idSet.contains($0.id) }
     }
 
+    /// 尚未关联到病历任意业务条目的源文件附件
+    private var unlinkedAttachments: [MedicalDocumentLocalAttachmentItem] {
+        localAttachments.excludingAssociatedIDs(draft.associatedAttachmentFileIDs)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -71,14 +77,18 @@ struct CaseRecognitionResultContentView: View {
                     symptomAttachments: matchedAttachments(for: draft.symptom?.attachmentFileIds ?? []),
                     surgeryAttachments: matchedAttachments(for: draft.surgery?.attachmentFileIds ?? []),
                     onEditSymptom: { localEditor = .symptom($0) },    // 编辑症状
-                    onEditSurgery: { localEditor = .surgery($0) }     // 编辑手术史
+                    onEditSurgery: { localEditor = .surgery($0) },     // 编辑手术史
+                    onManageCaseAttachments: { attachmentTarget = .caseDraft },
+                    onManageSymptomAttachments: { attachmentTarget = .symptom },
+                    onManageSurgeryAttachments: { attachmentTarget = .surgery }
                 )
 
                 // MARK: 3. 就诊信息区域
                 CaseVisitInfoSectionView(
                     visit: draft.visit,
                     attachments: matchedAttachments(for: draft.visit?.attachmentFileIds ?? []),
-                    onEdit: { localEditor = .visit($0) }              // 编辑就诊记录
+                    onEdit: { localEditor = .visit($0) },              // 编辑就诊记录
+                    onManageAttachments: { attachmentTarget = .visit }
                 )
 
                 // MARK: 4. 检查报告列表区域
@@ -87,6 +97,9 @@ struct CaseRecognitionResultContentView: View {
                     attachmentsForIDs: matchedAttachments(for:),
                     onEdit: { index, report in
                         localEditor = .exam(index: index, draft: report) // 编辑单份检查报告
+                    },
+                    onManageAttachments: { index, _ in
+                        attachmentTarget = .exam(index: index)
                     }
                 )
 
@@ -99,11 +112,20 @@ struct CaseRecognitionResultContentView: View {
                     onEditMedicationItem: { batchIndex, itemIndex, item in       // 编辑单个药品
                         localEditor = .medicationItem(batchIndex: batchIndex, itemIndex: itemIndex, draft: item)
                     },
-                    onEditFollowUp: { localEditor = .followUp($0) }             // 编辑随访计划
+                    onEditFollowUp: { localEditor = .followUp($0) },             // 编辑随访计划
+                    onManageBatchAttachments: { index, _ in
+                        attachmentTarget = .prescription(index: index)
+                    },
+                    onManageMedicationAttachments: { batchIndex, itemIndex, _ in
+                        attachmentTarget = .medication(batchIndex: batchIndex, itemIndex: itemIndex)
+                    },
+                    onManageFollowUpAttachments: { index, _ in
+                        attachmentTarget = .followUp(index: index)
+                    }
                 )
 
-                // MARK: 6. 附件展示（病历原图）
-                CaseAttachmentsSectionView(attachments: localAttachments)
+                // MARK: 6. 未关联业务的源文件附件
+                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
 
                 // MARK: 7. 保存成功回执（显示记录ID）
                 if let saveReceipt {
@@ -135,13 +157,21 @@ struct CaseRecognitionResultContentView: View {
                 localEditorDestination(editor)
             }
         }
+        .sheet(item: $attachmentTarget) { target in
+            MedicalDocumentAttachmentAssociationSheet(
+                title: target.title,
+                localAttachments: localAttachments,
+                selectedIDs: attachmentIDs(for: target),
+                onSubmit: { applyAttachmentIDs($0, to: target) }
+            )
+        }
     }
 
     // MARK: - 底部工具栏
     private var bottomBar: some View {
         HStack(spacing: 12) {
             Button("返回") {
-                viewModel.reset()
+                viewModel.reset(keepAttachments: true)
             }
                 .buttonStyle(.bordered)
 
@@ -164,6 +194,128 @@ struct CaseRecognitionResultContentView: View {
     private func submitSave() {
         viewModel.updateTypedResult(.caseDocument(draft))
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func attachmentIDs(for target: CaseRecognitionAttachmentTarget) -> [UUID] {
+        switch target {
+        case .caseDraft:
+            return draft.attachmentFileIds
+        case .symptom:
+            return draft.symptom?.attachmentFileIds ?? []
+        case .surgery:
+            return draft.surgery?.attachmentFileIds ?? []
+        case .visit:
+            return draft.visit?.attachmentFileIds ?? []
+        case .exam(let index):
+            guard let reports = draft.examinationReports, reports.indices.contains(index) else { return [] }
+            return reports[index].attachmentFileIds
+        case .prescription(let index):
+            guard let prescriptions = draft.prescriptions, prescriptions.indices.contains(index) else { return [] }
+            return prescriptions[index].attachmentFileIds
+        case .medication(let batchIndex, let itemIndex):
+            guard let prescriptions = draft.prescriptions,
+                  prescriptions.indices.contains(batchIndex),
+                  let medications = prescriptions[batchIndex].medicationPlans,
+                  medications.indices.contains(itemIndex)
+            else { return [] }
+            return medications[itemIndex].attachmentFileIds
+        case .followUp(let index):
+            guard let followUps = draft.followUps, followUps.indices.contains(index) else { return [] }
+            return followUps[index].attachmentFileIds
+        }
+    }
+
+    private func applyAttachmentIDs(_ ids: [UUID], to target: CaseRecognitionAttachmentTarget) {
+        removeAttachmentIDs(ids, except: target)
+
+        switch target {
+        case .caseDraft:
+            draft.attachmentFileIds = ids
+        case .symptom:
+            var symptom = draft.symptom
+            symptom?.attachmentFileIds = ids
+            draft.symptom = symptom
+        case .surgery:
+            var surgery = draft.surgery
+            surgery?.attachmentFileIds = ids
+            draft.surgery = surgery
+        case .visit:
+            var visit = draft.visit
+            visit?.attachmentFileIds = ids
+            draft.visit = visit
+        case .exam(let index):
+            guard var reports = draft.examinationReports, reports.indices.contains(index) else { return }
+            reports[index].attachmentFileIds = ids
+            draft.examinationReports = reports
+        case .prescription(let index):
+            guard var prescriptions = draft.prescriptions, prescriptions.indices.contains(index) else { return }
+            prescriptions[index].attachmentFileIds = ids
+            draft.prescriptions = prescriptions
+        case .medication(let batchIndex, let itemIndex):
+            guard var prescriptions = draft.prescriptions,
+                  prescriptions.indices.contains(batchIndex),
+                  var medications = prescriptions[batchIndex].medicationPlans,
+                  medications.indices.contains(itemIndex)
+            else { return }
+            medications[itemIndex].attachmentFileIds = ids
+            prescriptions[batchIndex].medicationPlans = medications
+            draft.prescriptions = prescriptions
+        case .followUp(let index):
+            guard var followUps = draft.followUps, followUps.indices.contains(index) else { return }
+            followUps[index].attachmentFileIds = ids
+            draft.followUps = followUps
+        }
+    }
+
+    private func removeAttachmentIDs(_ ids: [UUID], except target: CaseRecognitionAttachmentTarget) {
+        let idSet = Set(ids)
+        guard idSet.isEmpty == false else { return }
+
+        if target.id != CaseRecognitionAttachmentTarget.caseDraft.id {
+            draft.attachmentFileIds.removeAll { idSet.contains($0) }
+        }
+
+        if target.id != CaseRecognitionAttachmentTarget.symptom.id {
+            draft.symptom?.attachmentFileIds.removeAll { idSet.contains($0) }
+        }
+
+        if target.id != CaseRecognitionAttachmentTarget.surgery.id {
+            draft.surgery?.attachmentFileIds.removeAll { idSet.contains($0) }
+        }
+
+        if target.id != CaseRecognitionAttachmentTarget.visit.id {
+            draft.visit?.attachmentFileIds.removeAll { idSet.contains($0) }
+        }
+
+        if var reports = draft.examinationReports {
+            for index in reports.indices where target.id != CaseRecognitionAttachmentTarget.exam(index: index).id {
+                reports[index].attachmentFileIds.removeAll { idSet.contains($0) }
+            }
+            draft.examinationReports = reports
+        }
+
+        if var prescriptions = draft.prescriptions {
+            for batchIndex in prescriptions.indices {
+                if target.id != CaseRecognitionAttachmentTarget.prescription(index: batchIndex).id {
+                    prescriptions[batchIndex].attachmentFileIds.removeAll { idSet.contains($0) }
+                }
+
+                if var medications = prescriptions[batchIndex].medicationPlans {
+                    for itemIndex in medications.indices where target.id != CaseRecognitionAttachmentTarget.medication(batchIndex: batchIndex, itemIndex: itemIndex).id {
+                        medications[itemIndex].attachmentFileIds.removeAll { idSet.contains($0) }
+                    }
+                    prescriptions[batchIndex].medicationPlans = medications
+                }
+            }
+            draft.prescriptions = prescriptions
+        }
+
+        if var followUps = draft.followUps {
+            for index in followUps.indices where target.id != CaseRecognitionAttachmentTarget.followUp(index: index).id {
+                followUps[index].attachmentFileIds.removeAll { idSet.contains($0) }
+            }
+            draft.followUps = followUps
+        }
     }
 
     // MARK: - 编辑页面路由（支持8种精细化编辑）

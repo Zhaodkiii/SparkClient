@@ -19,22 +19,22 @@ struct MedicalDocumentUploadPickingView: View {
 
     /// 是否展示系统级文件预览 Sheet（由 `UnifiedFilePreview` 承载）。
     @State private var showPreviewSheet = false
-    /// 当前预览项在 `previewItems` 中的下标；需与 `showPreviewSheet` 同步使用，避免越界。
+    /// 当前预览项在 `selectedFiles` 中的下标；需与 `showPreviewSheet` 同步使用，避免越界。
     @State private var previewIndex = 0
 
     /// 已选文件中判定为图片类型的数量（依赖 `FilePreviewInput.isImage`，与 UTType/后缀推断一致）。
     private var imageCount: Int {
-        viewModel.previewItems.filter(\.isImage).count
+        viewModel.selectedFiles.map(\.previewInput).filter(\.isImage).count
     }
 
     /// 非图片文件数量（如 PDF 等），用于摘要角标「N 个文件」。
     private var documentCount: Int {
-        viewModel.previewItems.count - imageCount
+        viewModel.selectedFiles.count - imageCount
     }
 
     /// 是否存在任意待识别文件；用于控制摘要条、底部栏显隐。
     private var hasFiles: Bool {
-        viewModel.previewItems.isEmpty == false
+        viewModel.selectedFiles.isEmpty == false
     }
 
     var body: some View {
@@ -75,8 +75,8 @@ struct MedicalDocumentUploadPickingView: View {
             }
         }
         .sheet(isPresented: $showPreviewSheet) {
-            if viewModel.previewItems.indices.contains(previewIndex) {
-                UnifiedFilePreview(input: viewModel.previewItems[previewIndex]) {
+            if viewModel.selectedFiles.indices.contains(previewIndex) {
+                UnifiedFilePreview(input: viewModel.selectedFiles[previewIndex].previewInput) {
                     showPreviewSheet = false
                 }
             }
@@ -179,15 +179,15 @@ struct MedicalDocumentUploadPickingView: View {
             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
             spacing: 12
         ) {
-            ForEach(Array(viewModel.previewItems.enumerated()), id: \.element.id) { index, item in
+            ForEach(Array(viewModel.selectedFiles.enumerated()), id: \.element.id) { index, file in
                 MedicalDocumentFilePreviewSquareCard(
-                    item: item,
+                    item: file.previewInput,
                     onPreview: {
                         previewIndex = index
                         showPreviewSheet = true
                     },
                     onDelete: {
-                        viewModel.removeFile(id: item.id)
+                        viewModel.removeFile(id: file.id)
                     }
                 )
             }

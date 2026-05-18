@@ -50,9 +50,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 本地选择待上传的文件列表
     @Published private(set) var selectedFiles: [MedicalUploadLocalFile] = []
 
-    /// 文件预览数据源（图片/PDF 预览用）
-    @Published private(set) var previewItems: [FilePreviewInput] = []
-
     /// 上传流程进度模型（包含当前步骤、状态、进度值）
     @Published var progress: MedicalDocumentUploadProgress?
 
@@ -112,9 +109,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 绑定已上传文件到业务单据用例
     private let bindUseCase: BindUploadedFilesToMedicalBusinessUseCase
 
-    /// 构建文档预览数据用例
-    private let buildPreviewUseCase: BuildMedicalDocumentPreviewItemsUseCase
-
     /// AI 配置中心（场景 bundle、模型列表等）
     private let aiConfigCenter: AIConfigCenter
 
@@ -142,7 +136,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         extractUseCase: ExtractTypedMedicalDocumentUseCase,
         saveUseCase: SaveTypedMedicalDocumentUseCase,
         bindUseCase: BindUploadedFilesToMedicalBusinessUseCase,
-        buildPreviewUseCase: BuildMedicalDocumentPreviewItemsUseCase = BuildMedicalDocumentPreviewItemsUseCase(),
         aiConfigCenter: AIConfigCenter,
         logger: Logger = ConsoleLogger()
     ) {
@@ -151,7 +144,6 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.extractUseCase = extractUseCase
         self.saveUseCase = saveUseCase
         self.bindUseCase = bindUseCase
-        self.buildPreviewUseCase = buildPreviewUseCase
         self.aiConfigCenter = aiConfigCenter
         self.logger = logger
         self.selectedMemberName = memberContextStore.context.selectedMember?.name
@@ -166,19 +158,17 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     // MARK: - File selection
 
-    /// 替换当前待识别列表并刷新预览；会清除之前的错误提示。
+    /// 替换当前待识别列表；会清除之前的错误提示。
     func setSelectedFiles(_ files: [MedicalUploadLocalFile]) {
         selectedFiles = files
-        previewItems = buildPreviewUseCase.execute(files: files)
         clearPipelineCheckpoints()
         errorMessage = nil
         logger.info("已更新待识别文件，数量=\(files.count)", module: .medical)
     }
 
-    /// 按本地文件 ID 移除一项并同步预览。
+    /// 按本地文件 ID 移除一项。
     func removeFile(id: UUID) {
         selectedFiles.removeAll { $0.id == id }
-        previewItems = buildPreviewUseCase.execute(files: selectedFiles)
         clearPipelineCheckpoints()
         logger.info("已移除文件，剩余数量=\(selectedFiles.count)", module: .medical)
     }
@@ -297,10 +287,11 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 currentStep = .upload
                 // 标记步骤开始
                 start(.upload)
-                // 执行文件上传
+                // 执行文件上传（断点续跑时沿用已有 remoteFile，全新运行则全部重新上传）
                 let uploadedFiles = try await uploadFilesUseCase.execute(
                     memberID: member.id,
-                    files: selectedFiles
+                    files: selectedFiles,
+                    reuploadAll: false
                 )
                 selectedFiles = uploadedFiles
                 // 检查是否触发了任务取消
@@ -318,14 +309,16 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             if shouldRun(.ocr, from: requestedStartStep) {
                 currentStep = .ocr
                 start(.ocr)
-                // 执行 OCR 识别，写回每个本地文件后再合并文本
+                // 执行 OCR 识别，写回每个本地文件后再合并文本（断点续跑时沿用已有 ocrText）
                 let ocrFiles = try await extractUseCase.recognizeOCRFiles(
                     files: selectedFiles,
+                    reRecognizeAll: false,
                     cancellationToken: cancellationToken
                 )
                 selectedFiles = ocrFiles
                 let ocrText = try await extractUseCase.mergeOCRText(
                     files: ocrFiles,
+                    reRecognizeAll: false,
                     cancellationToken: cancellationToken
                 )
                 try cancellationToken.checkCancellation()
@@ -577,14 +570,19 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
 
     /// 将界面与中间态恢复为初始：清空文件、结果、进度与上传缓存，就诊人名称回读当前上下文。
-    func reset() {
+    /// - Parameter keepAttachments: 是否保留附件，默认 false（不保留，清空）
+    func reset(keepAttachments: Bool = false) {
         recognitionCancellationToken?.cancel()
         recognitionCancellationToken = nil
         recognitionTask?.cancel()
         recognitionTask = nil
         stage = .picking
-        selectedFiles = []
-        previewItems = []
+        
+        // 只有不保留附件时，才清空文件。
+        if !keepAttachments {
+            selectedFiles = []
+        }
+        
         progress = nil
         stopProgressTimer(resetElapsedSeconds: true)
         needsManualModeSelection = false
@@ -594,7 +592,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         selectedKind = .auto
         clearPipelineCheckpoints()
         selectedMemberName = memberContextStore.context.selectedMember?.name
-        logger.info("已重置医疗上传流程", module: .medical)
+        logger.info("已重置医疗上传流程，是否保留附件：\(keepAttachments)", module: .medical)
     }
 
     /// 仅重置识别状态，保留已选择的文件
@@ -608,7 +606,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         errorMessage = nil
         failedStep = nil
         stepStartedAt = [:]
-        // 注意：不重置 selectedFiles 和 previewItems，保留用户选择的文件及其中的上传/OCR结果
+        // 注意：不重置 selectedFiles，保留用户选择的文件及其中的上传/OCR结果
         logger.info("已重置识别状态（保留已选文件）", module: .medical)
     }
 

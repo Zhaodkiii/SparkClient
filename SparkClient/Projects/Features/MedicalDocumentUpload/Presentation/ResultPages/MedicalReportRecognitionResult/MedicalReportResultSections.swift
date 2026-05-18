@@ -79,6 +79,7 @@ struct MedicalReportCardsSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
     var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
     let onEdit: (Int, MedicalReportRecognitionDraft) -> Void
+    var onManageAttachments: ((Int, MedicalReportRecognitionDraft) -> Void)?
 
     var body: some View {
         MedicalDocumentResultSectionCard(
@@ -179,83 +180,12 @@ struct MedicalReportCardsSectionView: View {
             if let attachmentsForIDs {
                 CaseMatchedAttachmentsGridView(
                     title: "匹配附件",
-                    attachments: attachmentsForIDs(report.attachmentFileIds)
+                    attachments: attachmentsForIDs(report.attachmentFileIds),
+                    onManage: {
+                        onManageAttachments?(index, report)
+                    }
                 )
             }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
-    }
-}
-
-struct MedicalReportAttachmentsSectionView: View {
-    let attachments: [MedicalDocumentLocalAttachmentItem]
-
-    @State private var selectedPreview: FilePreviewInput?
-
-    var body: some View {
-        MedicalDocumentResultSectionCard(
-            title: L10n.text("medical.upload.result.attachments.title"),
-            subtitle: L10n.text("medical.upload.result.attachments.subtitle"),
-            systemImage: "paperclip",
-            tintColor: Color(uiColor: .systemTeal),
-            badgeText: String(
-                format: L10n.text("medical.upload.result.attachments.count"),
-                locale: .current,
-                attachments.count
-            )
-        ) {
-            if attachments.isEmpty {
-                Text(L10n.text("medical.upload.result.attachments.empty"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(attachments) { item in
-                        Button {
-                            selectedPreview = item.previewInput
-                        } label: {
-                            row(item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-        .unifiedFilePreview(selection: $selectedPreview)
-    }
-
-    private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemBackground))
-                    .frame(width: 40, height: 40)
-                Image(systemName: item.symbolName)
-                    .font(.headline)
-                    .foregroundStyle(Color(uiColor: .systemBlue))
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(item.fileURL.lastPathComponent)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .padding(12)
         .background(

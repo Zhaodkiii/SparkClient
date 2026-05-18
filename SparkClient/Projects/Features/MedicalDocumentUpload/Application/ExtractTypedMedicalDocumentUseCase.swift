@@ -9,23 +9,34 @@ struct ExtractTypedMedicalDocumentUseCase: Sendable {
 
     func recognizeOCRFiles(
         files: [MedicalUploadLocalFile],
+        reRecognizeAll: Bool = true,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> [MedicalUploadLocalFile] {
         try cancellationToken?.checkCancellation()
-        return try await extractor.recognizeOCRFiles(files: files, cancellationToken: cancellationToken)
+        return try await extractor.recognizeOCRFiles(
+            files: files,
+            reRecognizeAll: reRecognizeAll,
+            cancellationToken: cancellationToken
+        )
     }
 
     /// 合并多个上传文件的 OCR 识别文本
     /// - Parameters:
     ///   - files: 本地医疗单据文件列表
+    ///   - reRecognizeAll: 是否全部重新识别；为 `false` 时已有 `ocrText` 的文件将跳过 OCR
     ///   - cancellationToken: 取消令牌（中途可终止任务）
     /// - Returns: 合并后的完整OCR文本
     func mergeOCRText(
         files: [MedicalUploadLocalFile],
+        reRecognizeAll: Bool = true,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> String {
         try cancellationToken?.checkCancellation()
-        return try await extractor.mergeOCRText(files: files, cancellationToken: cancellationToken)
+        return try await extractor.mergeOCRText(
+            files: files,
+            reRecognizeAll: reRecognizeAll,
+            cancellationToken: cancellationToken
+        )
     }
 
     /// 根据OCR文本，解析/确定医疗单据的具体类型

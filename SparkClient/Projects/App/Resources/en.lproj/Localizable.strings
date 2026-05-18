@@ -1418,6 +1418,7 @@
 
 "medical.upload.result.attachments.title" = "Attachments";
 "medical.upload.result.attachments.subtitle" = "Attachment list reuses common preview capability";
+"medical.upload.result.attachments.unlinked.subtitle" = "Attachments not linked to a report item";
 "medical.upload.result.attachments.count" = "%d items";
 "medical.upload.result.attachments.empty" = "No attachments";
 

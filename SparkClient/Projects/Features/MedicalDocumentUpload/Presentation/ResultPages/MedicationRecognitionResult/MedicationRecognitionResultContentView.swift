@@ -11,6 +11,7 @@ struct MedicationRecognitionResultContentView: View {
     @State private var medicationPlans: [MedicationPlanRecognitionDraft]
     /// 本地编辑弹窗（批量编辑 / 单个药品编辑）
     @State private var localEditor: MedicationResultLocalEditor?
+    @State private var attachmentTarget: MedicationAttachmentTarget?
 
     /// 日志工具
     private let logger: Logger = ConsoleLogger()
@@ -42,6 +43,10 @@ struct MedicationRecognitionResultContentView: View {
         guard ids.isEmpty == false else { return [] }
         let idSet = Set(ids)
         return attachments.filter { idSet.contains($0.id) }
+    }
+
+    private var unlinkedAttachments: [MedicalDocumentLocalAttachmentItem] {
+        attachments.excludingAssociatedIDs(medicationPlans.associatedAttachmentFileIDs)
     }
 
     /// 合成一个虚拟处方（为了复用已有的批量编辑页面）
@@ -82,11 +87,14 @@ struct MedicationRecognitionResultContentView: View {
                     onEditItem: { index, item in
                         logger.info("Medication result: open local item editor index=\(index)", module: logModule)
                         localEditor = .item(index: index, draft: item) // 打开单个编辑
+                    },
+                    onManageAttachments: { index, _ in
+                        attachmentTarget = MedicationAttachmentTarget(index: index)
                     }
                 )
 
-                // MARK: 3. 附件（原图）
-                MedicationAttachmentsSectionView(attachments: attachments)
+                // MARK: 3. 未关联业务的源文件附件
+                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
 
                 // MARK: 4. 保存成功回执（显示记录ID）
                 if let saveReceipt {
@@ -122,6 +130,18 @@ struct MedicationRecognitionResultContentView: View {
                 editorDestination(editor)
             }
         }
+        .sheet(item: $attachmentTarget) { target in
+            MedicalDocumentAttachmentAssociationSheet(
+                title: target.title,
+                localAttachments: attachments,
+                selectedIDs: medicationPlans.indices.contains(target.index) ? medicationPlans[target.index].attachmentFileIds : [],
+                onSubmit: { ids in
+                    guard medicationPlans.indices.contains(target.index) else { return }
+                    removeAttachmentIDs(ids, except: target.index)
+                    medicationPlans[target.index].attachmentFileIds = ids
+                }
+            )
+        }
     }
 
     // MARK: - 底部工具栏
@@ -129,7 +149,7 @@ struct MedicationRecognitionResultContentView: View {
         HStack(spacing: 12) {
             // 返回按钮
             Button(L10n.text("medical.upload.result.common.back")) {
-                viewModel.reset()
+                viewModel.reset(keepAttachments: true)
             }
                 .buttonStyle(.bordered)
 
@@ -154,6 +174,15 @@ struct MedicationRecognitionResultContentView: View {
     private func submitSave() {
         viewModel.updateTypedResult(.medicationPlan(medicationPlans))
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func removeAttachmentIDs(_ ids: [UUID], except targetIndex: Int) {
+        let idSet = Set(ids)
+        guard idSet.isEmpty == false else { return }
+
+        for index in medicationPlans.indices where index != targetIndex {
+            medicationPlans[index].attachmentFileIds.removeAll { idSet.contains($0) }
+        }
     }
 
     // MARK: - 编辑页面路由

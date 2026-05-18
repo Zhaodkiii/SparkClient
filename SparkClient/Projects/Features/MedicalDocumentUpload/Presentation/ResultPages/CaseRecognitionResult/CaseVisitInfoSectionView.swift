@@ -4,6 +4,7 @@ struct CaseVisitInfoSectionView: View {
     let visit: VisitRecognitionDraft?
     let attachments: [MedicalDocumentLocalAttachmentItem]
     let onEdit: (VisitRecognitionDraft) -> Void
+    var onManageAttachments: (() -> Void)?
 
     var body: some View {
         MedicalDocumentResultSectionCard(
@@ -24,7 +25,11 @@ struct CaseVisitInfoSectionView: View {
                     MedicalDocumentResultInfoLine(title: "科室", value: visit.department ?? "")
                     MedicalDocumentResultInfoLine(title: "医生", value: visit.doctorName ?? "")
                     MedicalDocumentResultInfoLine(title: "备注", value: visit.notes ?? "")
-                    CaseMatchedAttachmentsGridView(title: "匹配附件", attachments: attachments)
+                    CaseMatchedAttachmentsGridView(
+                        title: "匹配附件",
+                        attachments: attachments,
+                        onManage: onManageAttachments
+                    )
                 }
             } else {
                 Text("暂无就诊信息")

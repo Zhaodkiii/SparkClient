@@ -11,6 +11,7 @@ struct MedicineBoxRecognitionResultView: View {
     @State private var items: [MedicineBoxRecognitionDraft]
     /// 当前正在编辑的药品项（弹出编辑页）
     @State private var editingItem: MedicineBoxRecognitionEditor?
+    @State private var attachmentTarget: MedicineBoxAttachmentTarget?
 
     init(viewModel: MedicalDocumentUploadViewModel) {
         self.viewModel = viewModel
@@ -29,12 +30,22 @@ struct MedicineBoxRecognitionResultView: View {
         output.envelope.sourceFiles.map { MedicalDocumentLocalAttachmentItem(file: $0) }
     }
 
+    private func matchedAttachments(for ids: [UUID]) -> [MedicalDocumentLocalAttachmentItem] {
+        guard ids.isEmpty == false else { return [] }
+        let idSet = Set(ids)
+        return attachments.filter { idSet.contains($0.id) }
+    }
+
+    private var unlinkedAttachments: [MedicalDocumentLocalAttachmentItem] {
+        attachments.excludingAssociatedIDs(items.associatedAttachmentFileIDs)
+    }
+
     private var isSaving: Bool { viewModel.isSaving }
 
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
 
     private func onBack() {
-        viewModel.reset()
+        viewModel.reset(keepAttachments: true)
     }
 
     private func onUpdate(_ typedResult: MedicalDocumentTypedResult) {
@@ -43,6 +54,15 @@ struct MedicineBoxRecognitionResultView: View {
 
     private func onSave() {
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func removeAttachmentIDs(_ ids: [UUID], except targetIndex: Int) {
+        let idSet = Set(ids)
+        guard idSet.isEmpty == false else { return }
+
+        for index in items.indices where index != targetIndex {
+            items[index].attachmentFileIds.removeAll { idSet.contains($0) }
+        }
     }
 
     var body: some View {
@@ -90,8 +110,8 @@ struct MedicineBoxRecognitionResultView: View {
                     }
                 }
 
-                // MARK: - 附件（照片）区域
-                MedicationAttachmentsSectionView(attachments: attachments)
+                // MARK: - 未关联业务的源文件附件
+                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
 
                 // MARK: - 保存成功回执区域
                 if let saveReceipt {
@@ -134,6 +154,19 @@ struct MedicineBoxRecognitionResultView: View {
                 workflowAPI: AppContainer.preview.backend.medicalWorkflow
             )
         }
+        .sheet(item: $attachmentTarget) { target in
+            MedicalDocumentAttachmentAssociationSheet(
+                title: target.title,
+                localAttachments: attachments,
+                selectedIDs: items.indices.contains(target.index) ? items[target.index].attachmentFileIds : [],
+                onSubmit: { ids in
+                    guard items.indices.contains(target.index) else { return }
+                    removeAttachmentIDs(ids, except: target.index)
+                    items[target.index].attachmentFileIds = ids
+                    onUpdate(.medicineBoxes(items))
+                }
+            )
+        }
         // 监听药品列表变化，自动通知上层更新
         .onChange(of: items) { newValue in
             onUpdate(.medicineBoxes(newValue))
@@ -168,37 +201,47 @@ struct MedicineBoxRecognitionResultView: View {
     // MARK: - 单行药品条目
     /// 展示单个药品信息 + 编辑按钮
     private func itemRow(index: Int, item: MedicineBoxRecognitionDraft) -> some View {
-        HStack(spacing: 10) {
-            // 药品图标
-            Image(systemName: "capsule")
-                .font(.caption)
-                .foregroundStyle(Color(uiColor: .systemPurple))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                // 药品图标
+                Image(systemName: "capsule")
+                    .font(.caption)
+                    .foregroundStyle(Color(uiColor: .systemPurple))
 
-            VStack(alignment: .leading, spacing: 4) {
-                // 药品名称
-                Text(item.medicineName?.nilIfBlank ?? L10n.text("medical.upload.result.medication.unnamed"))
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                // 药品详情：规格 + 剂型 + 有效期
-                let detail = [item.strength, item.dosageForm, item.expireDate]
-                    .compactMap { $0?.nilIfBlank }
-                    .joined(separator: " · ")
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    // 药品名称
+                    Text(item.medicineName?.nilIfBlank ?? L10n.text("medical.upload.result.medication.unnamed"))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
+                    // 药品详情：规格 + 剂型 + 有效期
+                    let detail = [item.strength, item.dosageForm, item.expireDate]
+                        .compactMap { $0?.nilIfBlank }
+                        .joined(separator: " · ")
+                    if !detail.isEmpty {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
+
+                Spacer()
+
+                // 编辑按钮
+                Button(L10n.text("common.edit")) {
+                    editingItem = MedicineBoxRecognitionEditor(index: index, item: item)
+                }
+                .font(.caption.weight(.semibold))
             }
 
-            Spacer()
-
-            // 编辑按钮
-            Button(L10n.text("common.edit")) {
-                editingItem = MedicineBoxRecognitionEditor(index: index, item: item)
-            }
-            .font(.caption.weight(.semibold))
+            CaseMatchedAttachmentsGridView(
+                title: "药品附件",
+                attachments: matchedAttachments(for: item.attachmentFileIds),
+                onManage: {
+                    attachmentTarget = MedicineBoxAttachmentTarget(index: index)
+                }
+            )
         }
         .padding(12)
         .background(
@@ -215,4 +258,11 @@ private struct MedicineBoxRecognitionEditor: Identifiable {
     let item: MedicineBoxRecognitionDraft  // 药品数据
 
     var id: String { "medicine-box-\(index)" }
+}
+
+private struct MedicineBoxAttachmentTarget: Identifiable {
+    let index: Int
+
+    var id: String { "medicine-box-attachment-\(index)" }
+    var title: String { "关联药品附件" }
 }

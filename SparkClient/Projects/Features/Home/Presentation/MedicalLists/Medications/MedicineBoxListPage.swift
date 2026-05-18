@@ -606,11 +606,11 @@ struct MedicineBoxUploadSheet: View {
                 columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
                 spacing: 12
             ) {
-                ForEach(BuildMedicalDocumentPreviewItemsUseCase().execute(files: localFiles)) { item in
+                ForEach(localFiles) { file in
                     MedicalDocumentFilePreviewSquareCard(
-                        item: item,
-                        onPreview: { filePreviewSelection = item },
-                        onDelete: { localFiles.removeAll { $0.id == item.id } }
+                        item: file.previewInput,
+                        onPreview: { filePreviewSelection = file.previewInput },
+                        onDelete: { localFiles.removeAll { $0.id == file.id } }
                     )
                 }
             }
@@ -1048,11 +1048,11 @@ struct MedicineBoxFormView: View {
                             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
                             spacing: 12
                         ) {
-                            ForEach(BuildMedicalDocumentPreviewItemsUseCase().execute(files: pendingAttachmentFiles)) { item in
+                            ForEach(pendingAttachmentFiles) { file in
                                 MedicalDocumentFilePreviewSquareCard(
-                                    item: item,
-                                    onPreview: { localAttachmentPreview = item },
-                                    onDelete: { pendingAttachmentFiles.removeAll { $0.id == item.id } }
+                                    item: file.previewInput,
+                                    onPreview: { localAttachmentPreview = file.previewInput },
+                                    onDelete: { pendingAttachmentFiles.removeAll { $0.id == file.id } }
                                 )
                             }
                         }

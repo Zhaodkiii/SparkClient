@@ -1418,6 +1418,7 @@
 
 "medical.upload.result.attachments.title" = "附件管理";
 "medical.upload.result.attachments.subtitle" = "附件列表复用公共预览能力";
+"medical.upload.result.attachments.unlinked.subtitle" = "未关联业务报告附件";
 "medical.upload.result.attachments.count" = "%d个";
 "medical.upload.result.attachments.empty" = "暂无附件";
 

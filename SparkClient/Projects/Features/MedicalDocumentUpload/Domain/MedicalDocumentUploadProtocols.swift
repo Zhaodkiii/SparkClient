@@ -20,11 +20,13 @@ protocol MedicalDocumentTypeResolving: Sendable {
 protocol TypedMedicalDocumentExtracting: Sendable {
     func recognizeOCRFiles(
         files: [MedicalUploadLocalFile],
+        reRecognizeAll: Bool,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> [MedicalUploadLocalFile]
 
     func mergeOCRText(
         files: [MedicalUploadLocalFile],
+        reRecognizeAll: Bool,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> String
 

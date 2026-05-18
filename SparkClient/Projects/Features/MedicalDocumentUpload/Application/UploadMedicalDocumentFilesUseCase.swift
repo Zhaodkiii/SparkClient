@@ -20,21 +20,29 @@ struct UploadMedicalDocumentFilesUseCase: Sendable {
     /// - Parameters:
     ///   - memberID: 成员 ID（用于业务关联）
     ///   - files: 需要上传的本地文件对象数组
+    ///   - reuploadAll: 是否全部重新上传；为 `false` 时已有 `remoteFile` 的文件将跳过上传
     /// - Returns: 带远程文件记录的本地文件数组
     func execute(
         memberID: Int,
-        files: [MedicalUploadLocalFile]
+        files: [MedicalUploadLocalFile],
+        reuploadAll: Bool = true
     ) async throws -> [MedicalUploadLocalFile] {
         var output: [MedicalUploadLocalFile] = []
-        
-        // 遍历所有待上传的本地文件
+        var uploadedCount = 0
+        var skippedCount = 0
+
         for file in files {
-            // 1. 从本地 URL 读取文件二进制数据
+            if reuploadAll == false, let remoteFile = file.remoteFile {
+                logger.info(
+                    "已有远端文件记录，跳过上传 name=\(file.displayName) fileID=\(remoteFile.id)",
+                    module: .medical
+                )
+                output.append(file)
+                skippedCount += 1
+                continue
+            }
+
             let data = try Data(contentsOf: file.url)
-            
-            // 2. 调用文件传输服务进行上传
-            // 这里指定了具体的业务类型 (businessType) 为 "medical_document_upload_source"
-            // 并将 memberID 作为业务关联 ID (businessID)
             let record = try await fileTransferService.upload(
                 ManagedFileUploadPayload(
                     data: data,
@@ -43,14 +51,15 @@ struct UploadMedicalDocumentFilesUseCase: Sendable {
                     businessID: "\(memberID)"
                 )
             )
-            
-            // 3. 将服务器返回的远程记录 (record) 写回本地文件模型
             output.append(file.withRemoteFile(record))
+            uploadedCount += 1
         }
-        
-        // 4. 记录上传成功的统计日志
-        logger.info("医疗文档源文件上传完成，count=\(output.count)", module: .medical)
-        
+
+        logger.info(
+            "医疗文档源文件上传完成，total=\(output.count) 新上传=\(uploadedCount) 跳过=\(skippedCount)",
+            module: .medical
+        )
+
         return output
     }
 }
