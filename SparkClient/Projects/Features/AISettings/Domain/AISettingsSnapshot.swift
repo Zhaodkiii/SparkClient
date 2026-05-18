@@ -210,19 +210,6 @@ extension AISettingsSnapshot {
             self.translationDic = translationDic
         }
 
-        enum CodingKeys: String, CodingKey {
-            case searchToolPreferences
-            case searchConfigRevision
-            case userInfo
-            case scenarioModelSources
-            case trialChatPickerDisabledModelNames
-            case trial
-            case trialModelPolicy
-            case searchKeys
-            case toolKeys
-            case memoryArchive
-            case translationDic
-        }
 
         enum LegacyUserInfoKeys: String, CodingKey {
             case useKnowledge
@@ -234,12 +221,12 @@ extension AISettingsSnapshot {
         }
 
         init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let container = try decoder.container(keyedBy: CodableKey.self)
 
-            if let direct = try container.decodeIfPresent(AISearchToolPreferences.self, forKey: .searchToolPreferences) {
+            if let direct = try container.decodeIfPresent(AISearchToolPreferences.self, forKey: .key("searchToolPreferences")) {
                 searchToolPreferences = direct
-            } else if container.contains(.userInfo),
-                      let legacy = try? container.nestedContainer(keyedBy: LegacyUserInfoKeys.self, forKey: .userInfo)
+            } else if container.contains(.key("userInfo")),
+                      let legacy = try? container.nestedContainer(keyedBy: LegacyUserInfoKeys.self, forKey: .key("userInfo"))
             {
                 searchToolPreferences = AISearchToolPreferences(
                     useKnowledge: try legacy.decodeIfPresent(Bool.self, forKey: .useKnowledge) ?? AISettingsDefaults.searchToolPreferences.useKnowledge,
@@ -252,31 +239,31 @@ extension AISettingsSnapshot {
             } else {
                 searchToolPreferences = AISettingsDefaults.searchToolPreferences
             }
-            searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .searchConfigRevision)
+            searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .key("searchConfigRevision"))
                 ?? SearchRuntimeConfigRevision()
 
-            scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .scenarioModelSources) ?? [:]
-            trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .trialChatPickerDisabledModelNames) ?? []
-            trial = try container.decodeIfPresent(AITrialState.self, forKey: .trial) ?? .inactive
-            trialModelPolicy = try container.decodeIfPresent([AITrialModelPolicyItem].self, forKey: .trialModelPolicy) ?? []
-            searchKeys = try container.decodeIfPresent([SearchKeys].self, forKey: .searchKeys) ?? AISettingsDefaults.searchKeys
-            toolKeys = try container.decodeIfPresent([ToolKeys].self, forKey: .toolKeys) ?? AISettingsDefaults.toolKeys
-            memoryArchive = try container.decodeIfPresent([MemoryArchive].self, forKey: .memoryArchive) ?? AISettingsDefaults.memoryArchive
-            translationDic = try container.decodeIfPresent([TranslationDic].self, forKey: .translationDic) ?? AISettingsDefaults.translationDic
+            scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .key("scenarioModelSources")) ?? [:]
+            trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .key("trialChatPickerDisabledModelNames")) ?? []
+            trial = try container.decodeIfPresent(AITrialState.self, forKey: .key("trial")) ?? .inactive
+            trialModelPolicy = try container.decodeIfPresent([AITrialModelPolicyItem].self, forKey: .key("trialModelPolicy")) ?? []
+            searchKeys = try container.decodeIfPresent([SearchKeys].self, forKey: .key("searchKeys")) ?? AISettingsDefaults.searchKeys
+            toolKeys = try container.decodeIfPresent([ToolKeys].self, forKey: .key("toolKeys")) ?? AISettingsDefaults.toolKeys
+            memoryArchive = try container.decodeIfPresent([MemoryArchive].self, forKey: .key("memoryArchive")) ?? AISettingsDefaults.memoryArchive
+            translationDic = try container.decodeIfPresent([TranslationDic].self, forKey: .key("translationDic")) ?? AISettingsDefaults.translationDic
         }
 
         func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(searchToolPreferences, forKey: .searchToolPreferences)
-            try container.encode(searchConfigRevision, forKey: .searchConfigRevision)
-            try container.encode(scenarioModelSources, forKey: .scenarioModelSources)
-            try container.encode(trialChatPickerDisabledModelNames, forKey: .trialChatPickerDisabledModelNames)
-            try container.encode(trial, forKey: .trial)
-            try container.encode(trialModelPolicy, forKey: .trialModelPolicy)
-            try container.encode(searchKeys, forKey: .searchKeys)
-            try container.encode(toolKeys, forKey: .toolKeys)
-            try container.encode(memoryArchive, forKey: .memoryArchive)
-            try container.encode(translationDic, forKey: .translationDic)
+            var container = encoder.container(keyedBy: CodableKey.self)
+            try container.encode(searchToolPreferences, forKey: .key("searchToolPreferences"))
+            try container.encode(searchConfigRevision, forKey: .key("searchConfigRevision"))
+            try container.encode(scenarioModelSources, forKey: .key("scenarioModelSources"))
+            try container.encode(trialChatPickerDisabledModelNames, forKey: .key("trialChatPickerDisabledModelNames"))
+            try container.encode(trial, forKey: .key("trial"))
+            try container.encode(trialModelPolicy, forKey: .key("trialModelPolicy"))
+            try container.encode(searchKeys, forKey: .key("searchKeys"))
+            try container.encode(toolKeys, forKey: .key("toolKeys"))
+            try container.encode(memoryArchive, forKey: .key("memoryArchive"))
+            try container.encode(translationDic, forKey: .key("translationDic"))
         }
     }
 

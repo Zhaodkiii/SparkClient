@@ -4,27 +4,39 @@ import os
 /// 最终类：OpenAI兼容格式的文本AI网关
 /// 实现AIRuntimeGateway协议，用于处理流式/非流式的AI文本生成请求，适配OpenAI规范的接口
 final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
+    /// 相邻数据块之间的最大空闲时间（秒）。系统默认 60s 会导致长 prompt / 慢首 token 误判超时。
+    private static let streamingRequestTimeout: TimeInterval = 300
+    /// 单次流式连接允许的总时长（秒）。
+    private static let streamingResourceTimeout: TimeInterval = 900
+
     // MARK: - 私有属性
     /// 网络会话，用于发送HTTP请求
     private let session: URLSession
     /// 日志工具，记录请求、响应、错误等信息
     private let logger: Logger
     /// JSON编码器，用于序列化请求参数
-    private let encoder = JSONEncoder()
+    private let encoder = JSONEncoder.default
     /// JSON解码器，用于解析响应数据
-    private let decoder = JSONDecoder()
+    private let decoder = JSONDecoder.default
 
     // MARK: - 初始化方法
     /// 初始化网关
     /// - Parameters:
-    ///   - session: 网络会话，默认使用系统共享会话
+    ///   - session: 网络会话，默认使用为流式推理调大的超时配置
     ///   - logger: 日志实例，默认使用控制台日志
     init(
-        session: URLSession = .shared,
+        session: URLSession = OpenAICompatibleTextGateway.makeStreamingSession(),
         logger: Logger = ConsoleLogger()
     ) {
         self.session = session
         self.logger = logger
+    }
+
+    private static func makeStreamingSession() -> URLSession {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = streamingRequestTimeout
+        configuration.timeoutIntervalForResource = streamingResourceTimeout
+        return URLSession(configuration: configuration)
     }
 
     // MARK: - 核心方法：生成流式文本
@@ -97,6 +109,7 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         // 构建URLRequest请求对象
         var request = URLRequest(url: client.endpoint)
         request.httpMethod = "POST"
+        request.timeoutInterval = Self.streamingRequestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
@@ -573,14 +586,6 @@ private struct ChatCompletionRequest: Encodable {
         let name: String?
         let reasoningContent: String?
 
-        enum CodingKeys: String, CodingKey {
-            case role
-            case content
-            case toolCalls = "tool_calls"
-            case toolCallID = "tool_call_id"
-            case name
-            case reasoningContent = "reasoning_content"
-        }
     }
 
     let model: String
@@ -592,26 +597,12 @@ private struct ChatCompletionRequest: Encodable {
     let tools: [RequestTool]?
     let toolChoice: String?
 
-    enum CodingKeys: String, CodingKey {
-        case model
-        case messages
-        case temperature
-        case topP = "top_p"
-        case maxTokens = "max_tokens"
-        case stream
-        case tools
-        case toolChoice = "tool_choice"
-    }
 }
 
 private struct ChatCompletionResponse: Decodable {
     struct Choice: Decodable {
         let finishReason: String?
 
-        enum CodingKeys: String, CodingKey {
-            case message
-            case finishReason = "finish_reason"
-        }
 
         struct ResponseMessage: Decodable {
             struct Part: Decodable {
@@ -650,25 +641,19 @@ private struct ChatCompletionResponse: Decodable {
                 return ""
             }
 
-            enum CodingKeys: String, CodingKey {
-                case role
-                case content
-                case toolCalls = "tool_calls"
-                case reasoningContent = "reasoning_content"
-            }
 
             init(from decoder: Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                role = try container.decodeIfPresent(String.self, forKey: .role)
-                if let stringContent = try? container.decodeIfPresent(String.self, forKey: .content) {
+                let container = try decoder.container(keyedBy: CodableKey.self)
+                role = try container.decodeIfPresent(String.self, forKey: .key("role"))
+                if let stringContent = try? container.decodeIfPresent(String.self, forKey: .key("content")) {
                     contentString = stringContent
                     contentParts = nil
                 } else {
                     contentString = nil
-                    contentParts = try container.decodeIfPresent([Part].self, forKey: .content)
+                    contentParts = try container.decodeIfPresent([Part].self, forKey: .key("content"))
                 }
-                toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .toolCalls)
-                reasoningContent = try container.decodeIfPresent(String.self, forKey: .reasoningContent)
+                toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .key("toolCalls"))
+                reasoningContent = try container.decodeIfPresent(String.self, forKey: .key("reasoningContent"))
             }
 
             init(
@@ -693,10 +678,6 @@ private struct ChatCompletionResponse: Decodable {
         let promptTokens: Int?
         let completionTokens: Int?
 
-        enum CodingKeys: String, CodingKey {
-            case promptTokens = "prompt_tokens"
-            case completionTokens = "completion_tokens"
-        }
     }
 
     let model: String
@@ -747,19 +728,13 @@ private struct StreamChunk: Decodable {
             /// Some providers expose chain-of-thought as `reasoning_content` or `reasoning` on the delta.
             let reasoningString: String?
 
-            enum CodingKeys: String, CodingKey {
-                case content
-                case toolCalls = "tool_calls"
-                case reasoningContent = "reasoning_content"
-                case reasoning
-            }
 
             init(from decoder: Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                contentString = try container.decodeIfPresent(String.self, forKey: .content)
-                toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .toolCalls)
-                let rc = try container.decodeIfPresent(String.self, forKey: .reasoningContent)
-                let r = try container.decodeIfPresent(String.self, forKey: .reasoning)
+                let container = try decoder.container(keyedBy: CodableKey.self)
+                contentString = try container.decodeIfPresent(String.self, forKey: .key("content"))
+                toolCalls = try container.decodeIfPresent([ToolCall].self, forKey: .key("toolCalls"))
+                let rc = try container.decodeIfPresent(String.self, forKey: .key("reasoningContent"))
+                let r = try container.decodeIfPresent(String.self, forKey: .key("reasoning"))
                 reasoningString = rc ?? r
             }
         }
@@ -767,10 +742,6 @@ private struct StreamChunk: Decodable {
         let delta: Delta
         let finishReason: String?
 
-        enum CodingKeys: String, CodingKey {
-            case delta
-            case finishReason = "finish_reason"
-        }
     }
 
     let model: String
@@ -827,25 +798,16 @@ private final class RequestToolProperty: Encodable {
         self.items = items
     }
 
-    enum CodingKeys: String, CodingKey {
-        case type
-        case description
-        case enumValues = "enum"
-        case format
-        case properties
-        case required
-        case items
-    }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(type, forKey: .type)
-        try c.encode(description, forKey: .description)
-        try c.encodeIfPresent(enumValues, forKey: .enumValues)
-        try c.encodeIfPresent(format, forKey: .format)
-        try c.encodeIfPresent(properties, forKey: .properties)
-        try c.encodeIfPresent(required, forKey: .required)
-        try c.encodeIfPresent(items, forKey: .items)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(type, forKey: .key("type"))
+        try c.encode(description, forKey: .key("description"))
+        try c.encodeIfPresent(enumValues, forKey: .key("enum"))
+        try c.encodeIfPresent(format, forKey: .key("format"))
+        try c.encodeIfPresent(properties, forKey: .key("properties"))
+        try c.encodeIfPresent(required, forKey: .key("required"))
+        try c.encodeIfPresent(items, forKey: .key("items"))
     }
 }
 

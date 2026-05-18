@@ -162,42 +162,30 @@ extension ChatAttachmentType: Codable {
 // MARK: - Codable（解码兼容 `file_id` / `full_cache_key` / `file_md5` 与驼峰本地存储）
 
 extension ChatAttachment: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case type
-        case url
-        case text
-        case fileId
-        case fullCacheKey
-        case fileMd5
-        case fileIdSnake = "file_id"
-        case fullCacheKeySnake = "full_cache_key"
-        case fileMd5Snake = "file_md5"
-    }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(UUID.self, forKey: .id)
-        type = try c.decode(ChatAttachmentType.self, forKey: .type)
-        url = try c.decodeIfPresent(URL.self, forKey: .url)
-        text = try c.decodeIfPresent(String.self, forKey: .text)
-        fileId = try c.decodeIfPresent(Int.self, forKey: .fileId)
-            ?? c.decodeIfPresent(Int.self, forKey: .fileIdSnake)
-        fullCacheKey = try c.decodeIfPresent(String.self, forKey: .fullCacheKey)
-            ?? c.decodeIfPresent(String.self, forKey: .fullCacheKeySnake)
-        fileMd5 = try c.decodeIfPresent(String.self, forKey: .fileMd5)
-            ?? c.decodeIfPresent(String.self, forKey: .fileMd5Snake)
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        id = try c.decode(UUID.self, forKey: .key("id"))
+        type = try c.decode(ChatAttachmentType.self, forKey: .key("type"))
+        url = try c.decodeIfPresent(URL.self, forKey: .key("url"))
+        text = try c.decodeIfPresent(String.self, forKey: .key("text"))
+        fileId = try c.decodeIfPresent(Int.self, forKey: .key("fileId"))
+            ?? c.decodeIfPresent(Int.self, forKey: .key("fileId"))
+        fullCacheKey = try c.decodeIfPresent(String.self, forKey: .key("fullCacheKey"))
+            ?? c.decodeIfPresent(String.self, forKey: .key("fullCacheKey"))
+        fileMd5 = try c.decodeIfPresent(String.self, forKey: .key("fileMd5"))
+            ?? c.decodeIfPresent(String.self, forKey: .key("fileMd5"))
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(type, forKey: .type)
-        try c.encodeIfPresent(url, forKey: .url)
-        try c.encodeIfPresent(text, forKey: .text)
-        try c.encodeIfPresent(fileId, forKey: .fileId)
-        try c.encodeIfPresent(fullCacheKey, forKey: .fullCacheKey)
-        try c.encodeIfPresent(fileMd5, forKey: .fileMd5)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(id, forKey: .key("id"))
+        try c.encode(type, forKey: .key("type"))
+        try c.encodeIfPresent(url, forKey: .key("url"))
+        try c.encodeIfPresent(text, forKey: .key("text"))
+        try c.encodeIfPresent(fileId, forKey: .key("fileId"))
+        try c.encodeIfPresent(fullCacheKey, forKey: .key("fullCacheKey"))
+        try c.encodeIfPresent(fileMd5, forKey: .key("fileMd5"))
     }
 }
 

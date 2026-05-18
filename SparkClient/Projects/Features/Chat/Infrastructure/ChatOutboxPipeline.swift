@@ -84,21 +84,22 @@ struct ChatOutboxPipeline: Sendable {
             let threadsByID = Dictionary(uniqueKeysWithValues: await repository.loadThreads().map { ($0.id, $0) })
             let payload: [ChatRemoteMessageDTO] = pending.map { message in
                 ChatRemoteMessageDTO(
-                    threadID: message.threadID,
+                    threadId: message.threadID,
                     role: message.role.rawValue,
                     blocks: message.blocks,
-                    clientMessageID: message.clientMessageID,
-                    serverMessageID: message.serverMessageID,
+                    clientMessageId: message.clientMessageID,
+                    serverMessageId: message.serverMessageID,
                     deliveryState: message.deliveryState.rawValue,
                     createdAt: message.createdAt,
                     serverUpdatedAt: message.serverUpdatedAt,
-                    isTombstone: message.isTombstone,
+                    tombstone: message.isTombstone,
                     threadCurrentModelName: threadsByID[message.threadID]?.currentModelName,
                     threadTemperature: threadsByID[message.threadID]?.temperature,
                     threadTopP: threadsByID[message.threadID]?.topP,
                     threadMaxTokens: threadsByID[message.threadID]?.maxTokens,
                     threadMaxMessages: threadsByID[message.threadID]?.maxMessages,
                     threadRolePrompt: threadsByID[message.threadID]?.rolePrompt,
+                    threadSystemPrompt: nil,
                     modelName: message.modelName
                 )
             }
@@ -117,7 +118,7 @@ struct ChatOutboxPipeline: Sendable {
                 let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
                 let localByClient = Self.indexByClientMessageID(localMessages)
                 let merged = remoteMessages.map { remote in
-                    mergeEngine.resolve(local: localByClient[remote.clientMessageID], remote: remote)
+                    mergeEngine.resolve(local: localByClient[remote.clientMessageId], remote: remote)
                 }
                 await repository.upsertRemoteMessages(merged, in: threadID, enqueueAttachmentDownloadJobs: false)
                 

@@ -32,23 +32,15 @@ struct UserSession: Codable, Equatable, Sendable {
         self.isNewUser = isNewUser
     }
 
-    enum CodingKeys: String, CodingKey {
-        case accountID
-        case email
-        case displayName
-        case signedInAt
-        case signInMethod
-        case isPro
-    }
 
     init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        accountID = try container.decode(Int64.self, forKey: .accountID)
-        email = try container.decode(String.self, forKey: .email)
-        displayName = try container.decode(String.self, forKey: .displayName)
-        signedInAt = try container.decode(Date.self, forKey: .signedInAt)
-        signInMethod = try container.decodeIfPresent(SignInMethod.self, forKey: .signInMethod) ?? .apple
-        isPro = try container.decodeIfPresent(Bool.self, forKey: .isPro) ?? false
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        accountID = try container.decode(Int64.self, forKey: .key("accountId"))
+        email = try container.decode(String.self, forKey: .key("email"))
+        displayName = try container.decode(String.self, forKey: .key("displayName"))
+        signedInAt = try container.decode(Date.self, forKey: .key("signedInAt"))
+        signInMethod = try container.decodeIfPresent(SignInMethod.self, forKey: .key("signInMethod")) ?? .apple
+        isPro = try container.decodeIfPresent(Bool.self, forKey: .key("isPro")) ?? false
         isNewUser = false
     }
 }

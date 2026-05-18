@@ -13,6 +13,7 @@ final class AppSessionStore: ObservableObject {
     @Published private(set) var state: State = .loading
 
     private let restoreSessionUseCase: RestoreSessionUseCase
+    private let logger: Logger = ConsoleLogger()
     private var didRestore = false
 
     init(restoreSessionUseCase: RestoreSessionUseCase) {
@@ -32,10 +33,12 @@ final class AppSessionStore: ObservableObject {
     }
 
     func setAuthenticated(_ session: UserSession) {
+        logger.info("AppSessionStore：设置已登录状态 accountID=\(session.accountID)", module: .auth)
         state = .signedIn(session)
     }
 
     func setSignedOut() {
+        logger.info("AppSessionStore：设置未登录状态", module: .auth)
         state = .signedOut
     }
 }

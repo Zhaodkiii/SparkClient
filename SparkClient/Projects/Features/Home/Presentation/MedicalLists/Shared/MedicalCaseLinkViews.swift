@@ -23,18 +23,14 @@ struct MedicalCaseLinkPatch: Encodable, Sendable {
     let field: Field
     let medicalCaseID: Int?
 
-    enum CodingKeys: String, CodingKey {
-        case medicalCase = "medical_case"
-        case medicalRecord = "medical_record"
-    }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
+        var container = encoder.container(keyedBy: CodableKey.self)
         switch field {
         case .medicalCase:
-            try container.encodeNilOrValue(medicalCaseID, forKey: .medicalCase)
+            try container.encodeNilOrValue(medicalCaseID, forKey: .key("medicalCase"))
         case .medicalRecord:
-            try container.encodeNilOrValue(medicalCaseID, forKey: .medicalRecord)
+            try container.encodeNilOrValue(medicalCaseID, forKey: .key("medicalRecord"))
         }
     }
 }

@@ -33,15 +33,15 @@ enum ChatSyncEngineDTOMapper: Sendable {
         }
 
         return ChatMessage(
-            threadID: remote.threadID,
+            threadID: remote.threadId,
             role: role,
             blocks: remote.blocks,
-            clientMessageID: remote.clientMessageID,
-            serverMessageID: remote.serverMessageID,
+            clientMessageID: remote.clientMessageId,
+            serverMessageID: remote.serverMessageId,
             deliveryState: deliveryState,
             createdAt: remote.createdAt,
             serverUpdatedAt: remote.serverUpdatedAt,
-            isTombstone: remote.isTombstone,
+            isTombstone: remote.tombstone,
             modelName: remote.modelName
         )
     }

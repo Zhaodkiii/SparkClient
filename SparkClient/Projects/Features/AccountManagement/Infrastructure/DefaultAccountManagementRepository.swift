@@ -22,24 +22,24 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
     }
 
     func requestVerification(channel: AccountVerificationChannel) async throws -> AccountVerificationRequestContext {
-        let bundleID = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceID = SparkKeychain.getOrCreateDeviceID()
+        let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
+        let deviceId = SparkKeychain.getOrCreateDeviceID()
 
         switch channel {
         case .phone(let phoneNumber):
             let result = try await backend.otp.requestPhoneOTP(
                 phoneNumber: phoneNumber,
-                bundleId: bundleID,
-                deviceId: deviceID
+                bundleId: bundleId,
+                deviceId: deviceId
             )
-            return AccountVerificationRequestContext(channel: channel, otpID: result.otp_id, expiresIn: result.expires_in)
+            return AccountVerificationRequestContext(channel: channel, otpID: result.otpId, expiresIn: result.expiresIn)
         case .email(let email):
             let result = try await backend.otp.requestEmailOTP(
                 email: email,
-                bundleId: bundleID,
-                deviceId: deviceID
+                bundleId: bundleId,
+                deviceId: deviceId
             )
-            return AccountVerificationRequestContext(channel: channel, otpID: result.otp_id, expiresIn: result.expires_in)
+            return AccountVerificationRequestContext(channel: channel, otpID: result.otpId, expiresIn: result.expiresIn)
         case .apple:
             throw AccountManagementError.unsupportedVerificationChannel
         }
@@ -54,10 +54,10 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
                 authorizationCode: authorizationCode,
                 userIdentifier: userIdentifier
             )
-        case .phone(let otpID, let code):
-            apiVerification = .phone(otpID: otpID, code: code)
-        case .email(let otpID, let code):
-            apiVerification = .email(otpID: otpID, code: code)
+        case .phone(let otpId, let code):
+            apiVerification = .phone(otpId: otpId, code: code)
+        case .email(let otpId, let code):
+            apiVerification = .email(otpId: otpId, code: code)
         }
 
         let request = SparkDeactivationAPI.AccountDeactivationSubmitRequest(
@@ -71,12 +71,11 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
         )
         let result = try await backend.deactivation.submitAccountDeactivation(request)
         return AccountDeactivationSubmission(
-            deactivationID: result.deactivation_id,
+            deactivationID: result.deactivationId,
             state: result.state,
-            scheduledAt: result.scheduled_at,
-            immediateDeactivation: result.immediate_deactivation,
-            countdownHours: result.countdown_hours
+            scheduledAt: result.scheduledAt,
+            immediateDeactivation: result.immediateDeactivation,
+            countdownHours: result.countdownHours
         )
     }
 }
-

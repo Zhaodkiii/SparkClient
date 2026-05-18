@@ -146,7 +146,7 @@ struct MedicalRecordFormSubmissionService: Sendable {
                 department: draft.department ?? "",
                 doctorName: draft.doctorName ?? "",
                 visitNo: draft.visitNo ?? "",
-                sourceSystemID: existing.sourceSystemID,
+                sourceSystemID: existing.sourceSystemId,
                 notes: draft.notes ?? "",
                 extra: existing.extra ?? [:]
             )
@@ -174,7 +174,7 @@ struct MedicalRecordFormSubmissionService: Sendable {
                 anesthesiaType: draft.anesthesiaType ?? "",
                 incisionLevel: draft.incisionLevel ?? "",
                 asaClass: draft.asaClass ?? "",
-                sourceSystemID: existing.sourceSystemID,
+                sourceSystemID: existing.sourceSystemId,
                 notes: draft.notes ?? "",
                 extra: existing.extra ?? [:]
             )
@@ -220,15 +220,6 @@ private struct SymptomUpdatePayload: Encodable {
     let notes: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicalCase = "medical_case"
-        case name, code, severity, notes, extra
-        case startedAt = "started_at"
-        case durationValue = "duration_value"
-        case durationUnit = "duration_unit"
-        case bodyPart = "body_part"
-    }
 }
 
 private struct VisitUpdatePayload: Encodable {
@@ -243,17 +234,6 @@ private struct VisitUpdatePayload: Encodable {
     let notes: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicalCase = "medical_case"
-        case visitType = "visit_type"
-        case visitedAt = "visited_at"
-        case department
-        case doctorName = "doctor_name"
-        case visitNo = "visit_no"
-        case sourceSystemID = "source_system_id"
-        case notes, extra
-    }
 }
 
 private struct SurgeryUpdatePayload: Encodable {
@@ -271,20 +251,6 @@ private struct SurgeryUpdatePayload: Encodable {
     let notes: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicalCase = "medical_case"
-        case procedureName = "procedure_name"
-        case procedureCode = "procedure_code"
-        case site
-        case performedAt = "performed_at"
-        case surgeon
-        case anesthesiaType = "anesthesia_type"
-        case incisionLevel = "incision_level"
-        case asaClass = "asa_class"
-        case sourceSystemID = "source_system_id"
-        case notes, extra
-    }
 }
 
 private struct FollowUpUpdatePayload: Encodable {
@@ -298,12 +264,4 @@ private struct FollowUpUpdatePayload: Encodable {
     let nextAction: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicalCase = "medical_case"
-        case plannedAt = "planned_at"
-        case completedAt = "completed_at"
-        case status, method, outcome, extra
-        case nextAction = "next_action"
-    }
 }

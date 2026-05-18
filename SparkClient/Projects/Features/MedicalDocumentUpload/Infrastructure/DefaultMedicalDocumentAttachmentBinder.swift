@@ -22,9 +22,9 @@ struct DefaultMedicalDocumentAttachmentBinder: MedicalDocumentAttachmentBinding,
             do {
                 _ = try await fileAPI.updateBusinessBinding(
                     ManagedFileBusinessUpdateItem(
-                        fileID: remoteFile.id,
+                        fileId: remoteFile.id,
                         businessType: businessType(for: kind),
-                        businessID: "\(receipt.recordID)"
+                        businessId: "\(receipt.recordID)"
                     )
                 )
             } catch {

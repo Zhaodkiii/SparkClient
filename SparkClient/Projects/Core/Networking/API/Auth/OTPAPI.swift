@@ -17,30 +17,30 @@ struct SparkOTPAPI {
     }
 
     struct OTPRequestResult: Decodable {
-        let otp_id: String
-        let expires_in: Int
+        let otpId: String
+        let expiresIn: Int
     }
 
     struct OTPVerifyResult: Decodable {
-        let user_id: Int
-        let access_token: String
-        let refresh_token: String
-        let expires_in: Int
-        let token_type: String
-        let otp_id: String
+        let userId: Int
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: Int
+        let tokenType: String
+        let otpId: String
     }
 
     struct PhoneOTPVerifyResult: Decodable {
-        let user_id: Int
-        let phone_number: String
-        let display_name: String?
-        let is_pro: Bool?
-        let access_token: String
-        let refresh_token: String
-        let expires_in: Int
-        let token_type: String
-        let otp_id: String
-        let is_new_user: Bool?
+        let userId: Int
+        let phoneNumber: String
+        let displayName: String?
+        let isPro: Bool?
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: Int
+        let tokenType: String
+        let otpId: String
+        let isNewUser: Bool?
     }
 
     func requestEmailOTP(
@@ -136,13 +136,13 @@ struct SparkOTPAPI {
         let result = try APIResponseDecoder.decodeWrappedData(OTPVerifyResult.self, from: response)
 
         let tokens = AuthTokens(
-            accessToken: result.access_token,
-            refreshToken: result.refresh_token,
-            expiresAt: Date().addingTimeInterval(TimeInterval(result.expires_in)),
-            tokenType: result.token_type
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(result.expiresIn)),
+            tokenType: result.tokenType
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: Int64(result.user_id))
+        configuration.deviceCache.cache(currentUserID: Int64(result.userId))
 
         return tokens
     }
@@ -240,13 +240,13 @@ struct SparkOTPAPI {
         let result = try APIResponseDecoder.decodeWrappedData(PhoneOTPVerifyResult.self, from: response)
 
         let tokens = AuthTokens(
-            accessToken: result.access_token,
-            refreshToken: result.refresh_token,
-            expiresAt: Date().addingTimeInterval(TimeInterval(result.expires_in)),
-            tokenType: result.token_type
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(result.expiresIn)),
+            tokenType: result.tokenType
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: Int64(result.user_id))
+        configuration.deviceCache.cache(currentUserID: Int64(result.userId))
 
         return result
     }

@@ -283,7 +283,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
         )
         
         // JSON编码草稿模型
-        let enc = JSONEncoder()
+        let enc = JSONEncoder.default
         enc.outputFormatting = [.sortedKeys] // 按键排序，保证格式稳定
         guard let data = try? enc.encode(draft), let json = String(data: data, encoding: .utf8) else {
             return .empty // 编码失败返回空Blob
@@ -320,7 +320,7 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
         ossFileId: Int?
     ) -> StructuredHealthCardsBlob {
         // JSON编码器配置：按键排序，保证输出稳定
-        let enc = JSONEncoder()
+        let enc = JSONEncoder.default
         enc.outputFormatting = [.sortedKeys]
         
         // 通用编码方法：将模型转为JSON字符串

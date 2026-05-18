@@ -80,7 +80,7 @@ actor NotificationInboxStore {
 
     private func persist() {
         do {
-            let data = try JSONEncoder().encode(items)
+            let data = try JSONEncoder.default.encode(items)
             try AtomicFileWriter.write(data, to: fileURL)
         } catch {
             SparkLogger.log(
@@ -93,6 +93,6 @@ actor NotificationInboxStore {
 
     private static func loadItems(from url: URL) -> [NotificationInboxItem] {
         guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([NotificationInboxItem].self, from: data)) ?? []
+        return (try? JSONDecoder.default.decode([NotificationInboxItem].self, from: data)) ?? []
     }
 }

@@ -36,13 +36,6 @@ private struct TokenRefreshSuccessEnvelope: Decodable {
     let refreshToken: String?
     let tokenType: String?
 
-    enum CodingKeys: String, CodingKey {
-        case access
-        case refresh
-        case accessToken = "access_token"
-        case refreshToken = "refresh_token"
-        case tokenType = "token_type"
-    }
 
     func resolvedTokens(fallbackRefreshToken: String) -> (access: String, refresh: String, tokenType: String)? {
         let accessString = access ?? accessToken
@@ -182,7 +175,7 @@ actor AuthTokenProvider {
         // Success: SimpleJWT 风格 { "access","refresh" } 或网关/账户服务常用 { "access_token","refresh_token","token_type" }。
         if (200...299).contains(response.httpResponse.statusCode) {
             do {
-                let decoder = JSONDecoder()
+                let decoder = JSONDecoder.default
                 let envelope = try decoder.decode(TokenRefreshSuccessEnvelope.self, from: response.data)
                 guard let triple = envelope.resolvedTokens(fallbackRefreshToken: refreshToken) else {
                     logger.error("令牌刷新响应解析失败：缺少 access/access_token 字段。", module: .auth)
@@ -213,7 +206,7 @@ actor AuthTokenProvider {
         let statusCode = response.httpResponse.statusCode
         let backendError: BackendError?
         do {
-            let decoded = try JSONDecoder().decode(BackendError.self, from: response.data)
+            let decoded = try JSONDecoder.default.decode(BackendError.self, from: response.data)
             backendError = decoded
             logger.error("令牌刷新 HTTP 错误：code=\(decoded.code) msg=\(decoded.msg)", module: .auth)
         } catch {

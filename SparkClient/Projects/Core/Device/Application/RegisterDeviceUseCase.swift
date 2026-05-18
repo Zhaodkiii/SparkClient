@@ -39,7 +39,7 @@ final class RegisterDeviceUseCase {
                 systemInfo: systemInfo,
                 requiresAuth: requiresAuth
             )
-            backend.deviceCache.cache(trustedDeviceID: result.device_id)
+            backend.deviceCache.cache(trustedDeviceID: result.deviceId)
             let idStr = result.id.map(String.init) ?? "-"
             let createdStr: String = {
                 guard let c = result.created else { return "-" }

@@ -119,7 +119,7 @@ extension DeviceCache: ETagStore {
     func record(forKey key: String) -> ETagCacheRecord? {
         let url = metadataURL(for: key)
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(ETagCacheRecord.self, from: data)
+        return try? JSONDecoder.default.decode(ETagCacheRecord.self, from: data)
     }
 
     func cachedBody(forKey key: String) -> Data? {
@@ -131,7 +131,7 @@ extension DeviceCache: ETagStore {
             try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
         }
 
-        try AtomicFileWriter.write(try JSONEncoder().encode(record), to: metadataURL(for: key))
+        try AtomicFileWriter.write(try JSONEncoder.default.encode(record), to: metadataURL(for: key))
         try AtomicFileWriter.write(body, to: bodyURL(for: key))
     }
 

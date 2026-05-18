@@ -26,8 +26,8 @@ final class CoreDataMemoryRepository: MemoryRepository, @unchecked Sendable {
     private let sessionSnapshotStore: SessionSnapshotStore
     private let searchEngine: MemorySearchEngine
     private let defaults: UserDefaults
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder.default
+    private let decoder = JSONDecoder.default
 
     init(
         coreDataStack: CoreDataStack,

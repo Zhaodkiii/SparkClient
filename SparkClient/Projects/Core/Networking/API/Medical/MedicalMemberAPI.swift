@@ -42,20 +42,6 @@ struct SparkMedicalMemberAPI {
         /// 服务端最后更新时间，用于增量同步或冲突判断。
         let updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case name
-            case gender
-            case relationship
-            case birthDate = "birth_date"
-            case bloodType = "blood_type"
-            case allergies
-            case chronicConditions = "chronic_conditions"
-            case notes
-            case avatarUrl = "avatar_url"
-            case isPrimary = "is_primary"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 创建或更新成员时的请求体（PUT/POST 共用形状）。
@@ -73,36 +59,24 @@ struct SparkMedicalMemberAPI {
         let avatarUrl: String
         let isPrimary: Bool
 
-        enum CodingKeys: String, CodingKey {
-            case name
-            case relationship
-            case gender
-            case birthDate = "birth_date"
-            case bloodType = "blood_type"
-            case allergies
-            case chronicConditions = "chronic_conditions"
-            case notes
-            case avatarUrl = "avatar_url"
-            case isPrimary = "is_primary"
-        }
 
         func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(name, forKey: .name)
-            try container.encode(relationship, forKey: .relationship)
-            try container.encode(gender, forKey: .gender)
+            var container = encoder.container(keyedBy: CodableKey.self)
+            try container.encode(name, forKey: .key("name"))
+            try container.encode(relationship, forKey: .key("relationship"))
+            try container.encode(gender, forKey: .key("gender"))
             // 出生日期：避免默认编码成带时区的完整 DateTime，统一为日期串以匹配后端 `birth_date` 语义。
             if let birthDate {
-                try container.encode(MedicalDateCoding.encodeDateOnly(birthDate), forKey: .birthDate)
+                try container.encode(MedicalDateCoding.encodeDateOnly(birthDate), forKey: .key("birthDate"))
             } else {
-                try container.encodeNil(forKey: .birthDate)
+                try container.encodeNil(forKey: .key("birthDate"))
             }
-            try container.encode(bloodType, forKey: .bloodType)
-            try container.encode(allergies, forKey: .allergies)
-            try container.encode(chronicConditions, forKey: .chronicConditions)
-            try container.encode(notes, forKey: .notes)
-            try container.encode(avatarUrl, forKey: .avatarUrl)
-            try container.encode(isPrimary, forKey: .isPrimary)
+            try container.encode(bloodType, forKey: .key("bloodType"))
+            try container.encode(allergies, forKey: .key("allergies"))
+            try container.encode(chronicConditions, forKey: .key("chronicConditions"))
+            try container.encode(notes, forKey: .key("notes"))
+            try container.encode(avatarUrl, forKey: .key("avatarUrl"))
+            try container.encode(isPrimary, forKey: .key("isPrimary"))
         }
     }
 

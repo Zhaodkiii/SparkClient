@@ -2005,45 +2005,28 @@ private struct MedicationPlanPayload: Encodable {
     let status: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member, prescription, instructions, status, extra
-        case medicalCase = "medical_case"
-        case medicineBox = "medicine_box"
-        case drugName = "drug_name"
-        case dosePerTime = "dose_per_time"
-        case doseValue = "dose_value"
-        case doseUnit = "dose_unit"
-        case frequencyType = "frequency_type"
-        case everyNDays = "every_n_days"
-        case weeklyWeekdays = "weekly_weekdays"
-        case frequencyText = "frequency_text"
-        case reminderTimes = "reminder_times"
-        case startDate = "start_date"
-        case endDate = "end_date"
-        case reminderEnabled = "reminder_enabled"
-    }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(member, forKey: .member)
-        try container.encodeNullable(medicalCase, forKey: .medicalCase)
-        try container.encodeNullable(medicineBox, forKey: .medicineBox)
-        try container.encodeNullable(prescription, forKey: .prescription)
-        try container.encode(drugName, forKey: .drugName)
-        try container.encode(dosePerTime, forKey: .dosePerTime)
-        try container.encodeNullable(doseValue, forKey: .doseValue)
-        try container.encode(doseUnit, forKey: .doseUnit)
-        try container.encode(frequencyType, forKey: .frequencyType)
-        try container.encodeNullable(everyNDays, forKey: .everyNDays)
-        try container.encode(weeklyWeekdays, forKey: .weeklyWeekdays)
-        try container.encode(frequencyText, forKey: .frequencyText)
-        try container.encode(reminderTimes, forKey: .reminderTimes)
-        try container.encode(startDate, forKey: .startDate)
-        try container.encodeNullable(endDate, forKey: .endDate)
-        try container.encode(instructions, forKey: .instructions)
-        try container.encode(reminderEnabled, forKey: .reminderEnabled)
-        try container.encode(status, forKey: .status)
-        try container.encode(extra, forKey: .extra)
+        var container = encoder.container(keyedBy: CodableKey.self)
+        try container.encode(member, forKey: .key("member"))
+        try container.encodeNullable(medicalCase, forKey: .key("medicalCase"))
+        try container.encodeNullable(medicineBox, forKey: .key("medicineBox"))
+        try container.encodeNullable(prescription, forKey: .key("prescription"))
+        try container.encode(drugName, forKey: .key("drugName"))
+        try container.encode(dosePerTime, forKey: .key("dosePerTime"))
+        try container.encodeNullable(doseValue, forKey: .key("doseValue"))
+        try container.encode(doseUnit, forKey: .key("doseUnit"))
+        try container.encode(frequencyType, forKey: .key("frequencyType"))
+        try container.encodeNullable(everyNDays, forKey: .key("everyNDays"))
+        try container.encode(weeklyWeekdays, forKey: .key("weeklyWeekdays"))
+        try container.encode(frequencyText, forKey: .key("frequencyText"))
+        try container.encode(reminderTimes, forKey: .key("reminderTimes"))
+        try container.encode(startDate, forKey: .key("startDate"))
+        try container.encodeNullable(endDate, forKey: .key("endDate"))
+        try container.encode(instructions, forKey: .key("instructions"))
+        try container.encode(reminderEnabled, forKey: .key("reminderEnabled"))
+        try container.encode(status, forKey: .key("status"))
+        try container.encode(extra, forKey: .key("extra"))
     }
 }
 

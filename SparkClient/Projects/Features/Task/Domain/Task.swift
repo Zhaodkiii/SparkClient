@@ -69,9 +69,9 @@ struct HealthTask: Identifiable, Codable, Equatable, Sendable {
     var repeatType: RepeatType
     var priority: Priority
     var businessType: String
-    var businessID: String
+    var businessId: String
     var source: Source
-    var notificationID: String
+    var notificationId: String
     var extra: [String: String]
     var createdAt: Date
     var updatedAt: Date
@@ -83,29 +83,14 @@ struct HealthTask: Identifiable, Codable, Equatable, Sendable {
     // 本地扩展字段
     var localState: LocalState?
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case member
-        case creator
-        case title
-        case description
-        case type
-        case status
-        case startTime = "start_time"
-        case dueTime = "due_time"
-        case repeatType = "repeat_type"
-        case priority
-        case businessType = "business_type"
-        case businessID = "business_id"
-        case source
-        case notificationID = "notification_id"
-        case extra
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case taskMedical = "task_medical"
-        case taskExercise = "task_exercise"
-        case taskDiet = "task_diet"
-        case localState = "local_state"
+    var businessID: String {
+        get { businessId }
+        set { businessId = newValue }
+    }
+
+    var notificationID: String {
+        get { notificationId }
+        set { notificationId = newValue }
     }
 }
 
@@ -118,15 +103,6 @@ struct TaskMedical: Codable, Equatable, Sendable {
     var source: String
     var extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case status
-        case reminderTime = "reminder_time"
-        case medicalTaskType = "medical_task_type"
-        case description
-        case source
-        case extra
-    }
 }
 
 struct TaskExercise: Codable, Equatable, Sendable {
@@ -139,16 +115,6 @@ struct TaskExercise: Codable, Equatable, Sendable {
     var source: String
     var extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case status
-        case exerciseType = "exercise_type"
-        case durationMin = "duration_min"
-        case intensity
-        case description
-        case source
-        case extra
-    }
 }
 
 struct TaskDiet: Codable, Equatable, Sendable {
@@ -161,16 +127,6 @@ struct TaskDiet: Codable, Equatable, Sendable {
     var source: String
     var extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case status
-        case mealType = "meal_type"
-        case calorieTarget = "calorie_target"
-        case foodRecommend = "food_recommend"
-        case description
-        case source
-        case extra
-    }
 }
 
 // MARK: - AI 任务卡片（仅客户端消息内展示，不落服务端 TaskCard 表）
@@ -194,7 +150,7 @@ struct TaskCard: Identifiable, Codable, Equatable, Sendable {
     var repeatType: HealthTask.RepeatType
     var priority: HealthTask.Priority
     var businessType: String
-    var businessID: String
+    var businessId: String
     var source: HealthTask.Source
     var status: CardStatus
     var extractPayload: [String: String]
@@ -213,42 +169,18 @@ struct TaskCard: Identifiable, Codable, Equatable, Sendable {
         case setMember(TaskCard, Int?)
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case member
-        case creator
-        case title
-        case description
-        case type
-        case startTime = "start_time"
-        case dueTime = "due_time"
-        case repeatType = "repeat_type"
-        case priority
-        case businessType = "business_type"
-        case businessID = "business_id"
-        case source
-        case status
-        case extractPayload = "extract_payload"
-        case taskPayload = "task_payload"
-        case similarityPayload = "similarity_payload"
-        case ignoredReason = "ignored_reason"
-        case confirmedTask = "confirmed_task"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case localState = "local_state"
+    var businessID: String {
+        get { businessId }
+        set { businessId = newValue }
     }
 }
 
 struct TaskStatusSyncItem: Codable, Sendable {
-    let taskID: Int
+    let taskId: Int
     let status: HealthTask.TaskStatus
     let updatedAt: Date
 
-    enum CodingKeys: String, CodingKey {
-        case taskID = "task_id"
-        case status
-        case updatedAt = "updated_at"
-    }
+    var taskID: Int { taskId }
 }
 
 struct TaskSyncPayload: Codable, Sendable {
@@ -256,9 +188,4 @@ struct TaskSyncPayload: Codable, Sendable {
     let taskStatuses: [TaskStatusSyncItem]
     let serverTime: Date
 
-    enum CodingKeys: String, CodingKey {
-        case tasks
-        case taskStatuses = "task_statuses"
-        case serverTime = "server_time"
-    }
 }

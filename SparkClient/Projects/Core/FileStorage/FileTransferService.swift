@@ -56,21 +56,21 @@ actor FileTransferService {
     /// - Returns: 服务器返回的文件记录
     @discardableResult
     func upload(_ payload: ManagedFileUploadPayload) async throws -> ManagedFileRecord {
-        let fileUUID = UUID().uuidString
+        let fileUuid = UUID().uuidString
         let fileMD5 = FileUtilities.md5Hex(payload.data)
         let safeFileName = FileUtilities.sanitizeFileName(payload.fileName)
 
         // 上传前先缓存，失败可重试并保留本地副本
         _ = try await cacheManager.save(
             data: payload.data,
-            fileUUID: fileUUID,
+            fileUUID: fileUuid,
             fileName: safeFileName
         )
 
         let ymd = Self.dayFormatter.string(from: Date())
         let objectKey = FileUtilities.makeObjectKey(
             prefix: "SparkClient/\(ymd)",
-            uuidString: fileUUID,
+            uuidString: fileUuid,
             filename: safeFileName
         )
         let mimeType = FileUtilities.mimeType(forName: safeFileName)
@@ -94,32 +94,32 @@ actor FileTransferService {
         )
 
         let uploaded = try await api.registerFile(.init(
-            fileUUID: fileUUID,
+            fileUuid: fileUuid,
             originalName: safeFileName,
             fileSize: payload.data.count,
             mimeType: mimeType,
             fileMd5: fileMD5,
             isPublic: payload.isPublic,
             businessType: payload.businessType,
-            businessID: payload.businessID,
+            businessId: payload.businessId,
             filePath: objectKey,
             objectKey: objectKey,
             storageType: "oss"
         ))
 
         let cacheMatches = await cacheManager.validateMD5(
-            fileUUID: fileUUID,
+            fileUUID: fileUuid,
             fileName: safeFileName,
             expectedMD5: fileMD5
         )
         if !cacheMatches {
             logger.warning(
-                "上传完成后本地缓存 MD5 与预期不一致，uuid=\(fileUUID)，name=\(safeFileName)",
+                "上传完成后本地缓存 MD5 与预期不一致，uuid=\(fileUuid)，name=\(safeFileName)",
                 module: .cache
             )
         }
 
-        logger.info("文件上传完成，file_id=\(uploaded.id)，uuid=\(uploaded.fileUUID)", module: .cache)
+        logger.info("文件上传完成，file_id=\(uploaded.id)，uuid=\(uploaded.fileUuid)", module: .cache)
         return uploaded
     }
 
@@ -144,17 +144,17 @@ actor FileTransferService {
     func download(file: ManagedFileRecord, forceRefresh: Bool = false) async throws -> URL {
         // 1. 检查本地缓存：如果不强制刷新，且本地存在该文件
         if !forceRefresh,
-           let cachedURL = await cacheManager.cachedFileURL(fileUUID: file.fileUUID, fileName: file.originalName) {
+           let cachedURL = await cacheManager.cachedFileURL(fileUUID: file.fileUuid, fileName: file.originalName) {
             
             // 2. 如果记录中有 MD5，则进行完整性校验
             if let fileMd5 = file.fileMd5 {
-                let valid = await cacheManager.validateMD5(fileUUID: file.fileUUID, fileName: file.originalName, expectedMD5: fileMd5)
+                let valid = await cacheManager.validateMD5(fileUUID: file.fileUuid, fileName: file.originalName, expectedMD5: fileMd5)
                 if valid {
                     logger.debug("命中本地缓存并通过 MD5 校验，file_id=\(file.id)", module: .cache)
                     return cachedURL
                 }
                 // 如果 MD5 校验失败，说明本地缓存损坏，移除它
-                try? await cacheManager.remove(fileUUID: file.fileUUID)
+                try? await cacheManager.remove(fileUUID: file.fileUuid)
             } else {
                 // 如果没有 MD5 记录，则直接使用缓存
                 logger.debug("命中本地缓存，file_id=\(file.id)", module: .cache)
@@ -184,7 +184,7 @@ actor FileTransferService {
         // 5. 校验通过，存入本地缓存并返回路径
         let localURL = try await cacheManager.save(
             data: data,
-            fileUUID: file.fileUUID,
+            fileUUID: file.fileUuid,
             fileName: file.originalName
         )
         logger.info("文件下载并缓存完成，file_id=\(file.id)", module: .cache)
@@ -193,7 +193,7 @@ actor FileTransferService {
 
     /// 获取文件的本地缓存路径（如果存在）
     func cachedURL(file: ManagedFileRecord) async -> URL? {
-        await cacheManager.cachedFileURL(fileUUID: file.fileUUID, fileName: file.originalName)
+        await cacheManager.cachedFileURL(fileUUID: file.fileUuid, fileName: file.originalName)
     }
 
     /// 基于 OSS object key 生成客户端本地 presigned 下载 URL（不依赖 files/{id}/download-url）。

@@ -64,7 +64,7 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
             return nil
         }
         do {
-            let decoder = JSONDecoder()
+            let decoder = JSONDecoder.default
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             return try decoder.decode(T.self, from: data)
         } catch {

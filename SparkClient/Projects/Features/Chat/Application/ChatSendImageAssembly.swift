@@ -31,7 +31,7 @@ enum ChatSendAttachmentAssembly {
             url: publicFullURL,
             text: text,
             fileId: record.id,
-            fullCacheKey: ChatAttachment.makeFullCacheKey(fileUUID: record.fileUUID, fileName: record.originalName),
+            fullCacheKey: ChatAttachment.makeFullCacheKey(fileUUID: record.fileUuid, fileName: record.originalName),
             fileMd5: record.fileMd5
         )
     }

@@ -143,7 +143,7 @@ struct SmallTaskEditorView: View {
     }
 
     private func save() {
-        let id = task?.sourceID ?? nextID
+        let id = task?.id ?? nextID
         let saved = SmallTask.createLocalTask(
             id: id,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),

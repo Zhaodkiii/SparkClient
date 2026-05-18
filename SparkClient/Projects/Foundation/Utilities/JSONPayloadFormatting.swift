@@ -21,7 +21,7 @@ enum JSONPayloadFormatting: Sendable {
     }
 
     /// `Encodable` → 与 `prettyUTF8StringForLog(from:)` 同风格的 pretty 字符串（内部先编码再统一走 JSON 美化路径）。
-    nonisolated static func prettyString<T: Encodable>(from value: T, encoder: JSONEncoder = JSONEncoder()) throws -> String {
+    nonisolated static func prettyString<T: Encodable>(from value: T, encoder: JSONEncoder = JSONEncoder.default) throws -> String {
         let data = try encoder.encode(value)
         return prettyUTF8StringForLog(from: data)
     }

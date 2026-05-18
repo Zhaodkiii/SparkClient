@@ -426,16 +426,13 @@ private func prescriptionStatusText(_ status: String) -> String {
 struct MedicationPlanPrescriptionUpdatePayload: Encodable {
     let prescription: Int?
 
-    enum CodingKeys: String, CodingKey {
-        case prescription
-    }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
+        var container = encoder.container(keyedBy: CodableKey.self)
         if let prescription {
-            try container.encode(prescription, forKey: .prescription)
+            try container.encode(prescription, forKey: .key("prescription"))
         } else {
-            try container.encodeNil(forKey: .prescription)
+            try container.encodeNil(forKey: .key("prescription"))
         }
     }
 }

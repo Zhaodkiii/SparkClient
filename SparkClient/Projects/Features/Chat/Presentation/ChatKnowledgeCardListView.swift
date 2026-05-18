@@ -34,33 +34,27 @@ struct ChatKnowledgeCard: Codable, Equatable, Identifiable {
         self.showsSaveAndCopy = showsSaveAndCopy
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case content
-        case showsSaveAndCopy
-    }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let title = try c.decode(String.self, forKey: .title)
-        let content = try c.decode(String.self, forKey: .content)
-        if let id = try c.decodeIfPresent(UUID.self, forKey: .id) {
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        let title = try c.decode(String.self, forKey: .key("title"))
+        let content = try c.decode(String.self, forKey: .key("content"))
+        if let id = try c.decodeIfPresent(UUID.self, forKey: .key("id")) {
             self.id = id
         } else {
             self.id = Self.stableID(title: title, content: content)
         }
         self.title = title
         self.content = content
-        self.showsSaveAndCopy = try c.decodeIfPresent(Bool.self, forKey: .showsSaveAndCopy) ?? true
+        self.showsSaveAndCopy = try c.decodeIfPresent(Bool.self, forKey: .key("showsSaveAndCopy")) ?? true
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(title, forKey: .title)
-        try c.encode(content, forKey: .content)
-        try c.encode(showsSaveAndCopy, forKey: .showsSaveAndCopy)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(id, forKey: .key("id"))
+        try c.encode(title, forKey: .key("title"))
+        try c.encode(content, forKey: .key("content"))
+        try c.encode(showsSaveAndCopy, forKey: .key("showsSaveAndCopy"))
     }
 }
 

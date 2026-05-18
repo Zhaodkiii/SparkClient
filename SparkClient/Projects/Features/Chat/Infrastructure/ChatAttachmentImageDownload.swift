@@ -24,7 +24,7 @@ enum ChatAttachmentFileDownload {
 
         let managedFile = ManagedFileRecord(
             id: attachment.fileId ?? 0,
-            fileUUID: fileUUID,
+            fileUuid: fileUUID,
             filePath: remoteURL?.absoluteString ?? "",
             originalName: originalName,
             fileSize: 0,
@@ -32,7 +32,7 @@ enum ChatAttachmentFileDownload {
             fileMd5: attachment.fileMd5,
             isPublic: false,
             businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
-            businessID: "",
+            businessId: "",
             createdAt: "",
             objectKey: objectKey,
             storageType: nil
@@ -61,7 +61,7 @@ enum ChatAttachmentFileDownload {
                 let presignedURL = try await fileTransferService.makePresignedDownloadURL(objectKey: key)
                 let presignedRecord = ManagedFileRecord(
                     id: managedFile.id,
-                    fileUUID: managedFile.fileUUID,
+                    fileUuid: managedFile.fileUuid,
                     filePath: presignedURL.absoluteString,
                     originalName: managedFile.originalName,
                     fileSize: managedFile.fileSize,
@@ -69,7 +69,7 @@ enum ChatAttachmentFileDownload {
                     fileMd5: managedFile.fileMd5,
                     isPublic: managedFile.isPublic,
                     businessType: managedFile.businessType,
-                    businessID: managedFile.businessID,
+                    businessId: managedFile.businessId,
                     createdAt: managedFile.createdAt,
                     objectKey: managedFile.objectKey,
                     storageType: managedFile.storageType

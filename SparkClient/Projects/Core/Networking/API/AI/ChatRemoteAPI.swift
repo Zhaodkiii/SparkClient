@@ -1,15 +1,15 @@
 import Foundation
 
 struct ChatRemoteMessageDTO: Codable, Sendable {
-    let threadID: UUID
+    let threadId: UUID
     let role: String
     let blocks: [ChatMessageBlock]
-    let clientMessageID: UUID
-    let serverMessageID: String?
+    let clientMessageId: UUID
+    let serverMessageId: String?
     let deliveryState: String
     let createdAt: Date
     let serverUpdatedAt: Date?
-    let isTombstone: Bool
+    let tombstone: Bool
     let threadCurrentModelName: String?
     let threadTemperature: Double?
     let threadTopP: Double?
@@ -18,108 +18,6 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let threadRolePrompt: String?
     let threadSystemPrompt: String?
     let modelName: String?
-
-    enum CodingKeys: String, CodingKey {
-        case threadID = "thread_id"
-        case role
-        case blocks
-        case clientMessageID = "client_message_id"
-        case serverMessageID = "server_message_id"
-        case deliveryState = "delivery_state"
-        case createdAt = "created_at"
-        case serverUpdatedAt = "server_updated_at"
-        case isTombstone = "tombstone"
-        case threadCurrentModelName = "thread_current_model_name"
-        case threadTemperature = "thread_temperature"
-        case threadTopP = "thread_top_p"
-        case threadMaxTokens = "thread_max_tokens"
-        case threadMaxMessages = "thread_max_messages"
-        case threadRolePrompt = "thread_role_prompt"
-        case threadSystemPrompt = "thread_system_prompt"
-        case modelName = "model_name"
-    }
-
-    nonisolated init(
-        threadID: UUID,
-        role: String,
-        blocks: [ChatMessageBlock],
-        clientMessageID: UUID,
-        serverMessageID: String?,
-        deliveryState: String,
-        createdAt: Date,
-        serverUpdatedAt: Date?,
-        isTombstone: Bool,
-        threadCurrentModelName: String? = nil,
-        threadTemperature: Double? = nil,
-        threadTopP: Double? = nil,
-        threadMaxTokens: Int? = nil,
-        threadMaxMessages: Int? = nil,
-        threadRolePrompt: String? = nil,
-        threadSystemPrompt: String? = nil,
-        modelName: String? = nil
-    ) {
-        self.threadID = threadID
-        self.role = role
-        self.blocks = blocks
-        self.clientMessageID = clientMessageID
-        self.serverMessageID = serverMessageID
-        self.deliveryState = deliveryState
-        self.createdAt = createdAt
-        self.serverUpdatedAt = serverUpdatedAt
-        self.isTombstone = isTombstone
-        self.threadCurrentModelName = threadCurrentModelName
-        self.threadTemperature = threadTemperature
-        self.threadTopP = threadTopP
-        self.threadMaxTokens = threadMaxTokens
-        self.threadMaxMessages = threadMaxMessages
-        self.threadRolePrompt = threadRolePrompt
-        self.threadSystemPrompt = threadSystemPrompt
-        self.modelName = modelName
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        threadID = try c.decode(UUID.self, forKey: .threadID)
-        role = try c.decode(String.self, forKey: .role)
-        blocks = try c.decode([ChatMessageBlock].self, forKey: .blocks)
-        clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
-        serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
-        deliveryState = try c.decode(String.self, forKey: .deliveryState)
-        createdAt = try c.decode(Date.self, forKey: .createdAt)
-        serverUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .serverUpdatedAt)
-        isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
-        threadCurrentModelName = try c.decodeIfPresent(String.self, forKey: .threadCurrentModelName)
-        threadTemperature = try c.decodeIfPresent(Double.self, forKey: .threadTemperature)
-        threadTopP = try c.decodeIfPresent(Double.self, forKey: .threadTopP)
-        threadMaxTokens = try c.decodeIfPresent(Int.self, forKey: .threadMaxTokens)
-        threadMaxMessages = try c.decodeIfPresent(Int.self, forKey: .threadMaxMessages)
-        let decodedThreadSystemPrompt = try c.decodeIfPresent(String.self, forKey: .threadSystemPrompt)
-        let decodedThreadRolePrompt = try c.decodeIfPresent(String.self, forKey: .threadRolePrompt)
-        threadSystemPrompt = decodedThreadSystemPrompt
-        threadRolePrompt = decodedThreadSystemPrompt ?? decodedThreadRolePrompt
-        modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(threadID, forKey: .threadID)
-        try c.encode(role, forKey: .role)
-        try c.encode(blocks, forKey: .blocks)
-        try c.encode(clientMessageID, forKey: .clientMessageID)
-        try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
-        try c.encode(deliveryState, forKey: .deliveryState)
-        try c.encode(createdAt, forKey: .createdAt)
-        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
-        try c.encode(isTombstone, forKey: .isTombstone)
-        try c.encodeIfPresent(threadCurrentModelName, forKey: .threadCurrentModelName)
-        try c.encodeIfPresent(threadTemperature, forKey: .threadTemperature)
-        try c.encodeIfPresent(threadTopP, forKey: .threadTopP)
-        try c.encodeIfPresent(threadMaxTokens, forKey: .threadMaxTokens)
-        try c.encodeIfPresent(threadMaxMessages, forKey: .threadMaxMessages)
-        try c.encodeIfPresent(threadRolePrompt, forKey: .threadRolePrompt)
-        try c.encodeIfPresent(threadRolePrompt, forKey: .threadSystemPrompt)
-        try c.encodeIfPresent(modelName, forKey: .modelName)
-    }
 }
 
 struct ChatRemotePullResult: Sendable {
@@ -129,16 +27,16 @@ struct ChatRemotePullResult: Sendable {
 }
 
 struct ChatRemoteThreadDTO: Codable, Sendable {
-    let threadID: UUID
+    let threadId: UUID
     let title: String
     let scenario: String
-    let patientID: UUID?
-    let memberID: Int?
+    let patientId: UUID?
+    let memberId: Int?
     let isDeleted: Bool
     let deletedAt: Date?
     let updatedAt: Date
     let serverUpdatedAt: Date
-    let imageDeliveryModeRaw: String?
+    let imageDeliveryMode: String?
     let currentModelName: String?
     let temperature: Double?
     let topP: Double?
@@ -147,25 +45,10 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let rolePrompt: String?
     let systemPrompt: String?
 
-    enum CodingKeys: String, CodingKey {
-        case threadID = "thread_id"
-        case title
-        case scenario
-        case patientID = "patient_id"
-        case memberID = "member_id"
-        case isDeleted = "is_deleted"
-        case deletedAt = "deleted_at"
-        case updatedAt = "updated_at"
-        case serverUpdatedAt = "server_updated_at"
-        case imageDeliveryModeRaw = "image_delivery_mode"
-        case currentModelName = "current_model_name"
-        case temperature
-        case topP = "top_p"
-        case maxTokens = "max_tokens"
-        case maxMessages = "max_messages"
-        case rolePrompt = "role_prompt"
-        case systemPrompt = "system_prompt"
-    }
+    nonisolated var threadID: UUID { threadId }
+    nonisolated var patientID: UUID? { patientId }
+    nonisolated var memberID: Int? { memberId }
+    nonisolated var imageDeliveryModeRaw: String? { imageDeliveryMode }
 
     nonisolated init(
         threadID: UUID,
@@ -186,16 +69,16 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         rolePrompt: String?,
         systemPrompt: String? = nil
     ) {
-        self.threadID = threadID
+        self.threadId = threadID
         self.title = title
         self.scenario = scenario
-        self.patientID = patientID
-        self.memberID = memberID
+        self.patientId = patientID
+        self.memberId = memberID
         self.isDeleted = isDeleted
         self.deletedAt = deletedAt
         self.updatedAt = updatedAt
         self.serverUpdatedAt = serverUpdatedAt
-        self.imageDeliveryModeRaw = imageDeliveryModeRaw
+        self.imageDeliveryMode = imageDeliveryModeRaw
         self.currentModelName = currentModelName
         self.temperature = temperature
         self.topP = topP
@@ -203,50 +86,6 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         self.maxMessages = maxMessages
         self.rolePrompt = systemPrompt ?? rolePrompt
         self.systemPrompt = systemPrompt
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        threadID = try c.decode(UUID.self, forKey: .threadID)
-        title = try c.decode(String.self, forKey: .title)
-        scenario = try c.decode(String.self, forKey: .scenario)
-        patientID = try c.decodeIfPresent(UUID.self, forKey: .patientID)
-        memberID = try c.decodeIfPresent(Int.self, forKey: .memberID)
-        isDeleted = try c.decodeIfPresent(Bool.self, forKey: .isDeleted) ?? false
-        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
-        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
-        serverUpdatedAt = try c.decode(Date.self, forKey: .serverUpdatedAt)
-        imageDeliveryModeRaw = try c.decodeIfPresent(String.self, forKey: .imageDeliveryModeRaw)
-        currentModelName = try c.decodeIfPresent(String.self, forKey: .currentModelName)
-        temperature = try c.decodeIfPresent(Double.self, forKey: .temperature)
-        topP = try c.decodeIfPresent(Double.self, forKey: .topP)
-        maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens)
-        maxMessages = try c.decodeIfPresent(Int.self, forKey: .maxMessages)
-        let decodedSystemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt)
-        let decodedRolePrompt = try c.decodeIfPresent(String.self, forKey: .rolePrompt)
-        systemPrompt = decodedSystemPrompt
-        rolePrompt = decodedSystemPrompt ?? decodedRolePrompt
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(threadID, forKey: .threadID)
-        try c.encode(title, forKey: .title)
-        try c.encode(scenario, forKey: .scenario)
-        try c.encodeIfPresent(patientID, forKey: .patientID)
-        try c.encodeIfPresent(memberID, forKey: .memberID)
-        try c.encode(isDeleted, forKey: .isDeleted)
-        try c.encodeIfPresent(deletedAt, forKey: .deletedAt)
-        try c.encode(updatedAt, forKey: .updatedAt)
-        try c.encode(serverUpdatedAt, forKey: .serverUpdatedAt)
-        try c.encodeIfPresent(imageDeliveryModeRaw, forKey: .imageDeliveryModeRaw)
-        try c.encodeIfPresent(currentModelName, forKey: .currentModelName)
-        try c.encodeIfPresent(temperature, forKey: .temperature)
-        try c.encodeIfPresent(topP, forKey: .topP)
-        try c.encodeIfPresent(maxTokens, forKey: .maxTokens)
-        try c.encodeIfPresent(maxMessages, forKey: .maxMessages)
-        try c.encodeIfPresent(rolePrompt, forKey: .rolePrompt)
-        try c.encodeIfPresent(rolePrompt, forKey: .systemPrompt)
     }
 }
 
@@ -492,11 +331,6 @@ private struct ChatPullResponse: Decodable {
     let messages: [ChatRemoteMessageDTO]
     let hasMore: Bool?
 
-    enum CodingKeys: String, CodingKey {
-        case cursor
-        case messages
-        case hasMore = "has_more"
-    }
 }
 
 private struct ChatThreadPullResponse: Decodable {
@@ -504,40 +338,30 @@ private struct ChatThreadPullResponse: Decodable {
     let threads: [ChatRemoteThreadDTO]
     let hasMore: Bool?
 
-    enum CodingKeys: String, CodingKey {
-        case cursor
-        case threads
-        case hasMore = "has_more"
-    }
 }
 
 private struct ChatThreadDeleteRequest: Encodable {
-    let threadIDs: [UUID]
+    let threadIds: [UUID]
 
-    enum CodingKeys: String, CodingKey {
-        case threadIDs = "thread_ids"
+    init(threadIDs: [UUID]) {
+        self.threadIds = threadIDs
     }
 }
 
 private struct ChatThreadDeleteResponse: Decodable {
-    let threadIDs: [UUID]
+    let threadIds: [UUID]
 
-    enum CodingKeys: String, CodingKey {
-        case threadIDs = "thread_ids"
-    }
+    nonisolated var threadIDs: [UUID] { threadIds }
 }
 
 private struct ChatThreadHeadPayload: Decodable {
     let lastServerUpdatedAt: Date?
 
-    enum CodingKeys: String, CodingKey {
-        case lastServerUpdatedAt = "last_server_updated_at"
-    }
 }
 
 private enum ChatRemoteCoding {
     static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder()
+        let encoder = JSONEncoder.default
         // 统一使用 ISO8601(含毫秒) 与 Django DateTimeField 对齐，减少时区歧义。
         encoder.dateEncodingStrategy = .custom { date, serializer in
             var container = serializer.singleValueContainer()
@@ -547,7 +371,7 @@ private enum ChatRemoteCoding {
     }()
 
     static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.default
         decoder.dateDecodingStrategy = .custom { serializer in
             let container = try serializer.singleValueContainer()
             if let text = try? container.decode(String.self) {

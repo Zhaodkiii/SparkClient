@@ -30,20 +30,6 @@ enum SparkMedicalSyncAPI {
         var isPrimary: Bool
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case name
-            case gender
-            case relationship
-            case birthDate = "birth_date"
-            case bloodType = "blood_type"
-            case allergies
-            case chronicConditions = "chronic_conditions"
-            case notes
-            case avatarUrl = "avatar_url"
-            case isPrimary = "is_primary"
-            case updatedAt = "updated_at"
-        }
 
     }
 
@@ -69,20 +55,6 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case member
-            case recordType = "record_type"
-            case status
-            case title
-            case hospitalName = "hospital_name"
-            case ageAtVisit = "age_at_visit"
-            case severity
-            case caseStatus = "case_status"
-            case diagnosisSummary = "diagnosis_summary"
-            case extra
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 症状实体；同时冗余 `member` 与 `medicalCase` 便于按人/按案查询。
@@ -106,15 +78,6 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, name, code, severity, notes, extra
-            case medicalCase = "medical_case"
-            case startedAt = "started_at"
-            case durationValue = "duration_value"
-            case durationUnit = "duration_unit"
-            case bodyPart = "body_part"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 就诊记录（到院一次就诊的元数据）。
@@ -129,21 +92,11 @@ enum SparkMedicalSyncAPI {
         /// 院内就诊号/流水号。
         var visitNo: String
         /// 外部系统（如医院 HIS）中的主键或业务 ID，用于去重与溯源。
-        var sourceSystemID: String
+        var sourceSystemId: String
         var notes: String
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, department, notes, extra
-            case medicalCase = "medical_case"
-            case visitType = "visit_type"
-            case visitedAt = "visited_at"
-            case doctorName = "doctor_name"
-            case visitNo = "visit_no"
-            case sourceSystemID = "source_system_id"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 手术记录；`asaClass` 为 ASA 分级，`incisionLevel` 为切口等级等临床字段的字符串存储。
@@ -160,23 +113,11 @@ enum SparkMedicalSyncAPI {
         var anesthesiaType: String
         var incisionLevel: String
         var asaClass: String
-        var sourceSystemID: String
+        var sourceSystemId: String
         var notes: String
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, site, surgeon, notes, extra
-            case medicalCase = "medical_case"
-            case procedureName = "procedure_name"
-            case procedureCode = "procedure_code"
-            case performedAt = "performed_at"
-            case anesthesiaType = "anesthesia_type"
-            case incisionLevel = "incision_level"
-            case asaClass = "asa_class"
-            case sourceSystemID = "source_system_id"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 随访：计划时间、完成时间、方式（电话/复诊）、结果与下一步动作。
@@ -193,14 +134,6 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, status, method, outcome, extra
-            case medicalCase = "medical_case"
-            case plannedAt = "planned_at"
-            case completedAt = "completed_at"
-            case nextAction = "next_action"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 检查报告头：可关联可选 `medicalRecord`（病历/案件维度）；`source`/`status` 为整型枚举，与 OCR 流水线状态对应。
@@ -224,32 +157,12 @@ enum SparkMedicalSyncAPI {
         /// 数据来源（手工录入、OCR、导入等），整型与后端一致。
         var source: Int
         /// OCR 原始键值，如页码、区域文本等，结构由业务定义。
-        var rawOCR: [String: String]?
+        var rawOcr: [String: String]?
         /// 解析/审核状态。
         var status: Int
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case member
-            case medicalRecord = "medical_record"
-            case category
-            case subCategory = "sub_category"
-            case itemName = "item_name"
-            case performedAt = "performed_at"
-            case reportedAt = "reported_at"
-            case organizationName = "organization_name"
-            case departmentName = "department_name"
-            case doctorName = "doctor_name"
-            case findings
-            case impression
-            case source
-            case rawOCR = "raw_ocr"
-            case status
-            case extra
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 体检报告汇总：机构、报告号、体检日期与类型；细项指标通常在 `RemoteMedExamDetail` 中通过 `business_type`/`business_id` 关联。
@@ -262,34 +175,20 @@ enum SparkMedicalSyncAPI {
         var examType: Int
         var summary: String?
         var source: Int
-        var rawOCR: [String: String]?
+        var rawOcr: [String: String]?
         var status: Int
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case member
-            case institutionName = "institution_name"
-            case reportNo = "report_no"
-            case examDate = "exam_date"
-            case examType = "exam_type"
-            case summary
-            case source
-            case rawOCR = "raw_ocr"
-            case status
-            case extra
-            case updatedAt = "updated_at"
-        }
     }
 
-    /// 检查/检验细项行：通过 `businessType` + `businessID` 多态关联到体检报告、检查报告等不同父业务。
+    /// 检查/检验细项行：通过 `businessType` + `businessId` 多态关联到体检报告、检查报告等不同父业务。
     struct RemoteMedExamDetail: Codable, Sendable, Equatable {
         var id: Int
         /// 业务类型标识（如 health_exam、examination 等），与后端常量一致。
         var businessType: String
         /// 父业务主键。
-        var businessID: Int
+        var businessId: Int
         var member: Int
         var category: String
         var subCategory: String
@@ -309,27 +208,6 @@ enum SparkMedicalSyncAPI {
         var sortOrder: Int
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case businessType = "business_type"
-            case businessID = "business_id"
-            case member
-            case category
-            case subCategory = "sub_category"
-            case itemName = "item_name"
-            case itemCode = "item_code"
-            case resultValue = "result_value"
-            case unit
-            case referenceRange = "reference_range"
-            case flag
-            case resultAt = "result_at"
-            case modality
-            case bodyPart = "body_part"
-            case diagnosis
-            case extra
-            case sortOrder = "sort_order"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 通用医疗报告（出院小结、病理等）；`medicalCase` 可选。
@@ -345,18 +223,6 @@ enum SparkMedicalSyncAPI {
         var date: Date
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case member
-            case medicalCase = "medical_case"
-            case category
-            case title
-            case hospital
-            case doctor
-            case content
-            case date
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 药箱：用户/成员拥有的物理药品库存。
@@ -376,17 +242,6 @@ enum SparkMedicalSyncAPI {
         var attachments: [RemoteManagedFile]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, strength, notes, extra, attachments
-            case medicineName = "medicine_name"
-            case medicineType = "medicine_type"
-            case brandName = "brand_name"
-            case dosageForm = "dosage_form"
-            case doseUnit = "dose_unit"
-            case totalQuantity = "total_quantity"
-            case expireDate = "expire_date"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 处方：作为服药计划的可选来源，不再承载药品行。
@@ -404,19 +259,10 @@ enum SparkMedicalSyncAPI {
         var attachments: [RemoteManagedFile]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, diagnosis, status, extra, attachments
-            case medicalCase = "medical_case"
-            case prescriberName = "prescriber_name"
-            case institutionName = "institution_name"
-            case prescribedAt = "prescribed_at"
-            case prescriptionNo = "prescription_no"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 服药计划：独立的用药规则，可选关联药箱与处方。
-    struct RemoteMedicationPlan: Sendable, Equatable {
+    struct RemoteMedicationPlan: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
         var medicalCase: Int?
@@ -462,15 +308,6 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var updatedAt: Date
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, plan, status, timezone, notes, extra
-            case scheduledAt = "scheduled_at"
-            case takenAt = "taken_at"
-            case plannedDose = "planned_dose"
-            case actualDose = "actual_dose"
-            case doseSequence = "dose_sequence"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 附件元数据（`ManagedFile`），与 ``/complete-data/`` 内嵌附件一致。
@@ -490,20 +327,6 @@ enum SparkMedicalSyncAPI {
         /// 服务端构造的 OSS 直链或空串。
         var fileUrl: String?
 
-        enum CodingKeys: String, CodingKey {
-            case id
-            case fileUuid = "file_uuid"
-            case originalName = "original_name"
-            case fileSize = "file_size"
-            case mimeType = "mime_type"
-            case fileMd5 = "file_md5"
-            case businessType = "business_type"
-            case businessId = "business_id"
-            case objectKey = "object_key"
-            case storageType = "storage_type"
-            case createdAt = "created_at"
-            case fileUrl = "file_url"
-        }
     }
 
     /// 病例汇总：基本信息 + 症状/药品展示名 + 附件（无检验明细）。
@@ -525,16 +348,6 @@ enum SparkMedicalSyncAPI {
         var medications: [String]?
         var attachments: [RemoteManagedFile]?
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, status, title, severity, extra, symptoms, medications, attachments
-            case recordType = "record_type"
-            case hospitalName = "hospital_name"
-            case ageAtVisit = "age_at_visit"
-            case caseStatus = "case_status"
-            case diagnosisSummary = "diagnosis_summary"
-            case createdAt = "created_at"
-            case updatedAt = "updated_at"
-        }
     }
 
     /// 体检报告 + 附件（首页不含明细行）。
@@ -555,16 +368,6 @@ enum SparkMedicalSyncAPI {
         /// 首页 `/complete-data/` 默认不返回；列表页进入后按需懒加载。
         var medExamDetails: [RemoteMedExamDetail]?
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, summary, source, status, extra, attachments
-            case institutionName = "institution_name"
-            case reportNo = "report_no"
-            case examDate = "exam_date"
-            case examType = "exam_type"
-            case createdAt = "created_at"
-            case updatedAt = "updated_at"
-            case medExamDetails = "med_exam_details"
-        }
     }
 
     /// 检查报告 + 附件（首页不含明细行）。
@@ -591,20 +394,6 @@ enum SparkMedicalSyncAPI {
         /// 首页 `/complete-data/` 默认不返回；列表页进入后按需懒加载。
         var medExamDetails: [RemoteMedExamDetail]?
 
-        enum CodingKeys: String, CodingKey {
-            case id, member, category, findings, impression, source, status, extra, attachments
-            case medicalRecord = "medical_record"
-            case subCategory = "sub_category"
-            case itemName = "item_name"
-            case performedAt = "performed_at"
-            case reportedAt = "reported_at"
-            case organizationName = "organization_name"
-            case departmentName = "department_name"
-            case doctorName = "doctor_name"
-            case createdAt = "created_at"
-            case updatedAt = "updated_at"
-            case medExamDetails = "med_exam_details"
-        }
     }
 
     struct RemoteMedicationSummary: Codable, Sendable, Equatable {
@@ -616,15 +405,6 @@ enum SparkMedicalSyncAPI {
         var lowStockCount: Int
         var expiringSoonCount: Int
 
-        enum CodingKeys: String, CodingKey {
-            case todayTotal = "today_total"
-            case todayTaken = "today_taken"
-            case todaySkipped = "today_skipped"
-            case adherenceRate = "adherence_rate"
-            case activePlanCount = "active_plan_count"
-            case lowStockCount = "low_stock_count"
-            case expiringSoonCount = "expiring_soon_count"
-        }
     }
 
     /// 单接口成员医疗数据汇总（``GET …/complete-data/``）。
@@ -644,94 +424,5 @@ enum SparkMedicalSyncAPI {
         var surgeries: [RemoteSurgery]?
         var followUps: [RemoteFollowUp]?
 
-        enum CodingKeys: String, CodingKey {
-            case memberId = "member_id"
-            case member
-            case medicalCases = "medical_cases"
-            case healthExamReports = "health_exam_reports"
-            case examinationReports = "examination_reports"
-            case medicineBoxes = "medicine_boxes"
-            case prescriptions
-            case medicationPlans = "medication_plans"
-            case todayMedicationRecords = "today_medication_records"
-            case medicationSummary = "medication_summary"
-            case symptoms
-            case visits
-            case surgeries
-            case followUps = "follow_ups"
-        }
-    }
-}
-
-extension SparkMedicalSyncAPI.RemoteMedicationPlan: Codable {
-    enum CodingKeys: String, CodingKey {
-        case id, member, prescription, instructions, status, extra, attachments
-        case medicalCase = "medical_case"
-        case medicineBox = "medicine_box"
-        case drugName = "drug_name"
-        case dosePerTime = "dose_per_time"
-        case doseValue = "dose_value"
-        case doseUnit = "dose_unit"
-        case frequencyType = "frequency_type"
-        case everyNDays = "every_n_days"
-        case weeklyWeekdays = "weekly_weekdays"
-        case frequencyText = "frequency_text"
-        case reminderTimes = "reminder_times"
-        case startDate = "start_date"
-        case endDate = "end_date"
-        case reminderEnabled = "reminder_enabled"
-        case updatedAt = "updated_at"
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(Int.self, forKey: .id)
-        member = try c.decode(Int.self, forKey: .member)
-        medicalCase = try c.decodeIfPresent(Int.self, forKey: .medicalCase)
-        medicineBox = try c.decodeIfPresent(Int.self, forKey: .medicineBox)
-        prescription = try c.decodeIfPresent(Int.self, forKey: .prescription)
-        drugName = try c.decode(String.self, forKey: .drugName)
-        dosePerTime = try c.decode(String.self, forKey: .dosePerTime)
-        doseValue = try c.decodeIfPresent(Double.self, forKey: .doseValue)
-        doseUnit = try c.decodeIfPresent(String.self, forKey: .doseUnit) ?? "片"
-        frequencyType = try c.decodeIfPresent(String.self, forKey: .frequencyType) ?? "daily"
-        everyNDays = try c.decodeIfPresent(Int.self, forKey: .everyNDays)
-        weeklyWeekdays = try c.decodeIfPresent([Int].self, forKey: .weeklyWeekdays) ?? []
-        frequencyText = try c.decodeIfPresent(String.self, forKey: .frequencyText) ?? ""
-        reminderTimes = try c.decode([SparkMedicalSyncAPI.MedicationReminderTime].self, forKey: .reminderTimes)
-        startDate = try c.decode(Date.self, forKey: .startDate)
-        endDate = try c.decodeIfPresent(Date.self, forKey: .endDate)
-        instructions = try c.decodeIfPresent(String.self, forKey: .instructions) ?? ""
-        reminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .reminderEnabled) ?? true
-        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "active"
-        extra = try c.decodeIfPresent([String: String].self, forKey: .extra)
-        attachments = try c.decodeIfPresent([SparkMedicalSyncAPI.RemoteManagedFile].self, forKey: .attachments)
-        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(member, forKey: .member)
-        try c.encodeIfPresent(medicalCase, forKey: .medicalCase)
-        try c.encodeIfPresent(medicineBox, forKey: .medicineBox)
-        try c.encodeIfPresent(prescription, forKey: .prescription)
-        try c.encode(drugName, forKey: .drugName)
-        try c.encode(dosePerTime, forKey: .dosePerTime)
-        try c.encodeIfPresent(doseValue, forKey: .doseValue)
-        try c.encode(doseUnit, forKey: .doseUnit)
-        try c.encode(frequencyType, forKey: .frequencyType)
-        try c.encodeIfPresent(everyNDays, forKey: .everyNDays)
-        try c.encode(weeklyWeekdays, forKey: .weeklyWeekdays)
-        try c.encode(frequencyText, forKey: .frequencyText)
-        try c.encode(reminderTimes, forKey: .reminderTimes)
-        try c.encode(startDate, forKey: .startDate)
-        try c.encodeIfPresent(endDate, forKey: .endDate)
-        try c.encode(instructions, forKey: .instructions)
-        try c.encode(reminderEnabled, forKey: .reminderEnabled)
-        try c.encode(status, forKey: .status)
-        try c.encodeIfPresent(extra, forKey: .extra)
-        try c.encodeIfPresent(attachments, forKey: .attachments)
-        try c.encode(updatedAt, forKey: .updatedAt)
     }
 }

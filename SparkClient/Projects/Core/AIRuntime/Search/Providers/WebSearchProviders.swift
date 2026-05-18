@@ -17,7 +17,7 @@ struct TavilySearchProvider: WebSearchProvider {
         urlRequest.setValue(nil, forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(TavilyResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(TavilyResponse.self, from: data)
         return WebSearchResponse(
             providerName: request.config.displayName,
             query: request.query,
@@ -55,7 +55,7 @@ struct SerpAPISearchProvider: WebSearchProvider {
         }
         let (data, response) = try await session.data(from: url)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(SerpAPIResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(SerpAPIResponse.self, from: data)
         let items = (decoded.organicResults ?? []).prefix(request.config.searchCount).map {
             WebSearchResultItem(title: $0.title ?? "", url: $0.link ?? "", snippet: $0.snippet ?? "", sourceName: $0.source, iconURL: nil, publishedAt: nil)
         }
@@ -64,7 +64,6 @@ struct SerpAPISearchProvider: WebSearchProvider {
 
     private struct SerpAPIResponse: Decodable {
         let organicResults: [Item]?
-        enum CodingKeys: String, CodingKey { case organicResults = "organic_results" }
         struct Item: Decodable {
             let title: String?
             let link: String?
@@ -86,7 +85,7 @@ struct ZhipuSearchProvider: WebSearchProvider {
         let urlRequest = try WebSearchGateway.jsonRequest(url: request.config.requestURL, apiKey: request.config.apiKey, body: body)
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(ZhipuResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(ZhipuResponse.self, from: data)
         let items = (decoded.searchResult ?? []).prefix(request.config.searchCount).map {
             WebSearchResultItem(title: $0.title ?? "", url: $0.link ?? "", snippet: $0.content ?? "", sourceName: nil, iconURL: $0.icon, publishedAt: nil)
         }
@@ -95,7 +94,6 @@ struct ZhipuSearchProvider: WebSearchProvider {
 
     private struct ZhipuResponse: Decodable {
         let searchResult: [Item]?
-        enum CodingKeys: String, CodingKey { case searchResult = "search_result" }
         struct Item: Decodable {
             let title: String?
             let link: String?
@@ -123,7 +121,7 @@ struct BraveSearchProvider: WebSearchProvider {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(BraveResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(BraveResponse.self, from: data)
         let items = (decoded.web?.results ?? []).prefix(request.config.searchCount).map {
             WebSearchResultItem(title: $0.title ?? "", url: $0.url ?? "", snippet: $0.description ?? "", sourceName: nil, iconURL: nil, publishedAt: nil)
         }
@@ -155,7 +153,7 @@ struct ExaSearchProvider: WebSearchProvider {
         urlRequest.setValue("Bearer \(request.config.apiKey)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(ExaResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(ExaResponse.self, from: data)
         let items = decoded.results.prefix(request.config.searchCount).map {
             WebSearchResultItem(title: $0.title ?? "", url: $0.url ?? "", snippet: $0.text ?? "", sourceName: nil, iconURL: nil, publishedAt: nil)
         }
@@ -186,7 +184,7 @@ struct BochaSearchProvider: WebSearchProvider {
         let urlRequest = try WebSearchGateway.jsonRequest(url: request.config.requestURL, apiKey: "", body: body, authorization: request.config.apiKey)
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(BochaResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(BochaResponse.self, from: data)
         let items = decoded.data.webPages.value.prefix(request.config.searchCount).map {
             WebSearchResultItem(title: $0.name ?? "", url: $0.url ?? "", snippet: $0.summary ?? $0.snippet ?? "", sourceName: $0.siteName, iconURL: $0.siteIcon, publishedAt: nil)
         }
@@ -225,7 +223,7 @@ struct LangSearchProvider: WebSearchProvider {
         let urlRequest = try WebSearchGateway.jsonRequest(url: request.config.requestURL, apiKey: request.config.apiKey, body: body)
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(LangSearchResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(LangSearchResponse.self, from: data)
         let items = (decoded.data?.webPages?.value ?? decoded.results ?? []).prefix(request.config.searchCount).map {
             WebSearchResultItem(title: $0.name ?? $0.title ?? "", url: $0.url ?? $0.link ?? "", snippet: $0.summary ?? $0.snippet ?? $0.content ?? "", sourceName: $0.siteName, iconURL: $0.siteIcon, publishedAt: nil)
         }
@@ -277,7 +275,7 @@ struct PerplexitySearchProvider: WebSearchProvider {
         )
         let (data, response) = try await session.data(for: urlRequest)
         try WebSearchGateway.validate(response: response, data: data)
-        let decoded = try JSONDecoder().decode(PerplexityResponse.self, from: data)
+        let decoded = try JSONDecoder.default.decode(PerplexityResponse.self, from: data)
         let answer = decoded.choices.first?.message.content ?? ""
         let sourceItems = (decoded.searchResults ?? []).map {
             WebSearchResultItem(
@@ -327,17 +325,12 @@ struct PerplexitySearchProvider: WebSearchProvider {
         let citations: [String]
         let searchResults: [SearchResult]?
 
-        enum CodingKeys: String, CodingKey {
-            case choices
-            case citations
-            case searchResults = "search_results"
-        }
 
         init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            choices = try container.decodeIfPresent([Choice].self, forKey: .choices) ?? []
-            citations = try container.decodeIfPresent([String].self, forKey: .citations) ?? []
-            searchResults = try container.decodeIfPresent([SearchResult].self, forKey: .searchResults)
+            let container = try decoder.container(keyedBy: CodableKey.self)
+            choices = try container.decodeIfPresent([Choice].self, forKey: .key("choices")) ?? []
+            citations = try container.decodeIfPresent([String].self, forKey: .key("citations")) ?? []
+            searchResults = try container.decodeIfPresent([SearchResult].self, forKey: .key("searchResults"))
         }
 
         struct Choice: Decodable {

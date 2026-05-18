@@ -19,15 +19,15 @@ struct SparkAuthAPI {
     }
 
     struct LoginResult: Decodable {
-        let user_id: Int
-        let access_token: String
-        let refresh_token: String
-        let expires_in: Int
-        let token_type: String
+        let userId: Int
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: Int
+        let tokenType: String
     }
 
     struct AuthenticatedUserContext: Sendable {
-        let userID: Int
+        let userId: Int
         let email: String?
         let displayName: String?
         let isPro: Bool
@@ -77,30 +77,35 @@ struct SparkAuthAPI {
         )
 
         let response = try await configuration.execute(operation)
+        configuration.logger.debug("认证解码：开始解析密码登录响应为 LoginResult", module: .auth)
         let result = try APIResponseDecoder.decodeWrappedData(LoginResult.self, from: response)
+        configuration.logger.info(
+            "认证解码：密码登录响应解析成功 userId=\(result.userId) tokenType=\(result.tokenType) expiresIn=\(result.expiresIn)",
+            module: .auth
+        )
 
         let tokens = AuthTokens(
-            accessToken: result.access_token,
-            refreshToken: result.refresh_token,
-            expiresAt: Date().addingTimeInterval(TimeInterval(result.expires_in)),
-            tokenType: result.token_type
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(result.expiresIn)),
+            tokenType: result.tokenType
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: Int64(result.user_id))
+        configuration.deviceCache.cache(currentUserID: Int64(result.userId))
 
         return tokens
     }
 
     struct AppleLoginResult: Decodable {
-        let user_id: Int
-        let access_token: String
-        let refresh_token: String
-        let expires_in: Int
-        let token_type: String
+        let userId: Int
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: Int
+        let tokenType: String
         let email: String?
-        let display_name: String?
-        let is_pro: Bool?
-        let is_new_user: Bool?
+        let displayName: String?
+        let isPro: Bool?
+        let isNewUser: Bool?
     }
 
     func loginWithApple(
@@ -157,31 +162,36 @@ struct SparkAuthAPI {
         )
 
         let response = try await configuration.execute(operation)
+        configuration.logger.debug("认证解码：开始解析 Apple 登录响应为 AppleLoginResult", module: .auth)
         let result = try APIResponseDecoder.decodeWrappedData(AppleLoginResult.self, from: response)
+        configuration.logger.info(
+            "认证解码：Apple 登录响应解析成功 userId=\(result.userId) email=\(result.email ?? "-") isPro=\(result.isPro ?? false) isNewUser=\(result.isNewUser ?? false)",
+            module: .auth
+        )
         let tokens = AuthTokens(
-            accessToken: result.access_token,
-            refreshToken: result.refresh_token,
-            expiresAt: Date().addingTimeInterval(TimeInterval(result.expires_in)),
-            tokenType: result.token_type
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(result.expiresIn)),
+            tokenType: result.tokenType
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: Int64(result.user_id))
+        configuration.deviceCache.cache(currentUserID: Int64(result.userId))
 
         return AuthenticatedUserContext(
-            userID: result.user_id,
+            userId: result.userId,
             email: result.email,
-            displayName: result.display_name,
-            isPro: result.is_pro ?? false,
-            isNewUser: result.is_new_user ?? false,
+            displayName: result.displayName,
+            isPro: result.isPro ?? false,
+            isNewUser: result.isNewUser ?? false,
             tokens: tokens
         )
     }
 
     struct TokenRefreshSuccess: Decodable {
-        let user_id: Int
-        let access_token: String
-        let refresh_token: String?
-        let token_type: String?
+        let userId: Int
+        let accessToken: String
+        let refreshToken: String?
+        let tokenType: String?
     }
 
     func refresh(refreshToken: String) async throws -> AuthTokens {
@@ -209,17 +219,17 @@ struct SparkAuthAPI {
         )
 
         let response = try await configuration.execute(operation)
-        let success = try JSONDecoder().decode(TokenRefreshSuccess.self, from: response.data)
-        let claims = try JWTExpParser.parseClaims(success.access_token)
+        let success = try JSONDecoder.default.decode(TokenRefreshSuccess.self, from: response.data)
+        let claims = try JWTExpParser.parseClaims(success.accessToken)
 
         let tokens = AuthTokens(
-            accessToken: success.access_token,
-            refreshToken: success.refresh_token ?? refreshToken,
+            accessToken: success.accessToken,
+            refreshToken: success.refreshToken ?? refreshToken,
             expiresAt: claims.expDate,
-            tokenType: success.token_type ?? "Bearer"
+            tokenType: success.tokenType ?? "Bearer"
         )
         await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: Int64(success.user_id))
+        configuration.deviceCache.cache(currentUserID: Int64(success.userId))
 
         return tokens
     }

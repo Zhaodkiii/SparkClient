@@ -60,7 +60,7 @@ final class SparkNetworkEngine {
     func send<T: Decodable>(
         _ request: SparkNetworkRequest,
         decodingMode: SparkResponseDecodingMode = .backendWrapped,
-        decoder: JSONDecoder = JSONDecoder()
+        decoder: JSONDecoder = JSONDecoder.default
     ) async throws -> T {
         let response = try await sendRaw(request)
         return try decodeSuccess(response: response, type: T.self, mode: decodingMode, decoder: decoder)
@@ -200,7 +200,7 @@ final class SparkNetworkEngine {
             break
         case .json(let anyEncodable):
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            urlRequest.httpBody = try JSONEncoder().encode(anyEncodable)
+            urlRequest.httpBody = try JSONEncoder.default.encode(anyEncodable)
         case .raw(let data, let contentType):
             // raw body 也必须显式声明 Content-Type，否则后端可能按 form 解析导致字段缺失。
             if urlRequest.value(forHTTPHeaderField: "Content-Type") == nil {
@@ -276,7 +276,7 @@ final class SparkNetworkEngine {
 
     /// 从错误响应 body 解析 `{ code, msg, data? }`（与成功体形态一致时常用）。
     private func decodeBackendError(from data: Data) throws -> BackendError {
-        try JSONDecoder().decode(BackendError.self, from: data)
+        try JSONDecoder.default.decode(BackendError.self, from: data)
     }
 
     // MARK: - 是否重试

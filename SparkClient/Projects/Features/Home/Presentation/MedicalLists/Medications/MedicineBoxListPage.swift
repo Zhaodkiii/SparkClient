@@ -1788,35 +1788,21 @@ private struct MedicineBoxPayload: Encodable {
     let extra: [String: String]
     let fileIds: [Int]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicineName = "medicine_name"
-        case medicineType = "medicine_type"
-        case brandName = "brand_name"
-        case dosageForm = "dosage_form"
-        case strength
-        case doseUnit = "dose_unit"
-        case totalQuantity = "total_quantity"
-        case expireDate = "expire_date"
-        case notes
-        case extra
-        case fileIds = "file_ids"
-    }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(member, forKey: .member)
-        try c.encode(medicineName, forKey: .medicineName)
-        try c.encodeIfPresent(medicineType, forKey: .medicineType)
-        try c.encode(brandName, forKey: .brandName)
-        try c.encode(dosageForm, forKey: .dosageForm)
-        try c.encode(strength, forKey: .strength)
-        try c.encode(doseUnit, forKey: .doseUnit)
-        try c.encodeIfPresent(totalQuantity, forKey: .totalQuantity)
-        try c.encodeIfPresent(expireDate, forKey: .expireDate)
-        try c.encode(notes, forKey: .notes)
-        try c.encode(extra, forKey: .extra)
-        try c.encode(fileIds, forKey: .fileIds)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(member, forKey: .key("member"))
+        try c.encode(medicineName, forKey: .key("medicineName"))
+        try c.encodeIfPresent(medicineType, forKey: .key("medicineType"))
+        try c.encode(brandName, forKey: .key("brandName"))
+        try c.encode(dosageForm, forKey: .key("dosageForm"))
+        try c.encode(strength, forKey: .key("strength"))
+        try c.encode(doseUnit, forKey: .key("doseUnit"))
+        try c.encodeIfPresent(totalQuantity, forKey: .key("totalQuantity"))
+        try c.encodeIfPresent(expireDate, forKey: .key("expireDate"))
+        try c.encode(notes, forKey: .key("notes"))
+        try c.encode(extra, forKey: .key("extra"))
+        try c.encode(fileIds, forKey: .key("fileIds"))
     }
 }
 

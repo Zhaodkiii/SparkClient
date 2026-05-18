@@ -48,7 +48,9 @@ struct UploadMedicalDocumentFilesUseCase: Sendable {
                     data: data,
                     fileName: file.displayName,
                     businessType: "medical_document_upload_source",
-                    businessID: "\(memberID)"
+                    businessId: "\(memberID)",
+                    isPublic: false,
+                    onUploadProgress: nil
                 )
             )
             output.append(file.withRemoteFile(record))

@@ -160,7 +160,7 @@ struct SendChatMessageUseCase: Sendable {
                         data: preview.data,
                         fileName: preview.displayName,
                         businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
-                        businessID: preview.id.uuidString,
+                        businessId: preview.id.uuidString,
                         isPublic: false,
                         onUploadProgress: { progress in
                             onImageUploadProgress?(preview.id, progress)

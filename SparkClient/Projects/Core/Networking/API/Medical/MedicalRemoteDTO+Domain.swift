@@ -217,7 +217,7 @@ extension SparkMedicalSyncAPI.RemoteHealthExamReport {
             examType: examType,
             summary: summary,
             source: source,
-            rawOCR: rawOCR,
+            rawOCR: rawOcr,
             status: status,
             extra: extra,
             updatedAt: updatedAt
@@ -242,7 +242,7 @@ extension SparkMedicalSyncAPI.RemoteExaminationReport {
             findings: findings,
             impression: impression,
             source: source,
-            rawOCR: rawOCR,
+            rawOCR: rawOcr,
             status: status,
             extra: extra,
             updatedAt: updatedAt
@@ -281,7 +281,7 @@ extension SparkMedicalSyncAPI.RemoteVisit {
             department: department,
             doctorName: doctorName,
             visitNo: visitNo,
-            sourceSystemID: sourceSystemID,
+            sourceSystemID: sourceSystemId,
             notes: notes,
             extra: extra ?? [:],
             updatedAt: updatedAt
@@ -303,7 +303,7 @@ extension SparkMedicalSyncAPI.RemoteSurgery {
             anesthesiaType: anesthesiaType,
             incisionLevel: incisionLevel,
             asaClass: asaClass,
-            sourceSystemID: sourceSystemID,
+            sourceSystemID: sourceSystemId,
             notes: notes,
             extra: extra ?? [:],
             updatedAt: updatedAt
@@ -334,7 +334,7 @@ extension SparkMedicalSyncAPI.RemoteMedExamDetail {
         MedExamDetail(
             id: id,
             businessType: businessType,
-            businessID: businessID,
+            businessID: businessId,
             memberID: member,
             category: category,
             subCategory: subCategory,

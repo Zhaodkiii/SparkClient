@@ -30,14 +30,14 @@ actor CoreDataChatStore {
 
     private let kernel: ChatDatabaseKernel
     private let snapshotStore: SessionSnapshotStore
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder.default
+    private let decoder = JSONDecoder.default
     private let logger: Logger
 
     /// 统一 blocksData 编解码：JSON + LZFSE（失败时自动降级为纯 JSON）。
     private enum ChatBlockCodec {
         static func encode(_ blocks: [ChatMessageBlock]) throws -> Data {
-            let json = try JSONEncoder().encode(blocks)
+            let json = try JSONEncoder.default.encode(blocks)
             if let compressed = try? (json as NSData).compressed(using: .lzfse) {
                 return compressed as Data
             }
@@ -47,10 +47,10 @@ actor CoreDataChatStore {
         static func decode(_ data: Data?) -> [ChatMessageBlock] {
             guard let data else { return [] }
             if let decompressed = try? (data as NSData).decompressed(using: .lzfse),
-               let decoded = try? JSONDecoder().decode([ChatMessageBlock].self, from: decompressed as Data) {
+               let decoded = try? JSONDecoder.default.decode([ChatMessageBlock].self, from: decompressed as Data) {
                 return decoded
             }
-            if let decoded = try? JSONDecoder().decode([ChatMessageBlock].self, from: data) {
+            if let decoded = try? JSONDecoder.default.decode([ChatMessageBlock].self, from: data) {
                 return decoded
             }
             return []

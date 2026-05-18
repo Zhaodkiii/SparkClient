@@ -937,7 +937,7 @@ final class ToolHub: @unchecked Sendable {
             fat: parseDoubleValue(invocation.arguments["fat"]),
             energy: parseDoubleValue(invocation.arguments["energy"])
         )
-        let json = (try? JSONEncoder().encode(card))
+        let json = (try? JSONEncoder.default.encode(card))
             .flatMap { String(data: $0, encoding: .utf8) }
             ?? "{}"
         return ToolExecutionResult(
@@ -2012,7 +2012,7 @@ final class ToolHub: @unchecked Sendable {
             let normalizer = MedicalDocumentModelJSONNormalizer()
             let normalized = normalizer.normalizedModelJSONText(raw)
             if let data = normalized.data(using: .utf8),
-               let decoded = try? JSONDecoder().decode(TaskIntentExtraction.self, from: data) {
+               let decoded = try? JSONDecoder.default.decode(TaskIntentExtraction.self, from: data) {
                 return decoded.normalized()
             }
         } catch {
@@ -2323,7 +2323,7 @@ final class ToolHub: @unchecked Sendable {
     }
 
     private func encodeJSON<T: Encodable>(_ value: T) -> String? {
-        let encoder = JSONEncoder()
+        let encoder = JSONEncoder.default
         encoder.outputFormatting = [.withoutEscapingSlashes]
         if let data = try? encoder.encode(value),
            let text = String(data: data, encoding: .utf8) {
@@ -2531,9 +2531,9 @@ final class ToolHub: @unchecked Sendable {
     /// 将工具内 `TaskToolCardPayload` 与消息内 `TaskCard` 对齐（与 `block(from: .taskCards)` 解码路径一致）。
     private func taskCardsFromToolCardPayload(_ cards: [TaskToolCardPayload]) -> [TaskCard]? {
         guard cards.isEmpty == false,
-              let data = try? JSONEncoder().encode(cards),
+              let data = try? JSONEncoder.default.encode(cards),
               let raw = String(data: data, encoding: .utf8)?.data(using: .utf8) else { return nil }
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.default
         decoder.dateDecodingStrategy = .iso8601
         guard let out = try? decoder.decode([TaskCard].self, from: raw), out.isEmpty == false else { return nil }
         return out
@@ -2817,13 +2817,6 @@ private struct TaskQueryToolPayload: Encodable {
     let total: Int
     let tasks: [HealthTask]
 
-    enum CodingKeys: String, CodingKey {
-        case ok
-        case memberID = "member_id"
-        case queriedAt = "queried_at"
-        case total
-        case tasks
-    }
 }
 
 private struct ToolQuestionAnswerPayload: Encodable {
@@ -2850,13 +2843,6 @@ private struct ToolQuestionAnswerPayload: Encodable {
         let selectedOptions: [ChatQuestionOption]
         let otherText: String?
 
-        enum CodingKeys: String, CodingKey {
-            case questionID = "question_id"
-            case question
-            case selectionMode = "selection_mode"
-            case selectedOptions = "selected_options"
-            case otherText = "other_text"
-        }
     }
 }
 
@@ -2869,15 +2855,6 @@ private struct TaskNoCreateToolPayload: Encodable {
     let extracted: TaskIntentExtraction
     let similarTasks: [TaskSimilarityItem]
 
-    enum CodingKeys: String, CodingKey {
-        case ok
-        case action
-        case reason
-        case queriedFirst = "queried_first"
-        case memberID = "member_id"
-        case extracted
-        case similarTasks = "similar_tasks"
-    }
 }
 
 private struct TaskSimilarityItem: Encodable {
@@ -2887,13 +2864,6 @@ private struct TaskSimilarityItem: Encodable {
     let status: Int
     let updatedAt: String
 
-    enum CodingKeys: String, CodingKey {
-        case taskID = "task_id"
-        case title
-        case type
-        case status
-        case updatedAt = "updated_at"
-    }
 }
 
 private struct TaskToolCardPayload: Encodable {
@@ -2919,29 +2889,6 @@ private struct TaskToolCardPayload: Encodable {
     let createdAt: String
     let updatedAt: String
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case member
-        case creator
-        case title
-        case description
-        case type
-        case startTime = "start_time"
-        case dueTime = "due_time"
-        case repeatType = "repeat_type"
-        case priority
-        case businessType = "business_type"
-        case businessID = "business_id"
-        case source
-        case status
-        case extractPayload = "extract_payload"
-        case taskPayload = "task_payload"
-        case similarityPayload = "similarity_payload"
-        case ignoredReason = "ignored_reason"
-        case confirmedTask = "confirmed_task"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-    }
 }
 
 private struct TaskIntentExtraction: Codable {
@@ -2950,11 +2897,6 @@ private struct TaskIntentExtraction: Codable {
         let frequency: String
         let period: String
 
-        enum CodingKeys: String, CodingKey {
-            case startTime = "start_time"
-            case frequency
-            case period
-        }
 
         init(startTime: String, frequency: String, period: String) {
             self.startTime = startTime
@@ -2963,10 +2905,10 @@ private struct TaskIntentExtraction: Codable {
         }
 
         init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            startTime = try c.decodeIfPresent(String.self, forKey: .startTime) ?? ""
-            frequency = try c.decodeIfPresent(String.self, forKey: .frequency) ?? ""
-            period = try c.decodeIfPresent(String.self, forKey: .period) ?? ""
+            let c = try decoder.container(keyedBy: CodableKey.self)
+            startTime = try c.decodeIfPresent(String.self, forKey: .key("startTime")) ?? ""
+            frequency = try c.decodeIfPresent(String.self, forKey: .key("frequency")) ?? ""
+            period = try c.decodeIfPresent(String.self, forKey: .key("period")) ?? ""
         }
     }
 
@@ -2977,14 +2919,6 @@ private struct TaskIntentExtraction: Codable {
     let intensityOrValue: String
     let confidence: Double
 
-    enum CodingKeys: String, CodingKey {
-        case taskType = "task_type"
-        case targetMetric = "target_metric"
-        case timeInfo = "time_info"
-        case action
-        case intensityOrValue = "intensity_or_value"
-        case confidence
-    }
 
     init(
         taskType: String,
@@ -3003,13 +2937,13 @@ private struct TaskIntentExtraction: Codable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        taskType = try c.decodeIfPresent(String.self, forKey: .taskType) ?? "unknown"
-        targetMetric = try c.decodeIfPresent(String.self, forKey: .targetMetric) ?? ""
-        timeInfo = try c.decodeIfPresent(TimeInfo.self, forKey: .timeInfo) ?? .init(startTime: "", frequency: "", period: "")
-        action = try c.decodeIfPresent(String.self, forKey: .action) ?? ""
-        intensityOrValue = try c.decodeIfPresent(String.self, forKey: .intensityOrValue) ?? ""
-        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        taskType = try c.decodeIfPresent(String.self, forKey: .key("taskType")) ?? "unknown"
+        targetMetric = try c.decodeIfPresent(String.self, forKey: .key("targetMetric")) ?? ""
+        timeInfo = try c.decodeIfPresent(TimeInfo.self, forKey: .key("timeInfo")) ?? .init(startTime: "", frequency: "", period: "")
+        action = try c.decodeIfPresent(String.self, forKey: .key("action")) ?? ""
+        intensityOrValue = try c.decodeIfPresent(String.self, forKey: .key("intensityOrValue")) ?? ""
+        confidence = try c.decodeIfPresent(Double.self, forKey: .key("confidence")) ?? 0
     }
 
     func normalized() -> TaskIntentExtraction {

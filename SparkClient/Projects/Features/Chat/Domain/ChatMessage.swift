@@ -28,10 +28,6 @@ nonisolated enum ChatBlockAnchor: Codable, Equatable, Sendable {
     case afterBlock(UUID)
     case toolCall(String)
 
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case value
-    }
 
     private enum AnchorType: String, Codable {
         case messageStart
@@ -42,37 +38,37 @@ nonisolated enum ChatBlockAnchor: Codable, Equatable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        switch try c.decode(AnchorType.self, forKey: .type) {
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        switch try c.decode(AnchorType.self, forKey: .key("type")) {
         case .messageStart:
             self = .messageStart
         case .messageEnd:
             self = .messageEnd
         case .beforeBlock:
-            self = .beforeBlock(try c.decode(UUID.self, forKey: .value))
+            self = .beforeBlock(try c.decode(UUID.self, forKey: .key("value")))
         case .afterBlock:
-            self = .afterBlock(try c.decode(UUID.self, forKey: .value))
+            self = .afterBlock(try c.decode(UUID.self, forKey: .key("value")))
         case .toolCall:
-            self = .toolCall(try c.decode(String.self, forKey: .value))
+            self = .toolCall(try c.decode(String.self, forKey: .key("value")))
         }
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
+        var c = encoder.container(keyedBy: CodableKey.self)
         switch self {
         case .messageStart:
-            try c.encode(AnchorType.messageStart, forKey: .type)
+            try c.encode(AnchorType.messageStart, forKey: .key("type"))
         case .messageEnd:
-            try c.encode(AnchorType.messageEnd, forKey: .type)
+            try c.encode(AnchorType.messageEnd, forKey: .key("type"))
         case .beforeBlock(let id):
-            try c.encode(AnchorType.beforeBlock, forKey: .type)
-            try c.encode(id, forKey: .value)
+            try c.encode(AnchorType.beforeBlock, forKey: .key("type"))
+            try c.encode(id, forKey: .key("value"))
         case .afterBlock(let id):
-            try c.encode(AnchorType.afterBlock, forKey: .type)
-            try c.encode(id, forKey: .value)
+            try c.encode(AnchorType.afterBlock, forKey: .key("type"))
+            try c.encode(id, forKey: .key("value"))
         case .toolCall(let id):
-            try c.encode(AnchorType.toolCall, forKey: .type)
-            try c.encode(id, forKey: .value)
+            try c.encode(AnchorType.toolCall, forKey: .key("type"))
+            try c.encode(id, forKey: .key("value"))
         }
     }
 }
@@ -165,11 +161,12 @@ nonisolated enum ChatMessageBlockPayload: Equatable, Sendable {
 nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let anchor: ChatBlockAnchor?
-    let toolCallID: String?
+    let toolCallId: String?
     let payload: ChatMessageBlockPayload
     let createdAt: Date
     let updatedAt: Date
 
+    nonisolated var toolCallID: String? { toolCallId }
     nonisolated var kind: ChatMessageBlockKind { payload.kind }
     nonisolated var text: String? {
         switch payload {
@@ -275,7 +272,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     ) {
         self.id = id
         self.anchor = anchor
-        self.toolCallID = toolCallID
+        self.toolCallId = toolCallID
         self.payload = Self.makePayload(
             kind: kind,
             text: text,
@@ -299,55 +296,31 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         self.updatedAt = updatedAt
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case anchor
-        case kind
-        case text
-        case toolName
-        case toolCallID
-        case attachments
-        case knowledgeCards
-        case taskCards
-        case pendingMemberToolCards
-        case locations
-        case routes
-        case events
-        case healthCards
-        case structuredHealthCards
-        case sleepVisualization
-        case workoutVisualization
-        case captureMessageCard
-        case smallTaskCard
-        case deepThoughtCard
-        case createdAt
-        case updatedAt
-    }
 
     nonisolated init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let id = try c.decode(UUID.self, forKey: .id)
-        let anchor = try c.decodeIfPresent(ChatBlockAnchor.self, forKey: .anchor)
-        let kind = try c.decode(ChatMessageBlockKind.self, forKey: .kind)
-        let text = try c.decodeIfPresent(String.self, forKey: .text)
-        let toolName = try c.decodeIfPresent(String.self, forKey: .toolName)
-        let toolCallID = try c.decodeIfPresent(String.self, forKey: .toolCallID)
-        let attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .attachments) ?? []
-        let knowledgeCards = try c.decodeIfPresent([ChatKnowledgeCard].self, forKey: .knowledgeCards) ?? []
-        let taskCards = try c.decodeIfPresent([TaskCard].self, forKey: .taskCards) ?? []
-        let pendingMemberToolCards = try c.decodeIfPresent([PendingMemberToolCard].self, forKey: .pendingMemberToolCards) ?? []
-        let locations = try c.decodeIfPresent([ChatMapLocationPayload].self, forKey: .locations) ?? []
-        let routes = try c.decodeIfPresent([ChatRoutePayload].self, forKey: .routes) ?? []
-        let events = try c.decodeIfPresent([ChatEventPayload].self, forKey: .events) ?? []
-        let healthCards = try c.decodeIfPresent([ChatHealthCardPayload].self, forKey: .healthCards) ?? []
-        let structuredHealthCards = try c.decodeIfPresent(StructuredHealthCardsBlob.self, forKey: .structuredHealthCards)
-        let sleepVisualization = try c.decodeIfPresent(ChatHealthSleepModel.self, forKey: .sleepVisualization)
-        let workoutVisualization = try c.decodeIfPresent(ChatHealthWorkoutModel.self, forKey: .workoutVisualization)
-        let captureMessageCard = try c.decodeIfPresent(ChatCaptureMessageCardPayload.self, forKey: .captureMessageCard)
-        let smallTaskCard = try c.decodeIfPresent(ChatSmallTaskMessageCardPayload.self, forKey: .smallTaskCard)
-        let deepThoughtCard = try c.decodeIfPresent(ChatDeepThoughtCardPayload.self, forKey: .deepThoughtCard)
-        let createdAt = try c.decode(Date.self, forKey: .createdAt)
-        let updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        let id = try c.decode(UUID.self, forKey: .key("id"))
+        let anchor = try c.decodeIfPresent(ChatBlockAnchor.self, forKey: .key("anchor"))
+        let kind = try c.decode(ChatMessageBlockKind.self, forKey: .key("kind"))
+        let text = try c.decodeIfPresent(String.self, forKey: .key("text"))
+        let toolName = try c.decodeIfPresent(String.self, forKey: .key("toolName"))
+        let toolCallId = try c.decodeIfPresent(String.self, forKey: .key("toolCallId"))
+        let attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .key("attachments")) ?? []
+        let knowledgeCards = try c.decodeIfPresent([ChatKnowledgeCard].self, forKey: .key("knowledgeCards")) ?? []
+        let taskCards = try c.decodeIfPresent([TaskCard].self, forKey: .key("taskCards")) ?? []
+        let pendingMemberToolCards = try c.decodeIfPresent([PendingMemberToolCard].self, forKey: .key("pendingMemberToolCards")) ?? []
+        let locations = try c.decodeIfPresent([ChatMapLocationPayload].self, forKey: .key("locations")) ?? []
+        let routes = try c.decodeIfPresent([ChatRoutePayload].self, forKey: .key("routes")) ?? []
+        let events = try c.decodeIfPresent([ChatEventPayload].self, forKey: .key("events")) ?? []
+        let healthCards = try c.decodeIfPresent([ChatHealthCardPayload].self, forKey: .key("healthCards")) ?? []
+        let structuredHealthCards = try c.decodeIfPresent(StructuredHealthCardsBlob.self, forKey: .key("structuredHealthCards"))
+        let sleepVisualization = try c.decodeIfPresent(ChatHealthSleepModel.self, forKey: .key("sleepVisualization"))
+        let workoutVisualization = try c.decodeIfPresent(ChatHealthWorkoutModel.self, forKey: .key("workoutVisualization"))
+        let captureMessageCard = try c.decodeIfPresent(ChatCaptureMessageCardPayload.self, forKey: .key("captureMessageCard"))
+        let smallTaskCard = try c.decodeIfPresent(ChatSmallTaskMessageCardPayload.self, forKey: .key("smallTaskCard"))
+        let deepThoughtCard = try c.decodeIfPresent(ChatDeepThoughtCardPayload.self, forKey: .key("deepThoughtCard"))
+        let createdAt = try c.decode(Date.self, forKey: .key("createdAt"))
+        let updatedAt = try c.decode(Date.self, forKey: .key("updatedAt"))
 
         self.init(
             id: id,
@@ -355,7 +328,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             kind: kind,
             text: text,
             toolName: toolName,
-            toolCallID: toolCallID,
+            toolCallID: toolCallId,
             attachments: attachments,
             knowledgeCards: knowledgeCards,
             taskCards: taskCards,
@@ -376,29 +349,29 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     }
 
     nonisolated func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encodeIfPresent(anchor, forKey: .anchor)
-        try c.encode(kind, forKey: .kind)
-        try c.encodeIfPresent(text, forKey: .text)
-        try c.encodeIfPresent(toolName, forKey: .toolName)
-        try c.encodeIfPresent(toolCallID, forKey: .toolCallID)
-        if attachments.isEmpty == false { try c.encode(attachments, forKey: .attachments) }
-        if knowledgeCards.isEmpty == false { try c.encode(knowledgeCards, forKey: .knowledgeCards) }
-        if taskCards.isEmpty == false { try c.encode(taskCards, forKey: .taskCards) }
-        if pendingMemberToolCards.isEmpty == false { try c.encode(pendingMemberToolCards, forKey: .pendingMemberToolCards) }
-        if locations.isEmpty == false { try c.encode(locations, forKey: .locations) }
-        if routes.isEmpty == false { try c.encode(routes, forKey: .routes) }
-        if events.isEmpty == false { try c.encode(events, forKey: .events) }
-        if healthCards.isEmpty == false { try c.encode(healthCards, forKey: .healthCards) }
-        try c.encodeIfPresent(structuredHealthCards, forKey: .structuredHealthCards)
-        try c.encodeIfPresent(sleepVisualization, forKey: .sleepVisualization)
-        try c.encodeIfPresent(workoutVisualization, forKey: .workoutVisualization)
-        try c.encodeIfPresent(captureMessageCard, forKey: .captureMessageCard)
-        try c.encodeIfPresent(smallTaskCard, forKey: .smallTaskCard)
-        try c.encodeIfPresent(deepThoughtCard, forKey: .deepThoughtCard)
-        try c.encode(createdAt, forKey: .createdAt)
-        try c.encode(updatedAt, forKey: .updatedAt)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(id, forKey: .key("id"))
+        try c.encodeIfPresent(anchor, forKey: .key("anchor"))
+        try c.encode(kind, forKey: .key("kind"))
+        try c.encodeIfPresent(text, forKey: .key("text"))
+        try c.encodeIfPresent(toolName, forKey: .key("toolName"))
+        try c.encodeIfPresent(toolCallId, forKey: .key("toolCallId"))
+        if attachments.isEmpty == false { try c.encode(attachments, forKey: .key("attachments")) }
+        if knowledgeCards.isEmpty == false { try c.encode(knowledgeCards, forKey: .key("knowledgeCards")) }
+        if taskCards.isEmpty == false { try c.encode(taskCards, forKey: .key("taskCards")) }
+        if pendingMemberToolCards.isEmpty == false { try c.encode(pendingMemberToolCards, forKey: .key("pendingMemberToolCards")) }
+        if locations.isEmpty == false { try c.encode(locations, forKey: .key("locations")) }
+        if routes.isEmpty == false { try c.encode(routes, forKey: .key("routes")) }
+        if events.isEmpty == false { try c.encode(events, forKey: .key("events")) }
+        if healthCards.isEmpty == false { try c.encode(healthCards, forKey: .key("healthCards")) }
+        try c.encodeIfPresent(structuredHealthCards, forKey: .key("structuredHealthCards"))
+        try c.encodeIfPresent(sleepVisualization, forKey: .key("sleepVisualization"))
+        try c.encodeIfPresent(workoutVisualization, forKey: .key("workoutVisualization"))
+        try c.encodeIfPresent(captureMessageCard, forKey: .key("captureMessageCard"))
+        try c.encodeIfPresent(smallTaskCard, forKey: .key("smallTaskCard"))
+        try c.encodeIfPresent(deepThoughtCard, forKey: .key("deepThoughtCard"))
+        try c.encode(createdAt, forKey: .key("createdAt"))
+        try c.encode(updatedAt, forKey: .key("updatedAt"))
     }
 
     private nonisolated static func makePayload(
@@ -487,7 +460,7 @@ extension ChatMessageBlock {
     fileprivate nonisolated init(id: UUID, anchor: ChatBlockAnchor?, toolCallID: String?, payload: ChatMessageBlockPayload, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.anchor = anchor
-        self.toolCallID = toolCallID
+        self.toolCallId = toolCallID
         self.payload = payload
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -560,16 +533,20 @@ nonisolated struct ChatMessageStorageEnvelope: Codable, Equatable, Sendable {
 
 nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
-    let threadID: UUID
+    let threadId: UUID
     let role: ChatMessageRole
     let blocks: [ChatMessageBlock]
-    let clientMessageID: UUID
-    let serverMessageID: String?
+    let clientMessageId: UUID
+    let serverMessageId: String?
     let deliveryState: ChatDeliveryState
     let createdAt: Date
     let serverUpdatedAt: Date?
     let isTombstone: Bool
     let modelName: String?
+
+    nonisolated var threadID: UUID { threadId }
+    nonisolated var clientMessageID: UUID { clientMessageId }
+    nonisolated var serverMessageID: String? { serverMessageId }
 
     nonisolated init(
         id: UUID = UUID(),
@@ -585,60 +562,16 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         modelName: String? = nil
     ) {
         self.id = id
-        self.threadID = threadID
+        self.threadId = threadID
         self.role = role
         self.blocks = blocks
-        self.clientMessageID = clientMessageID
-        self.serverMessageID = serverMessageID
+        self.clientMessageId = clientMessageID
+        self.serverMessageId = serverMessageID
         self.deliveryState = deliveryState
         self.createdAt = createdAt
         self.serverUpdatedAt = serverUpdatedAt
         self.isTombstone = isTombstone
         self.modelName = modelName
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case threadID
-        case role
-        case blocks
-        case clientMessageID
-        case serverMessageID
-        case deliveryState
-        case createdAt
-        case serverUpdatedAt
-        case isTombstone
-        case modelName
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(UUID.self, forKey: .id)
-        threadID = try c.decode(UUID.self, forKey: .threadID)
-        role = try c.decode(ChatMessageRole.self, forKey: .role)
-        blocks = try c.decode([ChatMessageBlock].self, forKey: .blocks)
-        clientMessageID = try c.decode(UUID.self, forKey: .clientMessageID)
-        serverMessageID = try c.decodeIfPresent(String.self, forKey: .serverMessageID)
-        deliveryState = try c.decode(ChatDeliveryState.self, forKey: .deliveryState)
-        createdAt = try c.decode(Date.self, forKey: .createdAt)
-        serverUpdatedAt = try c.decodeIfPresent(Date.self, forKey: .serverUpdatedAt)
-        isTombstone = try c.decodeIfPresent(Bool.self, forKey: .isTombstone) ?? false
-        modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(threadID, forKey: .threadID)
-        try c.encode(role, forKey: .role)
-        try c.encode(blocks, forKey: .blocks)
-        try c.encode(clientMessageID, forKey: .clientMessageID)
-        try c.encodeIfPresent(serverMessageID, forKey: .serverMessageID)
-        try c.encode(deliveryState, forKey: .deliveryState)
-        try c.encode(createdAt, forKey: .createdAt)
-        try c.encodeIfPresent(serverUpdatedAt, forKey: .serverUpdatedAt)
-        try c.encode(isTombstone, forKey: .isTombstone)
-        try c.encodeIfPresent(modelName, forKey: .modelName)
     }
 
 }

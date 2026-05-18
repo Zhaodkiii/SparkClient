@@ -57,7 +57,7 @@ struct FileETagStore: ETagStore {
     func record(forKey key: String) -> ETagCacheRecord? {
         let url = baseDirectory.appendingPathComponent("\(key).meta.json", isDirectory: false)
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(ETagCacheRecord.self, from: data)
+        return try? JSONDecoder.default.decode(ETagCacheRecord.self, from: data)
     }
 
     func cachedBody(forKey key: String) -> Data? {
@@ -72,7 +72,7 @@ struct FileETagStore: ETagStore {
 
         // 元数据与 body 分文件，便于单独读取 ETag 或合并 304。
         let metadataURL = baseDirectory.appendingPathComponent("\(key).meta.json", isDirectory: false)
-        try AtomicFileWriter.write(try JSONEncoder().encode(record), to: metadataURL)
+        try AtomicFileWriter.write(try JSONEncoder.default.encode(record), to: metadataURL)
 
         let bodyURL = baseDirectory.appendingPathComponent("\(key).body", isDirectory: false)
         try AtomicFileWriter.write(body, to: bodyURL)

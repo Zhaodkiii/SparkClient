@@ -857,7 +857,7 @@ final class AISettingsViewModel: ObservableObject {
     }
 
     func nextLocalSmallTaskID() -> Int {
-        (snapshot.smallTasks.filter { $0.source == .local }.map(\.sourceID).max() ?? 0) + 1
+        (snapshot.smallTasks.filter { $0.source == .local }.map(\.id).max() ?? 0) + 1
     }
 
     /// 初始化模型可见性（如需要则持久化）

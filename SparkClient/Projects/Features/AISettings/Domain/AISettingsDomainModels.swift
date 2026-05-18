@@ -112,41 +112,25 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
         )
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case providerID
-        case name
-        case company
-        case key
-        case requestURL
-        case help
-        case from
-        case privacyPolicyURL
-        case isEnabled
-        case source
-        case privacyPolicyAccepted
-        case privacyPolicyAcceptedAt
-        case timestamp
-    }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try container.decode(String.self, forKey: .name)
-        company = try container.decode(String.self, forKey: .company)
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .key("id")) ?? UUID()
+        name = try container.decode(String.self, forKey: .key("name"))
+        company = try container.decode(String.self, forKey: .key("company"))
         providerID = AIProviderIdentifier.normalize(
-            try container.decodeIfPresent(String.self, forKey: .providerID) ?? company
+            try container.decodeIfPresent(String.self, forKey: .key("providerId")) ?? company
         )
-        key = try container.decode(String.self, forKey: .key)
-        requestURL = try container.decode(String.self, forKey: .requestURL)
-        help = try container.decodeIfPresent(String.self, forKey: .help) ?? ""
-        from = try container.decodeIfPresent(String.self, forKey: .from) ?? AIRecordSource.system.rawValue
-        privacyPolicyURL = try container.decodeIfPresent(String.self, forKey: .privacyPolicyURL) ?? ""
-        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
-        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? AIRecordSource(rawValue: from.lowercased()) ?? .system
-        privacyPolicyAccepted = try container.decodeIfPresent(Bool.self, forKey: .privacyPolicyAccepted) ?? false
-        privacyPolicyAcceptedAt = try container.decodeIfPresent(Date.self, forKey: .privacyPolicyAcceptedAt)
-        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+        key = try container.decode(String.self, forKey: .key("key"))
+        requestURL = try container.decode(String.self, forKey: .key("requestUrl"))
+        help = try container.decodeIfPresent(String.self, forKey: .key("help")) ?? ""
+        from = try container.decodeIfPresent(String.self, forKey: .key("from")) ?? AIRecordSource.system.rawValue
+        privacyPolicyURL = try container.decodeIfPresent(String.self, forKey: .key("privacyPolicyUrl")) ?? ""
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .key("isEnabled")) ?? true
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .key("source")) ?? AIRecordSource(rawValue: from.lowercased()) ?? .system
+        privacyPolicyAccepted = try container.decodeIfPresent(Bool.self, forKey: .key("privacyPolicyAccepted")) ?? false
+        privacyPolicyAcceptedAt = try container.decodeIfPresent(Date.self, forKey: .key("privacyPolicyAcceptedAt"))
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .key("timestamp")) ?? Date()
     }
 }
 
@@ -198,27 +182,23 @@ struct SearchKeys: Identifiable, Codable, Equatable, Sendable {
         self.revision = revision
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id, name, company, key, requestURL, isUsing, searchClass, help, source, timestamp
-        case authType, priority, enabledScopes, revision
-    }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try container.decode(String.self, forKey: .name)
-        company = try container.decode(String.self, forKey: .company)
-        key = try container.decodeIfPresent(String.self, forKey: .key) ?? ""
-        requestURL = try container.decode(String.self, forKey: .requestURL)
-        isUsing = try container.decodeIfPresent(Bool.self, forKey: .isUsing) ?? false
-        searchClass = try container.decodeIfPresent(String.self, forKey: .searchClass) ?? "web"
-        help = try container.decodeIfPresent(String.self, forKey: .help) ?? ""
-        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
-        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
-        authType = try container.decodeIfPresent(SearchProviderAuthType.self, forKey: .authType) ?? .bearer
-        priority = try container.decodeIfPresent(Int.self, forKey: .priority) ?? 0
-        enabledScopes = try container.decodeIfPresent([String].self, forKey: .enabledScopes) ?? ["chat", "small_task"]
-        revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 1
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .key("id")) ?? UUID()
+        name = try container.decode(String.self, forKey: .key("name"))
+        company = try container.decode(String.self, forKey: .key("company"))
+        key = try container.decodeIfPresent(String.self, forKey: .key("key")) ?? ""
+        requestURL = try container.decode(String.self, forKey: .key("requestUrl"))
+        isUsing = try container.decodeIfPresent(Bool.self, forKey: .key("isUsing")) ?? false
+        searchClass = try container.decodeIfPresent(String.self, forKey: .key("searchClass")) ?? "web"
+        help = try container.decodeIfPresent(String.self, forKey: .key("help")) ?? ""
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .key("source")) ?? .system
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .key("timestamp")) ?? Date()
+        authType = try container.decodeIfPresent(SearchProviderAuthType.self, forKey: .key("authType")) ?? .bearer
+        priority = try container.decodeIfPresent(Int.self, forKey: .key("priority")) ?? 0
+        enabledScopes = try container.decodeIfPresent([String].self, forKey: .key("enabledScopes")) ?? ["chat", "small_task"]
+        revision = try container.decodeIfPresent(Int.self, forKey: .key("revision")) ?? 1
     }
 }
 
@@ -451,67 +431,38 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
         )
     }
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case displayName
-        case identity
-        case position
-        case providerID
-        case company
-        case price
-        case isEnabled
-        case supportsSearch
-        case supportsTextGen
-        case supportsMultimodal
-        case supportsReasoning
-        case supportReasoningChange
-        case supportsImageGen
-        case supportsVoiceGen
-        case supportsToolUse
-        case systemProvision
-        case icon
-        case briefDescription
-        case characterDesign
-        case aiToolScenarios
-        case relatedTaskCodes
-        case baseModelName
-        case localFilename
-        case source
-        case timestamp
-    }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        name = try container.decode(String.self, forKey: .name)
-        displayName = try container.decode(String.self, forKey: .displayName)
-        identity = try container.decodeIfPresent(AIModelIdentity.self, forKey: .identity) ?? .model
-        position = try container.decodeIfPresent(Int.self, forKey: .position) ?? 0
-        company = try container.decode(String.self, forKey: .company)
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .key("id")) ?? UUID()
+        name = try container.decode(String.self, forKey: .key("name"))
+        displayName = try container.decode(String.self, forKey: .key("displayName"))
+        identity = try container.decodeIfPresent(AIModelIdentity.self, forKey: .key("identity")) ?? .model
+        position = try container.decodeIfPresent(Int.self, forKey: .key("position")) ?? 0
+        company = try container.decode(String.self, forKey: .key("company"))
         providerID = AIProviderIdentifier.normalize(
-            try container.decodeIfPresent(String.self, forKey: .providerID) ?? company
+            try container.decodeIfPresent(String.self, forKey: .key("providerId")) ?? company
         )
-        price = try container.decodeIfPresent(Int.self, forKey: .price) ?? 0
-        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
-        supportsSearch = try container.decodeIfPresent(Bool.self, forKey: .supportsSearch) ?? true
-        supportsTextGen = try container.decodeIfPresent(Bool.self, forKey: .supportsTextGen) ?? true
-        supportsMultimodal = try container.decodeIfPresent(Bool.self, forKey: .supportsMultimodal) ?? false
-        supportsReasoning = try container.decodeIfPresent(Bool.self, forKey: .supportsReasoning) ?? false
-        supportReasoningChange = try container.decodeIfPresent(Bool.self, forKey: .supportReasoningChange) ?? false
-        supportsImageGen = try container.decodeIfPresent(Bool.self, forKey: .supportsImageGen) ?? false
-        supportsVoiceGen = try container.decodeIfPresent(Bool.self, forKey: .supportsVoiceGen) ?? false
-        supportsToolUse = try container.decodeIfPresent(Bool.self, forKey: .supportsToolUse) ?? false
-        systemProvision = try container.decodeIfPresent(String.self, forKey: .systemProvision) ?? ""
-        icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? ""
-        briefDescription = try container.decodeIfPresent(String.self, forKey: .briefDescription) ?? ""
-        characterDesign = try container.decodeIfPresent(String.self, forKey: .characterDesign) ?? ""
-        aiToolScenarios = try container.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
-        relatedTaskCodes = try container.decodeIfPresent([String].self, forKey: .relatedTaskCodes) ?? []
-        baseModelName = try container.decodeIfPresent(String.self, forKey: .baseModelName)
-        localFilename = try container.decodeIfPresent(String.self, forKey: .localFilename)
-        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .source) ?? .system
-        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+        price = try container.decodeIfPresent(Int.self, forKey: .key("price")) ?? 0
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .key("isEnabled")) ?? true
+        supportsSearch = try container.decodeIfPresent(Bool.self, forKey: .key("supportsSearch")) ?? true
+        supportsTextGen = try container.decodeIfPresent(Bool.self, forKey: .key("supportsTextGen")) ?? true
+        supportsMultimodal = try container.decodeIfPresent(Bool.self, forKey: .key("supportsMultimodal")) ?? false
+        supportsReasoning = try container.decodeIfPresent(Bool.self, forKey: .key("supportsReasoning")) ?? false
+        supportReasoningChange = try container.decodeIfPresent(Bool.self, forKey: .key("supportReasoningChange")) ?? false
+        supportsImageGen = try container.decodeIfPresent(Bool.self, forKey: .key("supportsImageGen")) ?? false
+        supportsVoiceGen = try container.decodeIfPresent(Bool.self, forKey: .key("supportsVoiceGen")) ?? false
+        supportsToolUse = try container.decodeIfPresent(Bool.self, forKey: .key("supportsToolUse")) ?? false
+        systemProvision = try container.decodeIfPresent(String.self, forKey: .key("systemProvision")) ?? ""
+        icon = try container.decodeIfPresent(String.self, forKey: .key("icon")) ?? ""
+        briefDescription = try container.decodeIfPresent(String.self, forKey: .key("briefDescription")) ?? ""
+        characterDesign = try container.decodeIfPresent(String.self, forKey: .key("characterDesign")) ?? ""
+        aiToolScenarios = try container.decodeIfPresent([String].self, forKey: .key("aiToolScenarios")) ?? []
+        relatedTaskCodes = try container.decodeIfPresent([String].self, forKey: .key("relatedTaskCodes")) ?? []
+        baseModelName = try container.decodeIfPresent(String.self, forKey: .key("baseModelName"))
+        localFilename = try container.decodeIfPresent(String.self, forKey: .key("localFilename"))
+        source = try container.decodeIfPresent(AIRecordSource.self, forKey: .key("source")) ?? .system
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .key("timestamp")) ?? Date()
     }
 
     var isLocalModel: Bool {
@@ -608,23 +559,15 @@ struct AISearchToolPreferences: Codable, Equatable, Sendable {
         self.searchCount = searchCount
     }
 
-    enum CodingKeys: String, CodingKey {
-        case useKnowledge
-        case knowledgeCount
-        case knowledgeSimilarity
-        case useSearch
-        case bilingualSearch
-        case searchCount
-    }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        useKnowledge = try container.decodeIfPresent(Bool.self, forKey: .useKnowledge) ?? true
-        knowledgeCount = try container.decodeIfPresent(Int.self, forKey: .knowledgeCount) ?? 12
-        knowledgeSimilarity = try container.decodeIfPresent(Double.self, forKey: .knowledgeSimilarity) ?? 0.55
-        useSearch = try container.decodeIfPresent(Bool.self, forKey: .useSearch) ?? true
-        bilingualSearch = try container.decodeIfPresent(Bool.self, forKey: .bilingualSearch) ?? true
-        searchCount = try container.decodeIfPresent(Int.self, forKey: .searchCount) ?? 8
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        useKnowledge = try container.decodeIfPresent(Bool.self, forKey: .key("useKnowledge")) ?? true
+        knowledgeCount = try container.decodeIfPresent(Int.self, forKey: .key("knowledgeCount")) ?? 12
+        knowledgeSimilarity = try container.decodeIfPresent(Double.self, forKey: .key("knowledgeSimilarity")) ?? 0.55
+        useSearch = try container.decodeIfPresent(Bool.self, forKey: .key("useSearch")) ?? true
+        bilingualSearch = try container.decodeIfPresent(Bool.self, forKey: .key("bilingualSearch")) ?? true
+        searchCount = try container.decodeIfPresent(Int.self, forKey: .key("searchCount")) ?? 8
     }
 }
 

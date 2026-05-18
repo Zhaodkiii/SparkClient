@@ -155,22 +155,10 @@ struct BackendAIRemoteConfigProvider: AIRemoteConfigProvider, @unchecked Sendabl
 private struct RemoteAIBootstrapPayload: Decodable {
     let revision: String?
     let scenarios: RemoteScenarioCollection?
-    let smallTasks: [SmallTask]
-
-    enum CodingKeys: String, CodingKey {
-        case revision
-        case scenarios
-        case smallTasks
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        revision = try c.decodeIfPresent(String.self, forKey: .revision)
-        scenarios = try c.decodeIfPresent(RemoteScenarioCollection.self, forKey: .scenarios)
-        smallTasks = try c.decodeIfPresent([SmallTask].self, forKey: .smallTasks) ?? []
-    }
+    let smallTasks: [SmallTask]?
 
     func toPatch() -> AIRemoteSettingsPatch {
+        let smallTasks = smallTasks ?? []
         guard let scenarios else {
             return AIRemoteSettingsPatch(revision: revision, scenarioRemoteBundles: nil, smallTasks: smallTasks)
         }
@@ -200,24 +188,6 @@ private struct RemoteScenarioCollection: Decodable {
     let modelConfig: AIScenarioRemoteBundle?
     let reportInterpretation: AIScenarioRemoteBundle?
 
-    enum CodingKeys: String, CodingKey {
-        case chat
-        case embedding
-        case voice
-        case medicalStructuredExtraction = "medical_structured_extraction"
-        case medicalDocumentTypeRecognition = "medical_document_type_recognition"
-        case medicalCaseExtraction = "medical_case_extraction"
-        case healthExamExtraction = "health_exam_extraction"
-        case medicalReportExtraction = "medical_report_extraction"
-        case prescriptionExtraction = "prescription_extraction"
-        case medicationExtraction = "medication_extraction"
-        case optimizationText = "optimization_text"
-        case optimizationVisual = "optimization_visual"
-        case contextFolding = "context_folding"
-        case router
-        case modelConfig = "model_config"
-        case reportInterpretation = "report_interpretation"
-    }
 
     /// Pro bootstrap 可能只返回部分场景；未出现的场景用空包占位（合并时由运行时逻辑回退到本地包）。
     /// 所有模型统一标记 source 为 `.pro`，以区别于本地模型（`system`/`custom`）。
@@ -266,14 +236,6 @@ private struct RemoteTrialStatusPayload: Decodable {
     let expiresAt: String?
     let remainingSeconds: Int?
 
-    enum CodingKeys: String, CodingKey {
-        case status
-        case isActive = "is_active"
-        case grantSource = "grant_source"
-        case startedAt = "started_at"
-        case expiresAt = "expires_at"
-        case remainingSeconds = "remaining_seconds"
-    }
 
     func toModel() -> AITrialState {
         let formatter = ISO8601DateFormatter()

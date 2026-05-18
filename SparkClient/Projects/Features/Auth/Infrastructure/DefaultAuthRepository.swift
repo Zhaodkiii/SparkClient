@@ -59,8 +59,8 @@ final class DefaultAuthRepository: AuthRepository {
             throw AuthFeatureError.missingAppleUserIdentifier
         }
 
-        let bundleID = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceID = SparkKeychain.getOrCreateDeviceID()
+        let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
+        let deviceId = SparkKeychain.getOrCreateDeviceID()
 
         let context = try await backend.auth.loginWithApple(
             identityToken: payload.identityToken,
@@ -69,8 +69,12 @@ final class DefaultAuthRepository: AuthRepository {
             user: userIdentifier,
             email: payload.email,
             fullName: payload.fullName,
-            bundleId: bundleID,
-            deviceId: deviceID
+            bundleId: bundleId,
+            deviceId: deviceId
+        )
+        logger.info(
+            "认证仓储：Apple 登录远端上下文已返回 userId=\(context.userId) email=\(context.email ?? "-") isPro=\(context.isPro) isNewUser=\(context.isNewUser)",
+            module: .auth
         )
 
         let normalizedEmail = (payload.email ?? context.email ?? "apple_\(userIdentifier)@privaterelay.appleid.com")
@@ -86,7 +90,7 @@ final class DefaultAuthRepository: AuthRepository {
 
         let signedInAt = Date()
         _ = try await userProfileRepository.upsertProfile(
-            accountID: Int64(context.userID),
+            accountID: Int64(context.userId),
             email: normalizedEmail,
             displayName: displayName,
             signedInAt: signedInAt,
@@ -94,7 +98,7 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         let session = UserSession(
-            accountID: Int64(context.userID),
+            accountID: Int64(context.userId),
             email: normalizedEmail,
             displayName: displayName,
             signedInAt: signedInAt,
@@ -104,43 +108,47 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         try await snapshotStore.save(session)
-        logger.info("用户已通过 Apple 登录，令牌类型=\(context.tokens.tokenType)", module: .auth)
+        logger.info("用户已通过 Apple 登录，session 已保存 accountID=\(session.accountID) 令牌类型=\(context.tokens.tokenType)", module: .auth)
         return session
     }
 
     func requestPhoneOTP(phoneNumber: String) async throws -> PhoneOTPRequestContext {
-        let bundleID = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceID = SparkKeychain.getOrCreateDeviceID()
+        let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
+        let deviceId = SparkKeychain.getOrCreateDeviceID()
         let result = try await backend.otp.requestPhoneOTP(
             phoneNumber: phoneNumber,
-            bundleId: bundleID,
-            deviceId: deviceID
+            bundleId: bundleId,
+            deviceId: deviceId
         )
         return PhoneOTPRequestContext(
-            otpID: result.otp_id,
-            expiresIn: result.expires_in
+            otpID: result.otpId,
+            expiresIn: result.expiresIn
         )
     }
 
     func signInWithPhoneOTP(phoneNumber: String, verificationCode: String, otpID: String) async throws -> UserSession {
-        let bundleID = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceID = SparkKeychain.getOrCreateDeviceID()
+        let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
+        let deviceId = SparkKeychain.getOrCreateDeviceID()
 
         let result = try await backend.otp.verifyPhoneOTP(
             otpId: otpID,
             phoneNumber: phoneNumber,
             code: verificationCode,
-            bundleId: bundleID,
-            deviceId: deviceID
+            bundleId: bundleId,
+            deviceId: deviceId
+        )
+        logger.info(
+            "认证仓储：手机号 OTP 远端响应已返回 userId=\(result.userId) phone=\(result.phoneNumber) isPro=\(result.isPro ?? false) isNewUser=\(result.isNewUser ?? false)",
+            module: .auth
         )
 
-        let normalizedPhone = result.phone_number.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayName = result.display_name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? (result.display_name ?? normalizedPhone)
+        let normalizedPhone = result.phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = result.displayName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? (result.displayName ?? normalizedPhone)
             : normalizedPhone
         let signedInAt = Date()
         _ = try await userProfileRepository.upsertProfile(
-            accountID: Int64(result.user_id),
+            accountID: Int64(result.userId),
             email: normalizedPhone,
             displayName: displayName,
             signedInAt: signedInAt,
@@ -148,17 +156,17 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         let session = UserSession(
-            accountID: Int64(result.user_id),
+            accountID: Int64(result.userId),
             email: normalizedPhone,
             displayName: displayName,
             signedInAt: signedInAt,
             signInMethod: .phone,
-            isPro: result.is_pro ?? false,
-            isNewUser: result.is_new_user ?? false
+            isPro: result.isPro ?? false,
+            isNewUser: result.isNewUser ?? false
         )
 
         try await snapshotStore.save(session)
-        logger.info("用户已通过手机号验证码登录，userID=\(result.user_id)", module: .auth)
+        logger.info("用户已通过手机号验证码登录，session 已保存 accountID=\(session.accountID)", module: .auth)
         return session
     }
 

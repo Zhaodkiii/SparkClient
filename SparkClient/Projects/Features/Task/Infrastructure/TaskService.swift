@@ -185,7 +185,7 @@ struct TaskService {
     // MARK: - Decode
 
     private func decodeWrapped<T: Decodable>(_ type: T.Type, from response: SparkNetworkResponse) throws -> T {
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.default
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
@@ -221,23 +221,6 @@ struct TaskCreatePayload: Encodable, Sendable {
     let taskExercise: TaskExercisePayload?
     let taskDiet: TaskDietPayload?
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case title
-        case description
-        case type
-        case status
-        case startTime = "start_time"
-        case dueTime = "due_time"
-        case repeatType = "repeat_type"
-        case priority
-        case businessType = "business_type"
-        case businessID = "business_id"
-        case extra
-        case taskMedical = "task_medical"
-        case taskExercise = "task_exercise"
-        case taskDiet = "task_diet"
-    }
 }
 
 struct TaskUpdatePayload: Encodable, Sendable {
@@ -254,19 +237,6 @@ struct TaskUpdatePayload: Encodable, Sendable {
     let taskExercise: TaskExercisePayload?
     let taskDiet: TaskDietPayload?
 
-    enum CodingKeys: String, CodingKey {
-        case title
-        case description
-        case status
-        case startTime = "start_time"
-        case dueTime = "due_time"
-        case repeatType = "repeat_type"
-        case priority
-        case extra
-        case taskMedical = "task_medical"
-        case taskExercise = "task_exercise"
-        case taskDiet = "task_diet"
-    }
 }
 
 struct TaskMedicalPayload: Encodable, Sendable {
@@ -276,13 +246,6 @@ struct TaskMedicalPayload: Encodable, Sendable {
     let source: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case reminderTime = "reminder_time"
-        case medicalTaskType = "medical_task_type"
-        case description
-        case source
-        case extra
-    }
 }
 
 struct TaskExercisePayload: Encodable, Sendable {
@@ -293,14 +256,6 @@ struct TaskExercisePayload: Encodable, Sendable {
     let source: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case exerciseType = "exercise_type"
-        case durationMin = "duration_min"
-        case intensity
-        case description
-        case source
-        case extra
-    }
 }
 
 struct TaskDietPayload: Encodable, Sendable {
@@ -311,14 +266,6 @@ struct TaskDietPayload: Encodable, Sendable {
     let source: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case mealType = "meal_type"
-        case calorieTarget = "calorie_target"
-        case foodRecommend = "food_recommend"
-        case description
-        case source
-        case extra
-    }
 }
 
 struct TaskExecutionPayload: Encodable, Sendable {
@@ -342,13 +289,6 @@ struct TaskExecutionPayload: Encodable, Sendable {
         self.businessID = businessID
     }
 
-    enum CodingKeys: String, CodingKey {
-        case executedAt = "executed_at"
-        case value
-        case notes
-        case businessType = "business_type"
-        case businessID = "business_id"
-    }
 }
 
 private struct EmptyPayload: Encodable {}

@@ -19,12 +19,6 @@ struct MedicalSyncPreference: Codable, Equatable, Sendable {
         syncPriority: .balanced
     )
 
-    enum CodingKeys: String, CodingKey {
-        case isSyncEnabled
-        case hasCompletedInitialUpload
-        case lastSyncAt
-        case syncPriority
-    }
 
     init(
         isSyncEnabled: Bool,
@@ -39,11 +33,11 @@ struct MedicalSyncPreference: Codable, Equatable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.isSyncEnabled = (try? container.decode(Bool.self, forKey: .isSyncEnabled)) ?? true
-        self.hasCompletedInitialUpload = (try? container.decode(Bool.self, forKey: .hasCompletedInitialUpload)) ?? false
-        self.lastSyncAt = try? container.decode(Date.self, forKey: .lastSyncAt)
-        self.syncPriority = (try? container.decode(CloudSyncPriority.self, forKey: .syncPriority)) ?? .balanced
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        self.isSyncEnabled = (try? container.decode(Bool.self, forKey: .key("isSyncEnabled"))) ?? true
+        self.hasCompletedInitialUpload = (try? container.decode(Bool.self, forKey: .key("hasCompletedInitialUpload"))) ?? false
+        self.lastSyncAt = try? container.decode(Date.self, forKey: .key("lastSyncAt"))
+        self.syncPriority = (try? container.decode(CloudSyncPriority.self, forKey: .key("syncPriority"))) ?? .balanced
     }
 }
 

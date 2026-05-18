@@ -155,7 +155,7 @@ extension SparkMedicalSyncAPI.RemoteManagedFile {
         guard let fileUUID = fileUuid?.nonEmpty else { return nil }
         return ManagedFileRecord(
             id: id,
-            fileUUID: fileUUID,
+            fileUuid: fileUUID,
             filePath: fileUrl?.nonEmpty ?? objectKey?.nonEmpty,
             originalName: displayName,
             fileSize: fileSize ?? 0,
@@ -163,7 +163,7 @@ extension SparkMedicalSyncAPI.RemoteManagedFile {
             fileMd5: fileMd5?.nonEmpty,
             isPublic: false,
             businessType: businessType?.nonEmpty ?? "medical_attachment",
-            businessID: businessId?.nonEmpty ?? "",
+            businessId: businessId?.nonEmpty ?? "",
             createdAt: createdAt.map(Self.createdAtFormatter.string(from:)) ?? "",
             objectKey: objectKey?.nonEmpty,
             storageType: storageType?.nonEmpty

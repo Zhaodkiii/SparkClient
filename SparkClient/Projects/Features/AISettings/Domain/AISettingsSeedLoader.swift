@@ -2,7 +2,7 @@ import Foundation
 
 enum AISettingsSeedLoader {
     private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.default
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return decoder
     }()

@@ -148,7 +148,7 @@ extension SmallTask {
     /// 创建一个“草稿任务”（用于 UI 编辑）
     static func newDraft(id: Int) -> SmallTask {
         SmallTask(
-            sourceID: id,
+            id: id,
             name: "",
             code: "Local_\(id)",   // ⚠️ 提前生成 code，保证 id 稳定
             brief: "",

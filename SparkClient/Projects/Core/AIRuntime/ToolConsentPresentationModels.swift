@@ -9,18 +9,6 @@ struct ExternalToolDataSharePayloadBlock: Identifiable, Equatable, Codable, Send
     let resultText: String
     let fullResultCharCount: Int
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case toolAPIName
-        case friendlyTitle
-        case argumentsText
-        case resultText
-        case fullResultCharCount
-        case argumentsDisplay
-        case resultDisplay
-        case argumentsTruncated
-        case resultTruncated
-    }
 
     init(
         id: UUID,
@@ -39,31 +27,31 @@ struct ExternalToolDataSharePayloadBlock: Identifiable, Equatable, Codable, Send
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(UUID.self, forKey: .id)
-        toolAPIName = try c.decode(String.self, forKey: .toolAPIName)
-        friendlyTitle = try c.decode(String.self, forKey: .friendlyTitle)
-        if let args = try c.decodeIfPresent(String.self, forKey: .argumentsText) {
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        id = try c.decode(UUID.self, forKey: .key("id"))
+        toolAPIName = try c.decode(String.self, forKey: .key("toolApiName"))
+        friendlyTitle = try c.decode(String.self, forKey: .key("friendlyTitle"))
+        if let args = try c.decodeIfPresent(String.self, forKey: .key("argumentsText")) {
             argumentsText = args
         } else {
-            argumentsText = try c.decode(String.self, forKey: .argumentsDisplay)
+            argumentsText = try c.decode(String.self, forKey: .key("argumentsDisplay"))
         }
-        if let res = try c.decodeIfPresent(String.self, forKey: .resultText) {
+        if let res = try c.decodeIfPresent(String.self, forKey: .key("resultText")) {
             resultText = res
         } else {
-            resultText = try c.decode(String.self, forKey: .resultDisplay)
+            resultText = try c.decode(String.self, forKey: .key("resultDisplay"))
         }
-        fullResultCharCount = try c.decodeIfPresent(Int.self, forKey: .fullResultCharCount) ?? resultText.count
+        fullResultCharCount = try c.decodeIfPresent(Int.self, forKey: .key("fullResultCharCount")) ?? resultText.count
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id, forKey: .id)
-        try c.encode(toolAPIName, forKey: .toolAPIName)
-        try c.encode(friendlyTitle, forKey: .friendlyTitle)
-        try c.encode(argumentsText, forKey: .argumentsText)
-        try c.encode(resultText, forKey: .resultText)
-        try c.encode(fullResultCharCount, forKey: .fullResultCharCount)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(id, forKey: .key("id"))
+        try c.encode(toolAPIName, forKey: .key("toolApiName"))
+        try c.encode(friendlyTitle, forKey: .key("friendlyTitle"))
+        try c.encode(argumentsText, forKey: .key("argumentsText"))
+        try c.encode(resultText, forKey: .key("resultText"))
+        try c.encode(fullResultCharCount, forKey: .key("fullResultCharCount"))
     }
 }
 
@@ -76,13 +64,4 @@ struct ExternalToolDataSharePrompt: Identifiable, Equatable, Codable, Sendable {
     let payloadBlocks: [ExternalToolDataSharePayloadBlock]
     let privacyPolicyURL: URL?
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case providerCompany
-        case endpointLine
-        case modelLine
-        case dataLines
-        case payloadBlocks
-        case privacyPolicyURL
-    }
 }

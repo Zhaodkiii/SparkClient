@@ -390,17 +390,12 @@ nonisolated struct BackendError: Decodable, Sendable {
     let msgValue: JSONValue
     let data: JSONValue?
 
-    private enum CodingKeys: String, CodingKey {
-        case code
-        case msg
-        case data
-    }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        code = try container.decode(Int.self, forKey: .code)
-        msgValue = (try? container.decode(JSONValue.self, forKey: .msg)) ?? .string("")
-        data = try? container.decodeIfPresent(JSONValue.self, forKey: .data)
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        code = try container.decode(Int.self, forKey: .key("code"))
+        msgValue = (try? container.decode(JSONValue.self, forKey: .key("msg"))) ?? .string("")
+        data = try? container.decodeIfPresent(JSONValue.self, forKey: .key("data"))
         msg = Self.stringify(value: msgValue)
     }
 

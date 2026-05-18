@@ -193,7 +193,7 @@ final class ChatDetailViewModel: ObservableObject {
                         data: attachment.data,
                         fileName: attachment.displayName,
                         businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
-                        businessID: attachment.id.uuidString,
+                        businessId: attachment.id.uuidString,
                         isPublic: false,
                         onUploadProgress: { progress in
                             Task { @MainActor [weak self] in
@@ -1042,6 +1042,8 @@ final class ChatDetailViewModel: ObservableObject {
         let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
         guard let target = messages.last(where: { $0.clientMessageID == assistantClientMessageID }) else { return }
         let mergedBlocks = ChatMessageBlockBuilder.mergeRichBlocks(
+
+//        let mergedBlocks = ChatMessageBlockBuilder.merge(
             existingBlocks: target.blocks,
             incomingBlocks: streaming.blocks
         )
@@ -1056,6 +1058,7 @@ final class ChatDetailViewModel: ObservableObject {
             clientMessageID: assistantClientMessageID,
             blocks: mergedBlocks
         )
+        await sendMessageUseCase.pushPendingMessages(source: "chat.streaming.blocks.merge")
     }
 
     @discardableResult
@@ -1441,7 +1444,7 @@ final class ChatDetailViewModel: ObservableObject {
         let mimeType = FileUtilities.mimeType(forName: originalName)
         return ManagedFileRecord(
             id: attachment.fileId ?? 0,
-            fileUUID: fileUUID,
+            fileUuid: fileUUID,
             filePath: resolvedPath,
             originalName: originalName,
             fileSize: 0,
@@ -1449,7 +1452,7 @@ final class ChatDetailViewModel: ObservableObject {
             fileMd5: attachment.fileMd5,
             isPublic: false,
             businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
-            businessID: "",
+            businessId: "",
             createdAt: "",
             objectKey: nil,
             storageType: nil
@@ -1628,7 +1631,7 @@ final class ChatDetailViewModel: ObservableObject {
                 extractedJSON: item.draftJSON
             )
         case .examReport:
-            if let report = try? JSONDecoder().decode(MedicalReportRecognitionDraft.self, from: data) {
+            if let report = try? JSONDecoder.default.decode(MedicalReportRecognitionDraft.self, from: data) {
                 return makeStructuredHealthCardSaveOutput(
                     memberID: memberID,
                     kind: .medicalReport,
@@ -1637,7 +1640,7 @@ final class ChatDetailViewModel: ObservableObject {
                     extractedJSON: item.draftJSON
                 )
             }
-            if let health = try? JSONDecoder().decode(HealthExamRecognitionDraft.self, from: data) {
+            if let health = try? JSONDecoder.default.decode(HealthExamRecognitionDraft.self, from: data) {
                 return makeStructuredHealthCardSaveOutput(
                     memberID: memberID,
                     kind: .healthExamReport,
@@ -1661,7 +1664,7 @@ final class ChatDetailViewModel: ObservableObject {
     }
 
     private func decodeStructuredHealthCardDraft<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
-        guard let draft = try? JSONDecoder().decode(type, from: data) else {
+        guard let draft = try? JSONDecoder.default.decode(type, from: data) else {
             notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
             return nil
         }

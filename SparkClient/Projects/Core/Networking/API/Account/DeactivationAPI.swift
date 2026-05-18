@@ -17,18 +17,18 @@ struct SparkDeactivationAPI {
     }
 
     struct DeactivationStatus: Decodable {
-        let deactivation_id: Int
+        let deactivationId: Int
         let state: String
-        let scheduled_at: String?
-        let completed_at: String?
+        let scheduledAt: String?
+        let completedAt: String?
     }
 
     struct DeactivationRequestResult: Decodable {
-        let deactivation_id: Int
+        let deactivationId: Int
         let state: String
-        let scheduled_at: String?
-        let immediate_deactivation: Bool?
-        let countdown_hours: Int?
+        let scheduledAt: String?
+        let immediateDeactivation: Bool?
+        let countdownHours: Int?
     }
 
     struct AccountDeactivationSubmitRequest: Encodable {
@@ -40,47 +40,30 @@ struct SparkDeactivationAPI {
         let deleteRelatedData: Bool
         let verification: AccountDeactivationVerification
 
-        enum CodingKeys: String, CodingKey {
-            case reason
-            case immediateDeactivation = "immediate_deactivation"
-            case countdownHours = "countdown_hours"
-            case dataRetentionDays = "data_retention_days"
-            case anonymizePersonalData = "anonymize_personal_data"
-            case deleteRelatedData = "delete_related_data"
-            case verification
-        }
     }
 
     enum AccountDeactivationVerification: Encodable {
         case apple(identityToken: String, authorizationCode: String?, userIdentifier: String)
-        case phone(otpID: String, code: String)
-        case email(otpID: String, code: String)
+        case phone(otpId: String, code: String)
+        case email(otpId: String, code: String)
 
-        enum CodingKeys: String, CodingKey {
-            case type
-            case identityToken = "identity_token"
-            case authorizationCode = "authorization_code"
-            case userIdentifier = "user_identifier"
-            case otpID = "otp_id"
-            case code
-        }
 
         func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
+            var container = encoder.container(keyedBy: CodableKey.self)
             switch self {
             case .apple(let identityToken, let authorizationCode, let userIdentifier):
-                try container.encode("apple", forKey: .type)
-                try container.encode(identityToken, forKey: .identityToken)
-                try container.encodeIfPresent(authorizationCode, forKey: .authorizationCode)
-                try container.encode(userIdentifier, forKey: .userIdentifier)
-            case .phone(let otpID, let code):
-                try container.encode("phone", forKey: .type)
-                try container.encode(otpID, forKey: .otpID)
-                try container.encode(code, forKey: .code)
-            case .email(let otpID, let code):
-                try container.encode("email", forKey: .type)
-                try container.encode(otpID, forKey: .otpID)
-                try container.encode(code, forKey: .code)
+                try container.encode("apple", forKey: .key("type"))
+                try container.encode(identityToken, forKey: .key("identityToken"))
+                try container.encodeIfPresent(authorizationCode, forKey: .key("authorizationCode"))
+                try container.encode(userIdentifier, forKey: .key("userIdentifier"))
+            case .phone(let otpId, let code):
+                try container.encode("phone", forKey: .key("type"))
+                try container.encode(otpId, forKey: .key("otpId"))
+                try container.encode(code, forKey: .key("code"))
+            case .email(let otpId, let code):
+                try container.encode("email", forKey: .key("type"))
+                try container.encode(otpId, forKey: .key("otpId"))
+                try container.encode(code, forKey: .key("code"))
             }
         }
     }

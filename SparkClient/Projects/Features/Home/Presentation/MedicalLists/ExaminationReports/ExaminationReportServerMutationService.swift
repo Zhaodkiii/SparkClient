@@ -162,24 +162,6 @@ private struct ExaminationReportUpdatePayload: Encodable {
     let status: Int
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicalRecord = "medical_record"
-        case category
-        case subCategory = "sub_category"
-        case itemName = "item_name"
-        case performedAt = "performed_at"
-        case reportedAt = "reported_at"
-        case organizationName = "organization_name"
-        case departmentName = "department_name"
-        case doctorName = "doctor_name"
-        case findings
-        case impression
-        case source
-        case rawOCR = "raw_ocr"
-        case status
-        case extra
-    }
 }
 
 private struct MedExamDetailCreatePayload: Encodable {
@@ -201,23 +183,4 @@ private struct MedExamDetailCreatePayload: Encodable {
     let extra: [String: String]
     let sortOrder: Int
 
-    enum CodingKeys: String, CodingKey {
-        case businessType = "business_type"
-        case businessID = "business_id"
-        case member
-        case category
-        case subCategory = "sub_category"
-        case itemName = "item_name"
-        case itemCode = "item_code"
-        case resultValue = "result_value"
-        case unit
-        case referenceRange = "reference_range"
-        case flag
-        case resultAt = "result_at"
-        case modality
-        case bodyPart = "body_part"
-        case diagnosis
-        case extra
-        case sortOrder = "sort_order"
-    }
 }

@@ -169,7 +169,7 @@ struct ChatView: View {
         
         // 1. 把小任务列表转成【code -> task】的字典，方便快速查找（统一格式化编码）
         let tasksByCode = detailViewModel.chatSmallTasks.reduce(into: [String: SmallTask]()) { result, task in
-            result[normalizeTaskCode(task.id)] = task
+            result[normalizeTaskCode(task.code)] = task
         }
         
         // 2. 根据模型关联的 taskCodes，从字典中取出对应的小任务（过滤不存在的）
@@ -450,13 +450,13 @@ struct ChatView: View {
             uiStateStore.applyCardActionSnapshot(.empty, forceReload: true)
         }
         guard let data = UserDefaults.standard.data(forKey: cardActionSnapshotStorageKey) else { return }
-        guard let snapshot = try? JSONDecoder().decode(CardActionSnapshot.self, from: data) else { return }
+        guard let snapshot = try? JSONDecoder.default.decode(CardActionSnapshot.self, from: data) else { return }
         uiStateStore.applyCardActionSnapshot(snapshot, forceReload: false)
     }
 
     private func persistCardActionSnapshot() {
         let snapshot = uiStateStore.makeCardActionSnapshot()
-        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        guard let data = try? JSONEncoder.default.encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: cardActionSnapshotStorageKey)
     }
 
@@ -733,7 +733,7 @@ struct ChatView: View {
     }
 
     private func encodableToJSONObject<T: Encodable>(_ value: T) -> Any? {
-        let encoder = JSONEncoder()
+        let encoder = JSONEncoder.default
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(value) else { return nil }
         return try? JSONSerialization.jsonObject(with: data)

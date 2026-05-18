@@ -11,34 +11,22 @@ struct OCRSTSCredentialsResponse: Decodable, Sendable {
     let region: String?
     let endpoint: String?
 
-    enum CodingKeys: String, CodingKey {
-        case accessKeyID
-        case accessKeySecret
-        case securityToken
-        case expiration
-        case accessKeyId = "access_key_id"
-        case accessKeySecretSnake = "access_key_secret"
-        case securityTokenSnake = "security_token"
-        case bucketName = "bucket_name"
-        case region
-        case endpoint
-    }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodableKey.self)
         self.accessKeyID =
-            (try? container.decode(String.self, forKey: .accessKeyID)) ??
-            (try? container.decode(String.self, forKey: .accessKeyId)) ?? ""
+            (try? container.decode(String.self, forKey: .key("accessKeyId"))) ??
+            (try? container.decode(String.self, forKey: .key("accessKeyId"))) ?? ""
         self.accessKeySecret =
-            (try? container.decode(String.self, forKey: .accessKeySecret)) ??
-            (try? container.decode(String.self, forKey: .accessKeySecretSnake)) ?? ""
+            (try? container.decode(String.self, forKey: .key("accessKeySecret"))) ??
+            (try? container.decode(String.self, forKey: .key("accessKeySecret"))) ?? ""
         self.securityToken =
-            (try? container.decode(String.self, forKey: .securityToken)) ??
-            (try? container.decode(String.self, forKey: .securityTokenSnake))
+            (try? container.decode(String.self, forKey: .key("securityToken"))) ??
+            (try? container.decode(String.self, forKey: .key("securityToken")))
         self.expiration = Self.decodeExpiration(from: container)
-        self.bucketName = try? container.decode(String.self, forKey: .bucketName)
-        self.region = try? container.decode(String.self, forKey: .region)
-        self.endpoint = try? container.decode(String.self, forKey: .endpoint)
+        self.bucketName = try? container.decode(String.self, forKey: .key("bucketName"))
+        self.region = try? container.decode(String.self, forKey: .key("region"))
+        self.endpoint = try? container.decode(String.self, forKey: .key("endpoint"))
     }
 
     init(
@@ -59,17 +47,17 @@ struct OCRSTSCredentialsResponse: Decodable, Sendable {
         self.endpoint = endpoint
     }
 
-    private static func decodeExpiration(from container: KeyedDecodingContainer<CodingKeys>) -> String? {
-        if let s = try? container.decode(String.self, forKey: .expiration), !s.isEmpty {
+    private static func decodeExpiration(from container: KeyedDecodingContainer<CodableKey>) -> String? {
+        if let s = try? container.decode(String.self, forKey: .key("expiration")), !s.isEmpty {
             return s
         }
-        if let i = try? container.decode(Int64.self, forKey: .expiration) {
+        if let i = try? container.decode(Int64.self, forKey: .key("expiration")) {
             return String(i)
         }
-        if let i = try? container.decode(Int.self, forKey: .expiration) {
+        if let i = try? container.decode(Int.self, forKey: .key("expiration")) {
             return String(i)
         }
-        if let d = try? container.decode(Double.self, forKey: .expiration) {
+        if let d = try? container.decode(Double.self, forKey: .key("expiration")) {
             return String(Int64(d))
         }
         return nil

@@ -81,7 +81,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
             blob.prescriptions.append(contentsOf: delta.prescriptions)
             blob.examReports.append(contentsOf: delta.examReports)
             blob.medicalCases.append(contentsOf: delta.medicalCases)
-            guard (try? JSONEncoder().encode(blob)) != nil else {
+            guard (try? JSONEncoder.default.encode(blob)) != nil else {
                 return nil
             }
             return PresentationPatch(
@@ -110,7 +110,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         blob.prescriptions.append(contentsOf: delta.prescriptions)
         blob.examReports.append(contentsOf: delta.examReports)
         blob.medicalCases.append(contentsOf: delta.medicalCases)
-        guard (try? JSONEncoder().encode(blob)) != nil else { return }
+        guard (try? JSONEncoder.default.encode(blob)) != nil else { return }
 
         let patch = PresentationPatch(
             blocks: [
@@ -152,7 +152,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         anchorToolCallID: String? = nil
     ) async {
         guard cards.isEmpty == false else { return }
-        guard (try? JSONEncoder().encode(cards)) != nil else { return }
+        guard (try? JSONEncoder.default.encode(cards)) != nil else { return }
 
         let patch = PresentationPatch(
             blocks: [
@@ -175,7 +175,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         anchorToolCallID: String? = nil,
         maxWaitSeconds: TimeInterval = 300
     ) async {
-        guard (try? JSONEncoder().encode(model)) != nil else { return }
+        guard (try? JSONEncoder.default.encode(model)) != nil else { return }
 
         let patch = PresentationPatch(
             blocks: [
@@ -203,7 +203,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         anchorToolCallID: String? = nil,
         maxWaitSeconds: TimeInterval = 300
     ) async {
-        guard (try? JSONEncoder().encode(model)) != nil else { return }
+        guard (try? JSONEncoder.default.encode(model)) != nil else { return }
 
         let patch = PresentationPatch(
             blocks: [
@@ -253,7 +253,7 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         payload: ChatCaptureMessageCardPayload,
         maxWaitSeconds: TimeInterval = 300
     ) async {
-        guard (try? JSONEncoder().encode(payload)) != nil else { return }
+        guard (try? JSONEncoder.default.encode(payload)) != nil else { return }
         await mergeRichPresentationIntoStreamingCache(
             threadID: threadID,
             patch: PresentationPatch(

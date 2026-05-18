@@ -74,12 +74,12 @@ actor AIRuntimeConfigStore {
     func effectiveSmallTasks() -> [SmallTask] {
         var merged: [String: SmallTask] = [:]
         for task in proSmallTasks {
-            merged[task.id] = task
+            merged[task.code] = task
         }
         for task in localSmallTasks {
-            merged[task.id] = task
+            merged[task.code] = task
         }
-        return merged.values.sorted { $0.id < $1.id }
+        return merged.values.sorted { $0.code < $1.code }
     }
 
     func effectiveSearchConfig() throws -> SearchRuntimeConfig {

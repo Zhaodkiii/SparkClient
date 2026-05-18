@@ -47,11 +47,6 @@ struct AIRuntimeContentPart: Codable, Equatable, Sendable {
     let text: String?
     let imageURL: AIRuntimeImageURLPayload?
 
-    enum CodingKeys: String, CodingKey {
-        case type
-        case text
-        case imageURL = "image_url"
-    }
 
     static func textPart(_ text: String) -> AIRuntimeContentPart {
         AIRuntimeContentPart(type: "text", text: text, imageURL: nil)
@@ -150,38 +145,29 @@ final class AIRuntimeToolProperty: Codable, @unchecked Sendable {
     }
 
     /// JSON 编码键（映射后端字段名）
-    enum CodingKeys: String, CodingKey {
-        case type
-        case description
-        case enumValues = "enum"
-        case format
-        case objectProperties = "properties"
-        case objectRequired = "required"
-        case arrayItems = "items"
-    }
 
     /// 自定义解码（默认值处理）
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        type = try c.decodeIfPresent(String.self, forKey: .type) ?? "string"
-        description = try c.decode(String.self, forKey: .description)
-        enumValues = try c.decodeIfPresent([String].self, forKey: .enumValues)
-        format = try c.decodeIfPresent(String.self, forKey: .format)
-        objectProperties = try c.decodeIfPresent([String: AIRuntimeToolProperty].self, forKey: .objectProperties)
-        objectRequired = try c.decodeIfPresent([String].self, forKey: .objectRequired)
-        arrayItems = try c.decodeIfPresent(AIRuntimeToolProperty.self, forKey: .arrayItems)
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        type = try c.decodeIfPresent(String.self, forKey: .key("type")) ?? "string"
+        description = try c.decode(String.self, forKey: .key("description"))
+        enumValues = try c.decodeIfPresent([String].self, forKey: .key("enum"))
+        format = try c.decodeIfPresent(String.self, forKey: .key("format"))
+        objectProperties = try c.decodeIfPresent([String: AIRuntimeToolProperty].self, forKey: .key("properties"))
+        objectRequired = try c.decodeIfPresent([String].self, forKey: .key("required"))
+        arrayItems = try c.decodeIfPresent(AIRuntimeToolProperty.self, forKey: .key("items"))
     }
 
     /// 自定义编码
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(type, forKey: .type)
-        try c.encode(description, forKey: .description)
-        try c.encodeIfPresent(enumValues, forKey: .enumValues)
-        try c.encodeIfPresent(format, forKey: .format)
-        try c.encodeIfPresent(objectProperties, forKey: .objectProperties)
-        try c.encodeIfPresent(objectRequired, forKey: .objectRequired)
-        try c.encodeIfPresent(arrayItems, forKey: .arrayItems)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(type, forKey: .key("type"))
+        try c.encode(description, forKey: .key("description"))
+        try c.encodeIfPresent(enumValues, forKey: .key("enum"))
+        try c.encodeIfPresent(format, forKey: .key("format"))
+        try c.encodeIfPresent(objectProperties, forKey: .key("properties"))
+        try c.encodeIfPresent(objectRequired, forKey: .key("required"))
+        try c.encodeIfPresent(arrayItems, forKey: .key("items"))
     }
 }
 

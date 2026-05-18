@@ -2,8 +2,8 @@ import Foundation
 
 final class UserDefaultsOnboardingStateRepository: OnboardingStateRepository {
     private let defaults: UserDefaults
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder.default
+    private let decoder = JSONDecoder.default
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

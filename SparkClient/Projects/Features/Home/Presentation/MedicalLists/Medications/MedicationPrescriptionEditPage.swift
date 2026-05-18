@@ -276,15 +276,5 @@ private struct PrescriptionResourceUpdatePayload: Encodable {
     let status: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case medicalCase = "medical_case"
-        case prescriberName = "prescriber_name"
-        case institutionName = "institution_name"
-        case prescribedAt = "prescribed_at"
-        case diagnosis
-        case prescriptionNo = "prescription_no"
-        case status
-        case extra
-    }
 }
 

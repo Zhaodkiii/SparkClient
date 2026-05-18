@@ -32,16 +32,6 @@ struct SparkMedicalWorkflowAPI {
         /// 扩展键值对，供未建模字段或灰度字段透传。
         let extra: [String: String]
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case recordType = "record_type"
-            case status
-            case title
-            case hospitalName = "hospital_name"
-            case ageAtVisit = "age_at_visit"
-            case diagnosisSummary = "diagnosis_summary"
-            case extra
-        }
     }
 
     /// 体检报告保存请求体。
@@ -71,20 +61,6 @@ struct SparkMedicalWorkflowAPI {
         /// 已上传文件 ID，服务端在落库后绑定到该体检报告（与 ``HealthExamWorkflowSaveView`` 的 `file_ids` 一致）。
         let fileIds: [Int]
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case institutionName = "institution_name"
-            case reportNo = "report_no"
-            case examDate = "exam_date"
-            case examType = "exam_type"
-            case summary
-            case source
-            case rawOCR = "raw_ocr"
-            case status
-            case extra
-            case details
-            case fileIds = "file_ids"
-        }
     }
 
     /// 检查/检验报告中的「明细行」：单项结果（如血常规某一指标、影像所见子项等）。
@@ -118,22 +94,6 @@ struct SparkMedicalWorkflowAPI {
         /// 列表排序序号，越小越靠前（与 UI 一致）。
         let sortOrder: Int
 
-        enum CodingKeys: String, CodingKey {
-            case category
-            case subCategory = "sub_category"
-            case itemName = "item_name"
-            case itemCode = "item_code"
-            case resultValue = "result_value"
-            case unit
-            case referenceRange = "reference_range"
-            case flag
-            case resultAt = "result_at"
-            case modality
-            case bodyPart = "body_part"
-            case diagnosis
-            case extra
-            case sortOrder = "sort_order"
-        }
     }
 
     /// 检查/检验报告主记录保存请求体（含多条 `details`）。
@@ -173,25 +133,6 @@ struct SparkMedicalWorkflowAPI {
         /// 明细行数组，与列表展示顺序一致。
         let details: [MedicalReportDetailPayload]
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case medicalCase = "medical_case"
-            case category
-            case subCategory = "sub_category"
-            case itemName = "item_name"
-            case performedAt = "performed_at"
-            case reportedAt = "reported_at"
-            case organizationName = "organization_name"
-            case departmentName = "department_name"
-            case doctorName = "doctor_name"
-            case findings
-            case impression
-            case modality
-            case bodyPart = "body_part"
-            case diagnosis
-            case fileIds = "file_ids"
-            case details
-        }
     }
 
     /// 症状新建请求体（表单创建专用）。
@@ -207,18 +148,6 @@ struct SparkMedicalWorkflowAPI {
         let bodyPart: String?
         let notes: String?
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case medicalCase = "medical_case"
-            case name
-            case code
-            case severity
-            case startedAt = "started_at"
-            case durationValue = "duration_value"
-            case durationUnit = "duration_unit"
-            case bodyPart = "body_part"
-            case notes
-        }
     }
 
     /// 就诊新建请求体（表单创建专用）。
@@ -232,16 +161,6 @@ struct SparkMedicalWorkflowAPI {
         let visitNo: String?
         let notes: String?
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case medicalCase = "medical_case"
-            case visitType = "visit_type"
-            case visitedAt = "visited_at"
-            case department
-            case doctorName = "doctor_name"
-            case visitNo = "visit_no"
-            case notes
-        }
     }
 
     /// 手术新建请求体（表单创建专用）。
@@ -258,19 +177,6 @@ struct SparkMedicalWorkflowAPI {
         let asaClass: String?
         let notes: String?
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case medicalCase = "medical_case"
-            case procedureName = "procedure_name"
-            case procedureCode = "procedure_code"
-            case site
-            case performedAt = "performed_at"
-            case surgeon
-            case anesthesiaType = "anesthesia_type"
-            case incisionLevel = "incision_level"
-            case asaClass = "asa_class"
-            case notes
-        }
     }
 
     /// 随访新建请求体（表单创建专用）。
@@ -284,16 +190,6 @@ struct SparkMedicalWorkflowAPI {
         let outcome: String?
         let nextAction: String?
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case medicalCase = "medical_case"
-            case plannedAt = "planned_at"
-            case completedAt = "completed_at"
-            case status
-            case method
-            case outcome
-            case nextAction = "next_action"
-        }
     }
 
     struct MedicationPlanBundleSavePayload: Encodable, Sendable {
@@ -304,14 +200,6 @@ struct SparkMedicalWorkflowAPI {
         let items: [MedicationPlanBundleItemPayload]
         let fileIds: [Int]
 
-        enum CodingKeys: String, CodingKey {
-            case member
-            case medicalCase = "medical_case"
-            case prescriptionID = "prescription_id"
-            case prescription
-            case items
-            case fileIds = "file_ids"
-        }
     }
 
     struct PrescriptionPayload: Encodable, Sendable {
@@ -324,16 +212,6 @@ struct SparkMedicalWorkflowAPI {
         let status: String
         let extra: [String: String]
 
-        enum CodingKeys: String, CodingKey {
-            case medicalCase = "medical_case"
-            case prescriberName = "prescriber_name"
-            case institutionName = "institution_name"
-            case prescribedAt = "prescribed_at"
-            case diagnosis
-            case prescriptionNo = "prescription_no"
-            case status
-            case extra
-        }
     }
 
     struct MedicationPlanBundleItemPayload: Encodable, Sendable {
@@ -354,24 +232,6 @@ struct SparkMedicalWorkflowAPI {
         let status: String
         let extra: [String: String]
 
-        enum CodingKeys: String, CodingKey {
-            case medicineBox = "medicine_box"
-            case drugName = "drug_name"
-            case dosePerTime = "dose_per_time"
-            case doseValue = "dose_value"
-            case doseUnit = "dose_unit"
-            case frequencyType = "frequency_type"
-            case everyNDays = "every_n_days"
-            case weeklyWeekdays = "weekly_weekdays"
-            case frequencyText = "frequency_text"
-            case reminderTimes = "reminder_times"
-            case startDate = "start_date"
-            case endDate = "end_date"
-            case instructions
-            case reminderEnabled = "reminder_enabled"
-            case status
-            case extra
-        }
     }
 
     struct MedicineBoxPayload: Encodable, Sendable {
@@ -386,18 +246,6 @@ struct SparkMedicalWorkflowAPI {
         let notes: String
         let extra: [String: String]
 
-        enum CodingKeys: String, CodingKey {
-            case medicineType = "medicine_type"
-            case medicineName = "medicine_name"
-            case brandName = "brand_name"
-            case dosageForm = "dosage_form"
-            case strength
-            case doseUnit = "dose_unit"
-            case totalQuantity = "total_quantity"
-            case expireDate = "expire_date"
-            case notes
-            case extra
-        }
     }
 
     /// 通用「仅返回 id」的响应解码结构。
@@ -663,7 +511,7 @@ struct SparkMedicalWorkflowAPI {
 
 private extension JSONDecoder {
     static let sparkMedicalResource: JSONDecoder = {
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.default
         decoder.dateDecodingStrategy = .custom(MedicalDateCoding.decodeFlexibleDate(from:))
         return decoder
     }()

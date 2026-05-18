@@ -354,7 +354,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
         }
 
         // JSON解码，校验必须字段kind存在
-        guard let parsed = try? JSONDecoder().decode(Parsed.self, from: data),
+        guard let parsed = try? JSONDecoder.default.decode(Parsed.self, from: data),
               let rawKind = parsed.kind else { return nil }
 
         // 将AI返回的字符串类型映射为系统枚举类型

@@ -172,18 +172,6 @@ private struct MedicalCaseResourcePayload: Encodable, Sendable {
     let diagnosisSummary: String?
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case recordType = "record_type"
-        case status
-        case title
-        case hospitalName = "hospital_name"
-        case ageAtVisit = "age_at_visit"
-        case severity
-        case caseStatus = "case_status"
-        case diagnosisSummary = "diagnosis_summary"
-        case extra
-    }
 
     init(draft: MedicalCaseFormDraft) {
         member = draft.memberID

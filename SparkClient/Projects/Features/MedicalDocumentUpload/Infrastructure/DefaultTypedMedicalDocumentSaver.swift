@@ -270,19 +270,6 @@ private struct MedicineBoxCreatePayload: Encodable {
     let notes: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicineName = "medicine_name"
-        case medicineType = "medicine_type"
-        case brandName = "brand_name"
-        case dosageForm = "dosage_form"
-        case strength
-        case doseUnit = "dose_unit"
-        case totalQuantity = "total_quantity"
-        case expireDate = "expire_date"
-        case notes
-        case extra
-    }
 }
 
 // MARK: - Date 扩展工具

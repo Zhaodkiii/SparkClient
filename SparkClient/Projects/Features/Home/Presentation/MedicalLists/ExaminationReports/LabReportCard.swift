@@ -617,7 +617,7 @@ extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
             SparkMedicalSyncAPI.RemoteMedExamDetail(
                 id: index + 1,
                 businessType: "examination_report",
-                businessID: id,
+                businessId: id,
                 member: member,
                 category: row.category,
                 subCategory: row.subCategory ?? "",

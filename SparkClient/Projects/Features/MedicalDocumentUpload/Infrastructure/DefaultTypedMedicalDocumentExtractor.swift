@@ -467,7 +467,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
         guard let data = Self.debugPretendCaseJSON.data(using: .utf8) else {
             throw ExtractionError.invalidDebugPayload
         }
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.default
         let payload = try decoder.decode(CaseRecognitionDraft.self, from: data)
         let payloadJSON = try prettyJSONString(from: payload)
         let preview = """

@@ -18,8 +18,8 @@ struct SparkDeviceAPI {
 
     struct DeviceRegisterResult: Decodable {
         let id: Int?
-        let device_id: String
-        let bundle_id: String
+        let deviceId: String
+        let bundleId: String
         let created: Bool?
     }
 

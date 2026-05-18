@@ -85,8 +85,8 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
 
     private let coreDataStack: CoreDataStack
     private let snapshotStore: SessionSnapshotStore
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder.default
+    private let decoder = JSONDecoder.default
     private let logger: Logger
     private let defaults: UserDefaults
 
@@ -759,7 +759,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         ])
         let object = (try? context.fetch(request).first)
             ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.smallTask, into: context)
-        object.setValue(Int64(task.sourceID), forKey: Field.id)
+        object.setValue(Int64(task.id), forKey: Field.id)
         object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
         object.setValue(task.name, forKey: Field.name)
         object.setValue(task.code, forKey: Field.code)
@@ -963,7 +963,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
             let code = object.value(forKey: Field.code) as? String ?? ""
             guard code.isEmpty == false else { return nil }
             return SmallTask(
-                sourceID: Int(object.value(forKey: Field.id) as? Int64 ?? 0),
+                id: Int(object.value(forKey: Field.id) as? Int64 ?? 0),
                 name: object.value(forKey: Field.name) as? String ?? "",
                 code: code,
                 brief: object.value(forKey: Field.brief) as? String ?? "",

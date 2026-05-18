@@ -150,10 +150,6 @@ struct ThinkingPayload: Encodable {
     let type: ReasoningSwitch
     let budgetTokens: Int?
 
-    enum CodingKeys: String, CodingKey {
-        case type
-        case budgetTokens = "budget_tokens"
-    }
 }
 
 /// 各厂商推理扩展字段（合并到请求 body 顶层）
@@ -163,12 +159,6 @@ struct OpenAIReasoningExtras: Encodable {
     let thinkingBudget: Int?                    // enableThinking
     let thinking: ThinkingPayload?              // thinkingObject
 
-    enum CodingKeys: String, CodingKey {
-        case reasoningEffort = "reasoning_effort"
-        case enableThinking  = "enable_thinking"
-        case thinkingBudget  = "thinking_budget"
-        case thinking
-    }
 }
 
 // MARK: - 构建结果

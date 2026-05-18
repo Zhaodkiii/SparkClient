@@ -90,7 +90,7 @@ struct LocalServerOCREngine: OCRTextEngine {
             }
         }
 
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
+        let decoded = try JSONDecoder.default.decode(Response.self, from: data)
         if !decoded.success {
             let message = decoded.error?.message ?? "local_server_failed"
             throw OCRError.response(message)

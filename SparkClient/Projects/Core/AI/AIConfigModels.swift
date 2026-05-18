@@ -176,27 +176,22 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
         self.isDefault = isDefault
     }
 
-    enum CodingKeys: String, CodingKey {
-        case scenario
-        case config
-        case isDefault
-    }
 
     /// 自定义解码：
     /// - 兼容历史数据中缺失 `isDefault` 的情况，默认回退为 `false`。
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        scenario = try c.decode(AIScenario.self, forKey: .scenario)
-        config = try c.decode(AIScenarioConfig.self, forKey: .config)
-        isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        scenario = try c.decode(AIScenario.self, forKey: .key("scenario"))
+        config = try c.decode(AIScenarioConfig.self, forKey: .key("config"))
+        isDefault = try c.decodeIfPresent(Bool.self, forKey: .key("isDefault")) ?? false
     }
 
     /// 自定义编码：显式输出全部字段，避免策略透传时语义丢失。
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(scenario, forKey: .scenario)
-        try c.encode(config, forKey: .config)
-        try c.encode(isDefault, forKey: .isDefault)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(scenario, forKey: .key("scenario"))
+        try c.encode(config, forKey: .key("config"))
+        try c.encode(isDefault, forKey: .key("isDefault"))
     }
 }
 
@@ -269,37 +264,6 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         return trimmed
     }
 
-    enum CodingKeys: String, CodingKey {
-        case name
-        case displayName = "display_name"
-        case isDefault = "is_default"
-        case identity
-        case providerID = "provider_id"
-        case company
-        case supportsSearch = "supports_search"
-        case supportsMultimodal = "supports_multimodal"
-        case supportsReasoning = "supports_reasoning"
-        case supportsToolUse = "supports_tool_use"
-        case supportsVoiceGen = "supports_voice_gen"
-        case supportsImageGen = "supports_image_gen"
-        case supportsText = "supports_text"
-        case supportsDeepReasoning = "supports_deep_reasoning"
-        case reasoningControllable = "reasoning_controllable"
-        case priceTier = "price_tier"
-        case systemProvision
-        case icon
-        case briefDescription
-        case source
-        case aiScenarios
-        case aiToolScenarios
-        case relatedTaskCodes
-        case temperature
-        case maxTokens = "max_tokens"
-        case baseModelName = "base_model_name"
-        case localFilename = "local_filename"
-        case endpoint
-        case apiKey = "api_key"
-    }
 
     func asScenarioConfig() -> AIScenarioConfig {
         AIScenarioConfig(
@@ -374,36 +338,36 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        name = try c.decode(String.self, forKey: .name)
-        displayName = try c.decode(String.self, forKey: .displayName)
-        identity = try c.decode(String.self, forKey: .identity)
-        company = try c.decode(String.self, forKey: .company)
-        providerID = AIProviderIdentifier.normalize(try c.decodeIfPresent(String.self, forKey: .providerID) ?? company)
-        endpoint = try c.decode(String.self, forKey: .endpoint)
-        apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey)
-        supportsSearch = try c.decode(Bool.self, forKey: .supportsSearch)
-        supportsMultimodal = try c.decode(Bool.self, forKey: .supportsMultimodal)
-        supportsReasoning = try c.decode(Bool.self, forKey: .supportsReasoning)
-        supportsToolUse = try c.decode(Bool.self, forKey: .supportsToolUse)
-        supportsVoiceGen = try c.decode(Bool.self, forKey: .supportsVoiceGen)
-        supportsImageGen = try c.decode(Bool.self, forKey: .supportsImageGen)
-        supportsText = try c.decode(Bool.self, forKey: .supportsText)
-        supportsDeepReasoning = try c.decode(Bool.self, forKey: .supportsDeepReasoning)
-        reasoningControllable = try c.decode(Bool.self, forKey: .reasoningControllable)
-        priceTier = try c.decode(Int.self, forKey: .priceTier)
-        systemProvision = try c.decodeIfPresent(String.self, forKey: .systemProvision)
-        icon = try c.decodeIfPresent(String.self, forKey: .icon)
-        briefDescription = try c.decodeIfPresent(String.self, forKey: .briefDescription)
-        source = try c.decode(String.self, forKey: .source)
-        aiScenarios = try c.decodeIfPresent([String].self, forKey: .aiScenarios) ?? []
-        aiToolScenarios = try c.decodeIfPresent([String].self, forKey: .aiToolScenarios) ?? []
-        relatedTaskCodes = try c.decodeIfPresent([String].self, forKey: .relatedTaskCodes) ?? []
-        isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
-        temperature = try c.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.2
-        maxTokens = try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? 4096
-        baseModelName = try c.decodeIfPresent(String.self, forKey: .baseModelName)
-        localFilename = try c.decodeIfPresent(String.self, forKey: .localFilename)
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        name = try c.decode(String.self, forKey: .key("name"))
+        displayName = try c.decode(String.self, forKey: .key("displayName"))
+        identity = try c.decode(String.self, forKey: .key("identity"))
+        company = try c.decode(String.self, forKey: .key("company"))
+        providerID = AIProviderIdentifier.normalize(try c.decodeIfPresent(String.self, forKey: .key("providerId")) ?? company)
+        endpoint = try c.decode(String.self, forKey: .key("endpoint"))
+        apiKey = try c.decodeIfPresent(String.self, forKey: .key("apiKey"))
+        supportsSearch = try c.decode(Bool.self, forKey: .key("supportsSearch"))
+        supportsMultimodal = try c.decode(Bool.self, forKey: .key("supportsMultimodal"))
+        supportsReasoning = try c.decode(Bool.self, forKey: .key("supportsReasoning"))
+        supportsToolUse = try c.decode(Bool.self, forKey: .key("supportsToolUse"))
+        supportsVoiceGen = try c.decode(Bool.self, forKey: .key("supportsVoiceGen"))
+        supportsImageGen = try c.decode(Bool.self, forKey: .key("supportsImageGen"))
+        supportsText = try c.decode(Bool.self, forKey: .key("supportsText"))
+        supportsDeepReasoning = try c.decode(Bool.self, forKey: .key("supportsDeepReasoning"))
+        reasoningControllable = try c.decode(Bool.self, forKey: .key("reasoningControllable"))
+        priceTier = try c.decode(Int.self, forKey: .key("priceTier"))
+        systemProvision = try c.decodeIfPresent(String.self, forKey: .key("systemProvision"))
+        icon = try c.decodeIfPresent(String.self, forKey: .key("icon"))
+        briefDescription = try c.decodeIfPresent(String.self, forKey: .key("briefDescription"))
+        source = try c.decode(String.self, forKey: .key("source"))
+        aiScenarios = try c.decodeIfPresent([String].self, forKey: .key("aiScenarios")) ?? []
+        aiToolScenarios = try c.decodeIfPresent([String].self, forKey: .key("aiToolScenarios")) ?? []
+        relatedTaskCodes = try c.decodeIfPresent([String].self, forKey: .key("relatedTaskCodes")) ?? []
+        isDefault = try c.decodeIfPresent(Bool.self, forKey: .key("isDefault")) ?? false
+        temperature = try c.decodeIfPresent(Double.self, forKey: .key("temperature")) ?? 0.2
+        maxTokens = try c.decodeIfPresent(Int.self, forKey: .key("maxTokens")) ?? 4096
+        baseModelName = try c.decodeIfPresent(String.self, forKey: .key("baseModelName"))
+        localFilename = try c.decodeIfPresent(String.self, forKey: .key("localFilename"))
     }
 
     var configSource: AIConfigSource {
@@ -425,15 +389,11 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     /// 候选模型行列表。
     var models: [AIScenarioRemoteModelRow]
 
-    enum CodingKeys: String, CodingKey {
-        case defaultModelName = "default_model"
-        case models
-    }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let models = try c.decode([AIScenarioRemoteModelRow].self, forKey: .models)
-        let decodedDefault = try c.decodeIfPresent(String.self, forKey: .defaultModelName)?
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        let models = try c.decode([AIScenarioRemoteModelRow].self, forKey: .key("models"))
+        let decodedDefault = try c.decodeIfPresent(String.self, forKey: .key("defaultModel"))?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let defaultModelName: String = {
             if let decodedDefault, decodedDefault.isEmpty == false,
@@ -455,9 +415,9 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(defaultModelName, forKey: .defaultModelName)
-        try c.encode(models, forKey: .models)
+        var c = encoder.container(keyedBy: CodableKey.self)
+        try c.encode(defaultModelName, forKey: .key("defaultModel"))
+        try c.encode(models, forKey: .key("models"))
     }
 
     init(defaultModelName: String, models: [AIScenarioRemoteModelRow]) {
@@ -639,46 +599,28 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     }
 
     /// 与服务端字段命名的映射。
-    enum CodingKeys: String, CodingKey {
-        case chat
-        case embedding
-        case voice
-        case medicalStructuredExtraction = "medical_structured_extraction"
-        case medicalDocumentTypeRecognition = "medical_document_type_recognition"
-        case medicalCaseExtraction = "medical_case_extraction"
-        case healthExamExtraction = "health_exam_extraction"
-        case medicalReportExtraction = "medical_report_extraction"
-        case prescriptionExtraction = "prescription_extraction"
-        case medicationExtraction = "medication_extraction"
-        case optimizationText = "optimization_text"
-        case optimizationVisual = "optimization_visual"
-        case contextFolding = "context_folding"
-        case router
-        case modelConfig = "model_config"
-        case reportInterpretation = "report_interpretation"
-    }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        chat = try c.decode(AIScenarioRemoteBundle.self, forKey: .chat)
-        embedding = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .embedding)
+        let c = try decoder.container(keyedBy: CodableKey.self)
+        chat = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("chat"))
+        embedding = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .key("embedding"))
             ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
-        voice = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .voice)
+        voice = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .key("voice"))
             ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
-        optimizationText = try c.decode(AIScenarioRemoteBundle.self, forKey: .optimizationText)
-        optimizationVisual = try c.decode(AIScenarioRemoteBundle.self, forKey: .optimizationVisual)
-        contextFolding = try c.decode(AIScenarioRemoteBundle.self, forKey: .contextFolding)
-        router = try c.decode(AIScenarioRemoteBundle.self, forKey: .router)
-        modelConfig = try c.decode(AIScenarioRemoteBundle.self, forKey: .modelConfig)
-        reportInterpretation = try c.decode(AIScenarioRemoteBundle.self, forKey: .reportInterpretation)
+        optimizationText = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("optimizationText"))
+        optimizationVisual = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("optimizationVisual"))
+        contextFolding = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("contextFolding"))
+        router = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("router"))
+        modelConfig = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("modelConfig"))
+        reportInterpretation = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("reportInterpretation"))
 
-        medicalStructuredExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalStructuredExtraction)
-        medicalDocumentTypeRecognition = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalDocumentTypeRecognition)
-        medicalCaseExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalCaseExtraction)
-        healthExamExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .healthExamExtraction)
-        medicalReportExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicalReportExtraction)
-        prescriptionExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .prescriptionExtraction)
-        medicationExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .medicationExtraction)
+        medicalStructuredExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalStructuredExtraction"))
+        medicalDocumentTypeRecognition = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalDocumentTypeRecognition"))
+        medicalCaseExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalCaseExtraction"))
+        healthExamExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("healthExamExtraction"))
+        medicalReportExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalReportExtraction"))
+        prescriptionExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("prescriptionExtraction"))
+        medicationExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicationExtraction"))
     }
 
     /// 根据业务场景取对应 bundle。

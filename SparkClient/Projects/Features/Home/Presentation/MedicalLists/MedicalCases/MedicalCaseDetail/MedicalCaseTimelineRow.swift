@@ -844,7 +844,7 @@ private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
         department: "内科",
         doctorName: "王医生",
         visitNo: "OP-9001",
-        sourceSystemID: "",
+        sourceSystemId: "",
         notes: "复查",
         extra: nil,
         updatedAt: Date()
@@ -888,7 +888,7 @@ private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
         anesthesiaType: "全麻",
         incisionLevel: "II",
         asaClass: "II",
-        sourceSystemID: "",
+        sourceSystemId: "",
         notes: "顺利",
         extra: nil,
         updatedAt: Date()

@@ -103,18 +103,20 @@ struct AliyunOCREngine: OCRTextEngine {
 
     private func decodeAliyunText(from data: Data) throws -> String {
         struct Response: Decodable {
-            struct DataField: Decodable { let content: String?; enum CodingKeys: String, CodingKey { case content = "Content" } }
+            struct DataField: Decodable {
+                let content: String?
+
+                init(from decoder: Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodableKey.self)
+                    content = try container.decodeIfPresent(String.self, forKey: .key("Content"))
+                }
+            }
             let data: DataField?
             let code: String?
             let message: String?
-            enum CodingKeys: String, CodingKey {
-                case data = "Data"
-                case code = "Code"
-                case message = "Message"
-            }
         }
 
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
+        let decoded = try JSONDecoder.default.decode(Response.self, from: data)
         if let code = decoded.code, let message = decoded.message {
             throw OCRError.response("aliyun_error_\(code):\(message)")
         }

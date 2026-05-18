@@ -1281,14 +1281,6 @@ private struct MedicationRecordCreatePayload: Encodable {
     let notes: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case member, plan, status, timezone, notes, extra
-        case scheduledAt = "scheduled_at"
-        case takenAt = "taken_at"
-        case plannedDose = "planned_dose"
-        case actualDose = "actual_dose"
-        case doseSequence = "dose_sequence"
-    }
 }
 
 private struct MedicationRecordUpdatePayload: Encodable {
@@ -1298,11 +1290,6 @@ private struct MedicationRecordUpdatePayload: Encodable {
     let notes: String
     let extra: [String: String]
 
-    enum CodingKeys: String, CodingKey {
-        case status, notes, extra
-        case takenAt = "taken_at"
-        case actualDose = "actual_dose"
-    }
 }
 
 private extension String {

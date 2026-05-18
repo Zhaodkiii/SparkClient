@@ -14,6 +14,7 @@ final class LoginViewModel: ObservableObject {
     private let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
     private let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     private let sessionStore: AppSessionStore
+    private let logger: Logger = ConsoleLogger()
     private var currentNonce: String?
 
     init(
@@ -46,10 +47,14 @@ final class LoginViewModel: ObservableObject {
             }
 
             let payload = try makePayload(from: credential)
+            logger.info("登录流程：Apple credential 已生成 payload，开始执行登录用例", module: .auth)
             let session = try await signInWithAppleUseCase.execute(payload: payload)
+            logger.info("登录流程：Apple 登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
             sessionStore.setAuthenticated(session)
+            logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
             errorMessage = nil
         } catch {
+            logger.error("登录流程：Apple 登录失败 error=\(error.localizedDescription)", module: .auth)
             errorMessage = error.localizedDescription
         }
     }
@@ -75,8 +80,11 @@ final class LoginViewModel: ObservableObject {
                 verificationCode: verificationCode,
                 otpID: otpId
             )
+            logger.info("登录流程：手机号登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
             sessionStore.setAuthenticated(session)
+            logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
         } catch {
+            logger.error("登录流程：手机号登录失败 error=\(error.localizedDescription)", module: .auth)
             errorMessage = error.localizedDescription
         }
     }

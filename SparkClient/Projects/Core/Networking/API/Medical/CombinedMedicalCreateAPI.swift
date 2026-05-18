@@ -10,13 +10,6 @@ struct MemberCreateRequest: Encodable, Sendable {
     let relationship: String?
     let extra: [String: String]?
 
-    enum CodingKeys: String, CodingKey {
-        case name
-        case gender
-        case birthDate = "birth_date"
-        case relationship
-        case extra
-    }
 }
 
 /// 成员创建请求（带 ID，用于校验或更新现有成员）
@@ -28,14 +21,6 @@ struct MemberCreateRequestWithId: Encodable, Sendable {
     let relationship: String?
     let extra: [String: String]?
 
-    enum CodingKeys: String, CodingKey {
-        case id
-        case name
-        case gender
-        case birthDate = "birth_date"
-        case relationship
-        case extra
-    }
 }
 
 /// 病历创建请求（与 `MedicalCase` 字段对齐）
@@ -46,13 +31,6 @@ struct MedicalCaseCreateRequest: Encodable, Sendable {
     let ageAtVisit: Int?
     let extra: [String: String]?
 
-    enum CodingKeys: String, CodingKey {
-        case title
-        case hospitalName = "hospital_name"
-        case diagnosisSummary = "diagnosis_summary"
-        case ageAtVisit = "age_at_visit"
-        case extra
-    }
 }
 
 /// 症状创建请求（与 `Symptom` 字段对齐）
@@ -66,16 +44,6 @@ struct SymptomCreateRequest: Encodable, Sendable {
     let bodyPart: String?
     let notes: String?
 
-    enum CodingKeys: String, CodingKey {
-        case name
-        case code
-        case severity
-        case startedAt = "started_at"
-        case durationValue = "duration_value"
-        case durationUnit = "duration_unit"
-        case bodyPart = "body_part"
-        case notes
-    }
 }
 
 /// 就诊创建请求（与 `Visit` 字段对齐）
@@ -87,14 +55,6 @@ struct VisitCreateRequest: Encodable, Sendable {
     let visitNo: String?
     let notes: String?
 
-    enum CodingKeys: String, CodingKey {
-        case visitType = "visit_type"
-        case visitedAt = "visited_at"
-        case department
-        case doctorName = "doctor_name"
-        case visitNo = "visit_no"
-        case notes
-    }
 }
 
 /// 手术创建请求（与 `Surgery` 字段对齐）
@@ -109,17 +69,6 @@ struct SurgeryCreateRequest: Encodable, Sendable {
     let asaClass: String?
     let notes: String?
 
-    enum CodingKeys: String, CodingKey {
-        case procedureName = "procedure_name"
-        case procedureCode = "procedure_code"
-        case site
-        case performedAt = "performed_at"
-        case surgeon
-        case anesthesiaType = "anesthesia_type"
-        case incisionLevel = "incision_level"
-        case asaClass = "asa_class"
-        case notes
-    }
 }
 
 /// 随访创建请求（与 `FollowUp` 字段对齐）
@@ -131,14 +80,6 @@ struct FollowUpCreateRequest: Encodable, Sendable {
     let outcome: String?
     let nextAction: String?
 
-    enum CodingKeys: String, CodingKey {
-        case plannedAt = "planned_at"
-        case completedAt = "completed_at"
-        case status
-        case method
-        case outcome
-        case nextAction = "next_action"
-    }
 }
 
 /// 检查报告明细项创建请求
@@ -158,22 +99,6 @@ struct ExaminationReportDetailRequest: Encodable, Sendable {
     let sortOrder: Int?
     let extra: [String: String]?
 
-    enum CodingKeys: String, CodingKey {
-        case category
-        case subCategory = "sub_category"
-        case itemName = "item_name"
-        case itemCode = "item_code"
-        case resultValue = "result_value"
-        case unit
-        case referenceRange = "reference_range"
-        case flag
-        case resultAt = "result_at"
-        case modality
-        case bodyPart = "body_part"
-        case diagnosis
-        case sortOrder = "sort_order"
-        case extra
-    }
 }
 
 /// 检查报告创建请求（与 `ExaminationReport` 字段对齐）
@@ -187,16 +112,6 @@ struct ExaminationReportCreateRequest: Encodable, Sendable {
     let doctorName: String?
     let details: [ExaminationReportDetailRequest]?
 
-    enum CodingKeys: String, CodingKey {
-        case category
-        case itemName = "item_name"
-        case findings
-        case impression
-        case performedAt = "performed_at"
-        case organizationName = "organization_name"
-        case doctorName = "doctor_name"
-        case details
-    }
 }
 
 /// 组合创建处方请求（与 `Prescription` 字段对齐，内含处方下的 `MedicationPlan` 行）
@@ -210,16 +125,6 @@ struct PrescriptionCreateRequest: Encodable, Sendable {
     let extra: [String: String]?
     let medicationPlans: [SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload]
 
-    enum CodingKeys: String, CodingKey {
-        case prescriberName = "prescriber_name"
-        case institutionName = "institution_name"
-        case prescribedAt = "prescribed_at"
-        case diagnosis
-        case prescriptionNo = "prescription_no"
-        case status
-        case extra
-        case medicationPlans = "medication_plans"
-    }
 }
 
 /// 组合创建请求（一次性创建所有医疗信息）
@@ -253,17 +158,6 @@ struct CombinedMedicalCreateRequest: Encodable, Sendable {
     /// 源文件 ID 列表（用于绑定附件）
     let sourceFileIds: [Int]?
 
-    enum CodingKeys: String, CodingKey {
-        case member
-        case medicalCase = "medical_case"
-        case symptom
-        case visit
-        case surgery
-        case followUp = "follow_up"
-        case examinationReports = "examination_reports"
-        case prescriptions
-        case sourceFileIds = "source_file_ids"
-    }
 }
 
 // MARK: - 响应模型
@@ -282,19 +176,6 @@ struct CombinedMedicalCreateResponse: Decodable, Sendable {
     let medicationPlanIds: [Int]?
     let createdAt: String
 
-    enum CodingKeys: String, CodingKey {
-        case memberId = "member_id"
-        case medicalCaseId = "medical_case_id"
-        case symptomId = "symptom_id"
-        case visitId = "visit_id"
-        case surgeryId = "surgery_id"
-        case followUpId = "follow_up_id"
-        case examinationReportIds = "examination_report_ids"
-        case prescriptionIds = "prescription_ids"
-        case medicineBoxIds = "medicine_box_ids"
-        case medicationPlanIds = "medication_plan_ids"
-        case createdAt = "created_at"
-    }
 }
 
 // MARK: - API

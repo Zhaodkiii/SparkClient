@@ -70,10 +70,15 @@ final class AppLifecycleCoordinator: ObservableObject {
         preparingAccountID = session.accountID
         defer { preparingAccountID = nil }
 
+        logger.debug("会话流程：准备步骤 activateUser 开始 accountID=\(session.accountID)", module: .auth)
         await container.accountSessionRuntime.activateUser(accountID: session.accountID)
+        logger.debug("会话流程：准备步骤 onboarding activate 开始 accountID=\(session.accountID)", module: .auth)
         await container.onboardingStore.activate(session: session)
+        logger.debug("会话流程：准备步骤 bootstrapIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
         await container.appBootstrapper.bootstrapIfNeeded(for: session)
+        logger.debug("会话流程：准备步骤 home loadInitialIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
         await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)
+        logger.debug("会话流程：准备步骤 task syncIncremental 开始 accountID=\(session.accountID)", module: .auth)
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         preparedAccountID = session.accountID
         logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
