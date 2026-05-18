@@ -33,6 +33,13 @@ struct MedicalReportRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
+        MedicalDocumentResultDetailNavigationContext(
+            memberID: output.envelope.memberID,
+            viewModel: viewModel,
+            logger: logger
+        )
+    }
 
     /// 附件（上传的检查报告照片）
     private var attachments: [MedicalDocumentLocalAttachmentItem] {
@@ -67,6 +74,7 @@ struct MedicalReportRecognitionResultContentView: View {
                 MedicalReportCardsSectionView(
                     reports: reports,
                     attachmentsForIDs: matchedAttachments(for:),
+                    detailNavigationContext: detailNavigationContext,
                     onEdit: { index, draft in
                         logger.info("Medical report result: open local editor index=\(index)", module: logModule)
                         localEditor = .report(index: index, draft: draft) // 打开编辑页

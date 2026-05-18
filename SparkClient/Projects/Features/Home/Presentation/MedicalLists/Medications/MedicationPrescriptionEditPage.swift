@@ -1,8 +1,15 @@
 import SwiftUI
 
 struct MedicationPrescriptionEditPage: View {
+    enum Mode {
+        case create
+        case serverEdit(existing: SparkMedicalSyncAPI.RemotePrescription)
+        case localEdit(existing: PrescriptionRecognitionDraft, onSubmit: (PrescriptionRecognitionDraft) -> Void)
+    }
+
     @Environment(\.dismiss) private var dismiss
 
+    let mode: Mode
     let prescription: SparkMedicalSyncAPI.RemotePrescription
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
@@ -35,6 +42,7 @@ struct MedicationPrescriptionEditPage: View {
         onSaved: @escaping (SparkMedicalSyncAPI.RemotePrescription) -> Void,
         onPlanUnlinked: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
     ) {
+        self.mode = .serverEdit(existing: prescription)
         self.prescription = prescription
         self.workflowAPI = workflowAPI
         self.fileTransferService = fileTransferService
@@ -49,6 +57,70 @@ struct MedicationPrescriptionEditPage: View {
         _status = State(initialValue: prescription.status)
         _hasPrescribedAt = State(initialValue: prescription.prescribedAt != nil)
         _prescribedAt = State(initialValue: prescription.prescribedAt ?? Date())
+    }
+
+    init(
+        mode: Mode,
+        plans: [SparkMedicalSyncAPI.RemoteMedicationPlan] = [],
+        workflowAPI: SparkMedicalWorkflowAPI,
+        fileTransferService: FileTransferService,
+        notificationClient: any NotificationClient,
+        onSaved: @escaping (SparkMedicalSyncAPI.RemotePrescription) -> Void = { _ in },
+        onPlanUnlinked: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void = { _ in }
+    ) {
+        self.mode = mode
+        self.workflowAPI = workflowAPI
+        self.fileTransferService = fileTransferService
+        self.notificationClient = notificationClient
+        self.onSaved = onSaved
+        self.onPlanUnlinked = onPlanUnlinked
+
+        let seedPrescription: SparkMedicalSyncAPI.RemotePrescription
+        switch mode {
+        case .create:
+            seedPrescription = SparkMedicalSyncAPI.RemotePrescription(
+                id: 0,
+                member: 0,
+                medicalCase: nil,
+                prescriberName: "",
+                institutionName: "",
+                prescribedAt: nil,
+                diagnosis: "",
+                prescriptionNo: nil,
+                status: "active",
+                extra: nil,
+                attachments: nil,
+                updatedAt: Date()
+            )
+        case .serverEdit(let existing):
+            seedPrescription = existing
+        case .localEdit(let existing, _):
+            let date = MedicalDateCoding.decodeDateOnlyOrDefaultNow(existing.prescribedAt, defaultDate: Date())
+            seedPrescription = SparkMedicalSyncAPI.RemotePrescription(
+                id: 0,
+                member: 0,
+                medicalCase: existing.medicalCase,
+                prescriberName: existing.prescriberName ?? "",
+                institutionName: existing.institutionName ?? "",
+                prescribedAt: existing.prescribedAt == nil ? nil : date,
+                diagnosis: existing.diagnosis ?? "",
+                prescriptionNo: existing.prescriptionNo,
+                status: existing.status ?? "active",
+                extra: existing.extra,
+                attachments: nil,
+                updatedAt: Date()
+            )
+        }
+
+        self.prescription = seedPrescription
+        _plans = State(initialValue: plans)
+        _institutionName = State(initialValue: seedPrescription.institutionName)
+        _prescriberName = State(initialValue: seedPrescription.prescriberName)
+        _prescriptionNo = State(initialValue: seedPrescription.prescriptionNo ?? "")
+        _diagnosis = State(initialValue: seedPrescription.diagnosis)
+        _status = State(initialValue: seedPrescription.status)
+        _hasPrescribedAt = State(initialValue: seedPrescription.prescribedAt != nil)
+        _prescribedAt = State(initialValue: seedPrescription.prescribedAt ?? Date())
     }
 
     var body: some View {
@@ -118,7 +190,13 @@ struct MedicationPrescriptionEditPage: View {
 
     private func saveNow() {
         formLog.info("MedicationPrescriptionEditPage: save started prescriptionId=\(prescription.id)", module: formLogModule)
-        Task { await savePrescription() }
+        switch mode {
+        case .localEdit(let existing, let onSubmit):
+            onSubmit(localOutputDraft(existing: existing))
+            dismiss()
+        case .create, .serverEdit:
+            Task { await savePrescription() }
+        }
     }
 
     private var linkedMedicationSection: some View {
@@ -186,6 +264,21 @@ struct MedicationPrescriptionEditPage: View {
             alertMessage = error.localizedDescription
             notificationClient.error(error.localizedDescription, title: "保存失败", source: "home.prescription.edit")
         }
+    }
+
+    private func localOutputDraft(existing: PrescriptionRecognitionDraft) -> PrescriptionRecognitionDraft {
+        PrescriptionRecognitionDraft(
+            medicalCase: existing.medicalCase,
+            prescriberName: prescriberName.nilIfBlank,
+            institutionName: institutionName.nilIfBlank,
+            prescribedAt: hasPrescribedAt ? MedicalDateCoding.encodeDateOnly(prescribedAt) : nil,
+            diagnosis: diagnosis.nilIfBlank,
+            prescriptionNo: prescriptionNo.nilIfBlank,
+            status: status.nilIfBlank ?? "active",
+            extra: existing.extra,
+            medicationPlans: existing.medicationPlans,
+            attachmentFileIds: existing.attachmentFileIds
+        )
     }
 
     @MainActor
@@ -277,4 +370,3 @@ private struct PrescriptionResourceUpdatePayload: Encodable {
     let extra: [String: String]
 
 }
-

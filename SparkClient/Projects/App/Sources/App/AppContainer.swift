@@ -615,6 +615,8 @@ final class AppContainer {
             saveUseCase: saveTypedMedicalDocumentUseCase,
             bindUseCase: bindUploadedFilesToMedicalBusinessUseCase,
             aiConfigCenter: aiConfigCenter,
+            workflowAPIForLocalForms: backend.medicalWorkflow,
+            notificationClient: notificationClient,
             logger: logger
         )
         cachedMedicalDocumentUploadViewModel = created

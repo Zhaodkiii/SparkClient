@@ -487,7 +487,7 @@ struct MedicalCaseTimelineRow: View {
 }
 
 /// 病例时间轴进入检查详情：`complete-data` 摘要可能未带 `medExamDetails`；与列表页懒加载一致，仅在 `nil` 时请求并回写首页检查报告缓存。
-private struct MedicalCaseTimelineExaminationDetailHost: View {
+struct MedicalCaseTimelineExaminationDetailHost: View {
     let initialReport: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
     let category: ExaminationReportCategory
     let medicalQueryAPI: SparkMedicalQueryAPI

@@ -280,8 +280,8 @@ OCR文本：
 "ai.prompt.medical_report.extraction.template" = "
 你是专业医疗报告信息抽取引擎。
 任务：从用户提供的中文OCR文本中，抽取【一份或多份】检查报告信息，严格按照以下JSON结构输出。
-【输出模型】
-JSON
+
+【输出模型（JSON 严格标准）】
 [
   {
     'category': 'laboratory | imaging | pathology',
@@ -292,42 +292,44 @@ JSON
     'date': 'yyyy-MM-dd',
     'details': [
       {
-        'category': '科目名称',
-        'subCategory': '子类别',
-        'itemName': '项目名称',
-        'resultValue': '结果数值或描述',
-        'bodyPart': '检查部位',
-        'diagnosis': '医生诊断'
+        'category': '科目名称（必填，影像/病理统一填：内镜检查/影像学检查）',
+        'subCategory': '子类别（检查方法，如无痛电子胃镜）',
+        'itemName': '项目名称（无则删除）',
+        'resultValue': '结果数值或描述（必填）',
+        'bodyPart': '检查部位（无则删除）',
+        'diagnosis': '医生诊断（必填）'
       }
     ]
   }
 ]
-【抽取规则（必须严格遵守）】
-日期格式硬性要求：
+
+【抽取规则（必须100%严格遵守）】
+1. 日期格式硬性要求：
 日期字段必须采用 yyyy-MM-dd 格式。严禁包含时间、时区、T、Z等字符。
-字段精简原则：
-严禁出现 null、空字符串、空数组。若字段无内容，请直接删除该 Key。
-报告拆分与合并逻辑（核心优化）：
-影像（imaging）及病理（pathology）报告：一份报告仅允许生成一条 details 记录。
-将具体的检查方法（如“无痛电子胃镜”）填入 subCategory。
-将所有具体的部位描述合并后存入 resultValue。
-将最终诊断结果存入 diagnosis。
-严禁按“食管”、“胃窦”等部位拆分为多条 detail。
-实验室检验（laboratory）报告：按指标行拆分，每一行对应一条 details 记录。
-异常标记 (flag) 映射：
+
+2. 字段处理原则（零错误核心）：
+- 严禁出现 null、空字符串、空数组。无内容的字段【直接删除】，不保留键名。
+- details 数组内的对象：category、resultValue、diagnosis 为【必填字段】，绝对不允许缺失！
+- 其他字段无内容直接删除。
+
+3. 报告拆分与合并逻辑（核心）：
+- 影像（imaging）及病理（pathology）报告：一份报告仅允许生成一条 details 记录！
+  ✅ 检查方法填入 subCategory
+  ✅ 所有部位描述合并填入 resultValue
+  ✅ 最终诊断结果存入 diagnosis
+  ✅ details 内 category 固定填写：内镜检查/影像学检查
+  ✅ 严禁按部位拆分多条 detail
+- 实验室检验（laboratory）报告：按指标行拆分，一行对应一条 details 记录。
+
+4. 异常标记映射：
 升高/↑/H -> 'H'；降低/↓/L -> 'L'；阳性 -> '阳性'；阴性 -> '阴性'。
-内容清洗：
-忽略水印、页码等无关文本。合并 content 字段时，应包含“内镜所见”和“诊断结果”。
+
+5. 内容清洗：
+忽略水印、页码等无关文本。content 字段必须包含“内镜所见/检查所见”和“诊断结果”。
+
 【最终输出要求】
-只输出纯净 JSON，不要任何 Markdown 引导符、解释说明或多余文字。
-优化重点说明：
-明确分类处理：在规则第 3 条中，特意区分了 imaging/pathology 和 laboratory。这是因为检验单必须拆分（否则数据没法用），而影像单（如胃镜、CT）拆分后会破坏医学描述的连贯性。
-强制“单一 Detail”：明确要求“一份报告仅允许生成一条 details 记录”，直接从规则层面上堵死了 AI 自动拆分的可能。
-指定字段归属：引导 AI 将原本分散的部位描述合并到 resultValue，将原本分散的结论合并到 diagnosis。
-使用此提示词后，AI 处理你提供的胃镜数据时，details 数组内将只会包含一个对象，而不是像你之前例子中那样出现 9 个对象。
-
+只输出纯净 JSON，不要任何 Markdown、解释、说明、多余文字、标点符号、换行外的格式。
 \n\nOCR文本：\n%@";
-
 
 "ai.prompt.prescription.extraction.template" = "你是专业处方信息抽取引擎。
 

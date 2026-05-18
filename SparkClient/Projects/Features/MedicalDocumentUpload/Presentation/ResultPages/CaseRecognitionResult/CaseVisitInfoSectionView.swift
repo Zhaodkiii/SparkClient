@@ -16,7 +16,9 @@ struct CaseVisitInfoSectionView: View {
                 if let visit {
                     onEdit(visit)
                 }
-            }
+            },
+            enableCollapse: true,
+            defaultCollapsed:true
         ) {
             if let visit {
                 VStack(alignment: .leading, spacing: 10) {

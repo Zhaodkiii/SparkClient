@@ -39,6 +39,7 @@ struct MedicalDocumentUploadHostView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
+                    viewModel.dismissUploadPage()
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")

@@ -1,67 +1,239 @@
 import SwiftUI
 
+import SwiftUI
+
+/// 医疗文档结果分组卡片
+///
+/// 支持：
+/// - 标题 / 副标题
+/// - SF Symbols 图标
+/// - Badge 标签
+/// - 操作按钮
+/// - 自定义内容
+/// - 内容折叠/展开
+///
+/// 折叠功能特点：
+/// - 可配置是否启用折叠
+/// - 可配置默认是否折叠
+/// - 点击 Header 区域自动展开/收起
+/// - 自动显示 Chevron 指示箭头
 struct MedicalDocumentResultSectionCard<Content: View>: View {
+
+    // MARK: - 基础配置
+
+    /// 卡片标题
     let title: String
+
+    /// 卡片副标题
     let subtitle: String?
+
+    /// 左侧图标
     let systemImage: String
+
+    /// 主题色
     var tintColor: Color = Color(uiColor: .systemBlue)
+
+    /// 右上角 Badge
     var badgeText: String?
+
+    /// 操作按钮标题
     var actionTitle: String?
+
+    /// 操作按钮点击事件
     var action: (() -> Void)?
+
+    // MARK: - 折叠配置
+
+    /// 是否启用折叠功能
+    ///
+    /// true：
+    /// - 显示折叠箭头
+    /// - 点击 Header 可展开/收起
+    ///
+    /// false：
+    /// - 永远展示内容
+    /// - 不显示折叠箭头
+    var enableCollapse: Bool = false
+
+    /// 默认是否折叠
+    ///
+    /// 仅在 enableCollapse = true 时生效
+    var defaultCollapsed: Bool = false
+
+    // MARK: - 内容
+
+    /// 卡片内容区域
     @ViewBuilder var content: Content
 
+    // MARK: - State
+
+    /// 当前折叠状态
+    @State private var isCollapsed: Bool = false
+
+    // MARK: - Init
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        systemImage: String,
+        tintColor: Color = Color(uiColor: .systemBlue),
+        badgeText: String? = nil,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil,
+        enableCollapse: Bool = false,
+        defaultCollapsed: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.tintColor = tintColor
+        self.badgeText = badgeText
+        self.actionTitle = actionTitle
+        self.action = action
+        self.enableCollapse = enableCollapse
+        self.defaultCollapsed = defaultCollapsed
+        self.content = content()
+
+        // 初始化默认折叠状态
+        self._isCollapsed = State(initialValue: defaultCollapsed)
+    }
+
+    // MARK: - Body
+
     var body: some View {
+
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(tintColor)
-                    .symbolRenderingMode(.hierarchical)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.primary)
+            headerView
 
-                    if let subtitle, subtitle.isEmpty == false {
-                        Text(subtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            // 未折叠时展示内容
+            if enableCollapse == false || isCollapsed == false {
 
-                Spacer(minLength: 0)
+                content
+                    .transition(
+                        .opacity.combined(with: .move(edge: .top))
+                    )
+            }
+        }
+        .padding(16)
 
-                if let badgeText, badgeText.isEmpty == false {
-                    Text(badgeText)
-                        .font(.caption.weight(.semibold))
+        // 卡片背景
+        .background(
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+            .fill(.regularMaterial)
+        )
+
+        // 卡片边框
+        .overlay(
+            RoundedRectangle(
+                cornerRadius: 16,
+                style: .continuous
+            )
+            .stroke(
+                Color.primary.opacity(0.08),
+                lineWidth: 1
+            )
+        )
+
+        // 卡片阴影
+        .shadow(
+            color: Color.black.opacity(0.08),
+            radius: 12,
+            x: 0,
+            y: 4
+        )
+
+        // 折叠动画
+        .animation(
+            .spring(response: 0.25, dampingFraction: 0.9),
+            value: isCollapsed
+        )
+    }
+
+    // MARK: - Header
+
+    private var headerView: some View {
+
+        HStack(alignment: .top, spacing: 10) {
+
+            // 左侧图标
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(tintColor)
+                .symbolRenderingMode(.hierarchical)
+
+            // 标题区域
+            VStack(alignment: .leading, spacing: 2) {
+
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                // 副标题
+                if let subtitle, subtitle.isEmpty == false {
+
+                    Text(subtitle)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color(uiColor: .secondarySystemFill))
-                        )
-                }
-
-                if let actionTitle, let action {
-                    Button(actionTitle, action: action)
-                        .font(.subheadline.weight(.semibold))
                 }
             }
 
-            content
+            Spacer(minLength: 0)
+
+            // Badge
+            if let badgeText, badgeText.isEmpty == false {
+
+                Text(badgeText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(
+                            cornerRadius: 8,
+                            style: .continuous
+                        )
+                        .fill(Color(uiColor: .secondarySystemFill))
+                    )
+            }
+
+            // 操作按钮
+            if let actionTitle, let action {
+
+                Button(actionTitle, action: action)
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            // 折叠箭头
+            if enableCollapse {
+
+                Image(systemName: "chevron.down")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                    // 旋转箭头
+                    .rotationEffect(
+                        .degrees(isCollapsed ? -90 : 0)
+                    )
+            }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+
+        // 扩大点击区域
+        .contentShape(Rectangle())
+
+        // 点击 Header 切换折叠状态
+        .onTapGesture {
+
+            guard enableCollapse else {
+                return
+            }
+
+            isCollapsed.toggle()
+        }
     }
 }
 

@@ -2,6 +2,7 @@ import SwiftUI
 
 
 enum CaseRecognitionLocalEditor: Identifiable {
+    case caseDraft(MedicalCaseFormDraft)
     case visit(VisitRecognitionDraft)
     case symptom(SymptomRecognitionDraft)
     case surgery(SurgeryRecognitionDraft)
@@ -12,6 +13,8 @@ enum CaseRecognitionLocalEditor: Identifiable {
 
     var id: String {
         switch self {
+        case .caseDraft:
+            return "caseDraft"
         case .visit:
             return "visit"
         case .symptom:
@@ -27,6 +30,13 @@ enum CaseRecognitionLocalEditor: Identifiable {
         case .exam(let index, _):
             return "exam-\(index)"
         }
+    }
+
+    var allowsDeletion: Bool {
+        if case .caseDraft = self {
+            return false
+        }
+        return true
     }
 }
 

@@ -660,6 +660,9 @@
 "ai_settings.prefs.source_trial" = "Pro model";
 "ai_settings.prefs.source_local_key" = "Local model";
 "ai_settings.prefs.model_unselected" = "Please select a model";
+"ai_settings.prefs.search_prompt" = "Search scenarios";
+"ai_settings.prefs.empty_search" = "No matching scenarios";
+"ai_settings.prefs.empty_search_hint" = "Try another keyword.";
 "ai_settings.prefs.toggle.context_folding" = "Enable context folding";
 "ai_settings.prefs.max_tool_sets" = "Max tool groups: %d";
 "ai_settings.prefs.section.extraction" = "Data extraction model";

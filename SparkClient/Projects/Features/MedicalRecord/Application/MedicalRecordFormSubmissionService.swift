@@ -15,7 +15,8 @@ struct MedicalRecordFormSubmissionService: Sendable {
             durationValue: draft.durationValue.parsedAsAgeAtVisitInteger(),
             durationUnit: draft.durationUnit,
             bodyPart: draft.bodyPart,
-            notes: draft.notes
+            notes: draft.notes,
+            fileIds: []
         ))
     }
 
@@ -28,7 +29,8 @@ struct MedicalRecordFormSubmissionService: Sendable {
             department: draft.department,
             doctorName: draft.doctorName,
             visitNo: draft.visitNo,
-            notes: draft.notes
+            notes: draft.notes,
+            fileIds: []
         ))
     }
 
@@ -44,7 +46,8 @@ struct MedicalRecordFormSubmissionService: Sendable {
             anesthesiaType: draft.anesthesiaType,
             incisionLevel: draft.incisionLevel,
             asaClass: draft.asaClass,
-            notes: draft.notes
+            notes: draft.notes,
+            fileIds: []
         ))
     }
 
@@ -57,7 +60,8 @@ struct MedicalRecordFormSubmissionService: Sendable {
             status: draft.status,
             method: draft.method,
             outcome: draft.outcome,
-            nextAction: draft.nextAction
+            nextAction: draft.nextAction,
+            fileIds: []
         ))
     }
 

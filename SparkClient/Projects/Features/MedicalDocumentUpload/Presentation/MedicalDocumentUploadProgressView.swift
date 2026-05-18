@@ -347,7 +347,7 @@ private struct StepRow: View {
             }
 
             // 提取失败 → 切换模型
-        case .extract where outcome.isFailed && !viewModel.extractModelOptions.isEmpty:
+        case .extract :
             Menu {
                 Button {
                     viewModel.preferredExtractModelName = nil

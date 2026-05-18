@@ -4,7 +4,7 @@ import Foundation
 
 extension SymptomRecognitionDraft {
     /// 转换为创建请求
-    func toCreateRequest() -> SymptomCreateRequest {
+    func toCreateRequest(sourceFileIds: [Int] = []) -> SymptomCreateRequest {
         SymptomCreateRequest(
             name: name,
             code: code,
@@ -13,7 +13,8 @@ extension SymptomRecognitionDraft {
             durationValue: durationValue.parsedAsAgeAtVisitInteger(),
             durationUnit: durationUnit,
             bodyPart: bodyPart,
-            notes: notes
+            notes: notes,
+            sourceFileIds: sourceFileIds
         )
     }
 }
@@ -22,14 +23,15 @@ extension SymptomRecognitionDraft {
 
 extension VisitRecognitionDraft {
     /// 转换为创建请求
-    func toCreateRequest() -> VisitCreateRequest {
+    func toCreateRequest(sourceFileIds: [Int] = []) -> VisitCreateRequest {
         VisitCreateRequest(
             visitType: visitType,
             visitedAt: visitedAt,
             department: department,
             doctorName: doctorName,
             visitNo: visitNo,
-            notes: notes
+            notes: notes,
+            sourceFileIds: sourceFileIds
         )
     }
 }
@@ -38,7 +40,7 @@ extension VisitRecognitionDraft {
 
 extension SurgeryRecognitionDraft {
     /// 转换为创建请求
-    func toCreateRequest() -> SurgeryCreateRequest {
+    func toCreateRequest(sourceFileIds: [Int] = []) -> SurgeryCreateRequest {
         SurgeryCreateRequest(
             procedureName: procedureName,
             procedureCode: procedureCode,
@@ -48,7 +50,8 @@ extension SurgeryRecognitionDraft {
             anesthesiaType: anesthesiaType,
             incisionLevel: incisionLevel,
             asaClass: asaClass,
-            notes: notes
+            notes: notes,
+            sourceFileIds: sourceFileIds
         )
     }
 }
@@ -57,14 +60,15 @@ extension SurgeryRecognitionDraft {
 
 extension FollowUpRecognitionDraft {
     /// 转换为创建请求
-    func toCreateRequest() -> FollowUpCreateRequest {
+    func toCreateRequest(sourceFileIds: [Int] = []) -> FollowUpCreateRequest {
         FollowUpCreateRequest(
             plannedAt: plannedAt,
             completedAt: completedAt,
             status: status,
             method: method,
             outcome: outcome,
-            nextAction: nextAction
+            nextAction: nextAction,
+            sourceFileIds: sourceFileIds
         )
     }
 }
@@ -73,7 +77,7 @@ extension FollowUpRecognitionDraft {
 
 extension CaseRecognitionDraft {
     /// 转换为病历创建请求
-    func toMedicalCaseCreateRequest() -> MedicalCaseCreateRequest {
+    func toMedicalCaseCreateRequest(sourceFileIds: [Int] = []) -> MedicalCaseCreateRequest {
         // 合并 summary 和 diagnosis 作为诊断摘要
         let diagnosisParts: [String] = [summary, diagnosis].compactMap { $0 }.filter { !$0.isEmpty }
         let diagnosisSummary = diagnosisParts.isEmpty ? nil : diagnosisParts.joined(separator: "\n")
@@ -89,7 +93,8 @@ extension CaseRecognitionDraft {
             hospitalName: hospitalName,
             diagnosisSummary: diagnosisSummary,
             ageAtVisit: ageAtVisit.parsedAsAgeAtVisitInteger(),
-            extra: extraDict.isEmpty ? nil : extraDict
+            extra: extraDict.isEmpty ? nil : extraDict,
+            sourceFileIds: sourceFileIds
         )
     }
 }
@@ -122,7 +127,7 @@ extension MedicalReportItem {
 
 extension MedicalReportRecognitionDraft {
     /// 转换为检查报告创建请求
-    func toExaminationReportCreateRequest() -> ExaminationReportCreateRequest {
+    func toExaminationReportCreateRequest(sourceFileIds: [Int] = []) -> ExaminationReportCreateRequest {
         ExaminationReportCreateRequest(
             category: category ?? "unknown",
             itemName: title,
@@ -131,7 +136,8 @@ extension MedicalReportRecognitionDraft {
             performedAt: date,
             organizationName: hospital,
             doctorName: doctor,
-            details: details.map { $0.toExaminationReportDetailRequest() }
+            details: details.map { $0.toExaminationReportDetailRequest() },
+            sourceFileIds: sourceFileIds
         )
     }
 }
@@ -140,7 +146,7 @@ extension MedicalReportRecognitionDraft {
 
 extension HealthExamRecognitionDraft {
     /// 转换为检查报告创建请求列表（将体检报告拆分为多个检查报告）
-    func toExaminationReportCreateRequests() -> [ExaminationReportCreateRequest] {
+    func toExaminationReportCreateRequests(sourceFileIds: [Int] = []) -> [ExaminationReportCreateRequest] {
         // 按类别分组创建检查报告
         let groupedByCategory = Dictionary(grouping: items) { $0.category }
 
@@ -153,7 +159,8 @@ extension HealthExamRecognitionDraft {
                 performedAt: examDate,
                 organizationName: institutionName,
                 doctorName: nil,
-                details: items.map { $0.toExaminationReportDetailRequest() }
+                details: items.map { $0.toExaminationReportDetailRequest() },
+                sourceFileIds: sourceFileIds
             )
         }
     }

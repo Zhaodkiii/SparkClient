@@ -19,7 +19,6 @@ struct ExaminationReportsListPage: View {
     @State private var selectedCategory: ExaminationReportCategory?
     @State private var isPresentingAddExamSheet = false
     @State private var showingUploadSheet = false
-    @State private var showingUploadHost = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -150,7 +149,7 @@ struct ExaminationReportsListPage: View {
                 startExaminationReportRecognition(files: files)
             }
         }
-        .fullScreenCover(isPresented: $showingUploadHost) {
+        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
@@ -292,7 +291,6 @@ struct ExaminationReportsListPage: View {
     @MainActor
     private func startExaminationReportRecognition(files: [MedicalUploadLocalFile]) {
         medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicalReport)
-        showingUploadHost = true
     }
 }
 

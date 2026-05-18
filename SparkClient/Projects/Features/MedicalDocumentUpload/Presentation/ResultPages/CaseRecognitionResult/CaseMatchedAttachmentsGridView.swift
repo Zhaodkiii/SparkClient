@@ -33,17 +33,17 @@ struct CaseMatchedAttachmentsGridView: View {
             }
         
             if attachments.isEmpty {
-                if onManage != nil {
-                    Button {
-                        onManage?()
-                    } label: {
-                        Label("手动关联附件", systemImage: "paperclip.badge.plus")
-                            .font(.caption.weight(.semibold))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(10)
-                    }
-                    .buttonStyle(.bordered)
-                }
+//                if onManage != nil {
+//                    Button {
+//                        onManage?()
+//                    } label: {
+//                        Label("手动关联附件", systemImage: "paperclip.badge.plus")
+//                            .font(.caption.weight(.semibold))
+//                            .frame(maxWidth: .infinity, alignment: .leading)
+//                            .padding(10)
+//                    }
+//                    .buttonStyle(.bordered)
+//                }
             } else {
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(attachments) { item in

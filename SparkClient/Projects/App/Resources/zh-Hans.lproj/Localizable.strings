@@ -660,6 +660,9 @@
 "ai_settings.prefs.source_trial" = "Pro 模型";
 "ai_settings.prefs.source_local_key" = "本地模型";
 "ai_settings.prefs.model_unselected" = "请选择模型";
+"ai_settings.prefs.search_prompt" = "搜索场景";
+"ai_settings.prefs.empty_search" = "没有匹配的场景";
+"ai_settings.prefs.empty_search_hint" = "试试其他关键词。";
 "ai_settings.prefs.toggle.context_folding" = "启用上下文折叠";
 "ai_settings.prefs.max_tool_sets" = "最大工具组数: %d";
 "ai_settings.prefs.section.extraction" = "抽数模型配置";

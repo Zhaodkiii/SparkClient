@@ -147,6 +147,7 @@ struct SparkMedicalWorkflowAPI {
         let durationUnit: String?
         let bodyPart: String?
         let notes: String?
+        let fileIds: [Int]
 
     }
 
@@ -160,6 +161,7 @@ struct SparkMedicalWorkflowAPI {
         let doctorName: String?
         let visitNo: String?
         let notes: String?
+        let fileIds: [Int]
 
     }
 
@@ -176,6 +178,7 @@ struct SparkMedicalWorkflowAPI {
         let incisionLevel: String?
         let asaClass: String?
         let notes: String?
+        let fileIds: [Int]
 
     }
 
@@ -189,6 +192,7 @@ struct SparkMedicalWorkflowAPI {
         let method: String?
         let outcome: String?
         let nextAction: String?
+        let fileIds: [Int]
 
     }
 
@@ -231,6 +235,7 @@ struct SparkMedicalWorkflowAPI {
         let reminderEnabled: Bool
         let status: String
         let extra: [String: String]
+        let fileIds: [Int]
 
     }
 

@@ -19,7 +19,6 @@ struct MedicineBoxListPage: View {
     @State private var localMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var sheetDestination: MedicineBoxSheetDestination?
     @State private var showingUploadSheet = false
-    @State private var showingUploadHost = false
 
     init(
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
@@ -132,7 +131,7 @@ struct MedicineBoxListPage: View {
                 startMedicineBoxRecognition(files: files)
             }
         }
-        .fullScreenCover(isPresented: $showingUploadHost) {
+        .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(viewModel: viewModel)
             }
@@ -182,7 +181,6 @@ struct MedicineBoxListPage: View {
     @MainActor
     private func startMedicineBoxRecognition(files: [MedicalUploadLocalFile]) {
         viewModel.prepareAndStart(files: files, kind: .medicineBox)
-        showingUploadHost = true
     }
 
     @ViewBuilder

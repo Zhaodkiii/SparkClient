@@ -44,6 +44,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 当前页面所处的整体大阶段
     @Published var stage: Stage = .picking
 
+    /// 上传页面弹层展示开关，由 ViewModel 统一驱动入口展示与保存后的关闭。
+    @Published var isUploadPresented = false
+
     /// 当前选中的家庭成员名称
     @Published private(set) var selectedMemberName: String?
 
@@ -67,6 +70,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     /// 保存成功后的回执信息
     @Published var saveReceipt: MedicalDocumentSaveReceipt?
+
+    /// 保存成功事件版本号，供首页等宿主页面监听后刷新最新数据。
+    @Published private(set) var saveSucceededRevision = 0
 
     /// 用户手动指定的文档类型
     /// 为 .auto 时表示由服务端/AI 自动推断类型
@@ -112,6 +118,12 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// AI 配置中心（场景 bundle、模型列表等）
     private let aiConfigCenter: AIConfigCenter
 
+    /// 公共通知客户端，用于保存成功后的统一提示。
+    private let notificationClient: (any NotificationClient)?
+
+    /// 本地表单编辑复用首页表单组件所需的工作流 API。
+    private let workflowAPIForLocalForms: SparkMedicalWorkflowAPI?
+    
     /// 日志记录器
     private let logger: Logger
 
@@ -137,6 +149,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         saveUseCase: SaveTypedMedicalDocumentUseCase,
         bindUseCase: BindUploadedFilesToMedicalBusinessUseCase,
         aiConfigCenter: AIConfigCenter,
+        workflowAPIForLocalForms: SparkMedicalWorkflowAPI? = nil,
+        notificationClient: (any NotificationClient)? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.memberContextStore = memberContextStore
@@ -145,6 +159,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.saveUseCase = saveUseCase
         self.bindUseCase = bindUseCase
         self.aiConfigCenter = aiConfigCenter
+        self.workflowAPIForLocalForms = workflowAPIForLocalForms
+        self.notificationClient = notificationClient
         self.logger = logger
         self.selectedMemberName = memberContextStore.context.selectedMember?.name
     }
@@ -154,6 +170,22 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 是否允许开始识别：已选文件且成员上下文中有当前选中成员。
     var canStartRecognition: Bool {
         selectedFiles.isEmpty == false && memberContextStore.context.selectedMember != nil
+    }
+
+    var memberContextStoreForLocalForms: MemberContextStore {
+        memberContextStore
+    }
+
+    var workflowAPIForCaseLocalForms: SparkMedicalWorkflowAPI? {
+        workflowAPIForLocalForms
+    }
+
+    var notificationClientForLocalForms: (any NotificationClient)? {
+        notificationClient
+    }
+
+    var fileTransferServiceForResultDetails: FileTransferService {
+        uploadFilesUseCase.fileTransferService
     }
 
     // MARK: - File selection
@@ -504,6 +536,15 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 module: .medical
             )
 
+            reset()
+            dismissUploadPage()
+            notificationClient?.success(
+                L10n.text("medical.upload.saved.message"),
+                title: L10n.text("medical.upload.saved.title"),
+                source: "medical.upload.save"
+            )
+            saveSucceededRevision += 1
+
             // 保存+绑定全部成功
             return true
         } catch {
@@ -565,7 +606,16 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         selectedKind = kind
         setSelectedFiles(files)
         stage = .processing
+        presentUploadPage()
         startRecognitionTask()
+    }
+
+    func presentUploadPage() {
+        isUploadPresented = true
+    }
+
+    func dismissUploadPage() {
+        isUploadPresented = false
     }
 
 
@@ -577,12 +627,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
         stage = .picking
-        
         // 只有不保留附件时，才清空文件。
         if !keepAttachments {
             selectedFiles = []
         }
-        
         progress = nil
         stopProgressTimer(resetElapsedSeconds: true)
         needsManualModeSelection = false
@@ -1050,7 +1098,8 @@ extension MedicalDocumentUploadViewModel {
             extractUseCase: ExtractTypedMedicalDocumentUseCase(extractor: extractor),
             saveUseCase: SaveTypedMedicalDocumentUseCase(saver: saver),
             bindUseCase: BindUploadedFilesToMedicalBusinessUseCase(binder: binder),
-            aiConfigCenter: AppContainer.preview.aiConfigCenter
+            aiConfigCenter: AppContainer.preview.aiConfigCenter,
+            workflowAPIForLocalForms: previewWorkflowAPI
         )
     }
 

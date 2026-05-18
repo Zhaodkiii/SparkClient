@@ -43,6 +43,13 @@ struct PrescriptionRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
+        MedicalDocumentResultDetailNavigationContext(
+            memberID: output.envelope.memberID,
+            viewModel: viewModel,
+            logger: logger
+        )
+    }
 
     /// 附件（上传的处方照片）
     private var attachments: [MedicalDocumentLocalAttachmentItem] {
@@ -74,6 +81,7 @@ struct PrescriptionRecognitionResultContentView: View {
                 PrescriptionBatchListSectionView(
                     batches: [batch],
                     attachmentsForIDs: matchedAttachments(for:),
+                    detailNavigationContext: detailNavigationContext,
                     onEditBatch: { _, batch in
                         logger.info("Prescription result: open local batch editor", module: logModule)
                         localEditor = .batch(batch) // 打开处方编辑页
@@ -214,37 +222,50 @@ struct PrescriptionRecognitionResultContentView: View {
         switch editor {
         // 编辑【整张处方】
         case .batch(let existing):
-            MedicationMultiCreateView(
-                mode: .localEdit(existing: existing, onSubmit: { updated in
-                    logger.info("Prescription result: local batch updated meds=\(updated.medicationPlans?.count ?? 0)", module: logModule)
-                    batch = updated // 保存编辑后的处方
-                })
-            )
+            if let detailNavigationContext {
+                MedicationPrescriptionEditPage(
+                    mode: .localEdit(existing: existing, onSubmit: { updated in
+                        logger.info("Prescription result: local batch updated meds=\(updated.medicationPlans?.count ?? 0)", module: logModule)
+                        batch = updated
+                    }),
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    notificationClient: detailNavigationContext.notificationClient
+                )
+            }
 
         // 编辑【单个药品】
         case .medication(let index, let med):
-            MedicationFormView(
-                mode: .localEdit(existing: med, onSubmit: { updated in
-                    var meds = batch.medicationPlans ?? []
-                    guard meds.indices.contains(index) else { return }
-                    meds[index] = updated // 更新对应位置的药品
-                    
-                    // 重新组装处方数据
-                    batch = PrescriptionRecognitionDraft(
-                        medicalCase: batch.medicalCase,
-                        prescriberName: batch.prescriberName,
-                        institutionName: batch.institutionName,
-                        prescribedAt: batch.prescribedAt,
-                        diagnosis: batch.diagnosis,
-                        prescriptionNo: batch.prescriptionNo,
-                        status: batch.status,
-                        extra: batch.extra,
-                        medicationPlans: meds,
-                        attachmentFileIds: batch.attachmentFileIds
-                    )
-                    logger.info("Prescription result: local medication updated index=\(index)", module: logModule)
-                })
-            )
+            if let detailNavigationContext {
+                MedicationPlanFormView(
+                    mode: .localEdit(existing: MedicationPlanDraft(recognition: med), onSubmit: { updatedDraft in
+                        let updated = updatedDraft.recognitionDraft(preserving: med)
+                        var meds = batch.medicationPlans ?? []
+                        guard meds.indices.contains(index) else { return }
+                        meds[index] = updated
+
+                        batch = PrescriptionRecognitionDraft(
+                            medicalCase: batch.medicalCase,
+                            prescriberName: batch.prescriberName,
+                            institutionName: batch.institutionName,
+                            prescribedAt: batch.prescribedAt,
+                            diagnosis: batch.diagnosis,
+                            prescriptionNo: batch.prescriptionNo,
+                            status: batch.status,
+                            extra: batch.extra,
+                            medicationPlans: meds,
+                            attachmentFileIds: batch.attachmentFileIds
+                        )
+                        logger.info("Prescription result: local medication updated index=\(index)", module: logModule)
+                    }),
+                    memberID: detailNavigationContext.memberID,
+                    medicineBoxes: [med.remoteMedicineBox(memberID: detailNavigationContext.memberID, id: -30_000 - index)],
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    notificationClient: detailNavigationContext.notificationClient,
+                    onMedicineBoxSaved: { _ in }
+                )
+            }
         }
     }
 }

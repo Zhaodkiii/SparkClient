@@ -14,6 +14,7 @@ struct CaseRecognitionResultContentView: View {
     /// 本地编辑弹窗（支持多达8种编辑项：症状/就诊/手术/报告/处方/药品/随访等）
     @State private var localEditor: CaseRecognitionLocalEditor?
     @State private var attachmentTarget: CaseRecognitionAttachmentTarget?
+    @State private var deletionTarget: CaseRecognitionLocalEditor?
 
     /// 初始化：从 AI 识别结果中加载病历数据
     init(viewModel: MedicalDocumentUploadViewModel) {
@@ -44,6 +45,13 @@ struct CaseRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
+        MedicalDocumentResultDetailNavigationContext(
+            memberID: output.envelope.memberID,
+            viewModel: viewModel,
+            logger: ConsoleLogger()
+        )
+    }
 
     /// 附件：上传的病历照片 / 扫描件
     private var localAttachments: [MedicalDocumentLocalAttachmentItem] {
@@ -75,26 +83,23 @@ struct CaseRecognitionResultContentView: View {
                     draft: draft,
                     caseAttachments: matchedAttachments(for: draft.attachmentFileIds),
                     symptomAttachments: matchedAttachments(for: draft.symptom?.attachmentFileIds ?? []),
+                    visitAttachments: matchedAttachments(for: draft.visit?.attachmentFileIds ?? []),
                     surgeryAttachments: matchedAttachments(for: draft.surgery?.attachmentFileIds ?? []),
+                    onEditCase: { localEditor = .caseDraft(caseFormDraft) }, // 编辑病例主档
                     onEditSymptom: { localEditor = .symptom($0) },    // 编辑症状
+                    onEditVisit: { localEditor = .visit($0) },          // 编辑就诊记录
                     onEditSurgery: { localEditor = .surgery($0) },     // 编辑手术史
                     onManageCaseAttachments: { attachmentTarget = .caseDraft },
                     onManageSymptomAttachments: { attachmentTarget = .symptom },
+                    onManageVisitAttachments: { attachmentTarget = .visit },
                     onManageSurgeryAttachments: { attachmentTarget = .surgery }
-                )
-
-                // MARK: 3. 就诊信息区域
-                CaseVisitInfoSectionView(
-                    visit: draft.visit,
-                    attachments: matchedAttachments(for: draft.visit?.attachmentFileIds ?? []),
-                    onEdit: { localEditor = .visit($0) },              // 编辑就诊记录
-                    onManageAttachments: { attachmentTarget = .visit }
                 )
 
                 // MARK: 4. 检查报告列表区域
                 MedicalReportCardsSectionView(
                     reports: draft.examinationReports ?? [],
                     attachmentsForIDs: matchedAttachments(for:),
+                    detailNavigationContext: detailNavigationContext,
                     onEdit: { index, report in
                         localEditor = .exam(index: index, draft: report) // 编辑单份检查报告
                     },
@@ -113,6 +118,7 @@ struct CaseRecognitionResultContentView: View {
                         localEditor = .medicationItem(batchIndex: batchIndex, itemIndex: itemIndex, draft: item)
                     },
                     onEditFollowUp: { localEditor = .followUp($0) },             // 编辑随访计划
+                    detailNavigationContext: detailNavigationContext,
                     onManageBatchAttachments: { index, _ in
                         attachmentTarget = .prescription(index: index)
                     },
@@ -142,6 +148,7 @@ struct CaseRecognitionResultContentView: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+
         // 底部固定工具栏：返回 + 保存
         .safeAreaInset(edge: .bottom) {
             bottomBar
@@ -152,9 +159,38 @@ struct CaseRecognitionResultContentView: View {
         // 数据变化时动画
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: draft.infoDensityCount)
         // 全屏编辑弹窗
-        .fullScreenCover(item: $localEditor) { editor in
+        .sheet(item: $localEditor) { editor in
             CompatibleNavigationContainer {
                 localEditorDestination(editor)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Group {
+                                if editor.allowsDeletion {
+                                    Button(role: .destructive) {
+                                        deletionTarget = editor
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                } else {
+                                    EmptyView()
+                                }
+                            }
+                        }
+                    }
+                    .alert("确认删除？", isPresented: deleteConfirmationBinding) {
+                        Button("删除", role: .destructive) {
+                            if let deletionTarget {
+                                deleteEditor(deletionTarget)
+                            }
+                            deletionTarget = nil
+                            localEditor = nil
+                        }
+                        Button("取消", role: .cancel) {
+                            deletionTarget = nil
+                        }
+                    } message: {
+                        Text("删除后将从本次识别结果中移除此项。")
+                    }
             }
         }
         .sheet(item: $attachmentTarget) { target in
@@ -194,6 +230,85 @@ struct CaseRecognitionResultContentView: View {
     private func submitSave() {
         viewModel.updateTypedResult(.caseDocument(draft))
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { deletionTarget != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    deletionTarget = nil
+                }
+            }
+        )
+    }
+
+    private var caseFormDraft: MedicalCaseFormDraft {
+        MedicalCaseFormDraft(
+            memberID: output.envelope.memberID ?? viewModel.memberContextStoreForLocalForms.context.selectedMember?.id ?? 0,
+            title: draft.title,
+            hospitalName: draft.hospitalName ?? "",
+            diagnosisSummary: draft.diagnosis ?? draft.summary ?? "",
+            visitDate: MedicalDateCoding.decodeDateOnlyOrDefaultNow(
+                draft.occurredAt ?? draft.visit?.visitedAt,
+                defaultDate: Date()
+            ),
+            presentIllness: draft.summary ?? "",
+            pastHistory: draft.surgery?.notes ?? "",
+            ageAtVisit: draft.ageAtVisit.parsedAsAgeAtVisitInteger()
+        )
+    }
+
+    private func applyCaseFormDraft(_ updated: MedicalCaseFormDraft) {
+        draft = CaseRecognitionDraft(
+            title: updated.title,
+            summary: updated.presentIllness.nilIfBlank,
+            diagnosis: updated.diagnosisSummary.nilIfBlank,
+            hospitalName: updated.hospitalName.nilIfBlank,
+            ageAtVisit: updated.ageAtVisit.map(String.init),
+            occurredAt: MedicalDateCoding.encodeDateOnly(updated.visitDate),
+            attachmentFileIds: draft.attachmentFileIds,
+            symptom: draft.symptom,
+            visit: draft.visit,
+            surgery: draft.surgery,
+            followUps: draft.followUps,
+            prescriptions: draft.prescriptions,
+            examinationReports: draft.examinationReports
+        )
+    }
+
+    private func deleteEditor(_ editor: CaseRecognitionLocalEditor) {
+        switch editor {
+        case .caseDraft:
+            return
+        case .visit:
+            draft.visit = nil
+        case .symptom:
+            draft.symptom = nil
+        case .surgery:
+            draft.surgery = nil
+        case .medicationBatch(let batchDraft):
+            var prescriptions = draft.prescriptions ?? []
+            prescriptions.removeAll { $0 == batchDraft }
+            draft.prescriptions = prescriptions
+        case .medicationItem(let batchIndex, let itemIndex, _):
+            guard var prescriptions = draft.prescriptions,
+                  prescriptions.indices.contains(batchIndex),
+                  var medications = prescriptions[batchIndex].medicationPlans,
+                  medications.indices.contains(itemIndex)
+            else { return }
+            medications.remove(at: itemIndex)
+            prescriptions[batchIndex].medicationPlans = medications
+            draft.prescriptions = prescriptions
+        case .followUp(let followDraft):
+            var followUps = draft.followUps ?? []
+            followUps.removeAll { $0 == followDraft }
+            draft.followUps = followUps
+        case .exam(let index, _):
+            guard var reports = draft.examinationReports, reports.indices.contains(index) else { return }
+            reports.remove(at: index)
+            draft.examinationReports = reports
+        }
     }
 
     private func attachmentIDs(for target: CaseRecognitionAttachmentTarget) -> [UUID] {
@@ -322,6 +437,17 @@ struct CaseRecognitionResultContentView: View {
     @ViewBuilder
     private func localEditorDestination(_ editor: CaseRecognitionLocalEditor) -> some View {
         switch editor {
+        // 1. 编辑病历文档
+        case .caseDraft(let caseDraft):
+            if let workflowAPI = viewModel.workflowAPIForCaseLocalForms {
+                MedicalCaseFormView(
+                    mode: .localEdit(caseDraft, onDone: applyCaseFormDraft),
+                    memberContextStore: viewModel.memberContextStoreForLocalForms,
+                    workflowAPI: workflowAPI,
+                    notificationClient: viewModel.notificationClientForLocalForms ?? CaseRecognitionNoopNotificationClient.shared
+                )
+            }
+
         // 1. 编辑就诊信息
         case .visit(let visitDraft):
             VisitFormView(
@@ -390,70 +516,83 @@ struct CaseRecognitionResultContentView: View {
 
         // 4. 编辑整组处方
         case .medicationBatch(let batchDraft):
-            MedicationMultiCreateView(
-                mode: .localEdit(existing: batchDraft, onSubmit: { updated in
-                    var items = draft.prescriptions ?? []
-                    if let index = items.firstIndex(of: batchDraft) {
-                        items[index] = updated
-                    }
-                    draft = CaseRecognitionDraft(
-                        title: draft.title,
-                        summary: draft.summary,
-                        diagnosis: draft.diagnosis,
-                        hospitalName: draft.hospitalName,
-                        ageAtVisit: draft.ageAtVisit,
-                        occurredAt: draft.occurredAt,
-                        attachmentFileIds: draft.attachmentFileIds,
-                        symptom: draft.symptom,
-                        visit: draft.visit,
-                        surgery: draft.surgery,
-                        followUps: draft.followUps,
-                        prescriptions: items,
-                        examinationReports: draft.examinationReports
-                    )
-                })
-            )
-
+            if let detailNavigationContext {
+                MedicationPrescriptionEditPage(
+                    mode: .localEdit(existing: batchDraft, onSubmit: { updated in
+                        var items = draft.prescriptions ?? []
+                        if let index = items.firstIndex(of: batchDraft) {
+                            items[index] = updated
+                        }
+                        draft = CaseRecognitionDraft(
+                            title: draft.title,
+                            summary: draft.summary,
+                            diagnosis: draft.diagnosis,
+                            hospitalName: draft.hospitalName,
+                            ageAtVisit: draft.ageAtVisit,
+                            occurredAt: draft.occurredAt,
+                            attachmentFileIds: draft.attachmentFileIds,
+                            symptom: draft.symptom,
+                            visit: draft.visit,
+                            surgery: draft.surgery,
+                            followUps: draft.followUps,
+                            prescriptions: items,
+                            examinationReports: draft.examinationReports
+                        )
+                    }),
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    notificationClient: detailNavigationContext.notificationClient
+                )
+            }
         // 5. 编辑处方中的单个药品
         case .medicationItem(let batchIndex, let itemIndex, let medDraft):
-            MedicationFormView(
-                mode: .localEdit(existing: medDraft, onSubmit: { updated in
-                    var batches = draft.prescriptions ?? []
-                    guard batches.indices.contains(batchIndex) else { return }
-                    var batch = batches[batchIndex]
-                    var meds = batch.medicationPlans ?? []
-                    guard meds.indices.contains(itemIndex) else { return }
-                    meds[itemIndex] = updated
-                    batch = PrescriptionRecognitionDraft(
-                        medicalCase: batch.medicalCase,
-                        prescriberName: batch.prescriberName,
-                        institutionName: batch.institutionName,
-                        prescribedAt: batch.prescribedAt,
-                        diagnosis: batch.diagnosis,
-                        prescriptionNo: batch.prescriptionNo,
-                        status: batch.status,
-                        extra: batch.extra,
-                        medicationPlans: meds,
-                        attachmentFileIds: batch.attachmentFileIds
-                    )
-                    batches[batchIndex] = batch
-                    draft = CaseRecognitionDraft(
-                        title: draft.title,
-                        summary: draft.summary,
-                        diagnosis: draft.diagnosis,
-                        hospitalName: draft.hospitalName,
-                        ageAtVisit: draft.ageAtVisit,
-                        occurredAt: draft.occurredAt,
-                        attachmentFileIds: draft.attachmentFileIds,
-                        symptom: draft.symptom,
-                        visit: draft.visit,
-                        surgery: draft.surgery,
-                        followUps: draft.followUps,
-                        prescriptions: batches,
-                        examinationReports: draft.examinationReports
-                    )
-                })
-            )
+            if let detailNavigationContext {
+                MedicationPlanFormView(
+                    mode: .localEdit(existing: MedicationPlanDraft(recognition: medDraft), onSubmit: { updatedDraft in
+                        let updated = updatedDraft.recognitionDraft(preserving: medDraft)
+                        var batches = draft.prescriptions ?? []
+                        guard batches.indices.contains(batchIndex) else { return }
+                        var batch = batches[batchIndex]
+                        var meds = batch.medicationPlans ?? []
+                        guard meds.indices.contains(itemIndex) else { return }
+                        meds[itemIndex] = updated
+                        batch = PrescriptionRecognitionDraft(
+                            medicalCase: batch.medicalCase,
+                            prescriberName: batch.prescriberName,
+                            institutionName: batch.institutionName,
+                            prescribedAt: batch.prescribedAt,
+                            diagnosis: batch.diagnosis,
+                            prescriptionNo: batch.prescriptionNo,
+                            status: batch.status,
+                            extra: batch.extra,
+                            medicationPlans: meds,
+                            attachmentFileIds: batch.attachmentFileIds
+                        )
+                        batches[batchIndex] = batch
+                        draft = CaseRecognitionDraft(
+                            title: draft.title,
+                            summary: draft.summary,
+                            diagnosis: draft.diagnosis,
+                            hospitalName: draft.hospitalName,
+                            ageAtVisit: draft.ageAtVisit,
+                            occurredAt: draft.occurredAt,
+                            attachmentFileIds: draft.attachmentFileIds,
+                            symptom: draft.symptom,
+                            visit: draft.visit,
+                            surgery: draft.surgery,
+                            followUps: draft.followUps,
+                            prescriptions: batches,
+                            examinationReports: draft.examinationReports
+                        )
+                    }),
+                    memberID: detailNavigationContext.memberID,
+                    medicineBoxes: [medDraft.remoteMedicineBox(memberID: detailNavigationContext.memberID, id: -30_000 - batchIndex * 100 - itemIndex)],
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    notificationClient: detailNavigationContext.notificationClient,
+                    onMedicineBoxSaved: { _ in }
+                )
+            }
 
         // 6. 编辑随访计划
         case .followUp(let followDraft):
@@ -507,4 +646,15 @@ struct CaseRecognitionResultContentView: View {
             )
         }
     }
+}
+
+@MainActor
+private final class CaseRecognitionNoopNotificationClient: NotificationClient {
+    static let shared = CaseRecognitionNoopNotificationClient()
+
+    func publish(_ intent: NotificationIntent) {}
+    func success(_ message: String, title: String?, source: String) {}
+    func error(_ message: String, title: String?, source: String) {}
+    func warning(_ message: String, title: String?, source: String) {}
+    func info(_ message: String, title: String?, source: String) {}
 }

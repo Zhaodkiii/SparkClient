@@ -30,6 +30,8 @@ struct MedicalCaseCreateRequest: Encodable, Sendable {
     let diagnosisSummary: String?
     let ageAtVisit: Int?
     let extra: [String: String]?
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 
@@ -43,6 +45,8 @@ struct SymptomCreateRequest: Encodable, Sendable {
     let durationUnit: String?
     let bodyPart: String?
     let notes: String?
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 
@@ -54,6 +58,8 @@ struct VisitCreateRequest: Encodable, Sendable {
     let doctorName: String?
     let visitNo: String?
     let notes: String?
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 
@@ -68,6 +74,8 @@ struct SurgeryCreateRequest: Encodable, Sendable {
     let incisionLevel: String?
     let asaClass: String?
     let notes: String?
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 
@@ -79,6 +87,8 @@ struct FollowUpCreateRequest: Encodable, Sendable {
     let method: String?
     let outcome: String?
     let nextAction: String?
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 
@@ -111,6 +121,8 @@ struct ExaminationReportCreateRequest: Encodable, Sendable {
     let organizationName: String?
     let doctorName: String?
     let details: [ExaminationReportDetailRequest]?
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 
@@ -124,6 +136,8 @@ struct PrescriptionCreateRequest: Encodable, Sendable {
     let status: String?
     let extra: [String: String]?
     let medicationPlans: [SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload]
+    /// 源文件 ID 列表（用于绑定附件）
+    let sourceFileIds: [Int]?
 
 }
 

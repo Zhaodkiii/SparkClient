@@ -16,7 +16,6 @@ struct MedicalCasesListPage: View {
     @State private var rows: [SparkMedicalSyncAPI.RemoteMedicalCaseSummary]
     @State private var showingCreateSheet = false
     @State private var showingUploadSheet = false
-    @State private var showingUploadHost = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -100,7 +99,7 @@ struct MedicalCasesListPage: View {
                 startCaseDocumentRecognition(files: files)
             }
         }
-        .fullScreenCover(isPresented: $showingUploadHost) {
+        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
@@ -188,7 +187,6 @@ struct MedicalCasesListPage: View {
     @MainActor
     private func startCaseDocumentRecognition(files: [MedicalUploadLocalFile]) {
         medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument)
-        showingUploadHost = true
     }
 
     @MainActor

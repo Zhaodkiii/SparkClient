@@ -13,7 +13,6 @@ struct HomeView: View {
     @State private var memberActionTarget: Member?
     @State private var showDeleteConfirmation = false
     @State private var addMemberMode: AddFamilyMemberView.Mode?
-    @State private var showMedicalDocumentUpload = false
     @State private var showTaskCenter = false
 
     var body: some View {
@@ -67,7 +66,7 @@ struct HomeView: View {
             hasLoaded = true
             await viewModel.loadInitialIfNeeded(syncRemote: true)
         }
-        .fullScreenCover(isPresented: $showMedicalDocumentUpload) {
+        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
@@ -78,6 +77,11 @@ struct HomeView: View {
                     memberID: viewModel.selectedMemberID,
                     taskManager: dependencies.taskManager
                 )
+            }
+        }
+        .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
+            Task {
+                await viewModel.refresh()
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
@@ -179,7 +183,7 @@ struct HomeView: View {
                     .font(.headline)
                 Spacer()
                 Button {
-                    showMedicalDocumentUpload = true
+                    medicalDocumentUploadViewModel.presentUploadPage()
                     triggerHaptic(style: .medium)
                 } label: {
                     Label(L10n.text("home.medical.upload"), systemImage: "sparkles.rectangle.stack")

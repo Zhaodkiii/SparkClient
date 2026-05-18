@@ -354,11 +354,11 @@ struct MedicalCaseFormView: View {
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(L10n.text("common.cancel")) { dismiss() }
-            }
-        }
+//        .toolbar {
+//            ToolbarItem(placement: .cancellationAction) {
+//                Button(L10n.text("common.cancel")) { dismiss() }
+//            }
+//        }
         .sparkFormBottomBar(
             canSubmit: isSaving == false && isValid,
             saveTitle: saveTitle,

@@ -3,6 +3,17 @@ import SwiftUI
 /// 默认模型配置页：按场景统一展示，支持本地模型与 Pro 模型切换。
 struct AIModelPreferencesView: View {
     @StateObject private var viewModel: ScenarioModelPreferencesViewModel
+    @State private var searchText = ""
+
+    private var normalizedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var filteredScenarios: [AIScenario] {
+        AIScenario.allCases.filter { scenario in
+            scenario.matchesLocalizedSearch(normalizedSearchText)
+        }
+    }
 
     init(viewModel: ScenarioModelPreferencesViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -10,13 +21,35 @@ struct AIModelPreferencesView: View {
 
     var body: some View {
         Form {
-            ForEach(AIScenario.allCases, id: \.rawValue) { scenario in
-                scenarioSection(scenario)
+            if filteredScenarios.isEmpty {
+                emptySearchState
+            } else {
+                ForEach(filteredScenarios, id: \.rawValue) { scenario in
+                    scenarioSection(scenario)
+                }
             }
         }
         .navigationTitle(L10n.text("ai_settings.row.default_model_config"))
+        .searchable(text: $searchText, prompt: L10n.text("ai_settings.prefs.search_prompt", fallback: "Search scenarios", comment: "Scenario model preference search placeholder"))
         .task {
             await viewModel.reloadBundles()
+        }
+    }
+
+    private var emptySearchState: some View {
+        Section {
+            VStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                Text(L10n.text("ai_settings.prefs.empty_search", fallback: "No matching scenarios", comment: "Scenario model preference empty search title"))
+                    .font(.headline)
+                Text(L10n.text("ai_settings.prefs.empty_search_hint", fallback: "Try another keyword.", comment: "Scenario model preference empty search hint"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
         }
     }
 
@@ -129,6 +162,18 @@ struct AIModelPreferencesView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+    }
+}
+
+private extension AIScenario {
+    func matchesLocalizedSearch(_ searchText: String) -> Bool {
+        guard searchText.isEmpty == false else { return true }
+
+        return [localizedTitle, localizedIntro].contains { value in
+            let normalizedValue = value.lowercased()
+            return normalizedValue.contains(searchText)
+                || normalizedValue.toPinyinForSearch().lowercased().contains(searchText)
+        }
     }
 }
 

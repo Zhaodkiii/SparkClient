@@ -15,7 +15,6 @@ struct HealthExamReportsListPage: View {
     @State private var query = ""
     @State private var selectedFilter: HealthExamFilter = .all
     @State private var showingUploadSheet = false
-    @State private var showingUploadHost = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -137,7 +136,7 @@ struct HealthExamReportsListPage: View {
                 startHealthExamReportRecognition(files: files)
             }
         }
-        .fullScreenCover(isPresented: $showingUploadHost) {
+        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
             }
@@ -201,7 +200,6 @@ struct HealthExamReportsListPage: View {
     @MainActor
     private func startHealthExamReportRecognition(files: [MedicalUploadLocalFile]) {
         medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .healthExamReport)
-        showingUploadHost = true
     }
 }
 

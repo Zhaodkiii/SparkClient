@@ -41,6 +41,7 @@ struct PrescriptionBatchListSectionView: View {
     var tintColor: Color = Color(uiColor: .systemBlue)
     var actionTitle: String? = L10n.text("medical.upload.result.prescription.edit_batch")
     var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
+    var detailNavigationContext: MedicalDocumentResultDetailNavigationContext?
     let onEditBatch: (Int, PrescriptionRecognitionDraft) -> Void
     let onEditMedication: (Int, Int, MedicationPlanRecognitionDraft) -> Void
     var onEditFollowUp: ((FollowUpRecognitionDraft) -> Void)?
@@ -56,7 +57,9 @@ struct PrescriptionBatchListSectionView: View {
             tintColor: tintColor,
             badgeText: badgeText ?? defaultBadgeText,
             actionTitle: firstBatch == nil ? nil : actionTitle,
-            action: { firstBatch.map { onEditBatch(0, $0) } }
+            action: { firstBatch.map { onEditBatch(0, $0) } },
+            enableCollapse: true,
+            defaultCollapsed:true
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 if batches.isEmpty {
@@ -114,7 +117,21 @@ struct PrescriptionBatchListSectionView: View {
         )
     }
 
+    @ViewBuilder
     private func batchCard(index: Int, batch: PrescriptionRecognitionDraft) -> some View {
+        if let detailNavigationContext {
+            NavigationLink {
+                prescriptionDetailDestination(index: index, batch: batch, context: detailNavigationContext)
+            } label: {
+                batchCardContent(index: index, batch: batch)
+            }
+            .buttonStyle(.plain)
+        } else {
+            batchCardContent(index: index, batch: batch)
+        }
+    }
+
+    private func batchCardContent(index: Int, batch: PrescriptionRecognitionDraft) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text(batch.institutionName ?? "处方批次")
@@ -165,7 +182,26 @@ struct PrescriptionBatchListSectionView: View {
         )
     }
 
+    @ViewBuilder
     private func medicationRow(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft) -> some View {
+        if let detailNavigationContext {
+            NavigationLink {
+                medicationDetailDestination(
+                    batchIndex: batchIndex,
+                    itemIndex: itemIndex,
+                    draft: draft,
+                    context: detailNavigationContext
+                )
+            } label: {
+                medicationRowContent(batchIndex: batchIndex, itemIndex: itemIndex, draft: draft)
+            }
+            .buttonStyle(.plain)
+        } else {
+            medicationRowContent(batchIndex: batchIndex, itemIndex: itemIndex, draft: draft)
+        }
+    }
+
+    private func medicationRowContent(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "capsule")
@@ -211,6 +247,64 @@ struct PrescriptionBatchListSectionView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+    }
+
+    private func prescriptionDetailDestination(index: Int, batch: PrescriptionRecognitionDraft, context: MedicalDocumentResultDetailNavigationContext) -> some View {
+        let prescriptionID = -20_000 - index
+        let medicineBoxes = (batch.medicationPlans ?? []).enumerated().map { pair in
+            pair.element.remoteMedicineBox(memberID: context.memberID, id: prescriptionID * 100 - pair.offset)
+        }
+        let plans = (batch.medicationPlans ?? []).enumerated().map { pair in
+            pair.element.remoteMedicationPlan(
+                memberID: context.memberID,
+                id: prescriptionID * 1000 - pair.offset,
+                prescriptionID: prescriptionID,
+                medicineBoxID: medicineBoxes.indices.contains(pair.offset) ? medicineBoxes[pair.offset].id : nil,
+                medicalCaseID: batch.medicalCase
+            )
+        }
+        return MedicationPrescriptionDetailPage(
+            prescription: batch.remotePrescription(memberID: context.memberID, id: prescriptionID),
+            plans: plans,
+            medicineBoxes: medicineBoxes,
+            recordsByPlanID: [:],
+            memberID: context.memberID,
+            completeData: nil,
+            memberContextStore: context.memberContextStore,
+            workflowAPI: context.workflowAPI,
+            fileTransferService: context.fileTransferService,
+            notificationClient: context.notificationClient,
+            onPrescriptionSaved: { _ in },
+            onPrescriptionDeleted: { _ in },
+            onPlanSaved: { _ in },
+            onPlanDeleted: { _ in }
+        )
+    }
+
+    private func medicationDetailDestination(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft, context: MedicalDocumentResultDetailNavigationContext) -> some View {
+        let boxID = -30_000 - batchIndex * 100 - itemIndex
+        let plan = draft.remoteMedicationPlan(
+            memberID: context.memberID,
+            id: -40_000 - batchIndex * 100 - itemIndex,
+            prescriptionID: -20_000 - batchIndex,
+            medicineBoxID: boxID,
+            medicalCaseID: batches.indices.contains(batchIndex) ? batches[batchIndex].medicalCase : nil
+        )
+        let box = draft.remoteMedicineBox(memberID: context.memberID, id: boxID)
+        return MedicationPlanDetailPage(
+            plan: plan,
+            medicineBoxes: [box],
+            records: [],
+            memberID: context.memberID,
+            completeData: nil,
+            memberContextStore: context.memberContextStore,
+            workflowAPI: context.workflowAPI,
+            fileTransferService: context.fileTransferService,
+            notificationClient: context.notificationClient,
+            onSaved: { _ in },
+            onDeleted: { _ in },
+            onMedicineBoxSaved: { _ in }
         )
     }
 

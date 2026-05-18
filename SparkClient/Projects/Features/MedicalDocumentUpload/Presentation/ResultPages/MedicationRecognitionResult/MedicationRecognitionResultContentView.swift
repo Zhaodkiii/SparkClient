@@ -33,6 +33,13 @@ struct MedicationRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
+        MedicalDocumentResultDetailNavigationContext(
+            memberID: output.envelope.memberID,
+            viewModel: viewModel,
+            logger: logger
+        )
+    }
 
     /// 附件（上传的用药单照片）
     private var attachments: [MedicalDocumentLocalAttachmentItem] {
@@ -191,22 +198,35 @@ struct MedicationRecognitionResultContentView: View {
         switch editor {
         // 批量编辑（复用处方编辑页）
         case .batch(let batch):
-            MedicationMultiCreateView(
-                mode: .localEdit(existing: batch, onSubmit: { updated in
-                    medicationPlans = updated.medicationPlans ?? []
-                    logger.info("Medication result: local batch updated meds=\(medicationPlans.count)", module: logModule)
-                })
-            )
+            if let detailNavigationContext {
+                MedicationPrescriptionEditPage(
+                    mode: .localEdit(existing: batch, onSubmit: { updated in
+                        medicationPlans = updated.medicationPlans ?? []
+                        logger.info("Medication result: local batch updated meds=\(medicationPlans.count)", module: logModule)
+                    }),
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    notificationClient: detailNavigationContext.notificationClient
+                )
+            }
 
         // 编辑单个用药计划
         case .item(let index, let item):
-            MedicationFormView(
-                mode: .localEdit(existing: item, onSubmit: { updated in
-                    guard medicationPlans.indices.contains(index) else { return }
-                    medicationPlans[index] = updated
-                    logger.info("Medication result: local item updated index=\(index)", module: logModule)
-                })
-            )
+            if let detailNavigationContext {
+                MedicationPlanFormView(
+                    mode: .localEdit(existing: MedicationPlanDraft(recognition: item), onSubmit: { updatedDraft in
+                        guard medicationPlans.indices.contains(index) else { return }
+                        medicationPlans[index] = updatedDraft.recognitionDraft(preserving: item)
+                        logger.info("Medication result: local item updated index=\(index)", module: logModule)
+                    }),
+                    memberID: detailNavigationContext.memberID,
+                    medicineBoxes: [item.remoteMedicineBox(memberID: detailNavigationContext.memberID, id: -30_000 - index)],
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    notificationClient: detailNavigationContext.notificationClient,
+                    onMedicineBoxSaved: { _ in }
+                )
+            }
         }
     }
 }

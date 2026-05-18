@@ -78,6 +78,7 @@ struct MedicalReportStatsSectionView: View {
 struct MedicalReportCardsSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
     var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
+    var detailNavigationContext: MedicalDocumentResultDetailNavigationContext?
     let onEdit: (Int, MedicalReportRecognitionDraft) -> Void
     var onManageAttachments: ((Int, MedicalReportRecognitionDraft) -> Void)?
 
@@ -91,7 +92,9 @@ struct MedicalReportCardsSectionView: View {
                 format: L10n.text("medical.upload.result.medical_report.total_format"),
                 locale: .current,
                 reports.count
-            )
+            ),
+            enableCollapse: true,
+            defaultCollapsed:true
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(ExaminationReportCategory.allCases, id: \.rawValue) { category in
@@ -136,7 +139,35 @@ struct MedicalReportCardsSectionView: View {
         }
     }
 
+    @ViewBuilder
     private func reportRow(index: Int, report: MedicalReportRecognitionDraft, category: ExaminationReportCategory) -> some View {
+        if let detailNavigationContext {
+            NavigationLink {
+                MedicalCaseTimelineExaminationDetailHost(
+                    report: report.remoteExaminationReport(
+                        memberID: detailNavigationContext.memberID,
+                        id: -10_000 - index
+                    ),
+                    category: category,
+                    medicalQueryAPI: SparkMedicalQueryAPI(configuration: detailNavigationContext.workflowAPI.configuration),
+                    completeData: nil,
+                    fileTransferService: detailNavigationContext.fileTransferService,
+                    workflowAPI: detailNavigationContext.workflowAPI,
+                    memberContextStore: detailNavigationContext.memberContextStore,
+                    notificationClient: detailNavigationContext.notificationClient,
+                    logger: detailNavigationContext.logger,
+                    onExaminationReportsUpdated: nil
+                )
+            } label: {
+                reportRowContent(index: index, report: report, category: category)
+            }
+            .buttonStyle(.plain)
+        } else {
+            reportRowContent(index: index, report: report, category: category)
+        }
+    }
+
+    private func reportRowContent(index: Int, report: MedicalReportRecognitionDraft, category: ExaminationReportCategory) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(report.title)

@@ -68,7 +68,6 @@ struct MedicationsListPage: View {
     @State private var todayMedicationRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     @State private var sheetDestination: MedicationPlanSheetDestination?
     @State private var showingUploadSheet = false
-    @State private var showingUploadHost = false
 
     private let logModule = LogModule.home
 
@@ -176,7 +175,7 @@ struct MedicationsListPage: View {
             .sheet(isPresented: $showingUploadSheet) {
                 medicationUploadSheet
             }
-            .fullScreenCover(isPresented: $showingUploadHost) {
+            .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
                 uploadHostView
             }
     }
@@ -600,7 +599,6 @@ struct MedicationsListPage: View {
     @MainActor
     private func startMedicationPlanRecognition(files: [MedicalUploadLocalFile]) {
         medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicationPlan)
-        showingUploadHost = true
     }
 
     private func statusRank(_ status: String) -> Int {

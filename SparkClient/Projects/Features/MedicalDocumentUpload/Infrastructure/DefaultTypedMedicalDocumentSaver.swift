@@ -115,8 +115,8 @@ private extension DefaultTypedMedicalDocumentSaver {
             medicalCase: nil,
             prescriptionID: nil,
             prescription: nil,
-            items: buildMedicationPlanBundleItems(drafts, now: now),
-            fileIds: fileIds(from: drafts.flatMap(\.attachmentFileIds), envelope: envelope)
+            items: buildMedicationPlanBundleItems(drafts, envelope: envelope, now: now),
+            fileIds: []
         )
         let id = try await workflowAPI.saveMedicationPlanBundle(payload)
         return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
@@ -143,11 +143,8 @@ private extension DefaultTypedMedicalDocumentSaver {
             medicalCase: draft.medicalCase,
             prescriptionID: nil,
             prescription: prescription,
-            items: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], now: now),
-            fileIds: fileIds(
-                from: draft.attachmentFileIds + (draft.medicationPlans ?? []).flatMap(\.attachmentFileIds),
-                envelope: envelope
-            )
+            items: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], envelope: envelope, now: now),
+            fileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope)
         )
         let id = try await workflowAPI.saveMedicationPlanBundle(payload)
         return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
@@ -198,6 +195,7 @@ private extension DefaultTypedMedicalDocumentSaver {
 
     func buildMedicationPlanBundleItems(
         _ drafts: [MedicationPlanRecognitionDraft],
+        envelope: MedicalDocumentRecognitionEnvelope? = nil,
         now: Date
     ) -> [SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload] {
         drafts.enumerated().map { index, draft in
@@ -240,7 +238,8 @@ private extension DefaultTypedMedicalDocumentSaver {
                 instructions: draft.instructions?.nilIfBlank ?? "",
                 reminderEnabled: draft.reminderEnabled ?? false,
                 status: draft.status?.nilIfBlank ?? "active",
-                extra: mergeTypedUploadExtra((draft.extra ?? [:]).merging(["sort_order": "\(index)"]) { current, _ in current })
+                extra: mergeTypedUploadExtra((draft.extra ?? [:]).merging(["sort_order": "\(index)"]) { current, _ in current }),
+                fileIds: envelope.map { fileIds(from: draft.attachmentFileIds, envelope: $0) } ?? []
             )
         }
     }
@@ -425,7 +424,6 @@ private extension DefaultTypedMedicalDocumentSaver {
     func buildMedicalReportPayloads(
         memberID: Int,
         drafts: [MedicalReportRecognitionDraft],
-        sourceFileIds: [Int],
         envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) throws -> [SparkMedicalWorkflowAPI.MedicalReportSavePayload] {
@@ -491,7 +489,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 modality: "",
                 bodyPart: "",
                 diagnosis: "",
-                fileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope, fallback: sourceFileIds),
+                fileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope),
                 details: detailRows
             )
         }
@@ -506,22 +504,32 @@ private extension DefaultTypedMedicalDocumentSaver {
         envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) async throws -> MedicalDocumentSaveReceipt {
-        let sourceFileIds = extractSourceFileIds(from: envelope)
         let diagnosisText = mergedCaseDiagnosisSummary(draft: draft)
         let medicalCase = MedicalCaseCreateRequest(
             title: draft.title,
             hospitalName: draft.hospitalName,
             diagnosisSummary: diagnosisText.isEmpty ? nil : diagnosisText,
             ageAtVisit: draft.ageAtVisit.parsedAsAgeAtVisitInteger(),
-            extra: caseDocumentExtra(draft: draft)
+            extra: caseDocumentExtra(draft: draft),
+            sourceFileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope)
         )
         // 后端组合接口：症状/就诊/手术/随访各单条；检查报告可多选。
-        let symptomRequest = draft.symptom?.toCreateRequest()
-        let visitRequest = draft.visit?.toCreateRequest()
-        let surgeryRequest = draft.surgery?.toCreateRequest()
-        let followUpRequest = draft.followUps?.first.map { $0.toCreateRequest() }
-        let examReports = draft.examinationReports?.map { $0.toExaminationReportCreateRequest() }
-        let prescriptions = buildPrescriptionCreateRequests(draft.prescriptions ?? [], now: now)
+        let symptomRequest = draft.symptom.map {
+            $0.toCreateRequest(sourceFileIds: fileIds(from: $0.attachmentFileIds, envelope: envelope))
+        }
+        let visitRequest = draft.visit.map {
+            $0.toCreateRequest(sourceFileIds: fileIds(from: $0.attachmentFileIds, envelope: envelope))
+        }
+        let surgeryRequest = draft.surgery.map {
+            $0.toCreateRequest(sourceFileIds: fileIds(from: $0.attachmentFileIds, envelope: envelope))
+        }
+        let followUpRequest = draft.followUps?.first.map {
+            $0.toCreateRequest(sourceFileIds: fileIds(from: $0.attachmentFileIds, envelope: envelope))
+        }
+        let examReports = draft.examinationReports?.map {
+            $0.toExaminationReportCreateRequest(sourceFileIds: fileIds(from: $0.attachmentFileIds, envelope: envelope))
+        }
+        let prescriptions = buildPrescriptionCreateRequests(draft.prescriptions ?? [], envelope: envelope, now: now)
 
         let request = CombinedMedicalCreateRequest(
             member: MemberCreateRequestWithId(
@@ -539,7 +547,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             followUp: followUpRequest,
             examinationReports: examReports,
             prescriptions: prescriptions.isEmpty ? nil : prescriptions,
-            sourceFileIds: sourceFileIds
+            sourceFileIds: nil
         )
 
         let response = try await combinedAPI.createCombinedMedical(request)
@@ -556,6 +564,7 @@ private extension DefaultTypedMedicalDocumentSaver {
 
     func buildPrescriptionCreateRequests(
         _ drafts: [PrescriptionRecognitionDraft],
+        envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) -> [PrescriptionCreateRequest] {
         drafts.map { draft in
@@ -567,7 +576,8 @@ private extension DefaultTypedMedicalDocumentSaver {
                 prescriptionNo: draft.prescriptionNo?.nilIfBlank,
                 status: draft.status?.nilIfBlank ?? "active",
                 extra: mergeTypedUploadExtra(draft.extra),
-                medicationPlans: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], now: now)
+                medicationPlans: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], envelope: envelope, now: now),
+                sourceFileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope)
             )
         }
     }
@@ -606,11 +616,9 @@ private extension DefaultTypedMedicalDocumentSaver {
         envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) async throws -> MedicalDocumentSaveReceipt {
-        let sourceFileIds = extractSourceFileIds(from: envelope)
         let payloads = try buildMedicalReportPayloads(
             memberID: memberID,
             drafts: drafts,
-            sourceFileIds: sourceFileIds,
             envelope: envelope,
             now: now
         )
@@ -639,15 +647,9 @@ private extension DefaultTypedMedicalDocumentSaver {
         )
     }
 
-    /// 从信封中提取源文件 ID
-    func extractSourceFileIds(from envelope: MedicalDocumentRecognitionEnvelope) -> [Int] {
-        envelope.sourceFiles.compactMap { $0.remoteFile?.id }
-    }
-
     func fileIds(
         from matchedLocalFileIds: [UUID],
-        envelope: MedicalDocumentRecognitionEnvelope,
-        fallback: [Int]? = nil
+        envelope: MedicalDocumentRecognitionEnvelope
     ) -> [Int] {
         let remoteIDByLocalID = Dictionary(
             uniqueKeysWithValues: envelope.sourceFiles.compactMap { file in
@@ -659,7 +661,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 result.append(id)
             }
         }
-        return uniqueMatchedIds.isEmpty ? (fallback ?? extractSourceFileIds(from: envelope)) : uniqueMatchedIds
+        return uniqueMatchedIds
     }
 
 }
