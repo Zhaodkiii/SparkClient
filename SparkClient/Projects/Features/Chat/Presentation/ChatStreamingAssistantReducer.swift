@@ -92,14 +92,27 @@ struct ChatStreamingAssistantReducer: Sendable {
     }
 
     /// 高级合并：用于展示层（富文本、卡片块批量更新）
+    /// 核心作用：将新接收的消息块与现有消息块合并，完成流式渲染的最终展示处理
+    /// - Parameters:
+    ///   - state: 聊天流式助手的状态（传入时会被直接修改）
+    ///   - incomingBlocks: 新接收/待合并的消息块数组
+    ///   - now: 当前时间，默认值为当前日期
+    /// - Returns: 合并后状态是否发生变化（true=有变化，需要刷新UI）
     func mergePresentation(
         state: inout ChatStreamingAssistantState,
         incomingBlocks: [ChatMessageBlock],
         now: Date = Date()
     ) -> Bool {
+        // 保存合并前的原始状态，用于后续对比是否发生变更
         let previous = state
+        
+        // 安全校验：如果新消息块为空，直接返回未变更
         guard incomingBlocks.isEmpty == false else { return false }
 
+        // 流式消息块合并与渲染处理流水线：
+        // 1. mergeRichBlocks：合并富文本/卡片类型的新旧消息块
+        // 2. normalizeStreamingBlocks：标准化流式消息块格式，统一结构
+        // 3. finalizeStreamingPresentationBlocks：最终处理流式块，生成可直接展示的结果
         state.blocks = ChatMessageBlockBuilder.finalizeStreamingPresentationBlocks(
             normalizeStreamingBlocks(
                 ChatMessageBlockBuilder.mergeRichBlocks(
@@ -109,6 +122,7 @@ struct ChatStreamingAssistantReducer: Sendable {
             )
         )
 
+        // 对比状态是否变更，返回结果用于触发UI刷新
         return state != previous
     }
 

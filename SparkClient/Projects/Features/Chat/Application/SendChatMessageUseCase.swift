@@ -305,6 +305,7 @@ struct SendChatMessageUseCase: Sendable {
             let textForTools = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) } ?? sanitizedInput
             let aiHistory: [ChatMessage]
             let effectiveInference: ChatOrchestratorInferenceOptions
+            let modelAllowedToolNames = allowedToolNames(from: resolvedRow.aiToolScenarios)
             if let smallTask {
                 aiHistory = [
                     ChatMessage(
@@ -321,11 +322,17 @@ struct SendChatMessageUseCase: Sendable {
                     useWebSearch: inference.useWebSearch,
                     reasoningEnabled: inference.reasoningEnabled,
                     reasoningEffortTier: inference.reasoningEffortTier,
-                    allowedToolNames: Set(smallTask.toolList)
+                    allowedToolNames: Set(smallTask.toolList).intersection(modelAllowedToolNames ?? Set(smallTask.toolList))
                 )
             } else {
                 aiHistory = history
-                effectiveInference = inference
+                effectiveInference = inference.withAllowedToolNames(modelAllowedToolNames)
+            }
+            if let allowed = effectiveInference.allowedToolNames {
+                logger.debug(
+                    "模型工具白名单生效，model=\(resolvedRow.name), allowedTools=\(allowed.sorted().joined(separator: ",")), count=\(allowed.count)",
+                    module: .aiConfig
+                )
             }
 
             // MARK: 核心：调用AI编排器生成回复（流式）
@@ -513,6 +520,16 @@ struct SendChatMessageUseCase: Sendable {
                 memberContextSummary = ""
             }
 
+            let effectiveInference = inference.withAllowedToolNames(
+                allowedToolNames(from: resolvedRow.aiToolScenarios)
+            )
+            if let allowed = effectiveInference.allowedToolNames {
+                logger.debug(
+                    "模型工具白名单生效，model=\(resolvedRow.name), allowedTools=\(allowed.sorted().joined(separator: ",")), count=\(allowed.count)",
+                    module: .aiConfig
+                )
+            }
+
             let output = try await orchestrator.generateReply(
                 userInput: replayUserInput,
                 history: replayHistory,
@@ -520,7 +537,7 @@ struct SendChatMessageUseCase: Sendable {
                 memberID: contextMemberID,
                 threadID: thread.id,
                 assistantMessageClientID: assistantClientMessageID,
-                inference: inference,
+                inference: effectiveInference,
                 modelReasoning: modelReasoning,
                 systemPrompt: systemPrompt,
                 preferredModelName: resolvedRow.name,
@@ -693,6 +710,17 @@ struct SendChatMessageUseCase: Sendable {
         }
     }
 
+    private func allowedToolNames(from storedToolNames: [String]) -> Set<String>? {
+        if storedToolNames.isEmpty {
+            return nil
+        }
+        if storedToolNames.contains(SparkToolName.noSelectionSentinel) {
+            return []
+        }
+        let normalized = Set(storedToolNames).intersection(Set(SparkToolName.all))
+        return normalized.isEmpty ? nil : normalized
+    }
+
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
@@ -705,5 +733,13 @@ struct SendChatMessageUseCase: Sendable {
 
     private func format(_ seconds: TimeInterval) -> String {
         String(format: "%.3f", seconds)
+    }
+}
+
+private extension ChatOrchestratorInferenceOptions {
+    func withAllowedToolNames(_ allowedToolNames: Set<String>?) -> Self {
+        var copy = self
+        copy.allowedToolNames = allowedToolNames
+        return copy
     }
 }

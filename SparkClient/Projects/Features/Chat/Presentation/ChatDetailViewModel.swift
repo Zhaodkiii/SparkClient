@@ -1039,13 +1039,32 @@ final class ChatDetailViewModel: ObservableObject {
     ) async {
         guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID),
               streaming.blocks.isEmpty == false else { return }
+        let presentationBlocks = streaming.blocks.filter { block in
+            switch block.kind {
+            case .structuredHealthCards,
+                    .sleepVisualization,
+                    .workoutVisualization,
+                    .captureCard,
+                    .knowledgeCards,
+                    .html,
+                    .taskCards,
+                    .pendingMemberToolCards,
+                    .smallTaskCard,
+                    .healthCards,
+                    .events,
+                    .mapRoute:
+                return true
+            default:
+                return false
+            }
+        }
+        guard presentationBlocks.isEmpty == false else { return }
         let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
         guard let target = messages.last(where: { $0.clientMessageID == assistantClientMessageID }) else { return }
-        let mergedBlocks = ChatMessageBlockBuilder.mergeRichBlocks(
+        let mergedBlocks = ChatMessageBlockBuilder.merge(
 
-//        let mergedBlocks = ChatMessageBlockBuilder.merge(
             existingBlocks: target.blocks,
-            incomingBlocks: streaming.blocks
+            incomingBlocks: presentationBlocks
         )
         guard mergedBlocks != target.blocks else { return }
         await updateChatMessageBlocksUseCase.execute(

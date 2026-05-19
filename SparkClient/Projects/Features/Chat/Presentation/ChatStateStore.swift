@@ -483,19 +483,34 @@ final class ChatStateStore: ObservableObject {
         streamingAssistants[threadID] = streaming
         streamingContentGeneration &+= 1
     }
-
+    /// 合并流式助手的展示内容（更新UI展示用）
+    /// - Parameters:
+    ///   - threadID: 对话线程唯一标识
+    ///   - incomingBlocks: 新接收到的消息块数据
     func mergeStreamingAssistantPresentation(
         threadID: UUID,
         incomingBlocks: [ChatMessageBlock]
     ) {
+        // 无新消息块时直接返回，不执行后续逻辑
         guard incomingBlocks.isEmpty == false else { return }
+        
+        // 根据线程ID获取对应的流式助手实例，不存在则直接返回
         guard var streaming = streamingAssistants[threadID] else { return }
+        
+        // 调用reducer合并新的消息块到当前流式状态中，并返回是否发生了变更
         let changed = streamingReducer.mergePresentation(
             state: &streaming.state,
             incomingBlocks: incomingBlocks
         )
+        
+        // 状态无变更时直接返回，不更新数据
         guard changed else { return }
+        
+        // 将更新后的流式助手状态存回字典
         streamingAssistants[threadID] = streaming
+        
+        // 流式内容生成计数 +1（用于统计/刷新标记）
         streamingContentGeneration &+= 1
     }
+    
 }

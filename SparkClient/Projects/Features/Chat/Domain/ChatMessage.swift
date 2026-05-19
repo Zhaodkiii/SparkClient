@@ -73,25 +73,46 @@ nonisolated enum ChatBlockAnchor: Codable, Equatable, Sendable {
     }
 }
 
+/// 聊天消息块类型枚举
+/// 用于标识聊天消息中不同展示样式、功能模块的块类型
 nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
+    /// 纯文本内容块
     case text
+    /// 深度思考/AI 推理过程块
     case deepThought
+    /// 工具调用块（如函数调用、插件执行）
     case tool
+    /// 图片画廊/多图展示块
     case imageGallery
+    /// 文件附件块
     case fileAttachments
+    /// 知识卡片块
     case knowledgeCards
+    /// 翻译文本块
     case translatedText
+    /// 地图路线块
     case mapRoute
+    /// 日程/事件块
     case events
+    /// 健康数据卡片块
     case healthCards
+    /// 待处理成员工具卡片块
     case pendingMemberToolCards
+    /// 结构化健康卡片块
     case structuredHealthCards
+    /// 睡眠可视化展示块
     case sleepVisualization
+    /// 运动/健身可视化展示块
     case workoutVisualization
+    /// 快速捕获卡片块
     case captureCard
+    /// HTML 富内容块
     case html
+    /// 小型任务卡片块
     case smallTaskCard
+    /// 任务列表卡片块
     case taskCards
+    /// 错误信息块
     case error
 }
 
@@ -158,16 +179,31 @@ nonisolated enum ChatMessageBlockPayload: Equatable, Sendable {
     }
 }
 
+/// 聊天消息块：聊天界面中独立的内容单元（文本/卡片/附件/工具等）
+/// 遵循非孤立、唯一标识、可序列化、可比较、线程安全协议
 nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable {
+    // MARK: - 基础属性
+    /// 唯一标识
     let id: UUID
+    /// 块锚点（定位/关联标记，可选）
     let anchor: ChatBlockAnchor?
+    /// 工具调用 ID（可选）
     let toolCallId: String?
+    /// 消息块负载数据（核心内容）
     let payload: ChatMessageBlockPayload
+    /// 创建时间
     let createdAt: Date
+    /// 更新时间
     let updatedAt: Date
 
+    // MARK: - 计算属性（快捷访问 payload 内容）
+    /// 工具调用 ID（兼容命名）
     nonisolated var toolCallID: String? { toolCallId }
+    
+    /// 消息块类型（从负载中自动获取）
     nonisolated var kind: ChatMessageBlockKind { payload.kind }
+    
+    /// 文本内容：提取文本/翻译文本/HTML/错误/工具中的文本
     nonisolated var text: String? {
         switch payload {
         case .text(let text),
@@ -181,10 +217,14 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return nil
         }
     }
+    
+    /// 工具名称：仅工具类型块有效
     nonisolated var toolName: String? {
         guard case .tool(let tool) = payload else { return nil }
         return tool.name
     }
+    
+    /// 附件列表：图片画廊/文件附件类型有效
     nonisolated var attachments: [ChatAttachment] {
         switch payload {
         case .imageGallery(let attachments), .fileAttachments(let attachments):
@@ -193,59 +233,87 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return []
         }
     }
+    
+    /// 知识卡片列表
     nonisolated var knowledgeCards: [ChatKnowledgeCard] {
         guard case .knowledgeCards(let cards) = payload else { return [] }
         return cards
     }
+    
+    /// 任务卡片列表
     nonisolated var taskCards: [TaskCard] {
         guard case .taskCards(let cards) = payload else { return [] }
         return cards
     }
+    
+    /// 待处理成员工具卡片列表
     nonisolated var pendingMemberToolCards: [PendingMemberToolCard] {
         guard case .pendingMemberToolCards(let cards) = payload else { return [] }
         return cards
     }
+    
+    /// 地图位置列表
     nonisolated var locations: [ChatMapLocationPayload] {
         guard case .mapRoute(let route) = payload else { return [] }
         return route.locations
     }
+    
+    /// 地图路线列表
     nonisolated var routes: [ChatRoutePayload] {
         guard case .mapRoute(let route) = payload else { return [] }
         return route.routes
     }
+    
+    /// 事件列表
     nonisolated var events: [ChatEventPayload] {
         guard case .events(let events) = payload else { return [] }
         return events
     }
+    
+    /// 健康卡片列表
     nonisolated var healthCards: [ChatHealthCardPayload] {
         guard case .healthCards(let cards) = payload else { return [] }
         return cards
     }
+    
+    /// 结构化健康卡片数据
     nonisolated var structuredHealthCards: StructuredHealthCardsBlob? {
         guard case .structuredHealthCards(let blob) = payload else { return nil }
         return blob
     }
+    
+    /// 睡眠可视化模型
     nonisolated var sleepVisualization: ChatHealthSleepModel? {
         guard case .sleepVisualization(let model) = payload else { return nil }
         return model
     }
+    
+    /// 运动可视化模型
     nonisolated var workoutVisualization: ChatHealthWorkoutModel? {
         guard case .workoutVisualization(let model) = payload else { return nil }
         return model
     }
+    
+    /// 捕获消息卡片数据
     nonisolated var captureMessageCard: ChatCaptureMessageCardPayload? {
         guard case .captureCard(let card) = payload else { return nil }
         return card
     }
+    
+    /// 小型任务卡片数据
     nonisolated var smallTaskCard: ChatSmallTaskMessageCardPayload? {
         guard case .smallTaskCard(let card) = payload else { return nil }
         return card
     }
+    
+    /// 深度思考卡片数据
     nonisolated var deepThoughtCard: ChatDeepThoughtCardPayload? {
         guard case .deepThought(let card) = payload else { return nil }
         return card
     }
 
+    // MARK: - 构造器
+    /// 便捷构造器：自动生成 ID、时间，传入类型与对应内容即可创建消息块
     nonisolated init(
         id: UUID = UUID(),
         anchor: ChatBlockAnchor? = nil,
@@ -273,6 +341,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         self.id = id
         self.anchor = anchor
         self.toolCallId = toolCallID
+        // 根据类型自动组装负载数据
         self.payload = Self.makePayload(
             kind: kind,
             text: text,
@@ -296,7 +365,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         self.updatedAt = updatedAt
     }
 
-
+    /// 解码构造器：从 JSON/数据中解析出消息块
     nonisolated init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodableKey.self)
         let id = try c.decode(UUID.self, forKey: .key("id"))
@@ -322,6 +391,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         let createdAt = try c.decode(Date.self, forKey: .key("createdAt"))
         let updatedAt = try c.decode(Date.self, forKey: .key("updatedAt"))
 
+        // 解析完成后调用便捷构造器赋值
         self.init(
             id: id,
             anchor: anchor,
@@ -348,6 +418,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         )
     }
 
+    /// 编码方法：将消息块序列化为 JSON/数据
     nonisolated func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodableKey.self)
         try c.encode(id, forKey: .key("id"))
@@ -356,6 +427,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         try c.encodeIfPresent(text, forKey: .key("text"))
         try c.encodeIfPresent(toolName, forKey: .key("toolName"))
         try c.encodeIfPresent(toolCallId, forKey: .key("toolCallId"))
+        
+        // 非空数据才编码，减少数据体积
         if attachments.isEmpty == false { try c.encode(attachments, forKey: .key("attachments")) }
         if knowledgeCards.isEmpty == false { try c.encode(knowledgeCards, forKey: .key("knowledgeCards")) }
         if taskCards.isEmpty == false { try c.encode(taskCards, forKey: .key("taskCards")) }
@@ -364,16 +437,20 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         if routes.isEmpty == false { try c.encode(routes, forKey: .key("routes")) }
         if events.isEmpty == false { try c.encode(events, forKey: .key("events")) }
         if healthCards.isEmpty == false { try c.encode(healthCards, forKey: .key("healthCards")) }
+        
         try c.encodeIfPresent(structuredHealthCards, forKey: .key("structuredHealthCards"))
         try c.encodeIfPresent(sleepVisualization, forKey: .key("sleepVisualization"))
         try c.encodeIfPresent(workoutVisualization, forKey: .key("workoutVisualization"))
         try c.encodeIfPresent(captureMessageCard, forKey: .key("captureMessageCard"))
         try c.encodeIfPresent(smallTaskCard, forKey: .key("smallTaskCard"))
         try c.encodeIfPresent(deepThoughtCard, forKey: .key("deepThoughtCard"))
+        
         try c.encode(createdAt, forKey: .key("createdAt"))
         try c.encode(updatedAt, forKey: .key("updatedAt"))
     }
 
+    // MARK: - 私有工具方法
+    /// 根据块类型，自动生成对应的负载数据（核心工厂方法）
     private nonisolated static func makePayload(
         kind: ChatMessageBlockKind,
         text: String?,
@@ -397,6 +474,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         case .text:
             return .text(text ?? "")
         case .deepThought:
+            // 无传入时创建默认思考卡片
             return .deepThought(
                 deepThoughtCard ?? ChatDeepThoughtCardPayload(
                     reasoningContent: text,
@@ -426,6 +504,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         case .structuredHealthCards:
             return .structuredHealthCards(structuredHealthCards ?? .empty)
         case .sleepVisualization:
+            // 必须传入可视化数据，否则触发开发时崩溃
             guard let sleepVisualization else {
                 preconditionFailure("Missing sleep visualization payload for sleepVisualization block")
             }

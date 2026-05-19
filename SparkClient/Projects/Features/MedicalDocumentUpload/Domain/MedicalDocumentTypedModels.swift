@@ -177,7 +177,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
     /// 药箱字段：用于同步创建/关联 MedicineBox。
     let medicineName: String?
     let medicineType: String?
-    let totalQuantity: String?
+    @FlexibleOptionalString var totalQuantity: String?
     let expireDate: String?
     let medicineBox: MedicineBoxRecognitionDraft?
 
@@ -188,9 +188,9 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
 
     /// 服药计划字段：用于创建 MedicationPlan。
     let dosePerTime: String?
-    let doseValue: String?          // OCR 原始字符串，如 "1", "0.5", "1g"
+    @FlexibleOptionalString var doseValue: String?          // OCR 原始字符串，如 "1", "0.5", "1g"
     let frequencyType: String?
-    let everyNDays: String?
+    @FlexibleOptionalString var everyNDays: String?
     let weeklyWeekdays: [Int]?
     let frequencyText: String?
     let startDate: String?
@@ -232,7 +232,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
     ) {
         self.medicineName = medicineName
         self.medicineType = medicineType
-        self.totalQuantity = totalQuantity
+        self._totalQuantity = FlexibleOptionalString(wrappedValue: totalQuantity)
         self.expireDate = expireDate
         self.medicineBox = medicineBox
         self.brandName = brandName
@@ -240,9 +240,9 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         self.strength = strength
         self.doseUnit = doseUnit
         self.dosePerTime = dosePerTime
-        self.doseValue = doseValue
+        self._doseValue = FlexibleOptionalString(wrappedValue: doseValue)
         self.frequencyType = frequencyType
-        self.everyNDays = everyNDays
+        self._everyNDays = FlexibleOptionalString(wrappedValue: everyNDays)
         self.weeklyWeekdays = weeklyWeekdays
         self.frequencyText = frequencyText
         self.startDate = startDate
@@ -265,7 +265,7 @@ struct MedicineBoxRecognitionDraft: Sendable, Equatable, Codable {
     let dosageForm: String?
     let strength: String?
     let doseUnit: String?
-    let totalQuantity: String?
+    @FlexibleOptionalString var totalQuantity: String?
     let expireDate: String?
     let notes: String?
     let extra: [String: String]?

@@ -47,6 +47,7 @@ struct ToolExecutionResult: Sendable {
     let shouldBypassModel: Bool         // 是否跳过模型直接返回结果
     let isAwaitingUserInput: Bool       // 是否等待用户输入
     let resolvedMemberID: Int?          // 已解析的成员ID
+    let toolCallID: String?             // 模型本轮 tool_call id，用于消息块锚定
 
     /// 初始化方法
     init(
@@ -55,7 +56,8 @@ struct ToolExecutionResult: Sendable {
         sensitive: Bool,
         shouldBypassModel: Bool,
         isAwaitingUserInput: Bool = false,
-        resolvedMemberID: Int? = nil
+        resolvedMemberID: Int? = nil,
+        toolCallID: String? = nil
     ) {
         self.toolName = toolName
         self.outputText = outputText
@@ -63,6 +65,19 @@ struct ToolExecutionResult: Sendable {
         self.shouldBypassModel = shouldBypassModel
         self.isAwaitingUserInput = isAwaitingUserInput
         self.resolvedMemberID = resolvedMemberID
+        self.toolCallID = toolCallID
+    }
+
+    func withToolCallID(_ toolCallID: String?) -> ToolExecutionResult {
+        ToolExecutionResult(
+            toolName: toolName,
+            outputText: outputText,
+            sensitive: sensitive,
+            shouldBypassModel: shouldBypassModel,
+            isAwaitingUserInput: isAwaitingUserInput,
+            resolvedMemberID: resolvedMemberID,
+            toolCallID: toolCallID
+        )
     }
 }
 

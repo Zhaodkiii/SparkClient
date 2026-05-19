@@ -770,26 +770,37 @@ struct ChatOrchestrator: Sendable {
         toolContent: String?,
         executedTools: [ToolExecutionResult]
     ) -> [ChatMessageBlock] {
-        let blocks: [ChatMessageBlock] = []
-//        if let reasoning, reasoning.isEmpty == false {
-//            blocks.append(ChatMessageBlock(kind: .reasoning, text: reasoning))
-//        }
-//        if executedTools.isEmpty == false {
-//            for result in executedTools {
-//                blocks.append(
-//                    ChatMessageBlock(
-//                        kind: .tool,
-//                        text: result.outputText,
-//                        toolName: result.toolName
-//                    )
-//                )
-//            }
-//        } else if let toolContent, toolContent.isEmpty == false {
-//            blocks.append(ChatMessageBlock(kind: .tool, text: toolContent, toolName: toolName))
-//        }
-//        if text.isEmpty == false {
-//            blocks.append(ChatMessageBlock(kind: .text, text: text))
-//        }
+        var blocks: [ChatMessageBlock] = []
+
+        for result in executedTools {
+            let output = result.outputText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard output.isEmpty == false else { continue }
+            blocks.append(
+                ChatMessageBlock(
+                    kind: .tool,
+                    text: output,
+                    toolName: result.toolName,
+                    toolCallID: result.toolCallID
+                )
+            )
+        }
+
+        if executedTools.isEmpty,
+           let toolContent = toolContent?.trimmingCharacters(in: .whitespacesAndNewlines),
+           toolContent.isEmpty == false {
+            blocks.append(
+                ChatMessageBlock(
+                    kind: .tool,
+                    text: toolContent,
+                    toolName: toolName
+                )
+            )
+        }
+
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedText.isEmpty == false {
+            blocks.append(ChatMessageBlock(kind: .text, text: trimmedText))
+        }
         return blocks
     }
 
