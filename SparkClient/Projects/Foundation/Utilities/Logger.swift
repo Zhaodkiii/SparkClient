@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum LogLevel: Int, CaseIterable, Codable, Sendable {
     case verbose = 0
@@ -79,6 +80,23 @@ enum SparkLogger {
         module: LogModule,
         message: String
     ) {
+        if #available(iOS 14.0, macOS 11.0, *) {
+            let logger = os.Logger(subsystem: sparkLogSubsystemStorage.value, category: module.rawValue)
+            switch level {
+            case .verbose:
+                logger.trace("\(message, privacy: .public)")
+            case .debug:
+                logger.debug("\(message, privacy: .public)")
+            case .info:
+                logger.info("\(message, privacy: .public)")
+            case .warning:
+                logger.warning("\(message, privacy: .public)")
+            case .error:
+                logger.error("\(message, privacy: .public)")
+            }
+            return
+        }
+
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current

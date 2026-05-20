@@ -375,12 +375,6 @@ struct ChatView: View {
                 )
                 .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
             }
-            .onAppear {
-                Task { await detailViewModel.chatPageDidAppear() }
-            }
-            .onDisappear {
-                Task { await detailViewModel.chatPageDidDisappear() }
-            }
             .alert(L10n.text("chat.management.clear_confirm_title"), isPresented: $showClearChatConfirmation) {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
                 Button(L10n.text("chat.management.clear_action"), role: .destructive) {
@@ -406,13 +400,11 @@ struct ChatView: View {
             hasMoreMessages: hasMoreMessages,
             isLoadingMoreMessages: isLoadingMoreMessages,
             lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
-            streamingContentGeneration: stateStore.streamingContentGeneration,
             scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
             onLoadMore: {
                 Task { await detailViewModel.loadMoreMessages(for: threadID) }
             },
             onRefresh: {
-                await detailViewModel.sync()
                 await detailViewModel.loadMessagesIfNeeded(for: threadID)
                 await listViewModel.refreshThreads()
                 await MainActor.run {

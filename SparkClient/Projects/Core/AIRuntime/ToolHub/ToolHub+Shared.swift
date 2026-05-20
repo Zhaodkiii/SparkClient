@@ -25,6 +25,26 @@ extension ToolHub {
         return fmt.date(from: value)
     }
 
+    func healthNoDataDiagnosticIfNeeded(
+        _ output: String,
+        range: (start: Date, end: Date)
+    ) -> String {
+        let noMatching = L10n.text("health.tool.error.no_matching_health")
+        let noWorkouts = L10n.text("health.tool.error.no_workouts", fallback: "No matching workout records found.")
+        guard output == noMatching || output == noWorkouts else {
+            return output
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = Calendar.current.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return """
+        \(output)
+        查询区间：\(formatter.string(from: range.start)) 至 \(formatter.string(from: range.end))。
+        可能原因：HealthKit 在该区间没有样本、未授权读取步数/能量/运动数据，或当前设备/模拟器没有 Apple 健康数据。
+        """
+    }
+
 
     func parseDoubleValue(_ text: String?) -> Double? {
         guard let text else { return nil }
@@ -690,7 +710,7 @@ extension ToolHub {
         }
         let merge = structuredHealthCardMergeCoordinator
         Task {
-            await merge.mergeAppendRichPresentationWhenAssistantMessageReady(
+            await merge.publishRichBlocks(
                 threadID: threadID,
                 assistantClientMessageID: assistantID,
                 blocks: richBlocks

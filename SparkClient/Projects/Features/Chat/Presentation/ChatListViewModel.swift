@@ -13,6 +13,7 @@ final class ChatListViewModel: ObservableObject {
     private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let createThreadUseCase: CreateThreadUseCase
     private let deleteThreadUseCase: DeleteThreadUseCase
+    private let chatSyncSupervisor: ChatSyncSupervisor
     private let notificationClient: any NotificationClient
     private var hasLoadedForList = false
     private var cancellables = Set<AnyCancellable>()
@@ -28,6 +29,7 @@ final class ChatListViewModel: ObservableObject {
         loadChatMessagesUseCase: LoadChatMessagesUseCase,
         createThreadUseCase: CreateThreadUseCase,
         deleteThreadUseCase: DeleteThreadUseCase,
+        chatSyncSupervisor: ChatSyncSupervisor,
         notificationClient: any NotificationClient
     ) {
         self.stateStore = stateStore
@@ -40,6 +42,7 @@ final class ChatListViewModel: ObservableObject {
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.createThreadUseCase = createThreadUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
+        self.chatSyncSupervisor = chatSyncSupervisor
         self.notificationClient = notificationClient
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -76,6 +79,15 @@ final class ChatListViewModel: ObservableObject {
     }
 
     func refreshThreads() async {
+        do {
+            try await chatSyncSupervisor.refreshThreadListIncremental()
+        } catch {
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("common.error"),
+                source: "chat.list.refresh"
+            )
+        }
         await reloadThreads(selectFirstIfNeeded: false)
     }
 

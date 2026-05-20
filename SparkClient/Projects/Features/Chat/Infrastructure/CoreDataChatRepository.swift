@@ -48,6 +48,10 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadMessages(threadID: threadID, limit: limit, before: before)
     }
 
+    func loadMessages(clientMessageIDs: [UUID]) async -> [ChatMessage] {
+        await store.loadMessages(clientMessageIDs: clientMessageIDs)
+    }
+
     func countMessages(threadID: UUID) async -> Int {
         await store.countMessages(threadID: threadID)
     }
@@ -58,6 +62,10 @@ actor CoreDataChatRepository: ChatRepository {
 
     func appendMessage(_ message: ChatMessage) async throws -> ChatMessage {
         try await store.appendMessage(message)
+    }
+
+    func upsertLocalMessage(_ message: ChatMessage) async throws -> ChatMessage {
+        try await store.upsertLocalMessage(message)
     }
 
     func softDeleteMessage(clientMessageID: UUID) async {
@@ -76,6 +84,18 @@ actor CoreDataChatRepository: ChatRepository {
         await store.updateMessageBlocks(
             clientMessageID: clientMessageID,
             blocks: blocks,
+            markPendingForSync: markPendingForSync
+        )
+    }
+
+    func upsertMessageBlock(
+        clientMessageID: UUID,
+        block: ChatMessageBlock,
+        markPendingForSync: Bool
+    ) async {
+        await store.upsertMessageBlock(
+            clientMessageID: clientMessageID,
+            block: block,
             markPendingForSync: markPendingForSync
         )
     }
@@ -118,6 +138,14 @@ actor CoreDataChatRepository: ChatRepository {
 
     func loadOutboxMessages(limit: Int) async -> [ChatMessage] {
         await store.loadOutboxMessages(limit: limit)
+    }
+
+    func loadPendingMessageBlocks(limit: Int) async -> [ChatPendingMessageBlock] {
+        await store.loadPendingMessageBlocks(limit: limit)
+    }
+
+    func markMessageBlocksSynced(ids: [UUID]) async {
+        await store.markMessageBlocksSynced(ids: ids)
     }
 
     func softDeleteThread(id: UUID) async {

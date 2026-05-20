@@ -59,16 +59,25 @@ extension ToolHub {
         // 依赖的协程管理器与文档抽取器
         let merge = structuredHealthCardMergeCoordinator
         let extractor = typedMedicalDocumentExtractor
+        let logger = logger
+
+        await merge.publishStructuredHealthCardsPending(
+            threadID: threadID,
+            assistantClientMessageID: assistantID,
+            anchorToolCallID: normalizedToolCallID
+        )
         
         // 开启后台任务：执行结构化健康卡片抽取与合并（不阻塞当前方法返回）
         Task {
             do {
                 // 1. 从聊天摘要文本中抽取结构化健康数据
-                let output = try await extractor.extractFromChatDistilledText(
-                    memberID: boundMemberID,
-                    reportType: effectiveReportType,
-                    rawText: rawText
-                )
+                let output = try await withStructuredHealthExtractionTimeout(seconds: 45) {
+                    try await extractor.extractFromChatDistilledText(
+                        memberID: boundMemberID,
+                        reportType: effectiveReportType,
+                        rawText: rawText
+                    )
+                }
                 
                 // 2. 构建卡片数据增量更新 payload
                 let delta = ChatStructuredHealthCardsPayloadBuilder.appendPayloads(
@@ -78,7 +87,7 @@ extension ToolHub {
                 )
                 
                 // 3. 与睡眠/运动卡片一致：用工具调用 ID 锚定到对应工具行，并走统一富卡片合并入口
-                await merge.insertStructuredHealthCardsWhenAssistantMessageReady(
+                await merge.publishStructuredHealthCards(
                     threadID: threadID,
                     assistantClientMessageID: assistantID,
                     delta: delta,
@@ -98,7 +107,7 @@ extension ToolHub {
                 )
                 
                 // 合并失败占位信息到助手消息
-                await merge.insertStructuredHealthCardsWhenAssistantMessageReady(
+                await merge.publishStructuredHealthCards(
                     threadID: threadID,
                     assistantClientMessageID: assistantID,
                     delta: delta,
@@ -114,6 +123,26 @@ extension ToolHub {
             sensitive: false,
             shouldBypassModel: false
         )
+    }
+
+    private func withStructuredHealthExtractionTimeout<T: Sendable>(
+        seconds: UInt64,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+                throw SparkHealthToolError(message: "结构化健康卡片生成超时")
+            }
+            guard let result = try await group.next() else {
+                throw SparkHealthToolError(message: "结构化健康卡片生成失败")
+            }
+            group.cancelAll()
+            return result
+        }
     }
 
 }

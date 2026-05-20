@@ -14,8 +14,8 @@ final class ChatDetailViewModel: ObservableObject {
     private let ocrOrchestrator: OCROrchestrator
     private let ocrDocumentExtractor: OCRDocumentExtractor
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
-    private let syncChatUseCase: SyncChatUseCase
     private let updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase
+    private let chatSyncSupervisor: ChatSyncSupervisor
     let toolInteractionCoordinator: ToolInteractionCoordinator
     private let notificationClient: any NotificationClient
     private let aiConfigCenter: AIConfigCenter
@@ -25,7 +25,6 @@ final class ChatDetailViewModel: ObservableObject {
     private let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
     private let taskManager: TaskManager
     private let logger: Logger
-    private var isRealtimeActive = false
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
     private var currentGenerationTask: Task<Void, Never>?
     private var currentGenerationCancellationToken: AIRuntimeCancellationToken?
@@ -64,8 +63,8 @@ final class ChatDetailViewModel: ObservableObject {
         ocrOrchestrator: OCROrchestrator,
         ocrDocumentExtractor: OCRDocumentExtractor,
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
-        syncChatUseCase: SyncChatUseCase,
         updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase,
+        chatSyncSupervisor: ChatSyncSupervisor,
         toolInteractionCoordinator: ToolInteractionCoordinator,
         notificationClient: any NotificationClient,
         aiConfigCenter: AIConfigCenter,
@@ -86,8 +85,8 @@ final class ChatDetailViewModel: ObservableObject {
         self.ocrOrchestrator = ocrOrchestrator
         self.ocrDocumentExtractor = ocrDocumentExtractor
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
-        self.syncChatUseCase = syncChatUseCase
         self.updateChatMessageBlocksUseCase = updateChatMessageBlocksUseCase
+        self.chatSyncSupervisor = chatSyncSupervisor
         self.toolInteractionCoordinator = toolInteractionCoordinator
         self.notificationClient = notificationClient
         self.aiConfigCenter = aiConfigCenter
@@ -115,15 +114,33 @@ final class ChatDetailViewModel: ObservableObject {
                         }
                     case .threadsChanged:
                         return
-                    case .messagesUpdated, .messagesMerged:
-                        break
+                    case .messagesUpdated:
+                        let currentIDs = Set(self.stateStore.persistedMessages(for: threadID).map(\.clientMessageID))
+                        let affected = event.affectedClientMessageIDs.filter(currentIDs.contains)
+                        guard affected.isEmpty == false else { return }
+                        self.chatLoadCoordinator.schedule(delayMs: 60) { [weak self] in
+                            guard let self else { return }
+                            let messages = await self.loadChatMessagesUseCase.execute(clientMessageIDs: affected)
+                            await MainActor.run {
+                                self.stateStore.updateMessages(messages, for: threadID)
+                            }
+                        }
+                        return
+                    case .messagesMerged:
+                        self.chatLoadCoordinator.schedule(delayMs: 60) { [weak self] in
+                            guard let self else { return }
+                            await self.loadMessagesIfNeeded(
+                                for: threadID,
+                                lockBottomViewport: true,
+                                syncRemote: false
+                            )
+                        }
+                        return
                     }
                 }
-                let streaming = self.stateStore.isStreamingAssistantActive(for: threadID)
-                let delay: UInt64 = streaming ? 1000 : 120
-                self.chatLoadCoordinator.schedule(delayMs: delay) { [weak self] in
+                self.chatLoadCoordinator.schedule(delayMs: 60) { [weak self] in
                     guard let self else { return }
-                    await self.loadMessagesIfNeeded(for: threadID, skipRemoteSync: true)
+                    await self.loadMessagesIfNeeded(for: threadID, syncRemote: false)
                 }
             }
             .store(in: &cancellables)
@@ -354,11 +371,6 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.upsertThreadListItem(item)
         }
 
-        do {
-            try await syncChatUseCase.pushOutboxOnly()
-        } catch {
-            logger.warning("线程模型配置上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     /// 当远程模型列表变化时，丢弃已不在可选列表中的选择并回退为场景默认。
@@ -439,11 +451,6 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.upsertThreadListItem(item)
         }
 
-        do {
-            try await syncChatUseCase.pushSingleThread(threadID: threadID)
-        } catch {
-            logger.warning("会话成员档案绑定上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     func updateThreadGenerationSettings(_ settings: ChatThreadGenerationSettings, for threadID: UUID) async {
@@ -482,11 +489,6 @@ final class ChatDetailViewModel: ObservableObject {
         }
         await refreshReasoningToolbarContext(for: threadID)
 
-        do {
-            try await syncChatUseCase.pushSingleThread(threadID: threadID)
-        } catch {
-            logger.warning("线程参数上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     func updateThreadSystemPrompt(_ rolePrompt: String, for threadID: UUID) async {
@@ -508,25 +510,31 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.upsertThreadListItem(item)
         }
 
-        do {
-            try await syncChatUseCase.pushSingleThread(threadID: threadID)
-        } catch {
-            logger.warning("会话系统消息上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     func loadMessagesIfNeeded(
         for threadID: UUID,
         lockBottomViewport: Bool = false,
-        skipRemoteSync: Bool = false
+        syncRemote: Bool = true
     ) async {
         await satisfyLoadRequest(
             .openOrReloadNewest(
                 threadID: threadID,
-                skipRemoteSync: skipRemoteSync,
                 lockBottomViewport: lockBottomViewport
             )
         )
+        guard syncRemote else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.chatSyncSupervisor.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
+            } catch {
+                self.logger.debug(
+                    "进入会话拉取增量失败，thread=\(self.shortID(threadID)), error=\(error.localizedDescription)",
+                    module: .general
+                )
+            }
+        }
     }
 
     func loadMoreMessages(for threadID: UUID) async {
@@ -542,7 +550,7 @@ final class ChatDetailViewModel: ObservableObject {
 
     private func satisfyLoadRequest(_ request: ChatLoadRequest) async {
         switch request {
-        case .openOrReloadNewest(let threadID, let skipRemoteSync, let lockBottomViewport):
+        case .openOrReloadNewest(let threadID, let lockBottomViewport):
             if lockBottomViewport {
                 stateStore.beginBottomViewportLock(for: threadID)
             }
@@ -559,53 +567,11 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.setMessages(
                 messages,
                 for: threadID,
-                clearStreamingAssistant: skipRemoteSync == false,
                 hasMore: hasMore
             )
-
-            guard skipRemoteSync == false else {
-                if lockBottomViewport {
-                    stateStore.endBottomViewportLock(for: threadID)
-                }
-                return
-            }
-
-            // 本地优先展示，再异步做远端增量同步，避免进入会话瞬时 UI 抖动。
-            Task { [weak self] in
-                guard let self else { return }
-                defer {
-                    Task { @MainActor [weak self] in
-                        guard let self, lockBottomViewport else { return }
-                        self.stateStore.endBottomViewportLock(for: threadID)
-                    }
-                }
-                do {
-                    try await self.syncChatUseCase.syncThreadOnOpen(threadID: threadID)
-                    let latestWindowLimit = ChatMessageWindow.newestFetchLimit(
-                        persistedCount: self.stateStore.persistedMessages(for: threadID).count
-                    )
-                    let latestTotal = await self.loadChatMessagesUseCase.count(threadID: threadID)
-                    let latestMessages = await self.loadChatMessagesUseCase.execute(
-                        threadID: threadID,
-                        limit: latestWindowLimit,
-                        before: nil
-                    )
-                    let latestHasMore = latestTotal > latestMessages.count
-                    await MainActor.run {
-                        self.stateStore.setMessages(latestMessages, for: threadID, hasMore: latestHasMore)
-                        self.stateStore.setError(nil, for: threadID)
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.stateStore.setError(error.localizedDescription, for: threadID)
-                    }
-                    self.logger.warning("会话打开同步失败：\(error.localizedDescription)", module: .general)
-                    self.notificationClient.error(
-                        error.localizedDescription,
-                        title: L10n.text("common.error"),
-                        source: "chat.sync.open"
-                    )
-                }
+            stateStore.requestScrollToBottom(for: threadID)
+            if lockBottomViewport {
+                stateStore.endBottomViewportLock(for: threadID)
             }
 
         case .loadOlderPage(let threadID, let before):
@@ -638,10 +604,8 @@ final class ChatDetailViewModel: ObservableObject {
         guard stateStore.isSending || currentGenerationCancellationToken != nil || currentGenerationTask != nil else { return }
 
         logger.info("用户中断 AI 生成，thread=\(shortID(threadID))", module: .general)
-        persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.cancel.tap")
         currentGenerationCancellationToken?.cancel()
         currentGenerationTask?.cancel()
-        stateStore.finishStreamingAssistant(threadID: threadID)
         stateStore.setSending(false)
         stateStore.setError(nil, for: threadID)
         appendCancellationNoticeIfNeeded(threadID: threadID)
@@ -713,13 +677,6 @@ final class ChatDetailViewModel: ObservableObject {
             let stateStore = self.stateStore
             stateStore.clearComposerAttachmentUploadProgress()
             
-            // MARK: - 开始流式输出助手消息（界面显示加载/打字效果）
-            stateStore.startStreamingAssistant(
-                threadID: threadID,
-                clientMessageID: streamingMessageID,
-                kind: .text
-            )
-            
             let loadChatThreadsUseCase = self.loadChatThreadsUseCase
             
             // MARK: - 核心执行：发送消息到后端，处理流式返回
@@ -748,8 +705,7 @@ final class ChatDetailViewModel: ObservableObject {
                     let listItem = await loadChatThreadsUseCase.execute(threadID: localSnapshot.thread.id)
                     await MainActor.run {
                         stateStore.setSelectedThreadID(localSnapshot.thread.id)
-                        // 不清空流式占位，保证打字效果不中断
-                        stateStore.setMessages(localSnapshot.messages, for: localSnapshot.thread.id, clearStreamingAssistant: false)
+                        stateStore.setMessages(localSnapshot.messages, for: localSnapshot.thread.id)
                         stateStore.requestScrollToBottom(for: localSnapshot.thread.id)
                         if let listItem {
                             stateStore.upsertThreadListItem(listItem)
@@ -759,24 +715,14 @@ final class ChatDetailViewModel: ObservableObject {
                     }
                 },
                 
-                // 助手流式返回片段 → 实时追加到界面
-                onAssistantPartial: { delta in
-                    await MainActor.run {
-                        stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
-                    }
-                }
+                // Streaming deltas are persisted by SendChatMessageUseCase and rendered through DB notifications.
+                onAssistantPartial: nil
             )
 
             // MARK: - 发送完成：刷新线程列表
             if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
                 stateStore.upsertThreadListItem(finalRow)
             }
-            
-            // 保存流式产生的附件
-            await persistStreamingAttachmentsIfNeeded(
-                threadID: snapshot.thread.id,
-                assistantClientMessageID: streamingMessageID
-            )
             
             // 加载最终完整消息
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
@@ -794,15 +740,12 @@ final class ChatDetailViewModel: ObservableObject {
         }
         // MARK: - 用户主动取消发送
         catch is CancellationError {
-            persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.cancel.catch")
-            stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
             appendCancellationNoticeIfNeeded(threadID: threadID)
             logger.info("发送对话已中断，thread=\(shortID(threadID))", module: .general)
         }
         // MARK: - 发送失败（网络/服务异常）
         catch {
-            stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
             // 显示错误卡片
             if shouldRenderAssistantErrorCard(for: error) {
@@ -853,22 +796,6 @@ final class ChatDetailViewModel: ObservableObject {
         await regenerateLatestAssistantReply(for: threadID)
     }
 
-    func sync() async {
-        logger.debug("手动聊天同步开始", module: .general)
-        do {
-            try await syncChatUseCase.execute()
-            if let threadID = stateStore.selectedThreadID {
-                let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
-                stateStore.setMessages(messages, for: threadID)
-            }
-            logger.debug("手动聊天同步完成", module: .general)
-        } catch {
-            stateStore.setError(error.localizedDescription)
-            logger.error("手动聊天同步失败：\(error.localizedDescription)", module: .general)
-            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "chat.sync")
-        }
-    }
-
     /// 清空指定会话的所有历史消息，保留会话本身与参数配置。
     func clearMessages(for threadID: UUID) async {
         let messages = await loadChatMessagesUseCase.execute(threadID: threadID, limit: nil, before: nil)
@@ -897,11 +824,6 @@ final class ChatDetailViewModel: ObservableObject {
             }
         }
 
-        do {
-            try await syncChatUseCase.pushOutboxOnly()
-        } catch {
-            logger.warning("清空聊天记录后上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     func regenerateLatestAssistantReply(for threadID: UUID) async {
@@ -935,12 +857,6 @@ final class ChatDetailViewModel: ObservableObject {
             let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
                 .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
             stateStore.setError(nil, for: threadID)
-            stateStore.startStreamingAssistant(
-                threadID: threadID,
-                clientMessageID: streamingMessageID,
-                kind: .text
-            )
-
             let snapshot = try await sendMessageUseCase.executeRegenerateReply(
                 threadID: threadID,
                 memberID: memberContextStore.context.selectedMemberID,
@@ -949,20 +865,12 @@ final class ChatDetailViewModel: ObservableObject {
                 inference: inference,
                 modelReasoning: modelReasoning,
                 cancellationToken: cancellationToken,
-                onAssistantPartial: { delta in
-                    await MainActor.run {
-                        self.stateStore.updateStreamingAssistant(threadID: threadID, delta: delta)
-                    }
-                }
+                onAssistantPartial: nil
             )
 
             if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {
                 stateStore.upsertThreadListItem(finalRow)
             }
-            await persistStreamingAttachmentsIfNeeded(
-                threadID: snapshot.thread.id,
-                assistantClientMessageID: streamingMessageID
-            )
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
             stateStore.setError(nil, for: snapshot.thread.id)
@@ -971,13 +879,10 @@ final class ChatDetailViewModel: ObservableObject {
                 module: .general
             )
         } catch is CancellationError {
-            persistInterruptedAssistantIfNeeded(threadID: threadID, source: "chat.regenerate.cancel.catch")
-            stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
             appendCancellationNoticeIfNeeded(threadID: threadID)
             logger.info("重新生成回答已中断，thread=\(shortID(threadID))", module: .general)
         } catch {
-            stateStore.finishStreamingAssistant(threadID: threadID)
             stateStore.setError(nil, for: threadID)
             if shouldRenderAssistantErrorCard(for: error) {
                 appendAssistantErrorMessage(
@@ -1031,132 +936,6 @@ final class ChatDetailViewModel: ObservableObject {
             deliveryState: .pending,
             source: "chat.cancel"
         )
-    }
-
-    private func persistStreamingAttachmentsIfNeeded(
-        threadID: UUID,
-        assistantClientMessageID: UUID
-    ) async {
-        guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID),
-              streaming.blocks.isEmpty == false else { return }
-        let presentationBlocks = streaming.blocks.filter { block in
-            switch block.kind {
-            case .structuredHealthCards,
-                    .sleepVisualization,
-                    .workoutVisualization,
-                    .captureCard,
-                    .knowledgeCards,
-                    .html,
-                    .taskCards,
-                    .pendingMemberToolCards,
-                    .smallTaskCard,
-                    .healthCards,
-                    .events,
-                    .mapRoute:
-                return true
-            default:
-                return false
-            }
-        }
-        guard presentationBlocks.isEmpty == false else { return }
-        let messages = await loadChatMessagesUseCase.execute(threadID: threadID)
-        guard let target = messages.last(where: { $0.clientMessageID == assistantClientMessageID }) else { return }
-        let mergedBlocks = ChatMessageBlockBuilder.merge(
-
-            existingBlocks: target.blocks,
-            incomingBlocks: presentationBlocks
-        )
-        guard mergedBlocks != target.blocks else { return }
-        await updateChatMessageBlocksUseCase.execute(
-            clientMessageID: assistantClientMessageID,
-            blocks: mergedBlocks,
-            markPendingForSync: true
-        )
-        stateStore.updateMessageBlocksSnapshot(
-            threadID: threadID,
-            clientMessageID: assistantClientMessageID,
-            blocks: mergedBlocks
-        )
-        await sendMessageUseCase.pushPendingMessages(source: "chat.streaming.blocks.merge")
-    }
-
-    @discardableResult
-    private func persistInterruptedAssistantIfNeeded(threadID: UUID, source: String) -> Bool {
-        guard let streaming = stateStore.activeStreamingAssistantMessage(for: threadID) else {
-            logger.debug("中断固化跳过：无流式助手消息，source=\(source), thread=\(shortID(threadID))", module: .general)
-            return false
-        }
-
-        let content = streaming.blocks
-            .compactMap(\.text)
-            .joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasDeepThought = streaming.blocks.contains(where: { $0.kind == .deepThought })
-        let hasAttachmentBlocks = streaming.blocks.contains { $0.kind == .imageGallery || $0.kind == .fileAttachments }
-        guard content.isEmpty == false || hasDeepThought || hasAttachmentBlocks else {
-            logger.debug("中断固化跳过：已生成内容为空，source=\(source), thread=\(shortID(threadID))", module: .general)
-            return false
-        }
-
-        guard finalizedInterruptedAssistantMessageIDs.insert(streaming.clientMessageID).inserted else {
-            logger.debug("中断固化跳过：assistant 已固化，source=\(source), clientMessageID=\(shortID(streaming.clientMessageID))", module: .general)
-            return false
-        }
-
-        let finalized = ChatMessage(
-            id: streaming.id,
-            threadID: threadID,
-            role: .assistant,
-            blocks: streaming.blocks,
-            clientMessageID: streaming.clientMessageID,
-            serverMessageID: nil,
-            deliveryState: .pending,
-            createdAt: streaming.createdAt,
-            serverUpdatedAt: nil,
-            isTombstone: false,
-            modelName: streaming.modelName
-        )
-
-        var messages = stateStore.persistedMessages(for: threadID)
-        if messages.contains(where: { $0.clientMessageID == finalized.clientMessageID }) == false {
-            messages.append(finalized)
-            stateStore.setMessages(messages, for: threadID, clearStreamingAssistant: false)
-        }
-
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                _ = try await self.chatRepository.appendMessage(finalized)
-                await self.sendMessageUseCase.pushPendingMessages(source: source)
-                let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
-                await MainActor.run {
-                    self.stateStore.setMessages(latest, for: threadID)
-                }
-                let finalizedTextLength = finalized.blocks
-                    .compactMap(\.text)
-                    .joined(separator: "\n")
-                    .count
-                self.logger.info(
-                    "中断时已固化 AI 已生成内容，source=\(source), thread=\(self.shortID(threadID)), clientMessageID=\(self.shortID(finalized.clientMessageID)), contentLength=\(finalizedTextLength)",
-                    module: .general
-                )
-            } catch {
-                self.logger.error(
-                    "中断时固化 AI 已生成内容失败，source=\(source), thread=\(self.shortID(threadID)), error=\(error.localizedDescription)",
-                    module: .general
-                )
-            }
-        }
-
-        let finalizedTextLength = finalized.blocks
-            .compactMap(\.text)
-            .joined(separator: "\n")
-            .count
-        logger.info(
-            "中断时保留 AI 已生成内容到本地列表，source=\(source), thread=\(shortID(threadID)), clientMessageID=\(shortID(finalized.clientMessageID)), contentLength=\(finalizedTextLength)",
-            module: .general
-        )
-        return true
     }
 
     private func appendAssistantErrorMessage(
@@ -1238,18 +1017,6 @@ final class ChatDetailViewModel: ObservableObject {
         }
 
         return nil
-    }
-
-    func chatPageDidAppear() async {
-        guard isRealtimeActive == false else { return }
-        isRealtimeActive = true
-        await syncChatUseCase.startRealtime()
-    }
-
-    func chatPageDidDisappear() async {
-        guard isRealtimeActive else { return }
-        isRealtimeActive = false
-        await syncChatUseCase.stopRealtime()
     }
 
     func translateMessageText(_ text: String) async throws -> String {
@@ -1407,17 +1174,6 @@ final class ChatDetailViewModel: ObservableObject {
             markPendingForSync: true
         )
 
-        stateStore.updateMessageBlocksFromIncoming(
-            threadID: threadID,
-            clientMessageID: message.clientMessageID,
-            incomingBlocks: updatedBlocks
-        )
-
-        do {
-            try await syncChatUseCase.pushOutboxOnly()
-        } catch {
-            logger.warning("任务卡状态上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     private func replacingTaskCard(
@@ -1439,6 +1195,9 @@ final class ChatDetailViewModel: ObservableObject {
             kind: .taskCards,
             toolCallID: old.toolCallID,
             taskCards: cards,
+            status: old.status,
+            revision: old.revision + 1,
+            orderKey: old.orderKey,
             createdAt: old.createdAt,
             updatedAt: Date()
         )
@@ -1499,27 +1258,13 @@ final class ChatDetailViewModel: ObservableObject {
         await updateThreadMemberBinding(memberID, for: threadID)
         memberContextStore.select(memberID: memberID)
 
-        updatePendingMemberToolCardInCache(threadID: threadID, message: message, cardID: card.id) {
+        await updatePendingMemberToolCard(threadID: threadID, message: message, cardID: card.id) {
             $0.selectedMemberID = memberID
             $0.status = .completed
             $0.arguments["member_id"] = String(memberID)
             $0.resultText = L10n.text("tool.result.request_member_selection.completed")
             $0.updatedAt = Date()
         }
-    }
-
-    private func updatePendingMemberToolCardInCache(
-        threadID: UUID,
-        message: ChatMessage,
-        cardID: UUID,
-        mutate: (inout PendingMemberToolCard) -> Void
-    ) {
-        guard let updated = replacingPendingMemberToolCard(in: message.blocks, cardID: cardID, mutate: mutate),
-              let pending = updated.last(where: { $0.kind == .pendingMemberToolCards }) else { return }
-        stateStore.mergeStreamingAssistantAttachments(
-            threadID: threadID,
-            incomingBlocks: [pending]
-        )
     }
 
     private func updatePendingMemberToolCard(
@@ -1756,19 +1501,6 @@ final class ChatDetailViewModel: ObservableObject {
             markPendingForSync: true
         )
         
-        // 更新本地状态存储
-        stateStore.updateMessageBlocksFromIncoming(
-            threadID: threadID,
-            clientMessageID: message.clientMessageID,
-            incomingBlocks: blocks
-        )
-        
-        // 执行同步：推送本地数据到服务端
-        do {
-            try await syncChatUseCase.pushOutboxOnly()
-        } catch {
-            logger.warning("医疗卡片状态上送失败，稍后重试：\(error.localizedDescription)", module: .general)
-        }
     }
 
     /// 替换消息 blocks 中的结构化健康卡片数据

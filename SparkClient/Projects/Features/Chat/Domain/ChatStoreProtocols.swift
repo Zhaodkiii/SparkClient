@@ -1,5 +1,11 @@
 import Foundation
 
+struct ChatPendingMessageBlock: Sendable {
+    let threadID: UUID
+    let clientMessageID: UUID
+    let block: ChatMessageBlock
+}
+
 // MARK: - 拆分后的存储边界（对齐 Signal 式 store 分层；实现仍可为单一 `CoreDataChatRepository`）
 
 protocol ChatThreadStoring: Sendable {
@@ -32,14 +38,19 @@ protocol ChatThreadStoring: Sendable {
 
 protocol ChatMessageStoring: Sendable {
     func loadMessages(threadID: UUID, limit: Int?, before: Date?) async -> [ChatMessage]
+    func loadMessages(clientMessageIDs: [UUID]) async -> [ChatMessage]
     func countMessages(threadID: UUID) async -> Int
     func latestServerActivity(for threadID: UUID) async -> Date?
     func appendMessage(_ message: ChatMessage) async throws -> ChatMessage
+    func upsertLocalMessage(_ message: ChatMessage) async throws -> ChatMessage
     func softDeleteMessage(clientMessageID: UUID) async
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async
     func updateMessageBlocks(clientMessageID: UUID, blocks: [ChatMessageBlock], markPendingForSync: Bool) async
+    func upsertMessageBlock(clientMessageID: UUID, block: ChatMessageBlock, markPendingForSync: Bool) async
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID, enqueueAttachmentDownloadJobs: Bool) async
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
+    func loadPendingMessageBlocks(limit: Int) async -> [ChatPendingMessageBlock]
+    func markMessageBlocksSynced(ids: [UUID]) async
 }
 
 protocol ChatSyncMetadataStoring: Sendable {

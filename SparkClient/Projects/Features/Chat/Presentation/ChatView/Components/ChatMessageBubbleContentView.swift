@@ -47,8 +47,8 @@ struct ChatMessageBubbleContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(effectiveBlocks) { block in
-                block.render(context: renderContext)
+            ForEach(effectiveTimeline) { node in
+                node.render(context: renderContext)
             }
         }
         .padding(.horizontal, 12)
@@ -86,73 +86,21 @@ struct ChatMessageBubbleContentView: View {
         )
     }
 
-    /// 最终生效的消息块数组（动态计算：根据状态动态插入/移除/替换 UI 块）
-    /// 作用：根据消息发送状态、错误、翻译、知识库等条件，返回最终要渲染的 blocks
     private var effectiveBlocks: [ChatMessageBlock] {
-        // 1. 先拿到原始消息的所有块
         var blocks = message.blocks
 
-        // 2. 如果消息发送失败 + 需要显示错误卡片 → 在最前面插入【错误提示块】
-//        if message.deliveryState == .failed, shouldRenderErrorCard {
-//            blocks.insert(
-//                ChatMessageBlock(kind: .error, text: errorCardBodyText, createdAt: message.createdAt, updatedAt: message.createdAt),
-//                at: 0
-//            )
-//        }
-
-        // 3. 如果有合并后的知识库卡片 → 移除旧的知识卡片，追加新的
-//        if combinedKnowledgeCards.isEmpty == false {
-//            // 先删掉已有的知识卡片块
-//            blocks.removeAll { $0.kind == .knowledgeCards }
-//            // 追加最新合并后的知识卡片块
-//            blocks.append(ChatMessageBlock(kind: .knowledgeCards, knowledgeCards: combinedKnowledgeCards, createdAt: message.createdAt, updatedAt: message.createdAt))
-//        }
-
-        // 4. 如果有翻译文本 → 移除旧翻译块，追加新翻译块
         if let translatedText, translatedText.isEmpty == false {
-            // 先删掉已有的翻译块
             blocks.removeAll { $0.kind == .translatedText }
-            // 追加最新翻译文本
             blocks.append(ChatMessageBlock(kind: .translatedText, text: translatedText, createdAt: message.createdAt, updatedAt: message.createdAt))
         }
 
         return blocks
-        // 5. 过滤工具块（去重）：
-        // 只保留【有 toolCallID 但没有对应展示块】的工具块，避免重复渲染
-//        return blocks.filter { block in
-//            // 非工具块直接保留
-//            guard block.kind == .tool else { return true }
-//            // 没有 toolCallID 的工具块直接保留
-//            guard let toolCallID = block.toolCallID, !toolCallID.isEmpty else { return true }
-//            // 如果已经有对应展示块了，就过滤掉这个原始工具块
-//            return !blocks.contains(where: {
-//                $0.toolCallID == toolCallID && Self.isToolPresentationBlock($0.kind)
-//            })
-//        }
     }
 
-    private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
-        switch kind {
-        case .tool, .text, .deepThought, .error:
-            return false
-        case .imageGallery,
-                .fileAttachments,
-                .knowledgeCards,
-                .translatedText,
-                .mapRoute,
-                .events,
-                .healthCards,
-                .pendingMemberToolCards,
-                .structuredHealthCards,
-                .sleepVisualization,
-                .workoutVisualization,
-                .captureCard,
-                .html,
-                .smallTaskCard,
-                .taskCards:
-            return true
-        }
+    private var effectiveTimeline: [ChatMessageTimelineNode] {
+        ChatMessageTimelineProjector.project(blocks: effectiveBlocks)
     }
+
     var actionButtonsHStack: some View {
         
         HStack(spacing: 10) {
@@ -281,6 +229,211 @@ struct ChatSmallTaskMessageCard: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.white.opacity(0.12))
         )
+    }
+}
+
+private struct ChatMessageTimelineNode: Identifiable {
+    enum Content {
+        case block(ChatMessageBlock)
+        case tool(ChatToolTimelineNode)
+    }
+
+    let id: UUID
+    let content: Content
+
+    @ViewBuilder
+    func render(context: ChatRenderContext) -> some View {
+        switch content {
+        case .block(let block):
+            block.render(context: context)
+        case .tool(let node):
+            ChatToolTimelineNodeView(node: node, context: context)
+        }
+    }
+}
+
+private struct ChatToolTimelineNode: Identifiable {
+    let id: UUID
+    let toolCallID: String
+    var toolBlock: ChatMessageBlock?
+    var presentations: [ChatMessageBlock]
+}
+
+private enum ChatMessageTimelineProjector {
+    nonisolated static func project(blocks: [ChatMessageBlock]) -> [ChatMessageTimelineNode] {
+        var nodes: [ChatMessageTimelineNode] = []
+        var toolNodeIndexByCallID: [String: Int] = [:]
+
+        for block in blocks {
+            if block.nodeRole == .tool, let toolCallID = normalizedToolCallID(block.toolCallID) {
+                let index = ensureToolNode(
+                    toolCallID: toolCallID,
+                    toolBlock: block,
+                    nodes: &nodes,
+                    indexByCallID: &toolNodeIndexByCallID
+                )
+                if case .tool(var node) = nodes[index].content {
+                    node.toolBlock = block
+                    nodes[index] = ChatMessageTimelineNode(id: node.id, content: .tool(node))
+                }
+                continue
+            }
+
+            if block.nodeRole == .toolPresentation,
+               let toolCallID = normalizedToolCallID(block.parentToolCallID ?? block.toolCallID) {
+                let index = ensureToolNode(
+                    toolCallID: toolCallID,
+                    toolBlock: nil,
+                    nodes: &nodes,
+                    indexByCallID: &toolNodeIndexByCallID
+                )
+                if case .tool(var node) = nodes[index].content,
+                   node.presentations.contains(where: { $0.id == block.id }) == false {
+                    node.presentations.append(block)
+                    node.presentations.sort(by: sortBlocks)
+                    nodes[index] = ChatMessageTimelineNode(id: node.id, content: .tool(node))
+                }
+                continue
+            }
+
+            nodes.append(ChatMessageTimelineNode(id: block.id, content: .block(block)))
+        }
+
+        return nodes
+    }
+
+    nonisolated private static func ensureToolNode(
+        toolCallID: String,
+        toolBlock: ChatMessageBlock?,
+        nodes: inout [ChatMessageTimelineNode],
+        indexByCallID: inout [String: Int]
+    ) -> Int {
+        if let index = indexByCallID[toolCallID] {
+            return index
+        }
+        let placeholderMessageID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        let id = toolBlock?.id ?? ChatStableBlockID.tool(messageID: placeholderMessageID, toolCallID: toolCallID)
+        let node = ChatToolTimelineNode(
+            id: id,
+            toolCallID: toolCallID,
+            toolBlock: toolBlock,
+            presentations: []
+        )
+        let index = nodes.count
+        nodes.append(ChatMessageTimelineNode(id: id, content: .tool(node)))
+        indexByCallID[toolCallID] = index
+        return index
+    }
+
+    nonisolated private static func normalizedToolCallID(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              trimmed.isEmpty == false else {
+            return nil
+        }
+        return trimmed
+    }
+
+    nonisolated private static func sortBlocks(_ lhs: ChatMessageBlock, _ rhs: ChatMessageBlock) -> Bool {
+        switch (lhs.orderKey, rhs.orderKey) {
+        case let (l?, r?) where l != r:
+            return l < r
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        default:
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    nonisolated private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
+        switch kind {
+        case .tool, .text, .deepThought, .error:
+            return false
+        case .imageGallery,
+                .fileAttachments,
+                .knowledgeCards,
+                .translatedText,
+                .mapRoute,
+                .events,
+                .healthCards,
+                .pendingMemberToolCards,
+                .structuredHealthCards,
+                .sleepVisualization,
+                .workoutVisualization,
+                .captureCard,
+                .html,
+                .smallTaskCard,
+                .taskCards:
+            return true
+        }
+    }
+}
+
+private struct ChatToolTimelineNodeView: View {
+    let node: ChatToolTimelineNode
+    let context: ChatRenderContext
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if node.presentations.isEmpty {
+                if let toolBlock = node.toolBlock {
+                    toolBlock.render(context: context)
+                } else {
+                    ChatToolTimelinePendingView(title: "正在整理结构化数据...")
+                }
+            } else {
+                if let toolBlock = node.toolBlock {
+                    toolBlock.render(context: context)
+                }
+                ForEach(node.presentations) { presentation in
+                    if presentation.status == .pending || presentation.status == .streaming {
+                        ChatToolTimelinePendingView(title: pendingTitle(for: presentation.kind))
+                    } else {
+                        presentation.render(context: context)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func pendingTitle(for kind: ChatMessageBlockKind) -> String {
+        switch kind {
+        case .structuredHealthCards:
+            return "正在结构化健康数据..."
+        case .sleepVisualization:
+            return "正在生成睡眠可视化..."
+        case .workoutVisualization:
+            return "正在生成运动可视化..."
+        case .knowledgeCards:
+            return "正在整理知识卡片..."
+        case .taskCards, .smallTaskCard:
+            return "正在创建提醒..."
+        case .captureCard:
+            return "正在准备采集卡片..."
+        default:
+            return "正在整理结果..."
+        }
+    }
+}
+
+private struct ChatToolTimelinePendingView: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(title)
     }
 }
 

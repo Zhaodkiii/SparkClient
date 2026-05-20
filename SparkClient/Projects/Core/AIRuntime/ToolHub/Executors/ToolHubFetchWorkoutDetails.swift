@@ -26,7 +26,8 @@ extension ToolHub {
             
             // MARK: 3. 异步插入【健身运动可视化卡片】到聊天消息中
             // 只有在会话和助手消息都存在时，才渲染UI卡片
-            if let threadID = context.threadID,
+            if model.workouts.isEmpty == false,
+               let threadID = context.threadID,
                let assistantID = context.assistantMessageClientID {
                 
                 let merge = structuredHealthCardMergeCoordinator
@@ -34,9 +35,9 @@ extension ToolHub {
                 let normalizedToolCallID = context.pendingToolCallID?
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 
-                // 后台任务：等助手消息就绪后，插入运动数据卡片
+                // 后台任务：发布运动数据卡片事件，由 MessageRunActor 串行落库。
                 Task {
-                    await merge.insertHealthWorkoutVisualizationWhenAssistantMessageReady(
+                    await merge.publishHealthWorkoutVisualization(
                         threadID: threadID,
                         assistantClientMessageID: assistantID,
                         model: model,
@@ -49,7 +50,7 @@ extension ToolHub {
             // 把结构化运动数据 → 自然语言文字，让AI直接朗读/展示
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchWorkoutDetails,
-                outputText: model.toReadableText(),  // 👈 关键：生成人类可读文本
+                outputText: healthNoDataDiagnosticIfNeeded(model.toReadableText(), range: range),
                 sensitive: true,                     // 健康数据 = 敏感数据
                 shouldBypassModel: true             // 不再回传给大模型，直接展示
             )

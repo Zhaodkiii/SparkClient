@@ -3,7 +3,7 @@ import Foundation
 /// 工具事件解释器：
 /// - 新流程下，工具展示以 `ChatMessageBlock` 为唯一真相源；
 /// - 不再把 toolName/toolContent/operational* 这类旧运行时附件落入正式消息，避免重复存储与重复渲染；
-/// - 富 UI 与知识卡附件仍由 `ToolHub` + `StructuredHealthCardMergeCoordinator` 走异步 presentation patch。
+/// - 富 UI 与知识卡由 `ToolHub` 发布 `ChatRunEvent`，最终落到 `ChatMessageBlockEntity`。
 struct ChatToolEventInterpreter: Sendable {
     let logger: Logger
 

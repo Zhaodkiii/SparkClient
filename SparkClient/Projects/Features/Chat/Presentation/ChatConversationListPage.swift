@@ -67,7 +67,6 @@ struct ChatConversationListPage: View {
             await listViewModel.loadForListIfNeeded()
         }
         .refreshable {
-            await detailViewModel.sync()
             await listViewModel.refreshThreads()
         }
     }

@@ -108,7 +108,7 @@ extension ToolHub {
             let normalizedToolCallID = context.pendingToolCallID?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             Task {
-                await merge.insertTaskCardsWhenAssistantMessageReady(
+                await merge.publishTaskCards(
                     threadID: threadID,
                     assistantClientMessageID: assistantID,
                     taskCards: taskCards,

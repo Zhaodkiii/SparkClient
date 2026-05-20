@@ -137,7 +137,6 @@
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ChatMessageEntity" representedClassName="ChatMessageEntity" syncable="YES" codeGenerationType="class">
-        <attribute name="blocksData" optional="YES" attributeType="Binary"/>
         <attribute name="clientMessageID" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="deliveryState" attributeType="String" defaultValueString="pending"/>
@@ -149,6 +148,25 @@
         <attribute name="serverMessageID" optional="YES" attributeType="String"/>
         <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="ChatMessageBlockEntity" representedClassName="ChatMessageBlockEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="anchorData" optional="YES" attributeType="Binary"/>
+        <attribute name="clientMessageID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isPendingSync" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="kind" attributeType="String" defaultValueString="text"/>
+        <attribute name="nodeRole" attributeType="String" defaultValueString="timeline"/>
+        <attribute name="orderKey" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="parentBlockID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="parentToolCallID" optional="YES" attributeType="String"/>
+        <attribute name="payloadData" attributeType="Binary"/>
+        <attribute name="revision" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="status" attributeType="String" defaultValueString="ready"/>
+        <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="toolCallID" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="ChatSyncCursorEntity" representedClassName="ChatSyncCursorEntity" syncable="YES" codeGenerationType="class">
         <attribute name="key" attributeType="String"/>

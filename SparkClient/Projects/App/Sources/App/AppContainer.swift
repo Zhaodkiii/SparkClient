@@ -188,8 +188,6 @@ final class AppContainer {
     let retryFailedMessageUseCase: RetryFailedMessageUseCase
     /// 删除线程及其消息（具体是否物理删由仓库实现）。
     let deleteThreadUseCase: DeleteThreadUseCase
-    /// 手动或定时拉取远端增量、处理 outbox。
-    let syncChatUseCase: SyncChatUseCase
     /// 聊天同步编排（引擎 + 附件管线）。
     let chatSyncSupervisor: ChatSyncSupervisor
     /// 用户发送一条消息：落库、触发编排（流式模型 + 工具）。
@@ -454,7 +452,6 @@ final class AppContainer {
         self.createThreadUseCase = chat.createThreadUseCase
         self.retryFailedMessageUseCase = chat.retryFailedMessageUseCase
         self.deleteThreadUseCase = chat.deleteThreadUseCase
-        self.syncChatUseCase = chat.syncChatUseCase
         self.chatSyncSupervisor = chat.chatSyncSupervisor
         self.sendChatMessageUseCase = chat.sendChatMessageUseCase
         self.toolHub = chat.toolHub
@@ -483,7 +480,6 @@ final class AppContainer {
         self.memberContextStore = notification.memberContextStore
         self.memberContextStore.configure(manage: manageHomeMemberUseCase)
         self.chatStateStore = ChatStateStore()
-        chat.structuredHealthCardMergeCoordinator.register(stateStore: chatStateStore)
         self.knowledgeViewModel = KnowledgeLibraryViewModel(
             loadListUseCase: knowledge.loadKnowledgeListUseCase,
             loadDocumentUseCase: knowledge.loadKnowledgeDocumentUseCase,
@@ -504,6 +500,7 @@ final class AppContainer {
             loadChatMessagesUseCase: chat.loadChatMessagesUseCase,
             createThreadUseCase: chat.createThreadUseCase,
             deleteThreadUseCase: chat.deleteThreadUseCase,
+            chatSyncSupervisor: chat.chatSyncSupervisor,
             notificationClient: notification.notificationClient
         )
         self.chatDetailViewModel = ChatDetailViewModel(
@@ -517,8 +514,8 @@ final class AppContainer {
             ocrOrchestrator: medical.ocrOrchestrator,
             ocrDocumentExtractor: OCRDocumentExtractor(config: ocrConfiguration),
             retryFailedMessageUseCase: chat.retryFailedMessageUseCase,
-            syncChatUseCase: chat.syncChatUseCase,
             updateChatMessageBlocksUseCase: chat.updateChatMessageBlocksUseCase,
+            chatSyncSupervisor: chat.chatSyncSupervisor,
             toolInteractionCoordinator: chat.toolInteractionCoordinator,
             notificationClient: notification.notificationClient,
             aiConfigCenter: ai.aiConfigCenter,

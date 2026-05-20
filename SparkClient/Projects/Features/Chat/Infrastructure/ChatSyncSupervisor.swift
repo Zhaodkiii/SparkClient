@@ -4,10 +4,38 @@ import Foundation
 actor ChatSyncSupervisor {
     private let syncEngine: ChatSyncEngine
     private let attachmentPipeline: ChatAttachmentPipeline
+    private var localChangeObserver: NSObjectProtocol?
+    private var debouncedOutboxTask: Task<Void, Never>?
+    private var debouncedThreadPushTasks: [UUID: Task<Void, Never>] = [:]
 
     init(syncEngine: ChatSyncEngine, attachmentPipeline: ChatAttachmentPipeline) {
         self.syncEngine = syncEngine
         self.attachmentPipeline = attachmentPipeline
+        self.localChangeObserver = NotificationCenter.default.addObserver(
+            forName: .sparkChatDatabaseDidChange,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let event = notification.chatConversationChangeEvent else { return }
+            switch event.kind {
+            case .messagesAppended, .messagesUpdated, .messagesMerged:
+                guard event.affectsThreadList else { return }
+                Task { await self?.scheduleOutboxPush(reason: event.kind.rawValue) }
+            case .threadsChanged:
+                guard let threadID = event.threadID else { return }
+                Task { await self?.scheduleThreadPush(threadID: threadID) }
+            }
+        }
+    }
+
+    deinit {
+        if let localChangeObserver {
+            NotificationCenter.default.removeObserver(localChangeObserver)
+        }
+        debouncedOutboxTask?.cancel()
+        for task in debouncedThreadPushTasks.values {
+            task.cancel()
+        }
     }
 
     func syncNow() async throws {
@@ -20,18 +48,39 @@ actor ChatSyncSupervisor {
         await attachmentPipeline.processPendingJobs(limit: 24)
     }
 
-    func syncThreadOnOpen(threadID: UUID) async throws {
-        try await syncEngine.syncThreadOnOpen(threadID: threadID)
-        await attachmentPipeline.processPendingJobs(limit: 16)
+    func refreshThreadListIncremental() async throws {
+        try await syncEngine.refreshThreadListIncremental()
+        await attachmentPipeline.processPendingJobs(limit: 24)
     }
 
-    func pushOutboxOnly() async throws {
-        try await syncEngine.pushOutboxOnly()
-        await attachmentPipeline.processPendingJobs(limit: 8)
+    func pullThreadMessagesIncrementalOnOpen(threadID: UUID) async throws {
+        try await syncEngine.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
+        await attachmentPipeline.processPendingJobs(limit: 12)
     }
 
-    func pushSingleThread(threadID: UUID) async throws {
-        try await syncEngine.pushSingleThread(threadID: threadID)
+    private func scheduleOutboxPush(reason: String) {
+        debouncedOutboxTask?.cancel()
+        debouncedOutboxTask = Task { [syncEngine, attachmentPipeline] in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard Task.isCancelled == false else { return }
+            do {
+                try await syncEngine.pushOutboxOnly()
+                await attachmentPipeline.processPendingJobs(limit: 8)
+            } catch {
+                // SyncEngine owns retry state through deliveryState; this observer is only a debounce trigger.
+                ConsoleLogger().debug("聊天 outbox 自动上送失败，reason=\(reason), error=\(error.localizedDescription)", module: .general)
+            }
+        }
+    }
+
+    private func scheduleThreadPush(threadID: UUID) {
+        debouncedThreadPushTasks[threadID]?.cancel()
+        debouncedThreadPushTasks[threadID] = Task { [syncEngine] in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard Task.isCancelled == false else { return }
+            try? await syncEngine.pushSingleThread(threadID: threadID)
+            try? await syncEngine.syncNow()
+        }
     }
 
     func startRealtimeSync() async {

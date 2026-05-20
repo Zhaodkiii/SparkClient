@@ -16,6 +16,10 @@ struct ChatQueryService: Sendable {
         await repository.loadMessages(threadID: threadID, limit: limit, before: before)
     }
 
+    func loadMessages(clientMessageIDs: [UUID]) async -> [ChatMessage] {
+        await repository.loadMessages(clientMessageIDs: clientMessageIDs)
+    }
+
     func countMessages(threadID: UUID) async -> Int {
         await repository.countMessages(threadID: threadID)
     }

@@ -20,10 +20,11 @@ extension ToolHub {
         let payload = ChatCaptureMessageCardPayload(cardType: type)
         let merge = structuredHealthCardMergeCoordinator
         Task {
-            await merge.insertCaptureCardWhenAssistantMessageReady(
+            await merge.publishCaptureCard(
                 threadID: threadID,
                 assistantClientMessageID: assistantID,
-                payload: payload
+                payload: payload,
+                anchorToolCallID: context.pendingToolCallID
             )
         }
 

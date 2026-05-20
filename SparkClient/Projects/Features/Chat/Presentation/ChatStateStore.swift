@@ -10,14 +10,6 @@ final class ChatStateStore: ObservableObject {
         var isLoadingMore: Bool
     }
 
-    private struct StreamingAssistant: Sendable {
-        let threadID: UUID
-        let clientMessageID: UUID
-        var state: ChatStreamingAssistantState
-        let createdAt: Date
-    }
-    private let streamingReducer = ChatStreamingAssistantReducer()
-
     @Published private(set) var threadItems: [ChatThreadListItem] = []
     @Published private(set) var messagesByThread: [UUID: [ChatMessage]] = [:]
     @Published private(set) var selectedThreadID: UUID?
@@ -30,11 +22,8 @@ final class ChatStateStore: ObservableObject {
     @Published private(set) var composerAttachmentUploadProgress: [UUID: Double] = [:]
     /// 选图后即上传/OCR 的附件状态（按附件 id 记录）。
     @Published private(set) var composerPreparedAttachmentStates: [UUID: ChatComposerPreparedAttachmentState] = [:]
-    @Published private var streamingAssistants: [UUID: StreamingAssistant] = [:]
     @Published private var messagePagingByThread: [UUID: MessagePaging] = [:]
     @Published private var bottomViewportLockedThreadIDs: Set<UUID> = []
-    /// Bumps on each streaming text/reasoning update so views can scroll even when message count is unchanged.
-    @Published private(set) var streamingContentGeneration: UInt64 = 0
     /// Bumps when the conversation view should force-scroll to the newest message, such as after sending.
     @Published private(set) var scrollToBottomRequestGenerationByThread: [UUID: UInt64] = [:]
 
@@ -54,35 +43,7 @@ final class ChatStateStore: ObservableObject {
 
     /// 会话列表展示用：持久化消息 + 流式尾部（按 `clientMessageID` 合并，避免整表 identity 抖动）。
     func conversationListItems(for threadID: UUID) -> [ChatMessage] {
-        let persisted = messagesByThread[threadID] ?? []
-        let tail = streamingTailMessage(for: threadID)
-        return ConversationRenderState.mergedList(persisted: persisted, streamingTail: tail)
-    }
-
-    private func streamingTailMessage(for threadID: UUID) -> ChatMessage? {
-        guard let streaming = streamingAssistants[threadID] else { return nil }
-        return ChatMessage(
-            id: streaming.clientMessageID,
-            threadID: streaming.threadID,
-            role: .assistant,
-            blocks: streaming.state.blocks,
-            clientMessageID: streaming.clientMessageID,
-            serverMessageID: nil,
-            deliveryState: .sending,
-            createdAt: streaming.createdAt,
-            serverUpdatedAt: nil,
-            isTombstone: false,
-            modelName: selectedThread?.currentModelName
-        )
-    }
-
-    /// 当前流式助手占位的消息快照。用于用户主动中断时，把已生成内容固化为正式消息。
-    func activeStreamingAssistantMessage(for threadID: UUID) -> ChatMessage? {
-        streamingTailMessage(for: threadID)
-    }
-
-    func isStreamingAssistantActive(for threadID: UUID) -> Bool {
-        streamingAssistants[threadID] != nil
+        messagesByThread[threadID] ?? []
     }
 
     func setThreads(_ items: [ChatThreadListItem]) {
@@ -117,20 +78,33 @@ final class ChatStateStore: ObservableObject {
         selectedThreadID = threadID
     }
 
-    /// - Parameter clearStreamingAssistant: Set `false` while a reply is streaming so mid-send reloads (e.g. after user message persist) do not wipe `streamingAssistants`.
     func setMessages(
         _ messages: [ChatMessage],
         for threadID: UUID,
-        clearStreamingAssistant: Bool = true,
         hasMore: Bool? = nil
     ) {
         messagesByThread[threadID] = messages
-        if clearStreamingAssistant {
-            streamingAssistants[threadID] = nil
-        }
         if let hasMore {
             let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: hasMore, isLoadingMore: false)
             messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: current.isLoadingMore)
+        }
+    }
+
+    func updateMessages(_ messages: [ChatMessage], for threadID: UUID) {
+        guard messages.isEmpty == false else { return }
+        var current = messagesByThread[threadID] ?? []
+        guard current.isEmpty == false else { return }
+        let replacements = Dictionary(uniqueKeysWithValues: messages.map { ($0.clientMessageID, $0) })
+        var changed = false
+        for index in current.indices {
+            let id = current[index].clientMessageID
+            if let replacement = replacements[id], replacement != current[index] {
+                current[index] = replacement
+                changed = true
+            }
+        }
+        if changed {
+            messagesByThread[threadID] = current
         }
     }
 
@@ -146,46 +120,6 @@ final class ChatStateStore: ObservableObject {
         messagesByThread[threadID] = mergedPrefix + current
         let paging = messagePagingByThread[threadID] ?? MessagePaging(hasMore: hasMore, isLoadingMore: false)
         messagePagingByThread[threadID] = MessagePaging(hasMore: hasMore, isLoadingMore: paging.isLoadingMore)
-    }
-
-    func updateMessageBlocksFromIncoming(
-        threadID: UUID,
-        clientMessageID: UUID,
-        incomingBlocks: [ChatMessageBlock]
-    ) {
-        guard let messages = messagesByThread[threadID],
-              let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
-        let old = messages[idx]
-        let mergedBlocks = ChatMessageBlockBuilder.mergeRichBlocks(existingBlocks: old.blocks, incomingBlocks: incomingBlocks)
-        updateMessageBlocksSnapshot(
-            threadID: threadID,
-            clientMessageID: clientMessageID,
-            blocks: mergedBlocks
-        )
-    }
-
-    func updateMessageBlocksSnapshot(
-        threadID: UUID,
-        clientMessageID: UUID,
-        blocks: [ChatMessageBlock]
-    ) {
-        guard var messages = messagesByThread[threadID] else { return }
-        guard let idx = messages.lastIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
-        let old = messages[idx]
-        messages[idx] = ChatMessage(
-            id: old.id,
-            threadID: old.threadID,
-            role: old.role,
-            blocks: ChatMessageBlockBuilder.composeBlocks(blocks),
-            clientMessageID: old.clientMessageID,
-            serverMessageID: old.serverMessageID,
-            deliveryState: old.deliveryState,
-            createdAt: old.createdAt,
-            serverUpdatedAt: Date(),
-            isTombstone: old.isTombstone,
-            modelName: old.modelName
-        )
-        messagesByThread[threadID] = messages
     }
 
     func setLoadingMore(_ loading: Bool, for threadID: UUID) {
@@ -403,63 +337,7 @@ final class ChatStateStore: ObservableObject {
         composerDrafts = [:]
         composerAttachmentUploadProgress = [:]
         composerPreparedAttachmentStates = [:]
-        streamingAssistants = [:]
         messagePagingByThread = [:]
-        streamingContentGeneration &+= 1
-    }
-
-    func startStreamingAssistant(
-        threadID: UUID,
-        clientMessageID: UUID,
-        kind: ChatMessageKind,
-        createdAt: Date = Date()
-    ) {
-        streamingAssistants[threadID] = StreamingAssistant(
-            threadID: threadID,
-            clientMessageID: clientMessageID,
-            state: .initial(kind: kind),
-            createdAt: createdAt
-        )
-        streamingContentGeneration &+= 1
-    }
-
-    func updateStreamingAssistant(
-        threadID: UUID,
-        delta: ChatAssistantPartialDelta
-    ) {
-        guard var streaming = streamingAssistants[threadID] else { return }
-        let changed = streamingReducer.reduce(
-            state: &streaming.state,
-            delta: delta
-        )
-        guard changed else { return }
-        streamingAssistants[threadID] = streaming
-        streamingContentGeneration &+= 1
-    }
-
-    func updateStreamingAssistant(
-        threadID: UUID,
-        kind: ChatMessageKind,
-        content: String,
-        reasoningContent: String?,
-        toolName: String?,
-        toolContent: String?
-    ) {
-        updateStreamingAssistant(
-            threadID: threadID,
-            delta: ChatAssistantPartialDelta(
-                answer: content,
-                reasoning: reasoningContent,
-                kind: kind,
-                toolName: toolName,
-                toolContent: toolContent,
-                toolCallID: nil
-            )
-        )
-    }
-
-    func finishStreamingAssistant(threadID: UUID) {
-        streamingAssistants[threadID] = nil
     }
 
     private func updateComposerDraft(
@@ -471,46 +349,4 @@ final class ChatStateStore: ObservableObject {
         update(&draft)
         composerDrafts[threadID] = draft
     }
-
-    func mergeStreamingAssistantAttachments(
-        threadID: UUID,
-        incomingBlocks: [ChatMessageBlock]
-    ) {
-        guard incomingBlocks.isEmpty == false else { return }
-        guard var streaming = streamingAssistants[threadID] else { return }
-        let changed = streamingReducer.mergeAttachments(state: &streaming.state, incomingBlocks: incomingBlocks)
-        guard changed else { return }
-        streamingAssistants[threadID] = streaming
-        streamingContentGeneration &+= 1
-    }
-    /// 合并流式助手的展示内容（更新UI展示用）
-    /// - Parameters:
-    ///   - threadID: 对话线程唯一标识
-    ///   - incomingBlocks: 新接收到的消息块数据
-    func mergeStreamingAssistantPresentation(
-        threadID: UUID,
-        incomingBlocks: [ChatMessageBlock]
-    ) {
-        // 无新消息块时直接返回，不执行后续逻辑
-        guard incomingBlocks.isEmpty == false else { return }
-        
-        // 根据线程ID获取对应的流式助手实例，不存在则直接返回
-        guard var streaming = streamingAssistants[threadID] else { return }
-        
-        // 调用reducer合并新的消息块到当前流式状态中，并返回是否发生了变更
-        let changed = streamingReducer.mergePresentation(
-            state: &streaming.state,
-            incomingBlocks: incomingBlocks
-        )
-        
-        // 状态无变更时直接返回，不更新数据
-        guard changed else { return }
-        
-        // 将更新后的流式助手状态存回字典
-        streamingAssistants[threadID] = streaming
-        
-        // 流式内容生成计数 +1（用于统计/刷新标记）
-        streamingContentGeneration &+= 1
-    }
-    
 }

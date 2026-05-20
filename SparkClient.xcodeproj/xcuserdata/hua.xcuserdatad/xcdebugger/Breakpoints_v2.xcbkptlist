@@ -7,113 +7,107 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "8614AE83-DD51-4053-8223-6754B7F2E22A"
-            shouldBeEnabled = "No"
+            uuid = "66D73354-89CF-494F-95B4-FDA25443C53D"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Features/MedicalDocumentUpload/Infrastructure/DefaultTypedMedicalDocumentExtractor.swift"
+            filePath = "SparkClient/Projects/Core/AIRuntime/ToolHub/Executors/ToolHubGenerateStructuredHealthCard.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "67"
-            endingLineNumber = "67"
-            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
+            startingLineNumber = "89"
+            endingLineNumber = "89"
+            landmarkName = "runGenerateStructuredHealthCard(invocation:context:)"
             landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "66D73354-89CF-494F-95B4-FDA25443C53D - 869c079a6401a82d"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for closure #2 () async -&gt; () in SparkClient.ToolHub.runGenerateStructuredHealthCard(invocation: SparkClient.ToolInvocation, context: SparkClient.ToolExecutionContext) async -&gt; SparkClient.ToolExecutionResult"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Core/AIRuntime/ToolHub/Executors/ToolHubGenerateStructuredHealthCard.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "90"
+                  endingLineNumber = "90">
+               </Location>
+               <Location
+                  uuid = "66D73354-89CF-494F-95B4-FDA25443C53D - 3442cc7d8312bd74"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) await resume partial function for closure #2 () async -&gt; () in SparkClient.ToolHub.runGenerateStructuredHealthCard(invocation: SparkClient.ToolInvocation, context: SparkClient.ToolExecutionContext) async -&gt; SparkClient.ToolExecutionResult"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Core/AIRuntime/ToolHub/Executors/ToolHubGenerateStructuredHealthCard.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "90"
+                  endingLineNumber = "90">
+               </Location>
+            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "951E8954-BECD-41A1-816F-26D3EA030C3B"
-            shouldBeEnabled = "No"
+            uuid = "C95DB24B-15C3-4BBA-8602-F15B5E952A66"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Features/MedicalDocumentUpload/Infrastructure/DefaultTypedMedicalDocumentExtractor.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "68"
-            endingLineNumber = "68"
-            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "CAB2B7EC-2B85-46AD-874B-185AFDD5E5DC"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Features/MedicalDocumentUpload/Infrastructure/DefaultTypedMedicalDocumentExtractor.swift"
+            filePath = "SparkClient/Projects/Features/Chat/Application/MessageRunActor.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "69"
             endingLineNumber = "69"
-            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
+            landmarkName = "apply(_:)"
             landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "B38DADDD-2E18-4536-A91B-FAEC2B2B3665"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "147"
-            endingLineNumber = "147"
-            landmarkName = "refreshTokensDeDuplicated()"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "65253E3A-DDFB-44D2-935C-6688050E35D1"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Core/Networking/AuthTokenProvider.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "123"
-            endingLineNumber = "123"
-            landmarkName = "validTokens()"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "89F3A8AF-254E-4DB0-93C6-BA451378C35B"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Core/Networking/API/Version/SparkVersionAPI.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "45"
-            endingLineNumber = "45"
-            landmarkName = "checkVersion(systemInfo:channel:)"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "C2DFC025-6A7A-4D34-8B4E-AF84DE1CBE67"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Features/MedicalDocumentUpload/Infrastructure/DefaultTypedMedicalDocumentExtractor.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "71"
-            endingLineNumber = "71"
-            landmarkName = "extract(memberID:files:selectedKind:cancellationToken:)"
-            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "C95DB24B-15C3-4BBA-8602-F15B5E952A66 - 73bf1f70064600f4"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for SparkClient.MessageRunActor.apply(SparkClient.ChatRunEvent) async -&gt; ()"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Chat/Application/MessageRunActor.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "69"
+                  endingLineNumber = "69">
+               </Location>
+               <Location
+                  uuid = "C95DB24B-15C3-4BBA-8602-F15B5E952A66 - 8a2564d039d138c3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(2) await resume partial function for SparkClient.MessageRunActor.apply(SparkClient.ChatRunEvent) async -&gt; ()"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Chat/Application/MessageRunActor.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "69"
+                  endingLineNumber = "69">
+               </Location>
+               <Location
+                  uuid = "C95DB24B-15C3-4BBA-8602-F15B5E952A66 - d41446094e6dc8a9"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for SparkClient.MessageRunActor.apply(SparkClient.ChatRunEvent) async -&gt; ()"
+                  moduleName = "SparkClient.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/hua/Downloads/Reference/SparkClient/SparkClient/Projects/Features/Chat/Application/MessageRunActor.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "160"
+                  endingLineNumber = "160">
+               </Location>
+            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

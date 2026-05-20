@@ -67,20 +67,48 @@ struct ChatOutboxPipeline: Sendable {
 
     func pushOutbox() async throws {
         let pending = await outboxStore.pending(limit: 50)
-        guard pending.isEmpty == false else { return }
+        let pendingBlocks = await outboxStore.pendingBlocks(limit: 100)
+        guard pending.isEmpty == false || pendingBlocks.isEmpty == false else { return }
 
         let toolCount = pending.filter { $0.blocks.contains(where: { $0.kind == .tool }) }.count
         let threads = Set(pending.map(\.threadID)).count
-        logger.info(
-            "准备上送对话，count=\(pending.count), threads=\(threads), toolMessages=\(toolCount)",
-            module: .general
-        )
+        if pending.isEmpty == false {
+            logger.info(
+                "准备上送对话，count=\(pending.count), threads=\(threads), toolMessages=\(toolCount)",
+                module: .general
+            )
+        }
+        if pendingBlocks.isEmpty == false {
+            let blockThreads = Set(pendingBlocks.map(\.threadID)).count
+            logger.info(
+                "准备上送对话块，blocks=\(pendingBlocks.count), threads=\(blockThreads)",
+                module: .general
+            )
+        }
 
         for message in pending {
             await outboxStore.markSending(message)
         }
 
         do {
+            if pendingBlocks.isEmpty == false {
+                let blockPayload = pendingBlocks.map { item in
+                    ChatRemoteMessageBlockUpdateDTO(
+                        threadId: item.threadID,
+                        clientMessageId: item.clientMessageID,
+                        block: item.block
+                    )
+                }
+                let pushed = try await remoteAPI.pushBlockUpdates(blockPayload)
+                await outboxStore.markBlocksSynced(ids: pendingBlocks.map { $0.block.id })
+                logger.info(
+                    "上送对话块完成，requested=\(pendingBlocks.count), acceptedMessages=\(pushed.count)",
+                    module: .general
+                )
+                await mergePushedMessages(pushed)
+            }
+
+            guard pending.isEmpty == false else { return }
             let threadsByID = Dictionary(uniqueKeysWithValues: await repository.loadThreads().map { ($0.id, $0) })
             let payload: [ChatRemoteMessageDTO] = pending.map { message in
                 ChatRemoteMessageDTO(
@@ -113,36 +141,40 @@ struct ChatOutboxPipeline: Sendable {
                 module: .general
             )
 
-            let grouped = Dictionary(grouping: pushed.compactMap(ChatSyncEngineDTOMapper.toDomain), by: { $0.threadID })
-            for (threadID, remoteMessages) in grouped {
-                let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
-                let localByClient = Self.indexByClientMessageID(localMessages)
-                let merged = remoteMessages.map { remote in
-                    mergeEngine.resolve(local: localByClient[remote.clientMessageId], remote: remote)
-                }
-                await repository.upsertRemoteMessages(merged, in: threadID, enqueueAttachmentDownloadJobs: false)
-                
-                // 将游标推进到刚上送消息的最新 server_updated_at 之后，避免下次 syncThreadOnOpen 重复拉取这些消息。
-                // 服务端以微秒精度存储时间戳（6位小数），但 ISO8601DateFormatter 解码后只能保留毫秒精度（3位），
-                // 导致游标与实际时间戳之间存在不超过 1ms 的负偏差，服务端判定 server_updated_at > cursor 为真而重复返回。
-                // 加 1ms epsilon 可确保游标严格大于同批次所有消息的实际微秒时间戳。
-                if let latestDate = remoteMessages.compactMap(\.serverUpdatedAt).max() {
-                    let exclusiveDate = latestDate.addingTimeInterval(0.001)
-                    await repository.saveMessageSyncCursor(
-                        ChatSyncCursor(value: Self.formatSyncCursor(exclusiveDate)),
-                        for: threadID
-                    )
-                }
-            }
+            await mergePushedMessages(pushed)
         } catch {
             for message in pending {
                 await outboxStore.markFailed(message)
             }
             logger.error(
-                "上送对话失败，count=\(pending.count), toolMessages=\(toolCount), error=\(error.localizedDescription)",
+                "上送对话失败，count=\(pending.count), blockUpdates=\(pendingBlocks.count), toolMessages=\(toolCount), error=\(error.localizedDescription)",
                 module: .general
             )
             throw error
+        }
+    }
+
+    private func mergePushedMessages(_ pushed: [ChatRemoteMessageDTO]) async {
+        let grouped = Dictionary(grouping: pushed.compactMap(ChatSyncEngineDTOMapper.toDomain), by: { $0.threadID })
+        for (threadID, remoteMessages) in grouped {
+            let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
+            let localByClient = Self.indexByClientMessageID(localMessages)
+            let merged = remoteMessages.map { remote in
+                mergeEngine.resolve(local: localByClient[remote.clientMessageId], remote: remote)
+            }
+            await repository.upsertRemoteMessages(merged, in: threadID, enqueueAttachmentDownloadJobs: false)
+
+            // 将游标推进到刚上送消息的最新 server_updated_at 之后，避免下次增量拉取重复返回这些消息。
+            // 服务端以微秒精度存储时间戳（6位小数），但 ISO8601DateFormatter 解码后只能保留毫秒精度（3位），
+            // 导致游标与实际时间戳之间存在不超过 1ms 的负偏差，服务端判定 server_updated_at > cursor 为真而重复返回。
+            // 加 1ms epsilon 可确保游标严格大于同批次所有消息的实际微秒时间戳。
+            if let latestDate = remoteMessages.compactMap(\.serverUpdatedAt).max() {
+                let exclusiveDate = latestDate.addingTimeInterval(0.001)
+                await repository.saveMessageSyncCursor(
+                    ChatSyncCursor(value: Self.formatSyncCursor(exclusiveDate)),
+                    for: threadID
+                )
+            }
         }
     }
     private static let syncCursorFormatter: ISO8601DateFormatter = {

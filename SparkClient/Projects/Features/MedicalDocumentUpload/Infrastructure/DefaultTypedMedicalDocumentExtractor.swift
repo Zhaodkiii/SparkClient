@@ -65,9 +65,9 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
 #if DEBUG
-        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
-        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: selectedKind)
-#endif
+        logger.info("使用本地 Debug 假装结构化抽取（跳过 OCR/AI），selectedKind=\(selectedKind.rawValue)", module: .medical)
+        return try makeDebugPretendOutput(memberID: memberID, files: files, selectedKind: selectedKind)
+#else
         try cancellationToken?.checkCancellation()
         logger.info("typed 抽取开始，文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
 
@@ -91,6 +91,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             preferredModelName: nil,
             cancellationToken: cancellationToken
         )
+#endif
     }
 
     func mergeOCRText(
@@ -279,6 +280,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> (typed: MedicalDocumentTypedResult, json: String) {
         try cancellationToken?.checkCancellation()
+#if DEBUG
+        logger.info("使用本地 Debug 假装结构化抽取（跳过 AI），kind=\(kind.rawValue)", module: .medical)
+        return try makeDebugPretendTypedResult(kind: kind)
+#else
         // 根据不同文档类型，走不同的抽取&解析流程
         switch kind {
         // 病例文档
@@ -370,6 +375,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             }
             return (.medicineBoxes(draft), final.normalizedJSON)
         }
+#endif
     }
 
     // MARK: - AI 流式结构化抽取通用方法
@@ -459,43 +465,88 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 
 #if DEBUG
 private extension DefaultTypedMedicalDocumentExtractor {
-    func makeDebugPretendCaseOutput(
+    func makeDebugPretendOutput(
         memberID: Int,
         files: [MedicalUploadLocalFile],
         selectedKind: MedicalDocumentKind
     ) throws -> MedicalDocumentTypedExtractionOutput {
-        guard let data = Self.debugPretendCaseJSON.data(using: .utf8) else {
-            throw ExtractionError.invalidDebugPayload
-        }
-        let decoder = JSONDecoder.default
-        let payload = try decoder.decode(CaseRecognitionDraft.self, from: data)
-        let payloadJSON = try prettyJSONString(from: payload)
+        let debugKind = Self.debugResolvedKind(for: selectedKind)
+        let extraction = try makeDebugPretendTypedResult(kind: debugKind)
         let preview = """
         {
           "memberID": \(memberID),
-          "kind": "\(selectedKind.rawValue)",
+          "kind": "\(debugKind.rawValue)",
           "resolutionSource": "\(MedicalDocumentTypeResolution.Source.manual.rawValue)",
           "confidence": \(String(format: "%.2f", 1.0)),
-          "payload": \(payloadJSON)
+          "payload": \(extraction.json)
         }
         """
         let envelope = MedicalDocumentRecognitionEnvelope(
             memberID: memberID,
             sourceFiles: files,
-            rawOCRText: "[DEBUG] pretend case extraction bypassed OCR",
+            rawOCRText: "[DEBUG] pretend \(debugKind.rawValue) extraction bypassed OCR",
             typeResolution: MedicalDocumentTypeResolution(
-                kind: selectedKind,
+                kind: debugKind,
                 confidence: 1.0,
                 source: .manual,
-                reason: "debug pretend case extraction"
+                reason: "debug pretend \(debugKind.rawValue) extraction"
             )
         )
         return MedicalDocumentTypedExtractionOutput(
             envelope: envelope,
-            typedResult: .caseDocument(payload),
-            extractedJSON: payloadJSON,
+            typedResult: extraction.typed,
+            extractedJSON: extraction.json,
             payloadPreview: preview
         )
+    }
+
+    func makeDebugPretendTypedResult(
+        kind: MedicalDocumentKind
+    ) throws -> (typed: MedicalDocumentTypedResult, json: String) {
+        switch Self.debugResolvedKind(for: kind) {
+        case .caseDocument:
+            let payload: CaseRecognitionDraft = try decodeDebugPayload(Self.debugPretendCaseJSON)
+            return (.caseDocument(payload), try prettyJSONString(from: payload))
+
+        case .healthExamReport:
+            let payload: HealthExamRecognitionDraft = try decodeDebugPayload(Self.debugPretendHealthExamJSON)
+            return (.healthExamReport(payload), try prettyJSONString(from: payload))
+
+        case .medicalReport, .auto:
+            let payload: [MedicalReportRecognitionDraft] = try decodeDebugPayload(Self.debugPretendMedicalReportJSON)
+            return (.medicalReport(payload), try prettyJSONString(from: payload))
+
+        case .prescription:
+            let payload: PrescriptionRecognitionDraft = try decodeDebugPayload(Self.debugPretendPrescriptionJSON)
+            return (.prescription(payload), try prettyJSONString(from: payload))
+
+        case .medicationPlan:
+            let payload: [MedicationPlanRecognitionDraft] = try decodeDebugPayload(Self.debugPretendMedicationPlanJSON)
+            return (.medicationPlan(payload), try prettyJSONString(from: payload))
+
+        case .medicineBox:
+            let payload: [MedicineBoxRecognitionDraft] = try decodeDebugPayload(Self.debugPretendMedicineBoxJSON)
+            return (.medicineBoxes(payload), try prettyJSONString(from: payload))
+        }
+    }
+
+    func makeDebugPretendCaseOutput(
+        memberID: Int,
+        files: [MedicalUploadLocalFile],
+        selectedKind: MedicalDocumentKind
+    ) throws -> MedicalDocumentTypedExtractionOutput {
+        try makeDebugPretendOutput(memberID: memberID, files: files, selectedKind: selectedKind)
+    }
+
+    func decodeDebugPayload<T: Decodable>(_ json: String) throws -> T {
+        guard let data = json.data(using: .utf8) else {
+            throw ExtractionError.invalidDebugPayload
+        }
+        return try JSONDecoder.default.decode(T.self, from: data)
+    }
+
+    static func debugResolvedKind(for selectedKind: MedicalDocumentKind) -> MedicalDocumentKind {
+        selectedKind == .auto ? .medicalReport : selectedKind
     }
 
     func prettyJSONString<T: Encodable>(from value: T) throws -> String {
@@ -505,6 +556,234 @@ private extension DefaultTypedMedicalDocumentExtractor {
         }
         return text
     }
+
+    static let debugPretendHealthExamJSON = """
+    {
+        "institutionName": "苏州工业园区星塘医院体检中心",
+        "reportNo": "HE-DEBUG-20260520",
+        "examDate": "2026-05-20",
+        "examType": "年度健康体检",
+        "summary": "本次体检提示低密度脂蛋白胆固醇轻度升高，肝肾功能未见明显异常。建议清淡饮食、规律运动，3个月后复查血脂。",
+        "items": [
+            {
+                "category": "血脂",
+                "subCategory": "生化",
+                "itemName": "低密度脂蛋白胆固醇",
+                "itemCode": "LDL-C",
+                "resultValue": "3.51",
+                "unit": "mmol/L",
+                "referenceRange": "0.00-3.37",
+                "flag": "↑",
+                "resultAt": "2026-05-20",
+                "sortOrder": "1"
+            },
+            {
+                "category": "肝功能",
+                "subCategory": "生化",
+                "itemName": "丙氨酸氨基转移酶",
+                "itemCode": "ALT",
+                "resultValue": "24",
+                "unit": "U/L",
+                "referenceRange": "9-50",
+                "flag": "正常",
+                "resultAt": "2026-05-20",
+                "sortOrder": "2"
+            },
+            {
+                "category": "肾功能",
+                "subCategory": "生化",
+                "itemName": "肌酐",
+                "itemCode": "CREA",
+                "resultValue": "72",
+                "unit": "umol/L",
+                "referenceRange": "57-97",
+                "flag": "正常",
+                "resultAt": "2026-05-20",
+                "sortOrder": "3"
+            }
+        ]
+    }
+    """
+
+    static let debugPretendMedicalReportJSON = """
+    [
+        {
+            "category": "imaging",
+            "title": "颈椎CT平扫报告",
+            "hospital": "苏州工业园区星塘医院",
+            "doctor": "王医生",
+            "content": "颈椎生理曲度变直，C4/5、C5/6椎间盘轻度后突，相邻硬膜囊稍受压。椎旁软组织未见明显肿胀。",
+            "date": "2026-05-20",
+            "details": [
+                {
+                    "category": "放射科",
+                    "subCategory": "CT",
+                    "itemName": "颈椎CT平扫",
+                    "resultValue": "C4/5、C5/6椎间盘轻度后突",
+                    "bodyPart": "颈椎",
+                    "diagnosis": "颈椎退变；C4/5、C5/6椎间盘轻度突出",
+                    "sortOrder": "1"
+                }
+            ]
+        },
+        {
+            "category": "lab",
+            "title": "血常规检验报告",
+            "hospital": "苏州工业园区星塘医院",
+            "doctor": "李医生",
+            "content": "白细胞、红细胞、血红蛋白及血小板计数均在参考范围内。",
+            "date": "2026-05-20",
+            "details": [
+                {
+                    "category": "血常规",
+                    "itemName": "白细胞计数",
+                    "itemCode": "WBC",
+                    "resultValue": "6.2",
+                    "unit": "10^9/L",
+                    "referenceRange": "3.5-9.5",
+                    "flag": "正常",
+                    "sortOrder": "1"
+                },
+                {
+                    "category": "血常规",
+                    "itemName": "血红蛋白",
+                    "itemCode": "HGB",
+                    "resultValue": "145",
+                    "unit": "g/L",
+                    "referenceRange": "130-175",
+                    "flag": "正常",
+                    "sortOrder": "2"
+                }
+            ]
+        }
+    ]
+    """
+
+    static let debugPretendPrescriptionJSON = """
+    {
+        "medicalCase": null,
+        "prescriberName": "周医生",
+        "institutionName": "苏州大学附属第四医院",
+        "prescribedAt": "2026-05-20",
+        "diagnosis": "前庭性眩晕",
+        "prescriptionNo": "RX-DEBUG-0520",
+        "status": "active",
+        "extra": {
+            "source": "debug_pretend_prescription"
+        },
+        "medicationPlans": [
+            {
+                "medicineName": "甲磺酸倍他司汀片",
+                "medicineType": "western",
+                "brandName": "敏使朗",
+                "dosageForm": "片剂",
+                "strength": "6mg",
+                "dosePerTime": "6mg",
+                "doseValue": "1",
+                "doseUnit": "片",
+                "frequencyType": "daily",
+                "frequencyText": "每日3次",
+                "startDate": "2026-05-20",
+                "endDate": "2026-06-03",
+                "instructions": "饭后口服",
+                "reminderEnabled": true,
+                "reminderTimes": ["08:00", "13:00", "19:00"],
+                "status": "active",
+                "sortOrder": "1"
+            },
+            {
+                "medicineName": "盐酸氟桂利嗪胶囊",
+                "medicineType": "western",
+                "dosageForm": "胶囊",
+                "strength": "5mg",
+                "dosePerTime": "5mg",
+                "doseValue": "1",
+                "doseUnit": "粒",
+                "frequencyType": "daily",
+                "frequencyText": "每晚1次",
+                "startDate": "2026-05-20",
+                "endDate": "2026-06-03",
+                "instructions": "睡前服用，如嗜睡明显请咨询医生",
+                "reminderEnabled": true,
+                "reminderTimes": ["21:30"],
+                "status": "active",
+                "sortOrder": "2"
+            }
+        ]
+    }
+    """
+
+    static let debugPretendMedicationPlanJSON = """
+    [
+        {
+            "medicineName": "普拉洛芬滴眼液",
+            "medicineType": "western",
+            "brandName": "普南扑灵",
+            "dosageForm": "滴眼液",
+            "strength": "5ml:5mg",
+            "dosePerTime": "1滴",
+            "doseValue": "1",
+            "doseUnit": "滴",
+            "frequencyType": "daily",
+            "frequencyText": "每日4次",
+            "startDate": "2026-05-20",
+            "endDate": "2026-05-27",
+            "instructions": "滴入患眼，避免瓶口接触眼部",
+            "reminderEnabled": true,
+            "reminderTimes": ["08:00", "12:00", "18:00", "22:00"],
+            "status": "active",
+            "sortOrder": "1"
+        },
+        {
+            "medicineName": "盐酸氮卓斯汀滴眼液",
+            "medicineType": "western",
+            "brandName": "爱赛平",
+            "dosageForm": "滴眼液",
+            "strength": "6ml:3mg",
+            "dosePerTime": "1滴",
+            "doseValue": "1",
+            "doseUnit": "滴",
+            "frequencyType": "daily",
+            "frequencyText": "每日2次",
+            "startDate": "2026-05-20",
+            "endDate": "2026-06-03",
+            "instructions": "开启瓶封后使用不超过四周",
+            "reminderEnabled": true,
+            "reminderTimes": ["09:00", "21:00"],
+            "status": "active",
+            "sortOrder": "2"
+        }
+    ]
+    """
+
+    static let debugPretendMedicineBoxJSON = """
+    [
+        {
+            "medicineName": "布洛芬缓释胶囊",
+            "medicineType": "western",
+            "brandName": "芬必得",
+            "dosageForm": "胶囊",
+            "strength": "0.3g",
+            "doseUnit": "粒",
+            "totalQuantity": "20",
+            "expireDate": "2028-06-30",
+            "notes": "用于缓解轻至中度疼痛，胃部不适或过敏史需谨慎。",
+            "sortOrder": "1"
+        },
+        {
+            "medicineName": "蒙脱石散",
+            "medicineType": "western",
+            "brandName": "思密达",
+            "dosageForm": "散剂",
+            "strength": "3g/袋",
+            "doseUnit": "袋",
+            "totalQuantity": "10",
+            "expireDate": "2027-12-31",
+            "notes": "冲服，需与其他药物间隔使用。",
+            "sortOrder": "2"
+        }
+    ]
+    """
 
     static let debugPretendCaseJSON = """
     {

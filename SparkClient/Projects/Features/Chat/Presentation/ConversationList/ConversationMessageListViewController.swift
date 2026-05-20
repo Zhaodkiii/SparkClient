@@ -27,7 +27,6 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     private var messageLookup: [UUID: ChatMessage] = [:] // 消息 ID → 消息模型映射
 
     // MARK: - 流式渲染状态
-    private var lastStreamingGeneration: UInt64 = 0 // 流式更新版本号（判断是否需要重刷）
     private var lastScrollToBottomRequestGeneration: UInt64 = 0 // 发送等主动动作触发的强制贴底版本号
     private var userDragging = false // 用户是否正在手动拖拽列表
     private var hasUserInteractedSinceThreadOpen = false // 用户是否交互过（交互后不再自动滚到底部）
@@ -116,7 +115,6 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     /// 切换新会话时重置所有状态
     func resetForNewThread() {
         lastAppliedMessageIDs = []
-        lastStreamingGeneration = 0
         lastScrollToBottomRequestGeneration = 0
         lastRenderedMessages = []
         userDragging = false
@@ -165,7 +163,6 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         isLoadingMoreFlag = payload.isLoadingMoreMessages
         let messages = payload.messages
         let hasMoreMessages = payload.hasMoreMessages
-        let streamingContentGeneration = payload.streamingContentGeneration
         let shouldForceScrollToBottom = payload.scrollToBottomRequestGeneration != lastScrollToBottomRequestGeneration
         lastScrollToBottomRequestGeneration = payload.scrollToBottomRequestGeneration
         if shouldForceScrollToBottom {
@@ -215,10 +212,6 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
             snapshot.reloadItems(reloadableIDs)
         }
 
-        // 流式版本号递增
-        let genBump = streamingContentGeneration != lastStreamingGeneration
-        lastStreamingGeneration = streamingContentGeneration
-
         // 应用快照
         dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
             guard let self else { return }
@@ -236,7 +229,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                 if updatePlan.hasAppendedItems && wasPinnedToBottom {
                     self.scrollToBottom(animated: false, force: false)
                 }
-            } else if genBump {
+            } else if reloadableIDs.isEmpty == false {
                 if ScrollAnchorPolicy.shouldFollowStream(collectionView: self.collectionView, userDragging: self.userDragging) {
                     self.scrollToBottom(animated: false, force: false)
                 }

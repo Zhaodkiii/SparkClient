@@ -20,6 +20,12 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let modelName: String?
 }
 
+struct ChatRemoteMessageBlockUpdateDTO: Codable, Sendable {
+    let threadId: UUID
+    let clientMessageId: UUID
+    let block: ChatMessageBlock
+}
+
 struct ChatRemotePullResult: Sendable {
     let cursor: String?
     let messages: [ChatRemoteMessageDTO]
@@ -147,6 +153,37 @@ struct SparkChatRemoteAPI {
                     requiresAuth: true,
                     allowETag: false,
                     serialKey: "chat.sync.push",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        let payload = try APIResponseDecoder.decodeWrappedData(
+            ChatPushResponse.self,
+            from: response,
+            decoder: ChatRemoteCoding.decoder
+        )
+        return payload.messages
+    }
+
+    func pushBlockUpdates(_ updates: [ChatRemoteMessageBlockUpdateDTO]) async throws -> [ChatRemoteMessageDTO] {
+        guard updates.isEmpty == false else { return [] }
+        let requestBody = try ChatRemoteCoding.encoder.encode(ChatBlockPushRequest(blockUpdates: updates))
+
+        let operation = CacheableSparkNetworkOperation(
+            name: "Chat.Sync.PushBlocks",
+            apiName: "ChatRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/ai/chat/sync/push/",
+                body: .raw(requestBody, contentType: "application/json"),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "chat.sync.push.blocks",
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .high
@@ -312,6 +349,10 @@ struct SparkChatRemoteAPI {
 
 private struct ChatPushRequest: Encodable {
     let messages: [ChatRemoteMessageDTO]
+}
+
+private struct ChatBlockPushRequest: Encodable {
+    let blockUpdates: [ChatRemoteMessageBlockUpdateDTO]
 }
 
 private struct ChatThreadPushRequest: Encodable {

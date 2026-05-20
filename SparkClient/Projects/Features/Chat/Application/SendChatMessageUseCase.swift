@@ -3,30 +3,29 @@ import Foundation
 struct SendChatMessageUseCase: Sendable {
     let repository: any ChatRepository
     let orchestrator: ChatOrchestrator
-    let chatSyncSupervisor: ChatSyncSupervisor
     let buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase
     let toolEventInterpreter: ChatToolEventInterpreter
     let fileTransferService: FileTransferService
     let ocrOrchestrator: OCROrchestrator
     let aiConfigCenter: AIConfigCenter
     let retrieveMemoryUseCase: RetrieveMemoryUseCase
+    let messageRunActor: MessageRunActor
     let logger: Logger
 
     init(
         repository: any ChatRepository,
         orchestrator: ChatOrchestrator,
-        chatSyncSupervisor: ChatSyncSupervisor,
         buildMemberContextSummaryUseCase: BuildMemberContextSummaryUseCase,
         toolEventInterpreter: ChatToolEventInterpreter? = nil,
         fileTransferService: FileTransferService,
         ocrOrchestrator: OCROrchestrator,
         aiConfigCenter: AIConfigCenter,
         retrieveMemoryUseCase: RetrieveMemoryUseCase,
+        messageRunActor: MessageRunActor,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
         self.orchestrator = orchestrator
-        self.chatSyncSupervisor = chatSyncSupervisor
         self.buildMemberContextSummaryUseCase = buildMemberContextSummaryUseCase
         self.logger = logger
         self.toolEventInterpreter = toolEventInterpreter ?? ChatToolEventInterpreter(logger: logger)
@@ -34,6 +33,7 @@ struct SendChatMessageUseCase: Sendable {
         self.ocrOrchestrator = ocrOrchestrator
         self.aiConfigCenter = aiConfigCenter
         self.retrieveMemoryUseCase = retrieveMemoryUseCase
+        self.messageRunActor = messageRunActor
     }
 
     /// 发送消息核心业务方法：处理输入、上传附件、保存消息、调用AI生成、返回对话快照
@@ -271,20 +271,18 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            // 异步推送待发送消息到同步队列
-            Task {
-                await OutboxCoordinator.pushPendingMessages(
-                    chatSyncSupervisor: chatSyncSupervisor,
-                    logger: logger
-                )
-            }
-
             // 加载当前对话所有历史消息
             let history = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
+            try await messageRunActor.startAssistantMessage(
+                threadID: thread.id,
+                assistantClientMessageID: assistantClientMessageID,
+                modelName: resolvedRow.name
+            )
+            let visibleHistory = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
             // 回调：用户消息已落库
             if let onUserMessagePersisted {
                 await onUserMessagePersisted(
-                    ChatThreadSnapshot(thread: thread, messages: history)
+                    ChatThreadSnapshot(thread: thread, messages: visibleHistory)
                 )
             }
             
@@ -354,7 +352,14 @@ struct SendChatMessageUseCase: Sendable {
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: smallTask == nil && deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
-                onPartial: onAssistantPartial
+                onPartial: { delta in
+                    await messageRunActor.apply(
+                        .assistantPartial(delta, assistantClientMessageID: assistantClientMessageID)
+                    )
+                    if let onAssistantPartial {
+                        await onAssistantPartial(delta)
+                    }
+                }
             )
             logger.info(
                 "AI 编排完成，thread=\(shortID(thread.id)), kind=\(output.kind.rawValue), outputLength=\(output.text.count)",
@@ -373,18 +378,8 @@ struct SendChatMessageUseCase: Sendable {
                 reasoningText: output.reasoningText,
                 reasoningDurationMs: output.reasoningDurationMs
             )
-            
-            // 保存AI助手消息到本地
-            _ = try await repository.appendMessage(
-                ChatMessage(
-                    threadID: thread.id,
-                    role: .assistant,
-                    blocks: assistantBlocks,
-                    clientMessageID: assistantClientMessageID,
-                    serverMessageID: nil,
-                    deliveryState: .pending,
-                    modelName: resolvedRow.name
-                )
+            await messageRunActor.apply(
+                .finalizeAssistantBlocks(assistantBlocks, assistantClientMessageID: assistantClientMessageID)
             )
 
             // 如果AI结束原因需要提示，追加系统消息
@@ -403,12 +398,6 @@ struct SendChatMessageUseCase: Sendable {
                 logger.warning("AI 完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
 
-            // 推送所有待同步消息
-            await OutboxCoordinator.pushPendingMessages(
-                chatSyncSupervisor: chatSyncSupervisor,
-                logger: logger
-            )
-
             // 加载最新线程与消息，返回快照
             guard let latestThread = await repository.loadThread(id: thread.id) else {
                 throw ChatFeatureError.threadNotFound
@@ -426,14 +415,6 @@ struct SendChatMessageUseCase: Sendable {
             logger.error("sendMessage 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
             throw error
         }
-    }
-
-    func pushPendingMessages(source: String) async {
-        logger.debug("触发对话待推送消息同步，source=\(source)", module: .general)
-        await OutboxCoordinator.pushPendingMessages(
-            chatSyncSupervisor: chatSyncSupervisor,
-            logger: logger
-        )
     }
 
     func executeRegenerateReply(
@@ -529,6 +510,11 @@ struct SendChatMessageUseCase: Sendable {
                     module: .aiConfig
                 )
             }
+            try await messageRunActor.startAssistantMessage(
+                threadID: thread.id,
+                assistantClientMessageID: assistantClientMessageID,
+                modelName: resolvedRow.name
+            )
 
             let output = try await orchestrator.generateReply(
                 userInput: replayUserInput,
@@ -548,7 +534,14 @@ struct SendChatMessageUseCase: Sendable {
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: deliverMultimodal,
                 providerCompanyUppercased: providerCompany,
-                onPartial: onAssistantPartial
+                onPartial: { delta in
+                    await messageRunActor.apply(
+                        .assistantPartial(delta, assistantClientMessageID: assistantClientMessageID)
+                    )
+                    if let onAssistantPartial {
+                        await onAssistantPartial(delta)
+                    }
+                }
             )
 
             _ = toolEventInterpreter.interpret(
@@ -562,16 +555,8 @@ struct SendChatMessageUseCase: Sendable {
                 reasoningText: output.reasoningText,
                 reasoningDurationMs: output.reasoningDurationMs
             )
-            _ = try await repository.appendMessage(
-                ChatMessage(
-                    threadID: thread.id,
-                    role: .assistant,
-                    blocks: assistantBlocks,
-                    clientMessageID: assistantClientMessageID,
-                    serverMessageID: nil,
-                    deliveryState: .pending,
-                    modelName: resolvedRow.name
-                )
+            await messageRunActor.apply(
+                .finalizeAssistantBlocks(assistantBlocks, assistantClientMessageID: assistantClientMessageID)
             )
 
             if let notice = finishReasonNoticeText(output.finishReason) {
@@ -588,11 +573,6 @@ struct SendChatMessageUseCase: Sendable {
                 )
                 logger.warning("重新生成完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
-
-            await OutboxCoordinator.pushPendingMessages(
-                chatSyncSupervisor: chatSyncSupervisor,
-                logger: logger
-            )
 
             guard let latestThread = await repository.loadThread(id: thread.id) else {
                 throw ChatFeatureError.threadNotFound
@@ -666,9 +646,6 @@ struct SendChatMessageUseCase: Sendable {
             rolePrompt: promptLocalizer.chatSystemPrompt()
         )
         await repository.setActiveThread(id: created.id)
-        Task {
-            try? await chatSyncSupervisor.pushSingleThread(threadID: created.id)
-        }
         return created
     }
 

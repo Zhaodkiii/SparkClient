@@ -36,7 +36,7 @@ extension ToolHub {
                 let merge = structuredHealthCardMergeCoordinator
                 let anchorToolCallID = normalizedToolCallID(from: context)
                 Task {
-                    await merge.insertKnowledgeCardsWhenAssistantMessageReady(
+                    await merge.publishKnowledgeCards(
                         threadID: threadID,
                         assistantClientMessageID: assistantID,
                         cards: [ChatKnowledgeCard(title: title, content: body, showsSaveAndCopy: false)],

@@ -11,6 +11,10 @@ struct LoadChatMessagesUseCase: Sendable {
         await queryService.loadMessages(threadID: threadID, limit: limit, before: before)
     }
 
+    func execute(clientMessageIDs: [UUID]) async -> [ChatMessage] {
+        await queryService.loadMessages(clientMessageIDs: clientMessageIDs)
+    }
+
     func count(threadID: UUID) async -> Int {
         await queryService.countMessages(threadID: threadID)
     }

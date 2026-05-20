@@ -116,6 +116,68 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case error
 }
 
+nonisolated enum ChatMessageBlockStatus: String, Codable, Sendable {
+    case pending
+    case streaming
+    case ready
+    case failed
+}
+
+nonisolated enum ChatMessageBlockNodeRole: String, Codable, Sendable {
+    case timeline
+    case tool
+    case toolPresentation
+}
+
+nonisolated enum ChatStableBlockID {
+    static func textSegment(messageID: UUID, index: Int) -> UUID {
+        deterministicUUID("chat.message.\(messageID.uuidString.lowercased()).block.text.\(index)")
+    }
+
+    static func reasoning(messageID: UUID) -> UUID {
+        deterministicUUID("chat.message.\(messageID.uuidString.lowercased()).block.reasoning")
+    }
+
+    static func tool(messageID: UUID, toolCallID: String) -> UUID {
+        deterministicUUID("chat.message.\(messageID.uuidString.lowercased()).tool.\(toolCallID).row")
+    }
+
+    static func rich(messageID: UUID, toolCallID: String, kind: ChatMessageBlockKind) -> UUID {
+        deterministicUUID("chat.message.\(messageID.uuidString.lowercased()).tool.\(toolCallID).rich.\(kind.rawValue)")
+    }
+
+    static func rich(messageID: UUID, kind: ChatMessageBlockKind) -> UUID {
+        deterministicUUID("chat.message.\(messageID.uuidString.lowercased()).rich.\(kind.rawValue)")
+    }
+
+    private static func deterministicUUID(_ key: String) -> UUID {
+        var hash1: UInt64 = 0xcbf29ce484222325
+        var hash2: UInt64 = 0x84222325cbf29ce4
+        for byte in key.utf8 {
+            hash1 ^= UInt64(byte)
+            hash1 &*= 0x100000001b3
+            hash2 ^= UInt64(byte) &+ 0x9e3779b97f4a7c15
+            hash2 &*= 0x100000001b3
+        }
+        var byteArray = [UInt8](repeating: 0, count: 16)
+        withUnsafeBytes(of: hash1.bigEndian) { raw in
+            for index in 0..<8 { byteArray[index] = raw[index] }
+        }
+        withUnsafeBytes(of: hash2.bigEndian) { raw in
+            for index in 0..<8 { byteArray[index + 8] = raw[index] }
+        }
+        byteArray[6] = (byteArray[6] & 0x0f) | 0x50
+        byteArray[8] = (byteArray[8] & 0x3f) | 0x80
+        let bytes: uuid_t = (
+            byteArray[0], byteArray[1], byteArray[2], byteArray[3],
+            byteArray[4], byteArray[5], byteArray[6], byteArray[7],
+            byteArray[8], byteArray[9], byteArray[10], byteArray[11],
+            byteArray[12], byteArray[13], byteArray[14], byteArray[15]
+        )
+        return UUID(uuid: bytes)
+    }
+}
+
 nonisolated struct ChatToolBlockPayload: Codable, Equatable, Sendable {
     let name: String?
     let content: String
@@ -133,7 +195,7 @@ nonisolated struct ChatDeepThoughtCardPayload: Equatable, Codable, Sendable {
     var reasoningVisibility: ChatReasoningVisibility
 }
 
-nonisolated enum ChatMessageBlockPayload: Equatable, Sendable {
+nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case text(String)
     case deepThought(ChatDeepThoughtCardPayload)
     case tool(ChatToolBlockPayload)
@@ -189,8 +251,17 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     let anchor: ChatBlockAnchor?
     /// 工具调用 ID（可选）
     let toolCallId: String?
+    let parentToolCallId: String?
+    let parentBlockId: UUID?
+    let nodeRole: ChatMessageBlockNodeRole
     /// 消息块负载数据（核心内容）
     let payload: ChatMessageBlockPayload
+    /// Streaming lifecycle for this block. Rich cards should move pending -> ready/failed on the same stable id.
+    let status: ChatMessageBlockStatus
+    /// Monotonic local revision used by idempotent DB upserts.
+    let revision: Int64
+    /// Stable presentation ordering that does not depend on array merge timing.
+    let orderKey: Double?
     /// 创建时间
     let createdAt: Date
     /// 更新时间
@@ -199,6 +270,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     // MARK: - 计算属性（快捷访问 payload 内容）
     /// 工具调用 ID（兼容命名）
     nonisolated var toolCallID: String? { toolCallId }
+    nonisolated var parentToolCallID: String? { parentToolCallId }
+    nonisolated var parentBlockID: UUID? { parentBlockId }
     
     /// 消息块类型（从负载中自动获取）
     nonisolated var kind: ChatMessageBlockKind { payload.kind }
@@ -321,6 +394,9 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         text: String? = nil,
         toolName: String? = nil,
         toolCallID: String? = nil,
+        parentToolCallID: String? = nil,
+        parentBlockID: UUID? = nil,
+        nodeRole: ChatMessageBlockNodeRole? = nil,
         attachments: [ChatAttachment] = [],
         knowledgeCards: [ChatKnowledgeCard] = [],
         taskCards: [TaskCard] = [],
@@ -335,12 +411,18 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         captureMessageCard: ChatCaptureMessageCardPayload? = nil,
         smallTaskCard: ChatSmallTaskMessageCardPayload? = nil,
         deepThoughtCard: ChatDeepThoughtCardPayload? = nil,
+        status: ChatMessageBlockStatus = .ready,
+        revision: Int64 = 1,
+        orderKey: Double? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
         self.id = id
         self.anchor = anchor
         self.toolCallId = toolCallID
+        self.parentToolCallId = parentToolCallID
+        self.parentBlockId = parentBlockID
+        self.nodeRole = nodeRole ?? Self.defaultNodeRole(kind: kind, toolCallID: toolCallID, parentToolCallID: parentToolCallID)
         // 根据类型自动组装负载数据
         self.payload = Self.makePayload(
             kind: kind,
@@ -361,89 +443,60 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             smallTaskCard: smallTaskCard,
             deepThoughtCard: deepThoughtCard
         )
+        self.status = status
+        self.revision = revision
+        self.orderKey = orderKey
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
-    /// 解码构造器：从 JSON/数据中解析出消息块
+    /// Decode the persisted block row payload directly. The old flat block JSON
+    /// shape has been retired with `ChatMessageBlockEntity.payloadData`.
     nonisolated init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodableKey.self)
         let id = try c.decode(UUID.self, forKey: .key("id"))
         let anchor = try c.decodeIfPresent(ChatBlockAnchor.self, forKey: .key("anchor"))
-        let kind = try c.decode(ChatMessageBlockKind.self, forKey: .key("kind"))
-        let text = try c.decodeIfPresent(String.self, forKey: .key("text"))
-        let toolName = try c.decodeIfPresent(String.self, forKey: .key("toolName"))
         let toolCallId = try c.decodeIfPresent(String.self, forKey: .key("toolCallId"))
-        let attachments = try c.decodeIfPresent([ChatAttachment].self, forKey: .key("attachments")) ?? []
-        let knowledgeCards = try c.decodeIfPresent([ChatKnowledgeCard].self, forKey: .key("knowledgeCards")) ?? []
-        let taskCards = try c.decodeIfPresent([TaskCard].self, forKey: .key("taskCards")) ?? []
-        let pendingMemberToolCards = try c.decodeIfPresent([PendingMemberToolCard].self, forKey: .key("pendingMemberToolCards")) ?? []
-        let locations = try c.decodeIfPresent([ChatMapLocationPayload].self, forKey: .key("locations")) ?? []
-        let routes = try c.decodeIfPresent([ChatRoutePayload].self, forKey: .key("routes")) ?? []
-        let events = try c.decodeIfPresent([ChatEventPayload].self, forKey: .key("events")) ?? []
-        let healthCards = try c.decodeIfPresent([ChatHealthCardPayload].self, forKey: .key("healthCards")) ?? []
-        let structuredHealthCards = try c.decodeIfPresent(StructuredHealthCardsBlob.self, forKey: .key("structuredHealthCards"))
-        let sleepVisualization = try c.decodeIfPresent(ChatHealthSleepModel.self, forKey: .key("sleepVisualization"))
-        let workoutVisualization = try c.decodeIfPresent(ChatHealthWorkoutModel.self, forKey: .key("workoutVisualization"))
-        let captureMessageCard = try c.decodeIfPresent(ChatCaptureMessageCardPayload.self, forKey: .key("captureMessageCard"))
-        let smallTaskCard = try c.decodeIfPresent(ChatSmallTaskMessageCardPayload.self, forKey: .key("smallTaskCard"))
-        let deepThoughtCard = try c.decodeIfPresent(ChatDeepThoughtCardPayload.self, forKey: .key("deepThoughtCard"))
+        let parentToolCallID = try c.decodeIfPresent(String.self, forKey: .key("parentToolCallID"))
+        let parentBlockID = try c.decodeIfPresent(UUID.self, forKey: .key("parentBlockID"))
+        let nodeRole = try c.decodeIfPresent(ChatMessageBlockNodeRole.self, forKey: .key("nodeRole"))
+        let payload = try c.decode(ChatMessageBlockPayload.self, forKey: .key("payload"))
+        let status = try c.decodeIfPresent(ChatMessageBlockStatus.self, forKey: .key("status")) ?? .ready
+        let revision = try c.decodeIfPresent(Int64.self, forKey: .key("revision")) ?? 1
+        let orderKey = try c.decodeIfPresent(Double.self, forKey: .key("orderKey"))
         let createdAt = try c.decode(Date.self, forKey: .key("createdAt"))
         let updatedAt = try c.decode(Date.self, forKey: .key("updatedAt"))
 
-        // 解析完成后调用便捷构造器赋值
         self.init(
             id: id,
             anchor: anchor,
-            kind: kind,
-            text: text,
-            toolName: toolName,
             toolCallID: toolCallId,
-            attachments: attachments,
-            knowledgeCards: knowledgeCards,
-            taskCards: taskCards,
-            pendingMemberToolCards: pendingMemberToolCards,
-            locations: locations,
-            routes: routes,
-            events: events,
-            healthCards: healthCards,
-            structuredHealthCards: structuredHealthCards,
-            sleepVisualization: sleepVisualization,
-            workoutVisualization: workoutVisualization,
-            captureMessageCard: captureMessageCard,
-            smallTaskCard: smallTaskCard,
-            deepThoughtCard: deepThoughtCard,
+            parentToolCallID: parentToolCallID,
+            parentBlockID: parentBlockID,
+            nodeRole: nodeRole,
+            payload: payload,
+            status: status,
+            revision: revision,
+            orderKey: orderKey,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
     }
 
-    /// 编码方法：将消息块序列化为 JSON/数据
+    /// Encode the same shape used by `ChatMessageBlockEntity.payloadData`.
     nonisolated func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodableKey.self)
         try c.encode(id, forKey: .key("id"))
         try c.encodeIfPresent(anchor, forKey: .key("anchor"))
         try c.encode(kind, forKey: .key("kind"))
-        try c.encodeIfPresent(text, forKey: .key("text"))
-        try c.encodeIfPresent(toolName, forKey: .key("toolName"))
         try c.encodeIfPresent(toolCallId, forKey: .key("toolCallId"))
-        
-        // 非空数据才编码，减少数据体积
-        if attachments.isEmpty == false { try c.encode(attachments, forKey: .key("attachments")) }
-        if knowledgeCards.isEmpty == false { try c.encode(knowledgeCards, forKey: .key("knowledgeCards")) }
-        if taskCards.isEmpty == false { try c.encode(taskCards, forKey: .key("taskCards")) }
-        if pendingMemberToolCards.isEmpty == false { try c.encode(pendingMemberToolCards, forKey: .key("pendingMemberToolCards")) }
-        if locations.isEmpty == false { try c.encode(locations, forKey: .key("locations")) }
-        if routes.isEmpty == false { try c.encode(routes, forKey: .key("routes")) }
-        if events.isEmpty == false { try c.encode(events, forKey: .key("events")) }
-        if healthCards.isEmpty == false { try c.encode(healthCards, forKey: .key("healthCards")) }
-        
-        try c.encodeIfPresent(structuredHealthCards, forKey: .key("structuredHealthCards"))
-        try c.encodeIfPresent(sleepVisualization, forKey: .key("sleepVisualization"))
-        try c.encodeIfPresent(workoutVisualization, forKey: .key("workoutVisualization"))
-        try c.encodeIfPresent(captureMessageCard, forKey: .key("captureMessageCard"))
-        try c.encodeIfPresent(smallTaskCard, forKey: .key("smallTaskCard"))
-        try c.encodeIfPresent(deepThoughtCard, forKey: .key("deepThoughtCard"))
+        try c.encodeIfPresent(parentToolCallId, forKey: .key("parentToolCallID"))
+        try c.encodeIfPresent(parentBlockId, forKey: .key("parentBlockID"))
+        try c.encode(nodeRole, forKey: .key("nodeRole"))
+        try c.encode(payload, forKey: .key("payload"))
+        try c.encode(status, forKey: .key("status"))
+        try c.encode(revision, forKey: .key("revision"))
+        try c.encodeIfPresent(orderKey, forKey: .key("orderKey"))
         
         try c.encode(createdAt, forKey: .key("createdAt"))
         try c.encode(updatedAt, forKey: .key("updatedAt"))
@@ -532,82 +585,93 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return .error(text ?? "")
         }
     }
+
+    private nonisolated static func defaultNodeRole(
+        kind: ChatMessageBlockKind,
+        toolCallID: String?,
+        parentToolCallID: String?
+    ) -> ChatMessageBlockNodeRole {
+        if kind == .tool { return .tool }
+        if parentToolCallID?.isEmpty == false { return .toolPresentation }
+        if toolCallID?.isEmpty == false, kind != .text, kind != .deepThought, kind != .error {
+            return .toolPresentation
+        }
+        return .timeline
+    }
 }
 
 extension ChatMessageBlock {
-    /// Payload-backed round-trip for ``ChatMessageBlockDTO`` / ``ChatMessageBlockBuilder``.
-    fileprivate nonisolated init(id: UUID, anchor: ChatBlockAnchor?, toolCallID: String?, payload: ChatMessageBlockPayload, createdAt: Date, updatedAt: Date) {
+    /// Payload-backed round-trip used by chat block storage and sync payloads.
+    fileprivate nonisolated init(
+        id: UUID,
+        anchor: ChatBlockAnchor?,
+        toolCallID: String?,
+        parentToolCallID: String? = nil,
+        parentBlockID: UUID? = nil,
+        nodeRole: ChatMessageBlockNodeRole? = nil,
+        payload: ChatMessageBlockPayload,
+        status: ChatMessageBlockStatus = .ready,
+        revision: Int64 = 1,
+        orderKey: Double? = nil,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.anchor = anchor
         self.toolCallId = toolCallID
+        self.parentToolCallId = parentToolCallID
+        self.parentBlockId = parentBlockID
+        self.nodeRole = nodeRole ?? Self.defaultNodeRole(kind: payload.kind, toolCallID: toolCallID, parentToolCallID: parentToolCallID)
         self.payload = payload
+        self.status = status
+        self.revision = revision
+        self.orderKey = orderKey
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
-    /// Merge semantics used by ``ChatMessageBlockBuilder`` (stable `id` / `createdAt`).
-    fileprivate nonisolated static func mergeReplacementPreservingIdentity(original: ChatMessageBlock, incoming: ChatMessageBlock) -> ChatMessageBlock {
+    nonisolated func replacingPayload(
+        _ payload: ChatMessageBlockPayload,
+        status: ChatMessageBlockStatus,
+        revision: Int64? = nil,
+        updatedAt: Date = Date()
+    ) -> ChatMessageBlock {
         ChatMessageBlock(
-            id: original.id,
-            anchor: incoming.anchor,
-            kind: incoming.kind,
-            text: incoming.text,
-            toolName: incoming.toolName,
-            toolCallID: incoming.toolCallID,
-            attachments: incoming.attachments,
-            knowledgeCards: incoming.knowledgeCards,
-            taskCards: incoming.taskCards,
-            pendingMemberToolCards: incoming.pendingMemberToolCards,
-            locations: incoming.locations,
-            routes: incoming.routes,
-            events: incoming.events,
-            healthCards: incoming.healthCards,
-            structuredHealthCards: incoming.structuredHealthCards,
-            sleepVisualization: incoming.sleepVisualization,
-            workoutVisualization: incoming.workoutVisualization,
-            captureMessageCard: incoming.captureMessageCard,
-            smallTaskCard: incoming.smallTaskCard,
-            deepThoughtCard: incoming.deepThoughtCard ?? original.deepThoughtCard,
-            createdAt: original.createdAt,
-            updatedAt: incoming.updatedAt
-        )
-    }
-
-    nonisolated func toDTO() -> ChatMessageBlockDTO {
-        ChatMessageBlockDTO(
             id: id,
             anchor: anchor,
             toolCallID: toolCallID,
+            parentToolCallID: parentToolCallID,
+            parentBlockID: parentBlockID,
+            nodeRole: nodeRole,
             payload: payload,
+            status: status,
+            revision: revision ?? self.revision + 1,
+            orderKey: orderKey,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
     }
-}
 
-/// 消息块合并用的值快照（`Sendable`），与 ``ChatMessageBlock`` 分离，供 ``ChatMessageBlockBuilder`` 在 `nonisolated` 上下文中处理。
-nonisolated struct ChatMessageBlockDTO: Identifiable, Sendable, Equatable {
-    let id: UUID
-    let anchor: ChatBlockAnchor?
-    let toolCallID: String?
-    let payload: ChatMessageBlockPayload
-    let createdAt: Date
-    let updatedAt: Date
-}
-
-extension ChatMessageBlockDTO {
-    /// 还原为聊天 UI / 存储模型（`ChatMessageBlock` 为 `Sendable`，可在任意隔离域调用）。
-    nonisolated func toUIModel() -> ChatMessageBlock {
-        ChatMessageBlock(id: id, anchor: anchor, toolCallID: toolCallID, payload: payload, createdAt: createdAt, updatedAt: updatedAt)
+    nonisolated func replacingIdentity(
+        id: UUID,
+        orderKey: Double? = nil
+    ) -> ChatMessageBlock {
+        ChatMessageBlock(
+            id: id,
+            anchor: anchor,
+            toolCallID: toolCallID,
+            parentToolCallID: parentToolCallID,
+            parentBlockID: parentBlockID,
+            nodeRole: nodeRole,
+            payload: payload,
+            status: status,
+            revision: revision,
+            orderKey: orderKey ?? self.orderKey,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
     }
 
-    fileprivate nonisolated var kind: ChatMessageBlockKind { payload.kind }
-
-    fileprivate nonisolated var asBlock: ChatMessageBlock { toUIModel() }
-}
-
-nonisolated struct ChatMessageStorageEnvelope: Codable, Equatable, Sendable {
-    let blocks: [ChatMessageBlock]
 }
 
 nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
@@ -655,285 +719,15 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
 
 }
 
-/// 聊天消息块构建器
-/// 核心职责：
-/// 1. 流式消息合并（增量更新不闪屏）
-/// 2. 块去重（避免重复卡片/附件）
-/// 3. 锚点定位（把卡片插到对应工具调用下方）
-/// 4. 结构归一化（最终展示顺序稳定）
-///
-/// 合并逻辑仅处理 ``ChatMessageBlockDTO``（`Sendable` 值快照）；展示模型在边界通过 ``ChatMessageBlock/toDTO()`` 与 ``ChatMessageBlockDTO/toUIModel()`` 转换。
-nonisolated enum ChatMessageBlockBuilder {
-
-    // MARK: - 富文本块合并（流式增量更新）— DTO 核心 API
-    /// 合并增量富文本块（用于流式打字机效果）
-    /// 规则：能替换则替换 → 能按锚点插入则插入 → 否则追加
-    nonisolated static func mergeRichBlocks(
-        existing: [ChatMessageBlockDTO],
-        incoming: [ChatMessageBlockDTO]
-    ) -> [ChatMessageBlockDTO] {
-        var result = existing
-        for block in incoming {
-            if let index = replacementIndex(in: result, for: block) {
-                result[index] = mergedReplacement(original: result[index], incoming: block)
-            } else if let insertIndex = anchoredInsertIndex(in: result, for: block) {
-                result.insert(block, at: insertIndex)
-            } else {
-                result.append(block)
-            }
-        }
-        return stabilizeToolAnchoredPresentationBlockOrder(deduplicated(result))
-    }
-
-    /// 便捷：直接合并 ``ChatMessageBlock``（内部走 DTO，调用方无需手写映射）。
-    nonisolated static func mergeRichBlocks(
-        existingBlocks: [ChatMessageBlock],
-        incomingBlocks: [ChatMessageBlock]
-    ) -> [ChatMessageBlock] {
-        mergeRichBlocks(
-            existing: existingBlocks.map { $0.toDTO() },
-            incoming: incomingBlocks.map { $0.toDTO() }
-        ).map { $0.toUIModel() }
-    }
-
-    // MARK: - 流式结束最终归一化
-    /// 流式渲染完成后，最终整理一次块顺序
-    /// 确保所有卡片都贴在对应 toolCall 后面，和睡眠卡逻辑一致
-    nonisolated static func finalizeStreamingPresentationBlocks(_ blocks: [ChatMessageBlockDTO]) -> [ChatMessageBlockDTO] {
-        stabilizeToolAnchoredPresentationBlockOrder(blocks)
-    }
-
-    nonisolated static func finalizeStreamingPresentationBlocks(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
-        finalizeStreamingPresentationBlocks(blocks.map { $0.toDTO() }).map { $0.toUIModel() }
-    }
-
-    // MARK: - 组合块（去重 + 排序）
-    /// 组合并归一化消息块：去重 + 排序
-    nonisolated static func composeBlocks(_ blocks: [ChatMessageBlockDTO]) -> [ChatMessageBlockDTO] {
-        stabilizeToolAnchoredPresentationBlockOrder(deduplicated(blocks))
-    }
-
-    nonisolated static func composeBlocks(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
-        composeBlocks(blocks.map { $0.toDTO() }).map { $0.toUIModel() }
-    }
-
-    // MARK: - 结构合并（保留文本/工具/错误，合并展示块）
-    /// 合并消息结构：
-    /// 保留核心结构块（文本/深度思考/工具/错误）
-    /// 追加展示类块（卡片、可视化等）
-    nonisolated static func merge(
-        existing: [ChatMessageBlockDTO],
-        incoming: [ChatMessageBlockDTO]
-    ) -> [ChatMessageBlockDTO] {
-        let composed = composeBlocks(incoming)
-        guard !existing.isEmpty else { return composed }
-
-        let structuralKinds: Set<ChatMessageBlockKind> = [.text, .deepThought, .tool, .error]
-        var merged = existing.filter { structuralKinds.contains($0.kind) }
-        let toolIDs = Set(merged.compactMap(\.toolCallID))
-
-        for block in composed {
-            if !structuralKinds.contains(block.kind) {
-                merged.append(block)
-            } else if block.kind == .tool,
-                      let toolCallID = block.toolCallID,
-                      !toolIDs.contains(toolCallID) {
-                merged.append(block)
-            }
-        }
-
-        return stabilizeToolAnchoredPresentationBlockOrder(merged)
-    }
-
-    nonisolated static func merge(
-        existingBlocks: [ChatMessageBlock],
-        incomingBlocks: [ChatMessageBlock]
-    ) -> [ChatMessageBlock] {
-        merge(
-            existing: existingBlocks.map { $0.toDTO() },
-            incoming: incomingBlocks.map { $0.toDTO() }
-        ).map { $0.toUIModel() }
-    }
-
-    // MARK: - 查找可替换的块索引
-    nonisolated private static func replacementIndex(
-        in blocks: [ChatMessageBlockDTO],
-        for incoming: ChatMessageBlockDTO
-    ) -> Int? {
-        let incomingBlock = incoming.asBlock
-
-        if let firstCard = incomingBlock.pendingMemberToolCards.first {
-            return blocks.firstIndex { block in
-                block.kind == .pendingMemberToolCards
-                    && block.asBlock.pendingMemberToolCards.contains(where: { $0.id == firstCard.id })
-            }
-        }
-
-        if incoming.kind == .structuredHealthCards
-            || incoming.kind == .sleepVisualization
-            || incoming.kind == .workoutVisualization
-            || incoming.kind == .captureCard
-            || incoming.kind == .knowledgeCards
-            || incoming.kind == .html {
-            return blocks.firstIndex {
-                $0.kind == incoming.kind
-                    && $0.toolCallID == incoming.toolCallID
-                    && $0.anchor == incoming.anchor
-            }
-        }
-
-        if let toolCallID = incoming.toolCallID {
-            return blocks.firstIndex {
-                $0.kind == incoming.kind
-                    && $0.toolCallID == toolCallID
-                    && $0.anchor == incoming.anchor
-            }
-        }
-
-        return nil
-    }
-
-    // MARK: - 根据锚点获取插入位置
-    nonisolated private static func anchoredInsertIndex(
-        in blocks: [ChatMessageBlockDTO],
-        for incoming: ChatMessageBlockDTO
-    ) -> Int? {
-        switch incoming.anchor {
-        case .beforeBlock(let id):
-            return blocks.firstIndex(where: { $0.id == id })
-        case .afterBlock(let id):
-            return blocks.firstIndex(where: { $0.id == id }).map { $0 + 1 }
-        case .toolCall(let toolCallID):
-            return blocks.lastIndex(where: { $0.toolCallID == toolCallID }).map { $0 + 1 }
-        case .messageStart:
-            return 0
-        case .messageEnd, .none:
-            return nil
-        }
-    }
-
-    // MARK: - 合并替换块
-    nonisolated private static func mergedReplacement(
-        original: ChatMessageBlockDTO,
-        incoming: ChatMessageBlockDTO
-    ) -> ChatMessageBlockDTO {
-        ChatMessageBlock.mergeReplacementPreservingIdentity(original: original.asBlock, incoming: incoming.asBlock).toDTO()
-    }
-
-    // MARK: - 去重
-    nonisolated private static func deduplicated(_ blocks: [ChatMessageBlockDTO]) -> [ChatMessageBlockDTO] {
-        var seenAttachmentIDs: Set<UUID> = []
-        var seenPendingCardIDs: Set<UUID> = []
-        var seenTaskCardIDs: Set<Int> = []
-        var out: [ChatMessageBlockDTO] = []
-
-        for dto in blocks {
-            let block = dto.asBlock
-            switch block.kind {
-            case .pendingMemberToolCards:
-                let ids = block.pendingMemberToolCards.map(\.id)
-                guard ids.allSatisfy({ seenPendingCardIDs.insert($0).inserted }) else { continue }
-            case .taskCards:
-                let ids = block.taskCards.map(\.id)
-                guard ids.allSatisfy({ seenTaskCardIDs.insert($0).inserted }) else { continue }
-            case .captureCard, .structuredHealthCards, .sleepVisualization, .workoutVisualization, .knowledgeCards, .html:
-                if out.contains(where: { $0.kind == dto.kind && $0 == dto }) {
-                    continue
-                }
-            default:
-                break
-            }
-
-            if !block.attachments.isEmpty {
-                let allNew = block.attachments.allSatisfy { seenAttachmentIDs.insert($0.id).inserted }
-                if !allNew { continue }
-            }
-
-            out.append(dto)
-        }
-        return out
-    }
-
-    // MARK: - 稳定工具锚点顺序（核心排序）
-    nonisolated private static func stabilizeToolAnchoredPresentationBlockOrder(_ blocks: [ChatMessageBlockDTO]) -> [ChatMessageBlockDTO] {
-        guard blocks.count > 1 else { return blocks }
-        var reordered = blocks
-
-        for _ in 0..<32 {
-            var didChange = false
-
-            let blockIDsToRelocate: [UUID] = reordered.compactMap { dto in
-                guard dto.kind != .tool, case .toolCall = dto.anchor else { return nil }
-                return dto.id
-            }
-
-            for blockID in blockIDsToRelocate {
-                guard let currentIndex = reordered.firstIndex(where: { $0.id == blockID }) else { continue }
-                let dto = reordered[currentIndex]
-
-                guard case .toolCall(let toolCallID) = dto.anchor, !toolCallID.isEmpty else { continue }
-                guard let toolIndex = reordered.lastIndex(where: {
-                    $0.kind == .tool && $0.toolCallID == toolCallID
-                }) else { continue }
-
-                let targetIndex = toolIndex + 1
-                if currentIndex == targetIndex { continue }
-
-                let moving = reordered.remove(at: currentIndex)
-                let adjustedTarget = currentIndex < targetIndex ? max(0, targetIndex - 1) : targetIndex
-                reordered.insert(moving, at: min(adjustedTarget, reordered.count))
-
-                didChange = true
-                break
-            }
-
-            if !didChange { break }
-        }
-
-        return reordered
-    }
-}
-
-private extension ChatBlockAnchor {
-    var blockID: UUID? {
-        switch self {
-        case .beforeBlock(let id), .afterBlock(let id):
-            return id
-        case .messageStart, .messageEnd, .toolCall:
-            return nil
-        }
-    }
-}
-
 extension ChatMessage {
-    /// 与指定 `toolCallID` 关联的业务展示块（用于工具详情 Sheet；不含工具行/文本/思考/错误）。
-    nonisolated func chatBlocksLinkedToToolCall(_ toolCallID: String?, excludingBlockId: UUID) -> [ChatMessageBlock] {
-        guard let toolCallID, toolCallID.isEmpty == false else { return [] }
-        let kinds: Set<ChatMessageBlockKind> = [
-            .taskCards,
-            .pendingMemberToolCards,
-            .structuredHealthCards,
-            .sleepVisualization,
-            .workoutVisualization,
-            .knowledgeCards,
-            .captureCard,
-            .html,
-            .smallTaskCard,
-            .healthCards,
-            .events,
-            .mapRoute
-        ]
-        return blocks.filter {
-            $0.id != excludingBlockId
-                && $0.toolCallID == toolCallID
-                && kinds.contains($0.kind)
-        }
-    }
-
     /// 由工具消息块构造全局工具详情 Sheet 的载荷（含同 `toolCallID` 关联块 id）。
     nonisolated func makeToolPreviewPrompt(forToolBlock toolBlock: ChatMessageBlock) -> ToolPreviewPrompt? {
         guard case .tool(let t) = toolBlock.payload else { return nil }
-        let related = chatBlocksLinkedToToolCall(toolBlock.toolCallID, excludingBlockId: toolBlock.id)
+        let related = blocks.filter {
+            $0.id != toolBlock.id
+                && $0.nodeRole == .toolPresentation
+                && ($0.parentToolCallID ?? $0.toolCallID) == toolBlock.toolCallID
+        }
         return ToolPreviewPrompt(
             toolName: ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: t.name),
             toolContent: t.content,

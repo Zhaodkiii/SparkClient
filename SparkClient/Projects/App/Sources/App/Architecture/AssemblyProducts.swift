@@ -108,7 +108,6 @@ struct ChatAssemblyProduct {
     let retryFailedMessageUseCase: RetryFailedMessageUseCase
     let updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase
     let deleteThreadUseCase: DeleteThreadUseCase
-    let syncChatUseCase: SyncChatUseCase
     let chatSyncSupervisor: ChatSyncSupervisor
     let sendChatMessageUseCase: SendChatMessageUseCase
 }
@@ -490,7 +489,10 @@ extension ChatAssembly {
     ) -> ChatAssemblyProduct {
         logger.info("ChatAssembly 装配聊天核心", module: .general)
         let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
-        let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(repository: chatRepository)
+        let messageRunActor = MessageRunActor(repository: chatRepository, logger: logger)
+        let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(
+            messageRunActor: messageRunActor
+        )
         let toolAuditStore = ToolAuditStore()
         let toolInteractionCoordinator = ToolInteractionCoordinator()
         let toolHub = ToolHub(
@@ -542,18 +544,17 @@ extension ChatAssembly {
             logger: logger
         )
         let chatQueryService = ChatQueryService(repository: chatRepository)
-        let syncChatUseCase = SyncChatUseCase(supervisor: chatSyncSupervisor)
         let updateChatMessageBlocksUseCase = UpdateChatMessageBlocksUseCase(repository: chatRepository)
         let sendChatMessageUseCase = SendChatMessageUseCase(
             repository: chatRepository,
             orchestrator: chatOrchestrator,
-            chatSyncSupervisor: chatSyncSupervisor,
             buildMemberContextSummaryUseCase: medical.buildMemberContextSummaryUseCase,
             toolEventInterpreter: ChatToolEventInterpreter(logger: logger),
             fileTransferService: infrastructure.fileTransferService,
             ocrOrchestrator: medical.ocrOrchestrator,
             aiConfigCenter: ai.aiConfigCenter,
             retrieveMemoryUseCase: ai.retrieveMemoryUseCase,
+            messageRunActor: messageRunActor,
             logger: logger
         )
         return ChatAssemblyProduct(
@@ -564,18 +565,15 @@ extension ChatAssembly {
             chatQueryService: chatQueryService,
             loadChatThreadsUseCase: LoadChatThreadsUseCase(queryService: chatQueryService),
             loadChatMessagesUseCase: LoadChatMessagesUseCase(queryService: chatQueryService),
-            createThreadUseCase: CreateThreadUseCase(repository: chatRepository, aiConfigCenter: ai.aiConfigCenter, syncChatUseCase: syncChatUseCase),
+            createThreadUseCase: CreateThreadUseCase(repository: chatRepository, aiConfigCenter: ai.aiConfigCenter),
             retryFailedMessageUseCase: RetryFailedMessageUseCase(
                 repository: chatRepository,
-                chatSyncSupervisor: chatSyncSupervisor,
                 logger: logger
             ),
             updateChatMessageBlocksUseCase: updateChatMessageBlocksUseCase,
             deleteThreadUseCase: DeleteThreadUseCase(
-                repository: chatRepository,
-                chatSyncSupervisor: chatSyncSupervisor
+                repository: chatRepository
             ),
-            syncChatUseCase: syncChatUseCase,
             chatSyncSupervisor: chatSyncSupervisor,
             sendChatMessageUseCase: sendChatMessageUseCase
         )

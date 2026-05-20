@@ -5,6 +5,7 @@ actor CoreDataChatStore {
     private enum EntityName {
         static let thread = "ChatThreadEntity"
         static let message = "ChatMessageEntity"
+        static let messageBlock = "ChatMessageBlockEntity"
         static let cursor = "ChatSyncCursorEntity"
         static let downloadJob = "ChatAttachmentDownloadEntity"
     }
@@ -34,26 +35,14 @@ actor CoreDataChatStore {
     private let decoder = JSONDecoder.default
     private let logger: Logger
 
-    /// 统一 blocksData 编解码：JSON + LZFSE（失败时自动降级为纯 JSON）。
-    private enum ChatBlockCodec {
-        static func encode(_ blocks: [ChatMessageBlock]) throws -> Data {
-            let json = try JSONEncoder.default.encode(blocks)
-            if let compressed = try? (json as NSData).compressed(using: .lzfse) {
-                return compressed as Data
-            }
-            return json
+    private enum ChatBlockPayloadCodec {
+        static func encode(_ block: ChatMessageBlock) throws -> Data {
+            try JSONEncoder.default.encode(block)
         }
 
-        static func decode(_ data: Data?) -> [ChatMessageBlock] {
-            guard let data else { return [] }
-            if let decompressed = try? (data as NSData).decompressed(using: .lzfse),
-               let decoded = try? JSONDecoder.default.decode([ChatMessageBlock].self, from: decompressed as Data) {
-                return decoded
-            }
-            if let decoded = try? JSONDecoder.default.decode([ChatMessageBlock].self, from: data) {
-                return decoded
-            }
-            return []
+        static func decode(_ data: Data?) -> ChatMessageBlock? {
+            guard let data else { return nil }
+            return try? JSONDecoder.default.decode(ChatMessageBlock.self, from: data)
         }
     }
 
@@ -362,9 +351,39 @@ actor CoreDataChatStore {
             }
             let rows = try context.fetch(request)
                 .compactMap { object in
-                    Self.toMessage(object: object, decoder: self.decoder, logger: self.logger)
+                    try? Self.toMessage(
+                        object: object,
+                        context: context,
+                        ownerAccountID: accountID,
+                        decoder: self.decoder,
+                        logger: self.logger
+                    )
                 }
             return rows.reversed()
+        }) ?? []
+    }
+
+    func loadMessages(clientMessageIDs: [UUID]) async -> [ChatMessage] {
+        let uniqueIDs = Array(Set(clientMessageIDs))
+        guard uniqueIDs.isEmpty == false else { return [] }
+        return (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "clientMessageID IN %@", uniqueIDs),
+                NSPredicate(format: "isTombstone == NO"),
+            ])
+            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+            return try context.fetch(request).compactMap { object in
+                try? Self.toMessage(
+                    object: object,
+                    context: context,
+                    ownerAccountID: accountID,
+                    decoder: self.decoder,
+                    logger: self.logger
+                )
+            }
         }) ?? []
     }
 
@@ -429,8 +448,8 @@ actor CoreDataChatStore {
             try Self.fillMessage(
                 object: object,
                 message: message,
-                ownerAccountID: accountID,
-                encoder: self.encoder
+                context: context,
+                ownerAccountID: accountID
             )
 
             threadObject.setValue(Date(), forKey: "updatedAt")
@@ -439,6 +458,51 @@ actor CoreDataChatStore {
             ChatConversationChangeEvent(
                 threadID: message.threadID,
                 kind: .messagesAppended,
+                affectedClientMessageIDs: [message.clientMessageID],
+                affectsThreadList: true
+            )
+        )
+
+        return message
+    }
+
+    func upsertLocalMessage(_ message: ChatMessage) async throws -> ChatMessage {
+        guard await activeAccountID() != nil else {
+            throw ChatFeatureError.threadNotFound
+        }
+        let inserted = try await kernel.writeWithoutNotification { context, accountID in
+            guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: message.threadID) else {
+                throw ChatFeatureError.threadNotFound
+            }
+
+            let object: NSManagedObject
+            let didInsert: Bool
+            if let existing = try Self.fetchMessage(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: message.clientMessageID,
+                serverMessageID: nil
+            ) {
+                object = existing
+                didInsert = false
+            } else {
+                object = NSEntityDescription.insertNewObject(forEntityName: EntityName.message, into: context)
+                didInsert = true
+            }
+
+            try Self.fillMessage(
+                object: object,
+                message: message,
+                context: context,
+                ownerAccountID: accountID
+            )
+            threadObject.setValue(Date(), forKey: "updatedAt")
+            return didInsert
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: message.threadID,
+                kind: inserted ? .messagesAppended : .messagesUpdated,
                 affectedClientMessageIDs: [message.clientMessageID],
                 affectsThreadList: true
             )
@@ -533,10 +597,15 @@ actor CoreDataChatStore {
             let thisClientID = object.value(forKey: "clientMessageID") as? UUID
             let isLatestMessage = latestClientID != nil && latestClientID == thisClientID
 
-            object.setValue(try ChatBlockCodec.encode(blocks), forKey: "blocksData")
-            if markPendingForSync {
-                object.setValue(ChatDeliveryState.pending.rawValue, forKey: "deliveryState")
-            }
+            let sortedBlocks = Self.sortBlocksByOrderKey(blocks)
+            try Self.replaceBlockRows(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: clientMessageID,
+                threadID: threadID,
+                blocks: sortedBlocks,
+                markChangedBlocksPendingForSync: markPendingForSync
+            )
             object.setValue(Date(), forKey: "serverUpdatedAt")
             if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
                 thread.setValue(Date(), forKey: "updatedAt")
@@ -550,6 +619,75 @@ actor CoreDataChatStore {
                     kind: .messagesUpdated,
                     affectedClientMessageIDs: [clientMessageID],
                     affectsThreadList: change.1
+                )
+            )
+        }
+    }
+
+    /// 插入或更新消息块（ upsert = update + insert ）
+    /// 内部会做版本校验：只有新版本（revision更大）才会覆盖旧数据
+    /// - Parameters:
+    ///   - clientMessageID: 客户端消息唯一 ID
+    ///   - block: 要写入的消息块（文本/卡片/健康数据/工具等）
+    ///   - markPendingForSync: 是否标记为待同步（true = 需要上传服务器）
+    func upsertMessageBlock(
+        clientMessageID: UUID,
+        block: ChatMessageBlock,
+        markPendingForSync: Bool
+    ) async {
+        // 执行数据库写入操作，**不立即发送 UI 刷新通知**（批量写完再统一通知）
+        let change = try? await kernel.writeWithoutNotification { context, accountID in
+            // 1. 根据客户端消息ID查找对应的数据库消息实体
+            guard let messageObject = try Self.fetchMessage(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: clientMessageID,
+                serverMessageID: nil
+            ) else {
+                // 找不到消息 → 直接返回，不执行任何操作
+                return nil as (threadID: UUID, needSync: Bool)?
+            }
+
+            // 2. 获取消息所属的会话 ID
+            guard let threadID = messageObject.value(forKey: "threadID") as? UUID else {
+                return nil
+            }
+
+            // 3. 【核心】插入或更新块（仅当新版本 revision 更大时才生效）
+            let didApply = try Self.upsertBlockRowIfNewer(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: clientMessageID,
+                threadID: threadID,
+                block: block,
+                markPendingForSync: markPendingForSync
+            )
+
+            // 如果块未生效（版本过旧被丢弃），直接返回，不更新状态
+            guard didApply else {
+                return (threadID, false)
+            }
+
+            // 4. 更新消息的【服务器更新时间】
+            messageObject.setValue(Date(), forKey: "serverUpdatedAt")
+
+            // 5. 同步更新会话的最后更新时间（用于会话列表排序）
+            if let thread = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) {
+                thread.setValue(Date(), forKey: "updatedAt")
+            }
+
+            // 返回：会话ID + 是否需要同步
+            return (threadID, markPendingForSync)
+        }
+
+        // MARK: 写入完成 → 发送 UI 刷新通知
+        if let change {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: change.threadID,
+                    kind: .messagesUpdated,        // 事件类型：消息已更新
+                    affectedClientMessageIDs: [clientMessageID], // 受影响的消息 ID
+                    affectsThreadList: change.needSync // 是否影响会话列表排序
                 )
             )
         }
@@ -589,12 +727,23 @@ actor CoreDataChatStore {
                     serverMessageID: message.serverMessageID
                 ) ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.message, into: context)
 
-                if let local = Self.toMessage(object: object, decoder: self.decoder, logger: self.logger),
+                if let local = try? Self.toMessage(
+                    object: object,
+                    context: context,
+                    ownerAccountID: accountID,
+                    decoder: self.decoder,
+                    logger: self.logger
+                ),
                    mergeEngine.shouldSkipApplyingRemote(local: local, remote: message) {
                     continue
                 }
 
-                try Self.fillMessage(object: object, message: message, ownerAccountID: accountID, encoder: self.encoder)
+                try Self.fillMessage(
+                    object: object,
+                    message: message,
+                    context: context,
+                    ownerAccountID: accountID
+                )
 
                 if enqueueAttachmentDownloadJobs {
                     try Self.insertImageDownloadJobsIfNeeded(
@@ -673,9 +822,69 @@ actor CoreDataChatStore {
             ])
             request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
             return try context.fetch(request).compactMap { object in
-                Self.toMessage(object: object, decoder: self.decoder, logger: self.logger)
+                try? Self.toMessage(
+                    object: object,
+                    context: context,
+                    ownerAccountID: accountID,
+                    decoder: self.decoder,
+                    logger: self.logger
+                )
             }
         }) ?? []
+    }
+
+    func loadPendingMessageBlocks(limit: Int) async -> [ChatPendingMessageBlock] {
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return [] }
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.messageBlock)
+            request.fetchLimit = max(1, limit)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "isPendingSync == YES"),
+            ])
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "updatedAt", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true),
+            ]
+            return try context.fetch(request).compactMap { row in
+                guard let threadID = row.value(forKey: "threadID") as? UUID,
+                      let clientMessageID = row.value(forKey: "clientMessageID") as? UUID,
+                      let block = ChatBlockPayloadCodec.decode(row.value(forKey: "payloadData") as? Data)
+                else {
+                    return nil
+                }
+                if let message = try? Self.fetchMessage(
+                    context: context,
+                    ownerAccountID: accountID,
+                    clientMessageID: clientMessageID,
+                    serverMessageID: nil
+                ),
+                   let deliveryState = message.value(forKey: "deliveryState") as? String,
+                   deliveryState == ChatDeliveryState.pending.rawValue || deliveryState == ChatDeliveryState.sending.rawValue {
+                    return nil
+                }
+                return ChatPendingMessageBlock(
+                    threadID: threadID,
+                    clientMessageID: clientMessageID,
+                    block: block
+                )
+            }
+        }) ?? []
+    }
+
+    func markMessageBlocksSynced(ids: [UUID]) async {
+        guard ids.isEmpty == false else { return }
+        let uniqueIDs = Array(Set(ids))
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.messageBlock)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "id IN %@", uniqueIDs),
+            ])
+            for row in try context.fetch(request) {
+                row.setValue(false, forKey: "isPendingSync")
+            }
+        }
     }
 
     func softDeleteThread(id: UUID) async {
@@ -952,9 +1161,10 @@ actor CoreDataChatStore {
     private static func fillMessage(
         object: NSManagedObject,
         message: ChatMessage,
-        ownerAccountID: Int64,
-        encoder: JSONEncoder
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64
     ) throws {
+        let sortedBlocks = sortBlocksByOrderKey(message.blocks)
         object.setValue(message.id, forKey: "id")
         object.setValue(ownerAccountID, forKey: Field.ownerAccountID)
         object.setValue(message.threadID, forKey: "threadID")
@@ -966,7 +1176,161 @@ actor CoreDataChatStore {
         object.setValue(message.createdAt, forKey: "createdAt")
         object.setValue(message.serverUpdatedAt, forKey: "serverUpdatedAt")
         object.setValue(message.isTombstone, forKey: "isTombstone")
-        object.setValue(try ChatBlockCodec.encode(message.blocks), forKey: "blocksData")
+        try replaceBlockRows(
+            context: context,
+            ownerAccountID: ownerAccountID,
+            clientMessageID: message.clientMessageID,
+            threadID: message.threadID,
+            blocks: sortedBlocks
+        )
+    }
+
+    private static func sortBlocksByOrderKey(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
+        blocks.enumerated().sorted { lhs, rhs in
+            switch (lhs.element.orderKey, rhs.element.orderKey) {
+            case let (l?, r?) where l != r:
+                return l < r
+            case (.some, nil):
+                return true
+            case (nil, .some):
+                return false
+            default:
+                return lhs.offset < rhs.offset
+            }
+        }
+        .map(\.element)
+    }
+
+    private static func fetchBlockRow(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        blockID: UUID
+    ) throws -> NSManagedObject? {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.messageBlock)
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "id == %@", blockID as CVarArg),
+        ])
+        return try context.fetch(request).first
+    }
+
+    private static func fetchBlockRows(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        clientMessageID: UUID
+    ) throws -> [NSManagedObject] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.messageBlock)
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "clientMessageID == %@", clientMessageID as CVarArg),
+        ])
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "orderKey", ascending: true),
+            NSSortDescriptor(key: "createdAt", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true),
+        ]
+        return try context.fetch(request)
+    }
+
+    private static func loadBlockRows(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        clientMessageID: UUID
+    ) throws -> [ChatMessageBlock] {
+        let blocks = try fetchBlockRows(
+            context: context,
+            ownerAccountID: ownerAccountID,
+            clientMessageID: clientMessageID
+        )
+        .compactMap { ChatBlockPayloadCodec.decode($0.value(forKey: "payloadData") as? Data) }
+        return sortBlocksByOrderKey(blocks)
+    }
+
+    private static func replaceBlockRows(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        clientMessageID: UUID,
+        threadID: UUID,
+        blocks: [ChatMessageBlock],
+        markChangedBlocksPendingForSync: Bool = false
+    ) throws {
+        let incomingIDs = Set(blocks.map(\.id))
+        let existingRows = try fetchBlockRows(
+            context: context,
+            ownerAccountID: ownerAccountID,
+            clientMessageID: clientMessageID
+        )
+        let existingBlocksByID = Dictionary(
+            uniqueKeysWithValues: existingRows.compactMap { row -> (UUID, ChatMessageBlock)? in
+                guard let id = row.value(forKey: "id") as? UUID,
+                      let block = ChatBlockPayloadCodec.decode(row.value(forKey: "payloadData") as? Data)
+                else {
+                    return nil
+                }
+                return (id, block)
+            }
+        )
+        for row in existingRows {
+            guard let id = row.value(forKey: "id") as? UUID else { continue }
+            if incomingIDs.contains(id) == false {
+                context.delete(row)
+            }
+        }
+        for block in blocks {
+            let shouldMarkPending = markChangedBlocksPendingForSync && existingBlocksByID[block.id] != block
+            _ = try upsertBlockRowIfNewer(
+                context: context,
+                ownerAccountID: ownerAccountID,
+                clientMessageID: clientMessageID,
+                threadID: threadID,
+                block: block,
+                markPendingForSync: shouldMarkPending
+            )
+        }
+    }
+
+    @discardableResult
+    private static func upsertBlockRowIfNewer(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        clientMessageID: UUID,
+        threadID: UUID,
+        block: ChatMessageBlock,
+        markPendingForSync: Bool = false
+    ) throws -> Bool {
+        let row = try fetchBlockRow(context: context, ownerAccountID: ownerAccountID, blockID: block.id)
+            ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.messageBlock, into: context)
+        let localRevision = row.value(forKey: "revision") as? Int64
+        if let localRevision, localRevision > block.revision {
+            return false
+        }
+        let localStatus = row.value(forKey: "status") as? String
+        if localStatus == ChatMessageBlockStatus.ready.rawValue,
+           block.status == .pending {
+            return false
+        }
+
+        row.setValue(block.id, forKey: "id")
+        row.setValue(ownerAccountID, forKey: Field.ownerAccountID)
+        row.setValue(threadID, forKey: "threadID")
+        row.setValue(clientMessageID, forKey: "clientMessageID")
+        row.setValue(block.kind.rawValue, forKey: "kind")
+        row.setValue(block.status.rawValue, forKey: "status")
+        row.setValue(block.revision, forKey: "revision")
+        row.setValue(block.orderKey, forKey: "orderKey")
+        row.setValue(block.toolCallID, forKey: "toolCallID")
+        row.setValue(block.parentToolCallID, forKey: "parentToolCallID")
+        row.setValue(block.parentBlockID, forKey: "parentBlockID")
+        row.setValue(block.nodeRole.rawValue, forKey: "nodeRole")
+        row.setValue(try? JSONEncoder.default.encode(block.anchor), forKey: "anchorData")
+        row.setValue(try ChatBlockPayloadCodec.encode(block), forKey: "payloadData")
+        row.setValue(block.createdAt, forKey: "createdAt")
+        row.setValue(block.updatedAt, forKey: "updatedAt")
+        if markPendingForSync {
+            row.setValue(true, forKey: "isPendingSync")
+        }
+        return true
     }
 
     private static func ownerPredicate(_ accountID: Int64) -> NSPredicate {
@@ -1009,7 +1373,13 @@ actor CoreDataChatStore {
         )
     }
 
-    private static func toMessage(object: NSManagedObject, decoder: JSONDecoder, logger: Logger) -> ChatMessage? {
+    private static func toMessage(
+        object: NSManagedObject,
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        decoder: JSONDecoder,
+        logger: Logger
+    ) throws -> ChatMessage? {
         guard
             let id = object.value(forKey: "id") as? UUID,
             let threadID = object.value(forKey: "threadID") as? UUID,
@@ -1023,8 +1393,12 @@ actor CoreDataChatStore {
             return nil
         }
 
-        let blocksData = object.value(forKey: "blocksData") as? Data
-        let blocks = ChatBlockCodec.decode(blocksData)
+        let blockRows = try loadBlockRows(
+            context: context,
+            ownerAccountID: ownerAccountID,
+            clientMessageID: clientMessageID
+        )
+        let blocks = blockRows
 
         return ChatMessage(
             id: id,
@@ -1059,7 +1433,13 @@ actor CoreDataChatStore {
         ])
         latestRequest.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: false)]
         let latestMessage = try context.fetch(latestRequest).first.flatMap {
-            Self.toMessage(object: $0, decoder: decoder, logger: logger)
+            try Self.toMessage(
+                object: $0,
+                context: context,
+                ownerAccountID: ownerAccountID,
+                decoder: decoder,
+                logger: logger
+            )
         }
 
         let unreadRequest = NSFetchRequest<NSNumber>(entityName: EntityName.message)

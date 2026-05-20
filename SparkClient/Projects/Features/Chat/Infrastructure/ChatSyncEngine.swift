@@ -66,6 +66,34 @@ actor ChatSyncEngine {
         }
     }
 
+    /// 对话列表下拉刷新：只拉取远端线程增量，并同步变更会话的消息增量。
+    /// 不主动上送本地 outbox，避免用户只是刷新列表时产生写请求。
+    func refreshThreadListIncremental() async throws {
+        try await runSingleFlight(scope: .global) { engine in
+            let changedThreads = try await engine.pullThreadDeltas(
+                cursor: await engine.repository.loadThreadSyncCursor()?.value
+            )
+            try await engine.pullMessagesForChangedThreads(changedThreads)
+        }
+    }
+
+    /// 进入会话：只拉取当前会话的消息增量。
+    /// 若本地已有消息，从本地已知最新远端活动之后拉；若本地为空，则 cursor=nil 拉首屏远端消息。
+    func pullThreadMessagesIncrementalOnOpen(threadID: UUID) async throws {
+        try await runSingleFlight(scope: .thread(threadID)) { engine in
+            let localCount = await engine.repository.countMessages(threadID: threadID)
+            let cursor: String?
+            if localCount == 0 {
+                cursor = nil
+            } else if let persisted = await engine.repository.loadMessageSyncCursor(for: threadID)?.value {
+                cursor = persisted
+            } else {
+                cursor = await engine.repository.latestServerActivity(for: threadID).map(Self.formatSyncCursor)
+            }
+            try await engine.pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
+        }
+    }
+
     /// 仅上送待同步消息，不拉取（发送成功/重试等路径使用）。
     func pushOutboxOnly() async throws {
         logger.debug("聊天仅上送 outbox", module: .general)
@@ -78,13 +106,6 @@ actor ChatSyncEngine {
     func pushSingleThread(threadID: UUID) async throws {
         logger.debug("上送单会话元数据，thread=\(shortID(threadID))", module: .general)
         try await outboxPipeline.pushThread(threadID: threadID)
-    }
-
-    /// 打开会话时：仅同步该会话，减少带宽。
-    func syncThreadOnOpen(threadID: UUID) async throws {
-        try await runSingleFlight(scope: .thread(threadID)) { engine in
-            try await engine.performThreadOpenSync(threadID: threadID)
-        }
     }
 
     func startRealtimeSync() async {
@@ -120,9 +141,6 @@ actor ChatSyncEngine {
     private func performManualRefreshSync() async throws {
         let start = Date()
         logger.debug("聊天手动刷新同步开始", module: .general)
-        try await pushPendingThreadDeletions()
-//        try await pushThreads()
-        try await pushOutbox()
         let changedThreads = try await pullThreadDeltas(cursor: await repository.loadThreadSyncCursor()?.value)
         try await pullMessagesForChangedThreads(changedThreads)
         let cost = Date().timeIntervalSince(start)
@@ -139,48 +157,6 @@ actor ChatSyncEngine {
 //        try await pushThreads()
         try await pushOutbox()
         logger.debug("realtime 提示处理完成：仅上送，不执行拉取", module: .general)
-    }
-
-    private func performThreadOpenSync(threadID: UUID) async throws {
-        let start = Date()
-        logger.debug("会话打开同步开始，thread=\(shortID(threadID))", module: .general)
-
-        // 本地新建会话：不走后续拉取链路。
-        // 仅在本地已有待上送消息时执行上送，避免新建会话触发远端拉取放大。
-        if let thread = await repository.loadThread(id: threadID),
-           thread.serverUpdatedAt == nil
-        {
-            let localMessageCount = await repository.countMessages(threadID: threadID)
-            if localMessageCount > 0 {
-                try await pushPendingThreadDeletions()
-//                try await pushThreads()
-                try await pushOutbox()
-                logger.debug(
-                    "会话打开同步完成：本地新建会话仅上送，不执行拉取，thread=\(shortID(threadID))",
-                    module: .general
-                )
-            } else {
-                logger.debug(
-                    "会话打开同步跳过：本地新建空会话，thread=\(shortID(threadID))",
-                    module: .general
-                )
-            }
-            return
-        }
-
-        // 存量会话打开：只拉取该会话的未同步消息（thread_id + cursor），不做全局拉取。
-        try await pushPendingThreadDeletions()
-//        try await pushThreads()
-        try await pushOutbox()
-        let persistedCursor = await repository.loadMessageSyncCursor(for: threadID)?.value
-        let cursor = if let persistedCursor {
-            persistedCursor
-        } else {
-            await repository.latestServerActivity(for: threadID).map(Self.formatSyncCursor)
-        }
-        try await pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
-        let cost = Date().timeIntervalSince(start)
-        logger.info("会话打开同步完成（单会话增量拉取），cost=\(format(cost))s", module: .general)
     }
 
     private func pushPendingThreadDeletions() async throws {

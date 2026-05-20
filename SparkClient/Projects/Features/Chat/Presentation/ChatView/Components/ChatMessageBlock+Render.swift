@@ -9,6 +9,9 @@ extension ChatMessageBlock {
     /// - Returns: 不同类型对应的视图组件
     @ViewBuilder
     func render(context: ChatRenderContext) -> some View {
+        if status == .pending || (status == .streaming && kind != .text && kind != .deepThought && kind != .tool) {
+            ChatPendingPresentationBlockView(title: pendingPresentationTitle)
+        } else {
         // 根据消息块类型分发到不同UI
         switch payload {
             
@@ -161,6 +164,7 @@ extension ChatMessageBlock {
             }
 
         }
+        }
     }
     
     /// 工具方法：生成只包含附件的空内容消息（用于图片组件）
@@ -209,5 +213,43 @@ extension ChatMessageBlock {
         let minutes = Int(seconds) / 60
         let remainSeconds = seconds.truncatingRemainder(dividingBy: 60)
         return String(format: "%dm %.1fs", minutes, remainSeconds)
+    }
+
+    private var pendingPresentationTitle: String {
+        switch kind {
+        case .structuredHealthCards:
+            return "正在结构化健康数据..."
+        case .sleepVisualization:
+            return "正在生成睡眠可视化..."
+        case .workoutVisualization:
+            return "正在生成运动可视化..."
+        case .knowledgeCards:
+            return "正在整理知识卡片..."
+        case .taskCards, .smallTaskCard:
+            return "正在创建提醒..."
+        case .captureCard:
+            return "正在准备采集卡片..."
+        default:
+            return "正在整理结果..."
+        }
+    }
+}
+
+private struct ChatPendingPresentationBlockView: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(title)
     }
 }
