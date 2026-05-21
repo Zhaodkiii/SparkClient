@@ -51,7 +51,7 @@
 "tool.param.activity_types_filter" = "可选，活动类型筛选，如 running/walking/cycling。空则全部。";
 "tool.param.activity_type_item" = "活动类型";
 "tool.param.max_items" = "可选，最大返回条数，默认 100";
-"tool.param.report_type_enum" = "卡片类型：medication / prescription / exam_report / medical_case（含义与 HealthClient 一致）。";
+"tool.param.report_type_enum" = "卡片类型：medication_plan（服药计划）/ medicine_box（药箱）/ prescription（处方）/ exam_report（检查报告）/ medical_case（病历）。";
 "tool.param.raw_text_distilled" = "须先提炼：只传入与 report_type 相关的关键医学信息；禁止把完整 OCR 原文粘贴进本参数。";
 "tool.param.oss_file_id_optional" = "可选，源文件关联整型 ID（Health 对齐）。";
 "tool.param.member_id_for_task" = "任务归属成员 ID（可选，默认当前主页成员）。";

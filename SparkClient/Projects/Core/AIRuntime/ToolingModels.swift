@@ -48,6 +48,8 @@ struct ToolExecutionResult: Sendable {
     let isAwaitingUserInput: Bool       // 是否等待用户输入
     let resolvedMemberID: Int?          // 已解析的成员ID
     let toolCallID: String?             // 模型本轮 tool_call id，用于消息块锚定
+    /// 工具执行侧归一化后的调用参数（供工具详情 Sheet 展示，与模型原始 JSON 字符串解耦）。
+    let arguments: [String: String]?
 
     /// 初始化方法
     init(
@@ -57,7 +59,8 @@ struct ToolExecutionResult: Sendable {
         shouldBypassModel: Bool,
         isAwaitingUserInput: Bool = false,
         resolvedMemberID: Int? = nil,
-        toolCallID: String? = nil
+        toolCallID: String? = nil,
+        arguments: [String: String]? = nil
     ) {
         self.toolName = toolName
         self.outputText = outputText
@@ -66,6 +69,7 @@ struct ToolExecutionResult: Sendable {
         self.isAwaitingUserInput = isAwaitingUserInput
         self.resolvedMemberID = resolvedMemberID
         self.toolCallID = toolCallID
+        self.arguments = arguments
     }
 
     func withToolCallID(_ toolCallID: String?) -> ToolExecutionResult {
@@ -76,7 +80,8 @@ struct ToolExecutionResult: Sendable {
             shouldBypassModel: shouldBypassModel,
             isAwaitingUserInput: isAwaitingUserInput,
             resolvedMemberID: resolvedMemberID,
-            toolCallID: toolCallID
+            toolCallID: toolCallID,
+            arguments: arguments
         )
     }
 }
@@ -509,7 +514,8 @@ extension ToolExecutionResult {
         sensitive: Bool,
         shouldBypassModel: Bool,
         isAwaitingUserInput: Bool = false,
-        resolvedMemberID: Int? = nil
+        resolvedMemberID: Int? = nil,
+        arguments: [String: String]? = nil
     ) {
         self.init(
             toolName: toolName.rawValue,
@@ -517,7 +523,8 @@ extension ToolExecutionResult {
             sensitive: sensitive,
             shouldBypassModel: shouldBypassModel,
             isAwaitingUserInput: isAwaitingUserInput,
-            resolvedMemberID: resolvedMemberID
+            resolvedMemberID: resolvedMemberID,
+            arguments: arguments
         )
     }
 }

@@ -228,7 +228,7 @@ struct SparkMedicalWorkflowAPI {
         let everyNDays: Int?
         let weeklyWeekdays: [Int]
         let frequencyText: String
-        let reminderTimes: [String]
+        let reminderTimes: [ReminderTime]
         let startDate: String
         let endDate: String?
         let instructions: String
@@ -246,7 +246,7 @@ struct SparkMedicalWorkflowAPI {
         let dosageForm: String
         let strength: String
         let doseUnit: String
-        let totalQuantity: String?
+        let totalQuantity: Double?
         let expireDate: String?
         let notes: String
         let extra: [String: String]
@@ -255,6 +255,10 @@ struct SparkMedicalWorkflowAPI {
 
     /// 通用「仅返回 id」的响应解码结构。
     private struct IDResponse: Decodable { let id: Int }
+    struct MedicationPlanBundleSaveResponse: Decodable, Sendable {
+        let id: Int
+        let prescriptionId: Int?
+    }
 
     /// 保存病历类文档；成功返回新建或更新后的记录 ID。
     func saveCase(_ payload: CaseSavePayload) async throws -> Int {
@@ -298,6 +302,14 @@ struct SparkMedicalWorkflowAPI {
 
     func saveMedicationPlanBundle(_ payload: MedicationPlanBundleSavePayload) async throws -> Int {
         try await post(path: "/api/v1/medical/workflows/medication-plans/save/", body: payload, decode: IDResponse.self).id
+    }
+
+    func saveMedicationPlanBundleResponse(_ payload: MedicationPlanBundleSavePayload) async throws -> MedicationPlanBundleSaveResponse {
+        try await post(
+            path: "/api/v1/medical/workflows/medication-plans/save/",
+            body: payload,
+            decode: MedicationPlanBundleSaveResponse.self
+        )
     }
 
     // MARK: - Unified Resource CRUD (`/api/v1/medical/resources/?kind=...`)
@@ -415,7 +427,7 @@ struct SparkMedicalWorkflowAPI {
             queuePriority: .high,
             isIdempotent: false
         )
-        _ = try APIResponseDecoder.decodeWrappedData(JSONValue?.self, from: response, decoder: .sparkMedicalResource)
+        _ = try APIResponseDecoder.decodeWrappedData(JSONValue?.self, from: response, decoder: .medicalAPI)
     }
 
     /// 统一 POST 封装：JSON  body、高优先级、按 path 维度串行（`serialKey`），禁用 ETag（写操作）。
@@ -510,14 +522,6 @@ struct SparkMedicalWorkflowAPI {
             queuePriority: queuePriority,
             isIdempotent: isIdempotent
         )
-        return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .sparkMedicalResource)
+        return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
     }
-}
-
-private extension JSONDecoder {
-    static let sparkMedicalResource: JSONDecoder = {
-        let decoder = JSONDecoder.default
-        decoder.dateDecodingStrategy = .custom(MedicalDateCoding.decodeFlexibleDate(from:))
-        return decoder
-    }()
 }

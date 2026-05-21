@@ -230,15 +230,6 @@ struct SparkMedicalQueryAPI {
             )
         )
         let response = try await configuration.execute(operation)
-        return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .sparkISO8601)
+        return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
     }
-}
-
-private extension JSONDecoder {
-    /// 医疗接口专用解码器：统一日期容错策略，减少模型层分支。
-    static let sparkISO8601: JSONDecoder = {
-        let decoder = JSONDecoder.default
-        decoder.dateDecodingStrategy = .custom(MedicalDateCoding.decodeFlexibleDate(from:))
-        return decoder
-    }()
 }

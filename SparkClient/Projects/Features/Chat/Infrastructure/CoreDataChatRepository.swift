@@ -88,11 +88,12 @@ actor CoreDataChatRepository: ChatRepository {
         )
     }
 
+    @discardableResult
     func upsertMessageBlock(
         clientMessageID: UUID,
         block: ChatMessageBlock,
         markPendingForSync: Bool
-    ) async {
+    ) async -> Bool {
         await store.upsertMessageBlock(
             clientMessageID: clientMessageID,
             block: block,
@@ -146,6 +147,19 @@ actor CoreDataChatRepository: ChatRepository {
 
     func markMessageBlocksSynced(ids: [UUID]) async {
         await store.markMessageBlocksSynced(ids: ids)
+    }
+
+
+    func applyPushMessageAck(
+        clientMessageID: UUID,
+        serverMessageID: String?,
+        serverUpdatedAt: Date
+    ) async {
+        await store.applyPushMessageAck(
+            clientMessageID: clientMessageID,
+            serverMessageID: serverMessageID,
+            serverUpdatedAt: serverUpdatedAt
+        )
     }
 
     func softDeleteThread(id: UUID) async {

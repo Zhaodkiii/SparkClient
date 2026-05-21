@@ -123,7 +123,7 @@ extension MedicationPlanRecognitionDraft {
             dosageForm: dosageForm ?? box?.dosageForm ?? "",
             strength: strength ?? box?.strength ?? "",
             doseUnit: doseUnit ?? box?.doseUnit ?? "",
-            totalQuantity: (totalQuantity ?? box?.totalQuantity).flatMap(Double.init),
+            totalQuantity: (totalQuantity ?? box?.totalQuantity).parsedAsTotalQuantity(),
             expireDate: MedicalDateCoding.decodeDateOnlyOrDefaultNow(expireDate ?? box?.expireDate, defaultDate: Date()),
             notes: box?.notes ?? instructions ?? "",
             extra: extra ?? box?.extra,
@@ -147,7 +147,7 @@ extension MedicationPlanRecognitionDraft {
             everyNDays: everyNDays.parsedAsAgeAtVisitInteger(),
             weeklyWeekdays: weeklyWeekdays ?? [],
             frequencyText: frequencyText ?? "",
-            reminderTimes: (reminderTimes ?? []).map { SparkMedicalSyncAPI.MedicationReminderTime(time: $0, dose: doseValue.parsedAsDoseValue()) },
+            reminderTimes: CodableReminderTimesList(wrappedValue: .normalized(from: reminderTimes)),
             startDate: MedicalDateCoding.decodeDateOnlyOrDefaultNow(startDate, defaultDate: Date()),
             endDate: endDate.flatMap { MedicalDateCoding.decodeDateOnlyOrDefaultNow($0, defaultDate: Date()) },
             instructions: instructions ?? "",
@@ -174,7 +174,7 @@ extension MedicationPlanDraft {
         everyNDays = recognition.everyNDays.parsedAsAgeAtVisitInteger() ?? 1
         weeklyWeekdays = Set((recognition.weeklyWeekdays ?? []).filter { (1...7).contains($0) })
         frequencyText = recognition.frequencyText ?? ""
-        reminderTimesText = (recognition.reminderTimes ?? []).joined(separator: ", ")
+        reminderTimesText = (recognition.reminderTimes ?? []).map(\.time).joined(separator: ", ")
         startDate = MedicalDateCoding.decodeDateOnlyOrDefaultNow(recognition.startDate, defaultDate: Date())
         if let endDate = recognition.endDate?.nilIfBlank {
             hasEndDate = true
@@ -186,7 +186,20 @@ extension MedicationPlanDraft {
     }
 
     func recognitionDraft(preserving existing: MedicationPlanRecognitionDraft) -> MedicationPlanRecognitionDraft {
-        MedicationPlanRecognitionDraft(
+        let separators = CharacterSet(charactersIn: ",，\n;；")
+        let timeTokens = reminderTimesText
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+        let optionalDoseValue: String? = doseValue.isEmpty ? nil : doseValue
+        let parsedDose = optionalDoseValue.parsedAsDoseValue()
+        var parsedReminderTimes: [ReminderTime] = []
+        parsedReminderTimes.reserveCapacity(timeTokens.count)
+        for token in timeTokens {
+            parsedReminderTimes.append(ReminderTime(time: token, dose: parsedDose))
+        }
+
+        return MedicationPlanRecognitionDraft(
             medicineName: drugName.nilIfBlank,
             medicineType: existing.medicineType,
             totalQuantity: existing.totalQuantity,
@@ -206,10 +219,7 @@ extension MedicationPlanDraft {
             endDate: hasEndDate ? MedicalDateCoding.encodeDateOnly(endDate) : nil,
             instructions: instructions.nilIfBlank,
             reminderEnabled: reminderEnabled,
-            reminderTimes: reminderTimesText
-                .split { $0 == "," || $0 == "，" || $0 == "\n" || $0 == ";" || $0 == "；" }
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { $0.isEmpty == false },
+            reminderTimes: parsedReminderTimes,
             sortOrder: existing.sortOrder,
             extra: existing.extra,
             attachmentFileIds: existing.attachmentFileIds

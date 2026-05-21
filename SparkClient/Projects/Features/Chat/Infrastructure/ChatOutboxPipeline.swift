@@ -5,20 +5,17 @@ struct ChatOutboxPipeline: Sendable {
     private let repository: any ChatRepository
     private let outboxStore: ChatOutboxStore
     private let remoteAPI: SparkChatRemoteAPI
-    private let mergeEngine: ChatMergeEngine
     private let logger: Logger
 
     nonisolated init(
         repository: any ChatRepository,
         outboxStore: ChatOutboxStore,
         remoteAPI: SparkChatRemoteAPI,
-        mergeEngine: ChatMergeEngine,
         logger: Logger
     ) {
         self.repository = repository
         self.outboxStore = outboxStore
         self.remoteAPI = remoteAPI
-        self.mergeEngine = mergeEngine
         self.logger = logger
     }
 
@@ -67,8 +64,8 @@ struct ChatOutboxPipeline: Sendable {
 
     func pushOutbox() async throws {
         let pending = await outboxStore.pending(limit: 50)
-        let pendingBlocks = await outboxStore.pendingBlocks(limit: 100)
-        guard pending.isEmpty == false || pendingBlocks.isEmpty == false else { return }
+        let hasPendingBlocks = await outboxStore.pendingBlocks(limit: 1).isEmpty == false
+        guard pending.isEmpty == false || hasPendingBlocks else { return }
 
         let toolCount = pending.filter { $0.blocks.contains(where: { $0.kind == .tool }) }.count
         let threads = Set(pending.map(\.threadID)).count
@@ -78,20 +75,88 @@ struct ChatOutboxPipeline: Sendable {
                 module: .general
             )
         }
+
+        for message in pending {
+            await outboxStore.markSending(message)
+        }
+
+        var messagePushError: Error?
+
+        if pending.isEmpty == false {
+            do {
+                let pendingIDs = pending.map(\.clientMessageID)
+                let messagesToPush = await repository.loadMessages(clientMessageIDs: pendingIDs)
+                for message in messagesToPush {
+                    let kinds = message.blocks.map { "\($0.kind.rawValue)(\($0.status.rawValue))" }.joined(separator: ", ")
+                    logger.info(
+                        "push 重载消息 blocks：clientMessageID=\(message.clientMessageID.uuidString), count=\(message.blocks.count), kinds=[\(kinds)]",
+                        module: .general
+                    )
+                }
+                let messagesByClientID = Dictionary(uniqueKeysWithValues: messagesToPush.map { ($0.clientMessageID, $0) })
+                let threadsByID = Dictionary(uniqueKeysWithValues: await repository.loadThreads().map { ($0.id, $0) })
+                let payload: [ChatRemoteMessageDTO] = pending.compactMap { queued in
+                    guard let message = messagesByClientID[queued.clientMessageID] else { return nil }
+                    return ChatRemoteMessageDTO(
+                        threadId: message.threadID,
+                        role: message.role.rawValue,
+                        blocks: message.blocks,
+                        clientMessageId: message.clientMessageID,
+                        serverMessageId: message.serverMessageID,
+                        deliveryState: message.deliveryState.rawValue,
+                        createdAt: message.createdAt,
+                        serverUpdatedAt: message.serverUpdatedAt,
+                        tombstone: message.isTombstone,
+                        threadCurrentModelName: threadsByID[message.threadID]?.currentModelName,
+                        threadTemperature: threadsByID[message.threadID]?.temperature,
+                        threadTopP: threadsByID[message.threadID]?.topP,
+                        threadMaxTokens: threadsByID[message.threadID]?.maxTokens,
+                        threadMaxMessages: threadsByID[message.threadID]?.maxMessages,
+                        threadRolePrompt: threadsByID[message.threadID]?.rolePrompt,
+                        threadSystemPrompt: nil,
+                        modelName: message.modelName
+                    )
+                }
+
+                let ack = try await remoteAPI.push(messages: payload)
+                await applyPushAck(
+                    ack,
+                    pending: messagesToPush,
+                    pendingBlocks: []
+                )
+                for message in messagesToPush {
+                    await outboxStore.markSent(
+                        message,
+                        syncedBlockIDs: message.blocks.map(\.id)
+                    )
+                }
+                let structuredBlockCount = messagesToPush.reduce(0) { partial, message in
+                    partial + message.blocks.filter { $0.kind == .structuredHealthCards }.count
+                }
+                logger.info(
+                    "上送对话完成，requested=\(messagesToPush.count), structuredHealthCardBlocks=\(structuredBlockCount), acceptedMessages=\(ack.acceptedMessages.count), acceptedBlockUpdates=\(ack.acceptedBlockUpdates.count)",
+                    module: .general
+                )
+            } catch {
+                messagePushError = error
+                for message in pending {
+                    await outboxStore.markFailed(message)
+                }
+                logger.error(
+                    "上送对话失败，count=\(pending.count), toolMessages=\(toolCount), error=\(error.localizedDescription)",
+                    module: .general
+                )
+            }
+        }
+
+        let pendingBlocks = await outboxStore.pendingBlocks(limit: 100)
         if pendingBlocks.isEmpty == false {
             let blockThreads = Set(pendingBlocks.map(\.threadID)).count
             logger.info(
                 "准备上送对话块，blocks=\(pendingBlocks.count), threads=\(blockThreads)",
                 module: .general
             )
-        }
-
-        for message in pending {
-            await outboxStore.markSending(message)
-        }
-
-        do {
-            if pendingBlocks.isEmpty == false {
+            do {
                 let blockPayload = pendingBlocks.map { item in
                     ChatRemoteMessageBlockUpdateDTO(
                         threadId: item.threadID,
@@ -99,84 +164,109 @@ struct ChatOutboxPipeline: Sendable {
                         block: item.block
                     )
                 }
-                let pushed = try await remoteAPI.pushBlockUpdates(blockPayload)
-                await outboxStore.markBlocksSynced(ids: pendingBlocks.map { $0.block.id })
+                let ack = try await remoteAPI.pushBlockUpdates(blockPayload)
+                await outboxStore.markBlocksSynced(ids: pendingBlocks.map(\.block.id))
                 logger.info(
-                    "上送对话块完成，requested=\(pendingBlocks.count), acceptedMessages=\(pushed.count)",
+                    "上送对话块完成，requested=\(pendingBlocks.count), acceptedMessages=\(ack.acceptedMessages.count), acceptedBlockUpdates=\(ack.acceptedBlockUpdates.count)",
                     module: .general
                 )
-                await mergePushedMessages(pushed)
-            }
-
-            guard pending.isEmpty == false else { return }
-            let threadsByID = Dictionary(uniqueKeysWithValues: await repository.loadThreads().map { ($0.id, $0) })
-            let payload: [ChatRemoteMessageDTO] = pending.map { message in
-                ChatRemoteMessageDTO(
-                    threadId: message.threadID,
-                    role: message.role.rawValue,
-                    blocks: message.blocks,
-                    clientMessageId: message.clientMessageID,
-                    serverMessageId: message.serverMessageID,
-                    deliveryState: message.deliveryState.rawValue,
-                    createdAt: message.createdAt,
-                    serverUpdatedAt: message.serverUpdatedAt,
-                    tombstone: message.isTombstone,
-                    threadCurrentModelName: threadsByID[message.threadID]?.currentModelName,
-                    threadTemperature: threadsByID[message.threadID]?.temperature,
-                    threadTopP: threadsByID[message.threadID]?.topP,
-                    threadMaxTokens: threadsByID[message.threadID]?.maxTokens,
-                    threadMaxMessages: threadsByID[message.threadID]?.maxMessages,
-                    threadRolePrompt: threadsByID[message.threadID]?.rolePrompt,
-                    threadSystemPrompt: nil,
-                    modelName: message.modelName
+                await applyPushAck(
+                    ack,
+                    pending: [],
+                    pendingBlocks: pendingBlocks
                 )
+            } catch {
+                await requeueMessagesForBlockPushFailure(error, pendingBlocks: pendingBlocks)
+                logger.error(
+                    "上送对话块失败，blocks=\(pendingBlocks.count), error=\(error.localizedDescription)",
+                    module: .general
+                )
+                if messagePushError != nil {
+                    throw messagePushError!
+                }
+                throw error
             }
+        }
 
-            let pushed = try await remoteAPI.push(messages: payload)
-            for message in pending {
-                await outboxStore.markSent(message)
-            }
-            logger.info(
-                "上送对话完成，requested=\(pending.count), accepted=\(pushed.count)",
-                module: .general
-            )
-
-            await mergePushedMessages(pushed)
-        } catch {
-            for message in pending {
-                await outboxStore.markFailed(message)
-            }
-            logger.error(
-                "上送对话失败，count=\(pending.count), blockUpdates=\(pendingBlocks.count), toolMessages=\(toolCount), error=\(error.localizedDescription)",
-                module: .general
-            )
-            throw error
+        if let messagePushError {
+            throw messagePushError
         }
     }
 
-    private func mergePushedMessages(_ pushed: [ChatRemoteMessageDTO]) async {
-        let grouped = Dictionary(grouping: pushed.compactMap(ChatSyncEngineDTOMapper.toDomain), by: { $0.threadID })
-        for (threadID, remoteMessages) in grouped {
-            let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
-            let localByClient = Self.indexByClientMessageID(localMessages)
-            let merged = remoteMessages.map { remote in
-                mergeEngine.resolve(local: localByClient[remote.clientMessageId], remote: remote)
-            }
-            await repository.upsertRemoteMessages(merged, in: threadID, enqueueAttachmentDownloadJobs: false)
-
-            // 将游标推进到刚上送消息的最新 server_updated_at 之后，避免下次增量拉取重复返回这些消息。
-            // 服务端以微秒精度存储时间戳（6位小数），但 ISO8601DateFormatter 解码后只能保留毫秒精度（3位），
-            // 导致游标与实际时间戳之间存在不超过 1ms 的负偏差，服务端判定 server_updated_at > cursor 为真而重复返回。
-            // 加 1ms epsilon 可确保游标严格大于同批次所有消息的实际微秒时间戳。
-            if let latestDate = remoteMessages.compactMap(\.serverUpdatedAt).max() {
-                let exclusiveDate = latestDate.addingTimeInterval(0.001)
-                await repository.saveMessageSyncCursor(
-                    ChatSyncCursor(value: Self.formatSyncCursor(exclusiveDate)),
-                    for: threadID
-                )
-            }
-        }
+    private func requeueMessagesForBlockPushFailure(
+        _ error: Error,
+        pendingBlocks: [ChatPendingMessageBlock]
+    ) async {
+        guard let clientMessageID = Self.clientMessageID(fromMessageNotFound: error) else { return }
+        let affected = pendingBlocks.filter { $0.clientMessageID == clientMessageID }
+        guard affected.isEmpty == false else { return }
+        await repository.updateMessageDeliveryState(clientMessageID: clientMessageID, state: .pending)
+        logger.warning(
+            "block_updates message_not_found，已将消息重新入队整包上送：clientMessageID=\(clientMessageID.uuidString), blocks=\(affected.count)",
+            module: .general
+        )
     }
+
+    private static func clientMessageID(fromMessageNotFound error: Error) -> UUID? {
+        guard case SparkNetworkError.httpError(_, let backend, _) = error,
+              backend?.msg == "message_not_found",
+              let data = backend?.data,
+              case .object(let fields) = data,
+              let raw = fields["client_message_id"],
+              case .string(let text) = raw,
+              let id = UUID(uuidString: text)
+        else {
+            return nil
+        }
+        return id
+    }
+
+    private func applyPushAck(
+        _ ack: ChatPushAckResponse,
+        pending: [ChatMessage],
+        pendingBlocks: [ChatPendingMessageBlock]
+    ) async {
+        let messageAckByClientID = Dictionary(
+            uniqueKeysWithValues: ack.acceptedMessages.map { ($0.clientMessageId, $0) }
+        )
+
+        for message in pending {
+            guard let meta = messageAckByClientID[message.clientMessageID] else { continue }
+            await repository.applyPushMessageAck(
+                clientMessageID: message.clientMessageID,
+                serverMessageID: meta.serverMessageId,
+                serverUpdatedAt: meta.serverUpdatedAt
+            )
+        }
+
+        var latestByThread: [UUID: Date] = [:]
+        for message in pending {
+            guard let meta = messageAckByClientID[message.clientMessageID] else { continue }
+            latestByThread[message.threadID] = max(latestByThread[message.threadID] ?? .distantPast, meta.serverUpdatedAt)
+        }
+
+        for item in pendingBlocks {
+            guard let meta = ack.acceptedBlockUpdates.last(where: { $0.clientMessageId == item.clientMessageID }) else {
+                continue
+            }
+            await repository.applyPushMessageAck(
+                clientMessageID: item.clientMessageID,
+                serverMessageID: nil,
+                serverUpdatedAt: meta.serverUpdatedAt
+            )
+            latestByThread[item.threadID] = max(latestByThread[item.threadID] ?? .distantPast, meta.serverUpdatedAt)
+        }
+
+        for (threadID, date) in latestByThread {
+            let exclusiveDate = date.addingTimeInterval(0.001)
+            await repository.saveMessageSyncCursor(
+                ChatSyncCursor(value: Self.formatSyncCursor(exclusiveDate)),
+                for: threadID
+            )
+        }
+
+    }
+
     private static let syncCursorFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -184,28 +274,6 @@ struct ChatOutboxPipeline: Sendable {
     }()
     private static func formatSyncCursor(_ date: Date) -> String {
         syncCursorFormatter.string(from: date)
-    }
-    private static func indexByClientMessageID(_ messages: [ChatMessage]) -> [UUID: ChatMessage] {
-        var map: [UUID: ChatMessage] = [:]
-        for message in messages {
-            if let existing = map[message.clientMessageID] {
-                map[message.clientMessageID] = preferMessage(existing, message)
-            } else {
-                map[message.clientMessageID] = message
-            }
-        }
-        return map
-    }
-
-    private static func preferMessage(_ a: ChatMessage, _ b: ChatMessage) -> ChatMessage {
-        let da = a.serverUpdatedAt ?? a.createdAt
-        let db = b.serverUpdatedAt ?? b.createdAt
-        if da != db { return da >= db ? a : b }
-        switch (a.serverMessageID, b.serverMessageID) {
-        case (nil, .some): return b
-        case (.some, nil): return a
-        default: return a.id.uuidString >= b.id.uuidString ? a : b
-        }
     }
 
     private static func toRemoteThread(_ thread: ChatThread) -> ChatRemoteThreadDTO {

@@ -55,6 +55,13 @@ extension Optional where Wrapped == String {
         return firstDouble(in: raw)
     }
 
+    /// 将 OCR/模型输出的总量字符串解析为 `total_quantity` 用 Double。
+    ///
+    /// - 支持：`"24"`, `"1盒"`, `"10片"`, `"2.5"` 等；提取**第一个**数字（含小数）。
+    func parsedAsTotalQuantity() -> Double? {
+        parsedAsDoseValue()
+    }
+
     /// 将 OCR/模型输出的频次次数字符串解析为 `times_per_period` 用 Int。
     ///
     /// - 支持：`"1"`, `"2"`, `"3次"`, `"每日2次"`, `"2次/日"` 等。

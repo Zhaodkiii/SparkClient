@@ -8,10 +8,16 @@ import Foundation
 /// 都由 Actor -> Repository -> Core Data 这一条管道处理。
 final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
     private let messageRunActor: MessageRunActor
+    private let pushOutbox: @Sendable () async throws -> Void
     private let logger: Logger
 
-    init(messageRunActor: MessageRunActor, logger: Logger = ConsoleLogger()) {
+    init(
+        messageRunActor: MessageRunActor,
+        pushOutbox: @escaping @Sendable () async throws -> Void,
+        logger: Logger = ConsoleLogger()
+    ) {
         self.messageRunActor = messageRunActor
+        self.pushOutbox = pushOutbox
         self.logger = logger
     }
 
@@ -23,65 +29,107 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         await submit(blocks, assistantClientMessageID: assistantClientMessageID)
     }
 
-    func publishStructuredHealthCardsDelta(
+    @discardableResult
+    func publishHealthStructuredHealthCardsPending(
         threadID: UUID,
         assistantClientMessageID: UUID,
-        delta: StructuredHealthCardsBlob
+        anchorToolCallID: String?
+    ) async -> Bool {
+        return await publishHealthStructuredHealthCards(
+            threadID: threadID,
+            assistantClientMessageID: assistantClientMessageID,
+            blob: .empty,
+            anchorToolCallID: anchorToolCallID,
+            status: .pending
+        )
+    }
+
+    func publishStructuredHealthCardsFailed(
+        assistantClientMessageID: UUID,
+        anchorToolCallID: String?,
+        message: String? = nil
     ) async {
-        await messageRunActor.apply(
-            .structuredHealthCardsDelta(
-                delta,
-                threadID: threadID,
-                assistantClientMessageID: assistantClientMessageID
+        await submit(
+            [
+                ChatMessageBlock(
+                    anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
+                    kind: .structuredHealthCards,
+                    toolCallID: anchorToolCallID,
+                    structuredHealthCards: .failed(message: message ?? ""),
+                    status: .failed
+                )
+            ],
+            assistantClientMessageID: assistantClientMessageID
+        )
+    }
+
+    @discardableResult
+    func publishHealthStructuredHealthCards(
+        threadID: UUID,
+        assistantClientMessageID: UUID,
+        blob: StructuredHealthCardsBlob,
+        anchorToolCallID: String? = nil,
+        status: ChatMessageBlockStatus = .ready
+    ) async -> Bool {
+        if status == .ready, blob.hasDisplayableCards == false {
+            logger.warning(
+                "结构化健康卡片 ready 发布跳过：抽取结果无卡片条目（examReports=\(blob.examReports.count), medicationPlans=\(blob.medicationPlans.count), medicineBoxes=\(blob.medicineBoxes.count), prescriptions=\(blob.prescriptions.count), medicalCases=\(blob.medicalCases.count)），assistantMessageClientID=\(assistantClientMessageID.uuidString)",
+                module: .aiConfig
             )
-        )
-    }
-
-    func publishStructuredHealthCards(
-        threadID: UUID,
-        assistantClientMessageID: UUID,
-        delta: StructuredHealthCardsBlob,
-        anchorToolCallID: String? = nil
-    ) async {
-        guard isEncodable(delta) else {
-            logger.warning("结构化健康卡片发布跳过：payload 无法编码", module: .aiConfig)
-            return
+            await publishStructuredHealthCardsFailed(
+                assistantClientMessageID: assistantClientMessageID,
+                anchorToolCallID: anchorToolCallID
+            )
+            return false
         }
-        await submit(
+        guard isEncodable(blob) else {
+            logger.warning("结构化健康卡片发布跳过：payload 无法编码", module: .aiConfig)
+            return false
+        }
+        let didApply = await submit(
             [
                 ChatMessageBlock(
                     anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
                     kind: .structuredHealthCards,
                     toolCallID: anchorToolCallID,
-                    structuredHealthCards: delta
+                    structuredHealthCards: blob,
+                    status: status
                 )
             ],
             assistantClientMessageID: assistantClientMessageID
         )
+
+        if status == .pending {
+            return didApply
+        }
+        guard status == .ready else { return didApply }
+        guard didApply else {
+            logger.warning(
+                "结构化健康卡片 ready 写入未生效，跳过独立上送，assistantMessageClientID=\(assistantClientMessageID.uuidString)",
+                module: .aiConfig
+            )
+            return false
+        }
+        logger.info(
+            "结构化健康卡片 ready 已落库，cards=\(blob.totalCardCount)，assistantMessageClientID=\(assistantClientMessageID.uuidString)，准备独立上送 outbox",
+            module: .aiConfig
+        )
+        do {
+            try await pushOutbox()
+        } catch {
+            logger.warning(
+                "结构化健康卡片 ready 后上送 outbox 失败：\(error.localizedDescription)",
+                module: .aiConfig
+            )
+        }
+        return true
     }
 
-    func publishStructuredHealthCardsPending(
-        threadID: UUID,
+    func publishAssistantTimelineNotice(
         assistantClientMessageID: UUID,
-        anchorToolCallID: String? = nil
+        text: String
     ) async {
-        await submit(
-            [
-                ChatMessageBlock(
-                    anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
-                    kind: .structuredHealthCards,
-                    toolCallID: anchorToolCallID,
-                    structuredHealthCards: StructuredHealthCardsBlob(
-                        medications: [],
-                        prescriptions: [],
-                        examReports: [],
-                        medicalCases: []
-                    ),
-                    status: .pending
-                )
-            ],
-            assistantClientMessageID: assistantClientMessageID
-        )
+        await messageRunActor.appendTimelineNotice(text, assistantClientMessageID: assistantClientMessageID)
     }
 
     func publishKnowledgeCardPreview(
@@ -204,16 +252,22 @@ final class StructuredHealthCardMergeCoordinator: @unchecked Sendable {
         )
     }
 
+    @discardableResult
     private func submit(
         _ blocks: [ChatMessageBlock],
         assistantClientMessageID: UUID
-    ) async {
+    ) async -> Bool {
+        var didApplyAny = false
         for block in blocks {
-            await messageRunActor.apply(
+            let didApply = await messageRunActor.apply(
                 .richBlockReady(block, assistantClientMessageID: assistantClientMessageID)
             )
+            didApplyAny = didApplyAny || didApply
         }
+        return didApplyAny
     }
+    
+    
 
     private func isEncodable<T: Encodable>(_ value: T) -> Bool {
         (try? JSONEncoder.default.encode(value)) != nil

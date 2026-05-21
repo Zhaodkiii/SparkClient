@@ -45,8 +45,14 @@ protocol ChatMessageStoring: Sendable {
     func upsertLocalMessage(_ message: ChatMessage) async throws -> ChatMessage
     func softDeleteMessage(clientMessageID: UUID) async
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async
+    func applyPushMessageAck(
+        clientMessageID: UUID,
+        serverMessageID: String?,
+        serverUpdatedAt: Date
+    ) async
     func updateMessageBlocks(clientMessageID: UUID, blocks: [ChatMessageBlock], markPendingForSync: Bool) async
-    func upsertMessageBlock(clientMessageID: UUID, block: ChatMessageBlock, markPendingForSync: Bool) async
+    @discardableResult
+    func upsertMessageBlock(clientMessageID: UUID, block: ChatMessageBlock, markPendingForSync: Bool) async -> Bool
     func upsertRemoteMessages(_ messages: [ChatMessage], in threadID: UUID, enqueueAttachmentDownloadJobs: Bool) async
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
     func loadPendingMessageBlocks(limit: Int) async -> [ChatPendingMessageBlock]

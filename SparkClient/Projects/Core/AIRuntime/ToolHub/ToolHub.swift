@@ -276,7 +276,13 @@ final class ToolHub: @unchecked Sendable {
                 "report_type": AIRuntimeToolProperty(
                     type: "string",
                     description: td("tool.param.report_type_enum"),
-                    enumValues: ["medication", "prescription", "exam_report", "medical_case"]
+                    enumValues: [
+                        "medication_plan",
+                        "medicine_box",
+                        "prescription",
+                        "exam_report",
+                        "medical_case"
+                    ]
                 ),
                 "raw_text": AIRuntimeToolProperty(type: "string", description: td("tool.param.raw_text_distilled")),
                 "oss_file_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.oss_file_id_optional"))

@@ -3,7 +3,6 @@ import Foundation
 enum ChatRunEvent: Sendable {
     case assistantPartial(ChatAssistantPartialDelta, assistantClientMessageID: UUID)
     case richBlockReady(ChatMessageBlock, assistantClientMessageID: UUID)
-    case structuredHealthCardsDelta(StructuredHealthCardsBlob, threadID: UUID, assistantClientMessageID: UUID)
     case finalizeAssistantBlocks([ChatMessageBlock], assistantClientMessageID: UUID)
 }
 
@@ -22,6 +21,8 @@ actor MessageRunActor {
     private var pendingPartials: [UUID: ChatAssistantPartialDelta] = [:]
     private var partialFlushTasks: [UUID: Task<Void, Never>] = [:]
     private var runStates: [UUID: AssistantRunState] = [:]
+    private var lastAllocatedRevision: [UUID: Int64] = [:]
+    private var writtenPendingPlaceholders: Set<String> = []
     private let partialFlushIntervalNs: UInt64 = 50_000_000
 
     init(repository: any ChatRepository, logger: Logger = ConsoleLogger()) {
@@ -53,33 +54,48 @@ actor MessageRunActor {
 
     /// 处理聊天运行事件（接收AI助手各种输出事件：增量文本、富文本块、健康卡片、最终定稿）
     /// - Parameter event: 聊天运行事件
-    func apply(_ event: ChatRunEvent) async {
+    @discardableResult
+    func apply(_ event: ChatRunEvent) async -> Bool {
         // 根据事件类型分发处理
         switch event {
             
         // MARK: - 助手增量文本片段（流式输出：打字机效果）
         case .assistantPartial(let delta, let assistantClientMessageID):
             // 将增量文本片段加入队列，累积完整回答
-            enqueueAssistantPartial(delta, assistantClientMessageID: assistantClientMessageID)
+            await enqueueAssistantPartial(delta, assistantClientMessageID: assistantClientMessageID)
+            return true
             
         // MARK: - 富内容块就绪（图片/卡片/工具等非文本块）
         case .richBlockReady(let block, let assistantClientMessageID):
-            // 插入/更新富消息块到数据库
-            // markPendingForSync: 标记为待同步，后续会上传到服务端
-            await repository.upsertMessageBlock(
-                clientMessageID: assistantClientMessageID,
-                block: Self.databaseRichBlock(block, assistantClientMessageID: assistantClientMessageID),
-                markPendingForSync: true
-            )
-            
-        // MARK: - 结构化健康卡片增量更新（睡眠/健康数据可视化卡片）
-        case .structuredHealthCardsDelta(let delta, let threadID, let assistantClientMessageID):
-            // 合并健康卡片增量数据（实时更新健康图表/数据）
-            await mergeStructuredHealthCardsDelta(
-                delta,
-                threadID: threadID,
+            let orderKeyOverride = await presentationOrderKey(
+                for: block,
                 assistantClientMessageID: assistantClientMessageID
             )
+            let persisted = Self.databaseRichBlock(
+                block,
+                assistantClientMessageID: assistantClientMessageID,
+                nextRevision: nextRevision(for: assistantClientMessageID, minimum: block.revision),
+                orderKeyOverride: orderKeyOverride
+            )
+            let didApply = await repository.upsertMessageBlock(
+                clientMessageID: assistantClientMessageID,
+                block: persisted,
+                markPendingForSync: block.status == .ready
+            )
+            if block.kind == .structuredHealthCards, block.status == .ready {
+                let status = didApply ? "已写入" : "未生效"
+                logger.info(
+                    "结构化健康卡片 ready 块\(status)，blockID=\(persisted.id.uuidString), revision=\(persisted.revision), cards=\(persisted.structuredHealthCards?.totalCardCount ?? 0)",
+                    module: .aiConfig
+                )
+                if didApply {
+                    await requeueSentMessageForFullPush(
+                        assistantClientMessageID: assistantClientMessageID,
+                        reason: "structuredHealthCardsReady"
+                    )
+                }
+            }
+            return didApply
             
         // MARK: - 助手消息最终定稿（所有流式输出完成，整理并持久化最终消息）
         case .finalizeAssistantBlocks(let blocks, let assistantClientMessageID):
@@ -99,7 +115,6 @@ actor MessageRunActor {
             
             // 4. 生成时间戳与修订版本号，用于消息块排序与更新
             let now = Date()
-            let revision = Self.revision(now)
             
             // 5. 持久化【最终定稿的文本片段】到数据库
             for segment in state.textSegmentsForFinalization() {
@@ -111,7 +126,7 @@ actor MessageRunActor {
                         text: segment.text,  // 片段内容
                         nodeRole: .timeline, // 角色：时间线展示
                         status: .ready,      // 状态：就绪
-                        revision: revision,  // 修订版本
+                        revision: nextRevision(for: assistantClientMessageID),  // 修订版本
                         orderKey: segment.orderKey, // 排序键（保证展示顺序）
                         createdAt: now,
                         updatedAt: now
@@ -131,19 +146,12 @@ actor MessageRunActor {
                 // 插入/更新最终定稿的助手消息块
                 await repository.upsertMessageBlock(
                     clientMessageID: assistantClientMessageID,
-                    block: Self.finalizedAssistantBlock(
+                    block: finalizedAssistantBlock(
                         block,
                         assistantClientMessageID: assistantClientMessageID,
                         orderKeyOverride: orderKeyOverride
                     ),
                     markPendingForSync: true
-                )
-                await upsertPendingStructuredHealthCardIfNeeded(
-                    toolName: block.toolName,
-                    toolCallID: block.toolCallID,
-                    assistantClientMessageID: assistantClientMessageID,
-                    revision: revision,
-                    createdAt: now
                 )
             }
 
@@ -155,15 +163,30 @@ actor MessageRunActor {
             )
             
             // 7. 清理：消息已定稿，移除运行状态，释放内存
+            let messagePrefix = assistantClientMessageID.uuidString + ":"
             runStates.removeValue(forKey: assistantClientMessageID)
+            lastAllocatedRevision.removeValue(forKey: assistantClientMessageID)
+            writtenPendingPlaceholders = writtenPendingPlaceholders.filter { !$0.hasPrefix(messagePrefix) }
+            return true
         }
     }
 
     private func enqueueAssistantPartial(
         _ delta: ChatAssistantPartialDelta,
         assistantClientMessageID: UUID
-    ) {
+    ) async {
         pendingPartials[assistantClientMessageID] = delta
+
+        // 结构化健康卡片：在工具执行前同步落库 pending，避免 50ms 防抖晚于 ToolHub.publishPending。
+        let shouldFlushStructuredHealthCardToolImmediately = delta.kind == .tool
+            && delta.toolName == SparkToolName.generateStructuredHealthCard.rawValue
+        if shouldFlushStructuredHealthCardToolImmediately {
+            partialFlushTasks[assistantClientMessageID]?.cancel()
+            partialFlushTasks[assistantClientMessageID] = nil
+            await flushAssistantPartial(assistantClientMessageID: assistantClientMessageID)
+            return
+        }
+
         guard partialFlushTasks[assistantClientMessageID] == nil else { return }
         partialFlushTasks[assistantClientMessageID] = Task { [partialFlushIntervalNs] in
             try? await Task.sleep(nanoseconds: partialFlushIntervalNs)
@@ -184,7 +207,7 @@ actor MessageRunActor {
         assistantClientMessageID: UUID
     ) async {
         let now = Date()
-        let revision = Self.revision(now)
+        let revision = nextRevision(for: assistantClientMessageID)
         var state = runStates[assistantClientMessageID] ?? AssistantRunState(threadID: nil)
         let appendedText = state.consumeAnswer(delta.answer)
         if appendedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
@@ -247,6 +270,7 @@ actor MessageRunActor {
                 kind: .tool,
                 text: delta.toolContent,
                 toolName: delta.toolName,
+                toolInvocationArguments: delta.toolInvocationArguments,
                 toolCallID: toolCallID,
                 nodeRole: .tool,
                 status: .streaming,
@@ -257,125 +281,137 @@ actor MessageRunActor {
             ),
             markPendingForSync: false
         )
-        await upsertPendingStructuredHealthCardIfNeeded(
-            toolName: delta.toolName,
-            toolCallID: toolCallID,
-            assistantClientMessageID: assistantClientMessageID,
-            revision: revision,
-            createdAt: now
-        )
-    }
 
-    /// 合并结构化健康卡片的增量数据（药品、处方、检查报告、病历 流式合并）
-    /// - Parameters:
-    ///   - delta: 健康卡片增量数据（本次新增的内容）
-    ///   - threadID: 会话ID
-    ///   - assistantClientMessageID: 助手消息客户端ID
-    private func mergeStructuredHealthCardsDelta(
-        _ delta: StructuredHealthCardsBlob,
-        threadID: UUID,
-        assistantClientMessageID: UUID
-    ) async {
-        // 1. 加载当前会话下的所有消息
-        let messages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
-        
-        // 2. 查找对应的助手消息：必须先存在消息才能合并卡片
-        guard let message = messages.first(where: { $0.clientMessageID == assistantClientMessageID }) else {
-            // 找不到消息 → 丢弃本次增量，打印警告日志
-            logger.warning("结构化健康卡片增量丢弃：assistant message 尚未创建，clientMessageID=\(assistantClientMessageID)", module: .general)
-            return
-        }
-
-        // 3. 读取消息中已存在的健康卡片数据（如果有）
-        var blob: StructuredHealthCardsBlob
-        if let existing = message.blocks.last(where: { $0.kind == .structuredHealthCards })?.structuredHealthCards {
-            // 已有卡片 → 使用现有数据继续追加
-            blob = existing
-        } else {
-            // 无卡片 → 创建空的健康卡片容器
-            blob = StructuredHealthCardsBlob(
-                medications: [],       // 药品
-                prescriptions: [],    // 处方
-                examReports: [],       // 检查报告
-                medicalCases: []       // 病历
+        if delta.toolName == SparkToolName.generateStructuredHealthCard.rawValue {
+            let placeholderKey = "\(assistantClientMessageID.uuidString):\(toolCallID)"
+            if writtenPendingPlaceholders.contains(placeholderKey) {
+                return
+            }
+            let didApply = await upsertStructuredHealthCardPendingPlaceholder(
+                assistantClientMessageID: assistantClientMessageID,
+                toolCallID: toolCallID,
+                toolOrderKey: toolOrderKey,
+                toolRevision: revision,
+                createdAt: now,
+                updatedAt: now
             )
+            if didApply {
+                writtenPendingPlaceholders.insert(placeholderKey)
+            }
         }
-        
-        // 4. 合并增量数据：将本次新增内容追加到原有卡片中
-        blob.medications.append(contentsOf: delta.medications)
-        blob.prescriptions.append(contentsOf: delta.prescriptions)
-        blob.examReports.append(contentsOf: delta.examReports)
-        blob.medicalCases.append(contentsOf: delta.medicalCases)
-
-        // 5. 构建新的健康卡片消息块（覆盖式更新）
-        let now = Date()
-        let block = ChatMessageBlock(
-            id: ChatStableBlockID.rich(
-                messageID: assistantClientMessageID,
-                kind: .structuredHealthCards
-            ),
-            kind: .structuredHealthCards,        // 块类型：结构化健康卡片
-            nodeRole: .toolPresentation,          // 角色：工具展示类内容
-            structuredHealthCards: blob,          // 合并后的完整健康数据
-            status: .ready,                       // 状态：就绪
-            revision: Self.revision(now),         // 数据修订版本
-            orderKey: Self.defaultOrderKey(for: .structuredHealthCards), // 排序键
-            createdAt: message.createdAt,          // 创建时间沿用消息原时间
-            updatedAt: now                        // 更新时间为当前时间
-        )
-        
-        // 6. 插入/更新到数据库，并标记为待同步
-        await repository.upsertMessageBlock(
-            clientMessageID: assistantClientMessageID,
-            block: block,
-            markPendingForSync: true
-        )
     }
 
-    private func upsertPendingStructuredHealthCardIfNeeded(
-        toolName: String?,
-        toolCallID: String?,
+    @discardableResult
+    private func upsertStructuredHealthCardPendingPlaceholder(
         assistantClientMessageID: UUID,
-        revision: Int64,
-        createdAt: Date
-    ) async {
-        guard toolName == SparkToolName.generateStructuredHealthCard.rawValue,
-              let toolCallID,
-              toolCallID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            return
-        }
-        await repository.upsertMessageBlock(
+        toolCallID: String,
+        toolOrderKey: Double,
+        toolRevision: Int64,
+        createdAt: Date,
+        updatedAt: Date
+    ) async -> Bool {
+        let presentationRevision = nextRevision(
+            for: assistantClientMessageID,
+            minimum: toolRevision + 1
+        )
+        let blockID = ChatStableBlockID.rich(
+            messageID: assistantClientMessageID,
+            toolCallID: toolCallID,
+            kind: .structuredHealthCards
+        )
+        let didApply = await repository.upsertMessageBlock(
             clientMessageID: assistantClientMessageID,
             block: ChatMessageBlock(
-                id: ChatStableBlockID.rich(
-                    messageID: assistantClientMessageID,
-                    toolCallID: toolCallID,
-                    kind: .structuredHealthCards
-                ),
+                id: blockID,
                 anchor: .toolCall(toolCallID),
                 kind: .structuredHealthCards,
                 toolCallID: toolCallID,
                 parentToolCallID: toolCallID,
-                parentBlockID: ChatStableBlockID.tool(messageID: assistantClientMessageID, toolCallID: toolCallID),
+                parentBlockID: ChatStableBlockID.tool(
+                    messageID: assistantClientMessageID,
+                    toolCallID: toolCallID
+                ),
                 nodeRole: .toolPresentation,
                 structuredHealthCards: .empty,
                 status: .pending,
-                revision: revision,
-                orderKey: Self.defaultOrderKey(for: .structuredHealthCards),
+                revision: presentationRevision,
+                orderKey: Self.presentationOrderKey(forToolOrderKey: toolOrderKey),
                 createdAt: createdAt,
-                updatedAt: Date()
+                updatedAt: updatedAt
+            ),
+            markPendingForSync: false
+        )
+        return didApply
+    }
+
+    private func presentationOrderKey(
+        for block: ChatMessageBlock,
+        assistantClientMessageID: UUID
+    ) async -> Double? {
+        guard block.kind == .structuredHealthCards else { return block.orderKey }
+        let toolCallID = block.parentToolCallID ?? block.toolCallID
+        guard let toolCallID else { return block.orderKey }
+
+        if let toolOrderKey = runStates[assistantClientMessageID]?.orderKeyIfKnown(forToolCallID: toolCallID) {
+            return Self.presentationOrderKey(forToolOrderKey: toolOrderKey)
+        }
+
+        let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+        if let toolOrderKey = messages.first?.blocks.first(where: {
+            $0.kind == .tool && $0.toolCallID == toolCallID
+        })?.orderKey {
+            return Self.presentationOrderKey(forToolOrderKey: toolOrderKey)
+        }
+        return block.orderKey
+    }
+
+    private static func presentationOrderKey(forToolOrderKey toolOrderKey: Double) -> Double {
+        toolOrderKey + 100
+    }
+
+    /// 在助手消息时间线追加独立文本片段（用于异步工具失败提示等，不覆盖已有流式正文）。
+    func appendTimelineNotice(
+        _ text: String,
+        assistantClientMessageID: UUID
+    ) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return }
+
+        let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+        guard let message = messages.first else { return }
+
+        let textSegmentCount = message.blocks.filter { $0.kind == .text }.count
+        let maxTimelineOrderKey = message.blocks
+            .filter { $0.nodeRole == .timeline }
+            .compactMap(\.orderKey)
+            .max() ?? 1_000
+        let now = Date()
+        let orderKey = max(maxTimelineOrderKey + 100, 3_100)
+
+        await repository.upsertMessageBlock(
+            clientMessageID: assistantClientMessageID,
+            block: ChatMessageBlock(
+                id: ChatStableBlockID.textSegment(messageID: assistantClientMessageID, index: textSegmentCount),
+                kind: .text,
+                text: trimmed,
+                nodeRole: .timeline,
+                status: .ready,
+                revision: Self.revision(now),
+                orderKey: orderKey,
+                createdAt: message.createdAt,
+                updatedAt: now
             ),
             markPendingForSync: true
         )
     }
 
-    private static func finalizedAssistantBlock(
+    private func finalizedAssistantBlock(
         _ block: ChatMessageBlock,
         assistantClientMessageID: UUID,
         orderKeyOverride: Double? = nil
     ) -> ChatMessageBlock {
         let now = Date()
-        let revision = max(block.revision + 1, Self.revision(now))
+        let revision = nextRevision(for: assistantClientMessageID, minimum: block.revision + 1)
         switch block.kind {
         case .text:
             return ChatMessageBlock(
@@ -412,6 +448,7 @@ actor MessageRunActor {
                 kind: .tool,
                 text: block.text,
                 toolName: block.toolName,
+                toolInvocationArguments: block.toolInvocationArguments,
                 toolCallID: block.toolCallID,
                 nodeRole: .tool,
                 status: .ready,
@@ -421,16 +458,61 @@ actor MessageRunActor {
                 updatedAt: now
             )
         default:
-            return databaseRichBlock(block, assistantClientMessageID: assistantClientMessageID)
+            return Self.databaseRichBlock(
+                block,
+                assistantClientMessageID: assistantClientMessageID,
+                nextRevision: revision
+            )
         }
+    }
+
+    private func nextRevision(for assistantClientMessageID: UUID, minimum: Int64 = 0) -> Int64 {
+        let floor = max(minimum, Self.revision(Date()))
+        let previous = lastAllocatedRevision[assistantClientMessageID] ?? 0
+        let next = max(floor, previous + 1)
+        lastAllocatedRevision[assistantClientMessageID] = next
+        return next
+    }
+
+    private func requeueSentMessageForFullPush(
+        assistantClientMessageID: UUID,
+        reason: String
+    ) async {
+        let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+        guard let message = messages.first else {
+            logger.warning(
+                "结构化健康卡片 ready 后未找到父消息，无法重新入队，clientMessageID=\(assistantClientMessageID.uuidString)",
+                module: .aiConfig
+            )
+            return
+        }
+        guard message.deliveryState == .sent else {
+            logger.info(
+                "结构化健康卡片 ready 后父消息暂不重入队，deliveryState=\(message.deliveryState.rawValue), reason=\(reason)",
+                module: .aiConfig
+            )
+            return
+        }
+        await repository.updateMessageDeliveryState(
+            clientMessageID: assistantClientMessageID,
+            state: .pending
+        )
+        let reloaded = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID]).first
+        let kinds = reloaded?.blocks.map(\.kind.rawValue).joined(separator: ", ") ?? "-"
+        logger.info(
+            "结构化健康卡片 ready 后父消息已重新入队整包上送，clientMessageID=\(assistantClientMessageID.uuidString), blockCount=\(reloaded?.blocks.count ?? 0), kinds=[\(kinds)], reason=\(reason)",
+            module: .aiConfig
+        )
     }
 
     static func databaseRichBlock(
         _ block: ChatMessageBlock,
-        assistantClientMessageID: UUID
+        assistantClientMessageID: UUID,
+        nextRevision: Int64,
+        orderKeyOverride: Double? = nil
     ) -> ChatMessageBlock {
         let now = Date()
-        let revision = max(block.revision + 1, Self.revision(now))
+        let revision = nextRevision
         let stableID: UUID
         if let toolCallID = block.toolCallID {
             stableID = ChatStableBlockID.rich(
@@ -449,7 +531,7 @@ actor MessageRunActor {
             updatedAt: now
         ).replacingIdentity(
             id: stableID,
-            orderKey: block.orderKey ?? defaultOrderKey(for: block.kind)
+            orderKey: orderKeyOverride ?? block.orderKey ?? defaultOrderKey(for: block.kind)
         )
     }
 
@@ -461,7 +543,10 @@ actor MessageRunActor {
             return 1_000
         case .tool:
             return 2_000
-        case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
+        case .structuredHealthCards:
+            // 须与父 tool 的 orderKey 绑定；无 tool 上下文时仅作兜底。
+            return 2_100
+        case .sleepVisualization, .workoutVisualization,
                 .captureCard, .knowledgeCards, .html, .taskCards,
                 .pendingMemberToolCards:
             return 2_100

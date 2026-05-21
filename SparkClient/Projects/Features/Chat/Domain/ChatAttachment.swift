@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// 聊天附件类型：对齐 Health `AttachmentType` 的文件类（`image` / `video` / `pdf` / `file`），
 /// 并包含工具/流式 UI 所需的结构化键。
@@ -228,11 +229,103 @@ extension ChatAttachment {
 // MARK: - 图片下载 / 列表缩略图
 
 extension ChatAttachment {
-    /// 可用于 HTTPS 远程下载的图片地址（仅 `url`；内嵌 base64 / 文本里的链接由 UI 层 ``ChatImagePayloadBuilder`` 处理）。
+    /// 与 ``ChatSendAttachmentAssembly/chatAttachmentBusinessType`` 一致。
+    nonisolated static let fileTransferBusinessType = "chat_attachment"
+
+    /// 可用于 HTTPS 远程下载的图片地址（仅 `url` 字段）。
     nonisolated var effectiveHTTPSImageDownloadURL: URL? {
         guard let u = url else { return nil }
         guard let scheme = u.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
         return u
+    }
+
+    /// `url` 或 `text` 前 2048 字符中的 http(s) 链接（构建 UI 载荷时用，勿整段 `text` 跨 `await` 传递）。
+    nonisolated func resolvedHTTPSImageDownloadURL() -> URL? {
+        if let u = effectiveHTTPSImageDownloadURL { return u }
+        if let raw = text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           raw.isEmpty == false,
+           let link = Self.inferredHTTPSURLString(from: String(raw.prefix(2048))),
+           let parsed = URL(string: link) {
+            return parsed
+        }
+        return nil
+    }
+
+    /// 对齐医疗 ``RemoteManagedFile/managedFileRecord``，供 ``FileTransferService`` 缓存/下载。
+    nonisolated func managedFileRecord(downloadURL: URL) -> ManagedFileRecord {
+        let parsed = sparkClientOSSFileUUIDAndFileName()
+            ?? Self.parseSparkClientOSSPath(downloadURL.path)
+        let name = parsed?.fileName
+            ?? downloadURL.lastPathComponent.removingPercentEncoding
+            ?? "image.jpg"
+        return ManagedFileRecord(
+            id: fileId ?? 0,
+            fileUuid: parsed?.fileUUID ?? id.uuidString.lowercased(),
+            filePath: downloadURL.absoluteString,
+            originalName: name,
+            fileSize: 0,
+            mimeType: FileUtilities.mimeType(forName: name),
+            fileMd5: fileMd5,
+            isPublic: false,
+            businessType: Self.fileTransferBusinessType,
+            businessId: "",
+            createdAt: "",
+            objectKey: nil,
+            storageType: nil
+        )
+    }
+
+    nonisolated func managedFileRecordForDownload() -> ManagedFileRecord? {
+        guard let downloadURL = resolvedHTTPSImageDownloadURL() else { return nil }
+        return managedFileRecord(downloadURL: downloadURL)
+    }
+
+    nonisolated static func inlinePreviewUIImage(from attachment: ChatAttachment) -> UIImage? {
+        guard let raw = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              raw.isEmpty == false else {
+            return nil
+        }
+        if raw.hasPrefix("data:image"),
+           let base64 = raw.components(separatedBy: ",").last,
+           let data = Data(base64Encoded: base64) {
+            return UIImage(data: data)
+        }
+        if let data = Data(base64Encoded: raw) {
+            return UIImage(data: data)
+        }
+        return nil
+    }
+
+    nonisolated static func inferredHTTPSURLString(from text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+        if trimmed.count <= 2048,
+           let u = URL(string: trimmed),
+           let scheme = u.scheme?.lowercased(),
+           scheme == "http" || scheme == "https" {
+            return trimmed
+        }
+        let markers = ["https://", "http://"]
+        var bestStart: String.Index?
+        for marker in markers {
+            if let range = trimmed.range(of: marker, options: [.caseInsensitive]) {
+                if bestStart == nil || range.lowerBound < bestStart! {
+                    bestStart = range.lowerBound
+                }
+            }
+        }
+        guard let start = bestStart else { return nil }
+        var end = start
+        let limit = trimmed.index(start, offsetBy: 2048, limitedBy: trimmed.endIndex) ?? trimmed.endIndex
+        while end < limit {
+            let ch = trimmed[end]
+            if ch.isWhitespace || ch == "\"" || ch == "'" || ch == "’" || ch == ")" || ch == "]" || ch == "}" || ch == "<" {
+                break
+            }
+            end = trimmed.index(after: end)
+        }
+        let slice = String(trimmed[start ..< end])
+        return slice.isEmpty ? nil : slice
     }
 
     /// 列表与详情、多次触发时去重用（优先 `fullCacheKey`，否则稳定 URL，再退 `id`）。

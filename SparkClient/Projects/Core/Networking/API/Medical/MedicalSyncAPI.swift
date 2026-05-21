@@ -276,7 +276,7 @@ enum SparkMedicalSyncAPI {
         var everyNDays: Int?
         var weeklyWeekdays: [Int]
         var frequencyText: String
-        var reminderTimes: [MedicationReminderTime]
+        @CodableReminderTimesList var reminderTimes: [ReminderTime]
         var startDate: Date
         var endDate: Date?
         var instructions: String
@@ -285,11 +285,6 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var attachments: [RemoteManagedFile]?
         var updatedAt: Date
-    }
-
-    struct MedicationReminderTime: Codable, Sendable, Equatable {
-        var time: String
-        var dose: Double?
     }
 
     /// 服药记录：计划剂次与实际打卡事实表。

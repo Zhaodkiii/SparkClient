@@ -112,7 +112,7 @@
                     'startDate': '字符串，yyyy-MM-dd，用药计划开始日期，无则省略',
                     'endDate': '字符串，yyyy-MM-dd，用药计划结束日期，无则省略',
                     'instructions': '字符串，完整用药嘱咐说明，无则省略',
-                    'reminderTimes': ['字符串，提醒时间格式HH:mm，无则省略'],
+                    'reminderTimes': [{'time': '字符串，提醒时间HH:mm', 'dose': '可选数值，无则省略'}],
                     'medicineBox': {
                         'medicineName': '字符串，药箱药品名称，必填',
                         'medicineType': '字符串，药品分类枚举，无则省略',
@@ -398,7 +398,7 @@ OCR文本：
 
 'instructions': '用药说明/注意事项（无则省略）',
 
-'reminderTimes': ['提醒时间（如：08:00、20:00）'],
+'reminderTimes': [{'time': '08:00', 'dose': null}],
 
 'medicineBox': {
 
@@ -468,7 +468,7 @@ OCR文本：
     •    medicineBox：药箱侧字段，可与同级字段重复药名/规格以便落库；无额外信息可整段省略。
     •    status：计划状态，无则 active。
     •    sortOrder：处方内顺序字符串（如 0、1、2）。
-    •    reminderTimes：每日提醒时间数组，格式 HH:mm，无则省略。
+    •    reminderTimes：提醒时刻对象数组 [{time,dose}]，time 为 HH:mm，dose 可选，无则省略。
 
 【抽取范围与去噪】
 
@@ -544,7 +544,7 @@ OCR文本：
     'endDate': '计划结束日期（yyyy-MM-dd，无则省略）',
     'instructions': '用药说明/注意事项（无则省略）',
     'reminderEnabled': '是否开启提醒（布尔值true/false，无则省略）',
-    'reminderTimes': ['提醒时间（如：08:00、20:00）'],
+    'reminderTimes': [{'time': '08:00', 'dose': null}],
     'medicineBox': {
       'medicineName': '药箱药品名称（无则省略）',
       'medicineType': '药品类型（无则省略）',
@@ -586,7 +586,7 @@ OCR文本：
 - weeklyWeekdays：仅 weekly 模式填写，1=周一…7=周日。
 - frequencyText：标准化频次文本。
 - instructions：服用方式、饭前饭后、注意事项等。
-- reminderTimes：仅当文本中有明确时间点时填写。
+- reminderTimes：仅当文本中有明确时间点时填写，输出 [{time,dose}] 对象数组，勿输出纯字符串。
 - medicineBox：承载药箱库存字段，用于独立创建 MedicineBox。
 
 【抽取范围与去噪】

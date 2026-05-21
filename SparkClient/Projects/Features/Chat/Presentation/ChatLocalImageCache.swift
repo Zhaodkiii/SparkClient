@@ -41,4 +41,30 @@ enum ChatLocalImageCache {
         }
         return nil
     }
+
+    /// 返回已缓存文件的本地 URL（供画廊写入 `downloadedImageFiles` 展示缩略图）。
+    static func cachedFileURLIfPresent(fileUUID: String, originalName: String) -> URL? {
+        let fileManager = FileManager.default
+        guard let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let base = caches.appendingPathComponent("SparkClient.FileCache", isDirectory: true)
+        let sanitized = sanitizedFileName(originalName)
+        let lowercasedUUID = fileUUID.lowercased()
+
+        let namespaceDirs = (try? fileManager.contentsOfDirectory(
+            at: base,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: .skipsHiddenFiles
+        )) ?? []
+
+        for nsDir in namespaceDirs {
+            guard (try? nsDir.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { continue }
+            let candidate = nsDir
+                .appendingPathComponent(lowercasedUUID, isDirectory: true)
+                .appendingPathComponent(sanitized)
+            if fileManager.fileExists(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        return nil
+    }
 }

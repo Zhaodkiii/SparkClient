@@ -124,9 +124,10 @@ struct ChatConversationListPage: View {
             } label: {
                 HStack(alignment: .center, spacing: 10) {
                     if let thumb = item.latestListImageAttachment {
-                        ChatThreadListThumbnailView(attachment: thumb) { att in
-                            try await detailViewModel.downloadChatAttachmentToLocalFile(attachment: att)
-                        }
+                        ChatThreadListThumbnailView(
+                            attachment: thumb,
+                            fileTransferService: detailViewModel.attachmentFileTransferService
+                        )
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 8) {

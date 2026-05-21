@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// 对话内四类结构化医疗卡片容器（保存按钮 + 摘要展示），数据来自 `structured_health_cards` 附件。
+/// 对话内结构化医疗卡片容器（保存按钮 + 摘要展示），数据来自 `structured_health_cards` 附件。
 struct ChatStructuredHealthCardsBlockView: View {
+    let blockID: UUID
+    let blockStatus: ChatMessageBlockStatus
     let blob: StructuredHealthCardsBlob
     @ObservedObject var memberContextStore: MemberContextStore
     let isSavingIDs: Set<UUID>
@@ -11,21 +13,44 @@ struct ChatStructuredHealthCardsBlockView: View {
         memberContextStore.context.members
     }
 
+    private var showsFailureCard: Bool {
+        blockStatus == .failed || blob.extractionFailed
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if blob.medications.isEmpty == false {
+            if showsFailureCard {
+                extractionFailedCard
+            }
+            if blob.medicationPlans.isEmpty == false {
                 sectionHeader("chat.medical_card.section.medications", systemImage: "pills.fill", tint: .green)
-                ForEach(blob.medications) { card in
-                    let item = ChatStructuredHealthCardItem.medication(card)
+                ForEach(blob.medicationPlans) { card in
+                    let item = ChatStructuredHealthCardItem.medicationPlan(card)
                     medicalRow(
                         title: card.displayName,
                         subtitle: [card.specification, card.dosageLine].compactMap { $0 }.joined(separator: "\n"),
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
                         onSetMember: { memberID in
-                            onAction(.setMember(item, memberID))
+                            onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
-                        action: { onAction(.save(item)) }
+                        action: { onAction(.save(blockID: blockID, item: item)) }
+                    )
+                }
+            }
+            if blob.medicineBoxes.isEmpty == false {
+                sectionHeader("medical_record.medicine_box.title", systemImage: "archivebox.fill", tint: .teal)
+                ForEach(blob.medicineBoxes) { card in
+                    let item = ChatStructuredHealthCardItem.medicineBox(card)
+                    medicalRow(
+                        title: card.displayName,
+                        subtitle: card.specification,
+                        item: item,
+                        isSaving: isSavingIDs.contains(item.id),
+                        onSetMember: { memberID in
+                            onAction(.setMember(blockID: blockID, item: item, memberID))
+                        },
+                        action: { onAction(.save(blockID: blockID, item: item)) }
                     )
                 }
             }
@@ -39,9 +64,9 @@ struct ChatStructuredHealthCardsBlockView: View {
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
                         onSetMember: { memberID in
-                            onAction(.setMember(item, memberID))
+                            onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
-                        action: { onAction(.save(item)) }
+                        action: { onAction(.save(blockID: blockID, item: item)) }
                     )
                 }
             }
@@ -55,9 +80,9 @@ struct ChatStructuredHealthCardsBlockView: View {
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
                         onSetMember: { memberID in
-                            onAction(.setMember(item, memberID))
+                            onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
-                        action: { onAction(.save(item)) }
+                        action: { onAction(.save(blockID: blockID, item: item)) }
                     )
                 }
             }
@@ -71,14 +96,47 @@ struct ChatStructuredHealthCardsBlockView: View {
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
                         onSetMember: { memberID in
-                            onAction(.setMember(item, memberID))
+                            onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
-                        action: { onAction(.save(item)) }
+                        action: { onAction(.save(blockID: blockID, item: item)) }
                     )
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var extractionFailedCard: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .imageScale(.medium)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.text("chat.medical_card.extraction_failed.title", fallback: "结构化健康卡片生成失败"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(
+                    blob.failureMessage
+                        ?? L10n.text(
+                            "tool.error.structured_health_card.extraction_failed",
+                            fallback: "请稍后重试或补充更完整的病历摘要。"
+                        )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.orange.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.orange.opacity(0.35), lineWidth: 1)
+        )
     }
 
     private func sectionHeader(_ key: String, systemImage: String, tint: Color) -> some View {
@@ -105,7 +163,15 @@ struct ChatStructuredHealthCardsBlockView: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                memberMenu(memberID: item.memberID, onSelect: onSetMember)
+                if item.isSaved {
+                    Text(memberName(for: item.memberId))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                } else {
+                    memberMenu(memberID: item.memberId, onSelect: onSetMember)
+                }
             }
             if let subtitle, subtitle.isEmpty == false {
                 Text(subtitle)

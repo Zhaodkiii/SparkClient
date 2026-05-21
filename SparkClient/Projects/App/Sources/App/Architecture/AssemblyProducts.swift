@@ -490,8 +490,24 @@ extension ChatAssembly {
         logger.info("ChatAssembly 装配聊天核心", module: .general)
         let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
         let messageRunActor = MessageRunActor(repository: chatRepository, logger: logger)
+        let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
+        let chatRealtimeClient = ChatRealtimeSyncClient(
+            tokenProvider: backend.tokenProvider(),
+            baseURL: backend.baseURL,
+            logger: logger
+        )
+        let chatSyncEngine = ChatSyncEngine(
+            repository: chatRepository,
+            outboxStore: chatOutboxStore,
+            remoteAPI: backend.chat,
+            realtimeClient: chatRealtimeClient,
+            mergePolicy: ChatMergePolicy(),
+            logger: logger
+        )
         let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(
-            messageRunActor: messageRunActor
+            messageRunActor: messageRunActor,
+            pushOutbox: { try await chatSyncEngine.pushOutboxOnly() },
+            logger: logger
         )
         let toolAuditStore = ToolAuditStore()
         let toolInteractionCoordinator = ToolInteractionCoordinator()
@@ -512,20 +528,6 @@ extension ChatAssembly {
             typedMedicalDocumentExtractor: medical.typedMedicalDocumentExtractor,
             structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
             toolInteractionCoordinator: toolInteractionCoordinator,
-            logger: logger
-        )
-        let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
-        let chatRealtimeClient = ChatRealtimeSyncClient(
-            tokenProvider: backend.tokenProvider(),
-            baseURL: backend.baseURL,
-            logger: logger
-        )
-        let chatSyncEngine = ChatSyncEngine(
-            repository: chatRepository,
-            outboxStore: chatOutboxStore,
-            remoteAPI: backend.chat,
-            realtimeClient: chatRealtimeClient,
-            mergePolicy: ChatMergePolicy(),
             logger: logger
         )
         let chatAttachmentPipeline = ChatAttachmentPipeline(

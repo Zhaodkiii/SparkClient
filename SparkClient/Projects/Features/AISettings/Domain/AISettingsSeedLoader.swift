@@ -1,18 +1,12 @@
 import Foundation
 
 enum AISettingsSeedLoader {
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder.default
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return decoder
-    }()
-
     static func loadAPIKeys(bundle: Bundle = .main) -> [APIKeys]? {
         guard let data = data(named: "APIKeys", bundle: bundle) else {
             return nil
         }
         do {
-            let rows = try decoder.decode([APIKeySeedRow].self, from: data)
+            let rows = try JSONDecoder.default.decode([APIKeySeedRow].self, from: data)
             return rows.map(\.model)
         } catch {
             #if DEBUG
@@ -25,7 +19,7 @@ enum AISettingsSeedLoader {
     static func loadAllModels(bundle: Bundle = .main) -> [AllModels]? {
         guard
             let data = data(named: "AllModels", bundle: bundle),
-            let rows = try? decoder.decode([AllModelSeedRow].self, from: data)
+            let rows = try? JSONDecoder.default.decode([AllModelSeedRow].self, from: data)
         else {
             return nil
         }
@@ -42,7 +36,7 @@ enum AISettingsSeedLoader {
     static func loadScenarioBindings(for models: [AllModels], bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
         guard
             let data = data(named: "AllModels", bundle: bundle),
-            let rows = try? decoder.decode([AllModelSeedRow].self, from: data)
+            let rows = try? JSONDecoder.default.decode([AllModelSeedRow].self, from: data)
         else {
             return nil
         }

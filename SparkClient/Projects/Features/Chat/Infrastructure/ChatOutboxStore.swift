@@ -27,8 +27,9 @@ actor ChatOutboxStore {
         await repository.updateMessageDeliveryState(clientMessageID: message.clientMessageID, state: .failed)
     }
 
-    func markSent(_ message: ChatMessage) async {
+    func markSent(_ message: ChatMessage, syncedBlockIDs: [UUID]) async {
         await repository.updateMessageDeliveryState(clientMessageID: message.clientMessageID, state: .sent)
-        await repository.markMessageBlocksSynced(ids: message.blocks.map(\.id))
+        guard syncedBlockIDs.isEmpty == false else { return }
+        await repository.markMessageBlocksSynced(ids: syncedBlockIDs)
     }
 }

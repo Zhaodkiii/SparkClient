@@ -1,11 +1,6 @@
 import Foundation
 
 struct MedicationPlan: Identifiable, Codable, Equatable, Sendable {
-    struct ReminderTime: Codable, Equatable, Sendable {
-        var time: String
-        var dose: Double?
-    }
-
     let id: Int
     var memberID: Int
     var medicalCaseID: Int?

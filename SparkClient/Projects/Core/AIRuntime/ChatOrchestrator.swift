@@ -34,6 +34,9 @@ struct ChatAssistantPartialDelta: Sendable {
     let kind: ChatMessageKind
     let toolName: String?
     let toolContent: String?
+    let toolArguments: String?
+    /// 工具执行结果或 ToolHub 解析后的参数字典，供工具详情 Sheet 展示。
+    let toolInvocationArguments: [String: String]?
     let toolCallID: String?
 }
 
@@ -310,6 +313,7 @@ struct ChatOrchestrator: Sendable {
                     reasoning: roundReasoning,
                     toolName: call.name,
                     toolCallID: call.id,
+                    toolArguments: trimmedToolCallArguments(call.arguments),
                     detail: trimmedToolCallArguments(call.arguments),
                     onPartial: onPartial
                 )
@@ -335,6 +339,11 @@ struct ChatOrchestrator: Sendable {
                     reasoning: roundReasoning,
                     toolName: call.name,
                     toolCallID: call.id,
+                    toolArguments: trimmedToolCallArguments(call.arguments),
+                    toolInvocationArguments: resolvedToolInvocationArguments(
+                        toolResult: toolResult,
+                        callArguments: call.arguments
+                    ),
                     detail: toolCallDetail(arguments: call.arguments, output: toolResult.outputText),
                     onPartial: onPartial
                 )
@@ -632,6 +641,8 @@ struct ChatOrchestrator: Sendable {
                             kind: .text,
                             toolName: nil,
                             toolContent: nil,
+                            toolArguments: nil,
+                            toolInvocationArguments: nil,
                             toolCallID: nil
                         )
                     )
@@ -650,6 +661,8 @@ struct ChatOrchestrator: Sendable {
                             kind: .text,
                             toolName: nil,
                             toolContent: nil,
+                            toolArguments: nil,
+                            toolInvocationArguments: nil,
                             toolCallID: nil
                         )
                     )
@@ -675,6 +688,11 @@ struct ChatOrchestrator: Sendable {
                     reasoning: bufferedReasoning.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
                     toolName: call.name,
                     toolCallID: call.id,
+                    toolArguments: trimmedToolCallArguments(call.arguments),
+                    toolInvocationArguments: {
+                        let parsed = toolHub.parseArguments(call.arguments)
+                        return parsed.isEmpty ? nil : parsed
+                    }(),
                     detail: call.arguments.isEmpty ? nil : call.arguments,
                     onPartial: onPartial
                 )
@@ -747,6 +765,8 @@ struct ChatOrchestrator: Sendable {
         reasoning: String?,
         toolName: String,
         toolCallID: String?,
+        toolArguments: String?,
+        toolInvocationArguments: [String: String]? = nil,
         detail: String?,
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)?
     ) async {
@@ -758,9 +778,22 @@ struct ChatOrchestrator: Sendable {
                 kind: .tool,
                 toolName: toolName.isEmpty ? nil : toolName,
                 toolContent: localizedToolOperationText(toolName: toolName, detail: detail),
+                toolArguments: toolArguments,
+                toolInvocationArguments: toolInvocationArguments,
                 toolCallID: toolCallID
             )
         )
+    }
+
+    private func resolvedToolInvocationArguments(
+        toolResult: ToolExecutionResult,
+        callArguments: String
+    ) -> [String: String]? {
+        if let arguments = toolResult.arguments, arguments.isEmpty == false {
+            return arguments
+        }
+        let parsed = toolHub.parseArguments(callArguments)
+        return parsed.isEmpty ? nil : parsed
     }
 
     private func buildOutputBlocks(
@@ -780,6 +813,7 @@ struct ChatOrchestrator: Sendable {
                     kind: .tool,
                     text: output,
                     toolName: result.toolName,
+                    toolInvocationArguments: result.arguments,
                     toolCallID: result.toolCallID
                 )
             )

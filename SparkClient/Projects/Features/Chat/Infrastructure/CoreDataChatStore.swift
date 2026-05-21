@@ -35,17 +35,6 @@ actor CoreDataChatStore {
     private let decoder = JSONDecoder.default
     private let logger: Logger
 
-    private enum ChatBlockPayloadCodec {
-        static func encode(_ block: ChatMessageBlock) throws -> Data {
-            try JSONEncoder.default.encode(block)
-        }
-
-        static func decode(_ data: Data?) -> ChatMessageBlock? {
-            guard let data else { return nil }
-            return try? JSONDecoder.default.decode(ChatMessageBlock.self, from: data)
-        }
-    }
-
     init(
         coreDataStack: CoreDataStack,
         snapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
@@ -449,7 +438,8 @@ actor CoreDataChatStore {
                 object: object,
                 message: message,
                 context: context,
-                ownerAccountID: accountID
+                ownerAccountID: accountID,
+                logger: self.logger
             )
 
             threadObject.setValue(Date(), forKey: "updatedAt")
@@ -494,7 +484,8 @@ actor CoreDataChatStore {
                 object: object,
                 message: message,
                 context: context,
-                ownerAccountID: accountID
+                ownerAccountID: accountID,
+                logger: self.logger
             )
             threadObject.setValue(Date(), forKey: "updatedAt")
             return didInsert
@@ -538,6 +529,38 @@ actor CoreDataChatStore {
                     kind: .messagesUpdated,
                     affectedClientMessageIDs: [clientMessageID],
                     affectsThreadList: change.1
+                )
+            )
+        }
+    }
+
+    func applyPushMessageAck(
+        clientMessageID: UUID,
+        serverMessageID: String?,
+        serverUpdatedAt: Date
+    ) async {
+        let change = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchMessage(
+                context: context,
+                ownerAccountID: accountID,
+                clientMessageID: clientMessageID,
+                serverMessageID: nil
+            ) else {
+                return nil as UUID?
+            }
+            if let serverMessageID, serverMessageID.isEmpty == false {
+                object.setValue(serverMessageID, forKey: "serverMessageID")
+            }
+            object.setValue(serverUpdatedAt, forKey: "serverUpdatedAt")
+            return object.value(forKey: "threadID") as? UUID
+        }
+        if let threadID = change {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: threadID,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [clientMessageID],
+                    affectsThreadList: false
                 )
             )
         }
@@ -630,11 +653,12 @@ actor CoreDataChatStore {
     ///   - clientMessageID: 客户端消息唯一 ID
     ///   - block: 要写入的消息块（文本/卡片/健康数据/工具等）
     ///   - markPendingForSync: 是否标记为待同步（true = 需要上传服务器）
+    @discardableResult
     func upsertMessageBlock(
         clientMessageID: UUID,
         block: ChatMessageBlock,
         markPendingForSync: Bool
-    ) async {
+    ) async -> Bool {
         // 执行数据库写入操作，**不立即发送 UI 刷新通知**（批量写完再统一通知）
         let change = try? await kernel.writeWithoutNotification { context, accountID in
             // 1. 根据客户端消息ID查找对应的数据库消息实体
@@ -644,13 +668,12 @@ actor CoreDataChatStore {
                 clientMessageID: clientMessageID,
                 serverMessageID: nil
             ) else {
-                // 找不到消息 → 直接返回，不执行任何操作
-                return nil as (threadID: UUID, needSync: Bool)?
+                return nil as (threadID: UUID, needSync: Bool, didApply: Bool)?
             }
 
             // 2. 获取消息所属的会话 ID
             guard let threadID = messageObject.value(forKey: "threadID") as? UUID else {
-                return nil
+                return nil as (threadID: UUID, needSync: Bool, didApply: Bool)?
             }
 
             // 3. 【核心】插入或更新块（仅当新版本 revision 更大时才生效）
@@ -665,7 +688,7 @@ actor CoreDataChatStore {
 
             // 如果块未生效（版本过旧被丢弃），直接返回，不更新状态
             guard didApply else {
-                return (threadID, false)
+                return (threadID: threadID, needSync: false, didApply: false)
             }
 
             // 4. 更新消息的【服务器更新时间】
@@ -677,7 +700,7 @@ actor CoreDataChatStore {
             }
 
             // 返回：会话ID + 是否需要同步
-            return (threadID, markPendingForSync)
+            return (threadID: threadID, needSync: markPendingForSync, didApply: true)
         }
 
         // MARK: 写入完成 → 发送 UI 刷新通知
@@ -687,10 +710,11 @@ actor CoreDataChatStore {
                     threadID: change.threadID,
                     kind: .messagesUpdated,        // 事件类型：消息已更新
                     affectedClientMessageIDs: [clientMessageID], // 受影响的消息 ID
-                    affectsThreadList: change.needSync // 是否影响会话列表排序
+                    affectsThreadList: change.needSync || change.didApply // 块内容变更也刷新对话页
                 )
             )
         }
+        return change?.didApply ?? false
     }
 
     func upsertRemoteMessages(
@@ -742,7 +766,8 @@ actor CoreDataChatStore {
                     object: object,
                     message: message,
                     context: context,
-                    ownerAccountID: accountID
+                    ownerAccountID: accountID,
+                    logger: self.logger
                 )
 
                 if enqueueAttachmentDownloadJobs {
@@ -837,7 +862,6 @@ actor CoreDataChatStore {
         (try? await kernel.read { context, accountID in
             guard let accountID else { return [] }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.messageBlock)
-            request.fetchLimit = max(1, limit)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
                 Self.ownerPredicate(accountID),
                 NSPredicate(format: "isPendingSync == YES"),
@@ -846,12 +870,14 @@ actor CoreDataChatStore {
                 NSSortDescriptor(key: "updatedAt", ascending: true),
                 NSSortDescriptor(key: "id", ascending: true),
             ]
-            return try context.fetch(request).compactMap { row in
+            var pendingBlocks: [ChatPendingMessageBlock] = []
+            for row in try context.fetch(request) {
+                guard pendingBlocks.count < max(1, limit) else { break }
                 guard let threadID = row.value(forKey: "threadID") as? UUID,
                       let clientMessageID = row.value(forKey: "clientMessageID") as? UUID,
-                      let block = ChatBlockPayloadCodec.decode(row.value(forKey: "payloadData") as? Data)
+                      let block = ChatMessageBlockCodec.decode(row.value(forKey: "payloadData") as? Data)
                 else {
-                    return nil
+                    continue
                 }
                 if let message = try? Self.fetchMessage(
                     context: context,
@@ -859,16 +885,25 @@ actor CoreDataChatStore {
                     clientMessageID: clientMessageID,
                     serverMessageID: nil
                 ),
-                   let deliveryState = message.value(forKey: "deliveryState") as? String,
-                   deliveryState == ChatDeliveryState.pending.rawValue || deliveryState == ChatDeliveryState.sending.rawValue {
-                    return nil
+                   let deliveryState = message.value(forKey: "deliveryState") as? String {
+                    // block_updates 要求服务端已有父消息；整包重推时父消息可能是 .pending。
+                    let canPushBlocks = deliveryState == ChatDeliveryState.sent.rawValue
+                        || deliveryState == ChatDeliveryState.pending.rawValue
+                    if canPushBlocks == false {
+                        continue
+                    }
+                } else {
+                    continue
                 }
-                return ChatPendingMessageBlock(
-                    threadID: threadID,
-                    clientMessageID: clientMessageID,
-                    block: block
+                pendingBlocks.append(
+                    ChatPendingMessageBlock(
+                        threadID: threadID,
+                        clientMessageID: clientMessageID,
+                        block: block
+                    )
                 )
             }
+            return pendingBlocks
         }) ?? []
     }
 
@@ -886,6 +921,7 @@ actor CoreDataChatStore {
             }
         }
     }
+
 
     func softDeleteThread(id: UUID) async {
         _ = try? await kernel.writeWithoutNotification { context, accountID in
@@ -1162,7 +1198,8 @@ actor CoreDataChatStore {
         object: NSManagedObject,
         message: ChatMessage,
         context: NSManagedObjectContext,
-        ownerAccountID: Int64
+        ownerAccountID: Int64,
+        logger: Logger? = nil
     ) throws {
         let sortedBlocks = sortBlocksByOrderKey(message.blocks)
         object.setValue(message.id, forKey: "id")
@@ -1186,8 +1223,8 @@ actor CoreDataChatStore {
     }
 
     private static func sortBlocksByOrderKey(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
-        blocks.enumerated().sorted { lhs, rhs in
-            switch (lhs.element.orderKey, rhs.element.orderKey) {
+        reconcilePresentationBlockOrderKeys(blocks).sorted { lhs, rhs in
+            switch (lhs.orderKey, rhs.orderKey) {
             case let (l?, r?) where l != r:
                 return l < r
             case (.some, nil):
@@ -1195,10 +1232,44 @@ actor CoreDataChatStore {
             case (nil, .some):
                 return false
             default:
-                return lhs.offset < rhs.offset
+                if lhs.createdAt != rhs.createdAt {
+                    return lhs.createdAt < rhs.createdAt
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
         }
-        .map(\.element)
+    }
+
+    /// 将 toolPresentation 块（如 structuredHealthCards）排在对应 tool 行之后，修复历史数据与同步后乱序。
+    private static func reconcilePresentationBlockOrderKeys(_ blocks: [ChatMessageBlock]) -> [ChatMessageBlock] {
+        var toolOrderByCallID: [String: Double] = [:]
+        for block in blocks where block.kind == .tool {
+            guard let toolCallID = block.toolCallID, let orderKey = block.orderKey else { continue }
+            toolOrderByCallID[toolCallID] = orderKey
+        }
+
+        return blocks.map { block in
+            guard isToolPresentationRichBlock(block) else { return block }
+            let anchorToolCallID = block.parentToolCallID ?? block.toolCallID
+            guard let anchorToolCallID,
+                  let toolOrderKey = toolOrderByCallID[anchorToolCallID] else {
+                return block
+            }
+            let desiredOrderKey = toolOrderKey + 100
+            guard block.orderKey != desiredOrderKey else { return block }
+            return block.replacingIdentity(id: block.id, orderKey: desiredOrderKey)
+        }
+    }
+
+    private static func isToolPresentationRichBlock(_ block: ChatMessageBlock) -> Bool {
+        guard block.nodeRole == .toolPresentation else { return false }
+        switch block.kind {
+        case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
+             .knowledgeCards, .taskCards, .captureCard, .html, .pendingMemberToolCards:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func fetchBlockRow(
@@ -1236,14 +1307,30 @@ actor CoreDataChatStore {
     private static func loadBlockRows(
         context: NSManagedObjectContext,
         ownerAccountID: Int64,
-        clientMessageID: UUID
+        clientMessageID: UUID,
+        logger: Logger
     ) throws -> [ChatMessageBlock] {
-        let blocks = try fetchBlockRows(
+        var blocks: [ChatMessageBlock] = []
+        for row in try fetchBlockRows(
             context: context,
             ownerAccountID: ownerAccountID,
             clientMessageID: clientMessageID
-        )
-        .compactMap { ChatBlockPayloadCodec.decode($0.value(forKey: "payloadData") as? Data) }
+        ) {
+            let blockID = row.value(forKey: "id") as? UUID
+            let kindRaw = row.value(forKey: "kind") as? String
+            let payloadData = row.value(forKey: "payloadData") as? Data
+            guard let block = ChatMessageBlockCodec.decode(payloadData) else {
+                if kindRaw == ChatMessageBlockKind.structuredHealthCards.rawValue {
+                    let reason = ChatMessageBlockCodec.decodeFailureReason(payloadData) ?? "unknown"
+                    logger.warning(
+                        "messageBlock payload 解码失败，clientMessageID=\(clientMessageID.uuidString), blockID=\(blockID?.uuidString ?? "nil"), bytes=\(payloadData?.count ?? 0), reason=\(reason)",
+                        module: .general
+                    )
+                }
+                continue
+            }
+            blocks.append(block)
+        }
         return sortBlocksByOrderKey(blocks)
     }
 
@@ -1264,7 +1351,7 @@ actor CoreDataChatStore {
         let existingBlocksByID = Dictionary(
             uniqueKeysWithValues: existingRows.compactMap { row -> (UUID, ChatMessageBlock)? in
                 guard let id = row.value(forKey: "id") as? UUID,
-                      let block = ChatBlockPayloadCodec.decode(row.value(forKey: "payloadData") as? Data)
+                      let block = ChatMessageBlockCodec.decode(row.value(forKey: "payloadData") as? Data)
                 else {
                     return nil
                 }
@@ -1273,9 +1360,14 @@ actor CoreDataChatStore {
         )
         for row in existingRows {
             guard let id = row.value(forKey: "id") as? UUID else { continue }
-            if incomingIDs.contains(id) == false {
-                context.delete(row)
+            if incomingIDs.contains(id) {
+                continue
             }
+            let isPendingSync = row.value(forKey: "isPendingSync") as? Bool ?? false
+            if isPendingSync || Self.shouldPreserveLocalBlockOnRemoteMerge(existingBlocksByID[id]) {
+                continue
+            }
+            context.delete(row)
         }
         for block in blocks {
             let shouldMarkPending = markChangedBlocksPendingForSync && existingBlocksByID[block.id] != block
@@ -1287,6 +1379,18 @@ actor CoreDataChatStore {
                 block: block,
                 markPendingForSync: shouldMarkPending
             )
+        }
+    }
+
+    private static func shouldPreserveLocalBlockOnRemoteMerge(_ block: ChatMessageBlock?) -> Bool {
+        guard let block else { return false }
+        guard block.nodeRole == .toolPresentation else { return false }
+        switch block.kind {
+        case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
+             .knowledgeCards, .taskCards, .captureCard, .html, .pendingMemberToolCards:
+            return true
+        default:
+            return false
         }
     }
 
@@ -1302,11 +1406,26 @@ actor CoreDataChatStore {
         let row = try fetchBlockRow(context: context, ownerAccountID: ownerAccountID, blockID: block.id)
             ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.messageBlock, into: context)
         let localRevision = row.value(forKey: "revision") as? Int64
-        if let localRevision, localRevision > block.revision {
+        let localStatusRaw = row.value(forKey: "status") as? String
+        let localStatus = localStatusRaw.flatMap(ChatMessageBlockStatus.init(rawValue:))
+
+        let shouldPromotePendingFromLocal = Self.shouldPromotePendingFromLocal(
+            localStatus: localStatus,
+            incoming: block
+        )
+        if let localRevision, localRevision > block.revision, shouldPromotePendingFromLocal == false {
             return false
         }
-        let localStatus = row.value(forKey: "status") as? String
-        if localStatus == ChatMessageBlockStatus.ready.rawValue,
+        if localStatus == .ready, block.status == .pending {
+            let allowPendingOverEmptyReady = block.kind == .structuredHealthCards
+                && Self.localStructuredHealthCardsHasDisplayableContent(row: row) == false
+            if allowPendingOverEmptyReady == false {
+                return false
+            }
+        }
+        if let localRevision,
+           localRevision == block.revision,
+           localStatus == block.status,
            block.status == .pending {
             return false
         }
@@ -1324,13 +1443,41 @@ actor CoreDataChatStore {
         row.setValue(block.parentBlockID, forKey: "parentBlockID")
         row.setValue(block.nodeRole.rawValue, forKey: "nodeRole")
         row.setValue(try? JSONEncoder.default.encode(block.anchor), forKey: "anchorData")
-        row.setValue(try ChatBlockPayloadCodec.encode(block), forKey: "payloadData")
+        row.setValue(try ChatMessageBlockCodec.encode(block), forKey: "payloadData")
         row.setValue(block.createdAt, forKey: "createdAt")
         row.setValue(block.updatedAt, forKey: "updatedAt")
         if markPendingForSync {
             row.setValue(true, forKey: "isPendingSync")
         }
         return true
+    }
+
+    /// 本地 pending 仅在有实质结果（或失败）时被 ready 覆盖；避免空 ready 抢在异步抽取前清掉等待态。
+    private static func shouldPromotePendingFromLocal(
+        localStatus: ChatMessageBlockStatus?,
+        incoming: ChatMessageBlock
+    ) -> Bool {
+        guard localStatus == .pending else { return false }
+        switch incoming.status {
+        case .failed:
+            return true
+        case .ready:
+            if incoming.kind == .structuredHealthCards {
+                return incoming.structuredHealthCards?.hasDisplayableCards ?? false
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func localStructuredHealthCardsHasDisplayableContent(row: NSManagedObject) -> Bool {
+        guard let data = row.value(forKey: "payloadData") as? Data,
+              let decoded = ChatMessageBlockCodec.decode(data),
+              decoded.kind == .structuredHealthCards else {
+            return false
+        }
+        return decoded.structuredHealthCards?.hasDisplayableCards ?? false
     }
 
     private static func ownerPredicate(_ accountID: Int64) -> NSPredicate {
@@ -1396,7 +1543,8 @@ actor CoreDataChatStore {
         let blockRows = try loadBlockRows(
             context: context,
             ownerAccountID: ownerAccountID,
-            clientMessageID: clientMessageID
+            clientMessageID: clientMessageID,
+            logger: logger
         )
         let blocks = blockRows
 

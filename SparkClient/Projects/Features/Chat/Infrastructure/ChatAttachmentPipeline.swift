@@ -1,7 +1,7 @@
 import Foundation
 
-/// 附件下载管线：从持久化任务表消费 pending 行，经 ``ChatAttachmentFileDownload`` 落盘到文件缓存。
-/// **不**把 `file://` 写回消息里的 `ChatAttachment.url`（该字段保留远端 https），避免 UI 载荷构建与 SwiftUI `.task` 生命周期错乱导致 `EXC_BAD_ACCESS`。
+/// 附件下载管线：从持久化任务表消费 pending 行，经 ``FileTransferService`` 落盘到文件缓存。
+/// **不**把 `file://` 写回消息里的 `ChatAttachment.url`（该字段保留远端 https）。
 actor ChatAttachmentPipeline {
     private let repository: any ChatRepository
     private let fileTransferService: FileTransferService
@@ -22,17 +22,19 @@ actor ChatAttachmentPipeline {
         for job in jobs {
             await repository.updateAttachmentDownloadJob(id: job.id, state: .processing, localFileURLString: nil)
             do {
-                let dedupeKey = job.dedupeKey
-                let fts = fileTransferService
-                let log = logger
-                let snapshot = job.attachmentSnapshot
-                let localURL = try await ChatImageDownloadCoordinator.shared.cachedOrDownload(dedupeKey: dedupeKey) {
-                    try await ChatAttachmentFileDownload.downloadToLocalFile(
-                        attachment: snapshot,
-                        fileTransferService: fts,
-                        logger: log
-                    )
+                let attachment = job.attachmentSnapshot
+                guard let managedFile = attachment.managedFileRecordForDownload() else {
+                    throw URLError(.unsupportedURL)
                 }
+                if let cached = await fileTransferService.cachedURL(file: managedFile) {
+                    await repository.updateAttachmentDownloadJob(
+                        id: job.id,
+                        state: .completed,
+                        localFileURLString: cached.absoluteString
+                    )
+                    continue
+                }
+                let localURL = try await fileTransferService.download(file: managedFile)
                 await repository.updateAttachmentDownloadJob(
                     id: job.id,
                     state: .completed,

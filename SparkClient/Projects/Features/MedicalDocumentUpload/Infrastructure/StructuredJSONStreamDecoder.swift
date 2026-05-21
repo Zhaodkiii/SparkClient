@@ -64,9 +64,7 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
             return nil
         }
         do {
-            let decoder = JSONDecoder.default
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            return try decoder.decode(T.self, from: data)
+            return try JSONDecoder.default.decode(T.self, from: data)
         } catch {
             
             logger.error("流式结构化解码失败 error=\(error)", module: .medical)

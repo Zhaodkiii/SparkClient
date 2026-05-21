@@ -178,23 +178,8 @@ final class ChatDetailViewModel: ObservableObject {
         stateStore.removeComposerAttachment(id: id, for: threadID)
     }
 
-    func cachedLocalURLForChatAttachment(_ attachment: ChatAttachment) async -> URL? {
-        let managedFile = Self.managedFileRecord(for: attachment)
-        return await fileTransferService.cachedURL(file: managedFile)
-    }
-
-    func downloadChatAttachmentToLocalFile(attachment: ChatAttachment) async throws -> URL {
-        let dedupeKey = attachment.imageDownloadDedupeKey
-        let fts = fileTransferService
-        let log = logger
-        return try await ChatImageDownloadCoordinator.shared.cachedOrDownload(dedupeKey: dedupeKey) {
-            try await ChatAttachmentFileDownload.downloadToLocalFile(
-                attachment: attachment,
-                fileTransferService: fts,
-                logger: log
-            )
-        }
-    }
+    /// 聊天附件 UI 下载（画廊/列表/文件块，与 ``MedicalAttachmentGridPreview`` 共用 ``FileTransferService``）。
+    var attachmentFileTransferService: FileTransferService { fileTransferService }
 
     private func startPreparingAttachment(_ attachment: ChatComposerAttachmentPreview, threadID: UUID) {
         composerAttachmentTasks[attachment.id]?.cancel()
@@ -1209,34 +1194,6 @@ final class ChatDetailViewModel: ObservableObject {
         return String(value.uuidString.prefix(8))
     }
 
-    private static func managedFileRecord(for attachment: ChatAttachment) -> ManagedFileRecord {
-        let resolvedPath = attachment.effectiveHTTPSImageDownloadURL?.absoluteString
-            ?? attachment.url?.absoluteString
-            ?? ""
-        let parsed = attachment.sparkClientOSSFileUUIDAndFileName()
-        let fileUUID = parsed?.fileUUID ?? attachment.id.uuidString
-        let originalName =
-            parsed?.fileName
-            ?? attachment.url?.lastPathComponent.removingPercentEncoding
-            ?? "attachment"
-        let mimeType = FileUtilities.mimeType(forName: originalName)
-        return ManagedFileRecord(
-            id: attachment.fileId ?? 0,
-            fileUuid: fileUUID,
-            filePath: resolvedPath,
-            originalName: originalName,
-            fileSize: 0,
-            mimeType: mimeType,
-            fileMd5: attachment.fileMd5,
-            isPublic: false,
-            businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
-            businessId: "",
-            createdAt: "",
-            objectKey: nil,
-            storageType: nil
-        )
-    }
-
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
@@ -1310,19 +1267,36 @@ final class ChatDetailViewModel: ObservableObject {
         action: ChatStructuredHealthCardAction
     ) async {
         switch action {
-        case .save(let item):
-            await saveStructuredHealthCard(threadID: threadID, message: message, item: item)
-        case .setMember(let item, let memberID):
-            await updateStructuredHealthCardMember(threadID: threadID, message: message, item: item, memberID: memberID)
+        case .save(let blockID, let item):
+            await saveStructuredHealthCard(threadID: threadID, message: message, blockID: blockID, item: item)
+        case .setMember(let blockID, let item, let memberID):
+            await updateStructuredHealthCardMember(
+                threadID: threadID,
+                message: message,
+                blockID: blockID,
+                item: item,
+                memberID: memberID
+            )
         }
     }
 
-    private func saveStructuredHealthCard(threadID: UUID, message: ChatMessage, item: ChatStructuredHealthCardItem) async {
+    private func saveStructuredHealthCard(
+        threadID: UUID,
+        message: ChatMessage,
+        blockID: UUID,
+        item: ChatStructuredHealthCardItem
+    ) async {
         guard let output = makeStructuredHealthCardSaveOutput(for: item) else { return }
         await saveWithCardId(item.id, rawTrace: item.rawTrace) {
             output
-        } onSuccess: {
-            await updateStructuredHealthCardsBlob(threadID: threadID, message: message) {
+        } onSuccess: { receipt in
+            await bindStructuredHealthCardAttachmentIfNeeded(item: item, output: output, receipt: receipt)
+            await updateStructuredHealthCardsBlob(
+                threadID: threadID,
+                message: message,
+                blockID: blockID,
+                item: item
+            ) {
                 $0.markSaved(item)
             }
         }
@@ -1338,7 +1312,7 @@ final class ChatDetailViewModel: ObservableObject {
         _ cardID: UUID,
         rawTrace: String,
         buildOutput: () throws -> MedicalDocumentTypedExtractionOutput,
-        onSuccess: () async -> Void
+        onSuccess: (MedicalDocumentSaveReceipt) async -> Void
     ) async {
         // 标记卡片正在保存中，防止重复保存
         savingStructuredHealthCardIDs.insert(cardID)
@@ -1349,7 +1323,7 @@ final class ChatDetailViewModel: ObservableObject {
             // 构建保存所需的输出数据
             let output = try buildOutput()
             // 执行保存用例
-            _ = try await saveTypedMedicalDocumentUseCase.execute(output: output)
+            let receipt = try await saveTypedMedicalDocumentUseCase.execute(output: output)
             
             // 保存成功：提示用户 + 打印日志 + 执行成功回调
             notificationClient.success(
@@ -1358,7 +1332,7 @@ final class ChatDetailViewModel: ObservableObject {
                 source: "chat.medical.save"
             )
             logger.info("对话医疗卡片已保存 trace=\(rawTrace)", module: .general)
-            await onSuccess()
+            await onSuccess(receipt)
         } catch {
             // 保存失败：打印错误日志 + 提示用户
             logger.error("对话医疗卡片保存失败：\(error.localizedDescription)", module: .general)
@@ -1366,24 +1340,77 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    private func bindStructuredHealthCardAttachmentIfNeeded(
+        item: ChatStructuredHealthCardItem,
+        output: MedicalDocumentTypedExtractionOutput,
+        receipt: MedicalDocumentSaveReceipt
+    ) async {
+        guard let ossFileId = item.ossFileId else { return }
+        let businessType = structuredHealthCardAttachmentBusinessType(for: output.envelope.typeResolution.kind)
+        do {
+            _ = try await fileTransferService.updateBusinessBinding(
+                fileID: ossFileId,
+                businessType: businessType,
+                businessID: "\(receipt.recordID)"
+            )
+            logger.info(
+                "对话医疗卡片附件已绑定 fileID=\(ossFileId), businessType=\(businessType), businessID=\(receipt.recordID)",
+                module: .medical
+            )
+        } catch {
+            logger.error(
+                "对话医疗卡片附件绑定失败 fileID=\(ossFileId), businessType=\(businessType), businessID=\(receipt.recordID), error=\(error.localizedDescription)",
+                module: .medical
+            )
+        }
+    }
+
+    private func structuredHealthCardAttachmentBusinessType(for kind: MedicalDocumentKind) -> String {
+        switch kind {
+        case .auto:
+            return "medical_document"
+        case .caseDocument:
+            return "medical_case"
+        case .healthExamReport:
+            return "health_exam_report"
+        case .medicalReport:
+            return "examination_report"
+        case .prescription:
+            return "prescription_batch"
+        case .medicationPlan:
+            return "medication_plan"
+        case .medicineBox:
+            return "medicine_box"
+        }
+    }
+
     private func makeStructuredHealthCardSaveOutput(for item: ChatStructuredHealthCardItem) -> MedicalDocumentTypedExtractionOutput? {
-        guard let memberID = validatedCardMemberID(item.memberID) else {
+        guard let memberID = validatedCardMemberID(item.memberId) else {
             return nil
         }
-        guard let data = item.draftJSON.data(using: .utf8) else {
+        guard let data = item.draftJson.data(using: .utf8) else {
             notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
             return nil
         }
 
         switch item {
-        case .medication:
+        case .medicationPlan:
             guard let draft = decodeStructuredHealthCardDraft(MedicationPlanRecognitionDraft.self, from: data) else { return nil }
             return makeStructuredHealthCardSaveOutput(
                 memberID: memberID,
                 kind: .medicationPlan,
                 rawText: item.rawTrace,
                 typedResult: .medicationPlan([draft]),
-                extractedJSON: item.draftJSON
+                extractedJSON: item.draftJson
+            )
+        case .medicineBox:
+            guard let draft = decodeStructuredHealthCardDraft(MedicineBoxRecognitionDraft.self, from: data) else { return nil }
+            return makeStructuredHealthCardSaveOutput(
+                memberID: memberID,
+                kind: .medicineBox,
+                rawText: item.rawTrace,
+                typedResult: .medicineBoxes([draft]),
+                extractedJSON: item.draftJson
             )
         case .prescription:
             guard let draft = decodeStructuredHealthCardDraft(PrescriptionRecognitionDraft.self, from: data) else { return nil }
@@ -1392,7 +1419,7 @@ final class ChatDetailViewModel: ObservableObject {
                 kind: .prescription,
                 rawText: item.rawTrace,
                 typedResult: .prescription(draft),
-                extractedJSON: item.draftJSON
+                extractedJSON: item.draftJson
             )
         case .examReport:
             if let report = try? JSONDecoder.default.decode(MedicalReportRecognitionDraft.self, from: data) {
@@ -1401,7 +1428,7 @@ final class ChatDetailViewModel: ObservableObject {
                     kind: .medicalReport,
                     rawText: item.rawTrace,
                     typedResult: .medicalReport([report]),
-                    extractedJSON: item.draftJSON
+                    extractedJSON: item.draftJson
                 )
             }
             if let health = try? JSONDecoder.default.decode(HealthExamRecognitionDraft.self, from: data) {
@@ -1410,7 +1437,7 @@ final class ChatDetailViewModel: ObservableObject {
                     kind: .healthExamReport,
                     rawText: item.rawTrace,
                     typedResult: .healthExamReport(health),
-                    extractedJSON: item.draftJSON
+                    extractedJSON: item.draftJson
                 )
             }
             notificationClient.error(L10n.text("chat.medical_card.error.decode"), title: nil, source: "chat.medical.save")
@@ -1422,7 +1449,7 @@ final class ChatDetailViewModel: ObservableObject {
                 kind: .caseDocument,
                 rawText: item.rawTrace,
                 typedResult: .caseDocument(draft),
-                extractedJSON: item.draftJSON
+                extractedJSON: item.draftJson
             )
         }
     }
@@ -1472,11 +1499,17 @@ final class ChatDetailViewModel: ObservableObject {
     private func updateStructuredHealthCardMember(
         threadID: UUID,
         message: ChatMessage,
+        blockID: UUID,
         item: ChatStructuredHealthCardItem,
         memberID: Int?
     ) async {
-        await updateStructuredHealthCardsBlob(threadID: threadID, message: message) {
-            $0.updateMember(item, memberID: memberID)
+        await updateStructuredHealthCardsBlob(
+            threadID: threadID,
+            message: message,
+            blockID: blockID,
+            item: item
+        ) {
+            $0.updateMember(item, memberId: memberID)
         }
     }
 
@@ -1485,52 +1518,91 @@ final class ChatDetailViewModel: ObservableObject {
     private func updateStructuredHealthCardsBlob(
         threadID: UUID,
         message: ChatMessage,
+        blockID: UUID,
+        item: ChatStructuredHealthCardItem,
         mutate: (inout StructuredHealthCardsBlob) -> Void
     ) async {
-        guard let updated = replacingStructuredHealthCardsBlob(in: message.blocks, mutate: mutate) else { return }
-        await persistStructuredBlocks(threadID: threadID, message: message, blocks: updated)
+        guard let updatedBlock = replacingStructuredHealthCardsBlock(
+            in: message.blocks,
+            blockID: blockID,
+            item: item,
+            mutate: mutate
+        ) else {
+            return
+        }
+        await persistStructuredHealthCardsBlock(
+            threadID: threadID,
+            message: message,
+            block: updatedBlock
+        )
     }
 
     // MARK: - Blocks 持久化与同步
 
-    /// 持久化更新后的结构化卡片 blocks，并同步到服务端
+    /// 持久化更新后的 pending 成员工具等整包 blocks（非结构化健康卡片单块路径）。
     private func persistStructuredBlocks(threadID: UUID, message: ChatMessage, blocks: [ChatMessageBlock]) async {
         await updateChatMessageBlocksUseCase.execute(
             clientMessageID: message.clientMessageID,
             blocks: blocks,
             markPendingForSync: true
         )
-        
     }
 
-    /// 替换消息 blocks 中的结构化健康卡片数据
-    /// - Parameters:
-    ///   - blocks: 原始消息 blocks
-    ///   - mutate: 修改卡片数据的闭包
-    /// - Returns: 修改后的消息 blocks
-    private func replacingStructuredHealthCardsBlob(
+    /// 单条 `structuredHealthCards` 块写入本地并标记待同步（走 block_updates）。
+    private func persistStructuredHealthCardsBlock(
+        threadID: UUID,
+        message: ChatMessage,
+        block: ChatMessageBlock
+    ) async {
+        let didApply = await chatRepository.upsertMessageBlock(
+            clientMessageID: message.clientMessageID,
+            block: block,
+            markPendingForSync: true
+        )
+        guard didApply else { return }
+        if let updatedMessage = message.replacingBlock(block) {
+            stateStore.updateMessages([updatedMessage], for: threadID)
+        }
+    }
+
+    /// 按 block id 更新对应 `structuredHealthCards` 载荷（同条消息可有多块）。
+    private func replacingStructuredHealthCardsBlock(
         in blocks: [ChatMessageBlock],
+        blockID: UUID,
+        item: ChatStructuredHealthCardItem,
         mutate: (inout StructuredHealthCardsBlob) -> Void
-    ) -> [ChatMessageBlock]? {
-        guard let index = blocks.lastIndex(where: { $0.kind == .structuredHealthCards }),
-              var blob = blocks[index].structuredHealthCards else {
+    ) -> ChatMessageBlock? {
+        guard let index = blocks.firstIndex(where: { $0.id == blockID }),
+              blocks[index].kind == .structuredHealthCards,
+              var blob = blocks[index].structuredHealthCards,
+              blob.contains(item: item) else {
             return nil
         }
-        
-        // 执行修改操作
         mutate(&blob)
-        
-        var next = blocks
-        let old = blocks[index]
-        next[index] = ChatMessageBlock(
-            id: old.id,
-            anchor: old.anchor,
-            kind: .structuredHealthCards,
-            toolCallID: old.toolCallID,
-            structuredHealthCards: blob,
-            createdAt: old.createdAt,
-            updatedAt: Date()
+        return blocks[index].replacingPayload(
+            .structuredHealthCards(blob),
+            status: blocks[index].status
         )
-        return next
+    }
+}
+
+extension ChatMessage {
+    fileprivate func replacingBlock(_ block: ChatMessageBlock) -> ChatMessage? {
+        guard let index = blocks.firstIndex(where: { $0.id == block.id }) else { return nil }
+        var nextBlocks = blocks
+        nextBlocks[index] = block
+        return ChatMessage(
+            id: id,
+            threadID: threadID,
+            role: role,
+            blocks: nextBlocks,
+            clientMessageID: clientMessageID,
+            serverMessageID: serverMessageID,
+            deliveryState: deliveryState,
+            createdAt: createdAt,
+            serverUpdatedAt: serverUpdatedAt,
+            isTombstone: isTombstone,
+            modelName: modelName
+        )
     }
 }

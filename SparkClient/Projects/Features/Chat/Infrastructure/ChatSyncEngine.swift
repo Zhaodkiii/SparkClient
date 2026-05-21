@@ -44,7 +44,6 @@ actor ChatSyncEngine {
             repository: repository,
             outboxStore: outboxStore,
             remoteAPI: remoteAPI,
-            mergeEngine: mergePolicy,
             logger: logger
         )
         self.logger = logger
@@ -66,14 +65,14 @@ actor ChatSyncEngine {
         }
     }
 
-    /// 对话列表下拉刷新：只拉取远端线程增量，并同步变更会话的消息增量。
+    /// 对话列表下拉刷新：只拉取远端线程元数据增量（标题、更新时间等）。
+    /// 不拉取各会话消息正文，也不触发附件后台下载；消息与图片在进入会话后按需同步/懒加载。
     /// 不主动上送本地 outbox，避免用户只是刷新列表时产生写请求。
     func refreshThreadListIncremental() async throws {
         try await runSingleFlight(scope: .global) { engine in
-            let changedThreads = try await engine.pullThreadDeltas(
+            _ = try await engine.pullThreadDeltas(
                 cursor: await engine.repository.loadThreadSyncCursor()?.value
             )
-            try await engine.pullMessagesForChangedThreads(changedThreads)
         }
     }
 
@@ -96,10 +95,12 @@ actor ChatSyncEngine {
 
     /// 仅上送待同步消息，不拉取（发送成功/重试等路径使用）。
     func pushOutboxOnly() async throws {
-        logger.debug("聊天仅上送 outbox", module: .general)
-        try await pushPendingThreadDeletions()
-//        try await pushThreads()
-        try await pushOutbox()
+        try await runSingleFlight(scope: .global) { engine in
+            engine.logger.debug("聊天仅上送 outbox", module: .general)
+            try await engine.pushPendingThreadDeletions()
+//            try await engine.pushThreads()
+            try await engine.pushOutbox()
+        }
     }
 
     /// 仅上送指定会话的元数据（单会话变更路径，避免全量推送）。
@@ -252,7 +253,7 @@ actor ChatSyncEngine {
             page += 1
             let result = try await remoteAPI.pull(cursor: nextCursor, threadID: threadID, limit: SyncPaging.messagePageLimit)
             let domainMessages = result.messages.compactMap(ChatSyncEngineDTOMapper.toDomain)
-            await inboundPipeline.applyRemoteMessages(domainMessages, enqueueAttachmentDownloadJobs: true)
+            await inboundPipeline.applyRemoteMessages(domainMessages, enqueueAttachmentDownloadJobs: false)
             for tid in Set(domainMessages.map(\.threadID)) {
                 touchedThreads.insert(tid)
             }

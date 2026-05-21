@@ -5,8 +5,7 @@ struct ChatFileAttachmentBlockView: View {
 
     let attachments: [ChatAttachment]
     let role: ChatMessageRole
-    let cachedLocalURL: (ChatAttachment) async -> URL?
-    let downloadToLocalFile: (ChatAttachment) async throws -> URL
+    let fileTransferService: FileTransferService
 
     @State private var localFiles: [UUID: URL] = [:]
     @State private var downloadingIDs: Set<UUID> = []
@@ -72,12 +71,8 @@ struct ChatFileAttachmentBlockView: View {
             )
         }
         .buttonStyle(.plain)
-        .task(id: attachment.id) {
-            if let cached = await cachedLocalURL(attachment) {
-                await MainActor.run {
-                    localFiles[attachment.id] = cached
-                }
-            }
+        .task(id: attachment.imageDownloadDedupeKey) {
+            await cacheLocalURLIfPresent(for: attachment)
         }
     }
 
@@ -97,15 +92,33 @@ struct ChatFileAttachmentBlockView: View {
         role == .user ? Color.white.opacity(0.82) : .secondary
     }
 
+    @MainActor
+    private func cacheLocalURLIfPresent(for attachment: ChatAttachment) async {
+        guard let managedFile = attachment.managedFileRecordForDownload() else { return }
+        if let cached = await fileTransferService.cachedURL(file: managedFile) {
+            localFiles[attachment.id] = cached
+        }
+    }
+
+    @MainActor
     private func handleTap(for attachment: ChatAttachment) async {
         if let local = localFiles[attachment.id] {
             openPreview(localURL: local, for: attachment)
             return
         }
+        guard let managedFile = attachment.managedFileRecordForDownload() else { return }
+
         downloadingIDs.insert(attachment.id)
         defer { downloadingIDs.remove(attachment.id) }
+
+        if let cached = await fileTransferService.cachedURL(file: managedFile) {
+            localFiles[attachment.id] = cached
+            openPreview(localURL: cached, for: attachment)
+            return
+        }
+
         do {
-            let local = try await downloadToLocalFile(attachment)
+            let local = try await fileTransferService.download(file: managedFile)
             localFiles[attachment.id] = local
             openPreview(localURL: local, for: attachment)
         } catch {

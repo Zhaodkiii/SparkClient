@@ -224,6 +224,17 @@ actor FileTransferService {
         try await api.list(businessType: businessType, businessID: businessID, isPublic: isPublic)
     }
 
+    @discardableResult
+    func updateBusinessBinding(fileID: Int, businessType: String, businessID: String) async throws -> ManagedFileRecord {
+        try await api.updateBusinessBinding(
+            ManagedFileBusinessUpdateItem(
+                fileId: fileID,
+                businessType: businessType,
+                businessId: businessID
+            )
+        )
+    }
+
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

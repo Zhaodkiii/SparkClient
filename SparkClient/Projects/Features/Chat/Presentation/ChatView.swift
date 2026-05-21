@@ -406,7 +406,6 @@ struct ChatView: View {
             },
             onRefresh: {
                 await detailViewModel.loadMessagesIfNeeded(for: threadID)
-                await listViewModel.refreshThreads()
                 await MainActor.run {
                     conversationListLayoutNonce += 1
                 }

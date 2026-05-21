@@ -197,7 +197,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
     let endDate: String?
     let instructions: String?
     let reminderEnabled: Bool?
-    let reminderTimes: [String]?
+    @OptionalCodableReminderTimesList var reminderTimes: [ReminderTime]?
     let status: String?
     /// 批次内排序；流式 JSON 常为字符串
     @FlexibleOptionalString var sortOrder: String?
@@ -224,7 +224,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         endDate: String? = nil,
         instructions: String? = nil,
         reminderEnabled: Bool? = nil,
-        reminderTimes: [String]? = nil,
+        reminderTimes: [ReminderTime]? = nil,
         status: String? = nil,
         sortOrder: String? = nil,
         extra: [String: String]? = nil,
@@ -249,7 +249,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         self.endDate = endDate
         self.instructions = instructions
         self.reminderEnabled = reminderEnabled
-        self.reminderTimes = reminderTimes
+        self._reminderTimes = OptionalCodableReminderTimesList(wrappedValue: reminderTimes)
         self.status = status
         self._sortOrder = FlexibleOptionalString(wrappedValue: sortOrder)
         self.extra = extra

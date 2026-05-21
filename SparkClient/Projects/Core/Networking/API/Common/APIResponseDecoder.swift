@@ -18,7 +18,7 @@ enum APIResponseDecoder {
             )
         } catch {
             logger.error(
-                "响应解码失败 type=\(String(describing: T.self)) error=\(decodingErrorSummary(error)) keys=\(jsonKeySummary(response.data))",
+                "响应解码失败 type=\(String(describing: T.self)) error=\(CodableDiagnostics.describe(error)) keys=\(jsonKeySummary(response.data))",
                 module: .network
             )
             throw error
@@ -71,27 +71,4 @@ enum APIResponseDecoder {
         return "root=[\(rootKeys)]"
     }
 
-    private static func decodingErrorSummary(_ error: Error) -> String {
-        guard let decodingError = error as? DecodingError else {
-            return error.localizedDescription
-        }
-
-        switch decodingError {
-        case let .keyNotFound(key, context):
-            return "keyNotFound key=\(key.stringValue) path=\(codingPathSummary(context.codingPath)) debug=\(context.debugDescription)"
-        case let .typeMismatch(type, context):
-            return "typeMismatch type=\(type) path=\(codingPathSummary(context.codingPath)) debug=\(context.debugDescription)"
-        case let .valueNotFound(type, context):
-            return "valueNotFound type=\(type) path=\(codingPathSummary(context.codingPath)) debug=\(context.debugDescription)"
-        case let .dataCorrupted(context):
-            return "dataCorrupted path=\(codingPathSummary(context.codingPath)) debug=\(context.debugDescription)"
-        @unknown default:
-            return error.localizedDescription
-        }
-    }
-
-    private static func codingPathSummary(_ path: [CodingKey]) -> String {
-        guard path.isEmpty == false else { return "<root>" }
-        return path.map(\.stringValue).joined(separator: ".")
-    }
 }

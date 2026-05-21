@@ -26,6 +26,23 @@ struct ChatRemoteMessageBlockUpdateDTO: Codable, Sendable {
     let block: ChatMessageBlock
 }
 
+struct ChatPushAcceptedMessageDTO: Codable, Sendable {
+    let clientMessageId: UUID
+    let serverMessageId: String?
+    let serverUpdatedAt: Date
+}
+
+struct ChatPushAcceptedBlockUpdateDTO: Codable, Sendable {
+    let clientMessageId: UUID
+    let blockId: UUID
+    let serverUpdatedAt: Date
+}
+
+struct ChatPushAckResponse: Codable, Sendable {
+    let acceptedMessages: [ChatPushAcceptedMessageDTO]
+    let acceptedBlockUpdates: [ChatPushAcceptedBlockUpdateDTO]
+}
+
 struct ChatRemotePullResult: Sendable {
     let cursor: String?
     let messages: [ChatRemoteMessageDTO]
@@ -132,15 +149,17 @@ struct SparkChatRemoteAPI {
         let payload = try APIResponseDecoder.decodeWrappedData(
             ChatThreadHeadPayload.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
         return payload.lastServerUpdatedAt
     }
 
-    func push(messages: [ChatRemoteMessageDTO]) async throws -> [ChatRemoteMessageDTO] {
-        guard messages.isEmpty == false else { return [] }
-        // 批量推送 outbox：服务端做幂等 upsert，客户端以回包为准更新本地状态。
-        let requestBody = try ChatRemoteCoding.encoder.encode(ChatPushRequest(messages: messages))
+    func push(messages: [ChatRemoteMessageDTO]) async throws -> ChatPushAckResponse {
+        guard messages.isEmpty == false else {
+            return ChatPushAckResponse(acceptedMessages: [], acceptedBlockUpdates: [])
+        }
+        // 批量推送 outbox：服务端持久化后以 ACK 元数据回包，客户端不 merge 完整 messages。
+        let requestBody = try JSONEncoder.chatRemote.encode(ChatPushRequest(messages: messages))
 
         let operation = CacheableSparkNetworkOperation(
             name: "Chat.Sync.Push",
@@ -161,17 +180,18 @@ struct SparkChatRemoteAPI {
         )
 
         let response = try await configuration.execute(operation)
-        let payload = try APIResponseDecoder.decodeWrappedData(
-            ChatPushResponse.self,
+        return try APIResponseDecoder.decodeWrappedData(
+            ChatPushAckResponse.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
-        return payload.messages
     }
 
-    func pushBlockUpdates(_ updates: [ChatRemoteMessageBlockUpdateDTO]) async throws -> [ChatRemoteMessageDTO] {
-        guard updates.isEmpty == false else { return [] }
-        let requestBody = try ChatRemoteCoding.encoder.encode(ChatBlockPushRequest(blockUpdates: updates))
+    func pushBlockUpdates(_ updates: [ChatRemoteMessageBlockUpdateDTO]) async throws -> ChatPushAckResponse {
+        guard updates.isEmpty == false else {
+            return ChatPushAckResponse(acceptedMessages: [], acceptedBlockUpdates: [])
+        }
+        let requestBody = try JSONEncoder.chatRemote.encode(ChatBlockPushRequest(blockUpdates: updates))
 
         let operation = CacheableSparkNetworkOperation(
             name: "Chat.Sync.PushBlocks",
@@ -192,17 +212,16 @@ struct SparkChatRemoteAPI {
         )
 
         let response = try await configuration.execute(operation)
-        let payload = try APIResponseDecoder.decodeWrappedData(
-            ChatPushResponse.self,
+        return try APIResponseDecoder.decodeWrappedData(
+            ChatPushAckResponse.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
-        return payload.messages
     }
 
     func pushThreads(_ threads: [ChatRemoteThreadDTO]) async throws -> [ChatRemoteThreadDTO] {
         guard threads.isEmpty == false else { return [] }
-        let requestBody = try ChatRemoteCoding.encoder.encode(ChatThreadPushRequest(threads: threads))
+        let requestBody = try JSONEncoder.chatRemote.encode(ChatThreadPushRequest(threads: threads))
 
         let operation = CacheableSparkNetworkOperation(
             name: "Chat.Sync.ThreadPush",
@@ -226,7 +245,7 @@ struct SparkChatRemoteAPI {
         let payload = try APIResponseDecoder.decodeWrappedData(
             ChatThreadPushResponse.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
         return payload.threads
     }
@@ -269,7 +288,7 @@ struct SparkChatRemoteAPI {
         let payload = try APIResponseDecoder.decodeWrappedData(
             ChatPullResponse.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
         return ChatRemotePullResult(
             cursor: payload.cursor,
@@ -307,7 +326,7 @@ struct SparkChatRemoteAPI {
         let payload = try APIResponseDecoder.decodeWrappedData(
             ChatThreadPullResponse.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
         return ChatRemoteThreadPullResult(
             cursor: payload.cursor,
@@ -319,7 +338,7 @@ struct SparkChatRemoteAPI {
     /// 客户端软删会话后上送服务端。
     func deleteThreads(threadIDs: [UUID]) async throws -> [UUID] {
         guard threadIDs.isEmpty == false else { return [] }
-        let requestBody = try ChatRemoteCoding.encoder.encode(ChatThreadDeleteRequest(threadIDs: threadIDs))
+        let requestBody = try JSONEncoder.chatRemote.encode(ChatThreadDeleteRequest(threadIDs: threadIDs))
         let operation = CacheableSparkNetworkOperation(
             name: "Chat.Sync.ThreadDelete",
             apiName: "ChatRemoteAPI",
@@ -341,7 +360,7 @@ struct SparkChatRemoteAPI {
         let payload = try APIResponseDecoder.decodeWrappedData(
             ChatThreadDeleteResponse.self,
             from: response,
-            decoder: ChatRemoteCoding.decoder
+            decoder: JSONDecoder.chatRemote
         )
         return payload.threadIDs
     }
@@ -361,10 +380,6 @@ private struct ChatThreadPushRequest: Encodable {
 
 private struct ChatThreadPushResponse: Decodable {
     let threads: [ChatRemoteThreadDTO]
-}
-
-private struct ChatPushResponse: Decodable {
-    let messages: [ChatRemoteMessageDTO]
 }
 
 private struct ChatPullResponse: Decodable {
@@ -400,54 +415,3 @@ private struct ChatThreadHeadPayload: Decodable {
 
 }
 
-private enum ChatRemoteCoding {
-    static let encoder: JSONEncoder = {
-        let encoder = JSONEncoder.default
-        // 统一使用 ISO8601(含毫秒) 与 Django DateTimeField 对齐，减少时区歧义。
-        encoder.dateEncodingStrategy = .custom { date, serializer in
-            var container = serializer.singleValueContainer()
-            try container.encode(ISO8601DateFormatter.chatFractional.string(from: date))
-        }
-        return encoder
-    }()
-
-    static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder.default
-        decoder.dateDecodingStrategy = .custom { serializer in
-            let container = try serializer.singleValueContainer()
-            if let text = try? container.decode(String.self) {
-                if let parsed = ISO8601DateFormatter.chatFractional.date(from: text) {
-                    return parsed
-                }
-                if let parsed = ISO8601DateFormatter.chatBasic.date(from: text) {
-                    return parsed
-                }
-            }
-            if let value = try? container.decode(Double.self) {
-                let seconds = abs(value) > 100_000_000_000 ? value / 1000 : value
-                return Date(timeIntervalSince1970: seconds)
-            }
-            if let value = try? container.decode(Int.self) {
-                let asDouble = Double(value)
-                let seconds = abs(asDouble) > 100_000_000_000 ? asDouble / 1000 : asDouble
-                return Date(timeIntervalSince1970: seconds)
-            }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported chat date value")
-        }
-        return decoder
-    }()
-}
-
-private extension ISO8601DateFormatter {
-    static let chatFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    static let chatBasic: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-}

@@ -115,6 +115,7 @@ struct HanlinChatInputView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
             }
+            // 预选报告
 
             VStack(spacing: 0) {
                 HStack(alignment: .bottom) {

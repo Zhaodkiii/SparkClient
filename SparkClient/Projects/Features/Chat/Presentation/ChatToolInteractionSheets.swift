@@ -357,6 +357,20 @@ struct ToolPreviewSheet: View {
         return base.replacingMessage(msg)
     }
 
+    private var toolArgumentsDisplay: ToolLargeTextDisplay? {
+        guard let args = prompt.toolArguments, args.isEmpty == false else {
+            return nil
+        }
+        let text = ToolPreviewPrompt.displayText(for: args)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty == false else { return nil }
+        return ToolLargeTextDisplay(
+            text: text,
+            emptyPlaceholder: "-",
+            limit: ExternalToolConsentSheetDisplayLimits.maxToolPreviewChars
+        )
+    }
+
     private var toolContentDisplay: ToolLargeTextDisplay {
         ToolLargeTextDisplay(
             text: prompt.toolContent,
@@ -379,8 +393,21 @@ struct ToolPreviewSheet: View {
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             }
-                            ToolLargeTextPreview(display: toolContentDisplay)
                         }
+                    }
+
+                    if let argsDisplay = toolArgumentsDisplay {
+                        ToolSheetSection {
+                            Text(L10n.text("chat.bubble.tool.arguments", fallback: "调用参数"))
+                                .font(.subheadline.weight(.semibold))
+                            ToolLargeTextPreview(display: argsDisplay)
+                        }
+                    }
+
+                    ToolSheetSection {
+                        Text(L10n.text("chat.bubble.tool.output", fallback: "输出"))
+                            .font(.subheadline.weight(.semibold))
+                        ToolLargeTextPreview(display: toolContentDisplay)
                     }
 
                     if orderedRelatedBlocks.isEmpty == false, let ctx = contextForCards {

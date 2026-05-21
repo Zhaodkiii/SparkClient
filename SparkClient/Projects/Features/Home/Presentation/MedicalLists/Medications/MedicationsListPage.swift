@@ -1891,13 +1891,13 @@ struct MedicationPlanDraft {
         )
     }
 
-    private func parseReminderTimes() -> (times: [SparkMedicalSyncAPI.MedicationReminderTime], error: String?) {
+    private func parseReminderTimes() -> (times: [ReminderTime], error: String?) {
         let rawItems = reminderTimesText
             .components(separatedBy: CharacterSet(charactersIn: ",，、;； \n"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
 
-        var result: [SparkMedicalSyncAPI.MedicationReminderTime] = []
+        var result: [ReminderTime] = []
         var seen = Set<String>()
         for item in rawItems {
             guard Self.isValidTimeText(item) else {
@@ -1995,7 +1995,7 @@ private struct MedicationPlanPayload: Encodable {
     let everyNDays: Int?
     let weeklyWeekdays: [Int]
     let frequencyText: String
-    let reminderTimes: [SparkMedicalSyncAPI.MedicationReminderTime]
+    let reminderTimes: [ReminderTime]
     let startDate: String
     let endDate: String?
     let instructions: String

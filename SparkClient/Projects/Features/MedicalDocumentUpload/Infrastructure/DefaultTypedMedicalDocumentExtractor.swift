@@ -64,10 +64,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         selectedKind: MedicalDocumentKind,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
-#if DEBUG
-        logger.info("使用本地 Debug 假装结构化抽取（跳过 OCR/AI），selectedKind=\(selectedKind.rawValue)", module: .medical)
-        return try makeDebugPretendOutput(memberID: memberID, files: files, selectedKind: selectedKind)
-#else
+//#if DEBUG
+//        logger.info("使用本地 Debug 假装结构化抽取（跳过 OCR/AI），selectedKind=\(selectedKind.rawValue)", module: .medical)
+//        return try makeDebugPretendOutput(memberID: memberID, files: files, selectedKind: selectedKind)
+//#else
         try cancellationToken?.checkCancellation()
         logger.info("typed 抽取开始，文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
 
@@ -91,7 +91,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             preferredModelName: nil,
             cancellationToken: cancellationToken
         )
-#endif
+//#endif
     }
 
     func mergeOCRText(
@@ -211,7 +211,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 
     // MARK: - 对话工具：从提炼文本抽取（与上传共用 `extractTypedResult` / Prompt / 场景）
     /// 供 `generate_structured_health_card` 调用：无 OCR、无本地文件，`raw_text` 即模型提炼后的医学摘录。
-    /// - `report_type` 与 HealthClient/OpenAI 工具约定一致：`medication` / `prescription` / `exam_report` / `medical_case`。
+    /// - `report_type`：`medication_plan` / `medicine_box` / `prescription` / `exam_report` / `medical_case`（兼容别名 `medication`）。
     func extractFromChatDistilledText(
         memberID: Int?,
         reportType: String,
@@ -236,7 +236,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         )
         let prompt = promptFactory.extractionPrompt(for: MedicalPromptInput(kind: kind, mergedOCRText: trimmed))
         let extraction = try await extractTypedResult(kind: kind, prompt: prompt, cancellationToken: nil)
-        let extractedJSON = extraction.json
+        let extractedJSON = Self.normalizedExtractedJSON(for: extraction.typed, fallback: extraction.json)
         let preview = """
         {
           "memberID": \(memberID),
@@ -280,10 +280,11 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> (typed: MedicalDocumentTypedResult, json: String) {
         try cancellationToken?.checkCancellation()
-#if DEBUG
-        logger.info("使用本地 Debug 假装结构化抽取（跳过 AI），kind=\(kind.rawValue)", module: .medical)
-        return try makeDebugPretendTypedResult(kind: kind)
-#else
+//#if DEBUG
+//        logger.info("使用本地 Debug 假装结构化抽取（跳过 AI），kind=\(kind.rawValue)", module: .medical)
+//        return try makeDebugPretendTypedResult(kind: kind)
+//#endif
+//        
         // 根据不同文档类型，走不同的抽取&解析流程
         switch kind {
         // 病例文档
@@ -299,7 +300,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             guard let draft = final.decoded else {
                 throw ExtractionError.decodingFailed
             }
-            return (.caseDocument(draft), final.normalizedJSON)
+            let normalized = Self.normalizedCaseDraft(draft)
+            return (.caseDocument(normalized), Self.normalizedExtractedJSON(for: .caseDocument(normalized), fallback: final.normalizedJSON))
 
         // 体检报告
         case .healthExamReport:
@@ -344,7 +346,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             guard let draft = final.decoded else {
                 throw ExtractionError.decodingFailed
             }
-            return (.prescription(draft), final.normalizedJSON)
+            let normalized = Self.normalizedPrescriptionDraft(draft)
+            return (.prescription(normalized), Self.normalizedExtractedJSON(for: .prescription(normalized), fallback: final.normalizedJSON))
 
         // 用药单
         case .medicationPlan:
@@ -359,7 +362,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             guard let draft = final.decoded else {
                 throw ExtractionError.decodingFailed
             }
-            return (.medicationPlan(draft), final.normalizedJSON)
+            let plans = Self.normalizedMedicationPlanDrafts(draft)
+            return (.medicationPlan(plans), Self.normalizedExtractedJSON(for: .medicationPlan(plans), fallback: final.normalizedJSON))
 
         case .medicineBox:
             let final = try await extractStructured(
@@ -375,7 +379,6 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             }
             return (.medicineBoxes(draft), final.normalizedJSON)
         }
-#endif
     }
 
     // MARK: - AI 流式结构化抽取通用方法
@@ -459,6 +462,62 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             return true
         }
         return false
+    }
+
+    // MARK: - reminderTimes 规范化（抽取后统一为 `[{ "time": "HH:mm", "dose": … }]`）
+
+    private static func normalizedMedicationPlanDrafts(
+        _ drafts: [MedicationPlanRecognitionDraft]
+    ) -> [MedicationPlanRecognitionDraft] {
+        drafts.map { draft in
+            var next = draft
+            next.reminderTimes = .normalized(from: draft.reminderTimes)
+            return next
+        }
+    }
+
+    private static func normalizedPrescriptionDraft(_ draft: PrescriptionRecognitionDraft) -> PrescriptionRecognitionDraft {
+        var next = draft
+        if var plans = next.medicationPlans {
+            plans = normalizedMedicationPlanDrafts(plans)
+            next.medicationPlans = plans
+        }
+        return next
+    }
+
+    private static func normalizedCaseDraft(_ draft: CaseRecognitionDraft) -> CaseRecognitionDraft {
+        var next = draft
+        if var prescriptions = next.prescriptions {
+            prescriptions = prescriptions.map { normalizedPrescriptionDraft($0) }
+            next.prescriptions = prescriptions
+        }
+        return next
+    }
+
+    private static func normalizedExtractedJSON(
+        for typed: MedicalDocumentTypedResult,
+        fallback: String
+    ) -> String {
+        let encoder = JSONEncoder.default
+        let data: Data?
+        switch typed {
+        case .caseDocument(let draft):
+            data = try? encoder.encode(draft)
+        case .healthExamReport(let draft):
+            data = try? encoder.encode(draft)
+        case .medicalReport(let drafts):
+            data = try? encoder.encode(drafts)
+        case .prescription(let draft):
+            data = try? encoder.encode(draft)
+        case .medicationPlan(let drafts):
+            data = try? encoder.encode(drafts)
+        case .medicineBoxes(let drafts):
+            data = try? encoder.encode(drafts)
+        }
+        guard let data, let text = String(data: data, encoding: .utf8) else {
+            return fallback
+        }
+        return text
     }
 
 }
@@ -687,7 +746,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
                 "endDate": "2026-06-03",
                 "instructions": "饭后口服",
                 "reminderEnabled": true,
-                "reminderTimes": ["08:00", "13:00", "19:00"],
+                "reminderTimes": [{"time": "08:00"}, {"time": "13:00"}, {"time": "19:00"}],
                 "status": "active",
                 "sortOrder": "1"
             },
@@ -705,7 +764,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
                 "endDate": "2026-06-03",
                 "instructions": "睡前服用，如嗜睡明显请咨询医生",
                 "reminderEnabled": true,
-                "reminderTimes": ["21:30"],
+                "reminderTimes": [{"time": "21:30"}],
                 "status": "active",
                 "sortOrder": "2"
             }
@@ -730,7 +789,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
             "endDate": "2026-05-27",
             "instructions": "滴入患眼，避免瓶口接触眼部",
             "reminderEnabled": true,
-            "reminderTimes": ["08:00", "12:00", "18:00", "22:00"],
+            "reminderTimes": [{"time": "08:00"}, {"time": "12:00"}, {"time": "18:00"}, {"time": "22:00"}],
             "status": "active",
             "sortOrder": "1"
         },
@@ -749,7 +808,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
             "endDate": "2026-06-03",
             "instructions": "开启瓶封后使用不超过四周",
             "reminderEnabled": true,
-            "reminderTimes": ["09:00", "21:00"],
+            "reminderTimes": [{"time": "09:00"}, {"time": "21:00"}],
             "status": "active",
             "sortOrder": "2"
         }

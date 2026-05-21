@@ -118,8 +118,8 @@ private extension DefaultTypedMedicalDocumentSaver {
             items: buildMedicationPlanBundleItems(drafts, envelope: envelope, now: now),
             fileIds: []
         )
-        let id = try await workflowAPI.saveMedicationPlanBundle(payload)
-        return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
+        let response = try await workflowAPI.saveMedicationPlanBundleResponse(payload)
+        return MedicalDocumentSaveReceipt(recordID: response.prescriptionId ?? response.id, savedAt: now, isSuccess: true)
     }
 
     func savePrescriptionWithPlans(
@@ -146,8 +146,8 @@ private extension DefaultTypedMedicalDocumentSaver {
             items: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], envelope: envelope, now: now),
             fileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope)
         )
-        let id = try await workflowAPI.saveMedicationPlanBundle(payload)
-        return MedicalDocumentSaveReceipt(recordID: id, savedAt: now, isSuccess: true)
+        let response = try await workflowAPI.saveMedicationPlanBundleResponse(payload)
+        return MedicalDocumentSaveReceipt(recordID: response.prescriptionId ?? response.id, savedAt: now, isSuccess: true)
     }
 
     func saveMedicineBoxes(
@@ -165,7 +165,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 dosageForm: draft.dosageForm?.nilIfBlank ?? "",
                 strength: draft.strength?.nilIfBlank ?? "",
                 doseUnit: draft.doseUnit?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
-                totalQuantity: draft.totalQuantity.flatMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) },
+                totalQuantity: draft.totalQuantity.parsedAsTotalQuantity(),
                 expireDate: draft.expireDate?.nilIfBlank,
                 notes: draft.notes?.nilIfBlank ?? "",
                 extra: mergeTypedUploadExtra(draft.extra)
@@ -219,7 +219,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                     dosageForm: box?.dosageForm?.nilIfBlank ?? draft.dosageForm?.nilIfBlank ?? "",
                     strength: box?.strength?.nilIfBlank ?? draft.strength?.nilIfBlank ?? "",
                     doseUnit: doseUnit,
-                    totalQuantity: box?.totalQuantity?.nilIfBlank ?? draft.totalQuantity?.nilIfBlank,
+                    totalQuantity: (box?.totalQuantity ?? draft.totalQuantity).parsedAsTotalQuantity(),
                     expireDate: box?.expireDate?.nilIfBlank ?? draft.expireDate?.nilIfBlank,
                     notes: box?.notes?.nilIfBlank ?? "",
                     extra: mergeTypedUploadExtra(box?.extra)
@@ -232,7 +232,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 everyNDays: draft.everyNDays.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) },
                 weeklyWeekdays: draft.weeklyWeekdays ?? [],
                 frequencyText: draft.frequencyText?.nilIfBlank ?? "按医嘱",
-                reminderTimes: draft.reminderTimes ?? [],
+                reminderTimes: .normalized(from: draft.reminderTimes),
                 startDate: startDate,
                 endDate: draft.endDate?.nilIfBlank,
                 instructions: draft.instructions?.nilIfBlank ?? "",

@@ -42,8 +42,7 @@ struct ChatMessageBubbleContentView: View {
     let onCaptureOpenPhotoLibrary: () -> Void
     let onCaptureOpenFiles: () -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
-    let onCachedChatAttachmentLocalURL: (ChatAttachment) async -> URL?
-    let onDownloadChatAttachmentToLocalFile: (ChatAttachment) async throws -> URL
+    let fileTransferService: FileTransferService
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -81,8 +80,7 @@ struct ChatMessageBubbleContentView: View {
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
             onPresentToolPreview: onPresentToolPreview,
-            onCachedChatAttachmentLocalURL: onCachedChatAttachmentLocalURL,
-            onDownloadChatAttachmentToLocalFile: onDownloadChatAttachmentToLocalFile
+            fileTransferService: fileTransferService
         )
     }
 
@@ -263,8 +261,9 @@ private enum ChatMessageTimelineProjector {
     nonisolated static func project(blocks: [ChatMessageBlock]) -> [ChatMessageTimelineNode] {
         var nodes: [ChatMessageTimelineNode] = []
         var toolNodeIndexByCallID: [String: Int] = [:]
+        let sortedBlocks = blocks.sorted(by: sortBlocks)
 
-        for block in blocks {
+        for block in sortedBlocks {
             if block.nodeRole == .tool, let toolCallID = normalizedToolCallID(block.toolCallID) {
                 let index = ensureToolNode(
                     toolCallID: toolCallID,
@@ -387,9 +386,10 @@ private struct ChatToolTimelineNodeView: View {
                     toolBlock.render(context: context)
                 }
                 ForEach(node.presentations) { presentation in
-                    if presentation.status == .pending || presentation.status == .streaming {
+                    switch presentation.status {
+                    case .pending, .streaming:
                         ChatToolTimelinePendingView(title: pendingTitle(for: presentation.kind))
-                    } else {
+                    case .failed, .ready:
                         presentation.render(context: context)
                     }
                 }

@@ -139,12 +139,7 @@ struct ChatConversationMessageRow: View {
             onPresentToolPreview: { prompt, renderContext in
                 detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)
             },
-            onCachedChatAttachmentLocalURL: { attachment in
-                await detailViewModel.cachedLocalURLForChatAttachment(attachment)
-            },
-            onDownloadChatAttachmentToLocalFile: { attachment in
-                try await detailViewModel.downloadChatAttachmentToLocalFile(attachment: attachment)
-            }
+            fileTransferService: detailViewModel.attachmentFileTransferService
         )
     }
 

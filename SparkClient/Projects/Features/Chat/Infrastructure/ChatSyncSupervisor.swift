@@ -50,12 +50,10 @@ actor ChatSyncSupervisor {
 
     func refreshThreadListIncremental() async throws {
         try await syncEngine.refreshThreadListIncremental()
-        await attachmentPipeline.processPendingJobs(limit: 24)
     }
 
     func pullThreadMessagesIncrementalOnOpen(threadID: UUID) async throws {
         try await syncEngine.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
-        await attachmentPipeline.processPendingJobs(limit: 12)
     }
 
     private func scheduleOutboxPush(reason: String) {

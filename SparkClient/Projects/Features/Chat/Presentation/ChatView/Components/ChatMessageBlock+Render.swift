@@ -12,7 +12,6 @@ extension ChatMessageBlock {
         if status == .pending || (status == .streaming && kind != .text && kind != .deepThought && kind != .tool) {
             ChatPendingPresentationBlockView(title: pendingPresentationTitle)
         } else {
-        // 根据消息块类型分发到不同UI
         switch payload {
             
             // 1. 错误提示卡片
@@ -30,9 +29,9 @@ extension ChatMessageBlock {
                 images: ChatImagePayloadBuilder.imagePayloads(
                     from: imageGalleryMessage(attachments, base: context.message)
                 ),
-                style: context.message.role == .user ? .user : .assistant, // 用户/助手样式
-                unifiedFilePreview: context.unifiedFilePreview,
-                downloadToLocalFile: context.onDownloadChatAttachmentToLocalFile
+                fileTransferService: context.fileTransferService,
+                style: context.message.role == .user ? .user : .assistant,
+                unifiedFilePreview: context.unifiedFilePreview
             )
             
             // 3. 深度思考块（AI思考过程）
@@ -91,6 +90,8 @@ extension ChatMessageBlock {
             // 11. 结构化健康卡片
         case .structuredHealthCards(let blob):
             ChatStructuredHealthCardsBlockView(
+                blockID: id,
+                blockStatus: status,
                 blob: blob,
                 memberContextStore: context.memberContextStore,
                 isSavingIDs: context.savingStructuredHealthCardIDs,
@@ -130,8 +131,7 @@ extension ChatMessageBlock {
                 unifiedFilePreview: context.unifiedFilePreview,
                 attachments: attachments,
                 role: context.message.role,
-                cachedLocalURL: context.onCachedChatAttachmentLocalURL,
-                downloadToLocalFile: context.onDownloadChatAttachmentToLocalFile
+                fileTransferService: context.fileTransferService
             )
             
             // 18. 纯文本 / Markdown / 数学公式

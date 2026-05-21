@@ -155,7 +155,7 @@ extension SparkMedicalSyncAPI.RemoteMedicationPlan {
             everyNDays: everyNDays,
             weeklyWeekdays: weeklyWeekdays,
             frequencyText: frequencyText,
-            reminderTimes: reminderTimes.map { MedicationPlan.ReminderTime(time: $0.time, dose: $0.dose) },
+            reminderTimes: reminderTimes,
             startDate: startDate,
             endDate: endDate,
             instructions: instructions,

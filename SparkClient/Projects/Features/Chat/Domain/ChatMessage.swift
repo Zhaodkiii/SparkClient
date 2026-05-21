@@ -181,6 +181,18 @@ nonisolated enum ChatStableBlockID {
 nonisolated struct ChatToolBlockPayload: Codable, Equatable, Sendable {
     let name: String?
     let content: String
+    /// 工具执行侧归一化参数（来自 `ToolExecutionResult.arguments`），供工具详情 Sheet。
+    let invocationArguments: [String: String]?
+
+    init(
+        name: String?,
+        content: String,
+        invocationArguments: [String: String]? = nil
+    ) {
+        self.name = name
+        self.content = content
+        self.invocationArguments = invocationArguments
+    }
 }
 
 nonisolated struct ChatMapRouteBlockPayload: Codable, Equatable, Sendable {
@@ -296,6 +308,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         guard case .tool(let tool) = payload else { return nil }
         return tool.name
     }
+
+    /// 工具执行归一化参数：仅工具类型块有效
+    nonisolated var toolInvocationArguments: [String: String]? {
+        guard case .tool(let tool) = payload else { return nil }
+        return tool.invocationArguments
+    }
     
     /// 附件列表：图片画廊/文件附件类型有效
     nonisolated var attachments: [ChatAttachment] {
@@ -393,6 +411,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         kind: ChatMessageBlockKind,
         text: String? = nil,
         toolName: String? = nil,
+        toolInvocationArguments: [String: String]? = nil,
         toolCallID: String? = nil,
         parentToolCallID: String? = nil,
         parentBlockID: UUID? = nil,
@@ -428,6 +447,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             kind: kind,
             text: text,
             toolName: toolName,
+            toolInvocationArguments: toolInvocationArguments,
             attachments: attachments,
             knowledgeCards: knowledgeCards,
             taskCards: taskCards,
@@ -450,64 +470,13 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         self.updatedAt = updatedAt
     }
 
-    /// Decode the persisted block row payload directly. The old flat block JSON
-    /// shape has been retired with `ChatMessageBlockEntity.payloadData`.
-    nonisolated init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodableKey.self)
-        let id = try c.decode(UUID.self, forKey: .key("id"))
-        let anchor = try c.decodeIfPresent(ChatBlockAnchor.self, forKey: .key("anchor"))
-        let toolCallId = try c.decodeIfPresent(String.self, forKey: .key("toolCallId"))
-        let parentToolCallID = try c.decodeIfPresent(String.self, forKey: .key("parentToolCallID"))
-        let parentBlockID = try c.decodeIfPresent(UUID.self, forKey: .key("parentBlockID"))
-        let nodeRole = try c.decodeIfPresent(ChatMessageBlockNodeRole.self, forKey: .key("nodeRole"))
-        let payload = try c.decode(ChatMessageBlockPayload.self, forKey: .key("payload"))
-        let status = try c.decodeIfPresent(ChatMessageBlockStatus.self, forKey: .key("status")) ?? .ready
-        let revision = try c.decodeIfPresent(Int64.self, forKey: .key("revision")) ?? 1
-        let orderKey = try c.decodeIfPresent(Double.self, forKey: .key("orderKey"))
-        let createdAt = try c.decode(Date.self, forKey: .key("createdAt"))
-        let updatedAt = try c.decode(Date.self, forKey: .key("updatedAt"))
-
-        self.init(
-            id: id,
-            anchor: anchor,
-            toolCallID: toolCallId,
-            parentToolCallID: parentToolCallID,
-            parentBlockID: parentBlockID,
-            nodeRole: nodeRole,
-            payload: payload,
-            status: status,
-            revision: revision,
-            orderKey: orderKey,
-            createdAt: createdAt,
-            updatedAt: updatedAt
-        )
-    }
-
-    /// Encode the same shape used by `ChatMessageBlockEntity.payloadData`.
-    nonisolated func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodableKey.self)
-        try c.encode(id, forKey: .key("id"))
-        try c.encodeIfPresent(anchor, forKey: .key("anchor"))
-        try c.encode(kind, forKey: .key("kind"))
-        try c.encodeIfPresent(toolCallId, forKey: .key("toolCallId"))
-        try c.encodeIfPresent(parentToolCallId, forKey: .key("parentToolCallID"))
-        try c.encodeIfPresent(parentBlockId, forKey: .key("parentBlockID"))
-        try c.encode(nodeRole, forKey: .key("nodeRole"))
-        try c.encode(payload, forKey: .key("payload"))
-        try c.encode(status, forKey: .key("status"))
-        try c.encode(revision, forKey: .key("revision"))
-        try c.encodeIfPresent(orderKey, forKey: .key("orderKey"))
-        
-        try c.encode(createdAt, forKey: .key("createdAt"))
-        try c.encode(updatedAt, forKey: .key("updatedAt"))
-    }
-
     // MARK: - 私有工具方法
     /// 根据块类型，自动生成对应的负载数据（核心工厂方法）
     private nonisolated static func makePayload(
         kind: ChatMessageBlockKind,
         text: String?,
         toolName: String?,
+        toolInvocationArguments: [String: String]?,
         attachments: [ChatAttachment],
         knowledgeCards: [ChatKnowledgeCard],
         taskCards: [TaskCard],
@@ -537,7 +506,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 )
             )
         case .tool:
-            return .tool(.init(name: toolName, content: text ?? ""))
+            return .tool(.init(
+                name: toolName,
+                content: text ?? "",
+                invocationArguments: toolInvocationArguments
+            ))
         case .imageGallery:
             return .imageGallery(attachments)
         case .fileAttachments:
@@ -731,6 +704,7 @@ extension ChatMessage {
         return ToolPreviewPrompt(
             toolName: ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: t.name),
             toolContent: t.content,
+            toolArguments: t.invocationArguments,
             toolCallID: toolBlock.toolCallID,
             threadID: threadID,
             sourceClientMessageID: clientMessageID,

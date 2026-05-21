@@ -33,9 +33,8 @@ struct ChatRenderContext {
     /// 展示工具详情全局 Sheet（由消息行注入，传入预览载荷与当前渲染上下文）。
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
 
-    // MARK: - 异步文件操作
-    let onCachedChatAttachmentLocalURL: (ChatAttachment) async -> URL?  // 获取附件缓存本地地址
-    let onDownloadChatAttachmentToLocalFile: (ChatAttachment) async throws -> URL  // 下载附件到本地
+    /// 附件缓存/下载（对齐 ``MedicalAttachmentGridPreview`` 的 ``FileTransferService`` 用法）。
+    let fileTransferService: FileTransferService
 }
 
 extension ChatRenderContext {
@@ -61,8 +60,7 @@ extension ChatRenderContext {
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
             onPresentToolPreview: onPresentToolPreview,
-            onCachedChatAttachmentLocalURL: onCachedChatAttachmentLocalURL,
-            onDownloadChatAttachmentToLocalFile: onDownloadChatAttachmentToLocalFile
+            fileTransferService: fileTransferService
         )
     }
 }
