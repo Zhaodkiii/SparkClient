@@ -139,7 +139,25 @@ struct ChatConversationMessageRow: View {
             onPresentToolPreview: { prompt, renderContext in
                 detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)
             },
-            fileTransferService: detailViewModel.attachmentFileTransferService
+            fileTransferService: detailViewModel.attachmentFileTransferService,
+            medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
+            cachedMemberCompleteData: detailViewModel.cachedMemberCompleteData,
+            onHealthResourceUnavailableTap: {
+                detailViewModel.notifyHealthResourceUnavailable()
+            },
+            healthResourceDestinationFactory: { reference in
+                AnyView(
+                    HealthResourceReferenceDestination(
+                        reference: reference,
+                        medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
+                        fileTransferService: detailViewModel.attachmentFileTransferService,
+                        memberContextStore: memberContextStore,
+                        notificationClient: detailViewModel.chatNotificationClient,
+                        cachedCompleteData: detailViewModel.cachedMemberCompleteData,
+                        logger: detailViewModel.chatLogger
+                    )
+                )
+            }
         )
     }
 

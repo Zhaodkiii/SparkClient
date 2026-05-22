@@ -1,11 +1,14 @@
 import Foundation
 
 /// 医疗按需查询 API：替代快照全量拉取，按资源请求并利用 ETag。
-struct SparkMedicalQueryAPI {
+struct SparkMedicalQueryAPI: @unchecked Sendable {
     /// 统一后端配置（网络引擎、鉴权、ETag 存储与日志）。
     let configuration: SparkBackendConfiguration
 
     private let resources: SparkMedicalWorkflowAPI
+
+    /// 医疗资源工作流 API（创建/更新/按 id 查询等）。
+    var medicalWorkflowAPI: SparkMedicalWorkflowAPI { resources }
 
     /// 通过应用层注入网络配置。
     init(configuration: SparkBackendConfiguration) {
@@ -181,6 +184,50 @@ struct SparkMedicalQueryAPI {
             q.append(URLQueryItem(name: "scheduled_to", value: MedicalDateCoding.encodeISO8601(scheduledTo)))
         }
         return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationRecord].self, kind: .medicationRecords, query: q)
+    }
+
+    func retrieveExaminationReport(id: Int) async throws -> SparkMedicalSyncAPI.RemoteExaminationReport {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteExaminationReport.self, kind: .examinationReports, id: id)
+    }
+
+    func retrieveHealthExamReport(id: Int) async throws -> SparkMedicalSyncAPI.RemoteHealthExamReport {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteHealthExamReport.self, kind: .healthExamReports, id: id)
+    }
+
+    func retrieveMedicalCase(id: Int) async throws -> SparkMedicalSyncAPI.RemoteMedicalCase {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteMedicalCase.self, kind: .cases, id: id)
+    }
+
+    func retrievePrescription(id: Int) async throws -> SparkMedicalSyncAPI.RemotePrescription {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemotePrescription.self, kind: .prescriptions, id: id)
+    }
+
+    func retrieveMedicationPlan(id: Int) async throws -> SparkMedicalSyncAPI.RemoteMedicationPlan {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteMedicationPlan.self, kind: .medicationPlans, id: id)
+    }
+
+    func retrieveMedicineBox(id: Int) async throws -> SparkMedicalSyncAPI.RemoteMedicineBox {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteMedicineBox.self, kind: .medicineBoxes, id: id)
+    }
+
+    func retrieveMedicationRecord(id: Int) async throws -> SparkMedicalSyncAPI.RemoteMedicationRecord {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteMedicationRecord.self, kind: .medicationRecords, id: id)
+    }
+
+    func retrieveSymptom(id: Int) async throws -> SparkMedicalSyncAPI.RemoteSymptom {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteSymptom.self, kind: .symptoms, id: id)
+    }
+
+    func retrieveVisit(id: Int) async throws -> SparkMedicalSyncAPI.RemoteVisit {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteVisit.self, kind: .visits, id: id)
+    }
+
+    func retrieveSurgery(id: Int) async throws -> SparkMedicalSyncAPI.RemoteSurgery {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteSurgery.self, kind: .surgeries, id: id)
+    }
+
+    func retrieveFollowUp(id: Int) async throws -> SparkMedicalSyncAPI.RemoteFollowUp {
+        try await resources.retrieve(SparkMedicalSyncAPI.RemoteFollowUp.self, kind: .followUps, id: id)
     }
 
     /// 按成员单接口拉取医疗数据汇总（病例汇总 / 报告头 / 处方与附件）。

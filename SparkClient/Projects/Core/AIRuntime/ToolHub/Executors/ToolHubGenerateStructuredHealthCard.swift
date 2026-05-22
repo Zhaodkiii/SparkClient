@@ -35,7 +35,7 @@ extension ToolHub {
             )
         }
 
-        guard let threadID = context.threadID, let assistantID = context.assistantMessageClientID else {
+        guard context.threadID != nil, context.assistantMessageClientID != nil else {
             return ToolExecutionResult(
                 toolName: SparkToolName.generateStructuredHealthCard,
                 outputText: l10n.tool(
@@ -51,16 +51,10 @@ extension ToolHub {
         let ossFileId = invocation.arguments["oss_file_id"].flatMap { Int($0) }
         let boundMemberID = context.memberID
         let normalizedToolCallID = normalizedToolCallID(from: context)
-
-        let merge = structuredHealthCardMergeCoordinator
         let extractor = typedMedicalDocumentExtractor
         let taskLogger = logger
-
-        await merge.publishHealthStructuredHealthCardsPending(
-            threadID: threadID,
-            assistantClientMessageID: assistantID,
-            anchorToolCallID: normalizedToolCallID
-        )
+        let sink = sideEffectSink
+        let assistantID = context.assistantMessageClientID!
 
         Task {
             do {
@@ -78,11 +72,10 @@ extension ToolHub {
                     ossFileId: ossFileId
                 )
 
-                await merge.publishHealthStructuredHealthCards(
-                    threadID: threadID,
-                    assistantClientMessageID: assistantID,
-                    blob: blob,
-                    anchorToolCallID: normalizedToolCallID
+                await sink.emit(
+                    .structuredHealthCardsReady(blob),
+                    anchorToolCallID: normalizedToolCallID,
+                    assistantClientMessageID: assistantID
                 )
             } catch {
                 taskLogger.error(
@@ -90,14 +83,15 @@ extension ToolHub {
                     module: .aiConfig
                 )
 
-                await merge.publishStructuredHealthCardsFailed(
-                    assistantClientMessageID: assistantID,
+                await sink.emit(
+                    .structuredHealthCardsFailed(message: extractionFailureNotice),
                     anchorToolCallID: normalizedToolCallID,
-                    message: extractionFailureNotice
+                    assistantClientMessageID: assistantID
                 )
-                await merge.publishAssistantTimelineNotice(
-                    assistantClientMessageID: assistantID,
-                    text: extractionFailureNotice
+                await sink.emit(
+                    .timelineNotice(text: extractionFailureNotice),
+                    anchorToolCallID: nil,
+                    assistantClientMessageID: assistantID
                 )
             }
         }
@@ -107,7 +101,8 @@ extension ToolHub {
             outputText: hintTemplate,
             sensitive: false,
             shouldBypassModel: false,
-            arguments: invocation.arguments
+            arguments: invocation.arguments,
+            sideEffects: [.structuredHealthCardsPending]
         )
     }
 

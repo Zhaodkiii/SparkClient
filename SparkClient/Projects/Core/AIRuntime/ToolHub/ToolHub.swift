@@ -18,8 +18,8 @@ final class ToolHub: @unchecked Sendable {
     let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
     /// 与上传流水线共用：对话工具 `generate_structured_health_card` 的结构化抽取。
     let typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor
-    /// 异步将卡片合并回当前助手消息（Core Data + `ChatStateStore`）。
-    let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
+    /// 工具异步任务向助手消息落库 UI 副作用（经 `MessageRunActor` 串行写入）。
+    let sideEffectSink: any ChatSideEffectSink
     let healthTool: SparkHealthTool
     let toolInteractionCoordinator: ToolInteractionCoordinator?
     let appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy
@@ -44,7 +44,7 @@ final class ToolHub: @unchecked Sendable {
         searchKnowledgeUseCase: SearchKnowledgeUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         typedMedicalDocumentExtractor: DefaultTypedMedicalDocumentExtractor,
-        structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator,
+        sideEffectSink: any ChatSideEffectSink,
         healthTool: SparkHealthTool = .shared,
         toolInteractionCoordinator: ToolInteractionCoordinator? = nil,
         appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy = AppleHealthToolConsentPolicy(),
@@ -65,7 +65,7 @@ final class ToolHub: @unchecked Sendable {
         self.searchKnowledgeUseCase = searchKnowledgeUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.typedMedicalDocumentExtractor = typedMedicalDocumentExtractor
-        self.structuredHealthCardMergeCoordinator = structuredHealthCardMergeCoordinator
+        self.sideEffectSink = sideEffectSink
         self.healthTool = healthTool
         self.toolInteractionCoordinator = toolInteractionCoordinator
         self.appleHealthToolConsentPolicy = appleHealthToolConsentPolicy
@@ -157,7 +157,10 @@ final class ToolHub: @unchecked Sendable {
             invocation: invocation,
             context: context,
             result: rawResult
-        ).withToolCallID(pendingToolCallID)
+        )
+            .withToolCallID(pendingToolCallID)
+            .withAnchorToolCallID(pendingToolCallID)
+            .withInvocationArgumentsIfMissing(invocation.arguments)
         await appendAudit(invocation: invocation, context: context, result: result)
         return result
     }
@@ -271,6 +274,25 @@ final class ToolHub: @unchecked Sendable {
                 ),
                 "max_items": AIRuntimeToolProperty(type: "integer", description: td("tool.param.max_items"))
             ]
+        case .listMemberHealthSources:
+            return [
+                "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_optional")),
+                "resource_type": healthResourceTypeProperty(),
+                "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.health_keyword")),
+                "start_date": AIRuntimeToolProperty(type: "string", description: td("tool.date.start_yyyy_mm_dd"), format: "date"),
+                "end_date": AIRuntimeToolProperty(type: "string", description: td("tool.date.end_yyyy_mm_dd"), format: "date"),
+                "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.health_sources_limit"))
+            ]
+        case .getHealthResourceReference, .getHealthResourceContext:
+            var props: [String: AIRuntimeToolProperty] = [
+                "resource_type": healthResourceTypeProperty(),
+                "resource_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.health_resource_id")),
+                "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_optional"))
+            ]
+            if tool == .getHealthResourceContext {
+                props["topic"] = AIRuntimeToolProperty(type: "string", description: td("tool.param.health_topic_focus"))
+            }
+            return props
         case .generateStructuredHealthCard:
             return [
                 "report_type": AIRuntimeToolProperty(
@@ -451,6 +473,8 @@ final class ToolHub: @unchecked Sendable {
             return ["protein", "carbohydrates", "fat", "energy"]
         case .generateStructuredHealthCard:
             return ["report_type", "raw_text"]
+        case .getHealthResourceReference, .getHealthResourceContext:
+            return ["resource_type", "resource_id"]
         case .generateTask:
             return ["user_input"]
         case .searchKnowledgeBag:
@@ -487,7 +511,8 @@ final class ToolHub: @unchecked Sendable {
             return ["title", "content", "type"]
         case .editCanvas:
             return ["patterns", "replacements"]
-        case .requestMemberSelection,
+        case .listMemberHealthSources,
+             .requestMemberSelection,
              .searchCalendarAndReminders, .writeSystemEvent,
              .queryTasksByMember, .generateChatTitle,
              .getCurrentMember, .switchMember, .findMember:
@@ -686,6 +711,15 @@ final class ToolHub: @unchecked Sendable {
         case .generateStructuredHealthCard:
             /// 生成结构化健康卡片（可能结合模型推理 + 数据）
             return await runGenerateStructuredHealthCard(invocation: invocation, context: context)
+
+        case .listMemberHealthSources:
+            return await runListMemberHealthSources(invocation: invocation, context: context)
+
+        case .getHealthResourceReference:
+            return await runGetHealthResourceReference(invocation: invocation, context: context)
+
+        case .getHealthResourceContext:
+            return await runGetHealthResourceContext(invocation: invocation, context: context)
 
         case .queryTasksByMember:
             /// 查询某成员的小任务列表

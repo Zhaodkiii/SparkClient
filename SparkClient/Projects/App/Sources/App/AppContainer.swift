@@ -510,6 +510,7 @@ final class AppContainer {
             loadChatThreadsUseCase: chat.loadChatThreadsUseCase,
             loadChatMessagesUseCase: chat.loadChatMessagesUseCase,
             sendMessageUseCase: chat.sendChatMessageUseCase,
+            medicalQueryAPI: backend.medicalQuery,
             fileTransferService: infrastructure.fileTransferService,
             ocrOrchestrator: medical.ocrOrchestrator,
             ocrDocumentExtractor: OCRDocumentExtractor(config: ocrConfiguration),

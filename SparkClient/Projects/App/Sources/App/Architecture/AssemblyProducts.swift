@@ -98,7 +98,7 @@ struct NotificationAssemblyProduct {
 /// 聊天领域装配产物。
 struct ChatAssemblyProduct {
     let chatRepository: CoreDataChatRepository
-    let structuredHealthCardMergeCoordinator: StructuredHealthCardMergeCoordinator
+    let messageRunActor: MessageRunActor
     let toolHub: ToolHub
     let toolInteractionCoordinator: ToolInteractionCoordinator
     let chatQueryService: ChatQueryService
@@ -489,7 +489,6 @@ extension ChatAssembly {
     ) -> ChatAssemblyProduct {
         logger.info("ChatAssembly 装配聊天核心", module: .general)
         let chatRepository = CoreDataChatRepository(coreDataStack: coreDataStack, logger: logger)
-        let messageRunActor = MessageRunActor(repository: chatRepository, logger: logger)
         let chatOutboxStore = ChatOutboxStore(repository: chatRepository)
         let chatRealtimeClient = ChatRealtimeSyncClient(
             tokenProvider: backend.tokenProvider(),
@@ -504,8 +503,8 @@ extension ChatAssembly {
             mergePolicy: ChatMergePolicy(),
             logger: logger
         )
-        let structuredHealthCardMergeCoordinator = StructuredHealthCardMergeCoordinator(
-            messageRunActor: messageRunActor,
+        let messageRunActor = MessageRunActor(
+            repository: chatRepository,
             pushOutbox: { try await chatSyncEngine.pushOutboxOnly() },
             logger: logger
         )
@@ -526,7 +525,7 @@ extension ChatAssembly {
             searchKnowledgeUseCase: knowledge.searchKnowledgeUseCase,
             createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
             typedMedicalDocumentExtractor: medical.typedMedicalDocumentExtractor,
-            structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
+            sideEffectSink: messageRunActor,
             toolInteractionCoordinator: toolInteractionCoordinator,
             logger: logger
         )
@@ -557,11 +556,12 @@ extension ChatAssembly {
             aiConfigCenter: ai.aiConfigCenter,
             retrieveMemoryUseCase: ai.retrieveMemoryUseCase,
             messageRunActor: messageRunActor,
+            medicalQueryAPI: backend.medicalQuery,
             logger: logger
         )
         return ChatAssemblyProduct(
             chatRepository: chatRepository,
-            structuredHealthCardMergeCoordinator: structuredHealthCardMergeCoordinator,
+            messageRunActor: messageRunActor,
             toolHub: toolHub,
             toolInteractionCoordinator: toolInteractionCoordinator,
             chatQueryService: chatQueryService,

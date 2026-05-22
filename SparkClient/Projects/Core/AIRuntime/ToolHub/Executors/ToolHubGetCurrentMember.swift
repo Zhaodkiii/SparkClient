@@ -2,10 +2,11 @@ import Foundation
 
 extension ToolHub {
     func runGetCurrentMember(context: ToolExecutionContext) async -> ToolExecutionResult {
-        guard let memberID = context.memberID else {
+        let invocation = ToolInvocation(name: SparkToolName.getCurrentMember.rawValue, arguments: [:])
+        guard let memberID = await resolveTargetMemberID(invocation: invocation, context: context) else {
             return ToolExecutionResult(
                 toolName: SparkToolName.getCurrentMember,
-                outputText: "当前未选择成员。",
+                outputText: "当前未选择成员（会话未绑定成员且本轮未解析到 member_id）。",
                 sensitive: false,
                 shouldBypassModel: true
             )
@@ -23,12 +24,13 @@ extension ToolHub {
             )
         }
         let member = data.member
-        let output = "当前成员：\(member.name)，关系：\(member.relationship)。"
+        let output = "当前成员：\(member.name)，关系：\(member.relationship)，member_id：\(memberID)。"
         return ToolExecutionResult(
             toolName: SparkToolName.getCurrentMember,
             outputText: output,
             sensitive: true,
-            shouldBypassModel: true
+            shouldBypassModel: true,
+            resolvedMemberID: context.memberID == memberID ? nil : memberID
         )
     }
 

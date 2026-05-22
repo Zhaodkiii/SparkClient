@@ -179,6 +179,9 @@ private extension OnboardingAgentTemplate {
         SparkToolName.fetchNutritionDetails.rawValue,
         SparkToolName.makeNutritionData.rawValue,
         SparkToolName.generateStructuredHealthCard.rawValue,
+        SparkToolName.listMemberHealthSources.rawValue,
+        SparkToolName.getHealthResourceReference.rawValue,
+        SparkToolName.getHealthResourceContext.rawValue,
         SparkToolName.getCurrentMember.rawValue,
         SparkToolName.queryMemberProfile.rawValue
     ]

@@ -31,24 +31,20 @@ extension ToolHub {
             let body = lines.joined(separator: "\n\n")
             let l10n = AIPromptL10n(locale: .current)
             let title = l10n.tool("tool.ui.knowledge.search_title", fallback: "Knowledge Search")
-            if let threadID = context.threadID,
-               let assistantID = context.assistantMessageClientID {
-                let merge = structuredHealthCardMergeCoordinator
-                let anchorToolCallID = normalizedToolCallID(from: context)
-                Task {
-                    await merge.publishKnowledgeCards(
-                        threadID: threadID,
-                        assistantClientMessageID: assistantID,
-                        cards: [ChatKnowledgeCard(title: title, content: body, showsSaveAndCopy: false)],
-                        anchorToolCallID: anchorToolCallID
-                    )
-                }
+            var sideEffects: [ToolSideEffect] = []
+            if context.threadID != nil, context.assistantMessageClientID != nil {
+                sideEffects = [
+                    .knowledgeCards([
+                        ChatKnowledgeCard(title: title, content: body, showsSaveAndCopy: false)
+                    ])
+                ]
             }
             return ToolExecutionResult(
                 toolName: SparkToolName.searchKnowledgeBag,
                 outputText: body,
                 sensitive: false,
-                shouldBypassModel: true
+                shouldBypassModel: true,
+                sideEffects: sideEffects
             )
         } catch {
             return ToolExecutionResult(

@@ -35,6 +35,15 @@ struct ChatRenderContext {
 
     /// 附件缓存/下载（对齐 ``MedicalAttachmentGridPreview`` 的 ``FileTransferService`` 用法）。
     let fileTransferService: FileTransferService
+
+    /// 健康资料卡片摘要懒加载（按类型+ID 单条查询，不拉 complete-data 全量）。
+    let medicalQueryAPI: SparkMedicalQueryAPI
+    /// 首页/问报告已缓存的成员 complete-data，仅作本地命中加速。
+    let cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    /// 本条消息内健康资料引用块总数（用于 `n/总数`）。
+    let healthResourceReferenceCount: Int
+    let onHealthResourceUnavailableTap: () -> Void
+    let healthResourceDestinationFactory: (HealthResourceReference) -> AnyView
 }
 
 extension ChatRenderContext {
@@ -60,7 +69,12 @@ extension ChatRenderContext {
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
             onPresentToolPreview: onPresentToolPreview,
-            fileTransferService: fileTransferService
+            fileTransferService: fileTransferService,
+            medicalQueryAPI: medicalQueryAPI,
+            cachedMemberCompleteData: cachedMemberCompleteData,
+            healthResourceReferenceCount: healthResourceReferenceCount,
+            onHealthResourceUnavailableTap: onHealthResourceUnavailableTap,
+            healthResourceDestinationFactory: healthResourceDestinationFactory
         )
     }
 }

@@ -19,24 +19,18 @@ extension ToolHub {
         )
 
         let userFacing = "已生成知识库文档草稿「\(resolvedTitle)」，内容已附在消息内知识卡中，用户可点击保存到知识库。"
-        if let threadID = context.threadID,
-           let assistantID = context.assistantMessageClientID {
-            let merge = structuredHealthCardMergeCoordinator
-            let anchorToolCallID = normalizedToolCallID(from: context)
-            Task {
-                await merge.publishKnowledgeCards(
-                    threadID: threadID,
-                    assistantClientMessageID: assistantID,
-                    cards: [ChatKnowledgeCard(title: resolvedTitle, content: content)],
-                    anchorToolCallID: anchorToolCallID
-                )
-            }
+        var sideEffects: [ToolSideEffect] = []
+        if context.threadID != nil, context.assistantMessageClientID != nil {
+            sideEffects = [
+                .knowledgeCards([ChatKnowledgeCard(title: resolvedTitle, content: content)])
+            ]
         }
         return ToolExecutionResult(
             toolName: SparkToolName.createKnowledgeDocument,
             outputText: userFacing,
             sensitive: false,
-            shouldBypassModel: true
+            shouldBypassModel: true,
+            sideEffects: sideEffects
         )
     }
 

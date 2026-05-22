@@ -1,37 +1,26 @@
 import Foundation
 
 /// 通用编码键：自定义灵活的 Codable 编码/解码键
-/// 支持字符串键，用于动态解析 JSON 字段
 struct CodableKey: CodingKey {
-    /// 字符串键值（JSON 字段名）
     let stringValue: String
-    /// 整型键值（极少使用）
     let intValue: Int?
 
-    /// 通过字符串创建编码键
-    /// - Parameter stringValue: JSON 字段名称
     init(_ stringValue: String) {
         self.stringValue = stringValue
         self.intValue = nil
     }
 
-    /// 遵循 CodingKey 协议：字符串构造器
     init?(stringValue: String) {
         self.init(stringValue)
     }
 
-    /// 遵循 CodingKey 协议：整型构造器
     init?(intValue: Int) {
         self.stringValue = "\(intValue)"
         self.intValue = intValue
     }
 }
 
-// MARK: - 便捷方法扩展
 extension CodableKey {
-    /// 便捷创建编码键（外部简化调用）
-    /// - Parameter stringValue: 字段名
-    /// - Returns: 编码键实例
     static func key(_ stringValue: String) -> CodableKey {
         CodableKey(stringValue)
     }
@@ -40,12 +29,9 @@ extension CodableKey {
 // MARK: - JSON 解码器扩展
 extension JSONDecoder {
     /// 默认全局解码器：项目通用配置
-    /// 配置：下划线转驼峰、ISO8601 日期格式
     nonisolated static var `default`: JSONDecoder {
         let decoder = JSONDecoder()
-        // JSON 下划线命名 → 模型驼峰命名（例：user_name → userName）
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        // 日期解析：使用 ISO8601 标准格式
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }
@@ -135,7 +121,7 @@ enum ChatCodableDateCodec: Sendable {
     }
 }
 
-// MARK: - Core Data `payloadData`（与聊天同步同格式：snake_case + chatRemote）
+// MARK: - Core Data `payloadData`（与聊天同步一致：`chatRemote`）
 
 /// `ChatMessageBlockEntity.payloadData` 编解码门面。
 enum ChatMessageBlockCodec: Sendable {
@@ -148,13 +134,23 @@ enum ChatMessageBlockCodec: Sendable {
         return try? JSONDecoder.chatRemote.decode(ChatMessageBlock.self, from: data)
     }
 
-    nonisolated static func decodeFailureReason(_ data: Data?) -> String? {
-        guard let data else { return "payloadData=nil" }
+    nonisolated static func decodeBlock(from snapshot: ChatMessageBlockRowSnapshot) -> ChatMessageBlock? {
+        guard let block = decode(snapshot.payloadData) else { return nil }
+        if block.id == snapshot.id { return block }
+        return block.replacingIdentity(id: snapshot.id, orderKey: snapshot.orderKey ?? block.orderKey)
+    }
+
+    nonisolated static func decodeFailureReason(
+        payloadData: Data?,
+        kind: ChatMessageBlockKind?
+    ) -> String? {
+        guard let payloadData else { return "payloadData=nil" }
         do {
-            _ = try JSONDecoder.chatRemote.decode(ChatMessageBlock.self, from: data)
+            _ = try JSONDecoder.chatRemote.decode(ChatMessageBlock.self, from: payloadData)
             return nil
         } catch {
-            return CodableDiagnostics.describe(error)
+            let prefix = kind.map { "\($0.rawValue): " } ?? ""
+            return "\(prefix)\(CodableDiagnostics.describe(error))"
         }
     }
 }

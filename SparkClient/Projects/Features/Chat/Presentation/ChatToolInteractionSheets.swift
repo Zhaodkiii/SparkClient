@@ -686,6 +686,19 @@ struct ToolInteractionPresentationSheet: View {
                 },
                 onClose: { coordinator.dismissSystemMessageSettings(id: active.id) }
             )
+        case .healthResourceCandidates(let prompt):
+            let pendingCount = stateStore.composerDraft(for: prompt.threadID).pendingHealthResourceRefs.count
+            let remaining = max(0, min(prompt.maxSelectable, HealthResourceSendValidator.maxRefs - pendingCount))
+            ChatHealthSourceCandidateSheet(
+                candidates: prompt.candidates,
+                maxSelectable: max(1, remaining),
+                onConfirm: { picked in
+                    coordinator.completeHealthResourceCandidates(id: active.id, selected: picked)
+                },
+                onCancel: {
+                    coordinator.completeHealthResourceCandidatesCancelled(id: active.id)
+                }
+            )
         }
     }
 }

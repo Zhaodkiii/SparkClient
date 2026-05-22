@@ -26,7 +26,7 @@ final class ChatStateStore: ObservableObject {
     @Published private var bottomViewportLockedThreadIDs: Set<UUID> = []
     /// Bumps when the conversation view should force-scroll to the newest message, such as after sending.
     @Published private(set) var scrollToBottomRequestGenerationByThread: [UUID: UInt64] = [:]
-
+    /// M11：AI 工具检索出的健康资料候选（待用户确认加入预览）。
     var selectedThread: ChatThread? {
         threadItems.first(where: { $0.id == selectedThreadID })?.thread
     }
@@ -172,12 +172,24 @@ final class ChatStateStore: ObservableObject {
     }
 
     func clearDraft(for threadID: UUID?) {
+        clearComposerSurface(for: threadID, includingHealthResourceRefs: true)
+    }
+
+    /// 发送完成后仅清空文本与附件，保留 M11 工具写入的 `pendingHealthResourceRefs`。
+    func clearComposerTextAndAttachments(for threadID: UUID?) {
+        clearComposerSurface(for: threadID, includingHealthResourceRefs: false)
+    }
+
+    private func clearComposerSurface(for threadID: UUID?, includingHealthResourceRefs: Bool) {
         let attachmentIDsToClear: [UUID]? = threadID.flatMap { id in
             composerDrafts[id]?.attachments.map(\.id)
         }
         updateComposerDraft(for: threadID) { draft in
             draft.text = ""
             draft.attachments = []
+            if includingHealthResourceRefs {
+                draft.pendingHealthResourceRefs = []
+            }
             draft.isShowingAttachmentMenu = false
             draft.isShowingPhotoPicker = false
             draft.isShowingCamera = false
@@ -279,6 +291,39 @@ final class ChatStateStore: ObservableObject {
         for item in attachments {
             composerPreparedAttachmentStates[item.id] = .pending
             composerAttachmentUploadProgress[item.id] = 0
+        }
+    }
+
+    func appendHealthResourceRefs(_ refs: [HealthResourceRef], for threadID: UUID?) {
+        guard refs.isEmpty == false else { return }
+        updateComposerDraft(for: threadID) { draft in
+            for ref in refs {
+                guard draft.pendingHealthResourceRefs.count < HealthResourceSendValidator.maxRefs else { break }
+                guard draft.pendingHealthResourceRefs.contains(where: { $0.id == ref.id }) == false else { continue }
+                draft.pendingHealthResourceRefs.append(ref)
+            }
+        }
+    }
+
+    func removeHealthResourceRef(_ ref: HealthResourceRef, for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.pendingHealthResourceRefs.removeAll { $0.id == ref.id }
+        }
+    }
+
+    func clearHealthResourceRefs(for threadID: UUID?) {
+        updateComposerDraft(for: threadID) { draft in
+            draft.pendingHealthResourceRefs = []
+        }
+    }
+
+    func pruneHealthResourceRefs(matchingMemberID memberID: Int?, for threadID: UUID?) {
+        guard let memberID, memberID > 0 else {
+            clearHealthResourceRefs(for: threadID)
+            return
+        }
+        updateComposerDraft(for: threadID) { draft in
+            draft.pendingHealthResourceRefs.removeAll { $0.memberID != memberID }
         }
     }
 

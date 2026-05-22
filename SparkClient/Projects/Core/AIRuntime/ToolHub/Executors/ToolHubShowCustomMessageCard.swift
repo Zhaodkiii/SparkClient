@@ -18,21 +18,13 @@ extension ToolHub {
         }
 
         let payload = ChatCaptureMessageCardPayload(cardType: type)
-        let merge = structuredHealthCardMergeCoordinator
-        Task {
-            await merge.publishCaptureCard(
-                threadID: threadID,
-                assistantClientMessageID: assistantID,
-                payload: payload,
-                anchorToolCallID: context.pendingToolCallID
-            )
-        }
 
         return ToolExecutionResult(
             toolName: invocation.name,
             outputText: outputText,
             sensitive: false,
-            shouldBypassModel: true
+            shouldBypassModel: true,
+            sideEffects: [.captureCard(payload)]
         )
     }
 

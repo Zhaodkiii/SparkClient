@@ -43,6 +43,10 @@ struct ChatMessageBubbleContentView: View {
     let onCaptureOpenFiles: () -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let fileTransferService: FileTransferService
+    let medicalQueryAPI: SparkMedicalQueryAPI
+    let cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let onHealthResourceUnavailableTap: () -> Void
+    let healthResourceDestinationFactory: (HealthResourceReference) -> AnyView
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -80,8 +84,17 @@ struct ChatMessageBubbleContentView: View {
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
             onPresentToolPreview: onPresentToolPreview,
-            fileTransferService: fileTransferService
+            fileTransferService: fileTransferService,
+            medicalQueryAPI: medicalQueryAPI,
+            cachedMemberCompleteData: cachedMemberCompleteData,
+            healthResourceReferenceCount: healthResourceReferenceCount,
+            onHealthResourceUnavailableTap: onHealthResourceUnavailableTap,
+            healthResourceDestinationFactory: healthResourceDestinationFactory
         )
+    }
+
+    private var healthResourceReferenceCount: Int {
+        message.blocks.filter { $0.kind == .healthResourceReference }.count
     }
 
     private var effectiveBlocks: [ChatMessageBlock] {
@@ -96,7 +109,7 @@ struct ChatMessageBubbleContentView: View {
     }
 
     private var effectiveTimeline: [ChatMessageTimelineNode] {
-        ChatMessageTimelineProjector.project(blocks: effectiveBlocks)
+        ChatMessageTimelineProjector.project(blocks: effectiveBlocks, messageRole: message.role)
     }
 
     var actionButtonsHStack: some View {
@@ -234,6 +247,7 @@ private struct ChatMessageTimelineNode: Identifiable {
     enum Content {
         case block(ChatMessageBlock)
         case tool(ChatToolTimelineNode)
+        case healthResourceReferenceGroup([ChatHealthResourceReferencePayload])
     }
 
     let id: UUID
@@ -246,6 +260,14 @@ private struct ChatMessageTimelineNode: Identifiable {
             block.render(context: context)
         case .tool(let node):
             ChatToolTimelineNodeView(node: node, context: context)
+        case .healthResourceReferenceGroup(let payloads):
+            ChatHealthResourceReferenceGroupBlockView(
+                payloads: payloads,
+                medicalQueryAPI: context.medicalQueryAPI,
+                cachedCompleteData: context.cachedMemberCompleteData,
+                onUnavailableTap: context.onHealthResourceUnavailableTap,
+                destinationBuilder: context.healthResourceDestinationFactory
+            )
         }
     }
 }
@@ -258,47 +280,88 @@ private struct ChatToolTimelineNode: Identifiable {
 }
 
 private enum ChatMessageTimelineProjector {
-    nonisolated static func project(blocks: [ChatMessageBlock]) -> [ChatMessageTimelineNode] {
+    nonisolated static func project(
+        blocks: [ChatMessageBlock],
+        messageRole: ChatMessageRole
+    ) -> [ChatMessageTimelineNode] {
         var nodes: [ChatMessageTimelineNode] = []
         var toolNodeIndexByCallID: [String: Int] = [:]
         let sortedBlocks = blocks.sorted(by: sortBlocks)
+        var index = 0
 
-        for block in sortedBlocks {
+        while index < sortedBlocks.count {
+            let block = sortedBlocks[index]
+
+            if messageRole == .user,
+               block.kind == .healthResourceReference,
+               let payload = healthResourcePayload(from: block) {
+                var payloads = [payload]
+                var groupBlockIDs = [block.id]
+                var next = index + 1
+                while next < sortedBlocks.count,
+                      sortedBlocks[next].kind == .healthResourceReference,
+                      let nextPayload = healthResourcePayload(from: sortedBlocks[next]) {
+                    payloads.append(nextPayload)
+                    groupBlockIDs.append(sortedBlocks[next].id)
+                    next += 1
+                }
+                let groupID = groupBlockIDs.first ?? block.id
+                nodes.append(
+                    ChatMessageTimelineNode(
+                        id: groupID,
+                        content: .healthResourceReferenceGroup(payloads)
+                    )
+                )
+                index = next
+                continue
+            }
+
             if block.nodeRole == .tool, let toolCallID = normalizedToolCallID(block.toolCallID) {
-                let index = ensureToolNode(
+                let toolNodeIndex = ensureToolNode(
                     toolCallID: toolCallID,
                     toolBlock: block,
                     nodes: &nodes,
                     indexByCallID: &toolNodeIndexByCallID
                 )
-                if case .tool(var node) = nodes[index].content {
+                if case .tool(var node) = nodes[toolNodeIndex].content {
                     node.toolBlock = block
-                    nodes[index] = ChatMessageTimelineNode(id: node.id, content: .tool(node))
+                    nodes[toolNodeIndex] = ChatMessageTimelineNode(id: node.id, content: .tool(node))
                 }
+                index += 1
                 continue
             }
 
             if block.nodeRole == .toolPresentation,
                let toolCallID = normalizedToolCallID(block.parentToolCallID ?? block.toolCallID) {
-                let index = ensureToolNode(
+                let toolNodeIndex = ensureToolNode(
                     toolCallID: toolCallID,
                     toolBlock: nil,
                     nodes: &nodes,
                     indexByCallID: &toolNodeIndexByCallID
                 )
-                if case .tool(var node) = nodes[index].content,
+                if case .tool(var node) = nodes[toolNodeIndex].content,
                    node.presentations.contains(where: { $0.id == block.id }) == false {
                     node.presentations.append(block)
                     node.presentations.sort(by: sortBlocks)
-                    nodes[index] = ChatMessageTimelineNode(id: node.id, content: .tool(node))
+                    nodes[toolNodeIndex] = ChatMessageTimelineNode(id: node.id, content: .tool(node))
                 }
+                index += 1
                 continue
             }
 
             nodes.append(ChatMessageTimelineNode(id: block.id, content: .block(block)))
+            index += 1
         }
 
         return nodes
+    }
+
+    nonisolated private static func healthResourcePayload(from block: ChatMessageBlock) -> ChatHealthResourceReferencePayload? {
+        guard block.kind == .healthResourceReference else { return nil }
+        if case .healthResourceReference(let payload) = block.payload {
+            return payload
+        }
+        return nil
     }
 
     nonisolated private static func ensureToolNode(
@@ -363,7 +426,8 @@ private enum ChatMessageTimelineProjector {
                 .captureCard,
                 .html,
                 .smallTaskCard,
-                .taskCards:
+                .taskCards,
+                .healthResourceReference:
             return true
         }
     }

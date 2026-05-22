@@ -163,6 +163,21 @@ extension ChatMessageBlock {
                 )
             }
 
+        case .healthResourceReference(let payload):
+            // 用户消息在 Timeline 层已合并为 Group；此处仅渲染助手等非用户消息中的单卡。
+            if context.message.role == .user {
+                EmptyView()
+            } else {
+                ChatHealthResourceReferenceBlockView(
+                    payload: payload,
+                    totalRefs: max(1, context.healthResourceReferenceCount),
+                    medicalQueryAPI: context.medicalQueryAPI,
+                    cachedCompleteData: context.cachedMemberCompleteData,
+                    onUnavailableTap: context.onHealthResourceUnavailableTap,
+                    destinationBuilder: context.healthResourceDestinationFactory
+                )
+            }
+
         }
         }
     }
@@ -223,6 +238,8 @@ extension ChatMessageBlock {
             return "正在生成睡眠可视化..."
         case .workoutVisualization:
             return "正在生成运动可视化..."
+        case .healthResourceReference:
+            return "正在加载健康资料…"
         case .knowledgeCards:
             return "正在整理知识卡片..."
         case .taskCards, .smallTaskCard:

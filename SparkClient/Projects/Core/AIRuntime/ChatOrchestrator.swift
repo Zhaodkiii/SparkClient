@@ -61,6 +61,7 @@ struct ChatOrchestrator: Sendable {
     /// AI 核心：生成回复（支持流式输出、工具调用、多轮循环、多模态）
     func generateReply(
         userInput: String,                                   // 用户输入文本
+        healthResourceContext: String? = nil,                // 问报告：健康资料上下文（单独 user 消息）
         history: [ChatMessage],                              // 聊天历史
         memberContextSummary: String,                        // 成员上下文摘要
         memberID: Int?,                                      // 成员ID
@@ -77,7 +78,8 @@ struct ChatOrchestrator: Sendable {
         cancellationToken: AIRuntimeCancellationToken? = nil, // 取消令牌
         deliverMultimodalImages: Bool = false,                // 是否发送多模态图片
         providerCompanyUppercased: String? = nil,              // 模型厂商
-        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil // 流式回调
+        onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil, // 流式回调
+        messageRunActor: MessageRunActor? = nil               // 工具 UI 副作用串行落库
     ) async throws -> ChatOrchestratorOutput {
         // 检查是否取消请求
         try cancellationToken?.checkCancellation()
@@ -161,8 +163,12 @@ struct ChatOrchestrator: Sendable {
             module: .aiConfig
         )
 
-        // 循环用变量
-        var loopMessages = runtimeMessages
+        // 问报告：健康上下文与本轮用户问题拆成两条 user 消息，避免与历史 text block 混在一条里。
+        var loopMessages = Self.applyOutboundUserTurn(
+            userInput: userInput,
+            healthResourceContext: healthResourceContext,
+            to: runtimeMessages
+        )
         var loopMemberID = memberID
         let maxToolRounds = 30 // 最大工具调用轮次
         var round = 0
@@ -348,6 +354,19 @@ struct ChatOrchestrator: Sendable {
                     onPartial: onPartial
                 )
 
+                if let messageRunActor, let assistantID = assistantMessageClientID {
+                    let anchor = toolResult.anchorToolCallID ?? call.id
+                    for effect in toolResult.sideEffects {
+                        await messageRunActor.apply(
+                            .toolSideEffect(
+                                effect,
+                                anchorToolCallID: anchor,
+                                assistantClientMessageID: assistantID
+                            )
+                        )
+                    }
+                }
+
                 // 记录已执行工具
                 executedTools.append(toolResult)
                 
@@ -422,6 +441,75 @@ struct ChatOrchestrator: Sendable {
             effortTier: tier,
             usePromptFallback: userWants
         )
+    }
+
+    /// 将本轮 `userInput`（可能含健康资料解析前缀）写入发给模型的最后一条 user 消息。
+    /// 将本轮用户问题与健康资料上下文写入网关消息列表（不修改历史中的 block 结构）。
+    private static func applyOutboundUserTurn(
+        userInput: String,
+        healthResourceContext: String?,
+        to messages: [AIRuntimeMessage]
+    ) -> [AIRuntimeMessage] {
+        let question = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let context = healthResourceContext?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard question.isEmpty == false || context.isEmpty == false else { return messages }
+
+        if context.isEmpty {
+            return applyCurrentUserInput(question, to: messages)
+        }
+
+        var next = messages
+        if next.isEmpty {
+            next.append(AIRuntimeMessage(role: .user, content: context))
+            if question.isEmpty == false {
+                next.append(AIRuntimeMessage(role: .user, content: question))
+            }
+            return next
+        }
+
+        guard let lastIndex = next.indices.last, next[lastIndex].role == .user else {
+            next.append(AIRuntimeMessage(role: .user, content: context))
+            if question.isEmpty == false {
+                next.append(AIRuntimeMessage(role: .user, content: question))
+            }
+            return next
+        }
+
+        next.insert(AIRuntimeMessage(role: .user, content: context), at: lastIndex)
+        let questionIndex = lastIndex + 1
+        if question.isEmpty == false {
+            next[questionIndex] = AIRuntimeMessage(role: .user, content: question)
+        }
+        return next
+    }
+
+    private static func applyCurrentUserInput(
+        _ userInput: String,
+        to messages: [AIRuntimeMessage]
+    ) -> [AIRuntimeMessage] {
+        let trimmed = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return messages }
+        guard messages.isEmpty == false else {
+            return [AIRuntimeMessage(role: .user, content: trimmed)]
+        }
+        var next = messages
+        guard let lastIndex = next.indices.last, next[lastIndex].role == .user else {
+            next.append(AIRuntimeMessage(role: .user, content: trimmed))
+            return next
+        }
+        let last = next[lastIndex]
+        if last.contentParts?.isEmpty == false {
+            var parts = last.contentParts ?? []
+            if let textIndex = parts.firstIndex(where: { $0.type == "text" }) {
+                parts[textIndex] = .textPart(trimmed)
+            } else {
+                parts.insert(.textPart(trimmed), at: 0)
+            }
+            next[lastIndex] = AIRuntimeMessage(role: .user, content: nil, contentParts: parts)
+        } else {
+            next[lastIndex] = AIRuntimeMessage(role: .user, content: trimmed)
+        }
+        return next
     }
 
     private func makeRuntimeMessages(

@@ -188,6 +188,21 @@ extension ToolHub {
         )
     }
 
+    /// 会话或参数已能解析 member_id 时短路，不弹成员选择 Sheet。
+    func memberSelectionAlreadyResolvedResult(memberID: Int) -> ToolExecutionResult {
+        let output = [
+            "【系统】成员已绑定，无需再次选择。",
+            #"{"selection_completed":true,"member_id":\#(memberID),"already_resolved":true,"instruction":"continue_conversation"}"#
+        ].joined(separator: "\n")
+        return ToolExecutionResult(
+            toolName: SparkToolName.requestMemberSelection.rawValue,
+            outputText: output,
+            sensitive: false,
+            shouldBypassModel: true,
+            resolvedMemberID: memberID
+        )
+    }
+
 
     func memberSelectionTimeoutResult(toolName: String) -> ToolExecutionResult {
         let output = [
@@ -697,26 +712,29 @@ extension ToolHub {
 
     /// 从参数截取短标题（最多 18 字）作为会话标题建议。
 
-    func returnWithScheduledRichMerge(
+    func returnWithRichBlockSideEffects(
         context: ToolExecutionContext,
         result: ToolExecutionResult,
         richBlocks: [ChatMessageBlock]
     ) -> ToolExecutionResult {
         guard richBlocks.isEmpty == false,
-              let threadID = context.threadID,
-              let assistantID = context.assistantMessageClientID
+              context.threadID != nil,
+              context.assistantMessageClientID != nil
         else {
             return result
         }
-        let merge = structuredHealthCardMergeCoordinator
-        Task {
-            await merge.publishRichBlocks(
-                threadID: threadID,
-                assistantClientMessageID: assistantID,
-                blocks: richBlocks
-            )
-        }
-        return result
+        return ToolExecutionResult(
+            toolName: result.toolName,
+            outputText: result.outputText,
+            sensitive: result.sensitive,
+            shouldBypassModel: result.shouldBypassModel,
+            isAwaitingUserInput: result.isAwaitingUserInput,
+            resolvedMemberID: result.resolvedMemberID,
+            toolCallID: result.toolCallID,
+            anchorToolCallID: result.anchorToolCallID,
+            arguments: result.arguments,
+            sideEffects: result.sideEffects + [.externalConnectorRichBlocks(richBlocks)]
+        )
     }
 
     /// 从 `ToolInvocation.arguments` 构建地图/日历/HTML 等富 UI blocks。

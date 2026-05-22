@@ -24,26 +24,11 @@ extension ToolHub {
                 maxItems: maxItems
             )
             
-            // MARK: 3. 异步插入【健身运动可视化卡片】到聊天消息中
-            // 只有在会话和助手消息都存在时，才渲染UI卡片
+            var sideEffects: [ToolSideEffect] = []
             if model.workouts.isEmpty == false,
-               let threadID = context.threadID,
-               let assistantID = context.assistantMessageClientID {
-                
-                let merge = structuredHealthCardMergeCoordinator
-                // 清理工具调用ID空白字符
-                let normalizedToolCallID = context.pendingToolCallID?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                // 后台任务：发布运动数据卡片事件，由 MessageRunActor 串行落库。
-                Task {
-                    await merge.publishHealthWorkoutVisualization(
-                        threadID: threadID,
-                        assistantClientMessageID: assistantID,
-                        model: model,
-                        anchorToolCallID: normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil
-                    )
-                }
+               context.threadID != nil,
+               context.assistantMessageClientID != nil {
+                sideEffects = [.workoutVisualization(model)]
             }
 
             // MARK: 4. 返回【可读文本】给AI
@@ -52,7 +37,8 @@ extension ToolHub {
                 toolName: SparkToolName.fetchWorkoutDetails,
                 outputText: healthNoDataDiagnosticIfNeeded(model.toReadableText(), range: range),
                 sensitive: true,                     // 健康数据 = 敏感数据
-                shouldBypassModel: true             // 不再回传给大模型，直接展示
+                shouldBypassModel: true,             // 不再回传给大模型，直接展示
+                sideEffects: sideEffects
             )
         } catch {
             // MARK: 5. 异常处理：查询失败时返回错误信息

@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 
 final class ChatToolEventInterpreterTests: XCTestCase {
-    /// 知识卡由 `ToolHub` + `StructuredHealthCardMergeCoordinator` 异步合并，解释器不生成 `knowledge_card` 附件。
+    /// 知识卡由 `ToolHub` 副作用经 `MessageRunActor` 落库，解释器不生成 `knowledge_card` 附件。
     func testCreateKnowledgeDocumentTraceDoesNotEmitKnowledgeCardFromInterpreter() {
         let interpreter = ChatToolEventInterpreter(logger: ConsoleLogger())
         let toolTrace = """

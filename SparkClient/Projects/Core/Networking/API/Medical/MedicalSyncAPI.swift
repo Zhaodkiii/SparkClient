@@ -402,22 +402,51 @@ enum SparkMedicalSyncAPI {
 
     }
 
-    /// 单接口成员医疗数据汇总（``GET …/complete-data/``）。
+    /// 单接口成员医疗数据汇总模型
+    ///
+    /// 对应接口：GET …/complete-data/
+    /// 用途：一次性获取当前成员的全量医疗相关数据，包含病例、体检、检查、用药、随访、手术等所有模块
     struct RemoteMemberCompleteData: Codable, Sendable, Equatable {
+        /// 成员唯一ID
         var memberId: Int
+        
+        /// 成员基础信息
         var member: RemoteMember
+        
+        /// 病例摘要列表
         var medicalCases: [RemoteMedicalCaseSummary]?
+        
+        /// 体检报告列表（含附件）
         var healthExamReports: [RemoteHealthExamReportWithAttachments]?
+        
+        /// 检查检验报告列表（含附件）
         var examinationReports: [RemoteExaminationReportWithAttachments]?
+        
+        /// 药盒列表
         var medicineBoxes: [RemoteMedicineBox]?
+        
+        /// 处方列表
         var prescriptions: [RemotePrescription]?
+        
+        /// 用药计划列表
         var medicationPlans: [RemoteMedicationPlan]?
+        
+        /// 今日用药记录
         var todayMedicationRecords: [RemoteMedicationRecord]?
+        
+        /// 用药统计汇总
         var medicationSummary: RemoteMedicationSummary?
+        
+        /// 症状记录列表
         var symptoms: [RemoteSymptom]?
+        
+        /// 就诊记录列表
         var visits: [RemoteVisit]?
+        
+        /// 手术记录列表
         var surgeries: [RemoteSurgery]?
+        
+        /// 随访记录列表
         var followUps: [RemoteFollowUp]?
-
     }
 }

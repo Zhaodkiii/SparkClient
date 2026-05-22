@@ -111,7 +111,10 @@ struct ChatComposerView: View {
     private var signalComposerContent: some View {
         VStack(spacing: 8) {
             ChatComposerContextTaskBar(
+                boundMemberID: nil,
+                isSending: stateStore.isSending,
                 smallTasks: smallTasks,
+                onAskReport: {},
                 onSmallTaskTapped: onSmallTaskTapped
             )
 

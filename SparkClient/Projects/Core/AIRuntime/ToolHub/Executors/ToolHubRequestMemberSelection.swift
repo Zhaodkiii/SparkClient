@@ -3,7 +3,7 @@ import Foundation
 extension ToolHub {
     func runRequestMemberSelection(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         if let memberID = await resolveTargetMemberID(invocation: invocation, context: context) {
-            return memberSelectionCompletedResult(toolName: SparkToolName.requestMemberSelection.rawValue, memberID: memberID)
+            return memberSelectionAlreadyResolvedResult(memberID: memberID)
         }
         let rawReason = invocation.arguments["reason"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)

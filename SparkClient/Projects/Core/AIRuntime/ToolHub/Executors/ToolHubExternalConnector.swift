@@ -28,7 +28,7 @@ extension ToolHub {
             toolOutputForWebPreview: output,
             toolCallID: normalizedToolCallID(from: context)
         )
-        return returnWithScheduledRichMerge(
+        return returnWithRichBlockSideEffects(
             context: context,
             result: ToolExecutionResult(
                 toolName: invocation.name,
@@ -66,7 +66,7 @@ extension ToolHub {
                     toolCallID: normalizedToolCallID(from: context)
                 )
             ]
-            return returnWithScheduledRichMerge(
+            return returnWithRichBlockSideEffects(
                 context: context,
                 result: ToolExecutionResult(
                     toolName: invocation.name,
@@ -110,7 +110,7 @@ extension ToolHub {
                     toolCallID: normalizedToolCallID(from: context)
                 )
             ]
-            return returnWithScheduledRichMerge(
+            return returnWithRichBlockSideEffects(
                 context: context,
                 result: ToolExecutionResult(
                     toolName: invocation.name,

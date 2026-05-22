@@ -1,33 +1,58 @@
 import SwiftUI
 
 struct ChatComposerContextTaskBar: View {
+    let boundMemberID: Int?
+    let isSending: Bool
     let smallTasks: [SmallTask]
+    let onAskReport: () -> Void
     let onSmallTaskTapped: (SmallTask) -> Void
 
+    private var shouldShowAskReportButton: Bool {
+        guard let id = boundMemberID, id > 0 else { return false }
+        return isSending == false
+    }
+
     private var hasContent: Bool {
-        smallTasks.isEmpty == false
+        shouldShowAskReportButton || smallTasks.isEmpty == false
     }
 
     var body: some View {
         if hasContent {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(smallTasks) { task in
-                        Button {
-                            onSmallTaskTapped(task)
-                        } label: {
-                            ChatComposerContextPill(
-                                icon: iconName(for: task),
-                                title: task.name,
-                                tint: task.source == .local ? .orange : .blue
-                            )
+            HStack(spacing: 10) {
+                if shouldShowAskReportButton {
+                    Button(action: onAskReport) {
+                        ChatComposerContextPill(
+                            icon: "doc.text.magnifyingglass",
+                            title: L10n.text("chat.ask_report.entry.title"),
+                            tint: .teal
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("chat.ask_report.entry.accessibility"))
+                    .disabled(isSending)
+                }
+
+                if smallTasks.isEmpty == false {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(smallTasks) { task in
+                                Button {
+                                    onSmallTaskTapped(task)
+                                } label: {
+                                    ChatComposerContextPill(
+                                        icon: iconName(for: task),
+                                        title: task.name,
+                                        tint: task.source == .local ? .orange : .blue
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
     }
 

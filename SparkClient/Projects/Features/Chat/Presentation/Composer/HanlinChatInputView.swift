@@ -9,16 +9,23 @@ struct HanlinChatInputView: View {
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
     let boundMemberID: Int?
+    let medicalQueryAPI: SparkMedicalQueryAPI
+    let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let fetchMemberCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
+    let fileTransferService: FileTransferService
     let onSend: () -> Void
     let onCancel: () -> Void
     let onRequestFileImport: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
     let onSetMemberBinding: (Int?) -> Void
+    let onRemoveHealthResourceRef: (HealthResourceRef) -> Void
+    let onClearHealthResourceRefs: () -> Void
 
     @State private var inputHeight: CGFloat = 24
     @State private var voiceInputSheet = false
     @State private var unifiedFilePreview: FilePreviewInput?
+    @State private var healthResourcePreviewRef: HealthResourceRef?
 
     private var composerDraft: ChatComposerDraft {
         stateStore.composerDraft(for: threadID)
@@ -106,16 +113,33 @@ struct HanlinChatInputView: View {
                 .sparkInputPresentationChromeIfAvailable()
             }
             .unifiedFilePreview(selection: $unifiedFilePreview)
+            .sheet(item: $healthResourcePreviewRef) { ref in
+                ChatHealthResourcePreviewSheet(
+                    ref: ref,
+                    memberContextStore: memberContextStore,
+                    medicalQueryAPI: medicalQueryAPI,
+                    initialCompleteData: initialCompleteData,
+                    fetchCompleteData: fetchMemberCompleteData,
+                    fileTransferService: fileTransferService
+                )
+            }
+            .onChange(of: boundMemberID) { newValue in
+                stateStore.pruneHealthResourceRefs(matchingMemberID: newValue, for: threadID)
+            }
+    }
+
+    private var composerAttachmentAreaHasContent: Bool {
+        composerDraft.attachments.isEmpty == false
+            || composerDraft.pendingHealthResourceRefs.isEmpty == false
     }
 
     private var content: some View {
         VStack(spacing: 6) {
-            if composerDraft.attachments.isEmpty == false {
-                attachmentStrip
+            if composerAttachmentAreaHasContent {
+                composerAttachmentArea
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
             }
-            // 预选报告
 
             VStack(spacing: 0) {
                 HStack(alignment: .bottom) {
@@ -171,7 +195,46 @@ struct HanlinChatInputView: View {
             .background(Color(uiColor: .secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 12)
-            .padding(.top, composerDraft.attachments.isEmpty ? 12 : 6)
+            .padding(.top, composerAttachmentAreaHasContent ? 6 : 12)
+        }
+    }
+
+    @ViewBuilder
+    private var composerAttachmentArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if composerDraft.attachments.isEmpty == false {
+                attachmentStrip
+            }
+            if composerDraft.pendingHealthResourceRefs.isEmpty == false {
+                healthResourcePreviewStrip
+            }
+        }
+    }
+
+    private var healthResourcePreviewStrip: some View {
+        let refs = composerDraft.pendingHealthResourceRefs
+        return HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(refs.enumerated()), id: \.element.id) { index, ref in
+                        HanlinHealthResourceThumbnail(
+                            ref: ref,
+                            index: index + 1,
+                            total: refs.count,
+                            onTap: { healthResourcePreviewRef = ref },
+                            onRemove: { onRemoveHealthResourceRef(ref) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            if refs.count > 1 {
+                Button(action: onClearHealthResourceRefs) {
+                    Text(L10n.text("chat.ask_report.strip.clear_all"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

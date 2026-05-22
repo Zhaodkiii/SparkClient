@@ -95,12 +95,15 @@ struct ChatComposerDraft: Equatable, Sendable {
     var isShowingPhotoPicker = false
     var isShowingCamera = false
     var previewSelection: UUID?
+    var pendingHealthResourceRefs: [HealthResourceRef] = []
 
     var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var hasVisualContent: Bool {
-        trimmedText.isEmpty == false || attachments.isEmpty == false
+        trimmedText.isEmpty == false
+            || attachments.isEmpty == false
+            || pendingHealthResourceRefs.isEmpty == false
     }
 }

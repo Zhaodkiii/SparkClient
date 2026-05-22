@@ -38,6 +38,21 @@ struct ToolAuditEvent: Identifiable, Codable, Sendable {
     }
 }
 
+// MARK: - 工具 UI 副作用（由 MessageRunActor 串行落库，不经过 Task 异步发卡）
+enum ToolSideEffect: Sendable {
+    case healthResourceReference(resourceType: String, resourceID: Int, memberID: Int)
+    case knowledgeCards([ChatKnowledgeCard])
+    case taskCards([TaskCard])
+    case captureCard(ChatCaptureMessageCardPayload)
+    case workoutVisualization(ChatHealthWorkoutModel)
+    case sleepVisualization(ChatHealthSleepModel)
+    case externalConnectorRichBlocks([ChatMessageBlock])
+    case structuredHealthCardsPending
+    case structuredHealthCardsReady(StructuredHealthCardsBlob)
+    case structuredHealthCardsFailed(message: String?)
+    case timelineNotice(text: String)
+}
+
 // MARK: - 工具执行结果
 /// 工具执行结果模型
 struct ToolExecutionResult: Sendable {
@@ -48,8 +63,12 @@ struct ToolExecutionResult: Sendable {
     let isAwaitingUserInput: Bool       // 是否等待用户输入
     let resolvedMemberID: Int?          // 已解析的成员ID
     let toolCallID: String?             // 模型本轮 tool_call id，用于消息块锚定
+    /// 展示块锚定的 tool_call id；默认由 Hub 从 pendingToolCallID 填充，工具可覆盖。
+    let anchorToolCallID: String?
     /// 工具执行侧归一化后的调用参数（供工具详情 Sheet 展示，与模型原始 JSON 字符串解耦）。
     let arguments: [String: String]?
+    /// 需在助手消息时间线落库的 UI 副作用，由 ChatOrchestrator 经 MessageRunActor 串行写入。
+    let sideEffects: [ToolSideEffect]
 
     /// 初始化方法
     init(
@@ -60,7 +79,9 @@ struct ToolExecutionResult: Sendable {
         isAwaitingUserInput: Bool = false,
         resolvedMemberID: Int? = nil,
         toolCallID: String? = nil,
-        arguments: [String: String]? = nil
+        anchorToolCallID: String? = nil,
+        arguments: [String: String]? = nil,
+        sideEffects: [ToolSideEffect] = []
     ) {
         self.toolName = toolName
         self.outputText = outputText
@@ -69,7 +90,9 @@ struct ToolExecutionResult: Sendable {
         self.isAwaitingUserInput = isAwaitingUserInput
         self.resolvedMemberID = resolvedMemberID
         self.toolCallID = toolCallID
+        self.anchorToolCallID = anchorToolCallID
         self.arguments = arguments
+        self.sideEffects = sideEffects
     }
 
     func withToolCallID(_ toolCallID: String?) -> ToolExecutionResult {
@@ -81,7 +104,44 @@ struct ToolExecutionResult: Sendable {
             isAwaitingUserInput: isAwaitingUserInput,
             resolvedMemberID: resolvedMemberID,
             toolCallID: toolCallID,
-            arguments: arguments
+            anchorToolCallID: anchorToolCallID ?? toolCallID,
+            arguments: arguments,
+            sideEffects: sideEffects
+        )
+    }
+
+    func withAnchorToolCallID(_ pendingAnchor: String?) -> ToolExecutionResult {
+        ToolExecutionResult(
+            toolName: toolName,
+            outputText: outputText,
+            sensitive: sensitive,
+            shouldBypassModel: shouldBypassModel,
+            isAwaitingUserInput: isAwaitingUserInput,
+            resolvedMemberID: resolvedMemberID,
+            toolCallID: toolCallID,
+            anchorToolCallID: anchorToolCallID ?? pendingAnchor,
+            arguments: arguments,
+            sideEffects: sideEffects
+        )
+    }
+
+    /// 若结果未携带调用参数，则填入本次 invocation 参数（供工具详情 Sheet 展示）。
+    func withInvocationArgumentsIfMissing(_ invocationArguments: [String: String]) -> ToolExecutionResult {
+        guard invocationArguments.isEmpty == false else { return self }
+        if let arguments, arguments.isEmpty == false {
+            return self
+        }
+        return ToolExecutionResult(
+            toolName: toolName,
+            outputText: outputText,
+            sensitive: sensitive,
+            shouldBypassModel: shouldBypassModel,
+            isAwaitingUserInput: isAwaitingUserInput,
+            resolvedMemberID: resolvedMemberID,
+            toolCallID: toolCallID,
+            anchorToolCallID: anchorToolCallID,
+            arguments: invocationArguments,
+            sideEffects: sideEffects
         )
     }
 }
@@ -236,6 +296,9 @@ enum SparkToolName: String, CaseIterable {
     case createCanvas                = "create_canvas"                   // 创建画布
     case editCanvas                  = "edit_canvas"                     // 编辑画布
     case generateStructuredHealthCard = "generate_structured_health_card" // 生成结构化健康卡片
+    case listMemberHealthSources     = "list_member_health_sources"      // 检索成员健康资料候选
+    case getHealthResourceReference  = "get_health_resource_reference"   // 获取单条健康资料引用
+    case getHealthResourceContext    = "get_health_resource_context"     // 获取健康资料解读上下文
     case queryTasksByMember          = "query_tasks_by_member"           // 查询成员任务
     case generateTask                = "generate_task"                  // 生成任务
 
@@ -249,7 +312,8 @@ extension SparkToolName {
     var dataCategory: ToolDataCategory {
         switch self {
         case .fetchStepDetails, .fetchEnergyDetails, .fetchNutritionDetails, .makeNutritionData,
-             .fetchSleepDetails, .fetchWorkoutDetails, .generateStructuredHealthCard:
+             .fetchSleepDetails, .fetchWorkoutDetails, .generateStructuredHealthCard,
+             .listMemberHealthSources, .getHealthResourceReference, .getHealthResourceContext:
             return .health
         case .getCurrentMember, .requestMemberSelection, .switchMember, .findMember, .queryMemberProfile:
             return .member
@@ -429,7 +493,10 @@ enum SparkToolGroup: String, CaseIterable {
                 .makeNutritionData,
                 .fetchSleepDetails,
                 .fetchWorkoutDetails,
-                .generateStructuredHealthCard
+                .generateStructuredHealthCard,
+                .listMemberHealthSources,
+                .getHealthResourceReference,
+                .getHealthResourceContext
             ]
         case .member:
             return [
@@ -515,7 +582,10 @@ extension ToolExecutionResult {
         shouldBypassModel: Bool,
         isAwaitingUserInput: Bool = false,
         resolvedMemberID: Int? = nil,
-        arguments: [String: String]? = nil
+        toolCallID: String? = nil,
+        anchorToolCallID: String? = nil,
+        arguments: [String: String]? = nil,
+        sideEffects: [ToolSideEffect] = []
     ) {
         self.init(
             toolName: toolName.rawValue,
@@ -524,7 +594,10 @@ extension ToolExecutionResult {
             shouldBypassModel: shouldBypassModel,
             isAwaitingUserInput: isAwaitingUserInput,
             resolvedMemberID: resolvedMemberID,
-            arguments: arguments
+            toolCallID: toolCallID,
+            anchorToolCallID: anchorToolCallID,
+            arguments: arguments,
+            sideEffects: sideEffects
         )
     }
 }

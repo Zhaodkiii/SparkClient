@@ -108,6 +108,12 @@ struct ChatView: View {
                 boundMemberID: stateStore.selectedThread?.memberID,
                 modelRows: detailViewModel.chatScenarioModels,
                 smallTasks: composerAssociatedSmallTasks,
+                initialCompleteData: homeViewModel.dashboard?.medical.completeData,
+                fetchMemberCompleteData: { memberID in
+                    try await detailViewModel.fetchMemberCompleteData(memberID: memberID)
+                },
+                medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
+                fileTransferService: detailViewModel.attachmentFileTransferService,
                 onSend: {
                     KeyboardDismissHelper.dismissKeyboard()
                     detailViewModel.startSendingCurrentDraft()
@@ -128,6 +134,9 @@ struct ChatView: View {
                 },
                 onSetMemberBinding: { memberID in
                     Task { await detailViewModel.updateThreadMemberBinding(memberID, for: threadID) }
+                },
+                onMaxHealthRefsReached: {
+                    detailViewModel.notifyAskReportMaxRefsReached()
                 },
                 onPersistSelectedChatModel: { modelName in
                     Task { await detailViewModel.updateThreadModel(modelName, for: threadID) }
@@ -322,6 +331,12 @@ struct ChatView: View {
 
     private var lifecycleLayout: some View {
         statePersistenceLayout
+            .onAppear {
+                detailViewModel.updateCachedMemberCompleteData(homeViewModel.dashboard?.medical.completeData)
+            }
+            .onChange(of: homeViewModel.dashboard?.medical.completeData) { data in
+                detailViewModel.updateCachedMemberCompleteData(data)
+            }
             .task(id: threadID) {
                 if let initialModel = await detailViewModel.refreshChatModelPicker(for: threadID) {
                     if stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName == nil {
@@ -356,6 +371,8 @@ struct ChatView: View {
                             detailViewModel.toolInteractionCoordinator.dismissToolPreview(id: active.id)
                         } else if case .systemMessageSettings = active.snapshot {
                             detailViewModel.toolInteractionCoordinator.dismissSystemMessageSettings(id: active.id)
+                        } else if case .healthResourceCandidates = active.snapshot {
+                            detailViewModel.toolInteractionCoordinator.completeHealthResourceCandidatesCancelled(id: active.id)
                         }
                     }
                 )

@@ -3,7 +3,21 @@ import Foundation
 enum ChatRunEvent: Sendable {
     case assistantPartial(ChatAssistantPartialDelta, assistantClientMessageID: UUID)
     case richBlockReady(ChatMessageBlock, assistantClientMessageID: UUID)
+    case toolSideEffect(
+        ToolSideEffect,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    )
     case finalizeAssistantBlocks([ChatMessageBlock], assistantClientMessageID: UUID)
+}
+
+/// 工具异步任务（如结构化健康卡片抽取）向同一 actor 管道派发 UI 副作用。
+protocol ChatSideEffectSink: Sendable {
+    func emit(
+        _ effect: ToolSideEffect,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    ) async
 }
 
 /// Serializes all message-block side effects for one AI run.
@@ -15,8 +29,9 @@ enum ChatRunEvent: Sendable {
 /// and `upsertMessageBlock` ignores stale revisions, a late health card or a
 /// duplicated network callback can only update its own block; it cannot create a
 /// second shadow card or overwrite newer streaming text.
-actor MessageRunActor {
+actor MessageRunActor: ChatSideEffectSink {
     private let repository: any ChatRepository
+    private let pushOutbox: (@Sendable () async throws -> Void)?
     private let logger: Logger
     private var pendingPartials: [UUID: ChatAssistantPartialDelta] = [:]
     private var partialFlushTasks: [UUID: Task<Void, Never>] = [:]
@@ -25,9 +40,28 @@ actor MessageRunActor {
     private var writtenPendingPlaceholders: Set<String> = []
     private let partialFlushIntervalNs: UInt64 = 50_000_000
 
-    init(repository: any ChatRepository, logger: Logger = ConsoleLogger()) {
+    init(
+        repository: any ChatRepository,
+        pushOutbox: (@Sendable () async throws -> Void)? = nil,
+        logger: Logger = ConsoleLogger()
+    ) {
         self.repository = repository
+        self.pushOutbox = pushOutbox
         self.logger = logger
+    }
+
+    func emit(
+        _ effect: ToolSideEffect,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    ) async {
+        _ = await apply(
+            .toolSideEffect(
+                effect,
+                anchorToolCallID: anchorToolCallID,
+                assistantClientMessageID: assistantClientMessageID
+            )
+        )
     }
 
     func startAssistantMessage(
@@ -96,6 +130,13 @@ actor MessageRunActor {
                 }
             }
             return didApply
+
+        case .toolSideEffect(let effect, let anchorToolCallID, let assistantClientMessageID):
+            return await applyToolSideEffect(
+                effect,
+                anchorToolCallID: anchorToolCallID,
+                assistantClientMessageID: assistantClientMessageID
+            )
             
         // MARK: - 助手消息最终定稿（所有流式输出完成，整理并持久化最终消息）
         case .finalizeAssistantBlocks(let blocks, let assistantClientMessageID):
@@ -344,11 +385,19 @@ actor MessageRunActor {
         return didApply
     }
 
+    func nextHealthResourceRefIndex(assistantClientMessageID: UUID) async -> Int {
+        let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+        let count = messages.first?.blocks.filter { $0.kind == .healthResourceReference }.count ?? 0
+        return count + 1
+    }
+
     private func presentationOrderKey(
         for block: ChatMessageBlock,
         assistantClientMessageID: UUID
     ) async -> Double? {
-        guard block.kind == .structuredHealthCards else { return block.orderKey }
+        guard block.kind == .structuredHealthCards || block.kind == .healthResourceReference else {
+            return block.orderKey
+        }
         let toolCallID = block.parentToolCallID ?? block.toolCallID
         guard let toolCallID else { return block.orderKey }
 
@@ -505,6 +554,269 @@ actor MessageRunActor {
         )
     }
 
+    @discardableResult
+    private func applyToolSideEffect(
+        _ effect: ToolSideEffect,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    ) async -> Bool {
+        let normalizedAnchor = Self.normalizedToolCallID(anchorToolCallID)
+
+        switch effect {
+        case .healthResourceReference(let resourceType, let resourceID, let memberID):
+            return await publishHealthResourceReference(
+                resourceType: resourceType,
+                resourceID: resourceID,
+                memberID: memberID,
+                anchorToolCallID: normalizedAnchor,
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .knowledgeCards(let cards):
+            guard cards.isEmpty == false, Self.isEncodable(cards) else { return false }
+            return await submitRichBlocks(
+                [
+                    ChatMessageBlock(
+                        anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                        kind: .knowledgeCards,
+                        toolCallID: normalizedAnchor,
+                        parentToolCallID: normalizedAnchor,
+                        knowledgeCards: cards
+                    )
+                ],
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .taskCards(let taskCards):
+            guard taskCards.isEmpty == false, Self.isEncodable(taskCards) else { return false }
+            return await submitRichBlocks(
+                [
+                    ChatMessageBlock(
+                        anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                        kind: .taskCards,
+                        toolCallID: normalizedAnchor,
+                        parentToolCallID: normalizedAnchor,
+                        taskCards: taskCards
+                    )
+                ],
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .captureCard(let payload):
+            guard Self.isEncodable(payload) else { return false }
+            return await submitRichBlocks(
+                [
+                    ChatMessageBlock(
+                        anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                        kind: .captureCard,
+                        toolCallID: normalizedAnchor,
+                        parentToolCallID: normalizedAnchor,
+                        captureMessageCard: payload
+                    )
+                ],
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .workoutVisualization(let model):
+            guard Self.isEncodable(model) else {
+                logger.warning("运动可视化卡片发布跳过：payload 无法编码", module: .aiConfig)
+                return false
+            }
+            return await submitRichBlocks(
+                [
+                    ChatMessageBlock(
+                        anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                        kind: .workoutVisualization,
+                        toolCallID: normalizedAnchor,
+                        parentToolCallID: normalizedAnchor,
+                        workoutVisualization: model
+                    )
+                ],
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .sleepVisualization(let model):
+            guard Self.isEncodable(model) else {
+                logger.warning("睡眠可视化卡片发布跳过：payload 无法编码", module: .aiConfig)
+                return false
+            }
+            return await submitRichBlocks(
+                [
+                    ChatMessageBlock(
+                        anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                        kind: .sleepVisualization,
+                        toolCallID: normalizedAnchor,
+                        parentToolCallID: normalizedAnchor,
+                        sleepVisualization: model
+                    )
+                ],
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .externalConnectorRichBlocks(let blocks):
+            guard blocks.isEmpty == false else { return false }
+            return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
+        case .structuredHealthCardsPending:
+            guard let toolCallID = normalizedAnchor else { return false }
+            let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+            let toolBlock = messages.first?.blocks.first { block in
+                block.kind == .tool && block.toolCallID == toolCallID
+            }
+            let stateOrderKey = runStates[assistantClientMessageID]?.orderKeyIfKnown(forToolCallID: toolCallID)
+            let toolOrderKey = toolBlock?.orderKey ?? stateOrderKey ?? 2_000
+            let now = Date()
+            return await upsertStructuredHealthCardPendingPlaceholder(
+                assistantClientMessageID: assistantClientMessageID,
+                toolCallID: toolCallID,
+                toolOrderKey: toolOrderKey,
+                toolRevision: nextRevision(for: assistantClientMessageID),
+                createdAt: now,
+                updatedAt: now
+            )
+        case .structuredHealthCardsReady(let blob):
+            return await publishStructuredHealthCardsReady(
+                blob: blob,
+                anchorToolCallID: normalizedAnchor,
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .structuredHealthCardsFailed(let message):
+            return await submitRichBlocks(
+                [
+                    ChatMessageBlock(
+                        anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                        kind: .structuredHealthCards,
+                        toolCallID: normalizedAnchor,
+                        parentToolCallID: normalizedAnchor,
+                        structuredHealthCards: .failed(message: message ?? ""),
+                        status: .failed
+                    )
+                ],
+                assistantClientMessageID: assistantClientMessageID
+            )
+        case .timelineNotice(let text):
+            await appendTimelineNotice(text, assistantClientMessageID: assistantClientMessageID)
+            return true
+        }
+    }
+
+    @discardableResult
+    private func publishHealthResourceReference(
+        resourceType: String,
+        resourceID: Int,
+        memberID: Int,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    ) async -> Bool {
+        let refIndex = await nextHealthResourceRefIndex(assistantClientMessageID: assistantClientMessageID)
+        let payload = ChatHealthResourceReferencePayload(
+            resourceType: resourceType,
+            resourceId: resourceID,
+            memberId: memberID,
+            refIndex: refIndex
+        )
+        guard Self.isEncodable(payload) else {
+            logger.warning("健康资料引用卡发布跳过：payload 无法编码", module: .aiConfig)
+            return false
+        }
+        let parentBlockID = anchorToolCallID.map {
+            ChatStableBlockID.tool(messageID: assistantClientMessageID, toolCallID: $0)
+        }
+        return await submitRichBlocks(
+            [
+                ChatMessageBlock(
+                    id: ChatStableBlockID.healthResource(
+                        messageID: assistantClientMessageID,
+                        resourceType: resourceType,
+                        resourceID: resourceID,
+                        memberID: memberID
+                    ),
+                    anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
+                    kind: .healthResourceReference,
+                    toolCallID: anchorToolCallID,
+                    parentToolCallID: anchorToolCallID,
+                    parentBlockID: parentBlockID,
+                    healthResourceReference: payload,
+                    status: .ready
+                )
+            ],
+            assistantClientMessageID: assistantClientMessageID
+        )
+    }
+
+    @discardableResult
+    private func publishStructuredHealthCardsReady(
+        blob: StructuredHealthCardsBlob,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    ) async -> Bool {
+        if blob.hasDisplayableCards == false {
+            logger.warning(
+                "结构化健康卡片 ready 发布跳过：抽取结果无卡片条目（examReports=\(blob.examReports.count), medicationPlans=\(blob.medicationPlans.count), medicineBoxes=\(blob.medicineBoxes.count), prescriptions=\(blob.prescriptions.count), medicalCases=\(blob.medicalCases.count)），assistantMessageClientID=\(assistantClientMessageID.uuidString)",
+                module: .aiConfig
+            )
+            return await applyToolSideEffect(
+                .structuredHealthCardsFailed(message: nil),
+                anchorToolCallID: anchorToolCallID,
+                assistantClientMessageID: assistantClientMessageID
+            )
+        }
+        guard Self.isEncodable(blob) else {
+            logger.warning("结构化健康卡片发布跳过：payload 无法编码", module: .aiConfig)
+            return false
+        }
+        let didApply = await submitRichBlocks(
+            [
+                ChatMessageBlock(
+                    anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
+                    kind: .structuredHealthCards,
+                    toolCallID: anchorToolCallID,
+                    parentToolCallID: anchorToolCallID,
+                    structuredHealthCards: blob,
+                    status: .ready
+                )
+            ],
+            assistantClientMessageID: assistantClientMessageID
+        )
+        guard didApply else {
+            logger.warning(
+                "结构化健康卡片 ready 写入未生效，跳过独立上送，assistantMessageClientID=\(assistantClientMessageID.uuidString)",
+                module: .aiConfig
+            )
+            return false
+        }
+        logger.info(
+            "结构化健康卡片 ready 已落库，cards=\(blob.totalCardCount)，assistantMessageClientID=\(assistantClientMessageID.uuidString)，准备独立上送 outbox",
+            module: .aiConfig
+        )
+        if let pushOutbox {
+            do {
+                try await pushOutbox()
+            } catch {
+                logger.warning(
+                    "结构化健康卡片 ready 后上送 outbox 失败：\(error.localizedDescription)",
+                    module: .aiConfig
+                )
+            }
+        }
+        return true
+    }
+
+    @discardableResult
+    private func submitRichBlocks(
+        _ blocks: [ChatMessageBlock],
+        assistantClientMessageID: UUID
+    ) async -> Bool {
+        var didApplyAny = false
+        for block in blocks {
+            let didApply = await apply(.richBlockReady(block, assistantClientMessageID: assistantClientMessageID))
+            didApplyAny = didApplyAny || didApply
+        }
+        return didApplyAny
+    }
+
+    private static func isEncodable<T: Encodable>(_ value: T) -> Bool {
+        (try? JSONEncoder.default.encode(value)) != nil
+    }
+
+    private static func normalizedToolCallID(_ raw: String?) -> String? {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     static func databaseRichBlock(
         _ block: ChatMessageBlock,
         assistantClientMessageID: UUID,
@@ -514,7 +826,15 @@ actor MessageRunActor {
         let now = Date()
         let revision = nextRevision
         let stableID: UUID
-        if let toolCallID = block.toolCallID {
+        if block.kind == .healthResourceReference,
+           let payload = block.healthResourceReferencePayload {
+            stableID = ChatStableBlockID.healthResource(
+                messageID: assistantClientMessageID,
+                resourceType: payload.resourceType,
+                resourceID: payload.resourceId,
+                memberID: payload.memberId
+            )
+        } else if let toolCallID = block.toolCallID {
             stableID = ChatStableBlockID.rich(
                 messageID: assistantClientMessageID,
                 toolCallID: toolCallID,
@@ -546,7 +866,7 @@ actor MessageRunActor {
         case .structuredHealthCards:
             // 须与父 tool 的 orderKey 绑定；无 tool 上下文时仅作兜底。
             return 2_100
-        case .sleepVisualization, .workoutVisualization,
+        case .sleepVisualization, .workoutVisualization, .healthResourceReference,
                 .captureCard, .knowledgeCards, .html, .taskCards,
                 .pendingMemberToolCards:
             return 2_100
@@ -680,6 +1000,11 @@ nonisolated private struct AssistantRunState {
 }
 
 private extension ChatMessageBlock {
+    nonisolated var healthResourceReferencePayload: ChatHealthResourceReferencePayload? {
+        guard case .healthResourceReference(let payload) = payload else { return nil }
+        return payload
+    }
+
     nonisolated func normalizedForToolPresentation(assistantClientMessageID: UUID) -> ChatMessageBlock {
         guard let toolCallID else { return self }
         return ChatMessageBlock(
@@ -706,6 +1031,7 @@ private extension ChatMessageBlock {
             captureMessageCard: captureMessageCard,
             smallTaskCard: smallTaskCard,
             deepThoughtCard: deepThoughtCard,
+            healthResourceReference: healthResourceReferencePayload,
             status: status,
             revision: revision,
             orderKey: orderKey,

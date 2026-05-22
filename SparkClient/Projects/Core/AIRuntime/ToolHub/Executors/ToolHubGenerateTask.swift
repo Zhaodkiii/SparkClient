@@ -101,26 +101,18 @@ extension ToolHub {
         let taskCards = taskCardsFromToolCardPayload([card]) ?? []
         let titleLine = makeTaskTitle(extracted: extracted, type: taskType)
         let userFacing = "已根据描述生成 1 条待确认任务「\(titleLine)」。请在消息内任务卡片中确认或忽略。"
+        var sideEffects: [ToolSideEffect] = []
         if taskCards.isEmpty == false,
-           let threadID = context.threadID,
-           let assistantID = context.assistantMessageClientID {
-            let merge = structuredHealthCardMergeCoordinator
-            let normalizedToolCallID = context.pendingToolCallID?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            Task {
-                await merge.publishTaskCards(
-                    threadID: threadID,
-                    assistantClientMessageID: assistantID,
-                    taskCards: taskCards,
-                    anchorToolCallID: (normalizedToolCallID?.isEmpty == false ? normalizedToolCallID : nil),
-                    )
-            }
+           context.threadID != nil,
+           context.assistantMessageClientID != nil {
+            sideEffects = [.taskCards(taskCards)]
         }
         return ToolExecutionResult(
             toolName: SparkToolName.generateTask,
             outputText: userFacing,
             sensitive: true,
-            shouldBypassModel: true
+            shouldBypassModel: true,
+            sideEffects: sideEffects
         )
     }
 

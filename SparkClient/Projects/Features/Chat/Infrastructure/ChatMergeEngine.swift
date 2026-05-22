@@ -11,19 +11,24 @@ struct ChatMergeEngine: Sendable {
         }
 
         if ChatMessage.shouldPreferRemoteUserImageSyncData(local: local, remote: remote) {
-            return remote
+            return remote.mergingRemotePreservingLocalHealthResourceBlocks(local)
         }
 
+        let winner: ChatMessage
         switch (local.serverUpdatedAt, remote.serverUpdatedAt) {
         case let (.some(localDate), .some(remoteDate)):
-            return remoteDate >= localDate ? remote : local
+            winner = remoteDate >= localDate ? remote : local
         case (.none, .some):
-            return remote
+            winner = remote
         case (.some, .none):
-            return local
+            winner = local
         case (.none, .none):
-            return remote
+            winner = remote
         }
+        if winner.clientMessageID == remote.clientMessageID {
+            return winner.mergingRemotePreservingLocalHealthResourceBlocks(local)
+        }
+        return winner
     }
 
     /// `true` 表示**跳过**用 `remote` 覆盖本地行（本地胜出或等价于旧 `shouldKeepLocal`）。

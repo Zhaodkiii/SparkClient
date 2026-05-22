@@ -10,6 +10,7 @@ struct SendChatMessageUseCase: Sendable {
     let aiConfigCenter: AIConfigCenter
     let retrieveMemoryUseCase: RetrieveMemoryUseCase
     let messageRunActor: MessageRunActor
+    let medicalQueryAPI: SparkMedicalQueryAPI
     let logger: Logger
 
     init(
@@ -22,6 +23,7 @@ struct SendChatMessageUseCase: Sendable {
         aiConfigCenter: AIConfigCenter,
         retrieveMemoryUseCase: RetrieveMemoryUseCase,
         messageRunActor: MessageRunActor,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
@@ -34,6 +36,7 @@ struct SendChatMessageUseCase: Sendable {
         self.aiConfigCenter = aiConfigCenter
         self.retrieveMemoryUseCase = retrieveMemoryUseCase
         self.messageRunActor = messageRunActor
+        self.medicalQueryAPI = medicalQueryAPI
     }
 
     /// 发送消息核心业务方法：处理输入、上传附件、保存消息、调用AI生成、返回对话快照
@@ -43,6 +46,7 @@ struct SendChatMessageUseCase: Sendable {
         userInput: String,                   // 用户输入文本
         composerAttachments: [ChatComposerAttachmentPreview] = [],  // 编辑区附件
         preparedAttachments: [ChatPreparedAttachment] = [],        // 已预处理的附件
+        healthResourceRefs: [HealthResourceRef] = [],
         selectedChatModelName: String? = nil, // 用户选择的模型名称
         assistantClientMessageID: UUID,      // 助手消息客户端ID
         inference: ChatOrchestratorInferenceOptions = .default,    // 推理选项
@@ -51,12 +55,17 @@ struct SendChatMessageUseCase: Sendable {
         cancellationToken: AIRuntimeCancellationToken? = nil,      // 取消令牌
         onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,           // 图片上传进度
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,  // 用户消息落库回调
-        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil         // AI流式返回回调
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil,         // AI流式返回回调
+        cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil
     ) async throws -> ChatThreadSnapshot {
         // 清理用户输入首尾空白
         let sanitizedInput = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
         // 校验：输入不能为空 + 无附件 + 无小任务，直接抛空输入错误
-        guard sanitizedInput.isEmpty == false || composerAttachments.isEmpty == false || smallTask != nil else {
+        guard sanitizedInput.isEmpty == false
+            || composerAttachments.isEmpty == false
+            || smallTask != nil
+            || healthResourceRefs.isEmpty == false
+        else {
             throw ChatFeatureError.emptyInput
         }
 
@@ -67,7 +76,7 @@ struct SendChatMessageUseCase: Sendable {
         let start = Date()
         // 日志：发送消息开始
         logger.info(
-            "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count), attachments=\(composerAttachments.count)",
+            "sendMessage 开始，thread=\(shortID(threadID)), member=\(shortID(memberID)), inputLength=\(sanitizedInput.count), attachments=\(composerAttachments.count), healthRefs=\(healthResourceRefs.count)",
             module: .general
         )
 
@@ -253,8 +262,27 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
 
-            // 保存用户消息到本地数据库
             let clientMessageID = UUID()
+            for (index, ref) in healthResourceRefs.enumerated() {
+                let payload = ref.toMessagePayload(refIndex: index + 1)
+                userBlocks.append(
+                    ChatMessageBlock(
+                        id: ChatStableBlockID.healthResource(
+                            messageID: clientMessageID,
+                            resourceType: payload.resourceType,
+                            resourceID: payload.resourceId,
+                            memberID: payload.memberId
+                        ),
+                        kind: .healthResourceReference,
+                        healthResourceReference: payload,
+                        orderKey: Double(1000 + index),
+                        createdAt: now,
+                        updatedAt: now
+                    )
+                )
+            }
+
+            // 保存用户消息到本地数据库
             _ = try await repository.appendMessage(
                 ChatMessage(
                     threadID: thread.id,
@@ -266,8 +294,9 @@ struct SendChatMessageUseCase: Sendable {
                     modelName: "user"
                 )
             )
+            let healthBlockCount = userBlocks.filter { $0.kind == .healthResourceReference }.count
             logger.debug(
-                "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID))",
+                "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID)), blocks=\(userBlocks.count), healthBlocks=\(healthBlockCount)",
                 module: .general
             )
 
@@ -286,11 +315,15 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
             
-            // 构建成员上下文摘要
+            // 构建成员上下文摘要（问报告时由 healthResourceContext 承担，跳过多 kind 列表拉取）
             let contextMemberID = smallTask == nil ? thread.memberID : nil
             let memberContextSummary: String
             if let contextMemberID {
-                memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
+                if healthResourceRefs.isEmpty {
+                    memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
+                } else {
+                    memberContextSummary = ""
+                }
             } else {
                 memberContextSummary = ""
             }
@@ -299,8 +332,37 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            // 小任务特殊处理：构造AI输入与推理参数
-            let textForTools = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) } ?? sanitizedInput
+            var userQuestionForAI = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) } ?? sanitizedInput
+            if userQuestionForAI.isEmpty, healthResourceRefs.isEmpty == false {
+                userQuestionForAI = L10n.text("chat.ask_report.default_user_question")
+            }
+            var healthContextForAI: String?
+            if healthResourceRefs.isEmpty == false {
+                let resolveMemberID = thread.memberID ?? healthResourceRefs.first?.memberID
+                if let resolveMemberID, resolveMemberID > 0 {
+                    let localCache = cachedMemberCompleteData?.memberId == resolveMemberID
+                        ? cachedMemberCompleteData
+                        : nil
+                    let resolved = await HealthResourceContextResolver(medicalQueryAPI: medicalQueryAPI)
+                        .resolveContextText(
+                            refs: healthResourceRefs,
+                            memberID: resolveMemberID,
+                            cachedCompleteData: localCache
+                        )
+                    if resolved.isEmpty == false {
+                        healthContextForAI = resolved
+                    } else {
+                        logger.warning(
+                            "健康资料上下文解析为空，refs=\(healthResourceRefs.count), member=\(shortID(resolveMemberID))",
+                            module: .general
+                        )
+                    }
+                }
+                logger.debug(
+                    "问报告 AI 输入已组装，healthRefs=\(healthResourceRefs.count), questionLen=\(userQuestionForAI.count), contextLen=\(healthContextForAI?.count ?? 0)",
+                    module: .general
+                )
+            }
             let aiHistory: [ChatMessage]
             let effectiveInference: ChatOrchestratorInferenceOptions
             let modelAllowedToolNames = allowedToolNames(from: resolvedRow.aiToolScenarios)
@@ -309,7 +371,7 @@ struct SendChatMessageUseCase: Sendable {
                     ChatMessage(
                         threadID: thread.id,
                         role: .user,
-                        blocks: [.init(kind: .text, text: textForTools)],
+                        blocks: [.init(kind: .text, text: userQuestionForAI)],
                         deliveryState: .pending,
                         modelName: "user"
                     )
@@ -335,7 +397,8 @@ struct SendChatMessageUseCase: Sendable {
 
             // MARK: 核心：调用AI编排器生成回复（流式）
             let output = try await orchestrator.generateReply(
-                userInput: textForTools,
+                userInput: userQuestionForAI,
+                healthResourceContext: healthContextForAI,
                 history: aiHistory,
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
@@ -359,7 +422,8 @@ struct SendChatMessageUseCase: Sendable {
                     if let onAssistantPartial {
                         await onAssistantPartial(delta)
                     }
-                }
+                },
+                messageRunActor: messageRunActor
             )
             logger.info(
                 "AI 编排完成，thread=\(shortID(thread.id)), kind=\(output.kind.rawValue), outputLength=\(output.text.count)",
@@ -425,7 +489,8 @@ struct SendChatMessageUseCase: Sendable {
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
         cancellationToken: AIRuntimeCancellationToken? = nil,
-        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil
+        onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil,
+        cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil
     ) async throws -> ChatThreadSnapshot {
         let bundles = try await aiConfigCenter.effectiveScenarioBundles()
         let start = Date()
@@ -494,9 +559,14 @@ struct SendChatMessageUseCase: Sendable {
                     .contains(where: \.isUserImageForMultimodal)
 
             let contextMemberID = thread.memberID
+            let replayHealthRefs = Self.healthResourceRefs(from: latestUserMessage.blocks)
             let memberContextSummary: String
             if let contextMemberID {
-                memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
+                if replayHealthRefs.isEmpty {
+                    memberContextSummary = await buildMemberContextSummaryUseCase.execute(memberID: contextMemberID, limit: 6)
+                } else {
+                    memberContextSummary = ""
+                }
             } else {
                 memberContextSummary = ""
             }
@@ -516,8 +586,26 @@ struct SendChatMessageUseCase: Sendable {
                 modelName: resolvedRow.name
             )
 
+            var healthContextForAI: String?
+            if replayHealthRefs.isEmpty == false, let resolveMemberID = contextMemberID ?? replayHealthRefs.first?.memberID,
+               resolveMemberID > 0 {
+                let localCache = cachedMemberCompleteData?.memberId == resolveMemberID
+                    ? cachedMemberCompleteData
+                    : nil
+                let resolved = await HealthResourceContextResolver(medicalQueryAPI: medicalQueryAPI)
+                    .resolveContextText(
+                        refs: replayHealthRefs,
+                        memberID: resolveMemberID,
+                        cachedCompleteData: localCache
+                    )
+                if resolved.isEmpty == false {
+                    healthContextForAI = resolved
+                }
+            }
+
             let output = try await orchestrator.generateReply(
                 userInput: replayUserInput,
+                healthResourceContext: healthContextForAI,
                 history: replayHistory,
                 memberContextSummary: memberContextSummary,
                 memberID: contextMemberID,
@@ -541,7 +629,8 @@ struct SendChatMessageUseCase: Sendable {
                     if let onAssistantPartial {
                         await onAssistantPartial(delta)
                     }
-                }
+                },
+                messageRunActor: messageRunActor
             )
 
             _ = toolEventInterpreter.interpret(
@@ -696,6 +785,25 @@ struct SendChatMessageUseCase: Sendable {
         }
         let normalized = Set(storedToolNames).intersection(Set(SparkToolName.all))
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func healthResourceRefs(from blocks: [ChatMessageBlock]) -> [HealthResourceRef] {
+        blocks.compactMap { block -> (Int, HealthResourceRef)? in
+            guard case .healthResourceReference(let payload) = block.payload,
+                  let type = HealthResourceType(rawValue: payload.resourceType) else {
+                return nil
+            }
+            let ref = HealthResourceRef(
+                type: type,
+                resourceID: payload.resourceId,
+                memberID: payload.memberId,
+                displayTitle: L10n.text(type.localizationKey),
+                displaySubtitle: ""
+            )
+            return (payload.refIndex, ref)
+        }
+        .sorted { $0.0 < $1.0 }
+        .map(\.1)
     }
 
     private func shortID(_ value: Int?) -> String {

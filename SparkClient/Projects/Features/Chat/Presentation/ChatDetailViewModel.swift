@@ -10,6 +10,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
     private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let sendMessageUseCase: SendChatMessageUseCase
+    private let medicalQueryAPI: SparkMedicalQueryAPI
     private let fileTransferService: FileTransferService
     private let ocrOrchestrator: OCROrchestrator
     private let ocrDocumentExtractor: OCRDocumentExtractor
@@ -52,6 +53,9 @@ final class ChatDetailViewModel: ObservableObject {
     /// 工具详情 Sheet 渲染上下文（由消息气泡注入，关闭 Sheet 时清空）。
     @Published private(set) var toolPreviewRenderContext: ChatRenderContext?
 
+    /// 首页已缓存的成员 complete-data，供消息流健康资料卡片本地命中（不触发全量拉取）。
+    private(set) var cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+
     init(
         stateStore: ChatStateStore,
         memberContextStore: MemberContextStore,
@@ -59,6 +63,7 @@ final class ChatDetailViewModel: ObservableObject {
         loadChatThreadsUseCase: LoadChatThreadsUseCase,
         loadChatMessagesUseCase: LoadChatMessagesUseCase,
         sendMessageUseCase: SendChatMessageUseCase,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         fileTransferService: FileTransferService,
         ocrOrchestrator: OCROrchestrator,
         ocrDocumentExtractor: OCRDocumentExtractor,
@@ -81,6 +86,7 @@ final class ChatDetailViewModel: ObservableObject {
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.sendMessageUseCase = sendMessageUseCase
+        self.medicalQueryAPI = medicalQueryAPI
         self.fileTransferService = fileTransferService
         self.ocrOrchestrator = ocrOrchestrator
         self.ocrDocumentExtractor = ocrDocumentExtractor
@@ -435,7 +441,43 @@ final class ChatDetailViewModel: ObservableObject {
         if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
             stateStore.upsertThreadListItem(item)
         }
+        stateStore.pruneHealthResourceRefs(matchingMemberID: memberID, for: threadID)
+    }
 
+    var sparkMedicalQueryAPI: SparkMedicalQueryAPI { medicalQueryAPI }
+    var chatNotificationClient: any NotificationClient { notificationClient }
+    var chatLogger: Logger { logger }
+
+    func updateCachedMemberCompleteData(_ data: SparkMedicalSyncAPI.RemoteMemberCompleteData?) {
+        cachedMemberCompleteData = data
+    }
+
+    func fetchMemberCompleteData(memberID: Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData {
+        try await medicalQueryAPI.fetchMemberCompleteData(memberID: memberID)
+    }
+
+    func notifyHealthResourceUnavailable() {
+        notificationClient.info(
+            L10n.text("chat.ask_report.message_card.unavailable"),
+            title: nil,
+            source: "chat.health_resource.unavailable"
+        )
+    }
+
+    func notifyAskReportMaxRefsReached() {
+        notificationClient.info(
+            L10n.text("chat.ask_report.toast.max_refs"),
+            title: nil,
+            source: "chat.ask_report.max_refs"
+        )
+    }
+
+    func notifyAskReportDuplicateInPreview() {
+        notificationClient.info(
+            L10n.text("chat.ask_report.toast.duplicate_in_preview"),
+            title: nil,
+            source: "chat.ask_report.duplicate_in_preview"
+        )
     }
 
     func updateThreadGenerationSettings(_ settings: ChatThreadGenerationSettings, for threadID: UUID) async {
@@ -605,10 +647,21 @@ final class ChatDetailViewModel: ObservableObject {
 
         // 获取当前编辑框的草稿内容
         let composer = stateStore.composerDraft(for: threadID)
+        let pendingHealthRefs = composer.pendingHealthResourceRefs
         // 必须有内容 或 有任务，才允许发送
         guard composer.hasVisualContent || smallTask != nil else { return }
         // 附件还在准备中，阻塞发送
         guard stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false else { return }
+
+        do {
+            try HealthResourceSendValidator.validate(
+                refs: pendingHealthRefs,
+                threadMemberID: stateStore.selectedThread?.memberID
+            )
+        } catch {
+            notificationClient.info(error.localizedDescription, title: nil, source: "chat.ask_report.send")
+            return
+        }
 
         // 清理文本首尾空白换行
         let draft = composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -625,7 +678,7 @@ final class ChatDetailViewModel: ObservableObject {
 
         // 日志：开始发送对话
         logger.info(
-            "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), textLen=\(draft.count), attachments=\(composer.attachments.count)",
+            "发送对话开始，thread=\(shortID(threadID)), member=\(shortID(memberContextStore.context.selectedMemberID)), textLen=\(draft.count), attachments=\(composer.attachments.count), healthRefs=\(pendingHealthRefs.count)",
             module: .general
         )
         
@@ -671,6 +724,7 @@ final class ChatDetailViewModel: ObservableObject {
                 userInput: composer.text,
                 composerAttachments: composer.attachments,
                 preparedAttachments: stateStore.preparedAttachments(for: threadID),
+                healthResourceRefs: pendingHealthRefs,
                 selectedChatModelName: flags.selectedChatModelName,
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
@@ -701,7 +755,8 @@ final class ChatDetailViewModel: ObservableObject {
                 },
                 
                 // Streaming deltas are persisted by SendChatMessageUseCase and rendered through DB notifications.
-                onAssistantPartial: nil
+                onAssistantPartial: nil,
+                cachedMemberCompleteData: cachedMemberCompleteData
             )
 
             // MARK: - 发送完成：刷新线程列表
@@ -712,8 +767,8 @@ final class ChatDetailViewModel: ObservableObject {
             // 加载最终完整消息
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
-            // 清空草稿、清除错误
-            stateStore.clearDraft(for: snapshot.thread.id)
+            // 清空已发送的文本/附件
+            stateStore.clearComposerTextAndAttachments(for: snapshot.thread.id)
             stateStore.setError(nil, for: snapshot.thread.id)
             
             // 日志：发送成功
@@ -850,7 +905,8 @@ final class ChatDetailViewModel: ObservableObject {
                 inference: inference,
                 modelReasoning: modelReasoning,
                 cancellationToken: cancellationToken,
-                onAssistantPartial: nil
+                onAssistantPartial: nil,
+                cachedMemberCompleteData: cachedMemberCompleteData
             )
 
             if let finalRow = await loadChatThreadsUseCase.execute(threadID: snapshot.thread.id) {

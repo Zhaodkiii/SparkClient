@@ -27,36 +27,15 @@ extension ToolHub {
                 module: .aiConfig
             )
 
-            if let threadID = context.threadID,
-               let assistantID = context.assistantMessageClientID {
-                let merge = structuredHealthCardMergeCoordinator
-                let logger = logger
+            var sideEffects: [ToolSideEffect] = []
+            if context.threadID != nil, context.assistantMessageClientID != nil {
                 logger.info(
                     """
-                    fetch_sleep_details 准备发布睡眠可视化卡片：threadID=\(threadID)，assistantMessageClientID=\(assistantID)，anchorToolCallID=\(anchorToolCallID ?? "<nil>")，days=\(model.days.count)
+                    fetch_sleep_details 将发布睡眠可视化卡片：anchorToolCallID=\(anchorToolCallID ?? "<nil>")，days=\(model.days.count)
                     """,
                     module: .aiConfig
                 )
-                Task {
-                    logger.debug(
-                        """
-                        fetch_sleep_details 睡眠可视化卡片发布任务开始：threadID=\(threadID)，assistantMessageClientID=\(assistantID)，anchorToolCallID=\(anchorToolCallID ?? "<nil>")
-                        """,
-                        module: .aiConfig
-                    )
-                    await merge.publishHealthSleepVisualization(
-                        threadID: threadID,
-                        assistantClientMessageID: assistantID,
-                        model: model,
-                        anchorToolCallID: anchorToolCallID,
-                        )
-                    logger.info(
-                        """
-                        fetch_sleep_details 睡眠可视化卡片发布任务完成：threadID=\(threadID)，assistantMessageClientID=\(assistantID)，anchorToolCallID=\(anchorToolCallID ?? "<nil>")
-                        """,
-                        module: .aiConfig
-                    )
-                }
+                sideEffects = [.sleepVisualization(model)]
             } else {
                 logger.warning(
                     """
@@ -69,7 +48,8 @@ extension ToolHub {
                 toolName: SparkToolName.fetchSleepDetails,
                 outputText: outputText,
                 sensitive: true,
-                shouldBypassModel: true
+                shouldBypassModel: true,
+                sideEffects: sideEffects
             )
         } catch {
             let diagnostic = sleepFailureDiagnostic(

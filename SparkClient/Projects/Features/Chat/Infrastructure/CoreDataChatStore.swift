@@ -751,20 +751,44 @@ actor CoreDataChatStore {
                     serverMessageID: message.serverMessageID
                 ) ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.message, into: context)
 
-                if let local = try? Self.toMessage(
+                let local = try? Self.toMessage(
                     object: object,
                     context: context,
                     ownerAccountID: accountID,
                     decoder: self.decoder,
                     logger: self.logger
-                ),
+                )
+                if let local,
                    mergeEngine.shouldSkipApplyingRemote(local: local, remote: message) {
                     continue
                 }
 
+                let messageToApply: ChatMessage
+                if let local {
+                    let mergedBlocks = Self.mergeBlocksPreservingLocalHealthResources(
+                        local: local.blocks,
+                        remote: message.blocks
+                    )
+                    messageToApply = ChatMessage(
+                        id: message.id,
+                        threadID: message.threadID,
+                        role: message.role,
+                        blocks: mergedBlocks,
+                        clientMessageID: message.clientMessageID,
+                        serverMessageID: message.serverMessageID,
+                        deliveryState: message.deliveryState,
+                        createdAt: message.createdAt,
+                        serverUpdatedAt: message.serverUpdatedAt,
+                        isTombstone: message.isTombstone,
+                        modelName: message.modelName
+                    )
+                } else {
+                    messageToApply = message
+                }
+
                 try Self.fillMessage(
                     object: object,
-                    message: message,
+                    message: messageToApply,
                     context: context,
                     ownerAccountID: accountID,
                     logger: self.logger
@@ -1265,7 +1289,8 @@ actor CoreDataChatStore {
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
         case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
-             .knowledgeCards, .taskCards, .captureCard, .html, .pendingMemberToolCards:
+             .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
+             .pendingMemberToolCards:
             return true
         default:
             return false
@@ -1304,6 +1329,33 @@ actor CoreDataChatStore {
         return try context.fetch(request)
     }
 
+    private static func blockRowSnapshot(from row: NSManagedObject) -> ChatMessageBlockRowSnapshot? {
+        guard let id = row.value(forKey: "id") as? UUID else { return nil }
+        let kindRaw = row.value(forKey: "kind") as? String
+        let anchor: ChatBlockAnchor?
+        if let anchorData = row.value(forKey: "anchorData") as? Data {
+            anchor = try? JSONDecoder.default.decode(ChatBlockAnchor.self, from: anchorData)
+        } else {
+            anchor = nil
+        }
+        let nodeRoleRaw = row.value(forKey: "nodeRole") as? String
+        return ChatMessageBlockRowSnapshot(
+            id: id,
+            kind: kindRaw.flatMap(ChatMessageBlockKind.init(rawValue:)),
+            payloadData: row.value(forKey: "payloadData") as? Data,
+            anchor: anchor,
+            status: (row.value(forKey: "status") as? String).flatMap(ChatMessageBlockStatus.init(rawValue:)),
+            revision: row.value(forKey: "revision") as? Int64 ?? 1,
+            orderKey: row.value(forKey: "orderKey") as? Double,
+            toolCallID: row.value(forKey: "toolCallID") as? String,
+            parentToolCallID: row.value(forKey: "parentToolCallID") as? String,
+            parentBlockID: row.value(forKey: "parentBlockID") as? UUID,
+            nodeRole: nodeRoleRaw.flatMap(ChatMessageBlockNodeRole.init(rawValue:)),
+            createdAt: row.value(forKey: "createdAt") as? Date,
+            updatedAt: row.value(forKey: "updatedAt") as? Date
+        )
+    }
+
     private static func loadBlockRows(
         context: NSManagedObjectContext,
         ownerAccountID: Int64,
@@ -1316,14 +1368,17 @@ actor CoreDataChatStore {
             ownerAccountID: ownerAccountID,
             clientMessageID: clientMessageID
         ) {
-            let blockID = row.value(forKey: "id") as? UUID
-            let kindRaw = row.value(forKey: "kind") as? String
-            let payloadData = row.value(forKey: "payloadData") as? Data
-            guard let block = ChatMessageBlockCodec.decode(payloadData) else {
-                if kindRaw == ChatMessageBlockKind.structuredHealthCards.rawValue {
-                    let reason = ChatMessageBlockCodec.decodeFailureReason(payloadData) ?? "unknown"
+            guard let snapshot = blockRowSnapshot(from: row) else { continue }
+            guard let block = ChatMessageBlockCodec.decodeBlock(from: snapshot) else {
+                let kindRaw = snapshot.kind?.rawValue
+                if kindRaw == ChatMessageBlockKind.structuredHealthCards.rawValue
+                    || kindRaw == ChatMessageBlockKind.healthResourceReference.rawValue {
+                    let reason = ChatMessageBlockCodec.decodeFailureReason(
+                        payloadData: snapshot.payloadData,
+                        kind: snapshot.kind
+                    ) ?? "unknown"
                     logger.warning(
-                        "messageBlock payload 解码失败，clientMessageID=\(clientMessageID.uuidString), blockID=\(blockID?.uuidString ?? "nil"), bytes=\(payloadData?.count ?? 0), reason=\(reason)",
+                        "messageBlock payload 解码失败，kind=\(kindRaw ?? "?"), clientMessageID=\(clientMessageID.uuidString), blockID=\(snapshot.id.uuidString), bytes=\(snapshot.payloadData?.count ?? 0), reason=\(reason)",
                         module: .general
                     )
                 }
@@ -1350,12 +1405,12 @@ actor CoreDataChatStore {
         )
         let existingBlocksByID = Dictionary(
             uniqueKeysWithValues: existingRows.compactMap { row -> (UUID, ChatMessageBlock)? in
-                guard let id = row.value(forKey: "id") as? UUID,
-                      let block = ChatMessageBlockCodec.decode(row.value(forKey: "payloadData") as? Data)
+                guard let snapshot = blockRowSnapshot(from: row),
+                      let block = ChatMessageBlockCodec.decodeBlock(from: snapshot)
                 else {
                     return nil
                 }
-                return (id, block)
+                return (snapshot.id, block)
             }
         )
         for row in existingRows {
@@ -1384,14 +1439,35 @@ actor CoreDataChatStore {
 
     private static func shouldPreserveLocalBlockOnRemoteMerge(_ block: ChatMessageBlock?) -> Bool {
         guard let block else { return false }
+        if block.kind == .healthResourceReference {
+            return true
+        }
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
         case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
-             .knowledgeCards, .taskCards, .captureCard, .html, .pendingMemberToolCards:
+             .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
+             .pendingMemberToolCards:
             return true
         default:
             return false
         }
+    }
+
+    /// 远端消息覆盖本地时，保留本地独有的健康资料引用 block。
+    private static func mergeBlocksPreservingLocalHealthResources(
+        local: [ChatMessageBlock],
+        remote: [ChatMessageBlock]
+    ) -> [ChatMessageBlock] {
+        let remoteHealthIDs = Set(
+            remote
+                .filter { $0.kind == .healthResourceReference }
+                .map(\.id)
+        )
+        let preserved = local.filter { block in
+            block.kind == .healthResourceReference && remoteHealthIDs.contains(block.id) == false
+        }
+        guard preserved.isEmpty == false else { return remote }
+        return sortBlocksByOrderKey(remote + preserved)
     }
 
     @discardableResult

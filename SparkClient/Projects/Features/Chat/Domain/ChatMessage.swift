@@ -114,6 +114,8 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case taskCards
     /// 错误信息块
     case error
+    /// 健康资料引用（问报告）
+    case healthResourceReference
 }
 
 nonisolated enum ChatMessageBlockStatus: String, Codable, Sendable {
@@ -148,6 +150,17 @@ nonisolated enum ChatStableBlockID {
 
     static func rich(messageID: UUID, kind: ChatMessageBlockKind) -> UUID {
         deterministicUUID("chat.message.\(messageID.uuidString.lowercased()).rich.\(kind.rawValue)")
+    }
+
+    static func healthResource(
+        messageID: UUID,
+        resourceType: String,
+        resourceID: Int,
+        memberID: Int
+    ) -> UUID {
+        deterministicUUID(
+            "chat.message.\(messageID.uuidString.lowercased()).health.\(resourceType).\(resourceID).\(memberID)"
+        )
     }
 
     private static func deterministicUUID(_ key: String) -> UUID {
@@ -227,6 +240,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case smallTaskCard(ChatSmallTaskMessageCardPayload)
     case taskCards([TaskCard])
     case error(String)
+    case healthResourceReference(ChatHealthResourceReferencePayload)
 
     nonisolated var kind: ChatMessageBlockKind {
         switch self {
@@ -249,6 +263,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .smallTaskCard: return .smallTaskCard
         case .taskCards: return .taskCards
         case .error: return .error
+        case .healthResourceReference: return .healthResourceReference
         }
     }
 }
@@ -430,6 +445,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         captureMessageCard: ChatCaptureMessageCardPayload? = nil,
         smallTaskCard: ChatSmallTaskMessageCardPayload? = nil,
         deepThoughtCard: ChatDeepThoughtCardPayload? = nil,
+        healthResourceReference: ChatHealthResourceReferencePayload? = nil,
         status: ChatMessageBlockStatus = .ready,
         revision: Int64 = 1,
         orderKey: Double? = nil,
@@ -461,7 +477,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,
             smallTaskCard: smallTaskCard,
-            deepThoughtCard: deepThoughtCard
+            deepThoughtCard: deepThoughtCard,
+            healthResourceReference: healthResourceReference
         )
         self.status = status
         self.revision = revision
@@ -490,7 +507,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         workoutVisualization: ChatHealthWorkoutModel?,
         captureMessageCard: ChatCaptureMessageCardPayload?,
         smallTaskCard: ChatSmallTaskMessageCardPayload?,
-        deepThoughtCard: ChatDeepThoughtCardPayload?
+        deepThoughtCard: ChatDeepThoughtCardPayload?,
+        healthResourceReference: ChatHealthResourceReferencePayload?
     ) -> ChatMessageBlockPayload {
         switch kind {
         case .text:
@@ -556,6 +574,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return .taskCards(taskCards)
         case .error:
             return .error(text ?? "")
+        case .healthResourceReference:
+            guard let healthResourceReference else {
+                preconditionFailure("Missing health resource reference payload")
+            }
+            return .healthResourceReference(healthResourceReference)
         }
     }
 
@@ -693,6 +716,42 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
 }
 
 extension ChatMessage {
+    /// 入站合并时保留本地已落库的 `healthResourceReference`（远端 push/拉取可能尚未支持该 block）。
+    nonisolated func mergingRemotePreservingLocalHealthResourceBlocks(_ remote: ChatMessage) -> ChatMessage {
+        guard clientMessageID == remote.clientMessageID else { return remote }
+        let remoteHealthIDs = Set(
+            remote.blocks
+                .filter { $0.kind == .healthResourceReference }
+                .map(\.id)
+        )
+        let preservedLocal = blocks.filter { block in
+            block.kind == .healthResourceReference && remoteHealthIDs.contains(block.id) == false
+        }
+        guard preservedLocal.isEmpty == false else { return remote }
+        var mergedBlocks = remote.blocks + preservedLocal
+        mergedBlocks.sort { lhs, rhs in
+            switch (lhs.orderKey, rhs.orderKey) {
+            case let (l?, r?) where l != r: return l < r
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: return lhs.createdAt < rhs.createdAt
+            }
+        }
+        return ChatMessage(
+            id: remote.id,
+            threadID: remote.threadID,
+            role: remote.role,
+            blocks: mergedBlocks,
+            clientMessageID: remote.clientMessageID,
+            serverMessageID: remote.serverMessageID ?? serverMessageID,
+            deliveryState: remote.deliveryState,
+            createdAt: remote.createdAt,
+            serverUpdatedAt: remote.serverUpdatedAt,
+            isTombstone: remote.isTombstone,
+            modelName: remote.modelName
+        )
+    }
+
     /// 由工具消息块构造全局工具详情 Sheet 的载荷（含同 `toolCallID` 关联块 id）。
     nonisolated func makeToolPreviewPrompt(forToolBlock toolBlock: ChatMessageBlock) -> ToolPreviewPrompt? {
         guard case .tool(let t) = toolBlock.payload else { return nil }

@@ -26,10 +26,10 @@
 "tool.summary.update_memory" = "Purpose: update memory. originalContent and updatedContent; exact match only. Use with retrieve_memory.";
 "tool.summary.generate_chat_title" = "Purpose: concise chat title (≤6 chars, emoji allowed). No required parameters.";
 "tool.summary.show_custom_message_card" = "Purpose: Show capture/upload card in reply when attachments are missing for report/meds/skin.";
-"tool.summary.get_current_member" = "Purpose: Read currently selected member basics. Spark returns a prompt if none selected.";
-"tool.summary.request_member_selection" = "Purpose: Ask the user to select a member in the current message when the next tool call or answer needs an explicit member and none is available. The tool loop pauses after this call; after selection, this tool returns member_id and the model must continue the original task.";
+"tool.summary.get_current_member" = "Purpose: Read the effective member (global selection, thread-bound member, or member_id arg). Returns name, relationship, and member_id. If list_member_health_sources JSON already includes member_id, use it — do not re-select a member because this tool once said none selected.";
+"tool.summary.request_member_selection" = "Purpose: Only when member_id cannot be resolved from get_current_member, list JSON, thread binding, or args. If member_id is already known, the client short-circuits without UI. Do NOT call after list/health tools when member_id is already in context.";
 "tool.summary.switch_member" = "Purpose: Switch member; subsequent tools use new selection (Spark placeholder).";
-"tool.summary.find_member" = "Purpose: Find member by relationship and/or name (partial). Provide at least one.";
+"tool.summary.find_member" = "Purpose: Find member by relationship and/or name (at least one required). Never pass numeric member_id as name (e.g. name=\"19\"). Do NOT call when list JSON already has member_id.";
 "tool.summary.query_member_profile" = "Purpose: Query member health profile by query_type. Optional member_id (UUID string in Spark); optional days, limit. Spark returns aggregate counts.";
 "tool.summary.search_online" = "Purpose: web search and summarise. query concise; no sensitive PII. Pair with: read_web_page, search_knowledge_bag.";
 "tool.summary.read_web_page" = "Purpose: fetch page content/summary. url full HTTP(S). Parse each link once.";
@@ -153,7 +153,16 @@
 "tool.error.structured_health_card.no_member" = "No member selected; cannot generate structured health cards.";
 "tool.error.structured_health_card.empty_raw_text" = "Missing raw_text (distilled excerpt).";
 "tool.error.structured_health_card.no_message_binding" = "[System] Internal error: assistant message not bound.";
-"tool.summary.ask_user_question" = "Purpose: ask the user a focused question during an answer. Supports 2-5 options, single or multiple selection, and optional free-form other input. The client shows a sheet and returns the submitted choice so you can continue.";
+
+"tool.summary.list_member_health_sources" = "Purpose: Search saved health sources from complete-data. Output JSON includes member_id and candidates — NOT full clinical text. Rules: (1) member_id in output is authoritative for this turn — do NOT call request_member_selection or find_member afterward; (2) one candidate skips report confirmation UI; (3) multiple candidates show report picker; (4) then get_health_resource_context once per record. Use query_member_profile only for counts.";
+"tool.summary.get_health_resource_reference" = "Purpose: Only when you must validate that a reference exists and you do not yet have resource_id (compact JSON + client reference card). After list or user confirmation, use get_health_resource_context for interpretation — do not call both tools on the same resource.";
+"tool.summary.get_health_resource_context" = "Purpose: Build AI-readable resolved context for ONE reference (same schema as client-side send resolver). After list or confirmation, call once per record before answering interpretation questions. Do not call get_health_resource_reference for the same resource. Never persist output to message database.";
+"tool.param.health_resource_type_enum" = "Health source type: health_exam_report, examination_report, medical_case, prescription, medication_plan, medicine_box, medication_record, medication_summary, symptom, visit, surgery, follow_up";
+"tool.param.health_resource_id" = "Primary key of the resource in complete-data";
+"tool.param.health_keyword" = "Search keyword for title, exam name, summary, findings";
+"tool.param.health_sources_limit" = "Max candidates returned (default 20)";
+"tool.param.health_topic_focus" = "Optional focus topic for context trimming, e.g. blood_pressure, thyroid";
+"tool.summary.ask_user_question" = "Purpose: flexibly ask the user to choose or clarify during an answer (not only generic Q&A). Primary use — pick report(s) to interpret: (1) when the user is vague (e.g. \"last checkup\", \"thyroid report\", \"recent endoscopy\"), call list_member_health_sources first, then ask_user_question with 2-5 options (single/multiple); option text = title · date · institution — never put resourceID in options; (2) when list returns 2-5 similar matches, let the user pick, then get_health_resource_reference + get_health_resource_context; (3) confirm member, date range, or focus (blood pressure, thyroid, etc.) before interpreting. Supports 2-5 options, single/multiple, allows_other. Do NOT replace list for full search; respect records the user already added via Ask Report UI. After submission, finish refs and interpretation.";
 "tool.param.ask_user_question" = "A concise, clear question for the user.";
 "tool.param.ask_user_questions" = "Question array, up to 5 items. Each item includes question, options, selection_mode, and allows_other.";
 "tool.param.ask_user_question_item" = "A single question object.";

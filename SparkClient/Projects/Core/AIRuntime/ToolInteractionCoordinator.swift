@@ -24,7 +24,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         let completion: QueuedCompletion?
     }
 
-    /// 队列任务的回调类型（区分授权/提问/选择成员三种异步等待）
+    /// 队列任务的回调类型（区分授权/提问/选择成员/健康资料候选等异步等待）
     private enum QueuedCompletion {
         /// 授权同意回调
         case consent(CheckedContinuation<InteractionResult<ToolConsentDecision>, Never>)
@@ -32,6 +32,8 @@ final class ToolInteractionCoordinator: ObservableObject {
         case question(CheckedContinuation<InteractionResult<ToolQuestionAnswer>, Never>)
         /// 选择成员回调
         case member(CheckedContinuation<InteractionResult<Int>, Never>)
+        /// 健康资料候选确认回调
+        case healthResourceCandidates(CheckedContinuation<InteractionResult<[HealthResourceToolCandidateDTO]>, Never>)
     }
 
     /// 等待用户操作后的结果类型
@@ -39,6 +41,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case consent(InteractionResult<ToolConsentDecision>)
         case question(InteractionResult<ToolQuestionAnswer>)
         case member(InteractionResult<Int>)
+        case healthResourceCandidates(InteractionResult<[HealthResourceToolCandidateDTO]>)
         case toolPreviewDismissed
         case systemMessageSettingsDismissed
     }
@@ -139,6 +142,22 @@ final class ToolInteractionCoordinator: ObservableObject {
         )
     }
 
+    /// 请求用户确认健康资料候选（阻塞直至确认或取消，与敏感数据授权一致）。
+    func requestHealthResourceCandidateSelection(
+        prompt: HealthResourceToolCandidatePrompt
+    ) async -> InteractionResult<[HealthResourceToolCandidateDTO]> {
+        let snapshot = ToolInteractionSnapshot.healthResourceCandidates(prompt)
+        return await withCheckedContinuation { continuation in
+            enqueue(
+                QueuedWork(
+                    id: prompt.id,
+                    snapshot: snapshot,
+                    completion: .healthResourceCandidates(continuation)
+                )
+            )
+        }
+    }
+
     /// 关闭工具预览
     func dismissToolPreview(id: UUID) {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
@@ -151,6 +170,18 @@ final class ToolInteractionCoordinator: ObservableObject {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
         guard case .systemMessageSettings = activePresentation?.snapshot else { return }
         pendingOutcome = .systemMessageSettingsDismissed
+        resumeUserGate()
+    }
+
+    func completeHealthResourceCandidates(id: UUID, selected: [HealthResourceToolCandidateDTO]) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        pendingOutcome = .healthResourceCandidates(.success(selected))
+        resumeUserGate()
+    }
+
+    func completeHealthResourceCandidatesCancelled(id: UUID) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        pendingOutcome = .healthResourceCandidates(.cancelled)
         resumeUserGate()
     }
 
@@ -251,6 +282,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case .member: return .member(.cancelled)
         case .toolPreview: return .toolPreviewDismissed
         case .systemMessageSettings: return .systemMessageSettingsDismissed
+        case .healthResourceCandidates: return .healthResourceCandidates(.cancelled)
         }
     }
 
@@ -269,6 +301,8 @@ final class ToolInteractionCoordinator: ObservableObject {
         case (.question(let c), .question(let r)):
             c.resume(returning: r)
         case (.member(let c), .member(let r)):
+            c.resume(returning: r)
+        case (.healthResourceCandidates(let c), .healthResourceCandidates(let r)):
             c.resume(returning: r)
         default:
             break
