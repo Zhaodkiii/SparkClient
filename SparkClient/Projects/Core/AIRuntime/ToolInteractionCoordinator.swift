@@ -44,6 +44,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case healthResourceCandidates(InteractionResult<[HealthResourceToolCandidateDTO]>)
         case toolPreviewDismissed
         case systemMessageSettingsDismissed
+        case askReportPickerDismissed
     }
 
     // MARK: - 内部状态
@@ -283,7 +284,42 @@ final class ToolInteractionCoordinator: ObservableObject {
         case .toolPreview: return .toolPreviewDismissed
         case .systemMessageSettings: return .systemMessageSettingsDismissed
         case .healthResourceCandidates: return .healthResourceCandidates(.cancelled)
+        case .askReportPicker: return .askReportPickerDismissed
         }
+    }
+
+    /// 用户手势关闭当前可关闭的 Sheet（View 层无需感知 snapshot 类型）。
+    func dismissActivePresentationByUser() {
+        guard let active = activePresentation, pendingOutcome == nil else { return }
+        switch active.snapshot {
+        case .toolPreview:
+            dismissToolPreview(id: active.id)
+        case .systemMessageSettings:
+            dismissSystemMessageSettings(id: active.id)
+        case .healthResourceCandidates:
+            completeHealthResourceCandidatesCancelled(id: active.id)
+        case .askReportPicker:
+            completeAskReportPickerCancelled(id: active.id)
+        case .consent, .question, .member:
+            break
+        }
+    }
+
+    func presentAskReportPicker(prompt: AskReportPickerPrompt) {
+        enqueue(
+            QueuedWork(
+                id: prompt.id,
+                snapshot: .askReportPicker(prompt),
+                completion: nil
+            )
+        )
+    }
+
+    func completeAskReportPickerCancelled(id: UUID) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        guard case .askReportPicker = activePresentation?.snapshot else { return }
+        pendingOutcome = .askReportPickerDismissed
+        resumeUserGate()
     }
 
     /// 恢复用户等待的异步门（继续执行队列）

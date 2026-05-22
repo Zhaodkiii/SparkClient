@@ -29,7 +29,7 @@ final class ChatDetailViewModel: ObservableObject {
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
     private var currentGenerationTask: Task<Void, Never>?
     private var currentGenerationCancellationToken: AIRuntimeCancellationToken?
-    private var cancellationNoticeThreadIDs: Set<UUID> = []
+    private var currentGenerationAssistantClientMessageID: UUID?
     private var finalizedInterruptedAssistantMessageIDs: Set<UUID> = []
     private var cancellables = Set<AnyCancellable>()
     private let chatLoadCoordinator = ChatLoadCoordinator()
@@ -164,6 +164,28 @@ final class ChatDetailViewModel: ObservableObject {
 
     func presentSystemMessageSettings(prompt: SystemMessageSettingsPrompt) {
         toolInteractionCoordinator.presentSystemMessageSettings(prompt: prompt)
+    }
+
+    func presentAskReportPicker(for threadID: UUID, memberID: Int?) {
+        guard let memberID, memberID > 0 else { return }
+        let prompt = AskReportPickerPrompt(threadID: threadID, memberID: memberID)
+        toolInteractionCoordinator.presentAskReportPicker(prompt: prompt)
+    }
+
+    func appendAskReportRefs(_ refs: [HealthResourceRef], for threadID: UUID) {
+        guard refs.isEmpty == false else { return }
+        let draft = stateStore.composerDraft(for: threadID)
+        let remaining = HealthResourceSendValidator.maxRefs - draft.pendingHealthResourceRefs.count
+        guard remaining > 0 else {
+            notifyAskReportMaxRefsReached()
+            return
+        }
+        let batch = Array(refs.prefix(remaining))
+        if batch.isEmpty {
+            notifyAskReportMaxRefsReached()
+            return
+        }
+        stateStore.appendHealthResourceRefs(batch, for: threadID)
     }
 
     func clearToolPreviewRenderContext() {
@@ -631,11 +653,18 @@ final class ChatDetailViewModel: ObservableObject {
         guard stateStore.isSending || currentGenerationCancellationToken != nil || currentGenerationTask != nil else { return }
 
         logger.info("用户中断 AI 生成，thread=\(shortID(threadID))", module: .general)
+        let assistantClientMessageID = currentGenerationAssistantClientMessageID
         currentGenerationCancellationToken?.cancel()
         currentGenerationTask?.cancel()
         stateStore.setSending(false)
         stateStore.setError(nil, for: threadID)
-        appendCancellationNoticeIfNeeded(threadID: threadID)
+        Task { [weak self] in
+            guard let self, let assistantClientMessageID else { return }
+            await self.finalizeInterruptedAssistantMessageIfNeeded(
+                threadID: threadID,
+                assistantClientMessageID: assistantClientMessageID
+            )
+        }
     }
 
     /// 发送当前编辑框的草稿消息（主入口函数）
@@ -687,8 +716,8 @@ final class ChatDetailViewModel: ObservableObject {
         currentGenerationCancellationToken = cancellationToken
         // 生成流式消息唯一ID
         let streamingMessageID = UUID()
+        currentGenerationAssistantClientMessageID = streamingMessageID
         // 清理中断相关标记
-        cancellationNoticeThreadIDs.remove(threadID)
         finalizedInterruptedAssistantMessageIDs.remove(streamingMessageID)
         
         // MARK: - 状态标记：正在发送
@@ -700,6 +729,9 @@ final class ChatDetailViewModel: ObservableObject {
             stateStore.setSending(false)
             if currentGenerationCancellationToken === cancellationToken {
                 currentGenerationCancellationToken = nil
+            }
+            if currentGenerationAssistantClientMessageID == streamingMessageID {
+                currentGenerationAssistantClientMessageID = nil
             }
             currentGenerationTask = nil
         }
@@ -781,7 +813,10 @@ final class ChatDetailViewModel: ObservableObject {
         // MARK: - 用户主动取消发送
         catch is CancellationError {
             stateStore.setError(nil, for: threadID)
-            appendCancellationNoticeIfNeeded(threadID: threadID)
+            await finalizeInterruptedAssistantMessageIfNeeded(
+                threadID: threadID,
+                assistantClientMessageID: streamingMessageID
+            )
             logger.info("发送对话已中断，thread=\(shortID(threadID))", module: .general)
         }
         // MARK: - 发送失败（网络/服务异常）
@@ -881,13 +916,16 @@ final class ChatDetailViewModel: ObservableObject {
         let cancellationToken = AIRuntimeCancellationToken()
         currentGenerationCancellationToken = cancellationToken
         let streamingMessageID = UUID()
-        cancellationNoticeThreadIDs.remove(threadID)
+        currentGenerationAssistantClientMessageID = streamingMessageID
         finalizedInterruptedAssistantMessageIDs.remove(streamingMessageID)
         stateStore.setSending(true)
         defer {
             stateStore.setSending(false)
             if currentGenerationCancellationToken === cancellationToken {
                 currentGenerationCancellationToken = nil
+            }
+            if currentGenerationAssistantClientMessageID == streamingMessageID {
+                currentGenerationAssistantClientMessageID = nil
             }
             currentGenerationTask = nil
         }
@@ -921,7 +959,10 @@ final class ChatDetailViewModel: ObservableObject {
             )
         } catch is CancellationError {
             stateStore.setError(nil, for: threadID)
-            appendCancellationNoticeIfNeeded(threadID: threadID)
+            await finalizeInterruptedAssistantMessageIfNeeded(
+                threadID: threadID,
+                assistantClientMessageID: streamingMessageID
+            )
             logger.info("重新生成回答已中断，thread=\(shortID(threadID))", module: .general)
         } catch {
             stateStore.setError(nil, for: threadID)
@@ -950,7 +991,7 @@ final class ChatDetailViewModel: ObservableObject {
             targetMessage = messages.last(where: { message in
                 message.role == .assistant
                     && message.deliveryState == .failed
-                    && message.blocks.contains(where: { $0.kind == .error })
+                    && message.blocks.contains(where: { $0.kind == .error || $0.kind == .assistantStatusCard })
             })
         }
         guard let targetMessage,
@@ -966,17 +1007,24 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    private func appendCancellationNoticeIfNeeded(threadID: UUID) {
-        guard cancellationNoticeThreadIDs.contains(threadID) == false else { return }
-        cancellationNoticeThreadIDs.insert(threadID)
-        appendLocalMessage(
-            threadID: threadID,
-            role: .system,
-            kind: .system,
-            content: L10n.text("chat.generation.interrupted"),
-            deliveryState: .pending,
-            source: "chat.cancel"
+    private func finalizeInterruptedAssistantMessageIfNeeded(
+        threadID: UUID,
+        assistantClientMessageID: UUID
+    ) async {
+        guard finalizedInterruptedAssistantMessageIDs.contains(assistantClientMessageID) == false else { return }
+
+        let didFinalize = await sendMessageUseCase.finalizeInterruptedAssistantMessage(
+            statusCard: ChatAssistantStatusCardPayload(
+                type: .interrupted,
+                message: L10n.text("chat.generation.interrupted")
+            ),
+            assistantClientMessageID: assistantClientMessageID
         )
+        guard didFinalize else { return }
+        finalizedInterruptedAssistantMessageIDs.insert(assistantClientMessageID)
+        let latest = await loadChatMessagesUseCase.execute(threadID: threadID)
+        stateStore.setMessages(latest, for: threadID)
+        stateStore.requestScrollToBottom(for: threadID)
     }
 
     private func appendAssistantErrorMessage(
@@ -989,11 +1037,16 @@ final class ChatDetailViewModel: ObservableObject {
             locale: Locale.current,
             error.localizedDescription
         )
+        let statusCard = ChatAssistantStatusCardPayload(type: .sendFailed, message: message)
         appendLocalMessage(
             threadID: threadID,
             role: .assistant,
-            kind: .system,
-            content: message,
+            blocks: [
+                ChatMessageBlock(
+                    kind: .assistantStatusCard,
+                    assistantStatusCard: statusCard
+                )
+            ],
             deliveryState: .failed,
             clientMessageID: assistantClientMessageID,
             source: "chat.error"
@@ -1003,22 +1056,29 @@ final class ChatDetailViewModel: ObservableObject {
     private func appendLocalMessage(
         threadID: UUID,
         role: ChatMessageRole,
-        kind: ChatMessageKind,
-        content: String,
+        blocks: [ChatMessageBlock],
         deliveryState: ChatDeliveryState,
         clientMessageID: UUID = UUID(),
         source: String
     ) {
+        var messages = stateStore.persistedMessages(for: threadID)
+        let existingMessage = messages.first(where: { $0.clientMessageID == clientMessageID })
         let local = ChatMessage(
+            id: existingMessage?.id ?? clientMessageID,
             threadID: threadID,
             role: role,
-            blocks: [ChatMessageBlock(kind: .text, text: content)],
+            blocks: blocks,
             clientMessageID: clientMessageID,
+            serverMessageID: existingMessage?.serverMessageID,
             deliveryState: deliveryState,
-            modelName: role.rawValue
+            createdAt: existingMessage?.createdAt ?? Date(),
+            serverUpdatedAt: existingMessage?.serverUpdatedAt,
+            modelName: existingMessage?.modelName ?? role.rawValue
         )
-        var messages = stateStore.persistedMessages(for: threadID)
-        if messages.contains(where: { $0.clientMessageID == clientMessageID }) == false {
+        if let existingIndex = messages.firstIndex(where: { $0.clientMessageID == clientMessageID }) {
+            messages[existingIndex] = local
+            stateStore.setMessages(messages, for: threadID)
+        } else {
             messages.append(local)
             stateStore.setMessages(messages, for: threadID)
         }
@@ -1026,7 +1086,7 @@ final class ChatDetailViewModel: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                _ = try await self.chatRepository.appendMessage(local)
+                _ = try await self.chatRepository.upsertLocalMessage(local)
                 let latest = await self.loadChatMessagesUseCase.execute(threadID: threadID)
                 await MainActor.run {
                     self.stateStore.setMessages(latest, for: threadID)

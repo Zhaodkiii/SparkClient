@@ -244,61 +244,69 @@ struct ToolDefinition: Sendable {
 }
 
 // MARK: - 工具枚举（核心）
-/// Spark平台所有可用工具枚举
+/// Spark 平台所有可用工具枚举。
+///
+/// **新增或重命名工具时须同步（保持 rawValue 一致）：**
+/// 1. `SparkService/ai_config/models.py` — `SparkToolName`
+/// 2. `ToolHub.swift` — `toolProperties` / `toolRequiredFields` / `execute`
+/// 3. `ToolHub/Executors/` — 工具实现
+/// 4. `Projects/App/Resources/en.lproj/ToolPrompts.strings`（及 zh-Hans、zh-Hant）— `tool.summary.*` / `tool.param.*`
+/// 5. `Projects/App/Resources/en.lproj/Localizable.strings`（及 zh-Hans）— `ai_settings.tools.*`
+/// 6. `OnboardingAgentSetupViewModel.healthTools` 等默认工具白名单（按需）
 enum SparkToolName: String, CaseIterable {
-    // 健康类
+    // MARK: 健康类（Apple Health / 结构化卡片 / 问报告 M11）
     case fetchStepDetails            = "fetch_step_details"             // 获取步数详情
     case fetchEnergyDetails          = "fetch_energy_details"           // 获取能量详情
     case fetchNutritionDetails       = "fetch_nutrition_details"        // 获取营养详情
     case makeNutritionData           = "make_nutrition_data"            // 生成营养数据
     case fetchSleepDetails           = "fetch_sleep_details"            // 获取睡眠详情
     case fetchWorkoutDetails         = "fetch_workout_details"          // 获取运动详情
-    
-    // 知识类
+    case generateStructuredHealthCard = "generate_structured_health_card" // 生成结构化健康卡片（后台抽取）
+    case listMemberHealthSources     = "list_member_health_sources"      // 问报告：检索成员健康资料候选
+    case getHealthResourceReference  = "get_health_resource_reference"   // 问报告：校验并返回单条资料引用
+    case getHealthResourceContext    = "get_health_resource_context"     // 问报告：获取单条资料解读上下文（M8）
+
+    // MARK: 知识类
     case searchKnowledgeBag          = "search_knowledge_bag"           // 搜索知识包
     case createKnowledgeDocument     = "create_knowledge_document"      // 创建知识文档
     
-    // 日历类
+    // MARK: 日历类
     case searchCalendarAndReminders  = "search_calendar_and_reminders"  // 搜索日历和提醒
     case writeSystemEvent            = "write_system_event"              // 写入系统事件
     
-    // 位置类
+    // MARK: 位置类
     case queryLocation               = "query_location"                 // 查询位置
     case getCurrentLocation          = "get_current_location"           // 获取当前位置
     case searchNearbyLocations       = "search_nearby_locations"        // 搜索附近位置
     case getRoute                    = "get_route"                       // 获取路线
     case queryWeather                = "query_weather"                  // 查询天气
     
-    // 记忆类
+    // MARK: 记忆类
     case saveMemory                  = "save_memory"                     // 保存记忆
     case retrieveMemory              = "retrieve_memory"                // 检索记忆
     case updateMemory                = "update_memory"                   // 更新记忆
     
-    // UI交互类
+    // MARK: UI 交互类
     case generateChatTitle           = "generate_chat_title"            // 生成聊天标题
     case showCustomMessageCard       = "show_custom_message_card"        // 显示自定义消息卡片
     case askUserQuestion             = "ask_user_question"              // 向用户提问
     
-    // 成员类
+    // MARK: 成员类
     case getCurrentMember            = "get_current_member"              // 获取当前成员
     case requestMemberSelection      = "request_member_selection"        // 请求选择成员
     case switchMember                = "switch_member"                   // 切换成员
     case findMember                  = "find_member"                     // 查找成员
     case queryMemberProfile          = "query_member_profile"            // 查询成员资料
     
-    // 网络类
+    // MARK: 网络类
     case searchOnline                = "search_online"                   // 在线搜索
     case readWebPage                 = "read_web_page"                   // 读取网页
     case searchArxivPapers           = "search_arxiv_papers"             // 搜索论文
     case extractRemoteFileContent    = "extract_remote_file_content"    // 提取远程文件内容
     
-    // 系统/画布类
+    // MARK: 系统 / 画布 / 任务类
     case createCanvas                = "create_canvas"                   // 创建画布
     case editCanvas                  = "edit_canvas"                     // 编辑画布
-    case generateStructuredHealthCard = "generate_structured_health_card" // 生成结构化健康卡片
-    case listMemberHealthSources     = "list_member_health_sources"      // 检索成员健康资料候选
-    case getHealthResourceReference  = "get_health_resource_reference"   // 获取单条健康资料引用
-    case getHealthResourceContext    = "get_health_resource_context"     // 获取健康资料解读上下文
     case queryTasksByMember          = "query_tasks_by_member"           // 查询成员任务
     case generateTask                = "generate_task"                  // 生成任务
 

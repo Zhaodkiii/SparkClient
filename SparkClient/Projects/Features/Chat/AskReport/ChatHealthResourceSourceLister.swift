@@ -17,7 +17,7 @@ enum ChatHealthResourceSourceLister {
 
     static func list(
         data: SparkMedicalSyncAPI.RemoteMemberCompleteData,
-        resourceType: String?,
+        resourceTypes: [String]?,
         keyword: String?,
         startDate: String?,
         endDate: String?,
@@ -26,9 +26,11 @@ enum ChatHealthResourceSourceLister {
         let mapped = ChatAskReportTimelineMapper.map(data)
         var sources: [ChatSelectableHealthSource] = mapped.allSelectableSources
 
-        if let resourceType,
-           let type = HealthResourceType(rawValue: resourceType) {
-            sources = sources.filter { $0.resourceType == type }
+        if let resourceTypes, resourceTypes.isEmpty == false {
+            let allowed = Set(resourceTypes.compactMap { HealthResourceType(rawValue: $0) })
+            if allowed.isEmpty == false {
+                sources = sources.filter { allowed.contains($0.resourceType) }
+            }
         }
 
         let normalizedKeyword = keyword?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -58,8 +60,8 @@ enum ChatHealthResourceSourceLister {
         let match = matchMetadata(source: source, keyword: keyword)
         return HealthResourceToolCandidateDTO(
             resourceType: source.resourceType.rawValue,
-            resourceID: source.resourceID,
-            memberID: source.memberID,
+            resourceId: source.resourceID,
+            memberId: source.memberID,
             title: source.title,
             occurredAt: formatDate(source.occurredAt),
             institution: source.subtitle,

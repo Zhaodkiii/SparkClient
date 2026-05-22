@@ -405,6 +405,7 @@
 "chat.error_card.title" = "请求失败";
 "chat.error_card.retry" = "重新请求";
 "chat.error_card.generic_body" = "生成回复时发生错误，请稍后重试。";
+"chat.status_card.interrupted.title" = "响应已停止";
 "chat.error.response_format" = "⚠️ 响应错误：%@";
 "chat.error.empty_output" = "⚠️ 生成内容为空，请重新尝试！";
 "chat.generation.interrupted" = "🛑 响应已打断";

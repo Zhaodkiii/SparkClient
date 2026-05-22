@@ -190,8 +190,28 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         try await resources.retrieve(SparkMedicalSyncAPI.RemoteExaminationReport.self, kind: .examinationReports, id: id)
     }
 
+    func retrieveExaminationReportWithAttachments(
+        id: Int
+    ) async throws -> SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+        try await resources.retrieve(
+            SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.self,
+            kind: .examinationReports,
+            id: id
+        )
+    }
+
     func retrieveHealthExamReport(id: Int) async throws -> SparkMedicalSyncAPI.RemoteHealthExamReport {
         try await resources.retrieve(SparkMedicalSyncAPI.RemoteHealthExamReport.self, kind: .healthExamReports, id: id)
+    }
+
+    func retrieveHealthExamReportWithAttachments(
+        id: Int
+    ) async throws -> SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments {
+        try await resources.retrieve(
+            SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments.self,
+            kind: .healthExamReports,
+            id: id
+        )
     }
 
     func retrieveMedicalCase(id: Int) async throws -> SparkMedicalSyncAPI.RemoteMedicalCase {

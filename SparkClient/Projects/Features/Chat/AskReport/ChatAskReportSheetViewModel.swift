@@ -19,8 +19,9 @@ final class ChatAskReportSheetViewModel: ObservableObject {
     @Published private(set) var loadState: LoadState = .idle
     @Published var selectedTab: AskReportTab = .all
     @Published var searchText: String = ""
-    /// 当前勾选（含预览区已存在的资料，重开 Sheet 时与 `pendingRefs` 同步）。
-    @Published var selectedSourceIDs: Set<String> = []
+    /// 用户点选顺序（稳定 refIndex / 卡片顺序）；`Set` 仅用于 O(1) contains。
+    @Published private(set) var orderedSelectionKeys: [String] = []
+    var selectedSourceIDs: Set<String> { Set(orderedSelectionKeys) }
     @Published private(set) var mappedTimeline: AskReportMappedTimeline?
 
     let memberID: Int
@@ -28,7 +29,7 @@ final class ChatAskReportSheetViewModel: ObservableObject {
 
     private let fetchCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
     private let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    private var syncedPendingKeys: Set<String> = []
+    private var syncedPendingKeysOrdered: [String] = []
 
     init(
         memberID: Int,
@@ -41,9 +42,9 @@ final class ChatAskReportSheetViewModel: ObservableObject {
         self.maxPreviewCount = maxPreviewCount
         self.initialCompleteData = initialCompleteData?.memberId == memberID ? initialCompleteData : nil
         self.fetchCompleteData = fetchCompleteData
-        let keys = Self.selectionKeys(from: pendingRefs)
-        selectedSourceIDs = keys
-        syncedPendingKeys = keys
+        let keys = Self.orderedSelectionKeys(from: pendingRefs)
+        orderedSelectionKeys = keys
+        syncedPendingKeysOrdered = keys
     }
 
     var searchQuery: String {
@@ -64,7 +65,7 @@ final class ChatAskReportSheetViewModel: ObservableObject {
     }
 
     var selectedCount: Int {
-        selectedSourceIDs.count
+        orderedSelectionKeys.count
     }
 
     func load() async {
@@ -83,40 +84,44 @@ final class ChatAskReportSheetViewModel: ObservableObject {
     }
 
     func syncSelectionWithPendingRefs(_ refs: [HealthResourceRef]) {
-        let pendingKeys = Self.selectionKeys(from: refs)
-        let removedFromPreview = syncedPendingKeys.subtracting(pendingKeys)
-        selectedSourceIDs.subtract(removedFromPreview)
-        selectedSourceIDs.formUnion(pendingKeys)
-        syncedPendingKeys = pendingKeys
+        let pendingKeys = Self.orderedSelectionKeys(from: refs)
+        let pendingSet = Set(pendingKeys)
+        let removedFromPreview = Set(syncedPendingKeysOrdered).subtracting(pendingSet)
+        orderedSelectionKeys.removeAll { removedFromPreview.contains($0) }
+        for key in pendingKeys where orderedSelectionKeys.contains(key) == false {
+            orderedSelectionKeys.append(key)
+        }
+        syncedPendingKeysOrdered = pendingKeys
         enforceSelectionLimit()
     }
 
     private func enforceSelectionLimit() {
-        guard selectedSourceIDs.count > maxPreviewCount else { return }
-        var kept = syncedPendingKeys
-        let extras = selectedSourceIDs.subtracting(syncedPendingKeys)
+        guard orderedSelectionKeys.count > maxPreviewCount else { return }
+        var kept = syncedPendingKeysOrdered
+        let syncedSet = Set(syncedPendingKeysOrdered)
+        let extras = orderedSelectionKeys.filter { syncedSet.contains($0) == false }
         let room = max(0, maxPreviewCount - kept.count)
-        kept.formUnion(extras.prefix(room))
-        selectedSourceIDs = kept
+        kept.append(contentsOf: extras.prefix(room))
+        orderedSelectionKeys = kept
     }
 
     func toggleSelection(_ selectionKey: String) -> Bool {
-        if selectedSourceIDs.contains(selectionKey) {
-            selectedSourceIDs.remove(selectionKey)
+        if let index = orderedSelectionKeys.firstIndex(of: selectionKey) {
+            orderedSelectionKeys.remove(at: index)
             return true
         }
-        guard selectedSourceIDs.count < maxPreviewCount else { return false }
-        selectedSourceIDs.insert(selectionKey)
+        guard orderedSelectionKeys.count < maxPreviewCount else { return false }
+        orderedSelectionKeys.append(selectionKey)
         return true
     }
 
     func isSelected(_ selectionKey: String) -> Bool {
-        selectedSourceIDs.contains(selectionKey)
+        orderedSelectionKeys.contains(selectionKey)
     }
 
     func refsToAppend(existingRefs: [HealthResourceRef]) -> [HealthResourceRef] {
         let existingIDs = Set(existingRefs.map(\.id))
-        return selectedSourceIDs.compactMap { key in
+        return orderedSelectionKeys.compactMap { key in
             guard existingIDs.contains(key) == false else { return nil }
             guard let source = selectableSource(for: key) else { return nil }
             return ChatAskReportTimelineMapper.makeHealthResourceRef(from: source)
@@ -149,8 +154,8 @@ final class ChatAskReportSheetViewModel: ObservableObject {
         mappedTimeline = ChatAskReportTimelineMapper.map(data)
     }
 
-    private static func selectionKeys(from refs: [HealthResourceRef]) -> Set<String> {
-        Set(refs.map(\.id))
+    private static func orderedSelectionKeys(from refs: [HealthResourceRef]) -> [String] {
+        refs.map(\.id)
     }
 
     private func filterRow(_ row: AskReportTimelineRow, query: String) -> AskReportTimelineRow? {

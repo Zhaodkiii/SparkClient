@@ -14,12 +14,17 @@ extension ChatMessageBlock {
         } else {
         switch payload {
             
-            // 1. 错误提示卡片
+            // 1. 状态提示卡片
         case .error(let message):
-            ChatMessageErrorCard(
-                title: L10n.text("chat.error_card.title"),
+            ChatAssistantStatusCardView(
+                type: .sendFailed,
                 message: message.isEmpty ? context.errorCardBodyText : message,
-                retryTitle: L10n.text("chat.error_card.retry"),
+                onRetry: context.onRetry
+            )
+        case .assistantStatusCard(let card):
+            ChatAssistantStatusCardView(
+                type: card.type,
+                message: card.message.isEmpty ? context.errorCardBodyText : card.message,
                 onRetry: context.onRetry
             )
             

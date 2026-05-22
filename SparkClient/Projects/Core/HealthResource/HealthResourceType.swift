@@ -1,7 +1,7 @@
 import Foundation
 
 /// 健康资料引用类型，与 `RemoteMemberCompleteData` 字段及消息 block `resourceType` 对齐。
-nonisolated enum HealthResourceType: String, Codable, Sendable, CaseIterable {
+enum HealthResourceType: String, Codable, Sendable, CaseIterable {
     case healthExamReport = "health_exam_report"
     case examinationReport = "examination_report"
     case medicalCase = "medical_case"

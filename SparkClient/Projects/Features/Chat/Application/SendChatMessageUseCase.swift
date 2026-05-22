@@ -332,31 +332,23 @@ struct SendChatMessageUseCase: Sendable {
                 module: .general
             )
 
-            var userQuestionForAI = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) } ?? sanitizedInput
-            if userQuestionForAI.isEmpty, healthResourceRefs.isEmpty == false {
-                userQuestionForAI = L10n.text("chat.ask_report.default_user_question")
-            }
-            var healthContextForAI: String?
+            let outboundAssembler = ChatOutboundContextAssembler(medicalQueryAPI: medicalQueryAPI)
+            var userQuestionForAI = smallTask.map { makeSmallTaskUserInput(task: $0, userInput: sanitizedInput) }
+                ?? outboundAssembler.defaultUserQuestionWhenEmpty(
+                    userInput: sanitizedInput,
+                    healthResourceRefs: healthResourceRefs
+                )
+            let healthContextForAI = await outboundAssembler.assembleHealthResourceContext(
+                refs: healthResourceRefs,
+                threadMemberID: thread.memberID,
+                cachedMemberCompleteData: cachedMemberCompleteData
+            )
             if healthResourceRefs.isEmpty == false {
-                let resolveMemberID = thread.memberID ?? healthResourceRefs.first?.memberID
-                if let resolveMemberID, resolveMemberID > 0 {
-                    let localCache = cachedMemberCompleteData?.memberId == resolveMemberID
-                        ? cachedMemberCompleteData
-                        : nil
-                    let resolved = await HealthResourceContextResolver(medicalQueryAPI: medicalQueryAPI)
-                        .resolveContextText(
-                            refs: healthResourceRefs,
-                            memberID: resolveMemberID,
-                            cachedCompleteData: localCache
-                        )
-                    if resolved.isEmpty == false {
-                        healthContextForAI = resolved
-                    } else {
-                        logger.warning(
-                            "健康资料上下文解析为空，refs=\(healthResourceRefs.count), member=\(shortID(resolveMemberID))",
-                            module: .general
-                        )
-                    }
+                if healthContextForAI == nil {
+                    logger.warning(
+                        "健康资料上下文解析为空，refs=\(healthResourceRefs.count)",
+                        module: .general
+                    )
                 }
                 logger.debug(
                     "问报告 AI 输入已组装，healthRefs=\(healthResourceRefs.count), questionLen=\(userQuestionForAI.count), contextLen=\(healthContextForAI?.count ?? 0)",
@@ -446,18 +438,11 @@ struct SendChatMessageUseCase: Sendable {
                 .finalizeAssistantBlocks(assistantBlocks, assistantClientMessageID: assistantClientMessageID)
             )
 
-            // 如果AI结束原因需要提示，追加系统消息
+            // 如果 AI 结束原因需要提示，写入本轮助手消息，避免额外插入 system 消息。
             if let notice = finishReasonNoticeText(output.finishReason) {
-                _ = try await repository.appendMessage(
-                    ChatMessage(
-                        threadID: thread.id,
-                        role: .system,
-                        blocks: [.init(kind: .text, text: notice)],
-                        clientMessageID: UUID(),
-                        serverMessageID: nil,
-                        deliveryState: .pending,
-                        modelName: "system"
-                    )
+                await messageRunActor.appendTimelineNotice(
+                    notice,
+                    assistantClientMessageID: assistantClientMessageID
                 )
                 logger.warning("AI 完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
@@ -649,16 +634,9 @@ struct SendChatMessageUseCase: Sendable {
             )
 
             if let notice = finishReasonNoticeText(output.finishReason) {
-                _ = try await repository.appendMessage(
-                    ChatMessage(
-                        threadID: thread.id,
-                        role: .system,
-                        blocks: [.init(kind: .text, text: notice)],
-                        clientMessageID: UUID(),
-                        serverMessageID: nil,
-                        deliveryState: .pending,
-                        modelName: "system"
-                    )
+                await messageRunActor.appendTimelineNotice(
+                    notice,
+                    assistantClientMessageID: assistantClientMessageID
                 )
                 logger.warning("重新生成完成原因需要提示，thread=\(shortID(thread.id)), finishReason=\(output.finishReason ?? "-")", module: .general)
             }
@@ -751,6 +729,16 @@ struct SendChatMessageUseCase: Sendable {
             return L10n.text("chat.finish_reason.sensitive")
         }
         return nil
+    }
+
+    func finalizeInterruptedAssistantMessage(
+        statusCard: ChatAssistantStatusCardPayload,
+        assistantClientMessageID: UUID
+    ) async -> Bool {
+        await messageRunActor.finalizeInterruptedAssistantMessage(
+            statusCard: statusCard,
+            assistantClientMessageID: assistantClientMessageID
+        )
     }
 
     private func makeSmallTaskUserInput(task: SmallTask, userInput: String) -> String {

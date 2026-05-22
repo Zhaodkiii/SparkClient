@@ -510,6 +510,7 @@ extension ChatAssembly {
         )
         let toolAuditStore = ToolAuditStore()
         let toolInteractionCoordinator = ToolInteractionCoordinator()
+        let healthResourceToolService = DefaultHealthResourceToolService(medicalQueryAPI: backend.medicalQuery)
         let toolHub = ToolHub(
             chatRepository: chatRepository,
             auditStore: toolAuditStore,
@@ -527,6 +528,7 @@ extension ChatAssembly {
             typedMedicalDocumentExtractor: medical.typedMedicalDocumentExtractor,
             sideEffectSink: messageRunActor,
             toolInteractionCoordinator: toolInteractionCoordinator,
+            healthResourceToolService: healthResourceToolService,
             logger: logger
         )
         let chatAttachmentPipeline = ChatAttachmentPipeline(

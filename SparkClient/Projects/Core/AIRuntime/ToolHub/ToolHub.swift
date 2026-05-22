@@ -22,6 +22,7 @@ final class ToolHub: @unchecked Sendable {
     let sideEffectSink: any ChatSideEffectSink
     let healthTool: SparkHealthTool
     let toolInteractionCoordinator: ToolInteractionCoordinator?
+    let healthResourceToolService: any HealthResourceToolService
     let appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy
     let webSearchGateway: WebSearchGateway
     let logger: Logger
@@ -47,6 +48,7 @@ final class ToolHub: @unchecked Sendable {
         sideEffectSink: any ChatSideEffectSink,
         healthTool: SparkHealthTool = .shared,
         toolInteractionCoordinator: ToolInteractionCoordinator? = nil,
+        healthResourceToolService: (any HealthResourceToolService)? = nil,
         appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy = AppleHealthToolConsentPolicy(),
         webSearchGateway: WebSearchGateway = WebSearchGateway(),
         logger: Logger = ConsoleLogger()
@@ -68,6 +70,8 @@ final class ToolHub: @unchecked Sendable {
         self.sideEffectSink = sideEffectSink
         self.healthTool = healthTool
         self.toolInteractionCoordinator = toolInteractionCoordinator
+        self.healthResourceToolService = healthResourceToolService
+            ?? DefaultHealthResourceToolService(medicalQueryAPI: medicalQueryAPI)
         self.appleHealthToolConsentPolicy = appleHealthToolConsentPolicy
         self.webSearchGateway = webSearchGateway
         self.logger = logger
@@ -278,6 +282,7 @@ final class ToolHub: @unchecked Sendable {
             return [
                 "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_optional")),
                 "resource_type": healthResourceTypeProperty(),
+                "resource_types": healthResourceTypesProperty(),
                 "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.health_keyword")),
                 "start_date": AIRuntimeToolProperty(type: "string", description: td("tool.date.start_yyyy_mm_dd"), format: "date"),
                 "end_date": AIRuntimeToolProperty(type: "string", description: td("tool.date.end_yyyy_mm_dd"), format: "date"),
@@ -291,6 +296,10 @@ final class ToolHub: @unchecked Sendable {
             ]
             if tool == .getHealthResourceContext {
                 props["topic"] = AIRuntimeToolProperty(type: "string", description: td("tool.param.health_topic_focus"))
+                props["references"] = AIRuntimeToolProperty(
+                    type: "string",
+                    description: td("tool.param.health_references_json")
+                )
             }
             return props
         case .generateStructuredHealthCard:
@@ -473,8 +482,10 @@ final class ToolHub: @unchecked Sendable {
             return ["protein", "carbohydrates", "fat", "energy"]
         case .generateStructuredHealthCard:
             return ["report_type", "raw_text"]
-        case .getHealthResourceReference, .getHealthResourceContext:
+        case .getHealthResourceReference:
             return ["resource_type", "resource_id"]
+        case .getHealthResourceContext:
+            return []
         case .generateTask:
             return ["user_input"]
         case .searchKnowledgeBag:

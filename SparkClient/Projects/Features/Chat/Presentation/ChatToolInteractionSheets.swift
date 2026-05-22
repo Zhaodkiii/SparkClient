@@ -644,8 +644,13 @@ struct ToolInteractionPresentationSheet: View {
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var stateStore: ChatStateStore
     let toolPreviewRenderContext: ChatRenderContext?
+    let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let fetchMemberCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
     let onClearToolPreviewRenderContext: () -> Void
     let onSaveSystemMessage: (SystemMessageSettingsPrompt, String) -> Void
+    let onAskReportAppend: (UUID, [HealthResourceRef]) -> Void
+    let onAskReportSetMemberBinding: (Int?) -> Void
+    let onAskReportMaxRefsReached: () -> Void
 
     var body: some View {
         switch active.snapshot {
@@ -698,6 +703,19 @@ struct ToolInteractionPresentationSheet: View {
                 onCancel: {
                     coordinator.completeHealthResourceCandidatesCancelled(id: active.id)
                 }
+            )
+        case .askReportPicker(let prompt):
+            ChatAskReportSheet(
+                memberContextStore: memberContextStore,
+                boundMemberID: prompt.memberID,
+                pendingRefs: stateStore.composerDraft(for: prompt.threadID).pendingHealthResourceRefs,
+                initialCompleteData: initialCompleteData,
+                fetchCompleteData: fetchMemberCompleteData,
+                onAppendToPreview: { refs in
+                    onAskReportAppend(active.id, refs)
+                },
+                onSetMemberBinding: onAskReportSetMemberBinding,
+                onMaxRefsReached: onAskReportMaxRefsReached
             )
         }
     }

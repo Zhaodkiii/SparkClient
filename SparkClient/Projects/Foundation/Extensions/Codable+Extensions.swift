@@ -26,6 +26,34 @@ extension CodableKey {
     }
 }
 
+// MARK: - JSON 字符串编解码（工具参数 / 调试 payload）
+
+extension JSONDecoder {
+    /// 从 UTF-8 JSON 字符串解码；与 `JSONDecoder.default` 策略一致。
+    nonisolated func decode<T: Decodable>(_ type: T.Type, fromJSONString string: String) throws -> T {
+        guard let data = string.data(using: .utf8) else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: [], debugDescription: "Invalid UTF-8 JSON string")
+            )
+        }
+        return try decode(type, from: data)
+    }
+}
+
+extension JSONEncoder {
+    /// 编码为 UTF-8 JSON 字符串；与 `JSONEncoder.default` 策略一致。
+    nonisolated func encodeToJSONString<T: Encodable>(_ value: T) throws -> String {
+        let data = try encode(value)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw EncodingError.invalidValue(
+                value,
+                EncodingError.Context(codingPath: [], debugDescription: "Encoded JSON is not valid UTF-8")
+            )
+        }
+        return text
+    }
+}
+
 // MARK: - JSON 解码器扩展
 extension JSONDecoder {
     /// 默认全局解码器：项目通用配置

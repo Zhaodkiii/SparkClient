@@ -112,6 +112,18 @@ struct OptionalCodableReminderTimesList: Codable, Equatable, Sendable {
     }
 }
 
+extension KeyedDecodingContainer {
+    /// 键缺失时回落为空列表（API / 流式 JSON 常省略 `reminderTimes`）。
+    func decode(_ type: CodableReminderTimesList.Type, forKey key: Key) throws -> CodableReminderTimesList {
+        try decodeIfPresent(type, forKey: key) ?? CodableReminderTimesList()
+    }
+
+    /// 键缺失时回落为 nil，避免 `@OptionalCodableReminderTimesList` 触发 keyNotFound。
+    func decode(_ type: OptionalCodableReminderTimesList.Type, forKey key: Key) throws -> OptionalCodableReminderTimesList {
+        try decodeIfPresent(type, forKey: key) ?? OptionalCodableReminderTimesList(wrappedValue: nil)
+    }
+}
+
 extension Array where Element == ReminderTime {
     /// 抽取/保存前保证为对象列表（供已解码草稿二次规范化）。
     static func normalized(from raw: [ReminderTime]?) -> [ReminderTime] {

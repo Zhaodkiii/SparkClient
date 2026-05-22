@@ -23,7 +23,11 @@ struct HealthResourceCardSummary: Equatable, Sendable {
     let attachmentCount: Int?
     let indexText: String
 
+    var identity: HealthResourceIdentity {
+        HealthResourceIdentity(resourceType: resourceType, resourceID: resourceId, memberID: memberId)
+    }
+
     var cacheKey: String {
-        "\(resourceType):\(resourceId):\(memberId)"
+        identity.cacheKey
     }
 }

@@ -31,14 +31,16 @@
 "tool.summary.switch_member" = "用途：切换当前成员；选择后后续 query_member_profile 等使用新成员（Spark 本地为占位说明）。";
 "tool.summary.find_member" = "用途：通过关系或姓名查找成员（name/relationship 至少其一）。禁止把 member_id 数字当作 name（如 name=\"19\"）。list_member_health_sources 或健康工具 JSON 已含 member_id 时勿调用本工具。";
 "tool.summary.query_member_profile" = "用途：查询成员健康信息摘要。query_type：summary / medications / hospital_exams / medical_records / health_exams。可选 member_id（Spark 为成员 UUID 字符串）；可选 days、limit。Spark 当前返回各类型记录数量汇总。";
-"tool.summary.list_member_health_sources" = "用途：从成员 complete-data 快照检索可引用的健康资料（体检、检查/影像报告、病历、用药、症状、就诊等）。用户口头问某份报告/记录且未手动点「问报告」时使用。输入：可选 member_id（默认会话成员）、resource_type、keyword、日期范围、limit。输出：JSON 含 member_id 与候选列表，不含全文。规则：(1) 输出中的 member_id 即本轮成员，之后勿 request_member_selection / find_member；(2) 仅一条候选时不弹窗；(3) 多条时客户端弹报告候选确认；(4) 确定 resource_id 后每条只调 get_health_resource_context。仅要数量汇总时用 query_member_profile。";
+"tool.summary.list_member_health_sources" = "用途：从成员 complete-data 快照检索可引用的健康资料（体检、检查/影像报告、病历、用药、症状、就诊等）。用户口头问某份报告/记录且未手动点「问报告」时使用。输入：可选 member_id（默认会话成员）、resource_types（推荐，可多类型）或 resource_type（单类型兼容）、keyword、日期范围、limit。输出：JSON 含 member_id 与候选列表，不含全文。规则：(1) 输出中的 member_id 即本轮成员，之后勿 request_member_selection / find_member；(2) 仅一条候选时不弹窗；(3) 多条时客户端弹报告候选确认；(4) 确定资料后**一次** get_health_resource_context（references 含全部 resource_type+resource_id）。仅要数量汇总时用 query_member_profile。";
 "tool.summary.get_health_resource_reference" = "用途：仅在校验引用是否存在且尚无 resource_id 时使用（返回紧凑 JSON + 客户端展示卡片）。list 已返回候选或用户已确认后，解读请直接 get_health_resource_context，勿与本工具重复调用同一 resource。";
-"tool.summary.get_health_resource_context" = "用途：为单条引用构建 AI 可读解读上下文（与客户端发送前 M8 解析同 schema）。list 或用户确认后，回答解读类问题前对每条资料调用一次即可；报告类会按需加载 medExamDetails。勿对同一 resource 再调 get_health_resource_reference。勿将输出持久化到消息库。";
+"tool.summary.get_health_resource_context" = "用途：构建 AI 可读解读上下文（与客户端 M8 同 schema）。**优先批量**：将 list/用户确认后的多条资料组成 references JSON，一次调用返回 version=2（contexts + combined_context_text）；仅一条时可用 resource_type+resource_id（version=1）。对比多份报告/记录时必须用 references 批量调用，禁止对每条 resource 重复调用。勿再调 get_health_resource_reference。勿持久化到消息库。";
 "tool.param.health_resource_type_enum" = "健康资料类型：health_exam_report、examination_report、medical_case、prescription、medication_plan、medicine_box、medication_record、medication_summary、symptom、visit、surgery、follow_up";
+"tool.param.health_resource_types_filter" = "可选，健康资料类型筛选（数组）。可同时传多种，如 [\"health_exam_report\",\"examination_report\"] 或逗号分隔；与 resource_type 二选一或合并；空则全部类型。";
 "tool.param.health_resource_id" = "complete-data 中该资料主键 ID";
 "tool.param.health_keyword" = "在标题、检查名、摘要、所见/结论等字段中搜索的关键词";
 "tool.param.health_sources_limit" = "返回候选条数上限（默认 20）";
 "tool.param.health_topic_focus" = "可选解读聚焦主题，用于上下文裁剪，如 blood_pressure、thyroid";
+"tool.param.health_references_json" = "批量解读：JSON 数组，每项含 resource_type、resource_id、member_id（可省略，默认会话成员）。与 list/用户确认后的 candidates 对齐，最多 5 条。传入后勿再逐条调用本工具；单条时仍可用 resource_type+resource_id。";
 "tool.summary.search_online" = "用途：在线检索并汇总多来源信息。query 简洁；勿含个人敏感信息。可与 read_web_page、search_knowledge_bag 联用。";
 "tool.summary.read_web_page" = "用途：抓取网页正文并生成摘要。url 须为完整 HTTP(S)。同一链接解析一次。";
 "tool.summary.search_arxiv_papers" = "用途：检索 arXiv 学术文献并生成摘要。query 为主题相关英文关键词。";

@@ -1,40 +1,41 @@
 import Foundation
 
-/// 聊天内健康资料详情导航值（与消息 block 三元组一致，供 `NavigationLink` / `navigationDestination`）。
+/// 聊天内健康资料详情导航值（包装 canonical identity）。
 struct HealthResourceReference: Hashable, Sendable {
-    let resourceType: String
-    let resourceID: Int
-    let memberID: Int
+    let identity: HealthResourceIdentity
+
+    var resourceType: String { identity.resourceType }
+    var resourceID: Int { identity.resourceID }
+    var memberID: Int { identity.memberID }
+    var cacheKey: String { identity.cacheKey }
+
+    init(identity: HealthResourceIdentity) {
+        self.identity = identity
+    }
 
     init(resourceType: String, resourceID: Int, memberID: Int) {
-        self.resourceType = resourceType
-        self.resourceID = resourceID
-        self.memberID = memberID
+        self.init(identity: HealthResourceIdentity(resourceType: resourceType, resourceID: resourceID, memberID: memberID))
     }
 
     init(_ ref: HealthResourceRef) {
-        self.init(resourceType: ref.resourceType, resourceID: ref.resourceID, memberID: ref.memberID)
+        self.init(identity: ref.identity)
     }
 
     init(_ payload: ChatHealthResourceReferencePayload) {
-        self.init(
-            resourceType: payload.resourceType,
-            resourceID: payload.resourceId,
-            memberID: payload.memberId
-        )
-    }
-
-    var cacheKey: String {
-        "\(resourceType):\(resourceID):\(memberID)"
+        self.init(identity: payload.identity)
     }
 
     var healthRef: HealthResourceRef {
         HealthResourceRef(
-            resourceType: resourceType,
-            resourceID: resourceID,
-            memberID: memberID,
+            identity: identity,
             displayTitle: "",
             displaySubtitle: ""
         )
+    }
+}
+
+extension HealthResourceIdentity {
+    init(_ reference: HealthResourceReference) {
+        self = reference.identity
     }
 }

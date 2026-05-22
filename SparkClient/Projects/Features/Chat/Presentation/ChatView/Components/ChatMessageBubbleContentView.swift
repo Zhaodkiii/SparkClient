@@ -410,7 +410,7 @@ private enum ChatMessageTimelineProjector {
 
     nonisolated private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
         switch kind {
-        case .tool, .text, .deepThought, .error:
+        case .tool, .text, .deepThought, .error, .assistantStatusCard:
             return false
         case .imageGallery,
                 .fileAttachments,
@@ -501,35 +501,76 @@ private struct ChatToolTimelinePendingView: View {
     }
 }
 
-struct ChatMessageErrorCard: View {
-    let title: String
+struct ChatAssistantStatusCardView: View {
+    let type: ChatAssistantStatusCardType
     let message: String
-    let retryTitle: String
     let onRetry: () -> Void
+
+    private var title: String {
+        switch type {
+        case .interrupted:
+            return L10n.text("chat.status_card.interrupted.title")
+        case .sendFailed:
+            return L10n.text("chat.error_card.title")
+        }
+    }
+
+    private var retryTitle: String {
+        L10n.text("chat.error_card.retry")
+    }
+
+    private var systemImage: String {
+        switch type {
+        case .interrupted:
+            return "stop.circle.fill"
+        case .sendFailed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch type {
+        case .interrupted:
+            return .secondary
+        case .sendFailed:
+            return .orange
+        }
+    }
+
+    private var showsRetry: Bool {
+        switch type {
+        case .interrupted:
+            return false
+        case .sendFailed:
+            return true
+        }
+    }
 
     var bodyView: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: "exclamationmark.triangle.fill")
+            Label(title, systemImage: systemImage)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(tint)
 
             Text(message)
                 .font(.caption)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Button(action: onRetry) {
-                Label(retryTitle, systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
+            if showsRetry {
+                Button(action: onRetry) {
+                    Label(retryTitle, systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(tint)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
         }
         .padding(14)
-        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+                .stroke(tint.opacity(0.25), lineWidth: 1)
         )
     }
 
@@ -537,3 +578,5 @@ struct ChatMessageErrorCard: View {
         bodyView
     }
 }
+
+typealias ChatMessageErrorCard = ChatAssistantStatusCardView

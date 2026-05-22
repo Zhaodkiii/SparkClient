@@ -23,7 +23,6 @@ struct ChatView: View {
     @State private var conversationListLayoutNonce: UInt64 = 0
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
     private let actionState = ChatMessageActionState()
-    @State private var selectedTextSheet: ChatSelectableTextPayload?
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showCaptureFileImporter = false
     @State private var showClearChatConfirmation = false
@@ -137,6 +136,9 @@ struct ChatView: View {
                 },
                 onMaxHealthRefsReached: {
                     detailViewModel.notifyAskReportMaxRefsReached()
+                },
+                onPresentAskReportPicker: {
+                    detailViewModel.presentAskReportPicker(for: threadID, memberID: stateStore.selectedThread?.memberID)
                 },
                 onPersistSelectedChatModel: { modelName in
                     Task { await detailViewModel.updateThreadModel(modelName, for: threadID) }
@@ -348,32 +350,13 @@ struct ChatView: View {
             .task(id: reasoningRefreshId) {
                 await detailViewModel.refreshReasoningToolbarContext(for: threadID)
             }
-            .sheet(item: $selectedTextSheet) { payload in
-                CompatibleNavigationContainer(legacyStackStyle: true) {
-                    ScrollView {
-                        Text(payload.text)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
-                    .navigationTitle(payload.title)
-                }
-            }
             .sheet(
                 item: Binding(
                     get: { detailViewModel.toolInteractionCoordinator.activePresentation },
                     set: { newValue in
-                        // 允许工具详情 Sheet 手势关闭时走完协调器队列。
                         guard newValue == nil else { return }
-                        guard let active = detailViewModel.toolInteractionCoordinator.activePresentation else { return }
-                        if case .toolPreview = active.snapshot {
-                            detailViewModel.clearToolPreviewRenderContext()
-                            detailViewModel.toolInteractionCoordinator.dismissToolPreview(id: active.id)
-                        } else if case .systemMessageSettings = active.snapshot {
-                            detailViewModel.toolInteractionCoordinator.dismissSystemMessageSettings(id: active.id)
-                        } else if case .healthResourceCandidates = active.snapshot {
-                            detailViewModel.toolInteractionCoordinator.completeHealthResourceCandidatesCancelled(id: active.id)
-                        }
+                        detailViewModel.clearToolPreviewRenderContext()
+                        detailViewModel.toolInteractionCoordinator.dismissActivePresentationByUser()
                     }
                 )
             ) { active in
@@ -383,11 +366,24 @@ struct ChatView: View {
                     memberContextStore: homeViewModel.memberContextStoreForBinding,
                     stateStore: stateStore,
                     toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
+                    initialCompleteData: homeViewModel.dashboard?.medical.completeData,
+                    fetchMemberCompleteData: { memberID in
+                        try await detailViewModel.fetchMemberCompleteData(memberID: memberID)
+                    },
                     onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() },
                     onSaveSystemMessage: { prompt, value in
                         Task {
                             await detailViewModel.updateThreadSystemPrompt(value, for: prompt.threadID)
                         }
+                    },
+                    onAskReportAppend: { _, refs in
+                        detailViewModel.appendAskReportRefs(refs, for: threadID)
+                    },
+                    onAskReportSetMemberBinding: { memberID in
+                        Task { await detailViewModel.updateThreadMemberBinding(memberID, for: threadID) }
+                    },
+                    onAskReportMaxRefsReached: {
+                        detailViewModel.notifyAskReportMaxRefsReached()
                     }
                 )
                 .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)

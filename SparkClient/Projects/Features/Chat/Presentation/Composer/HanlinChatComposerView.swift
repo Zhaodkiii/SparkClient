@@ -21,11 +21,11 @@ struct HanlinChatComposerView: View {
     let onRemoveAttachment: (UUID) -> Void
     let onSetMemberBinding: (Int?) -> Void
     let onMaxHealthRefsReached: () -> Void
+    let onPresentAskReportPicker: () -> Void
     /// 模型选择变更时立即持久化到线程并触发同步（由 `ChatDetailViewModel.updateThreadModel` 承担）。
     let onPersistSelectedChatModel: (String?) -> Void
 
     @State private var showFileImporter = false
-    @State private var showAskReportSheet = false
     @State private var isKeyboardVisible = false
 
     private var selectedModelBinding: Binding<String?> {
@@ -45,7 +45,7 @@ struct HanlinChatComposerView: View {
                     boundMemberID: boundMemberID,
                     isSending: stateStore.isSending,
                     smallTasks: smallTasks,
-                    onAskReport: { showAskReportSheet = true },
+                    onAskReport: onPresentAskReportPicker,
                     onSmallTaskTapped: onSmallTaskTapped
                 )
 
@@ -108,33 +108,6 @@ struct HanlinChatComposerView: View {
                 await MainActor.run {
                     onAttachmentsPicked(previews)
                 }
-            }
-        }
-        .sheet(isPresented: $showAskReportSheet) {
-            if let memberID = boundMemberID, memberID > 0 {
-                ChatAskReportSheet(
-                    memberContextStore: memberContextStore,
-                    boundMemberID: memberID,
-                    pendingRefs: stateStore.composerDraft(for: threadID).pendingHealthResourceRefs,
-                    initialCompleteData: initialCompleteData,
-                    fetchCompleteData: fetchMemberCompleteData,
-                    onAppendToPreview: { refs in
-                        let draft = stateStore.composerDraft(for: threadID)
-                        let remaining = HealthResourceSendValidator.maxRefs - draft.pendingHealthResourceRefs.count
-                        guard remaining > 0 else {
-                            onMaxHealthRefsReached()
-                            return
-                        }
-                        let batch = Array(refs.prefix(remaining))
-                        if batch.isEmpty {
-                            onMaxHealthRefsReached()
-                            return
-                        }
-                        stateStore.appendHealthResourceRefs(batch, for: threadID)
-                    },
-                    onSetMemberBinding: onSetMemberBinding,
-                    onMaxRefsReached: onMaxHealthRefsReached
-                )
             }
         }
     }

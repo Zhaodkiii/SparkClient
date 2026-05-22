@@ -41,13 +41,18 @@ struct ChatToolBlockStreamedPresentationView: View {
             }
             // 否则 → 展示工具执行/加载中状态
             else {
+                let invocationArguments = tool.invocationArguments
+                let content: String = {
+                    guard let invocationArguments, invocationArguments.isEmpty == false else { return "" }
+                    return ToolPreviewPrompt.displayText(for: invocationArguments)
+                }()
                 // 构建工具执行状态元数据（状态标题 + 描述）
                 let operational = ChatToolRuntimeAttachmentBuilder.makeOperationalMeta(
                     toolName: tool.name,
-                    toolContent: tool.content
+                    toolContent: content
                 ) ?? (
                     state: ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: tool.name),
-                    description: tool.content
+                    description: content
                 )
                 // 展示执行状态 UI
                 ChatOperationalStatusBlockView(

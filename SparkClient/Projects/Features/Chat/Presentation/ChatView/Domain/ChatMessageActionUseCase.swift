@@ -41,7 +41,7 @@ final class DefaultChatMessageActionUseCase: ChatMessageActionUseCase {
         let blockToolContent = message.blocks.last(where: { $0.kind == .tool })?.text ?? ""
         let toolContent = blockToolContent.isEmpty ? (metadata.toolContent ?? "") : blockToolContent
         let fallbackText = message.blocks
-            .filter { $0.kind == .text || $0.kind == .error }
+            .filter { $0.kind == .text || $0.kind == .error || $0.kind == .assistantStatusCard }
             .compactMap(\.text)
             .joined(separator: "\n")
         let primary = toolContent.isEmpty ? fallbackText : toolContent

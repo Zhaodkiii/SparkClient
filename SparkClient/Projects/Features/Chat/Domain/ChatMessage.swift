@@ -114,6 +114,8 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case taskCards
     /// 错误信息块
     case error
+    /// 助手回复状态卡片（中断、失败等）
+    case assistantStatusCard
     /// 健康资料引用（问报告）
     case healthResourceReference
 }
@@ -240,6 +242,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case smallTaskCard(ChatSmallTaskMessageCardPayload)
     case taskCards([TaskCard])
     case error(String)
+    case assistantStatusCard(ChatAssistantStatusCardPayload)
     case healthResourceReference(ChatHealthResourceReferencePayload)
 
     nonisolated var kind: ChatMessageBlockKind {
@@ -263,8 +266,24 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .smallTaskCard: return .smallTaskCard
         case .taskCards: return .taskCards
         case .error: return .error
+        case .assistantStatusCard: return .assistantStatusCard
         case .healthResourceReference: return .healthResourceReference
         }
+    }
+}
+
+nonisolated enum ChatAssistantStatusCardType: String, Codable, Sendable {
+    case interrupted
+    case sendFailed
+}
+
+nonisolated struct ChatAssistantStatusCardPayload: Codable, Equatable, Sendable {
+    let type: ChatAssistantStatusCardType
+    let message: String
+
+    init(type: ChatAssistantStatusCardType, message: String) {
+        self.type = type
+        self.message = message
     }
 }
 
@@ -311,6 +330,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 .html(let text),
                 .error(let text):
             return text
+        case .assistantStatusCard(let card):
+            return card.message
         case .tool(let tool):
             return tool.content
         default:
@@ -445,6 +466,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         captureMessageCard: ChatCaptureMessageCardPayload? = nil,
         smallTaskCard: ChatSmallTaskMessageCardPayload? = nil,
         deepThoughtCard: ChatDeepThoughtCardPayload? = nil,
+        assistantStatusCard: ChatAssistantStatusCardPayload? = nil,
         healthResourceReference: ChatHealthResourceReferencePayload? = nil,
         status: ChatMessageBlockStatus = .ready,
         revision: Int64 = 1,
@@ -478,6 +500,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             captureMessageCard: captureMessageCard,
             smallTaskCard: smallTaskCard,
             deepThoughtCard: deepThoughtCard,
+            assistantStatusCard: assistantStatusCard,
             healthResourceReference: healthResourceReference
         )
         self.status = status
@@ -508,6 +531,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         captureMessageCard: ChatCaptureMessageCardPayload?,
         smallTaskCard: ChatSmallTaskMessageCardPayload?,
         deepThoughtCard: ChatDeepThoughtCardPayload?,
+        assistantStatusCard: ChatAssistantStatusCardPayload?,
         healthResourceReference: ChatHealthResourceReferencePayload?
     ) -> ChatMessageBlockPayload {
         switch kind {
@@ -574,6 +598,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return .taskCards(taskCards)
         case .error:
             return .error(text ?? "")
+        case .assistantStatusCard:
+            guard let assistantStatusCard else {
+                preconditionFailure("Missing assistant status card payload")
+            }
+            return .assistantStatusCard(assistantStatusCard)
         case .healthResourceReference:
             guard let healthResourceReference else {
                 preconditionFailure("Missing health resource reference payload")
@@ -589,7 +618,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     ) -> ChatMessageBlockNodeRole {
         if kind == .tool { return .tool }
         if parentToolCallID?.isEmpty == false { return .toolPresentation }
-        if toolCallID?.isEmpty == false, kind != .text, kind != .deepThought, kind != .error {
+        if toolCallID?.isEmpty == false, kind != .text, kind != .deepThought, kind != .error, kind != .assistantStatusCard {
             return .toolPresentation
         }
         return .timeline

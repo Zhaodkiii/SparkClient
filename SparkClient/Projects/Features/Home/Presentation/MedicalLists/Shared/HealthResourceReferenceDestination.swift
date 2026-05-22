@@ -8,6 +8,7 @@ struct HealthResourceReferenceDestination: View {
     @ObservedObject var memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
     let cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    let onCompleteDataPatched: ((SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void)?
     let logger: Logger
 
     @State private var loadState: HealthResourceReferenceDetailLoadState = .idle
@@ -160,8 +161,15 @@ struct HealthResourceReferenceDestination: View {
 
     private func loadDetail() async {
         loadState = .loading
-        let loader = HealthResourceReferenceDetailLoader(medicalQueryAPI: medicalQueryAPI, logger: logger)
-        let result = await loader.load(reference: reference, cachedCompleteData: cachedCompleteData)
+        let loader = HealthResourceDetailLoader(
+            repository: HealthResourceRepository(medicalQueryAPI: medicalQueryAPI),
+            logger: logger
+        )
+        let result = await loader.load(
+            reference: reference,
+            cachedCompleteData: cachedCompleteData,
+            onCompleteDataPatched: onCompleteDataPatched
+        )
         if case .loaded(let payload) = result,
            case .examinationReport(let report) = payload {
             examinationReport = report

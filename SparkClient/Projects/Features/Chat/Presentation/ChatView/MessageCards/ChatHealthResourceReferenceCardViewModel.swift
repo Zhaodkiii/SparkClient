@@ -52,7 +52,7 @@ final class ChatHealthResourceReferenceCardViewModel: ObservableObject {
 
     func retry() async {
         logger.info(
-            "健康资料卡片摘要重试，type=\(summary.resourceType), id=\(summary.resourceId)",
+            "健康资料卡片摘要重试，key=\(summary.cacheKey)",
             module: .general
         )
         await HealthResourceSummaryCache.shared.invalidate(key: summary.cacheKey)
@@ -72,7 +72,7 @@ final class ChatHealthResourceReferenceCardViewModel: ObservableObject {
 
         if retry == false, let cached = await HealthResourceSummaryCache.shared.summary(for: key) {
             logger.debug(
-                "健康资料卡片摘要命中内存缓存，key=\(key), status=\(String(describing: cached.status))",
+                "健康资料卡片摘要命中缓存，key=\(key), status=\(String(describing: cached.status))",
                 module: .general
             )
             summary = cached
@@ -80,14 +80,15 @@ final class ChatHealthResourceReferenceCardViewModel: ObservableObject {
         }
 
         logger.info(
-            "健康资料卡片摘要加载开始，key=\(key), member=\(summary.memberId), retry=\(retry)",
+            "健康资料卡片摘要加载开始，key=\(key), retry=\(retry)",
             module: .general
         )
         summary = summary.updating(status: .loading)
 
-        let loaded = await HealthResourceSummaryCache.shared.load(key: key) { [recordService, cachedCompleteData, ref, totalRefs, refIndex, logger] in
+        await HealthResourceSummaryCache.shared.setActiveMember(summary.memberId)
+        let loaded = await HealthResourceSummaryCache.shared.load(key: key, memberID: summary.memberId) { [recordService, cachedCompleteData, ref, totalRefs, refIndex, logger] in
             logger.debug(
-                "健康资料卡片摘要执行加载任务，type=\(ref.resourceType), id=\(ref.resourceID)",
+                "健康资料卡片摘要执行加载任务，key=\(key)",
                 module: .general
             )
             return await recordService.cardSummary(
@@ -98,7 +99,7 @@ final class ChatHealthResourceReferenceCardViewModel: ObservableObject {
             )
         }
         logger.info(
-            "健康资料卡片摘要加载完成，key=\(key), status=\(String(describing: loaded.status)), title=\(loaded.title)",
+            "健康资料卡片摘要加载完成，key=\(key), status=\(String(describing: loaded.status))",
             module: .general
         )
         summary = loaded

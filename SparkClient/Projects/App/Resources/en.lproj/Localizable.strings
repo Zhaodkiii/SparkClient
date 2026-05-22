@@ -405,6 +405,7 @@
 "chat.error_card.title" = "Request failed";
 "chat.error_card.retry" = "Retry request";
 "chat.error_card.generic_body" = "An error occurred while generating the reply. Try again.";
+"chat.status_card.interrupted.title" = "Response stopped";
 "chat.error.response_format" = "⚠️ Response error: %@";
 "chat.error.empty_output" = "⚠️ Generated content is empty. Please try again.";
 "chat.generation.interrupted" = "🛑 Response interrupted";

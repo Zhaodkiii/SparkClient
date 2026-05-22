@@ -33,52 +33,53 @@ enum HealthResourceReferenceDetailPayload: Equatable, Sendable {
     case readOnly(HealthResourceReadOnlySnapshot)
 }
 
-/// 详情页实体加载：先本地 complete-data，未命中再按类型+ID 单条 retrieve。
-struct HealthResourceReferenceDetailLoader {
-    let medicalQueryAPI: SparkMedicalQueryAPI
+/// 详情页深加载：先 complete-data 切片，未命中再经 `HealthResourceRepository` 单条/列表拉取。
+struct HealthResourceDetailLoader {
+    let repository: HealthResourceRepository
     let logger: Logger
 
-    init(medicalQueryAPI: SparkMedicalQueryAPI, logger: Logger = ConsoleLogger()) {
-        self.medicalQueryAPI = medicalQueryAPI
+    init(repository: HealthResourceRepository, logger: Logger = ConsoleLogger()) {
+        self.repository = repository
         self.logger = logger
+    }
+
+    init(medicalQueryAPI: SparkMedicalQueryAPI, logger: Logger = ConsoleLogger()) {
+        self.init(repository: HealthResourceRepository(medicalQueryAPI: medicalQueryAPI), logger: logger)
     }
 
     func load(
         reference: HealthResourceReference,
-        cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+        cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        onCompleteDataPatched: ((SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void)? = nil
     ) async -> HealthResourceReferenceDetailLoadState {
         let ref = reference.healthRef
-        logger.info(
-            "健康资料详情加载开始，type=\(reference.resourceType), id=\(reference.resourceID), member=\(reference.memberID)",
-            module: .general
-        )
+        let key = reference.cacheKey
+        logger.info("健康资料详情加载开始，key=\(key)", module: .general)
 
         if let data = cachedCompleteData, data.memberId == reference.memberID,
            let payload = payloadFromCompleteData(ref: ref, data: data) {
-            logger.info(
-                "健康资料详情命中本地 complete-data，type=\(reference.resourceType), id=\(reference.resourceID)",
-                module: .general
+            logger.info("健康资料详情命中本地 complete-data，key=\(key)", module: .general)
+            let enriched = await enrichReportPayloadIfNeeded(payload, ref: ref)
+            patchCompleteDataCacheIfNeeded(
+                enriched: enriched,
+                cachedCompleteData: data,
+                onCompleteDataPatched: onCompleteDataPatched
             )
-            return .loaded(payload)
+            return .loaded(enriched)
         }
 
         guard let type = ref.typedResource else {
-            logger.warning("健康资料详情未知类型：\(reference.resourceType)", module: .general)
+            logger.warning("健康资料详情未知类型，key=\(key)", module: .general)
             return .notFound
         }
 
-        if let payload = await payloadFromNetwork(ref: ref, type: type) {
-            logger.info(
-                "健康资料详情网络加载成功，type=\(reference.resourceType), id=\(reference.resourceID)",
-                module: .general
-            )
+        if var payload = await payloadFromNetwork(ref: ref, type: type) {
+            payload = await enrichReportPayloadIfNeeded(payload, ref: ref)
+            logger.info("健康资料详情网络加载成功，key=\(key)", module: .general)
             return .loaded(payload)
         }
 
-        logger.warning(
-            "健康资料详情未找到，type=\(reference.resourceType), id=\(reference.resourceID)",
-            module: .general
-        )
+        logger.warning("健康资料详情未找到，key=\(key)", module: .general)
         return .notFound
     }
 
@@ -164,77 +165,223 @@ struct HealthResourceReferenceDetailLoader {
     ) async -> HealthResourceReferenceDetailPayload? {
         switch type {
         case .examinationReport:
-            guard let report = try? await medicalQueryAPI.retrieveExaminationReport(id: ref.resourceID) else { return nil }
-            let details = try? await medicalQueryAPI.listMedExamDetails(
-                memberID: ref.memberID,
-                businessType: type.rawValue,
-                businessID: ref.resourceID
-            )
-            return .examinationReport(Self.examinationWithAttachments(report, details: details))
+            guard case .success(let report) = await repository.retrieveExaminationReportWithAttachments(id: ref.resourceID) else {
+                return nil
+            }
+            return .examinationReport(report)
         case .healthExamReport:
-            guard let report = try? await medicalQueryAPI.retrieveHealthExamReport(id: ref.resourceID) else { return nil }
-            let details = try? await medicalQueryAPI.listMedExamDetails(
-                memberID: ref.memberID,
-                businessType: type.rawValue,
-                businessID: ref.resourceID
-            )
-            return .healthExamReport(Self.healthExamWithAttachments(report, details: details))
+            guard case .success(let report) = await repository.retrieveHealthExamReportWithAttachments(id: ref.resourceID) else {
+                return nil
+            }
+            return .healthExamReport(report)
         case .medicalCase:
-            guard let item = try? await medicalQueryAPI.retrieveMedicalCase(id: ref.resourceID) else { return nil }
+            guard case .success(let item) = await repository.retrieveMedicalCase(id: ref.resourceID) else { return nil }
             return .medicalCase(Self.medicalCaseSummary(from: item))
         case .prescription:
-            guard let rx = try? await medicalQueryAPI.retrievePrescription(id: ref.resourceID) else { return nil }
-            let plans = (try? await medicalQueryAPI.listMedicationPlans(memberID: ref.memberID, prescriptionID: ref.resourceID)) ?? []
-            let boxes = (try? await medicalQueryAPI.listMedicineBoxes(memberID: ref.memberID)) ?? []
-            let records = recordsByPlan(plans: plans, records: (try? await medicalQueryAPI.listMedicationRecords(memberID: ref.memberID)) ?? [])
+            guard case .success(let rx) = await repository.retrievePrescription(id: ref.resourceID) else { return nil }
+            let plans = await listValueOrEmpty { await repository.listMedicationPlans(memberID: ref.memberID, prescriptionID: ref.resourceID) }
+            let boxes = await listValueOrEmpty { await repository.listMedicineBoxes(memberID: ref.memberID) }
+            let records = recordsByPlan(
+                plans: plans,
+                records: await listValueOrEmpty { await repository.listMedicationRecords(memberID: ref.memberID) }
+            )
             return .prescription(rx, plans: plans, medicineBoxes: boxes, recordsByPlanID: records)
         case .medicationPlan:
-            guard let plan = try? await medicalQueryAPI.retrieveMedicationPlan(id: ref.resourceID) else { return nil }
-            let boxes = (try? await medicalQueryAPI.listMedicineBoxes(memberID: ref.memberID)) ?? []
-            let records = (try? await medicalQueryAPI.listMedicationRecords(memberID: ref.memberID, planID: ref.resourceID)) ?? []
+            guard case .success(let plan) = await repository.retrieveMedicationPlan(id: ref.resourceID) else { return nil }
+            let boxes = await listValueOrEmpty { await repository.listMedicineBoxes(memberID: ref.memberID) }
+            let records = await listValueOrEmpty { await repository.listMedicationRecords(memberID: ref.memberID, planID: ref.resourceID) }
             return .medicationPlan(plan, medicineBoxes: boxes, records: records)
         case .medicineBox:
-            guard let box = try? await medicalQueryAPI.retrieveMedicineBox(id: ref.resourceID) else { return nil }
-            let all = (try? await medicalQueryAPI.listMedicineBoxes(memberID: ref.memberID)) ?? [box]
-            return .medicineBox(box, allBoxes: all)
+            guard case .success(let box) = await repository.retrieveMedicineBox(id: ref.resourceID) else { return nil }
+            let all = await listValueOrEmpty { await repository.listMedicineBoxes(memberID: ref.memberID) }
+            return .medicineBox(box, allBoxes: all.isEmpty ? [box] : all)
         case .medicationSummary:
             return .medicationExecution(
                 memberID: ref.memberID,
-                plans: (try? await medicalQueryAPI.listMedicationPlans(memberID: ref.memberID)) ?? [],
-                medicineBoxes: (try? await medicalQueryAPI.listMedicineBoxes(memberID: ref.memberID)) ?? [],
-                initialRecords: (try? await medicalQueryAPI.listMedicationRecords(memberID: ref.memberID)) ?? []
+                plans: await listValueOrEmpty { await repository.listMedicationPlans(memberID: ref.memberID) },
+                medicineBoxes: await listValueOrEmpty { await repository.listMedicineBoxes(memberID: ref.memberID) },
+                initialRecords: await listValueOrEmpty { await repository.listMedicationRecords(memberID: ref.memberID) }
             )
         case .symptom:
-            guard let item = try? await medicalQueryAPI.retrieveSymptom(id: ref.resourceID) else { return nil }
+            guard case .success(let item) = await repository.retrieveSymptom(id: ref.resourceID) else { return nil }
             return .readOnly(Self.readOnlySnapshot(ref: ref, type: type, title: item.name, fields: [
                 HealthResourceReadOnlyField(title: "严重度", value: item.severity),
                 HealthResourceReadOnlyField(title: "部位", value: item.bodyPart)
             ], body: item.notes))
         case .visit:
-            guard let item = try? await medicalQueryAPI.retrieveVisit(id: ref.resourceID) else { return nil }
+            guard case .success(let item) = await repository.retrieveVisit(id: ref.resourceID) else { return nil }
             return .readOnly(Self.readOnlySnapshot(ref: ref, type: type, title: item.department, fields: [
                 HealthResourceReadOnlyField(title: "医生", value: item.doctorName),
                 HealthResourceReadOnlyField(title: "类型", value: item.visitType)
             ], body: item.notes))
         case .surgery:
-            guard let item = try? await medicalQueryAPI.retrieveSurgery(id: ref.resourceID) else { return nil }
+            guard case .success(let item) = await repository.retrieveSurgery(id: ref.resourceID) else { return nil }
             return .readOnly(Self.readOnlySnapshot(ref: ref, type: type, title: item.procedureName, fields: [
                 HealthResourceReadOnlyField(title: "术者", value: item.surgeon)
             ], body: item.notes))
         case .followUp:
-            guard let item = try? await medicalQueryAPI.retrieveFollowUp(id: ref.resourceID) else { return nil }
+            guard case .success(let item) = await repository.retrieveFollowUp(id: ref.resourceID) else { return nil }
             return .readOnly(Self.readOnlySnapshot(ref: ref, type: type, title: item.method, fields: [
                 HealthResourceReadOnlyField(title: "结果", value: item.outcome),
                 HealthResourceReadOnlyField(title: "下一步", value: item.nextAction)
             ], body: nil))
         case .medicationRecord:
-            guard let item = try? await medicalQueryAPI.retrieveMedicationRecord(id: ref.resourceID) else { return nil }
+            guard case .success(let item) = await repository.retrieveMedicationRecord(id: ref.resourceID) else { return nil }
             return .readOnly(Self.readOnlySnapshot(ref: ref, type: type, title: L10n.text(type.localizationKey), fields: [
                 HealthResourceReadOnlyField(title: "计划剂量", value: item.plannedDose),
                 HealthResourceReadOnlyField(title: "实际", value: item.actualDose),
                 HealthResourceReadOnlyField(title: "状态", value: item.status)
             ], body: item.notes))
         }
+    }
+
+    private func enrichReportPayloadIfNeeded(
+        _ payload: HealthResourceReferenceDetailPayload,
+        ref: HealthResourceRef
+    ) async -> HealthResourceReferenceDetailPayload {
+        switch payload {
+        case .examinationReport(let report):
+            let enriched = await enrichExaminationReport(report, ref: ref)
+            return .examinationReport(enriched)
+        case .healthExamReport(let report):
+            let enriched = await enrichHealthExamReport(report, ref: ref)
+            return .healthExamReport(enriched)
+        default:
+            return payload
+        }
+    }
+
+    private func enrichExaminationReport(
+        _ report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
+        ref: HealthResourceRef
+    ) async -> SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+        var merged = report
+        if merged.medExamDetails.isNilOrEmpty {
+            if let details = await medExamDetailsOrNil(
+                memberID: ref.memberID,
+                businessType: HealthResourceType.examinationReport.rawValue,
+                businessID: ref.resourceID
+            ) {
+                merged.medExamDetails = details
+                logger.info(
+                    "检查报告明细懒加载完成 reportID=\(ref.resourceID) count=\(details.count)",
+                    module: .general
+                )
+            }
+        }
+        if merged.attachments.isNilOrEmpty,
+           case .success(let fresh) = await repository.retrieveExaminationReportWithAttachments(id: ref.resourceID),
+           let attachments = fresh.attachments,
+           attachments.isEmpty == false {
+            merged.attachments = attachments
+            logger.info(
+                "检查报告附件已从医疗资源接口补齐 reportID=\(ref.resourceID) count=\(attachments.count)",
+                module: .general
+            )
+        }
+        return merged
+    }
+
+    private func enrichHealthExamReport(
+        _ report: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments,
+        ref: HealthResourceRef
+    ) async -> SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments {
+        var merged = report
+        if merged.medExamDetails.isNilOrEmpty {
+            if let details = await medExamDetailsOrNil(
+                memberID: ref.memberID,
+                businessType: HealthResourceType.healthExamReport.rawValue,
+                businessID: ref.resourceID
+            ) {
+                merged.medExamDetails = details
+                logger.info(
+                    "体检报告明细懒加载完成 reportID=\(ref.resourceID) count=\(details.count)",
+                    module: .general
+                )
+            }
+        }
+        if merged.attachments.isNilOrEmpty,
+           case .success(let fresh) = await repository.retrieveHealthExamReportWithAttachments(id: ref.resourceID),
+           let attachments = fresh.attachments,
+           attachments.isEmpty == false {
+            merged.attachments = attachments
+            logger.info(
+                "体检报告附件已从医疗资源接口补齐 reportID=\(ref.resourceID) count=\(attachments.count)",
+                module: .general
+            )
+        }
+        return merged
+    }
+
+    private func patchCompleteDataCacheIfNeeded(
+        enriched: HealthResourceReferenceDetailPayload,
+        cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData,
+        onCompleteDataPatched: ((SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void)?
+    ) {
+        guard let onCompleteDataPatched else { return }
+        let patched: SparkMedicalSyncAPI.RemoteMemberCompleteData
+        switch enriched {
+        case .examinationReport(let report):
+            patched = HealthResourceCompleteDataCachePatcher.patch(
+                cachedCompleteData,
+                examinationReport: report
+            )
+        case .healthExamReport(let report):
+            patched = HealthResourceCompleteDataCachePatcher.patch(
+                cachedCompleteData,
+                healthExamReport: report
+            )
+        default:
+            return
+        }
+        onCompleteDataPatched(patched)
+    }
+
+    private func medExamDetailsOrNil(
+        memberID: Int,
+        businessType: String,
+        businessID: Int
+    ) async -> [SparkMedicalSyncAPI.RemoteMedExamDetail]? {
+        guard case .success(let details) = await repository.loadMedExamDetails(
+            memberID: memberID,
+            businessID: businessID
+        ) else { return nil }
+        return Self.filterMedExamRows(details, acceptedBusinessTypes: acceptedTypes(for: businessType))
+    }
+
+    private func acceptedTypes(for businessType: String) -> [String] {
+        switch businessType {
+        case HealthResourceType.examinationReport.rawValue:
+            return ["examination_report", "examination"]
+        case HealthResourceType.healthExamReport.rawValue:
+            return ["health_exam_report", "health_exam"]
+        default:
+            return [businessType]
+        }
+    }
+
+    private static func filterMedExamRows(
+        _ rows: [SparkMedicalSyncAPI.RemoteMedExamDetail],
+        acceptedBusinessTypes: [String]
+    ) -> [SparkMedicalSyncAPI.RemoteMedExamDetail] {
+        let accepted = acceptedBusinessTypes.map { $0.lowercased() }
+        let filtered = rows.filter { row in
+            let normalized = row.businessType.lowercased()
+            return accepted.contains(normalized) || rows.count == 1
+        }
+        return filtered.sorted { lhs, rhs in
+            if lhs.sortOrder == rhs.sortOrder {
+                return lhs.id < rhs.id
+            }
+            return lhs.sortOrder < rhs.sortOrder
+        }
+    }
+
+    private func listValueOrEmpty<T>(
+        _ load: () async -> Result<[T], HealthResourceLoadError>
+    ) async -> [T] {
+        guard case .success(let value) = await load() else { return [] }
+        return value
     }
 
     private func recordsByPlan(
@@ -335,5 +482,16 @@ struct HealthResourceReferenceDetailLoader {
             fields: nonEmptyFields,
             bodyText: body?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? body : nil
         )
+    }
+}
+
+private extension Optional where Wrapped: Collection {
+    var isNilOrEmpty: Bool {
+        switch self {
+        case .none:
+            return true
+        case .some(let value):
+            return value.isEmpty
+        }
     }
 }

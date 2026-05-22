@@ -92,9 +92,9 @@ struct ModelCatalogCoordinator: Sendable {
         guard let model = snapshot.allModels.first(where: { $0.id == id }) else {
             throw AISettingsMutationError.modelNotFound
         }
-        guard model.source != .system else {
-            throw AISettingsMutationError.systemModelCannotBeDeleted
-        }
+//        guard model.source != .system else {
+//            throw AISettingsMutationError.systemModelCannotBeDeleted
+//        }
         snapshot.allModels.removeAll { $0.id == id }
     }
 

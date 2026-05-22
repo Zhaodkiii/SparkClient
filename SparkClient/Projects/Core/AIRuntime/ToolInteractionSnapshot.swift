@@ -11,11 +11,13 @@ enum ToolInteractionSnapshot: Codable, Equatable, Sendable {
     case systemMessageSettings(SystemMessageSettingsPrompt)
     /// M11：`list_member_health_sources` 多条候选，用户勾选后加入预览草稿。
     case healthResourceCandidates(HealthResourceToolCandidatePrompt)
+    /// 手动「问报告」资料选择（与工具候选共用呈现队列）。
+    case askReportPicker(AskReportPickerPrompt)
 
     /// `true`：禁止下滑关闭（同意/提问/选成员）；`false`：允许工具详情 Sheet 手势关闭。
     var requiresForcedSheetDismiss: Bool {
         switch self {
-        case .toolPreview, .systemMessageSettings, .healthResourceCandidates: return false
+        case .toolPreview, .systemMessageSettings, .healthResourceCandidates, .askReportPicker: return false
         case .consent, .question, .member: return true
         }
     }

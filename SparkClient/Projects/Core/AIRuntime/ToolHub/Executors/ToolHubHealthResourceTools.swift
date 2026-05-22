@@ -11,6 +11,27 @@ extension ToolHub {
         )
     }
 
+    func healthResourceTypesProperty() -> AIRuntimeToolProperty {
+        AIRuntimeToolProperty(
+            type: "array",
+            description: td("tool.param.health_resource_types_filter"),
+            arrayItems: healthResourceTypeProperty()
+        )
+    }
+
+    func parseHealthResourceTypeFilter(from arguments: [String: String]) -> HealthResourceListTypeFilter.Parsed {
+        HealthResourceListTypeFilter.parse(arguments: arguments)
+    }
+
+    func appendUnrecognizedHealthResourceTypesNotice(
+        to output: String,
+        unrecognized: [String]
+    ) -> String {
+        guard unrecognized.isEmpty == false else { return output }
+        let list = unrecognized.joined(separator: ", ")
+        return output + "\n\n【系统】未识别的健康资料类型已忽略：\(list)。可用类型见 resource_types 参数说明。"
+    }
+
     func runListMemberHealthSources(
         invocation: ToolInvocation,
         context: ToolExecutionContext
@@ -20,16 +41,23 @@ extension ToolHub {
         }
         let memberID = scope
 
-        let resourceType = invocation.arguments["resource_type"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typeFilter = parseHealthResourceTypeFilter(from: invocation.arguments)
         let keyword = invocation.arguments["keyword"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         let startDate = invocation.arguments["start_date"]
         let endDate = invocation.arguments["end_date"]
         let limit = Int(invocation.arguments["limit"] ?? "") ?? 20
 
-        let data: SparkMedicalSyncAPI.RemoteMemberCompleteData
-        do {
-            data = try await medicalQueryAPI.fetchMemberCompleteData(memberID: memberID)
-        } catch {
+        let listResult = await healthResourceToolService.listSources(
+            query: HealthResourceListQuery(
+                resourceTypes: typeFilter.resourceTypes,
+                keyword: keyword?.isEmpty == true ? nil : keyword,
+                startDate: startDate,
+                endDate: endDate,
+                limit: limit
+            ),
+            memberID: memberID
+        )
+        guard case .success(let listed) = listResult else {
             return healthResourceErrorResult(
                 tool: .listMemberHealthSources,
                 code: "load_failed",
@@ -37,21 +65,12 @@ extension ToolHub {
             )
         }
 
-        let listed = ChatHealthResourceSourceLister.list(
-            data: data,
-            resourceType: resourceType?.isEmpty == true ? nil : resourceType,
-            keyword: keyword?.isEmpty == true ? nil : keyword,
-            startDate: startDate,
-            endDate: endDate,
-            limit: limit
-        )
-
         let payload = ListMemberHealthSourcesResponse(
             version: 1,
-            memberID: memberID,
+            memberId: memberID,
             query: ListMemberHealthSourcesQuery(
                 keyword: keyword?.isEmpty == true ? nil : keyword,
-                resourceType: resourceType?.isEmpty == true ? nil : resourceType,
+                resourceTypes: typeFilter.resourceTypes,
                 startDate: startDate,
                 endDate: endDate,
                 limit: limit
@@ -67,9 +86,12 @@ extension ToolHub {
                   let coordinator = toolInteractionCoordinator else {
                 return ToolExecutionResult(
                     toolName: SparkToolName.listMemberHealthSources,
-                    outputText: HealthResourceToolOrchestration.appendMemberScopeNotice(
-                        to: baseOutput + "\n\n【系统】当前界面无法展示健康资料候选选择，请根据 JSON 候选列表继续。",
-                        memberID: memberID
+                    outputText: appendUnrecognizedHealthResourceTypesNotice(
+                        to: HealthResourceToolOrchestration.appendMemberScopeNotice(
+                            to: baseOutput + "\n\n【系统】当前界面无法展示健康资料候选选择，请根据 JSON 候选列表继续。",
+                            memberID: memberID
+                        ),
+                        unrecognized: typeFilter.unrecognized
                     ),
                     sensitive: true,
                     shouldBypassModel: true,
@@ -86,11 +108,14 @@ extension ToolHub {
             let selectionResult = await coordinator.requestHealthResourceCandidateSelection(prompt: prompt)
             switch selectionResult {
             case .success(let selected):
-                let outputText = HealthResourceToolOrchestration.makeConfirmedToolOutput(
-                    memberID: memberID,
-                    query: payload.query,
-                    selected: selected,
-                    encodeJSON: { encodeJSON($0) }
+                let outputText = appendUnrecognizedHealthResourceTypesNotice(
+                    to: HealthResourceToolOrchestration.makeConfirmedToolOutput(
+                        memberID: memberID,
+                        query: payload.query,
+                        selected: selected,
+                        encodeJSON: { encodeJSON($0) }
+                    ),
+                    unrecognized: typeFilter.unrecognized
                 )
                 return ToolExecutionResult(
                     toolName: SparkToolName.listMemberHealthSources,
@@ -112,9 +137,12 @@ extension ToolHub {
             }
         }
 
-        var outputText = HealthResourceToolOrchestration.appendMemberScopeNotice(to: baseOutput, memberID: memberID)
+        var outputText = appendUnrecognizedHealthResourceTypesNotice(
+            to: HealthResourceToolOrchestration.appendMemberScopeNotice(to: baseOutput, memberID: memberID),
+            unrecognized: typeFilter.unrecognized
+        )
         if listed.candidates.count == 1 {
-            outputText += "\n\n【系统】检索结果唯一，无需用户确认。请对该 resource 仅调用 get_health_resource_context 获取解读正文（勿调用 get_health_resource_reference）。"
+            outputText += "\n\n【系统】检索结果唯一，无需用户确认。请用 get_health_resource_context 一次传入 references（含该条 resource_type+resource_id）获取解读正文（勿调用 get_health_resource_reference）。"
         }
 
         return ToolExecutionResult(
@@ -145,24 +173,10 @@ extension ToolHub {
             )
         }
 
-        let ref = HealthResourceRef(
-            type: type,
-            resourceID: resourceID,
-            memberID: scope,
-            displayTitle: "",
-            displaySubtitle: ""
-        )
-
-        let data = try? await medicalQueryAPI.fetchMemberCompleteData(memberID: scope)
-        let recordService = HealthResourceRecordService(medicalQueryAPI: medicalQueryAPI)
-        let summary = await recordService.cardSummary(
-            for: ref,
-            refIndex: 1,
-            totalRefs: 1,
-            cachedCompleteData: data
-        )
-
-        guard summary.status == .loaded || summary.status == .idle else {
+        let identity = HealthResourceIdentity(type: type, resourceID: resourceID, memberID: scope)
+        let validation = await healthResourceToolService.validateReference(identity)
+        guard case .success(let summary) = validation,
+              summary.status == .loaded || summary.status == .idle else {
             let payload = GetHealthResourceReferenceResponse(
                 version: 1,
                 reference: nil,
@@ -182,8 +196,8 @@ extension ToolHub {
             version: 1,
             reference: HealthResourceToolReferenceDTO(
                 resourceType: resourceType,
-                resourceID: resourceID,
-                memberID: scope
+                resourceId: resourceID,
+                memberId: scope
             ),
             resolveStatus: "ok",
             displayTitle: summary.title,
@@ -215,10 +229,10 @@ extension ToolHub {
         guard let scope = await resolveHealthResourceMemberScope(invocation: invocation, context: context) else {
             return scopeDeniedResult(tool: .getHealthResourceContext)
         }
-        guard let resourceType = invocation.arguments["resource_type"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-              resourceType.isEmpty == false,
-              let type = HealthResourceType(rawValue: resourceType),
-              let resourceID = Int(invocation.arguments["resource_id"] ?? "") else {
+        guard let identities = HealthResourceContextReferenceParser.identities(
+            from: invocation.arguments,
+            scopeMemberID: scope
+        ), identities.isEmpty == false else {
             return healthResourceErrorResult(
                 tool: .getHealthResourceContext,
                 code: "invalid_args",
@@ -227,19 +241,30 @@ extension ToolHub {
         }
 
         let topic = invocation.arguments["topic"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let ref = HealthResourceRef(
-            type: type,
-            resourceID: resourceID,
+        let normalizedTopic = topic?.isEmpty == true ? nil : topic
+
+        if identities.count == 1 {
+            return await runGetHealthResourceContextSingle(
+                identity: identities[0],
+                memberID: scope,
+                topic: normalizedTopic
+            )
+        }
+
+        return await runGetHealthResourceContextBatch(
+            identities: identities,
             memberID: scope,
-            displayTitle: "",
-            displaySubtitle: ""
+            topic: normalizedTopic
         )
+    }
 
-        let cached = try? await medicalQueryAPI.fetchMemberCompleteData(memberID: scope)
-        let contextText = await HealthResourceContextResolver(medicalQueryAPI: medicalQueryAPI)
-            .resolveContextText(refs: [ref], memberID: scope, cachedCompleteData: cached)
-
-        guard contextText.isEmpty == false else {
+    private func runGetHealthResourceContextSingle(
+        identity: HealthResourceIdentity,
+        memberID: Int,
+        topic: String?
+    ) async -> ToolExecutionResult {
+        let resolved = await healthResourceToolService.resolveContext(identity, topic: topic)
+        guard case .success(let context) = resolved, context.contextText.isEmpty == false else {
             return healthResourceErrorResult(
                 tool: .getHealthResourceContext,
                 code: "context_empty",
@@ -250,30 +275,91 @@ extension ToolHub {
         let payload = GetHealthResourceContextResponse(
             version: 1,
             reference: HealthResourceToolReferenceDTO(
-                resourceType: resourceType,
-                resourceID: resourceID,
-                memberID: scope
+                resourceType: identity.resourceType,
+                resourceId: identity.resourceID,
+                memberId: identity.memberID
             ),
-            contextText: contextText,
-            topic: topic?.isEmpty == true ? nil : topic
+            contextText: context.contextText,
+            topic: topic
         )
 
         let json = encodeJSON(payload) ?? "{}"
-        let outputText = HealthResourceToolOrchestration.memberScopeNotice(memberID: scope) + "\n" + json
+        let outputText = HealthResourceToolOrchestration.memberScopeNotice(memberID: memberID) + "\n" + json
 
         return ToolExecutionResult(
             toolName: SparkToolName.getHealthResourceContext,
             outputText: outputText,
             sensitive: true,
             shouldBypassModel: true,
-            resolvedMemberID: scope,
+            resolvedMemberID: memberID,
             sideEffects: [
                 .healthResourceReference(
-                    resourceType: resourceType,
-                    resourceID: resourceID,
-                    memberID: scope
+                    resourceType: identity.resourceType,
+                    resourceID: identity.resourceID,
+                    memberID: memberID
                 )
             ]
+        )
+    }
+
+    private func runGetHealthResourceContextBatch(
+        identities: [HealthResourceIdentity],
+        memberID: Int,
+        topic: String?
+    ) async -> ToolExecutionResult {
+        let resolved = await healthResourceToolService.resolveContexts(identities, memberID: memberID, topic: topic)
+        guard case .success(let batch) = resolved else {
+            let code: String
+            let message: String
+            if case .failure(let error) = resolved {
+                switch error {
+                case .insufficientContent:
+                    code = "context_empty"
+                    message = L10n.text("chat.ask_report.tool.error.context_empty")
+                case .forbidden:
+                    code = "member_scope_denied"
+                    message = L10n.text("chat.ask_report.tool.error.member_scope")
+                case .invalidType:
+                    code = "invalid_args"
+                    message = L10n.text("chat.ask_report.error.invalid_reference")
+                default:
+                    code = "load_failed"
+                    message = L10n.text("chat.ask_report.tool.error.load_failed")
+                }
+            } else {
+                code = "context_empty"
+                message = L10n.text("chat.ask_report.tool.error.context_empty")
+            }
+            return healthResourceErrorResult(tool: .getHealthResourceContext, code: code, message: message)
+        }
+
+        let payload = batch
+        let json = encodeJSON(payload) ?? "{}"
+        let batchNotice = """
+        【系统】已一次性返回 \(batch.contexts.filter { $0.resolveStatus == "ok" }.count) 份资料解读上下文（version=2）。请优先阅读 combined_context_text 做对比分析，勿对同一批资料重复调用本工具。
+        """
+        let outputText = HealthResourceToolOrchestration.memberScopeNotice(memberID: memberID)
+            + "\n"
+            + batchNotice
+            + "\n"
+            + json
+
+        let sideEffects = batch.contexts.compactMap { item -> ToolSideEffect? in
+            guard item.resolveStatus == "ok" else { return nil }
+            return .healthResourceReference(
+                resourceType: item.reference.resourceType,
+                resourceID: item.reference.resourceId,
+                memberID: item.reference.memberId ?? memberID
+            )
+        }
+
+        return ToolExecutionResult(
+            toolName: SparkToolName.getHealthResourceContext,
+            outputText: outputText,
+            sensitive: true,
+            shouldBypassModel: true,
+            resolvedMemberID: memberID,
+            sideEffects: sideEffects
         )
     }
 
@@ -288,6 +374,14 @@ extension ToolHub {
                 return nil
             }
             return explicitID
+        }
+        if let fromReferences = HealthResourceContextReferenceParser.scopeMemberID(
+            fromReferencesJSON: invocation.arguments["references"]
+        ) {
+            if let bound = context.memberID, bound > 0, fromReferences != bound {
+                return nil
+            }
+            return fromReferences
         }
         if let bound = context.memberID, bound > 0 {
             return bound

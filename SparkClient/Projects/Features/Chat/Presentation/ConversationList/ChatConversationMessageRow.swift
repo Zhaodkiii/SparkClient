@@ -154,6 +154,7 @@ struct ChatConversationMessageRow: View {
                         memberContextStore: memberContextStore,
                         notificationClient: detailViewModel.chatNotificationClient,
                         cachedCompleteData: detailViewModel.cachedMemberCompleteData,
+                        onCompleteDataPatched: { detailViewModel.updateCachedMemberCompleteData($0) },
                         logger: detailViewModel.chatLogger
                     )
                 )
@@ -407,7 +408,7 @@ struct ChatConversationMessageRow: View {
 
     private func messagePlainText(_ message: ChatMessage) -> String {
         message.blocks
-            .filter { $0.kind == .text || $0.kind == .tool || $0.kind == .error }
+            .filter { $0.kind == .text || $0.kind == .tool || $0.kind == .error || $0.kind == .assistantStatusCard }
             .compactMap(\.text)
             .joined(separator: "\n")
     }
