@@ -36,6 +36,7 @@ struct HomeFeatureDependencies {
     let medicalQueryAPI: SparkMedicalQueryAPI
     let medicalMemberAPI: SparkMedicalMemberAPI
     let shareMemberUseCase: ShareMemberUseCase
+    let memberInviteUseCase: MemberInviteUseCase
     let manageMemberBindingUseCase: ManageMemberBindingUseCase
     let fileTransferService: FileTransferService
     let taskManager: TaskManager
@@ -43,6 +44,7 @@ struct HomeFeatureDependencies {
     let memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    let routeStore: AppRouteStore
 }
 
 struct KnowledgeFeatureDependencies {
@@ -58,13 +60,15 @@ extension HomeFeatureDependencies {
             medicalQueryAPI: container.backend.medicalQuery,
             medicalMemberAPI: container.backend.medicalMembers,
             shareMemberUseCase: ShareMemberUseCase(memberAPI: container.backend.medicalMembers),
+            memberInviteUseCase: MemberInviteUseCase(memberAPI: container.backend.medicalMembers),
             manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: container.backend.medicalMembers),
             fileTransferService: container.fileTransferService,
             taskManager: container.taskManager,
             logger: container.logger,
             memberContextStore: container.memberContextStore,
             notificationClient: container.notificationClient,
-            medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel()
+            medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
+            routeStore: AppRouteStore()
         )
     }
 }

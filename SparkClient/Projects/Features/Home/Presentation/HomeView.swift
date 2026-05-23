@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
     @State private var showTaskCenter = false
+    @State private var addMemberNearbyTransport = NearbyShareTransport()
 
     var body: some View {
         homeContent
@@ -45,15 +46,47 @@ struct HomeView: View {
                         mode: .create,
                         store: viewModel.memberContextStoreForBinding,
                         shareUseCase: dependencies.shareMemberUseCase,
+                        inviteUseCase: dependencies.memberInviteUseCase,
+                        nearbyTransport: addMemberNearbyTransport,
                         initialPendingTicket: pendingTicket,
                         onBindingAccepted: {
-                            Task { await viewModel.refresh() }
+                            Task {
+                                await viewModel.refresh()
+                                await viewModel.fetchPendingInvitesIfNeeded()
+                            }
                         }
                     )
                 case .edit(let member):
                     AddFamilyMemberView(mode: .edit(member), store: viewModel.memberContextStoreForBinding)
+                case .acceptInvite(let inviteID, let preview):
+                    AddFamilyMemberView(
+                        mode: .acceptInvite(inviteID: inviteID, preview: preview),
+                        store: viewModel.memberContextStoreForBinding,
+                        inviteUseCase: dependencies.memberInviteUseCase,
+                        onBindingAccepted: {
+                            Task {
+                                await viewModel.refresh()
+                                await viewModel.fetchPendingInvitesIfNeeded()
+                            }
+                        }
+                    )
                 }
             }
+        }
+        .sheet(isPresented: $viewModel.showPendingInvites) {
+            PendingMemberInvitesView(
+                items: viewModel.pendingInvites,
+                highlightInviteID: viewModel.highlightInviteID,
+                onAccept: { item in
+                    viewModel.openInviteAccept(item)
+                },
+                onReject: { item in
+                    await viewModel.rejectPendingInvite(item)
+                },
+                onAppearRefresh: {
+                    await viewModel.fetchPendingInvitesIfNeeded()
+                }
+            )
         }
         .sheet(isPresented: memberDetailPresented) {
             if let memberID = viewModel.memberDetailID {
@@ -88,10 +121,7 @@ struct HomeView: View {
             ShareSheet(
                 member: member,
                 shareUseCase: dependencies.shareMemberUseCase,
-                onBindTicketReceived: { ticket in
-                    viewModel.shareMember = nil
-                    viewModel.openAddMemberForShareBinding(ticket: ticket)
-                }
+                inviteUseCase: dependencies.memberInviteUseCase
             )
         }
         .refreshable {
@@ -101,7 +131,17 @@ struct HomeView: View {
             guard !hasLoaded else { return }
             hasLoaded = true
             viewModel.consumePendingShareTicketIfNeeded()
+            viewModel.consumePendingInviteIfNeeded()
             await viewModel.loadInitialIfNeeded(syncRemote: true)
+        }
+        .onReceive(dependencies.routeStore.$routeStacks) { _ in
+            // Triggered when AppRouteStore updates (including .memberInvite signal from push/deeplink tap).
+            if let stack = dependencies.routeStore.routeStacks[.home],
+               let last = stack.last, case .memberInvite(let id) = last {
+                viewModel.handleRoute(.memberInvite(inviteID: id))
+                // Clear so next same inviteID still triggers; replaceStack was already done.
+                dependencies.routeStore.replaceStack([], for: .home)
+            }
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
@@ -126,6 +166,32 @@ struct HomeView: View {
 
     private var memberSelectorBar: some View {
         HStack(spacing: 8) {
+            if viewModel.pendingInviteCount > 0 {
+                Button {
+                    viewModel.showPendingInvites = true
+                    triggerHaptic(style: .light)
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "bell.badge")
+                            .font(.title3)
+                        Text("\(viewModel.pendingInviteCount)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.red))
+                            .offset(x: 8, y: -8)
+                    }
+                    .frame(width: 40, height: 40)
+                }
+                .accessibilityLabel(
+                    String(
+                        format: L10n.text("home.members.invite.pending_count"),
+                        viewModel.pendingInviteCount
+                    )
+                )
+            }
+
             ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(viewModel.dashboard?.members ?? []) { member in
@@ -516,8 +582,24 @@ extension HomeViewModel {
     static var preview: HomeViewModel {
         let now = Date()
         let accountID: Int64 = 1
-        let memberA = Member(id: 1, name: "本人", gender: "female", relationship: "self", birthDate: now.addingTimeInterval(-86_400 * 365 * 30), isPrimary: true)
-        let memberB = Member(id: 2, name: "妈妈", gender: "female", relationship: "mother", birthDate: now.addingTimeInterval(-86_400 * 365 * 56), isPrimary: false)
+        let memberA = Member(
+            id: 1,
+            name: "本人",
+            gender: "female",
+            relationship: "self",
+            birthDate: now.addingTimeInterval(-86_400 * 365 * 30),
+            isPrimary: true,
+            binding: .ownerLike(bindingID: 1)
+        )
+        let memberB = Member(
+            id: 2,
+            name: "妈妈",
+            gender: "female",
+            relationship: "mother",
+            birthDate: now.addingTimeInterval(-86_400 * 365 * 56),
+            isPrimary: false,
+            binding: .ownerLike(bindingID: 2)
+        )
 
         let dashboard = HomeDashboard(
             profile: UserProfile(
@@ -569,6 +651,7 @@ extension HomeViewModel {
             ),
             memberContextStore: memberContextStore,
             shareMemberUseCase: ShareMemberUseCase(memberAPI: previewBackend.medicalMembers),
+            memberInviteUseCase: MemberInviteUseCase(memberAPI: previewBackend.medicalMembers),
             manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: previewBackend.medicalMembers),
             notificationClient: PreviewNotificationClient(),
             logger: previewLogger

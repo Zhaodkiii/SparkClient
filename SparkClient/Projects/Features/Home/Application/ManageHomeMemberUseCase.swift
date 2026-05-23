@@ -1,5 +1,16 @@
 import Foundation
 
+enum ManageHomeMemberError: LocalizedError {
+    case relationshipUpdateFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .relationshipUpdateFailed:
+            return L10n.text("home.members.update.relationship_failed")
+        }
+    }
+}
+
 /// 家庭成员增删改：直接调用 ``SparkMedicalMemberAPI``。
 struct ManageHomeMemberUseCase: Sendable {
     let memberAPI: SparkMedicalMemberAPI
@@ -44,9 +55,12 @@ struct ManageHomeMemberUseCase: Sendable {
             avatarUrl: member.avatarUrl,
             isPrimary: member.isPrimary
         )
-        _ = try await memberAPI.updateMember(remoteID: member.id, payload: payload)
-        if let bindingID = member.binding?.bindingID, bindingID > 0 {
+        try await memberAPI.updateMember(remoteID: member.id, payload: payload)
+        guard let bindingID = member.binding?.bindingID, bindingID > 0 else { return }
+        do {
             _ = try await memberAPI.updateBinding(bindingID: bindingID, relationship: relationship)
+        } catch {
+            throw ManageHomeMemberError.relationshipUpdateFailed
         }
     }
 

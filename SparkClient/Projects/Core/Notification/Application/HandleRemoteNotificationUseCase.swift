@@ -46,9 +46,25 @@ struct RemoteNotificationPayload: Sendable {
             return .settings
         case "ai_settings", "ai-settings", "settings/ai":
             return .aiSettings
+        case "member_invite", "member-invite":
+            let inviteID = (userInfo["invite_id"] as? String).flatMap(Int.init)
+                ?? (userInfo["invite_id"] as? Int)
+                ?? (userInfo["inviteId"] as? String).flatMap(Int.init)
+                ?? (userInfo["inviteId"] as? Int)
+            if let inviteID {
+                return .memberInvite(inviteID: inviteID)
+            }
+            return .home
         default:
             return nil
         }
+    }
+
+    private static func extractInviteID(_ userInfo: [AnyHashable: Any]) -> Int? {
+        (userInfo["invite_id"] as? String).flatMap(Int.init)
+            ?? (userInfo["invite_id"] as? Int)
+            ?? (userInfo["inviteId"] as? String).flatMap(Int.init)
+            ?? (userInfo["inviteId"] as? Int)
     }
 }
 
@@ -63,6 +79,36 @@ struct HandleRemoteNotificationUseCase {
     }
 
     func execute(payload: RemoteNotificationPayload, entryPoint: RemoteNotificationEntryPoint) {
+        // Special-case member_invite: foreground = tappable banner; tap = route.
+        if payload.type == "member_invite", let route = payload.route,
+           case .memberInvite(let inviteID) = route {
+            switch entryPoint {
+            case .foreground:
+                NotificationCenter.default.post(name: .memberInvitePendingRefresh, object: nil)
+                let tapPayload = payload
+                let coordinator = routeCoordinator
+                notificationClient.publish(
+                    NotificationIntent(
+                        title: payload.title ?? L10n.text("home.members.invite.title"),
+                        message: payload.body,
+                        level: .info,
+                        presentation: .banner,
+                        dedupeKey: "member_invite_\(inviteID)",
+                        source: payload.source,
+                        onTap: { [weak coordinator] in
+                            coordinator?.routeRemoteNotification(
+                                tapPayload,
+                                entryPoint: .interaction(actionIdentifier: "member_invite_tap")
+                            )
+                        }
+                    )
+                )
+            case .interaction:
+                routeCoordinator.routeRemoteNotification(payload, entryPoint: entryPoint)
+            }
+            return
+        }
+
         routeCoordinator.routeRemoteNotification(payload, entryPoint: entryPoint)
 
         switch payload.type {

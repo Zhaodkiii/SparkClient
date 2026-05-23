@@ -7,7 +7,7 @@ extension SparkMedicalMemberAPI {
     }
 
     struct ShareResolveResponse: Decodable, Sendable {
-        struct MemberSummary: Decodable, Sendable {
+        struct MemberSummary: Decodable, Sendable, Equatable {
             let id: Int
             let name: String
             let gender: String
@@ -15,7 +15,7 @@ extension SparkMedicalMemberAPI {
             let avatarUrl: String
         }
 
-        struct InviterSummary: Decodable, Sendable {
+        struct InviterSummary: Decodable, Sendable, Equatable {
             let userId: Int
             let displayName: String
             let relationship: String
@@ -48,6 +48,7 @@ extension SparkMedicalMemberAPI {
         let canEdit: Bool
         let canDelete: Bool
         let canUnbind: Bool
+        let canManageBindings: Bool?
         let updatedAt: Date
         let medicalOverview: MedicalOverview?
         let sharedUsers: [SharedUserRow]?
@@ -61,13 +62,17 @@ extension SparkMedicalMemberAPI {
             let lastUpdatedAt: Date?
         }
 
-        struct SharedUserRow: Decodable, Sendable {
+        struct SharedUserRow: Decodable, Sendable, Identifiable {
+            let bindingId: Int
             let userId: Int
             let displayName: String
             let relationship: String
             let role: String
+            let permission: String?
             let isSelf: Bool
             let boundAt: Date
+
+            var id: Int { bindingId }
         }
 
         struct MyBindingRow: Decodable, Sendable {
@@ -80,7 +85,7 @@ extension SparkMedicalMemberAPI {
 
     struct GenerateShareTicketPayload: Encodable, Sendable {
         let channel: String
-        let role: String
+        let permission: String
     }
 
     struct ShareTicketPayload: Encodable, Sendable {
@@ -106,11 +111,15 @@ extension SparkMedicalMemberAPI {
         )
     }
 
-    func generateShareTicket(memberID: Int, channel: String, role: String = "viewer") async throws -> ShareTicketResponse {
+    func generateShareTicket(
+        memberID: Int,
+        channel: String,
+        permission: String = "edit"
+    ) async throws -> ShareTicketResponse {
         try await postRequest(
             method: .post,
             path: "/api/v1/medical/members/\(memberID)/share-ticket/",
-            body: GenerateShareTicketPayload(channel: channel, role: role),
+            body: GenerateShareTicketPayload(channel: channel, permission: permission),
             responseType: ShareTicketResponse.self
         )
     }

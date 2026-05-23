@@ -12,6 +12,17 @@ final class NotificationStore: ObservableObject {
     private var alertDismissContinuation: CheckedContinuation<Void, Never>?
     private var activeAlertID: UUID?
 
+    /// onTap closures keyed by NotificationMessage.id (never Codable, not in message struct).
+    private var tapActions: [UUID: @MainActor @Sendable () -> Void] = [:]
+
+    func registerTapAction(for messageID: UUID, action: @escaping @MainActor @Sendable () -> Void) {
+        tapActions[messageID] = action
+    }
+
+    func tapAction(for messageID: UUID) -> ((@MainActor @Sendable () -> Void))? {
+        tapActions[messageID]
+    }
+
     func present(_ message: NotificationMessage) {
         switch message.presentation {
         case .toast:
@@ -31,6 +42,7 @@ final class NotificationStore: ObservableObject {
 
     func dismissBanner(id: UUID?) {
         guard currentBanner?.id == id || id == nil else { return }
+        if let id { tapActions.removeValue(forKey: id) }
         currentBanner = nil
     }
 

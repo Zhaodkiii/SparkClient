@@ -10,6 +10,7 @@ enum AppRoute: Hashable, Sendable {
     case chatThread(UUID)
     case settings
     case aiSettings
+    case memberInvite(inviteID: Int)
 
     var rootTab: AppRouteStore.RootTab {
         switch self {
@@ -21,6 +22,8 @@ enum AppRoute: Hashable, Sendable {
             return .chat
         case .settings, .aiSettings:
             return .settings
+        case .memberInvite:
+            return .home
         }
     }
 }
@@ -52,6 +55,14 @@ final class AppRouteStore: ObservableObject {
         selectedTab = tab
         if route == .home || route == .knowledge || route == .chatList || route == .settings {
             routeStacks[tab] = replaceStack ? [] : routeStacks[tab, default: []]
+            return
+        }
+        if case .memberInvite = route {
+            var stack = routeStacks[tab, default: []]
+            if stack.last != route {
+                stack.append(route)
+            }
+            routeStacks[tab] = stack
             return
         }
 

@@ -110,7 +110,7 @@ struct MainTabCoordinatorView: View {
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
                 .hidesMainTabBarWhenPushed()
-        case .home, .knowledge, .chatList, .settings:
+        case .home, .knowledge, .chatList, .settings, .memberInvite:
             EmptyView()
         }
     }

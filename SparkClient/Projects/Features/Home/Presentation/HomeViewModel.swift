@@ -15,10 +15,15 @@ final class HomeViewModel: ObservableObject {
     @Published var memberDetailID: Int?
     @Published var shareMember: Member?
     @Published var addMemberSheet: AddMemberSheet?
+    @Published private(set) var pendingInviteCount: Int = 0
+    @Published var showPendingInvites = false
+    @Published var highlightInviteID: Int?
+    @Published private(set) var pendingInvites: [SparkMedicalMemberAPI.PendingInviteItem] = []
 
     // MARK: Dependencies
 
     let shareMemberUseCase: ShareMemberUseCase
+    let memberInviteUseCase: MemberInviteUseCase
     let manageMemberBindingUseCase: ManageMemberBindingUseCase
 
     private let sessionStore: AppSessionStore
@@ -40,6 +45,7 @@ final class HomeViewModel: ObservableObject {
         loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase,
         memberContextStore: MemberContextStore,
         shareMemberUseCase: ShareMemberUseCase,
+        memberInviteUseCase: MemberInviteUseCase,
         manageMemberBindingUseCase: ManageMemberBindingUseCase,
         notificationClient: any NotificationClient,
         logger: Logger
@@ -48,6 +54,7 @@ final class HomeViewModel: ObservableObject {
         self.loadHomeMedicalOverviewUseCase = loadHomeMedicalOverviewUseCase
         self.memberContextStore = memberContextStore
         self.shareMemberUseCase = shareMemberUseCase
+        self.memberInviteUseCase = memberInviteUseCase
         self.manageMemberBindingUseCase = manageMemberBindingUseCase
         self.notificationClient = notificationClient
         self.logger = logger
@@ -57,6 +64,13 @@ final class HomeViewModel: ObservableObject {
                 Task {
                     await self.load(syncRemote: true)
                 }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .memberInvitePendingRefresh)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                Task { await self?.fetchPendingInvitesIfNeeded() }
             }
             .store(in: &cancellables)
     }
@@ -71,6 +85,7 @@ final class HomeViewModel: ObservableObject {
         isInitialLoadInFlight = true
         defer { isInitialLoadInFlight = false }
         await load(syncRemote: syncRemote)
+        await fetchPendingInvitesIfNeeded()
     }
 
     func load(syncRemote: Bool = true) async {
@@ -118,16 +133,83 @@ final class HomeViewModel: ObservableObject {
             "首页加载完成 cost=\(String(format: "%.3f", cost))s syncRemote=\(syncRemote)",
             module: logModule
         )
+        await fetchPendingInvitesIfNeeded()
     }
 
     func refresh() async {
         await load(syncRemote: true)
     }
 
+    func fetchPendingInvitesIfNeeded() async {
+        guard case .signedIn = sessionStore.state else {
+            pendingInviteCount = 0
+            pendingInvites = []
+            return
+        }
+        do {
+            let items = try await memberInviteUseCase.fetchPending()
+            pendingInvites = items
+            pendingInviteCount = items.count
+        } catch {
+            pendingInviteCount = 0
+            pendingInvites = []
+        }
+    }
+
+    func openInviteAccept(_ item: SparkMedicalMemberAPI.PendingInviteItem) {
+        showPendingInvites = false
+        addMemberSheet = .acceptInvite(inviteID: item.inviteId, preview: item)
+    }
+
+    func rejectPendingInvite(_ item: SparkMedicalMemberAPI.PendingInviteItem) async {
+        do {
+            try await memberInviteUseCase.reject(inviteID: item.inviteId)
+            await fetchPendingInvitesIfNeeded()
+        } catch {
+            notificationClient.error(L10n.text("common.error"), title: L10n.text("common.error"), source: "home.invite.reject")
+        }
+    }
+
     func consumePendingShareTicketIfNeeded() {
         guard addMemberSheet == nil else { return }
-        guard let ticket = PendingMemberShareTicketStore.consume() else { return }
+        guard case .signedIn(let session) = sessionStore.state else { return }
+        guard let ticket = PendingMemberShareTicketStore.consume(forAccountID: session.accountID) else { return }
         openAddMemberForShareBinding(ticket: ticket)
+    }
+
+    func consumePendingInviteIfNeeded() {
+        guard case .signedIn(let session) = sessionStore.state else { return }
+        guard let inviteID = PendingMemberInviteStore.consume(forAccountID: session.accountID) else { return }
+        Task {
+            await fetchPendingInvitesIfNeeded()
+            highlightInviteID = inviteID
+            showPendingInvites = true
+        }
+    }
+
+    func openInviteByID(_ inviteID: Int) async {
+        // Fast path: item already in pending list cache.
+        if let item = pendingInvites.first(where: { $0.inviteId == inviteID }) {
+            openInviteAccept(item)
+            return
+        }
+        // Slow path: fetch detail from API.
+        do {
+            let item = try await memberInviteUseCase.fetchDetail(inviteID: inviteID)
+            openInviteAccept(item)
+        } catch {
+            logger.warning("openInviteByID fetch failed inviteID=\(inviteID): \(error)", module: logModule)
+        }
+    }
+
+    func handleRoute(_ route: AppRoute) {
+        if case .memberInvite(let inviteID) = route {
+            Task {
+                await fetchPendingInvitesIfNeeded()
+                highlightInviteID = inviteID
+                showPendingInvites = true
+            }
+        }
     }
 
     func openShareTicket(_ raw: String) {
@@ -141,12 +223,7 @@ final class HomeViewModel: ObservableObject {
     }
 
     private static func parseShareTicket(from raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return nil }
-        if let url = URL(string: trimmed), let ticket = MemberShareDeepLinkParser.ticket(from: url) {
-            return ticket
-        }
-        return trimmed
+        MemberShareDeepLinkParser.ticket(fromRaw: raw)
     }
 
     // MARK: - Member selection

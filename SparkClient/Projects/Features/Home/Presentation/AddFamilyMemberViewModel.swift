@@ -6,6 +6,7 @@ import Foundation
 final class AddFamilyMemberViewModel: ObservableObject {
     @Published var mode: AddFamilyMemberView.Mode
     @Published var showMemberScanner = false
+    @Published var isReceivingNearby = false
     @Published private(set) var isResolvingShare = false
     @Published private(set) var shareErrorMessage: String?
     @Published var shareAlertMessage: String?
@@ -14,16 +15,23 @@ final class AddFamilyMemberViewModel: ObservableObject {
     @Published private(set) var isAccepting = false
 
     let shareUseCase: ShareMemberUseCase?
+    let inviteUseCase: MemberInviteUseCase?
+    let nearbyTransport: NearbyShareTransport?
+
     private let initialPendingTicket: String?
     private var didConsumeInitialTicket = false
 
     init(
         mode: AddFamilyMemberView.Mode,
-        shareUseCase: ShareMemberUseCase?,
+        shareUseCase: ShareMemberUseCase? = nil,
+        inviteUseCase: MemberInviteUseCase? = nil,
+        nearbyTransport: NearbyShareTransport? = nil,
         initialPendingTicket: String? = nil
     ) {
         self.mode = mode
         self.shareUseCase = shareUseCase
+        self.inviteUseCase = inviteUseCase
+        self.nearbyTransport = nearbyTransport
         self.initialPendingTicket = initialPendingTicket
     }
 
@@ -33,8 +41,17 @@ final class AddFamilyMemberViewModel: ObservableObject {
         return false
     }
 
+    var canShowReceiveNearby: Bool {
+        nearbyTransport != nil && canShowScanner
+    }
+
     var canConfirmBinding: Bool {
-        guard case .bind = mode else { return false }
+        switch mode {
+        case .bind, .acceptInvite:
+            break
+        default:
+            return false
+        }
         return !relationshipCode.isEmpty
             && (relationshipCode != "other" || !customRelationship.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
@@ -46,13 +63,27 @@ final class AddFamilyMemberViewModel: ObservableObject {
         await resolveAndEnterBindMode(ticket: ticket)
     }
 
-    /// 扫码页关闭后解析票据并切换绑定模式，避免与 `fullScreenCover` 动画冲突。
     func presentShareAcceptAfterScanner(ticket: String) {
         showMemberScanner = false
         Task {
             try? await Task.sleep(nanoseconds: 350_000_000)
             await resolveAndEnterBindMode(ticket: ticket)
         }
+    }
+
+    func startNearbyReceive() {
+        guard let transport = nearbyTransport else { return }
+        isReceivingNearby = true
+        transport.onTicketReceived = { [weak self] ticket in
+            self?.presentShareAcceptAfterScanner(ticket: ticket)
+        }
+        transport.startReceiving()
+    }
+
+    func stopNearbyReceive() {
+        isReceivingNearby = false
+        nearbyTransport?.onTicketReceived = nil
+        nearbyTransport?.stopReceiving()
     }
 
     func resolveAndEnterBindMode(ticket: String) async {
@@ -88,19 +119,36 @@ final class AddFamilyMemberViewModel: ObservableObject {
         customRelationship = ""
     }
 
+    func rejectCurrentInviteIfNeeded() async {
+        guard case .acceptInvite(let inviteID, _) = mode else { return }
+        try? await inviteUseCase?.reject(inviteID: inviteID)
+    }
+
     func acceptBinding() async -> Member? {
-        guard case .bind(let ticket, _) = mode, let shareUseCase else { return nil }
         guard canConfirmBinding else { return nil }
 
         isAccepting = true
         defer { isAccepting = false }
 
         do {
-            return try await shareUseCase.accept(
-                ticket: ticket,
-                relationship: relationshipCode,
-                customRelationship: customRelationship
-            )
+            switch mode {
+            case .bind(let ticket, _):
+                guard let shareUseCase else { return nil }
+                return try await shareUseCase.accept(
+                    ticket: ticket,
+                    relationship: relationshipCode,
+                    customRelationship: customRelationship
+                )
+            case .acceptInvite(let inviteID, _):
+                guard let inviteUseCase else { return nil }
+                return try await inviteUseCase.accept(
+                    inviteID: inviteID,
+                    relationship: relationshipCode,
+                    customRelationship: customRelationship
+                )
+            default:
+                return nil
+            }
         } catch {
             shareErrorMessage = L10n.text("home.members.bind.failed")
             return nil

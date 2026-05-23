@@ -26,6 +26,8 @@ struct NotificationIntent: Sendable {
     var dedupeKey: String?
     var source: String
     var autoDismissAfter: TimeInterval?
+    /// Optional tap handler. When set, the banner becomes tappable and invokes this closure on tap.
+    var onTap: (@MainActor @Sendable () -> Void)?
 
     init(
         title: String? = nil,
@@ -34,7 +36,8 @@ struct NotificationIntent: Sendable {
         presentation: NotificationPresentation = .toast,
         dedupeKey: String? = nil,
         source: String = "app",
-        autoDismissAfter: TimeInterval? = nil
+        autoDismissAfter: TimeInterval? = nil,
+        onTap: (@MainActor @Sendable () -> Void)? = nil
     ) {
         self.title = title
         self.message = message
@@ -43,6 +46,7 @@ struct NotificationIntent: Sendable {
         self.dedupeKey = dedupeKey
         self.source = source
         self.autoDismissAfter = autoDismissAfter
+        self.onTap = onTap
     }
 }
 

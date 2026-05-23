@@ -46,6 +46,7 @@ struct SparkMedicalMemberAPI {
         let canEdit: Bool?
         let canDelete: Bool?
         let canUnbind: Bool?
+        let canManageBindings: Bool?
         /// 服务端最后更新时间，用于增量同步或冲突判断。
         let updatedAt: Date
 
@@ -58,7 +59,8 @@ struct SparkMedicalMemberAPI {
                 canShare: canShare ?? false,
                 canEdit: canEdit ?? false,
                 canDelete: canDelete ?? false,
-                canUnbind: canUnbind ?? true
+                canUnbind: canUnbind ?? true,
+                canManageBindings: canManageBindings ?? false
             )
         }
     }

@@ -1,5 +1,8 @@
 import CoreBluetooth
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct NearbySharePeerSnapshot: Equatable {
     let id: String
@@ -51,6 +54,8 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
     private var beaconData: Data?
     private var payloadCharacteristic: CBMutableCharacteristic?
     private var pruneTimer: DispatchSourceTimer?
+    private var isAppActive = true
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     private var links: [UUID: PeripheralLink] = [:]
     private var sessionLinks: [String: UUID] = [:]
@@ -67,6 +72,11 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
 
     override init() {
         super.init()
+        registerLifecycleObservers()
+    }
+
+    deinit {
+        lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 
     func configureShare(outbound: NearbyShareOutboundPayload) {
@@ -189,8 +199,44 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
         guard isScanning, let central, central.state == .poweredOn else { return }
         central.scanForPeripherals(
             withServices: [NearbyShareBLE.serviceUUID],
-            options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
+            options: [CBCentralManagerScanOptionAllowDuplicatesKey: isAppActive]
         )
+    }
+
+    private func registerLifecycleObservers() {
+        #if canImport(UIKit)
+        let center = NotificationCenter.default
+        lifecycleObservers.append(
+            center.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                self?.queue.async { self?.handleEnterBackground() }
+            }
+        )
+        lifecycleObservers.append(
+            center.addObserver(
+                forName: UIApplication.willEnterForegroundNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                self?.queue.async { self?.handleEnterForeground() }
+            }
+        )
+        #endif
+    }
+
+    private func handleEnterBackground() {
+        isAppActive = false
+        central?.stopScan()
+        peripheralManager?.stopAdvertising()
+    }
+
+    private func handleEnterForeground() {
+        isAppActive = true
+        if isScanning { scanIfPossible() }
+        if isReceiving { startPeripheralIfPossible() }
     }
 
     private func startPeripheralIfPossible() {

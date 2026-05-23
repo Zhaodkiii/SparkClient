@@ -138,26 +138,12 @@ final class QRScannerController: NSObject, ObservableObject {
     private func handleScanned(_ raw: String) {
         stopSession()
         deactivateScanLine()
-        guard let ticket = Self.extractTicket(from: raw) else {
+        guard let ticket = MemberShareDeepLinkParser.ticket(fromRaw: raw) else {
             showInvalidCodeAlert = true
             return
         }
         phase = .detected
         onTicketResolved?(ticket)
-    }
-
-    static func extractTicket(from raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = URL(string: trimmed), let ticket = MemberShareDeepLinkParser.ticket(from: url) {
-            return ticket
-        }
-        if trimmed.contains("ticket="), let url = URL(string: trimmed), let ticket = MemberShareDeepLinkParser.ticket(from: url) {
-            return ticket
-        }
-        if trimmed.isEmpty == false, trimmed.contains(".") == false, trimmed.count > 16 {
-            return trimmed
-        }
-        return nil
     }
 }
 

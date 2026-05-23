@@ -9,6 +9,7 @@ struct MemberBindingInfo: Codable, Equatable, Sendable {
     var canEdit: Bool
     var canDelete: Bool
     var canUnbind: Bool
+    var canManageBindings: Bool
 }
 
 /// 家庭档案中的成员（就诊人/家属）：病例、检查、处方等医疗实体通过 `memberID` 与之关联。
@@ -78,15 +79,34 @@ struct Member: Identifiable, Codable, Equatable, Sendable {
         self.binding = binding
     }
 
+    /// 缺失 binding 时采用最小权限，避免旧接口漏字段导致 UI 误展示分享/删除。
     var effectiveBinding: MemberBindingInfo {
-        binding ?? MemberBindingInfo(
-            bindingID: 0,
+        binding ?? .restrictedFallback
+    }
+}
+
+extension MemberBindingInfo {
+    static let restrictedFallback = MemberBindingInfo(
+        bindingID: 0,
+        role: "unknown",
+        sharedUserCount: 0,
+        canShare: false,
+        canEdit: false,
+        canDelete: false,
+        canUnbind: false,
+        canManageBindings: false
+    )
+
+    static func ownerLike(bindingID: Int, sharedUserCount: Int = 1) -> MemberBindingInfo {
+        MemberBindingInfo(
+            bindingID: bindingID,
             role: "owner",
-            sharedUserCount: 1,
+            sharedUserCount: sharedUserCount,
             canShare: true,
             canEdit: true,
             canDelete: true,
-            canUnbind: true
+            canUnbind: true,
+            canManageBindings: true
         )
     }
 }

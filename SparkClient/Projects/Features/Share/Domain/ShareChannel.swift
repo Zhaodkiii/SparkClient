@@ -4,6 +4,7 @@ import Foundation
 enum ShareChannel: String, CaseIterable, Identifiable {
     case qrCode
     case nearby
+    case remoteInvite
 
     var id: String { rawValue }
 }

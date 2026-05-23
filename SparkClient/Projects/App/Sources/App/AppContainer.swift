@@ -595,6 +595,7 @@ final class AppContainer {
             loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
             memberContextStore: memberContextStore,
             shareMemberUseCase: ShareMemberUseCase(memberAPI: backend.medicalMembers),
+            memberInviteUseCase: MemberInviteUseCase(memberAPI: backend.medicalMembers),
             manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: backend.medicalMembers),
             notificationClient: notificationClient,
             logger: logger
@@ -684,13 +685,15 @@ final class AppContainer {
                 medicalQueryAPI: backend.medicalQuery,
                 medicalMemberAPI: backend.medicalMembers,
                 shareMemberUseCase: ShareMemberUseCase(memberAPI: backend.medicalMembers),
+                memberInviteUseCase: MemberInviteUseCase(memberAPI: backend.medicalMembers),
                 manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: backend.medicalMembers),
                 fileTransferService: fileTransferService,
                 taskManager: taskManager,
                 logger: logger,
                 memberContextStore: memberContextStore,
                 notificationClient: notificationClient,
-                medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel()
+                medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel(),
+                routeStore: routeStore
             ),
             knowledgeDependencies: KnowledgeFeatureDependencies(
                 makeEditorViewModel: { [self] documentID in

@@ -7,7 +7,7 @@ final class MemberDetailViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
 
-    private let bindingUseCase: ManageMemberBindingUseCase
+    let bindingUseCase: ManageMemberBindingUseCase
     private let memberID: Int
 
     init(bindingUseCase: ManageMemberBindingUseCase, memberID: Int) {
@@ -30,13 +30,13 @@ final class MemberDetailViewModel: ObservableObject {
         try await bindingUseCase.unbind(bindingID: bindingId)
     }
 
-    func deleteOrUnbind() async throws -> Bool {
-        guard let detail else { return false }
-        if detail.sharedUserCount > 1 || !detail.canDelete {
-            try await bindingUseCase.unbind(bindingID: detail.bindingId)
-            return false
-        }
-        return true
+    func deleteOrUnbind() async throws -> DeleteOrUnbindResult? {
+        guard let detail else { return nil }
+        return try await bindingUseCase.deleteOrUnbind(
+            memberID: memberID,
+            bindingID: detail.bindingId,
+            canDelete: detail.canDelete
+        )
     }
 }
 
@@ -45,6 +45,7 @@ struct MemberDetailView: View {
     @StateObject private var viewModel: MemberDetailViewModel
     @ObservedObject var memberContextStore: MemberContextStore
 
+    private let memberID: Int
     let memberAPI: SparkMedicalMemberAPI
     let shareUseCase: ShareMemberUseCase
     let onShare: () -> Void
@@ -52,7 +53,7 @@ struct MemberDetailView: View {
     let onDeleted: () -> Void
 
     @State private var showDeleteConfirmation = false
-    @State private var deleteIsProfile = false
+    @State private var showSharedUsersManage = false
 
     init(
         memberID: Int,
@@ -67,6 +68,7 @@ struct MemberDetailView: View {
         _viewModel = StateObject(
             wrappedValue: MemberDetailViewModel(bindingUseCase: bindingUseCase, memberID: memberID)
         )
+        self.memberID = memberID
         self.memberContextStore = memberContextStore
         self.memberAPI = memberAPI
         self.shareUseCase = shareUseCase
@@ -114,7 +116,6 @@ struct MemberDetailView: View {
                             systemImage: "trash",
                             role: .destructive
                         ) {
-                            deleteIsProfile = viewModel.detail?.canDelete == true && (viewModel.detail?.sharedUserCount ?? 1) <= 1
                             showDeleteConfirmation = true
                         }
                     }
@@ -129,10 +130,29 @@ struct MemberDetailView: View {
             }
             Button(L10n.text("common.cancel"), role: .cancel) {}
         } message: {
-            Text(deleteIsProfile ? L10n.text("home.members.detail.delete_profile.message") : L10n.text("home.members.detail.unbind.message"))
+            Text(
+                detail?.canDelete == true
+                    ? L10n.text("home.members.detail.delete_profile.message")
+                    : L10n.text("home.members.detail.unbind.message")
+            )
         }
         .task {
             await viewModel.load()
+        }
+        .sheet(isPresented: $showSharedUsersManage) {
+            if let detail = viewModel.detail {
+                CompatibleNavigationContainer {
+                    MemberSharedUsersManageView(
+                        memberID: memberID,
+                        detail: detail,
+                        bindingUseCase: viewModel.bindingUseCase,
+                        onShareMore: onShare,
+                        onUpdated: {
+                            Task { await viewModel.load() }
+                        }
+                    )
+                }
+            }
         }
     }
 
@@ -141,10 +161,9 @@ struct MemberDetailView: View {
     }
 
     private var deleteTitle: String {
-        if detail?.canDelete == true && (detail?.sharedUserCount ?? 1) <= 1 {
-            return L10n.text("home.members.detail.delete_profile")
-        }
-        return L10n.text("home.members.detail.unbind")
+        detail?.canDelete == true
+            ? L10n.text("home.members.detail.delete_profile")
+            : L10n.text("home.members.detail.unbind")
     }
 
     @ViewBuilder
@@ -227,9 +246,18 @@ struct MemberDetailView: View {
     private func sharedUsersSection(_ detail: SparkMedicalMemberAPI.MemberDetailResponse) -> some View {
         if let users = detail.sharedUsers, !users.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.text("home.members.detail.shared_users"))
-                    .font(.headline)
-                ForEach(users, id: \.userId) { user in
+                HStack {
+                    Text(L10n.text("home.members.detail.shared_users"))
+                        .font(.headline)
+                    Spacer()
+                    if detail.canManageBindings == true {
+                        Button(L10n.text("home.members.binding.manage")) {
+                            showSharedUsersManage = true
+                        }
+                        .font(.footnote.weight(.semibold))
+                    }
+                }
+                ForEach(users) { user in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(user.displayName)
@@ -238,13 +266,28 @@ struct MemberDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(user.role)
+                        Text(roleLabel(user.role))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
                 }
+                if detail.canShare == true {
+                    Button(L10n.text("home.members.action.share"), action: onShare)
+                        .font(.footnote.weight(.semibold))
+                }
             }
+        }
+    }
+
+    private func roleLabel(_ role: String) -> String {
+        switch role {
+        case "owner":
+            return L10n.text("home.members.binding.role.owner")
+        case "admin":
+            return L10n.text("home.members.binding.role.admin")
+        default:
+            return L10n.text("home.members.binding.role.viewer")
         }
     }
 
@@ -260,16 +303,12 @@ struct MemberDetailView: View {
     }
 
     private func performDelete() async {
-        if deleteIsProfile, let member = detail?.domainMember {
-            _ = await memberContextStore.deleteMember(member)
-        } else {
-            do {
-                try await viewModel.unbind()
-                memberContextStore.membersDidChange.send()
-            } catch {
-                return
-            }
+        do {
+            _ = try await viewModel.deleteOrUnbind()
+        } catch {
+            return
         }
+        memberContextStore.membersDidChange.send()
         onDeleted()
         dismiss()
     }

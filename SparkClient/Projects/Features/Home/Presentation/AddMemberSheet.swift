@@ -4,6 +4,7 @@ import Foundation
 enum AddMemberSheet: Identifiable, Equatable {
     case create(pendingShareTicket: String? = nil)
     case edit(Member)
+    case acceptInvite(inviteID: Int, preview: SparkMedicalMemberAPI.PendingInviteItem)
 
     var id: String {
         switch self {
@@ -11,6 +12,8 @@ enum AddMemberSheet: Identifiable, Equatable {
             return "create-\(ticket ?? "new")"
         case .edit(let member):
             return "edit-\(member.id)"
+        case .acceptInvite(let inviteID, _):
+            return "accept-\(inviteID)"
         }
     }
 }

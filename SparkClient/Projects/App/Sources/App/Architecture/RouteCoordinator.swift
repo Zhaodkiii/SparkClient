@@ -142,6 +142,15 @@ private extension AppRoute {
             }
             return
         }
+        if target.contains("member-invite") {
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let idValue = components.queryItems?.first(where: { $0.name == "id" })?.value,
+               let inviteID = Int(idValue) {
+                PendingMemberInviteStore.save(inviteID: inviteID)
+            }
+            self = .home
+            return
+        }
         if target.contains("member-share") {
             if let ticket = MemberShareDeepLinkParser.ticket(from: url) {
                 PendingMemberShareTicketStore.save(ticket)

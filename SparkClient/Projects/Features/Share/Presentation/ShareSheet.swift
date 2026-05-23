@@ -1,8 +1,5 @@
 import Combine
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct ShareResourceSummary: Equatable {
     let title: String
@@ -17,16 +14,21 @@ final class MemberShareSheetViewModel: ObservableObject {
     @Published private(set) var isLoadingQR = false
     @Published private(set) var isNearbyReady = false
     @Published private(set) var errorMessage: String?
+    @Published var selectedPermission: MemberSharePermission = .edit
 
     let summary: ShareResourceSummary
     let nearbyTransport = NearbyShareTransport()
 
     private let shareUseCase: ShareMemberUseCase
+    private let inviteUseCase: MemberInviteUseCase
     private let member: Member
 
-    init(member: Member, shareUseCase: ShareMemberUseCase) {
+    var memberID: Int { member.id }
+
+    init(member: Member, shareUseCase: ShareMemberUseCase, inviteUseCase: MemberInviteUseCase) {
         self.member = member
         self.shareUseCase = shareUseCase
+        self.inviteUseCase = inviteUseCase
         self.summary = ShareResourceSummary(
             title: member.name,
             subtitle: MemberRelationshipCatalog.displayTitle(for: member.relationship),
@@ -35,22 +37,35 @@ final class MemberShareSheetViewModel: ObservableObject {
         )
     }
 
-    func loadQRIfNeeded() async {
+    func loadQRIfNeeded(force: Bool = false) async {
+        if force {
+            qrPayload = nil
+        }
         guard qrPayload == nil else { return }
         isLoadingQR = true
         defer { isLoadingQR = false }
         do {
-            let response = try await shareUseCase.generateQRShare(memberID: member.id)
+            let response = try await shareUseCase.generateQRShare(
+                memberID: member.id,
+                permission: selectedPermission.rawValue
+            )
             qrPayload = response.qrPayload
         } catch {
             errorMessage = L10n.text("common.error")
         }
     }
 
-    func prepareNearbyShareIfNeeded() async {
+    func prepareNearbyShareIfNeeded(force: Bool = false) async {
+        if force {
+            isNearbyReady = false
+            nearbyTransport.teardown()
+        }
         guard isNearbyReady == false else { return }
         do {
-            let response = try await shareUseCase.generateNearbyShare(memberID: member.id)
+            let response = try await shareUseCase.generateNearbyShare(
+                memberID: member.id,
+                permission: selectedPermission.rawValue
+            )
             let outbound = NearbySharePayloadCodec.makeOutboundPayload(
                 ticket: response.shareTicket,
                 member: member,
@@ -75,44 +90,36 @@ final class MemberShareSheetViewModel: ObservableObject {
         nearbyTransport.teardown()
     }
 
-    func startNearbyReceive() {
-        nearbyTransport.startReceiving()
-    }
-
-    func stopNearbyReceive() {
-        nearbyTransport.stopReceiving()
-    }
-
     func sendNearby(to peer: NearbyShareTransport.Peer) {
         Task {
             try? await nearbyTransport.send(to: peer)
         }
     }
 
+    /// 近场分享展示名脱敏，不使用系统设备名。
     private static func inviterDisplayName() -> String {
-        #if canImport(UIKit)
-        let name = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty == false { return name }
-        #endif
-        return L10n.text("home.members.share.nearby.anonymous_peer")
+        L10n.text("home.members.share.nearby.anonymous_peer")
     }
 }
 
+/// 公共分享页：仅负责把当前资源分享出去（二维码 / 附近设备发送）。
 struct ShareSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: MemberShareSheetViewModel
     @State private var expandedChannel: ShareChannel = .qrCode
-    @State private var isReceivingNearby = false
+    @State private var showManagePermissionConfirm = false
 
-    let onBindTicketReceived: (String) -> Void
+    private let inviteUseCase: MemberInviteUseCase
 
-    init(
-        member: Member,
-        shareUseCase: ShareMemberUseCase,
-        onBindTicketReceived: @escaping (String) -> Void
-    ) {
-        _viewModel = StateObject(wrappedValue: MemberShareSheetViewModel(member: member, shareUseCase: shareUseCase))
-        self.onBindTicketReceived = onBindTicketReceived
+    init(member: Member, shareUseCase: ShareMemberUseCase, inviteUseCase: MemberInviteUseCase) {
+        self.inviteUseCase = inviteUseCase
+        _viewModel = StateObject(
+            wrappedValue: MemberShareSheetViewModel(
+                member: member,
+                shareUseCase: shareUseCase,
+                inviteUseCase: inviteUseCase
+            )
+        )
     }
 
     var body: some View {
@@ -121,6 +128,7 @@ struct ShareSheet: View {
                 .font(.headline)
 
             resourceSummary
+            permissionPicker
 
             expandedPanel
 
@@ -143,10 +151,6 @@ struct ShareSheet: View {
         .animation(.easeInOut(duration: 0.3), value: expandedChannel)
         .task {
             await viewModel.loadQRIfNeeded()
-            viewModel.nearbyTransport.onTicketReceived = { ticket in
-                onBindTicketReceived(ticket)
-                dismiss()
-            }
         }
         .onDisappear {
             viewModel.stopNearby()
@@ -154,7 +158,45 @@ struct ShareSheet: View {
         .onChange(of: expandedChannel) { channel in
             handleChannelChange(channel)
         }
+        .onChange(of: viewModel.selectedPermission) { _ in
+            Task {
+                await viewModel.loadQRIfNeeded(force: true)
+                if expandedChannel == .nearby {
+                    await viewModel.prepareNearbyShareIfNeeded(force: true)
+                }
+            }
+        }
+        .alert(L10n.text("home.members.share.permission.manage.confirm.title"), isPresented: $showManagePermissionConfirm) {
+            Button(L10n.text("common.cancel"), role: .cancel) {
+                viewModel.selectedPermission = .edit
+            }
+            Button(L10n.text("common.confirm"), role: .destructive) {}
+        } message: {
+            Text(L10n.text("home.members.share.permission.manage.confirm.message"))
+        }
         .shareSheetPresentation()
+    }
+
+    private var permissionPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.text("home.members.share.permission.title"))
+                .font(.subheadline.weight(.semibold))
+            Picker("", selection: $viewModel.selectedPermission) {
+                ForEach(MemberSharePermission.allCases) { item in
+                    Text(L10n.text(item.titleKey)).tag(item)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: viewModel.selectedPermission) { newValue in
+                if newValue == .manage {
+                    showManagePermissionConfirm = true
+                }
+            }
+            Text(L10n.text(viewModel.selectedPermission.subtitleKey))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var resourceSummary: some View {
@@ -194,6 +236,9 @@ struct ShareSheet: View {
         case .nearby:
             nearbyExpandedPanel
                 .transition(.scale.combined(with: .opacity))
+        case .remoteInvite:
+            remoteInviteExpandedPanel
+                .transition(.scale.combined(with: .opacity))
         }
     }
 
@@ -232,48 +277,6 @@ struct ShareSheet: View {
                 ProgressView()
                     .frame(maxWidth: .infinity)
             }
-
-            Button {
-                isReceivingNearby.toggle()
-                if isReceivingNearby {
-                    viewModel.stopNearbyDiscovery()
-                    viewModel.startNearbyReceive()
-                } else {
-                    viewModel.stopNearbyReceive()
-                    viewModel.startNearbyDiscovery()
-                }
-            } label: {
-                Text(
-                    isReceivingNearby
-                        ? L10n.text("home.members.share.nearby.receive_stop")
-                        : L10n.text("home.members.share.nearby.receive_toggle")
-                )
-                .font(.footnote.weight(.semibold))
-            }
-
-            if isReceivingNearby {
-                nearbyReceiveStatus
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var nearbyReceiveStatus: some View {
-        switch viewModel.nearbyTransport.receiveState {
-        case .advertising:
-            Label(L10n.text("home.members.share.nearby.receive_advertising"), systemImage: "antenna.radiowaves.left.and.right")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        case .received:
-            Text(L10n.text("home.members.share.nearby.receive_received"))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        case .failed(let message):
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.red)
-        default:
-            EmptyView()
         }
     }
 
@@ -293,8 +296,17 @@ struct ShareSheet: View {
         }
     }
 
+    @ViewBuilder
+    private var remoteInviteExpandedPanel: some View {
+        RemoteInviteFormView(
+            memberID: viewModel.memberID,
+            inviteUseCase: inviteUseCase,
+            selectedPermission: viewModel.selectedPermission
+        )
+    }
+
     private var channelButtons: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: 20) {
             ShareIconButton(
                 systemImage: "qrcode",
                 title: L10n.text("home.members.share.qr"),
@@ -310,6 +322,14 @@ struct ShareSheet: View {
                 isSelected: expandedChannel == .nearby
             ) {
                 selectChannel(.nearby)
+            }
+            ShareIconButton(
+                systemImage: "paperplane",
+                title: L10n.text("home.members.invite.remote"),
+                color: .green,
+                isSelected: expandedChannel == .remoteInvite
+            ) {
+                selectChannel(.remoteInvite)
             }
         }
         .frame(maxWidth: .infinity)
@@ -341,18 +361,14 @@ struct ShareSheet: View {
     private func handleChannelChange(_ channel: ShareChannel) {
         switch channel {
         case .qrCode:
-            isReceivingNearby = false
-            viewModel.stopNearbyReceive()
             viewModel.stopNearbyDiscovery()
         case .nearby:
             Task {
                 await viewModel.prepareNearbyShareIfNeeded()
-                if isReceivingNearby {
-                    viewModel.startNearbyReceive()
-                } else {
-                    viewModel.startNearbyDiscovery()
-                }
+                viewModel.startNearbyDiscovery()
             }
+        case .remoteInvite:
+            viewModel.stopNearbyDiscovery()
         }
     }
 }

@@ -10,6 +10,7 @@ struct AddFamilyMemberView: View {
         case create
         case edit(Member)
         case bind(ticket: String, resolved: SparkMedicalMemberAPI.ShareResolveResponse)
+        case acceptInvite(inviteID: Int, preview: SparkMedicalMemberAPI.PendingInviteItem)
 
         var id: String {
             switch self {
@@ -19,6 +20,8 @@ struct AddFamilyMemberView: View {
                 return "edit-\(member.id)"
             case .bind(let ticket, _):
                 return "bind-\(ticket.hashValue)"
+            case .acceptInvite(let inviteID, _):
+                return "accept-\(inviteID)"
             }
         }
     }
@@ -27,6 +30,8 @@ struct AddFamilyMemberView: View {
 
     @ObservedObject var store: MemberContextStore
     let shareUseCase: ShareMemberUseCase?
+    let inviteUseCase: MemberInviteUseCase?
+    let nearbyTransport: NearbyShareTransport?
     let initialPendingTicket: String?
     let onBindingAccepted: (() -> Void)?
 
@@ -44,23 +49,29 @@ struct AddFamilyMemberView: View {
         mode: Mode,
         store: MemberContextStore,
         shareUseCase: ShareMemberUseCase? = nil,
+        inviteUseCase: MemberInviteUseCase? = nil,
+        nearbyTransport: NearbyShareTransport? = nil,
         initialPendingTicket: String? = nil,
         onBindingAccepted: (() -> Void)? = nil
     ) {
         self.store = store
         self.shareUseCase = shareUseCase
+        self.inviteUseCase = inviteUseCase
+        self.nearbyTransport = nearbyTransport
         self.initialPendingTicket = initialPendingTicket
         self.onBindingAccepted = onBindingAccepted
         _bindViewModel = StateObject(
             wrappedValue: AddFamilyMemberViewModel(
                 mode: mode,
                 shareUseCase: shareUseCase,
+                inviteUseCase: inviteUseCase,
+                nearbyTransport: nearbyTransport,
                 initialPendingTicket: initialPendingTicket
             )
         )
 
         switch mode {
-        case .create, .bind:
+        case .create, .bind, .acceptInvite:
             _name = State(initialValue: "")
             _relationshipCode = State(initialValue: MemberRelationshipCatalog.defaultCode)
             _gender = State(initialValue: MemberRelationshipCatalog.defaultGender)
@@ -79,7 +90,7 @@ struct AddFamilyMemberView: View {
             return L10n.text("home.members.add.title")
         case .edit:
             return L10n.text("home.members.edit")
-        case .bind:
+        case .bind, .acceptInvite:
             return L10n.text("home.members.bind.title")
         }
     }
@@ -90,7 +101,7 @@ struct AddFamilyMemberView: View {
             return L10n.text("home.members.add.save")
         case .edit:
             return L10n.text("home.members.update")
-        case .bind:
+        case .bind, .acceptInvite:
             return L10n.text("home.members.add.save")
         }
     }
@@ -105,6 +116,8 @@ struct AddFamilyMemberView: View {
                 switch bindViewModel.mode {
                 case .bind(_, let resolved):
                     bindMemberContent(resolved)
+                case .acceptInvite(_, let preview):
+                    acceptInviteContent(preview)
                 case .create, .edit:
                     createOrEditContent
                 }
@@ -122,16 +135,41 @@ struct AddFamilyMemberView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                if bindViewModel.canShowScanner {
-                    Button {
-                        bindViewModel.showMemberScanner = true
-                        triggerHaptic(style: .light)
+                if bindViewModel.canShowScanner || bindViewModel.canShowReceiveNearby {
+                    Menu {
+                        if bindViewModel.canShowScanner {
+                            Button {
+                                bindViewModel.showMemberScanner = true
+                                triggerHaptic(style: .light)
+                            } label: {
+                                Label(L10n.text("home.members.add.scan"), systemImage: "qrcode.viewfinder")
+                            }
+                        }
+                        if bindViewModel.canShowReceiveNearby {
+                            Button {
+                                if bindViewModel.isReceivingNearby {
+                                    bindViewModel.stopNearbyReceive()
+                                } else {
+                                    bindViewModel.startNearbyReceive()
+                                }
+                                triggerHaptic(style: .light)
+                            } label: {
+                                Label(
+                                    bindViewModel.isReceivingNearby
+                                        ? L10n.text("home.members.share.nearby.receive_stop")
+                                        : L10n.text("home.members.add.receive_nearby"),
+                                    systemImage: "antenna.radiowaves.left.and.right"
+                                )
+                            }
+                        }
                     } label: {
-                        Image(systemName: "qrcode.viewfinder")
+                        Image(systemName: "plus.viewfinder")
                     }
-                    .accessibilityLabel(L10n.text("home.members.add.scan"))
                 }
             }
+        }
+        .onDisappear {
+            bindViewModel.stopNearbyReceive()
         }
         .overlay {
             if bindViewModel.isResolvingShare {
@@ -191,6 +229,12 @@ struct AddFamilyMemberView: View {
 
     @ViewBuilder
     private var createOrEditContent: some View {
+        if bindViewModel.isReceivingNearby, let transport = nearbyTransport {
+            NearbyShareReceivePanel(transport: transport) {
+                bindViewModel.stopNearbyReceive()
+            }
+        }
+
         if let message = bindViewModel.shareErrorMessage {
             Text(message)
                 .font(.footnote)
@@ -310,6 +354,85 @@ struct AddFamilyMemberView: View {
             bindViewModel.cancelBindMode()
         } label: {
             Text(L10n.text("home.members.bind.cancel"))
+                .font(.body.weight(.medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func acceptInviteContent(_ preview: SparkMedicalMemberAPI.PendingInviteItem) -> some View {
+        Text(
+            String(
+                format: L10n.text("home.members.bind.inviter"),
+                preview.inviter.displayName
+            )
+        )
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text(preview.member.name)
+                .font(.title2.weight(.bold))
+            Text(bindMemberSummary(preview.member))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(uiColor: .secondarySystemBackground)))
+
+        Text(L10n.text("home.members.bind.summary"))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+
+        MemberRelationshipPicker(
+            relationshipCode: $bindViewModel.relationshipCode,
+            customRelationship: $bindViewModel.customRelationship
+        )
+
+        if let message = bindViewModel.shareErrorMessage {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.red)
+        }
+
+        Button {
+            Task {
+                if await bindViewModel.acceptBinding() != nil {
+                    onBindingAccepted?()
+                    dismiss()
+                }
+            }
+        } label: {
+            HStack {
+                Spacer()
+                if bindViewModel.isAccepting {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text(L10n.text("home.members.invite.accept"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 14)
+            .background(bindViewModel.canConfirmBinding ? Color.accentColor : Color(uiColor: .systemGray3))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!bindViewModel.canConfirmBinding || bindViewModel.isAccepting)
+
+        Button {
+            Task {
+                await bindViewModel.rejectCurrentInviteIfNeeded()
+                dismiss()
+            }
+        } label: {
+            Text(L10n.text("home.members.invite.reject"))
                 .font(.body.weight(.medium))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -528,7 +651,7 @@ struct AddFamilyMemberView: View {
                 birthDate: birthDate
             )
             guard didSave else { return }
-        case .bind:
+        case .bind, .acceptInvite:
             return
         }
         dismiss()

@@ -13,9 +13,11 @@ struct NotificationHostView<Content: View>: View {
         content
             .overlay(alignment: .top) {
                 if let banner = store.currentBanner {
-                    NotificationBannerView(message: banner) {
-                        store.dismissBanner(id: banner.id)
-                    }
+                    NotificationBannerView(
+                        message: banner,
+                        onTap: store.tapAction(for: banner.id),
+                        onDismiss: { store.dismissBanner(id: banner.id) }
+                    )
                     .padding(.top, 8)
                     .padding(.horizontal, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -76,6 +78,7 @@ private struct NotificationToastView: View {
 
 private struct NotificationBannerView: View {
     let message: NotificationMessage
+    let onTap: (@MainActor @Sendable () -> Void)?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -109,6 +112,12 @@ private struct NotificationBannerView: View {
                         .strokeBorder(.quaternary, lineWidth: 1)
                 )
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let onTap else { return }
+            onDismiss()
+            onTap()
+        }
     }
 }
 

@@ -42,7 +42,8 @@ extension SparkMedicalMemberAPI.MemberDetailResponse {
                 canShare: canShare,
                 canEdit: canEdit,
                 canDelete: canDelete,
-                canUnbind: canUnbind
+                canUnbind: canUnbind,
+                canManageBindings: canManageBindings ?? false
             )
         )
     }

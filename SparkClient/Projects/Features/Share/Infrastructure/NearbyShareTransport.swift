@@ -68,13 +68,7 @@ final class NearbyShareTransport: ObservableObject {
     }
 
     private static func defaultDisplayName() -> String {
-        #if canImport(UIKit)
-        let deviceName = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if deviceName.isEmpty == false {
-            return deviceName
-        }
-        #endif
-        return L10n.text("home.members.share.nearby.anonymous_peer")
+        L10n.text("home.members.share.nearby.anonymous_peer")
     }
 }
 

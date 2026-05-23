@@ -14,6 +14,8 @@ actor NotificationQueue {
 
     private var queue: [NotificationMessage] = []
     private var lastSeenByKey: [String: Date] = [:]
+    /// Tap actions stored side-channel so NotificationMessage stays Codable.
+    private var pendingTapActions: [UUID: @MainActor @Sendable () -> Void] = [:]
 
     init(
         dedupeWindow: TimeInterval = 2.0,
@@ -31,6 +33,7 @@ actor NotificationQueue {
 
     func enqueue(_ intent: NotificationIntent) async -> EnqueueResult {
         let message = NotificationMessage.from(intent: intent)
+        let onTap = intent.onTap
         let now = Date()
 
         if let previous = lastSeenByKey[message.dedupeKey], now.timeIntervalSince(previous) < dedupeWindow {
@@ -48,6 +51,9 @@ actor NotificationQueue {
         }
 
         queue.append(message)
+        if let onTap {
+            pendingTapActions[message.id] = onTap
+        }
         lastSeenByKey[message.dedupeKey] = now
         await metricsStore.recordEnqueued()
         await inboxStore.appendQueued(message)
@@ -57,5 +63,9 @@ actor NotificationQueue {
     func dequeue() -> NotificationMessage? {
         guard queue.isEmpty == false else { return nil }
         return queue.removeFirst()
+    }
+
+    func consumeTapAction(for id: UUID) -> (@MainActor @Sendable () -> Void)? {
+        pendingTapActions.removeValue(forKey: id)
     }
 }

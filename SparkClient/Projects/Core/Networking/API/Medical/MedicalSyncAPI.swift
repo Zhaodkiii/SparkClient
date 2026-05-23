@@ -35,6 +35,7 @@ enum SparkMedicalSyncAPI {
         var canEdit: Bool?
         var canDelete: Bool?
         var canUnbind: Bool?
+        var canManageBindings: Bool?
         var updatedAt: Date
 
         var bindingInfo: MemberBindingInfo? {
@@ -46,7 +47,8 @@ enum SparkMedicalSyncAPI {
                 canShare: canShare ?? false,
                 canEdit: canEdit ?? false,
                 canDelete: canDelete ?? false,
-                canUnbind: canUnbind ?? true
+                canUnbind: canUnbind ?? true,
+                canManageBindings: canManageBindings ?? false
             )
         }
     }

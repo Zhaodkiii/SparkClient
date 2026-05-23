@@ -3,12 +3,12 @@ import Foundation
 struct ShareMemberUseCase: Sendable {
     let memberAPI: SparkMedicalMemberAPI
 
-    func generateQRShare(memberID: Int) async throws -> SparkMedicalMemberAPI.ShareTicketResponse {
-        try await memberAPI.generateShareTicket(memberID: memberID, channel: "qr")
+    func generateQRShare(memberID: Int, permission: String = "edit") async throws -> SparkMedicalMemberAPI.ShareTicketResponse {
+        try await memberAPI.generateShareTicket(memberID: memberID, channel: "qr", permission: permission)
     }
 
-    func generateNearbyShare(memberID: Int) async throws -> SparkMedicalMemberAPI.ShareTicketResponse {
-        try await memberAPI.generateShareTicket(memberID: memberID, channel: "nearby")
+    func generateNearbyShare(memberID: Int, permission: String = "edit") async throws -> SparkMedicalMemberAPI.ShareTicketResponse {
+        try await memberAPI.generateShareTicket(memberID: memberID, channel: "nearby", permission: permission)
     }
 
     func resolve(ticket: String) async throws -> SparkMedicalMemberAPI.ShareResolveResponse {

@@ -48,6 +48,10 @@ final class NotificationDeliveryCoordinator {
             await metricsStore.recordDisplayed(latencyMs: latencyMs)
             await refreshDashboard()
 
+            // Register tap action (if any) before presenting so the view can pick it up.
+            if let tapAction = await queue.consumeTapAction(for: message.id) {
+                store.registerTapAction(for: message.id, action: tapAction)
+            }
             store.present(message)
 
             switch message.presentation {
