@@ -9,22 +9,23 @@ enum AISettingsSeedLoader {
             let rows = try JSONDecoder.default.decode([APIKeySeedRow].self, from: data)
             return rows.map(\.model)
         } catch {
-            #if DEBUG
-            print("AISettingsSeedLoader.loadAPIKeys decode failed: \(error)")
-            #endif
+            logDecodeFailure("loadAPIKeys", error: error)
             return nil
         }
     }
 
     static func loadAllModels(bundle: Bundle = .main) -> [AllModels]? {
-        guard
-            let data = data(named: "AllModels", bundle: bundle),
-            let rows = try? JSONDecoder.default.decode([AllModelSeedRow].self, from: data)
-        else {
+        guard let data = data(named: "AllModels", bundle: bundle) else {
             return nil
         }
-        return rows.enumerated().map { index, row in
-            row.model(position: index)
+        do {
+            let rows = try JSONDecoder.default.decode([AllModelSeedRow].self, from: data)
+            return rows.enumerated().map { index, row in
+                row.model(position: index)
+            }
+        } catch {
+            logDecodeFailure("loadAllModels", error: error)
+            return nil
         }
     }
 
@@ -34,10 +35,14 @@ enum AISettingsSeedLoader {
     }
 
     static func loadScenarioBindings(for models: [AllModels], bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
-        guard
-            let data = data(named: "AllModels", bundle: bundle),
-            let rows = try? JSONDecoder.default.decode([AllModelSeedRow].self, from: data)
-        else {
+        guard let data = data(named: "AllModels", bundle: bundle) else {
+            return nil
+        }
+        let rows: [AllModelSeedRow]
+        do {
+            rows = try JSONDecoder.default.decode([AllModelSeedRow].self, from: data)
+        } catch {
+            logDecodeFailure("loadScenarioBindings", error: error)
             return nil
         }
         var positions: [String: Int] = [:]
@@ -55,8 +60,8 @@ enum AISettingsSeedLoader {
                     scenario: scenarioRaw,
                     identity: model.identity,
                     modelID: model.id,
-                    temperature: scenarioRaw == AIScenario.chat.rawValue ? 0.6 : 0.2,
-                    maxTokens: 14096,
+                    temperature: AIScenarioModelBinding.defaultTemperature,
+                    maxTokens: AIScenarioModelBinding.defaultMaxTokens,
                     position: position,
                     isDefault: isDefault,
                     systemProvision: row.systemProvision,
@@ -75,6 +80,12 @@ enum AISettingsSeedLoader {
             return try? Data(contentsOf: url)
         }
         return nil
+    }
+
+    private static func logDecodeFailure(_ scope: String, error: Error) {
+        #if DEBUG
+        print("AISettingsSeedLoader.\(scope) decode failed: \(error)")
+        #endif
     }
 }
 

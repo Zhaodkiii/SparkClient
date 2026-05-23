@@ -18,11 +18,11 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
     /// 当前使用的模型名称
     let currentModelName: String?
     /// 温度系数（控制生成随机性，0~1）
-    let temperature: Double
+    let temperature: Double?
     /// 核采样参数（控制生成多样性）
     let topP: Double
     /// 最大生成Token数
-    let maxTokens: Int
+    let maxTokens: Int?
     /// 最大上下文消息数
     let maxMessages: Int
     /// 角色提示词（系统Prompt）
@@ -82,9 +82,9 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         title: String,
         scenario: AIScenario = .chat,
         currentModelName: String? = nil,
-        temperature: Double = 0.6,
+        temperature: Double? = nil,
         topP: Double = 1.0,
-        maxTokens: Int = 14096,
+        maxTokens: Int? = nil,
         maxMessages: Int = 20,
         rolePrompt: String = "",
         imageDeliveryModeRaw: String? = nil,

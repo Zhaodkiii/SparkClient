@@ -313,6 +313,7 @@ struct ChatComposerRuntimeTogglesRow: View {
         MemberProfileBindingMenu(
             memberContextStore: memberContextStore,
             selectedMemberID: boundMemberID,
+            showsNoneOption: true,
             onSelect: { memberID in
                 onSetMemberBinding(memberID)
             }

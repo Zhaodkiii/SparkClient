@@ -39,54 +39,48 @@ struct HanlinChatComposerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                ChatComposerContextTaskBar(
-                    boundMemberID: boundMemberID,
-                    isSending: stateStore.isSending,
-                    smallTasks: smallTasks,
-                    onAskReport: onPresentAskReportPicker,
-                    onSmallTaskTapped: onSmallTaskTapped
-                )
+        VStack(spacing: 4) {
+            ChatComposerContextTaskBar(
+                boundMemberID: boundMemberID,
+                isSending: stateStore.isSending,
+                smallTasks: smallTasks,
+                onAskReport: onPresentAskReportPicker,
+                onSmallTaskTapped: onSmallTaskTapped
+            )
 
-                HanlinChatInputView(
-                    threadID: threadID,
-                    modelReasoning: modelReasoning,
-                    stateStore: stateStore,
-                    memberContextStore: memberContextStore,
-                    boundMemberID: boundMemberID,
-                    medicalQueryAPI: medicalQueryAPI,
-                    initialCompleteData: initialCompleteData,
-                    fetchMemberCompleteData: fetchMemberCompleteData,
-                    fileTransferService: fileTransferService,
-                    onSend: onSend,
-                    onCancel: onCancel,
-                    onRequestFileImport: { showFileImporter = true },
-                    onAttachmentsPicked: onAttachmentsPicked,
-                    onRemoveAttachment: onRemoveAttachment,
-                    onSetMemberBinding: onSetMemberBinding,
-                    onRemoveHealthResourceRef: { ref in
-                        stateStore.removeHealthResourceRef(ref, for: threadID)
-                    },
-                    onClearHealthResourceRefs: {
-                        stateStore.clearHealthResourceRefs(for: threadID)
-                    }
-                )
-
-                if !isKeyboardVisible {
-                    ChatComposerModelPickerRow(
-                        models: modelRows,
-                        selectedModelName: selectedModelBinding
-                    )
+            HanlinChatInputView(
+                threadID: threadID,
+                modelReasoning: modelReasoning,
+                stateStore: stateStore,
+                memberContextStore: memberContextStore,
+                boundMemberID: boundMemberID,
+                medicalQueryAPI: medicalQueryAPI,
+                initialCompleteData: initialCompleteData,
+                fetchMemberCompleteData: fetchMemberCompleteData,
+                fileTransferService: fileTransferService,
+                onSend: onSend,
+                onCancel: onCancel,
+                onRequestFileImport: { showFileImporter = true },
+                onAttachmentsPicked: onAttachmentsPicked,
+                onRemoveAttachment: onRemoveAttachment,
+                onSetMemberBinding: onSetMemberBinding,
+                onRemoveHealthResourceRef: { ref in
+                    stateStore.removeHealthResourceRef(ref, for: threadID)
+                },
+                onClearHealthResourceRefs: {
+                    stateStore.clearHealthResourceRefs(for: threadID)
                 }
-            }
-            .padding(.bottom, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 0, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: Color.primary.opacity(0.32), radius: 1)
+            )
+
+            if !isKeyboardVisible {
+                ChatComposerModelPickerRow(
+                    models: modelRows,
+                    selectedModelName: selectedModelBinding
+                )
             }
         }
+        .padding(.bottom, 12)
+        .background(Color(uiColor: .systemBackground))
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isKeyboardVisible = true

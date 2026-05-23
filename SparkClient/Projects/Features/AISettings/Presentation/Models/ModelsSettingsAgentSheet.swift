@@ -34,7 +34,7 @@ struct ModelsSettingsAgentSheet: View {
 
     var body: some View {
         List {
-            Section(L10n.text("ai_settings.models.agent.section.icons")) {
+            Section(L10n.text("ai_settings.models.agent.section.icons", comment: "图标选择")) {
                 HStack {
                     Spacer()
                     Button {
@@ -51,11 +51,11 @@ struct ModelsSettingsAgentSheet: View {
                 .listRowBackground(Color.clear)
             }
 
-            Section(L10n.text("ai_settings.models.agent.section.basic")) {
-                TextField(L10n.text("ai_settings.models.agent.field.name"), text: $displayName)
+            Section(L10n.text("ai_settings.models.agent.section.basic", comment: "基础信息")) {
+                TextField(L10n.text("ai_settings.models.agent.field.name", comment: "智能体名称"), text: $displayName)
             }
 
-            Section(L10n.text("ai_settings.models.agent.section.system_prompt")) {
+            Section(L10n.text("ai_settings.models.agent.section.system_prompt", comment: "智能体设定")) {
                 PromptInputEditorView(
                     text: $systemPrompt,
                     promptTemplates: promptTemplates,
@@ -69,13 +69,13 @@ struct ModelsSettingsAgentSheet: View {
 
                 NavigationLink {
                     MultiSelectOptionsView(
-                        title: L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "Related small tasks selector title"),
-                        options: smallTasks.map { ($0.code, String(format: L10n.text("ai_settings.models.agent.related_tasks.option_format", fallback: "%@ (%@)", comment: "Related small task option format"), locale: Locale.current, $0.name, $0.code)) },
+                        title: L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "关联小任务选择页标题"),
+                        options: smallTasks.map { ($0.code, String(format: L10n.text("ai_settings.models.agent.related_tasks.option_format", fallback: "%@ (%@)", comment: "关联小任务选项格式"), locale: Locale.current, $0.name, $0.code)) },
                         selectedValues: $selectedTaskCodes
                     )
                 } label: {
                     HStack {
-                        Text(L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "Related small tasks row title"))
+                        Text(L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "关联小任务"))
                         Spacer()
                         Text("\(selectedTaskCodes.count)")
                             .foregroundStyle(.secondary)
@@ -83,8 +83,8 @@ struct ModelsSettingsAgentSheet: View {
                 }
             }
 
-            Section(L10n.text("ai_settings.models.agent.section.base_model")) {
-                Picker(L10n.text("ai_settings.models.agent.field.base_model"), selection: $selectedBaseModelName) {
+            Section(L10n.text("ai_settings.models.agent.section.base_model", comment: "基础模型")) {
+                Picker(L10n.text("ai_settings.models.agent.field.base_model", comment: "基座模型"), selection: $selectedBaseModelName) {
                     ForEach(baseModels) { model in
                         Text(model.displayName).tag(model.name)
                     }
@@ -92,13 +92,13 @@ struct ModelsSettingsAgentSheet: View {
                 if let selectedModel = baseModels.first(where: { $0.name == selectedBaseModelName }) {
                     AgentBaseModelPreview(model: selectedModel)
                 } else if baseModels.isEmpty {
-                    Text(L10n.text("ai_settings.models.agent.empty.base_models"))
+                    Text(L10n.text("ai_settings.models.agent.empty.base_models", comment: "暂无可用基础模型提示"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section(L10n.text("ai_settings.models.online.section.usage")) {
+            Section(L10n.text("ai_settings.models.online.section.usage", comment: "使用场景与工具")) {
                 NavigationLink {
                     ModelScenarioBindingsEditorView(
                         scenarioBindings: $draftScenarioBindings,
@@ -108,6 +108,8 @@ struct ModelsSettingsAgentSheet: View {
                         defaultToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
                         defaultRelatedTaskCodes: selectedTaskCodes.sorted(),
                         smallTasks: smallTasks,
+                        promptTooling: promptTooling,
+                        promptTemplates: promptTemplates,
                         onPersist: { change in
                             guard editingAgent != nil else { return }
                             onPersistScenarioBindings?(change)
@@ -115,7 +117,7 @@ struct ModelsSettingsAgentSheet: View {
                     )
                 } label: {
                     HStack {
-                        Text(L10n.text("ai_settings.models.online.field.scenarios"))
+                        Text(L10n.text("ai_settings.models.online.field.scenarios", comment: "使用场景"))
                         Spacer()
                         Text("\(draftScenarioBindings.filter { $0.modelID == (editingAgent?.id ?? draftAgentID) }.count)")
                             .foregroundStyle(.secondary)
@@ -124,12 +126,12 @@ struct ModelsSettingsAgentSheet: View {
 
                 NavigationLink {
                     GroupedToolSelectionView(
-                        title: L10n.text("common.tools"),
+                        title: L10n.text("common.tools", comment: "工具"),
                         selectedValues: $selectedToolNames
                     )
                 } label: {
                     HStack {
-                        Text(L10n.text("common.tools"))
+                        Text(L10n.text("common.tools", comment: "工具"))
                         Spacer()
                         Text(selectedToolsSummary)
                             .foregroundStyle(.secondary)
@@ -137,15 +139,15 @@ struct ModelsSettingsAgentSheet: View {
                 }
             }
         }
-        .navigationTitle(isEditing ? L10n.text("ai_settings.models.agent.nav.edit_title") : L10n.text("ai_settings.models.agent.nav.new_title"))
+        .navigationTitle(isEditing ? L10n.text("ai_settings.models.agent.nav.edit_title", comment: "编辑智能体") : L10n.text("ai_settings.models.agent.nav.new_title", comment: "新建智能体"))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(L10n.text("common.cancel")) {
+                Button(L10n.text("common.cancel", comment: "取消")) {
                     dismiss()
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(isEditing ? L10n.text("common.save") : L10n.text("ai_settings.models.agent.action.create")) {
+                Button(isEditing ? L10n.text("common.save", comment: "保存") : L10n.text("ai_settings.models.agent.action.create", comment: "创建")) {
                     if isEditing, let agent = editingAgent {
                         onUpdate?(
                             agent.id,
@@ -204,11 +206,11 @@ struct ModelsSettingsAgentSheet: View {
             )
                 .sparkInputPresentationChromeIfAvailable()
         }
-        .alert(L10n.text("common.operation_failed"), isPresented: Binding(
+        .alert(L10n.text("common.operation_failed", comment: "操作失败"), isPresented: Binding(
             get: { actionError != nil },
             set: { if $0 == false { actionError = nil } }
         )) {
-            Button(L10n.text("common.ok")) {}
+            Button(L10n.text("common.ok", comment: "确定")) {}
         } message: {
             Text(actionError ?? "")
         }
@@ -270,7 +272,7 @@ struct ModelsSettingsAgentSheet: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("common.all")
+            return L10n.text("common.all", comment: "全部")
         }
         return "\(selectedToolNames.count)/\(total)"
     }
@@ -288,10 +290,10 @@ private struct AgentBaseModelPreview: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
-                capabilityChip(model.isLocalModel ? L10n.text("ai_settings.models.badge.local") : L10n.text("ai_settings.models.badge.service"), enabled: true)
-                capabilityChip(L10n.text("ai_settings.models.capability.reasoning"), enabled: model.supportsReasoning)
-                capabilityChip(L10n.text("common.tools"), enabled: model.supportsToolUse)
-                capabilityChip(L10n.text("ai_settings.models.capability.multimodal"), enabled: model.supportsMultimodal)
+                capabilityChip(model.isLocalModel ? L10n.text("ai_settings.models.badge.local", comment: "本地") : L10n.text("ai_settings.models.badge.service", comment: "服务"), enabled: true)
+                capabilityChip(L10n.text("ai_settings.models.capability.reasoning", comment: "推理"), enabled: model.supportsReasoning)
+                capabilityChip(L10n.text("common.tools", comment: "工具"), enabled: model.supportsToolUse)
+                capabilityChip(L10n.text("ai_settings.models.capability.multimodal", comment: "多模态"), enabled: model.supportsMultimodal)
             }
         }
         .padding(.vertical, 4)

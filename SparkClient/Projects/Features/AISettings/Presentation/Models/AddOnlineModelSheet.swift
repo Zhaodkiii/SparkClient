@@ -67,7 +67,7 @@ struct AddOnlineModelSheet: View {
 
     private var selectedProviderDisplayName: String {
         guard let provider = selectedProviderForProbe else {
-            return L10n.text("ai_settings.models.online.field.vendor")
+            return L10n.text("ai_settings.models.online.field.vendor", comment: "厂商")
         }
         return provider.localizedDisplayName
     }
@@ -92,20 +92,20 @@ struct AddOnlineModelSheet: View {
         CompatibleNavigationContainer {
             Form {
 
-                Section(L10n.text("ai_settings.models.online.section.basic")) {
+                Section(L10n.text("ai_settings.models.online.section.basic", comment: "基本信息")) {
                     formInputRow(
                         icon: "rectangle.and.text.magnifyingglass", //  API 名称 / 标识 图标
-                        title: L10n.text("ai_settings.models.online.field.api_name"),
-                        prompt: L10n.text("ai_settings.models.online.field.api_name_prompt"),
+                        title: L10n.text("ai_settings.models.online.field.api_name", comment: "API 模型名"),
+                        prompt: L10n.text("ai_settings.models.online.field.api_name_prompt", comment: "API 模型名占位提示"),
                         text: $name
                     )
                     formInputRow(
                         icon: "textformat", // 显示名称 / 标题 图标
-                        title: L10n.text("ai_settings.models.online.field.display_name"),
-                        prompt: L10n.text("ai_settings.models.online.field.display_name_prompt"),
+                        title: L10n.text("ai_settings.models.online.field.display_name", comment: "显示名称"),
+                        prompt: L10n.text("ai_settings.models.online.field.display_name_prompt", comment: "显示名称占位提示"),
                         text: $displayName
                     )
-                    formMenuRow(icon: "building.2", title: L10n.text("ai_settings.models.online.field.vendor")) {
+                    formMenuRow(icon: "building.2", title: L10n.text("ai_settings.models.online.field.vendor", comment: "厂商")) {
                         Picker("", selection: $selectedProviderID) {
                             ForEach(apiKeyRows, id: \.id) { key in
                                 Text(key.localizedDisplayName)
@@ -119,13 +119,13 @@ struct AddOnlineModelSheet: View {
                             .foregroundStyle(selectedProviderForProbe == nil ? .secondary : .primary)
                     }
                 }
-                Section(L10n.text("ai_settings.models.online.section.price")) {
-                    formMenuRow(icon: "yensign", title: L10n.text("ai_settings.field.price_tier")) {
+                Section(L10n.text("ai_settings.models.online.section.price", comment: "价格")) {
+                    formMenuRow(icon: "yensign", title: L10n.text("ai_settings.field.price_tier", comment: "价格档位")) {
                         Picker("", selection: $priceTier) {
-                            Text(L10n.text("ai_settings.field.price_tier.free")).tag(0)
-                            Text(L10n.text("ai_settings.field.price_tier.economy")).tag(1)
-                            Text(L10n.text("ai_settings.field.price_tier.standard")).tag(2)
-                            Text(L10n.text("ai_settings.field.price_tier.premium")).tag(3)
+                            Text(L10n.text("ai_settings.field.price_tier.free", comment: "免费")).tag(0)
+                            Text(L10n.text("ai_settings.field.price_tier.economy", comment: "经济")).tag(1)
+                            Text(L10n.text("ai_settings.field.price_tier.standard", comment: "标准")).tag(2)
+                            Text(L10n.text("ai_settings.field.price_tier.premium", comment: "高级")).tag(3)
                         }
                         .pickerStyle(.menu)
                     } label: {
@@ -137,96 +137,96 @@ struct AddOnlineModelSheet: View {
                         .foregroundStyle(ModelsSettingsRowChrome.priceTierColor(priceTier))
                     }
                 }
-                Section(L10n.text("ai_settings.models.online.section.usage")) {
-                    NavigationLink {
-                        ModelScenarioBindingsEditorView(
-                            scenarioBindings: $draftScenarioBindings,
-                            modelID: draftModelID,
-                            identity: .model,
-                            defaultToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
-                            smallTasks: viewModel.snapshot.smallTasks
-                        )
-                    } label: {
-                        HStack {
-                            Text(L10n.text("ai_settings.models.online.field.scenarios"))
-                            Spacer()
-                            Text("\(draftScenarioBindings.filter { $0.modelID == draftModelID }.count)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    NavigationLink {
-                        GroupedToolSelectionView(
-                            title: L10n.text("common.tools"),
-                            selectedValues: $selectedToolNames
-                        )
-                    } label: {
-                        HStack {
-                            Text(L10n.text("common.tools"))
-                            Spacer()
-                            Text(selectedToolsSummary)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                Section(L10n.text("ai_settings.models.online.section.capabilities")) {
+//                Section(L10n.text("ai_settings.models.online.section.usage", comment: "使用场景与工具")) {
+//                    NavigationLink {
+//                        ModelScenarioBindingsEditorView(
+//                            scenarioBindings: $draftScenarioBindings,
+//                            modelID: draftModelID,
+//                            identity: .model,
+//                            defaultToolScenarios: SparkToolName.storageValues(forSelectedToolNames: selectedToolNames),
+//                            smallTasks: viewModel.snapshot.smallTasks
+//                        )
+//                    } label: {
+//                        HStack {
+//                            Text(L10n.text("ai_settings.models.online.field.scenarios", comment: "使用场景"))
+//                            Spacer()
+//                            Text("\(draftScenarioBindings.filter { $0.modelID == draftModelID }.count)")
+//                                .foregroundStyle(.secondary)
+//                        }
+//                    }
+//
+//                    NavigationLink {
+//                        GroupedToolSelectionView(
+//                            title: L10n.text("common.tools", comment: "工具"),
+//                            selectedValues: $selectedToolNames
+//                        )
+//                    } label: {
+//                        HStack {
+//                            Text(L10n.text("common.tools", comment: "工具"))
+//                            Spacer()
+//                            Text(selectedToolsSummary)
+//                                .foregroundStyle(.secondary)
+//                        }
+//                    }
+//                }
+                Section(L10n.text("ai_settings.models.online.section.capabilities", comment: "能力")) {
                     formToggleRow(
                         icon: "eye.slash",
-                        title: L10n.text("ai_settings.models.online.toggle.default_hidden"),
+                        title: L10n.text("ai_settings.models.online.toggle.default_hidden", comment: "默认隐藏"),
                         isOn: $isHidden
                     )
                     probeActionRow
-                    Text(L10n.text("ai_settings.models.online.probe.cost_note"))
+                    Text(L10n.text("ai_settings.models.online.probe.cost_note", comment: "能力探测费用提示"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     formToggleRow(
                         icon: "character",
-                        title: L10n.text("ai_settings.models.online.toggle.supports_text"),
+                        title: L10n.text("ai_settings.models.online.toggle.supports_text", comment: "支持文本"),
                         isOn: $supportsText
                     )
                     formToggleRow(
                         icon: "photo.on.rectangle.angled",
-                        title: L10n.text("ai_settings.field.supports_multimodal"),
+                        title: L10n.text("ai_settings.field.supports_multimodal", comment: "支持多模态"),
                         isOn: $supportsMultimodal
                     )
                     formToggleRow(
                         icon: "atom",
-                        title: L10n.text("ai_settings.field.supports_reasoning"),
+                        title: L10n.text("ai_settings.field.supports_reasoning", comment: "支持推理"),
                         isOn: $supportsReasoning
                     )
                     formToggleRow(
                         icon: "lightbulb",
-                        title: L10n.text("ai_settings.field.reasoning_controllable"),
+                        title: L10n.text("ai_settings.field.reasoning_controllable", comment: "思考可控"),
                         isOn: $reasoningControllable
                     )
                     formToggleRow(
                         icon: "hammer",
-                        title: L10n.text("ai_settings.field.supports_tool_use"),
+                        title: L10n.text("ai_settings.field.supports_tool_use", comment: "支持工具调用"),
                         isOn: $supportsToolUse
                     )
                     formToggleRow(
                         icon: "camera.aperture",
-                        title: L10n.text("ai_settings.models.online.toggle.image_gen"),
+                        title: L10n.text("ai_settings.models.online.toggle.image_gen", comment: "生图"),
                         isOn: $supportsImageGen
                     )
 
-                    Text(L10n.text("ai_settings.models.online.capabilities.footer"))
+                    Text(L10n.text("ai_settings.models.online.capabilities.footer", comment: "能力区底部说明"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
             .tint(.accentColor)
-            .navigationTitle(L10n.text("ai_settings.models.online.nav_title"))
+            .navigationTitle(L10n.text("ai_settings.models.online.nav_title", comment: "添加在线模型"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.text("common.cancel")) { dismiss() }
+                    Button(L10n.text("common.cancel", comment: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("ai_settings.models.online.save")) { save() }
+                    Button(L10n.text("ai_settings.models.online.save", comment: "添加")) { save() }
                 }
             }
-            .alert(L10n.text("ai_settings.models.online.error_title"), isPresented: $showAlert) {
-                Button(L10n.text("common.ok"), role: .cancel) {}
+            .alert(L10n.text("ai_settings.models.online.error_title", comment: "无法添加"), isPresented: $showAlert) {
+                Button(L10n.text("common.ok", comment: "确定"), role: .cancel) {}
             } message: {
                 Text(alertMessage)
             }
@@ -255,7 +255,7 @@ struct AddOnlineModelSheet: View {
         } label: {
             HStack(spacing: 12) {
                 rowIcon("wand.and.stars")
-                Text(L10n.text("ai_settings.models.online.probe.button"))
+                Text(L10n.text("ai_settings.models.online.probe.button", comment: "自动模型能力探测"))
                     .foregroundStyle(.primary)
                 Spacer()
                 if isProbing {
@@ -338,7 +338,7 @@ struct AddOnlineModelSheet: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("common.all")
+            return L10n.text("common.all", comment: "全部")
         }
         return "\(selectedToolNames.count)/\(total)"
     }
@@ -363,8 +363,8 @@ struct AddOnlineModelSheet: View {
                 scenario: scenario.rawValue,
                 identity: .model,
                 modelID: draftModelID,
-                temperature: scenario == .chat ? 0.6 : 0.2,
-                maxTokens: 2048,
+                temperature: AIScenarioModelBinding.defaultTemperature,
+                maxTokens: AIScenarioModelBinding.defaultMaxTokens,
                 position: index,
                 isDefault: true,
                 aiToolScenarios: initialDraft.aiToolScenarios
@@ -380,17 +380,17 @@ struct AddOnlineModelSheet: View {
         let provider = selectedProviderForProbe
         let company = provider?.company.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !n.isEmpty else {
-            alertMessage = L10n.text("ai_settings.models.online.err.api_name")
+            alertMessage = L10n.text("ai_settings.models.online.err.api_name", comment: "请填写 API 模型名")
             showAlert = true
             return
         }
         guard !d.isEmpty else {
-            alertMessage = L10n.text("ai_settings.models.online.err.display_name")
+            alertMessage = L10n.text("ai_settings.models.online.err.display_name", comment: "请填写显示名称")
             showAlert = true
             return
         }
         guard !providerID.isEmpty, let provider else {
-            alertMessage = L10n.text("ai_settings.models.online.err.vendor")
+            alertMessage = L10n.text("ai_settings.models.online.err.vendor", comment: "请选择已配置密钥的厂商")
             showAlert = true
             return
         }
@@ -421,13 +421,13 @@ struct AddOnlineModelSheet: View {
 
     private func startProbe() async {
         guard let provider = selectedProviderForProbe else {
-            alertMessage = L10n.text("ai_settings.models.online.err.vendor")
+            alertMessage = L10n.text("ai_settings.models.online.err.vendor", comment: "请选择已配置密钥的厂商")
             showAlert = true
             return
         }
         let modelName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard modelName.isEmpty == false else {
-            alertMessage = L10n.text("ai_settings.models.online.err.api_name")
+            alertMessage = L10n.text("ai_settings.models.online.err.api_name", comment: "请填写 API 模型名")
             showAlert = true
             return
         }
@@ -571,10 +571,10 @@ struct GroupedToolSelectionView: View {
         let selectedCount = group.toolRawValues.filter { selectedValues.contains($0) }.count
         let total = group.tools.count
         if selectedCount == 0 {
-            return L10n.text("ai_settings.models.online.selection.none")
+            return L10n.text("ai_settings.models.online.selection.none", comment: "未设置")
         }
         if selectedCount == total {
-            return L10n.text("common.all")
+            return L10n.text("common.all", comment: "全部")
         }
         return "\(selectedCount)/\(total)"
     }
@@ -589,7 +589,7 @@ private struct ModelCapabilityProbeSheet: View {
                 HStack(spacing: 12) {
                     icon(for: item.status)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.text(item.step.titleKey))
+                        Text(L10n.text(item.step.titleKey, comment: "能力探测步骤标题"))
                         if let message = item.message, message.isEmpty == false {
                             Text(message)
                                 .font(.footnote)
@@ -599,7 +599,7 @@ private struct ModelCapabilityProbeSheet: View {
                 }
                 .padding(.vertical, 4)
             }
-            .navigationTitle(L10n.text("ai_settings.models.online.probe.sheet_title"))
+            .navigationTitle(L10n.text("ai_settings.models.online.probe.sheet_title", comment: "能力探测结果"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }

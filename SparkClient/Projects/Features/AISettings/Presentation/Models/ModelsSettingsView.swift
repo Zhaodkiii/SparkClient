@@ -15,8 +15,6 @@ struct ModelsSettingsView: View {
     @State private var editingAgent: AllModels?
 
     @State private var inlineError: String?
-    @State private var modelPendingDelete: AllModels?
-    @State private var showDeleteConfirm = false
 
     private var normalizedSearch: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -216,17 +214,6 @@ struct ModelsSettingsView: View {
         } message: {
             Text(inlineError ?? "")
         }
-        .alert(L10n.text("ai_settings.models.alert.delete_confirm_title"), isPresented: $showDeleteConfirm, presenting: modelPendingDelete) { model in
-            Button(L10n.text("common.cancel"), role: .cancel) {
-                modelPendingDelete = nil
-            }
-            Button(L10n.text("ai_settings.models.action.delete"), role: .destructive) {
-                performDelete(model)
-                modelPendingDelete = nil
-            }
-        } message: { model in
-            Text(String(format: L10n.text("ai_settings.models.alert.delete_confirm_message"), model.displayName))
-        }
         .task {
             await viewModel.refreshTrialStatus()
         }
@@ -301,7 +288,7 @@ struct ModelsSettingsView: View {
                         isEditing: isEditing,
                         priceLabel: ModelsSettingsRowChrome.priceTierLabel(model.priceTier),
                         priceColor: ModelsSettingsRowChrome.priceTierColor(model.priceTier),
-                        onDelete: { requestDelete(model) }
+                        onDelete: { performDelete(model) }
                     )
                 }
                 .onMove(perform: moveUnifiedModels)
@@ -338,11 +325,6 @@ struct ModelsSettingsView: View {
         guard dn.isEmpty == false else { return false }
         if dn.lowercased().contains(normalizedSearch) { return true }
         return dn.toPinyinForSearch().lowercased().contains(normalizedSearch)
-    }
-
-    private func requestDelete(_ model: AllModels) {
-        modelPendingDelete = model
-        showDeleteConfirm = true
     }
 
     private func performDelete(_ model: AllModels) {

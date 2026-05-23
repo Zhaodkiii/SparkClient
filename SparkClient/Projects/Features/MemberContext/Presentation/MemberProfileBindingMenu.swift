@@ -3,6 +3,8 @@ import SwiftUI
 struct MemberProfileBindingMenu<Content: View>: View {
     @ObservedObject var memberContextStore: MemberContextStore
     let selectedMemberID: Int?
+    /// When true, shows a menu item to clear the binding. Only used in chat composer input.
+    var showsNoneOption: Bool = false
     let onSelect: (Int?) -> Void
     @State private var showAddMemberSheet = false
     @ViewBuilder let label: () -> Content
@@ -18,17 +20,19 @@ struct MemberProfileBindingMenu<Content: View>: View {
 
     var body: some View {
         Menu {
-            Button {
-                onSelect(nil)
-            } label: {
-                Label(
-                    L10n.text("chat.composer.member_profile.none"),
-                    systemImage: selectedMemberID == nil ? "checkmark.circle.fill" : "circle"
-                )
-            }
+            if showsNoneOption {
+                Button {
+                    onSelect(nil)
+                } label: {
+                    Label(
+                        L10n.text("chat.composer.member_profile.none"),
+                        systemImage: selectedMemberID == nil ? "checkmark.circle.fill" : "circle"
+                    )
+                }
 
-            if members.isEmpty == false {
-                Divider()
+                if members.isEmpty == false {
+                    Divider()
+                }
             }
 
             ForEach(members) { member in

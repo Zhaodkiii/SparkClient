@@ -662,133 +662,7 @@ private enum MedicationPlanSheetDestination: Identifiable {
     }
 }
 
-// MARK: - Medication plan dose (stepper + detail sheet)
-
-private struct MedicationPlanDoseValueStepperRow: View {
-    @Binding var text: String
-    @Binding var keyboardVisible: Bool
-
-    @FocusState private var isValueFocused: Bool
-
-    private static let minDose: Double = 1
-    private static let maxDose: Double = 9999
-    private static let step: Double = 1
-
-    private var controlFill: Color { Color(uiColor: .systemPurple).opacity(0.12) }
-    private var controlStroke: Color { Color(uiColor: .systemPurple).opacity(0.35) }
-    private var accentColor: Color { Color(uiColor: .systemPurple) }
-
-    private var numericValue: Double {
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard t.isEmpty == false, let v = Double(t) else { return 0 }
-        return v
-    }
-
-    private var canDecrement: Bool {
-        numericValue > Self.minDose + 1e-9
-    }
-
-    private var canIncrement: Bool {
-        numericValue < Self.maxDose - 1e-9
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.text("medication_plan.form.dose_value", fallback: "剂量数值"))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-
-            HStack(spacing: 12) {
-                decrementButton
-                valueField
-                incrementButton
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: text)
-        .onChange(of: isValueFocused) { focused in
-            keyboardVisible = focused
-        }
-    }
-
-    private var decrementButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let v = Double(t), t.isEmpty == false else { return }
-            let next = max(Self.minDose, v - Self.step)
-            text = Self.formatDose(next)
-        } label: {
-            Image(systemName: "minus")
-                .font(.headline.weight(.semibold))
-                .imageScale(.medium)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(accentColor)
-                .frame(width: 32, height: 32)
-                .background(controlFill, in: Circle())
-                .overlay(Circle().strokeBorder(controlStroke, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .disabled(canDecrement == false)
-        .opacity(canDecrement ? 1 : 0.45)
-        .accessibilityLabel(L10n.text("medication_plan.form.dose_decrement", fallback: "减少剂量"))
-    }
-
-    private var incrementButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if t.isEmpty {
-                text = Self.formatDose(Self.step)
-                return
-            }
-            let v = Double(t) ?? Self.minDose
-            let next = min(Self.maxDose, max(Self.minDose, v) + Self.step)
-            text = Self.formatDose(next)
-        } label: {
-            Image(systemName: "plus")
-                .font(.headline.weight(.bold))
-                .imageScale(.medium)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color.white)
-                .frame(width: 32, height: 32)
-                .background(accentColor, in: Circle())
-                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
-        .disabled(canIncrement == false)
-        .opacity(canIncrement ? 1 : 0.45)
-        .accessibilityLabel(L10n.text("medication_plan.form.dose_increment", fallback: "增加剂量"))
-    }
-
-    private var valueField: some View {
-        TextField(
-            L10n.text("medication_plan.form.dose_value_placeholder", fallback: "如 1"),
-            text: $text
-        )
-        .textFieldStyle(.plain)
-        .multilineTextAlignment(.center)
-        .focused($isValueFocused)
-        .keyboardType(.decimalPad)
-        .font(.title3.weight(.bold))
-        .monospacedDigit()
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 12)
-        .frame(minHeight: 36)
-        .frame(maxWidth: .infinity)
-        .background(
-            Color(uiColor: .secondarySystemBackground),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color(uiColor: .separator).opacity(0.18), lineWidth: 1)
-        )
-    }
-
-    private static func formatDose(_ v: Double) -> String {
-        v.formatted(.number.precision(.fractionLength(0...3)))
-    }
-}
+// MARK: - Medication plan dose (detail sheet)
 
 private struct MedicationPlanDoseDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -1179,8 +1053,12 @@ struct MedicationPlanFormView: View {
                                                 
                         
                         HStack(spacing: 12) {
-                            MedicationPlanDoseValueStepperRow(text: $draft.doseValue, keyboardVisible: $sheetKeyboardVisible)
-                            
+                            MedicationPlanDoseValueStepperRow(
+                                text: $draft.doseValue,
+                                keyboardVisible: $sheetKeyboardVisible,
+                                controlStyle: .custom
+                            )
+
                             SparkFormSheetPickerRow(
                                 title: L10n.text("medication_plan.form.single_dose_sheet_title", fallback: "单次剂量单位"),
                                 displayValue: draft.doseUnit,

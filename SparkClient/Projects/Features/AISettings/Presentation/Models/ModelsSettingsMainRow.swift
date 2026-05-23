@@ -17,6 +17,11 @@ struct ModelsSettingsMainRow: View {
     @State private var showAgentEditSheet = false
     @State private var showToggleKeyError = false
 
+    private var resolvedDisplayName: String {
+        let trimmed = model.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? model.name : trimmed
+    }
+
     private var isLocal: Bool {
         AIProviderAdapterRegistry.adapter(for: model.providerID).isLocal
     }
@@ -117,7 +122,9 @@ struct ModelsSettingsMainRow: View {
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if showsTrailingSwipeAction {
-                Button(role: .destructive, action: onDelete) {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
                     Label(L10n.text("ai_settings.models.action.delete"), systemImage: "trash")
                 }
             }

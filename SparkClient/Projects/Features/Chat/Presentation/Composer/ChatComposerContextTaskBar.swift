@@ -18,7 +18,7 @@ struct ChatComposerContextTaskBar: View {
 
     var body: some View {
         if hasContent {
-            HStack(spacing: 10) {
+            HStack(spacing: 5) {
                 if shouldShowAskReportButton {
                     Button(action: onAskReport) {
                         ChatComposerContextPill(
@@ -31,6 +31,7 @@ struct ChatComposerContextTaskBar: View {
                     .accessibilityLabel(L10n.text("chat.ask_report.entry.accessibility"))
                     .disabled(isSending)
                 }
+                Spacer(minLength: 0)
 
                 if smallTasks.isEmpty == false {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -51,8 +52,9 @@ struct ChatComposerContextTaskBar: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.leading, 8)
+//            .padding(.horizontal, 16)
+//            .padding(.vertical, 8)
         }
     }
 

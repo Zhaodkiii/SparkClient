@@ -149,8 +149,15 @@ struct ChatThreadSettingsSheet: View {
         )
     }
 
-    private var temperatureOptions: [ChatThreadSettingOption<Double>] {
-        stride(from: 0.1, through: 2.0, by: 0.1).map { raw in
+    private var temperatureOptions: [ChatThreadSettingOption<Double?>] {
+        [
+            ChatThreadSettingOption(
+                id: "temp-default",
+                value: nil,
+                title: L10n.text("chat.settings.model_default"),
+                detail: L10n.text("chat.settings.temperature.detail.model_default")
+            )
+        ] + stride(from: 0.1, through: 2.0, by: 0.1).map { raw in
             let value = Double(round(raw * 10) / 10)
             return ChatThreadSettingOption(
                 id: String(format: "temp-%.1f", value),
@@ -177,8 +184,15 @@ struct ChatThreadSettingsSheet: View {
         }
     }
 
-    private var maxTokenOptions: [ChatThreadSettingOption<Int>] {
-        [256, 512, 1024, 2048, 4096, 8192, 16384, 32768].map { value in
+    private var maxTokenOptions: [ChatThreadSettingOption<Int?>] {
+        [
+            ChatThreadSettingOption(
+                id: "tokens-default",
+                value: nil,
+                title: L10n.text("chat.settings.model_default"),
+                detail: L10n.text("chat.settings.max_tokens.detail.model_default")
+            )
+        ] + [256, 512, 1024, 2048, 4096, 8192, 16384, 32768].map { value in
             ChatThreadSettingOption(
                 id: "tokens-\(value)",
                 value: value,

@@ -77,7 +77,7 @@
         <attribute name="identity" attributeType="String" defaultValueString="model"/>
         <attribute name="isActive" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
         <attribute name="isDefault" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
-        <attribute name="maxTokens" attributeType="Integer 32" defaultValueString="2048" usesScalarValueType="YES"/>
+        <attribute name="maxTokens" attributeType="Integer 32" usesScalarValueType="YES"/>
         <attribute name="modelID" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="position" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
@@ -183,13 +183,13 @@
         <attribute name="isActive" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="isSoftDeleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="maxMessages" attributeType="Integer 32" defaultValueString="20" usesScalarValueType="YES"/>
-        <attribute name="maxTokens" attributeType="Integer 32" defaultValueString="4096" usesScalarValueType="YES"/>
+        <attribute name="maxTokens" optional="YES" attributeType="Integer 32"/>
         <attribute name="memberID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="rolePrompt" attributeType="String" defaultValueString=""/>
         <attribute name="scenario" attributeType="String" defaultValueString="chat"/>
         <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="temperature" attributeType="Double" defaultValueString="0.6" usesScalarValueType="YES"/>
+        <attribute name="temperature" optional="YES" attributeType="Double"/>
         <attribute name="title" attributeType="String" defaultValueString=""/>
         <attribute name="topP" attributeType="Double" defaultValueString="1.0" usesScalarValueType="YES"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>

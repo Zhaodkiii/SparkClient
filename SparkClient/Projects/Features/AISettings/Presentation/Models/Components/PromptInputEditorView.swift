@@ -80,6 +80,9 @@ struct PromptInputEditorView: View {
                 }
             )
         }
+        .sparkKeyboardDoneToolbar {
+            SparkKeyboardDismiss.endEditing()
+        }
     }
 
     private var autoFillButton: some View {

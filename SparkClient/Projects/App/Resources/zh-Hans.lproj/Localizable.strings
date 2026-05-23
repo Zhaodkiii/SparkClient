@@ -387,6 +387,7 @@
 "chat.settings.temperature.detail.low" = "回答更稳，更收敛。";
 "chat.settings.temperature.detail.medium" = "创造性和稳定性更平衡。";
 "chat.settings.temperature.detail.high" = "更开放，但更容易偏题。";
+"chat.settings.temperature.detail.model_default" = "本会话使用所选模型或智能体的配置。";
 "chat.settings.top_p.title" = "累积概率";
 "chat.settings.top_p.subtitle" = "控制采样词汇范围的宽度。";
 "chat.settings.top_p.detail.low" = "词汇选择更收敛。";
@@ -395,6 +396,8 @@
 "chat.settings.max_tokens.title" = "最大回复长度";
 "chat.settings.max_tokens.subtitle" = "限制单次助手回复的最大长度。";
 "chat.settings.max_tokens.detail" = "单次回复最多允许 %d 个 tokens。";
+"chat.settings.max_tokens.detail.model_default" = "使用所选模型或智能体的回复长度。";
+"chat.settings.model_default" = "模型默认";
 "chat.settings.max_messages.title" = "消息数量上限";
 "chat.settings.max_messages.subtitle" = "只把最近的消息重新送入上下文。";
 "chat.settings.max_messages.detail" = "上下文窗口保留最近 %d 条消息。";
@@ -564,6 +567,10 @@
 "ai_settings.scenario.report_interpretation" = "报告解读模型";
 "ai_settings.scenario_model_picker" = "场景模型";
 "ai_settings.scenario_default_hint" = "默认";
+"ai_settings.scenario_binding.active" = "启用";
+"ai_settings.scenario_binding.inactive" = "未启用";
+"ai_settings.scenario_binding.system_provision" = "系统指令";
+"ai_settings.scenario_binding.nav.add_title" = "添加场景";
 "ai_settings.no_models_configure_key" = "暂无可用模型：服务端未下发该场景模型列表，且本地目录中无已配置 API Key 的模型。";
 "ai_settings.endpoint" = "端点";
 "ai_settings.api_key" = "API Key（可选）";
@@ -775,7 +782,6 @@
 "ai_settings.models.section.remote_catalog" = "云端模型";
 "ai_settings.models.empty.remote_none" = "暂无云端目录模型。请先配置厂商密钥或等待服务端同步。";
 "ai_settings.models.alert.delete_confirm_title" = "确定删除该模型？";
-"ai_settings.models.alert.delete_confirm_message" = "将移除目录中的「%@」。";
 "ai_settings.models.alert.need_api_key_title" = "需要 API Key";
 "ai_settings.models.alert.need_api_key_message" = "请先在密钥页为该厂商添加有效且已显示的 API Key，再开启显示。";
 "ai_settings.models.capability.visual_short" = "视觉";
@@ -860,6 +866,8 @@
 "common.tools" = "工具";
 "common.model" = "模型";
 "common.edit" = "编辑";
+"common.add" = "添加";
+"common.description" = "描述";
 "common.done" = "完成";
 "common.save" = "保存";
 
@@ -900,8 +908,6 @@
 "ai_settings.providers.editor.field.provider" = "厂商";
 "ai_settings.providers.editor.field.request_url" = "请求地址";
 "ai_settings.providers.editor.field.api_key" = "API Key";
-"ai_settings.providers.editor.section.custom" = "自定义供应商";
-"ai_settings.providers.editor.field.custom_name" = "供应商名称";
 "ai_settings.providers.editor.models.empty" = "该厂商暂未配置在线模型";
 "ai_settings.providers.editor.section.models" = "该厂商模型";
 "ai_settings.providers.editor.section.privacy" = "隐私政策";
@@ -915,13 +921,12 @@
 "ai_settings.providers.editor.test.no_models" = "无可用模型";
 "ai_settings.providers.editor.nav_title" = "编辑密钥";
 "ai_settings.providers.editor.alert.delete_model_title" = "删除模型？";
-"ai_settings.providers.editor.alert.delete_model_message" = "删除后将从当前厂商模型列表移除。";
+"ai_settings.providers.editor.alert.delete_model_message" = "「%@」将从当前厂商模型列表移除。";
 "ai_settings.providers.editor.alert.notice_title" = "提示";
 "ai_settings.providers.editor.alert.need_api_key" = "请先配置有效 API Key";
 "ai_settings.providers.editor.alert.no_models" = "当前厂商无可测试模型，请先配置模型";
 "ai_settings.providers.editor.alert.test_failed" = "连接测试失败，请检查 URL 或密钥";
 "ai_settings.providers.editor.alert.backend_network_error" = "服务端连通性测试网络不可达，已自动改用本地直连测试。若仍失败，请检查网络、请求地址和模型名。";
-"ai_settings.providers.editor.footer.auto_enable_notice" = "⚠️ 注意：配置API后，厂商将自动开启，如需修改，可以在菜单中关闭厂商";
 "ai_settings.tool_groups.health" = "健康数据类";
 "ai_settings.tool_groups.health.description" = "负责获取身体、运动、睡眠、营养、能量等健康相关数据";
 "ai_settings.tool_groups.member" = "成员管理类";

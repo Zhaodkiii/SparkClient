@@ -61,7 +61,7 @@ struct AIScenarioConfig: Codable, Equatable, Sendable {
         model: String,
         apiKey: String? = nil,
         temperature: Double = 0.2,
-        maxTokens: Int = 2048
+        maxTokens: Int
     ) {
         self.endpoint = endpoint
         self.model = model
@@ -224,8 +224,8 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
     var aiToolScenarios: [String]
     var relatedTaskCodes: [String]
     var isDefault: Bool = false
-    var temperature: Double = 0.2
-    var maxTokens: Int = 14096
+    var temperature: Double
+    var maxTokens: Int
     var baseModelName: String?
     var localFilename: String?
 
@@ -302,7 +302,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         relatedTaskCodes: [String] = [],
         isDefault: Bool = false,
         temperature: Double = 0.2,
-        maxTokens: Int = 14096,
+        maxTokens: Int,
         baseModelName: String? = nil,
         localFilename: String? = nil
     ) {
@@ -364,8 +364,8 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
         aiToolScenarios = try c.decodeIfPresent([String].self, forKey: .key("aiToolScenarios")) ?? []
         relatedTaskCodes = try c.decodeIfPresent([String].self, forKey: .key("relatedTaskCodes")) ?? []
         isDefault = try c.decodeIfPresent(Bool.self, forKey: .key("isDefault")) ?? false
-        temperature = try c.decodeIfPresent(Double.self, forKey: .key("temperature")) ?? 0.2
-        maxTokens = try c.decodeIfPresent(Int.self, forKey: .key("maxTokens")) ?? 4096
+        temperature = try c.decode(Double.self, forKey: .key("temperature"))
+        maxTokens = try c.decode(Int.self, forKey: .key("maxTokens"))
         baseModelName = try c.decodeIfPresent(String.self, forKey: .key("baseModelName"))
         localFilename = try c.decodeIfPresent(String.self, forKey: .key("localFilename"))
     }

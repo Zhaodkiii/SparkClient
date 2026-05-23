@@ -120,9 +120,9 @@ actor CoreDataChatRepository: ChatRepository {
     func updateThreadGenerationConfig(
         threadID: UUID,
         currentModelName: String?,
-        temperature: Double,
+        temperature: Double?,
         topP: Double,
-        maxTokens: Int,
+        maxTokens: Int?,
         maxMessages: Int,
         rolePrompt: String
     ) async {

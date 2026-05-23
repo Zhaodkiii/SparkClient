@@ -472,6 +472,19 @@ final class AISettingsViewModel: ObservableObject {
         return await persistSnapshotNowReturningBool()
     }
 
+    /// 编辑器内启停厂商：先写入当前编辑字段，再应用启停逻辑（禁用时同步关闭旗下模型）并持久化。
+    @discardableResult
+    func setProviderEnabledFromEditorAndPersist(_ provider: APIKeys, enabled: Bool) async -> Bool {
+        _ = providerCoordinator.saveProviderFromEditor(provider, in: &snapshot)
+        do {
+            _ = try providerCoordinator.setProviderEnabled(recordID: provider.id, enabled: enabled, in: &snapshot)
+            return await persistSnapshotNowReturningBool()
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - 提示词库单独持久化
     /// 设置页提示词库新增、删除、排序、编辑后立即同步数据库与运行时缓存。
     @discardableResult
@@ -928,8 +941,8 @@ final class AISettingsViewModel: ObservableObject {
                 scenario: scenarioRaw,
                 identity: model.identity,
                 modelID: model.id,
-                temperature: scenarioRaw == AIScenario.chat.rawValue ? 0.6 : 0.2,
-                maxTokens: 14096,
+                temperature: AIScenarioModelBinding.defaultTemperature,
+                maxTokens: AIScenarioModelBinding.defaultMaxTokens,
                 position: (existing.map(\.position).max() ?? -1) + 1,
                 isDefault: existing.contains(where: { $0.isDefault }) == false,
                 systemProvision: model.systemProvision,

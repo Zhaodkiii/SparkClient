@@ -498,8 +498,8 @@ struct AIScenarioModelBinding: Identifiable, Codable, Equatable, Sendable {
         scenario: String,
         identity: AIModelIdentity = .model,
         modelID: UUID,
-        temperature: Double = 0.2,
-        maxTokens: Int = 2048,
+        temperature: Double = Self.defaultTemperature,
+        maxTokens: Int = Self.defaultMaxTokens,
         position: Int = 0,
         isDefault: Bool = false,
         isActive: Bool = true,
@@ -530,6 +530,9 @@ struct AIScenarioModelBinding: Identifiable, Codable, Equatable, Sendable {
 }
 
 extension AIScenarioModelBinding {
+    static let defaultTemperature: Double = 0.68
+    static let defaultMaxTokens: Int = 12_800
+
     var scenarioKey: AIScenario? {
         AIScenario(rawValue: scenario)
     }

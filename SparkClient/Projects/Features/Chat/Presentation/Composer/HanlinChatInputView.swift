@@ -195,7 +195,7 @@ struct HanlinChatInputView: View {
             .background(Color(uiColor: .secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 12)
-            .padding(.top, composerAttachmentAreaHasContent ? 6 : 12)
+//            .padding(.top, composerAttachmentAreaHasContent ? 6 : 12)
         }
     }
 

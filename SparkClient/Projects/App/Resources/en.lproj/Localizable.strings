@@ -387,6 +387,7 @@
 "chat.settings.temperature.detail.low" = "Safer and more deterministic output.";
 "chat.settings.temperature.detail.medium" = "Balanced creativity and stability.";
 "chat.settings.temperature.detail.high" = "More diverse, but more likely to drift.";
+"chat.settings.temperature.detail.model_default" = "Use the selected model or agent setting for this conversation.";
 "chat.settings.top_p.title" = "Top-p";
 "chat.settings.top_p.subtitle" = "Controls how wide the token sampling pool can be.";
 "chat.settings.top_p.detail.low" = "More constrained token choices.";
@@ -395,6 +396,8 @@
 "chat.settings.max_tokens.title" = "Max reply length";
 "chat.settings.max_tokens.subtitle" = "Sets the upper bound for a single assistant reply.";
 "chat.settings.max_tokens.detail" = "Allow up to %d tokens in one response.";
+"chat.settings.max_tokens.detail.model_default" = "Use the selected model or agent reply length.";
+"chat.settings.model_default" = "Model default";
 "chat.settings.max_messages.title" = "Message limit";
 "chat.settings.max_messages.subtitle" = "Only the most recent messages are sent back into context.";
 "chat.settings.max_messages.detail" = "Keep the latest %d messages in the prompt window.";
@@ -564,6 +567,10 @@
 "ai_settings.scenario.report_interpretation" = "Report Interpretation Model";
 "ai_settings.scenario_model_picker" = "Scenario model";
 "ai_settings.scenario_default_hint" = "Default";
+"ai_settings.scenario_binding.active" = "Active";
+"ai_settings.scenario_binding.inactive" = "Inactive";
+"ai_settings.scenario_binding.system_provision" = "System prompt";
+"ai_settings.scenario_binding.nav.add_title" = "Add scenario";
 "ai_settings.no_models_configure_key" = "No models available: the server has not published a model list for this scenario, and no catalog models have a configured API key.";
 "ai_settings.endpoint" = "Endpoint";
 "ai_settings.api_key" = "API Key (optional)";
@@ -775,7 +782,6 @@
 "ai_settings.models.section.remote_catalog" = "Cloud models";
 "ai_settings.models.empty.remote_none" = "No cloud models in the catalog. Add API keys or sync from the server.";
 "ai_settings.models.alert.delete_confirm_title" = "Delete this model?";
-"ai_settings.models.alert.delete_confirm_message" = "“%@” will be removed from the catalog.";
 "ai_settings.models.alert.need_api_key_title" = "API key required";
 "ai_settings.models.alert.need_api_key_message" = "Add a valid, visible API key for this provider in the keys screen before showing the model.";
 "ai_settings.models.capability.visual_short" = "Vision";
@@ -860,6 +866,8 @@
 "common.tools" = "Tools";
 "common.model" = "Model";
 "common.edit" = "Edit";
+"common.add" = "Add";
+"common.description" = "Description";
 "common.done" = "Done";
 "common.save" = "Save";
 
@@ -900,8 +908,6 @@
 "ai_settings.providers.editor.field.provider" = "Provider";
 "ai_settings.providers.editor.field.request_url" = "Request URL";
 "ai_settings.providers.editor.field.api_key" = "API Key";
-"ai_settings.providers.editor.section.custom" = "Custom provider";
-"ai_settings.providers.editor.field.custom_name" = "Provider name";
 "ai_settings.providers.editor.models.empty" = "No online models are configured for this provider yet";
 "ai_settings.providers.editor.section.models" = "Provider models";
 "ai_settings.providers.editor.section.privacy" = "Privacy policy";
@@ -915,13 +921,12 @@
 "ai_settings.providers.editor.test.no_models" = "No available models";
 "ai_settings.providers.editor.nav_title" = "Edit key";
 "ai_settings.providers.editor.alert.delete_model_title" = "Delete model?";
-"ai_settings.providers.editor.alert.delete_model_message" = "This model will be removed from the current provider model list.";
+"ai_settings.providers.editor.alert.delete_model_message" = "\"%@\" will be removed from the current provider model list.";
 "ai_settings.providers.editor.alert.notice_title" = "Notice";
 "ai_settings.providers.editor.alert.need_api_key" = "Please configure a valid API key first";
 "ai_settings.providers.editor.alert.no_models" = "No testable model is available for this provider yet";
 "ai_settings.providers.editor.alert.test_failed" = "Connection test failed. Please check the URL or API key.";
 "ai_settings.providers.editor.alert.backend_network_error" = "Server-side connectivity test hit a network error. The app has automatically retried with a local direct test. If it still fails, check network, request URL, and model name.";
-"ai_settings.providers.editor.footer.auto_enable_notice" = "⚠️ Note: After configuring an API key, the provider is automatically enabled. You can disable it later from the provider menu.";
 "ai_settings.tool_groups.health" = "Health Data";
 "ai_settings.tool_groups.health.description" = "Body, activity, sleep, nutrition, and energy health data.";
 "ai_settings.tool_groups.member" = "Member Management";

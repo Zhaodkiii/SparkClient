@@ -106,6 +106,10 @@ struct SendChatMessageUseCase: Sendable {
             let persistedModelName = trimmedSelected?.isEmpty == false
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            let generationParameters = Self.resolveGenerationParameters(
+                thread: thread,
+                modelRow: resolvedRow
+            )
             
             // 构建系统提示词
             let systemPrompt = await systemPromptWithRelevantMemory(
@@ -400,9 +404,9 @@ struct SendChatMessageUseCase: Sendable {
                 modelReasoning: modelReasoning,
                 systemPrompt: systemPrompt,
                 preferredModelName: resolvedRow.name,
-                temperature: thread.temperature,
+                temperature: generationParameters.temperature,
                 topP: thread.topP,
-                maxTokens: thread.maxTokens,
+                maxTokens: generationParameters.maxTokens,
                 maxMessages: thread.maxMessages,
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: smallTask == nil && deliverMultimodal,
@@ -500,6 +504,10 @@ struct SendChatMessageUseCase: Sendable {
             let persistedModelName = trimmedSelected?.isEmpty == false
                 ? trimmedSelected
                 : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            let generationParameters = Self.resolveGenerationParameters(
+                thread: thread,
+                modelRow: resolvedRow
+            )
             let baseSystemPrompt = ChatSystemPromptResolver().resolve(
                 sessionPrompt: thread.rolePrompt,
                 agentPrompt: resolvedRow.systemPrompt,
@@ -600,9 +608,9 @@ struct SendChatMessageUseCase: Sendable {
                 modelReasoning: modelReasoning,
                 systemPrompt: systemPrompt,
                 preferredModelName: resolvedRow.name,
-                temperature: thread.temperature,
+                temperature: generationParameters.temperature,
                 topP: thread.topP,
-                maxTokens: thread.maxTokens,
+                maxTokens: generationParameters.maxTokens,
                 maxMessages: thread.maxMessages,
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: deliverMultimodal,
@@ -710,7 +718,7 @@ struct SendChatMessageUseCase: Sendable {
             memberID: nil,
             title: title.isEmpty ? promptLocalizer.newThreadTitle() : title,
             imageDeliveryModeRaw: defaultImageDeliveryRaw,
-            rolePrompt: promptLocalizer.chatSystemPrompt()
+            rolePrompt: ""
         )
         await repository.setActiveThread(id: created.id)
         return created
@@ -792,6 +800,19 @@ struct SendChatMessageUseCase: Sendable {
         }
         .sorted { $0.0 < $1.0 }
         .map(\.1)
+    }
+
+    private static func resolveGenerationParameters(
+        thread: ChatThread,
+        modelRow: AIScenarioRemoteModelRow
+    ) -> (temperature: Double, maxTokens: Int) {
+        if modelRow.identity == AIModelIdentity.agent.rawValue {
+            return (modelRow.temperature, modelRow.maxTokens)
+        }
+        return (
+            thread.temperature ?? modelRow.temperature,
+            thread.maxTokens ?? modelRow.maxTokens
+        )
     }
 
     private func shortID(_ value: Int?) -> String {

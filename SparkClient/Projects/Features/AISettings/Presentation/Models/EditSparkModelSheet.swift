@@ -31,10 +31,10 @@ struct EditSparkModelSheet: View {
     var body: some View {
         CompatibleNavigationContainer {
             Form {
-                Section(L10n.text("common.name")) {
-                    TextField(L10n.text("ai_settings.models.edit.field.display_name"), text: $displayName)
+                Section(L10n.text("common.name", comment: "名称")) {
+                    TextField(L10n.text("ai_settings.models.edit.field.display_name", comment: "显示名称"), text: $displayName)
                 }
-                Section(L10n.text("ai_settings.models.edit.section.icon")) {
+                Section(L10n.text("ai_settings.models.edit.section.icon", comment: "图标")) {
                     HStack {
                         Spacer()
                         Button {
@@ -51,7 +51,7 @@ struct EditSparkModelSheet: View {
                     .listRowBackground(Color.clear)
                 }
                 if canEditCapabilities {
-                    Section(L10n.text("ai_settings.models.online.section.usage")) {
+                    Section(L10n.text("ai_settings.models.online.section.usage", comment: "使用场景与工具")) {
                         NavigationLink {
                             if let model {
                                 ModelScenarioBindingsEditorView(
@@ -62,7 +62,9 @@ struct EditSparkModelSheet: View {
                                     defaultBriefDescription: model.briefDescription,
                                     defaultToolScenarios: model.aiToolScenarios,
                                     defaultRelatedTaskCodes: model.relatedTaskCodes,
-                                    smallTasks: viewModel.snapshot.smallTasks,
+                                    smallTasks: viewModel.effectiveSmallTasks,
+                                    promptTooling: viewModel.promptTooling,
+                                    promptTemplates: viewModel.snapshot.promptRepo,
                                     onPersist: { change in
                                         Task { await viewModel.persistScenarioBindingChange(change) }
                                     }
@@ -70,7 +72,7 @@ struct EditSparkModelSheet: View {
                             }
                         } label: {
                             HStack {
-                                Text(L10n.text("ai_settings.models.online.field.scenarios"))
+                                Text(L10n.text("ai_settings.models.online.field.scenarios", comment: "使用场景"))
                                 Spacer()
                                 Text("\(scenarioBindingCount)")
                                     .foregroundStyle(.secondary)
@@ -79,12 +81,12 @@ struct EditSparkModelSheet: View {
 
                         NavigationLink {
                             GroupedToolSelectionView(
-                                title: L10n.text("common.tools"),
+                                title: L10n.text("common.tools", comment: "工具"),
                                 selectedValues: $selectedToolNames
                             )
                         } label: {
                             HStack {
-                                Text(L10n.text("common.tools"))
+                                Text(L10n.text("common.tools", comment: "工具"))
                                 Spacer()
                                 Text(selectedToolsSummary)
                                     .foregroundStyle(.secondary)
@@ -92,14 +94,15 @@ struct EditSparkModelSheet: View {
                         }
 
                         NavigationLink {
+                            
                             MultiSelectOptionsView(
-                                title: "关联小任务",
-                                options: viewModel.snapshot.smallTasks.map { ($0.code, "\($0.name)（\($0.code)）") },
+                                title: L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "关联小任务选择页标题"),
+                                options: viewModel.effectiveSmallTasks.map { ($0.code, String(format: L10n.text("ai_settings.models.agent.related_tasks.option_format", fallback: "%@ (%@)", comment: "关联小任务选项格式"), locale: Locale.current, $0.name, $0.code)) },
                                 selectedValues: $selectedTaskCodes
                             )
                         } label: {
                             HStack {
-                                Text("关联小任务")
+                                Text(L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "关联小任务"))
                                 Spacer()
                                 Text("\(selectedTaskCodes.count)")
                                     .foregroundStyle(.secondary)
@@ -107,23 +110,23 @@ struct EditSparkModelSheet: View {
                         }
                     }
 
-                    Section(L10n.text("ai_settings.models.edit.section.capabilities")) {
-                        Toggle(L10n.text("ai_settings.models.online.toggle.supports_text"), isOn: $supportsText)
-                        Toggle(L10n.text("ai_settings.field.supports_multimodal"), isOn: $supportsMultimodal)
-                        Toggle(L10n.text("ai_settings.field.supports_reasoning"), isOn: $supportsReasoning)
-                        Toggle(L10n.text("ai_settings.field.reasoning_controllable"), isOn: $reasoningControllable)
-                        Toggle(L10n.text("ai_settings.field.supports_tool_use"), isOn: $supportsToolUse)
-                        Toggle(L10n.text("ai_settings.models.online.toggle.image_gen"), isOn: $supportsImageGen)
+                    Section(L10n.text("ai_settings.models.edit.section.capabilities", comment: "能力")) {
+                        Toggle(L10n.text("ai_settings.models.online.toggle.supports_text", comment: "支持文本"), isOn: $supportsText)
+                        Toggle(L10n.text("ai_settings.field.supports_multimodal", comment: "支持多模态"), isOn: $supportsMultimodal)
+                        Toggle(L10n.text("ai_settings.field.supports_reasoning", comment: "支持推理"), isOn: $supportsReasoning)
+                        Toggle(L10n.text("ai_settings.field.reasoning_controllable", comment: "思考可控"), isOn: $reasoningControllable)
+                        Toggle(L10n.text("ai_settings.field.supports_tool_use", comment: "支持工具调用"), isOn: $supportsToolUse)
+                        Toggle(L10n.text("ai_settings.models.online.toggle.image_gen", comment: "生图"), isOn: $supportsImageGen)
                     }
                 }
             }
-            .navigationTitle(L10n.text("ai_settings.models.edit.nav_title"))
+            .navigationTitle(L10n.text("ai_settings.models.edit.nav_title", comment: "编辑模型"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.text("common.cancel")) { dismiss() }
+                    Button(L10n.text("common.cancel", comment: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("common.save")) { save() }
+                    Button(L10n.text("common.save", comment: "保存")) { save() }
                 }
             }
             .sheet(isPresented: $showIconPicker) {
@@ -179,7 +182,7 @@ struct EditSparkModelSheet: View {
     private var selectedToolsSummary: String {
         let total = SparkToolName.all.count
         if selectedToolNames.count == total {
-            return L10n.text("common.all")
+            return L10n.text("common.all", comment: "全部")
         }
         return "\(selectedToolNames.count)/\(total)"
     }
