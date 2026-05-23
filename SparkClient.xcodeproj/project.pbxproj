@@ -302,6 +302,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SparkClient/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于发现附近设备并面对面分享成员绑定。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "用于在你主动操作时写入健康记录。";
@@ -344,6 +345,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SparkClient/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于发现附近设备并面对面分享成员绑定。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "用于在你主动操作时写入健康记录。";
@@ -448,6 +450,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SparkClient/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于发现附近设备并面对面分享成员绑定。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "用于在你主动操作时写入健康记录。";

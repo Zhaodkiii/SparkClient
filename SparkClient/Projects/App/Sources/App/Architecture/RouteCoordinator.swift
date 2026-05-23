@@ -142,6 +142,13 @@ private extension AppRoute {
             }
             return
         }
+        if target.contains("member-share") {
+            if let ticket = MemberShareDeepLinkParser.ticket(from: url) {
+                PendingMemberShareTicketStore.save(ticket)
+            }
+            self = .home
+            return
+        }
         if target.contains("home") {
             self = .home
             return

@@ -1,8 +1,19 @@
 import Foundation
 
+/// 当前用户对成员的绑定能力与元数据。
+struct MemberBindingInfo: Codable, Equatable, Sendable {
+    var bindingID: Int
+    var role: String
+    var sharedUserCount: Int
+    var canShare: Bool
+    var canEdit: Bool
+    var canDelete: Bool
+    var canUnbind: Bool
+}
+
 /// 家庭档案中的成员（就诊人/家属）：病例、检查、处方等医疗实体通过 `memberID` 与之关联。
 ///
-/// `relationship` 描述与账号关系（如 `self` / `本人`），供 UI 展示与排序等使用。
+/// `relationship` 为当前用户视角下的绑定关系（如 `self` / `father`），供 UI 展示与排序等使用。
 struct Member: Identifiable, Codable, Equatable, Sendable {
     /// 服务端自增主键。
     let id: Int
@@ -21,6 +32,8 @@ struct Member: Identifiable, Codable, Equatable, Sendable {
     var isPrimary: Bool
     /// 最近修改时间，用于列表排序与冲突处理参考。
     var updatedAt: Date
+    /// 当前用户与该成员的绑定信息；旧接口未返回时可为 `nil`。
+    var binding: MemberBindingInfo?
 
     /// - Parameters:
     ///   - id: 服务端成员 ID。
@@ -47,7 +60,8 @@ struct Member: Identifiable, Codable, Equatable, Sendable {
         notes: String = "",
         avatarUrl: String = "",
         isPrimary: Bool = false,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        binding: MemberBindingInfo? = nil
     ) {
         self.id = id
         self.name = name
@@ -61,5 +75,18 @@ struct Member: Identifiable, Codable, Equatable, Sendable {
         self.avatarUrl = avatarUrl
         self.isPrimary = isPrimary
         self.updatedAt = updatedAt
+        self.binding = binding
+    }
+
+    var effectiveBinding: MemberBindingInfo {
+        binding ?? MemberBindingInfo(
+            bindingID: 0,
+            role: "owner",
+            sharedUserCount: 1,
+            canShare: true,
+            canEdit: true,
+            canDelete: true,
+            canUnbind: true
+        )
     }
 }

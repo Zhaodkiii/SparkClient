@@ -579,7 +579,11 @@ struct MedicalCaseTimelineExaminationDetailHost: View {
         )
 
         do {
-            let rows = try await medicalQueryAPI.listMedExamDetails(memberID: memberID, businessID: reportID)
+            let rows = try await medicalQueryAPI.listMedExamDetails(
+                memberID: memberID,
+                businessType: report.medExamDetailBusinessType,
+                businessID: reportID
+            )
             let filtered = Self.filterMedExamRows(rows)
             var merged = report
             merged.medExamDetails = filtered

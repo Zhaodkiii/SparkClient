@@ -12,8 +12,14 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var isLoadingMedical = false
     @Published private(set) var errorMessage: String?
     @Published var selectedMemberID: Int?
+    @Published var memberDetailID: Int?
+    @Published var shareMember: Member?
+    @Published var addMemberSheet: AddMemberSheet?
 
     // MARK: Dependencies
+
+    let shareMemberUseCase: ShareMemberUseCase
+    let manageMemberBindingUseCase: ManageMemberBindingUseCase
 
     private let sessionStore: AppSessionStore
     private let loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase
@@ -33,12 +39,16 @@ final class HomeViewModel: ObservableObject {
         sessionStore: AppSessionStore,
         loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase,
         memberContextStore: MemberContextStore,
+        shareMemberUseCase: ShareMemberUseCase,
+        manageMemberBindingUseCase: ManageMemberBindingUseCase,
         notificationClient: any NotificationClient,
         logger: Logger
     ) {
         self.sessionStore = sessionStore
         self.loadHomeMedicalOverviewUseCase = loadHomeMedicalOverviewUseCase
         self.memberContextStore = memberContextStore
+        self.shareMemberUseCase = shareMemberUseCase
+        self.manageMemberBindingUseCase = manageMemberBindingUseCase
         self.notificationClient = notificationClient
         self.logger = logger
         memberContextStore.membersDidChange
@@ -112,6 +122,31 @@ final class HomeViewModel: ObservableObject {
 
     func refresh() async {
         await load(syncRemote: true)
+    }
+
+    func consumePendingShareTicketIfNeeded() {
+        guard addMemberSheet == nil else { return }
+        guard let ticket = PendingMemberShareTicketStore.consume() else { return }
+        openAddMemberForShareBinding(ticket: ticket)
+    }
+
+    func openShareTicket(_ raw: String) {
+        guard let ticket = Self.parseShareTicket(from: raw) else { return }
+        openAddMemberForShareBinding(ticket: ticket)
+    }
+
+    /// 附近设备 / 深链收到票据后，打开新增成员页并由页内解析、进入绑定模式。
+    func openAddMemberForShareBinding(ticket: String) {
+        addMemberSheet = .create(pendingShareTicket: ticket)
+    }
+
+    private static func parseShareTicket(from raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+        if let url = URL(string: trimmed), let ticket = MemberShareDeepLinkParser.ticket(from: url) {
+            return ticket
+        }
+        return trimmed
     }
 
     // MARK: - Member selection

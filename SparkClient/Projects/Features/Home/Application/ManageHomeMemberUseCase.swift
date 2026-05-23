@@ -45,6 +45,9 @@ struct ManageHomeMemberUseCase: Sendable {
             isPrimary: member.isPrimary
         )
         _ = try await memberAPI.updateMember(remoteID: member.id, payload: payload)
+        if let bindingID = member.binding?.bindingID, bindingID > 0 {
+            _ = try await memberAPI.updateBinding(bindingID: bindingID, relationship: relationship)
+        }
     }
 
     func delete(member: Member) async throws {

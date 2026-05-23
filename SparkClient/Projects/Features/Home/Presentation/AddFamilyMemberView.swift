@@ -2,8 +2,6 @@
 //  AddFamilyMemberView.swift
 //  SparkClient
 //
-//  Created by 話 on 2026/4/9.
-//
 
 import SwiftUI
 
@@ -11,6 +9,7 @@ struct AddFamilyMemberView: View {
     enum Mode: Identifiable {
         case create
         case edit(Member)
+        case bind(ticket: String, resolved: SparkMedicalMemberAPI.ShareResolveResponse)
 
         var id: String {
             switch self {
@@ -18,14 +17,20 @@ struct AddFamilyMemberView: View {
                 return "create"
             case .edit(let member):
                 return "edit-\(member.id)"
+            case .bind(let ticket, _):
+                return "bind-\(ticket.hashValue)"
             }
         }
     }
 
     @Environment(\.dismiss) private var dismiss
 
-    let mode: Mode
     @ObservedObject var store: MemberContextStore
+    let shareUseCase: ShareMemberUseCase?
+    let initialPendingTicket: String?
+    let onBindingAccepted: (() -> Void)?
+
+    @StateObject private var bindViewModel: AddFamilyMemberViewModel
 
     @State private var name: String
     @State private var relationshipCode: String
@@ -35,12 +40,27 @@ struct AddFamilyMemberView: View {
     @State private var showDatePicker = false
     private let datePickerSheetHeight: CGFloat = 300
 
-    init(mode: Mode, store: MemberContextStore) {
-        self.mode = mode
+    init(
+        mode: Mode,
+        store: MemberContextStore,
+        shareUseCase: ShareMemberUseCase? = nil,
+        initialPendingTicket: String? = nil,
+        onBindingAccepted: (() -> Void)? = nil
+    ) {
         self.store = store
+        self.shareUseCase = shareUseCase
+        self.initialPendingTicket = initialPendingTicket
+        self.onBindingAccepted = onBindingAccepted
+        _bindViewModel = StateObject(
+            wrappedValue: AddFamilyMemberViewModel(
+                mode: mode,
+                shareUseCase: shareUseCase,
+                initialPendingTicket: initialPendingTicket
+            )
+        )
 
         switch mode {
-        case .create:
+        case .create, .bind:
             _name = State(initialValue: "")
             _relationshipCode = State(initialValue: MemberRelationshipCatalog.defaultCode)
             _gender = State(initialValue: MemberRelationshipCatalog.defaultGender)
@@ -53,21 +73,25 @@ struct AddFamilyMemberView: View {
         }
     }
 
-    private var title: String {
-        switch mode {
+    private var navigationTitle: String {
+        switch bindViewModel.mode {
         case .create:
-            return L10n.text("home.members.create")
+            return L10n.text("home.members.add.title")
         case .edit:
             return L10n.text("home.members.edit")
+        case .bind:
+            return L10n.text("home.members.bind.title")
         }
     }
 
     private var actionTitle: String {
-        switch mode {
+        switch bindViewModel.mode {
         case .create:
-            return L10n.text("common.save")
+            return L10n.text("home.members.add.save")
         case .edit:
             return L10n.text("home.members.update")
+        case .bind:
+            return L10n.text("home.members.add.save")
         }
     }
 
@@ -78,53 +102,42 @@ struct AddFamilyMemberView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                relationshipSection
-                nameSection
-                genderSection
-                birthDateSection
-
-                Text(L10n.text("home.members.hint"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .multilineTextAlignment(.center)
-
-                Button {
-                    Task {
-                        await save()
-                    }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if isSaving {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text(actionTitle)
-                                .font(.headline.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 14)
-                    .background(canSave ? Color.accentColor : Color(uiColor: .systemGray3))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                switch bindViewModel.mode {
+                case .bind(_, let resolved):
+                    bindMemberContent(resolved)
+                case .create, .edit:
+                    createOrEditContent
                 }
-                .buttonStyle(.plain)
-                .disabled(!canSave || isSaving)
-                .padding(.top, 4)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle(title)
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(L10n.text("common.ok")) {
                     dismiss()
                 }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if bindViewModel.canShowScanner {
+                    Button {
+                        bindViewModel.showMemberScanner = true
+                        triggerHaptic(style: .light)
+                    } label: {
+                        Image(systemName: "qrcode.viewfinder")
+                    }
+                    .accessibilityLabel(L10n.text("home.members.add.scan"))
+                }
+            }
+        }
+        .overlay {
+            if bindViewModel.isResolvingShare {
+                ProgressView(L10n.text("home.members.share.scan.resolving"))
+                    .padding(20)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
         .sheet(isPresented: $showDatePicker) {
@@ -139,7 +152,185 @@ struct AddFamilyMemberView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $bindViewModel.showMemberScanner) {
+            QRCodeScannerView { ticket in
+                bindViewModel.presentShareAcceptAfterScanner(ticket: ticket)
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: bindViewModel.mode.id)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: relationshipCode)
+        .task {
+            if case .create = bindViewModel.mode {
+                await bindViewModel.consumeInitialPendingTicketIfNeeded()
+            }
+        }
+        .alert(
+            L10n.text("home.members.bind.title"),
+            isPresented: shareAlertPresented
+        ) {
+            Button(L10n.text("common.ok"), role: .cancel) {
+                bindViewModel.shareAlertMessage = nil
+            }
+        } message: {
+            if let message = bindViewModel.shareAlertMessage {
+                Text(message)
+            }
+        }
+    }
+
+    private var shareAlertPresented: Binding<Bool> {
+        Binding(
+            get: { bindViewModel.shareAlertMessage != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    bindViewModel.shareAlertMessage = nil
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var createOrEditContent: some View {
+        if let message = bindViewModel.shareErrorMessage {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+
+        relationshipSection
+        nameSection
+        genderSection
+        birthDateSection
+
+        Text(L10n.text("home.members.hint"))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .multilineTextAlignment(.center)
+
+        Button {
+            Task {
+                await save()
+            }
+        } label: {
+            HStack {
+                Spacer()
+                if isSaving {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text(actionTitle)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 14)
+            .background(canSave ? Color.accentColor : Color(uiColor: .systemGray3))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSave || isSaving)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private func bindMemberContent(_ resolved: SparkMedicalMemberAPI.ShareResolveResponse) -> some View {
+        Text(
+            String(
+                format: L10n.text("home.members.bind.inviter"),
+                resolved.inviter.displayName
+            )
+        )
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text(resolved.member.name)
+                .font(.title2.weight(.bold))
+            Text(bindMemberSummary(resolved.member))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(uiColor: .secondarySystemBackground)))
+
+        Text(L10n.text("home.members.bind.summary"))
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+
+        MemberRelationshipPicker(
+            relationshipCode: $bindViewModel.relationshipCode,
+            customRelationship: $bindViewModel.customRelationship
+        )
+
+        if resolved.alreadyBound {
+            Text(L10n.text("home.members.bind.already_bound"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+
+        if let message = bindViewModel.shareErrorMessage {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.red)
+        }
+
+        Button {
+            Task {
+                if await bindViewModel.acceptBinding() != nil {
+                    onBindingAccepted?()
+                    dismiss()
+                }
+            }
+        } label: {
+            HStack {
+                Spacer()
+                if bindViewModel.isAccepting {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text(L10n.text("home.members.bind.confirm"))
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 14)
+            .background(bindViewModel.canConfirmBinding ? Color.accentColor : Color(uiColor: .systemGray3))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!bindViewModel.canConfirmBinding || bindViewModel.isAccepting)
+
+        Button {
+            bindViewModel.cancelBindMode()
+        } label: {
+            Text(L10n.text("home.members.bind.cancel"))
+                .font(.body.weight(.medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func bindMemberSummary(_ member: SparkMedicalMemberAPI.ShareResolveResponse.MemberSummary) -> String {
+        let genderText: String
+        switch member.gender.lowercased() {
+        case "male":
+            genderText = L10n.text("home.members.gender.male")
+        case "female":
+            genderText = L10n.text("home.members.gender.female")
+        default:
+            genderText = L10n.text("home.members.gender.unknown")
+        }
+        if let birthDate = member.birthDate {
+            return "\(genderText) · \(birthDate.formatted(date: .long, time: .omitted))"
+        }
+        return genderText
     }
 
     private var legacyBirthDatePickerSheetContent: some View {
@@ -319,7 +510,7 @@ struct AddFamilyMemberView: View {
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        switch mode {
+        switch bindViewModel.mode {
         case .create:
             let didSave = await store.addMember(
                 name: trimmedName,
@@ -337,6 +528,8 @@ struct AddFamilyMemberView: View {
                 birthDate: birthDate
             )
             guard didSave else { return }
+        case .bind:
+            return
         }
         dismiss()
     }
@@ -347,6 +540,7 @@ struct AddFamilyMemberView: View {
 #endif
     }
 }
+
 #Preview {
     AddFamilyMemberView(mode: .create, store: HomeViewModel.preview.memberContextStoreForBinding)
 }

@@ -51,7 +51,7 @@ struct MemberProfileBindingMenu<Content: View>: View {
             Button {
                 showAddMemberSheet = true
             } label: {
-                Label(L10n.text("home.members.create"), systemImage: "plus.circle")
+                Label(L10n.text("home.members.add.title"), systemImage: "plus.circle")
             }
         } label: {
             label()

@@ -594,6 +594,8 @@ final class AppContainer {
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
             memberContextStore: memberContextStore,
+            shareMemberUseCase: ShareMemberUseCase(memberAPI: backend.medicalMembers),
+            manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: backend.medicalMembers),
             notificationClient: notificationClient,
             logger: logger
         )
@@ -680,6 +682,9 @@ final class AppContainer {
             homeDependencies: HomeFeatureDependencies(
                 medicalWorkflowAPI: backend.medicalWorkflow,
                 medicalQueryAPI: backend.medicalQuery,
+                medicalMemberAPI: backend.medicalMembers,
+                shareMemberUseCase: ShareMemberUseCase(memberAPI: backend.medicalMembers),
+                manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: backend.medicalMembers),
                 fileTransferService: fileTransferService,
                 taskManager: taskManager,
                 logger: logger,

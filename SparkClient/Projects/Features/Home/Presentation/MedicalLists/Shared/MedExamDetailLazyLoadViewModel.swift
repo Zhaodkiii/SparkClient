@@ -7,14 +7,18 @@ protocol MedExamDetailLoadableReport: Identifiable, Equatable {
     var member: Int { get }
     var medExamDetails: [SparkMedicalSyncAPI.RemoteMedExamDetail]? { get set }
     static var acceptedBusinessTypes: [String] { get }
+    /// 请求 `med-exam-details` 时使用的 `business_type` 查询参数。
+    var medExamDetailBusinessType: String { get }
 }
 
 extension SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments: MedExamDetailLoadableReport {
     static var acceptedBusinessTypes: [String] { ["health_exam_report", "health_exam"] }
+    var medExamDetailBusinessType: String { "health_exam_report" }
 }
 
 extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments: MedExamDetailLoadableReport {
     static var acceptedBusinessTypes: [String] { ["examination_report", "examination"] }
+    var medExamDetailBusinessType: String { "examination_report" }
 }
 
 /// 通用明细懒加载 ViewModel：
@@ -58,7 +62,11 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
         logger.info("明细加载开始 scene=\(scene) reportID=\(reportID) memberID=\(memberID)", module: logModule)
 
         do {
-            let rows = try await medicalQueryAPI.listMedExamDetails(memberID: memberID, businessID: reportID)
+            let rows = try await medicalQueryAPI.listMedExamDetails(
+                memberID: memberID,
+                businessType: reports[index].medExamDetailBusinessType,
+                businessID: reportID
+            )
             let filtered = rows
                 .filter { row in
                     let normalized = row.businessType.lowercased()

@@ -34,6 +34,9 @@ struct MedicalFeatureDependencies {
 struct HomeFeatureDependencies {
     let medicalWorkflowAPI: SparkMedicalWorkflowAPI
     let medicalQueryAPI: SparkMedicalQueryAPI
+    let medicalMemberAPI: SparkMedicalMemberAPI
+    let shareMemberUseCase: ShareMemberUseCase
+    let manageMemberBindingUseCase: ManageMemberBindingUseCase
     let fileTransferService: FileTransferService
     let taskManager: TaskManager
     let logger: Logger
@@ -53,6 +56,9 @@ extension HomeFeatureDependencies {
         return HomeFeatureDependencies(
             medicalWorkflowAPI: container.backend.medicalWorkflow,
             medicalQueryAPI: container.backend.medicalQuery,
+            medicalMemberAPI: container.backend.medicalMembers,
+            shareMemberUseCase: ShareMemberUseCase(memberAPI: container.backend.medicalMembers),
+            manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: container.backend.medicalMembers),
             fileTransferService: container.fileTransferService,
             taskManager: container.taskManager,
             logger: container.logger,

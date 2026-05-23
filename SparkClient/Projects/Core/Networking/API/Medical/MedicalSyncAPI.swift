@@ -13,11 +13,12 @@ enum SparkMedicalSyncAPI {
     /// 家庭成员或健康档案成员；是多数医疗实体的外键 `member` 所指对象。
     struct RemoteMember: Codable, Sendable, Equatable {
         var id: Int
+        var bindingId: Int?
         var name: String
         /// 性别：通常与后端枚举字符串一致。
         var gender: String
-        /// 与当前用户的关系（本人、父母等）。
-        var relationship: String
+        /// 与当前用户的关系（本人、父母等）；`complete-data` 等旧路径可能缺失，解码时回退为 `self`。
+        var relationship: String?
         /// 出生日期；仅日期语义，解码由 `MedicalDateCoding` 处理。
         var birthDate: Date?
         var bloodType: String
@@ -28,9 +29,26 @@ enum SparkMedicalSyncAPI {
         var avatarUrl: String
         /// 是否为当前账号下的主档案。
         var isPrimary: Bool
+        var bindingRole: String?
+        var sharedUserCount: Int?
+        var canShare: Bool?
+        var canEdit: Bool?
+        var canDelete: Bool?
+        var canUnbind: Bool?
         var updatedAt: Date
 
-
+        var bindingInfo: MemberBindingInfo? {
+            guard let bindingId else { return nil }
+            return MemberBindingInfo(
+                bindingID: bindingId,
+                role: bindingRole ?? "owner",
+                sharedUserCount: sharedUserCount ?? 1,
+                canShare: canShare ?? false,
+                canEdit: canEdit ?? false,
+                canDelete: canDelete ?? false,
+                canUnbind: canUnbind ?? true
+            )
+        }
     }
 
     /// 医疗案件/一次就诊聚合；`symptoms`、`visits` 等子表通过 `medical_case` 关联。

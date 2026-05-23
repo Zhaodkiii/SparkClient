@@ -6,7 +6,7 @@ extension SparkMedicalMemberAPI.RemoteMember {
             id: id,
             name: name,
             gender: gender,
-            relationship: relationship,
+            relationship: relationship ?? "self",
             birthDate: birthDate,
             bloodType: bloodType,
             allergies: allergies,
@@ -14,13 +14,14 @@ extension SparkMedicalMemberAPI.RemoteMember {
             notes: notes,
             avatarUrl: avatarUrl,
             isPrimary: isPrimary,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            binding: bindingInfo
         )
     }
 }
 
-extension SparkMedicalSyncAPI.RemoteMember {
-    var domainModel: Member {
+extension SparkMedicalMemberAPI.MemberDetailResponse {
+    var domainMember: Member {
         Member(
             id: id,
             name: name,
@@ -33,7 +34,36 @@ extension SparkMedicalSyncAPI.RemoteMember {
             notes: notes,
             avatarUrl: avatarUrl,
             isPrimary: isPrimary,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            binding: MemberBindingInfo(
+                bindingID: bindingId,
+                role: bindingRole,
+                sharedUserCount: sharedUserCount,
+                canShare: canShare,
+                canEdit: canEdit,
+                canDelete: canDelete,
+                canUnbind: canUnbind
+            )
+        )
+    }
+}
+
+extension SparkMedicalSyncAPI.RemoteMember {
+    var domainModel: Member {
+        Member(
+            id: id,
+            name: name,
+            gender: gender,
+            relationship: relationship ?? "self",
+            birthDate: birthDate,
+            bloodType: bloodType,
+            allergies: allergies,
+            chronicConditions: chronicConditions,
+            notes: notes,
+            avatarUrl: avatarUrl,
+            isPrimary: isPrimary,
+            updatedAt: updatedAt,
+            binding: bindingInfo
         )
     }
 }

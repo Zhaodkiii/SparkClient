@@ -19,12 +19,13 @@ struct SparkMedicalMemberAPI {
     struct RemoteMember: Decodable, Sendable, Equatable {
         /// 服务端主键。
         let id: Int
+        let bindingId: Int?
         /// 显示姓名。
         let name: String
         /// 性别编码或展示文案（与后端约定）。
         let gender: String
-        /// 与当前用户的关系（如本人、父母、子女）。
-        let relationship: String
+        /// 与当前用户的关系（如本人、父母、子女）；部分嵌套响应可能缺失。
+        let relationship: String?
         /// 出生日期；缺失时为 `nil`。
         let birthDate: Date?
         /// 血型。
@@ -39,9 +40,27 @@ struct SparkMedicalMemberAPI {
         let avatarUrl: String
         /// 是否为当前账号下的主成员（主档案）。
         let isPrimary: Bool
+        let bindingRole: String?
+        let sharedUserCount: Int?
+        let canShare: Bool?
+        let canEdit: Bool?
+        let canDelete: Bool?
+        let canUnbind: Bool?
         /// 服务端最后更新时间，用于增量同步或冲突判断。
         let updatedAt: Date
 
+        var bindingInfo: MemberBindingInfo? {
+            guard let bindingId else { return nil }
+            return MemberBindingInfo(
+                bindingID: bindingId,
+                role: bindingRole ?? "owner",
+                sharedUserCount: sharedUserCount ?? 1,
+                canShare: canShare ?? false,
+                canEdit: canEdit ?? false,
+                canDelete: canDelete ?? false,
+                canUnbind: canUnbind ?? true
+            )
+        }
     }
 
     /// 创建或更新成员时的请求体（PUT/POST 共用形状）。

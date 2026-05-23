@@ -473,15 +473,32 @@ extension SparkNetworkError: LocalizedError {
 enum AuthSessionInvalidation {
     static let notificationName = Notification.Name("Spark.Auth.SessionInvalidatedByServer")
 
-    static func shouldInvalidate(statusCode: Int, backendCode: Int?) -> Bool {
-        if statusCode == 401 || statusCode == 403 {
+    static func shouldInvalidate(statusCode: Int, backendCode: Int?, message: String) -> Bool {
+        if statusCode == 403 {
+            return false
+        }
+        if statusCode == 401 {
+            return true
+        }
+        if isAuthFailureMessage(message) {
             return true
         }
         guard let backendCode else { return false }
-        if (40100...40199).contains(backendCode) || (40300...40399).contains(backendCode) {
-            return true
-        }
-        return false
+        return (40100...40199).contains(backendCode)
+    }
+
+    private static func isAuthFailureMessage(_ message: String) -> Bool {
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized.isEmpty == false else { return false }
+        let authFailureTokens = [
+            "token_not_valid",
+            "authentication_failed",
+            "not_authenticated",
+            "invalid_token",
+            "token_expired",
+            "given token not valid",
+        ]
+        return authFailureTokens.contains { normalized == $0 || normalized.contains($0) }
     }
 
     static func postIfNeeded(
@@ -490,7 +507,7 @@ enum AuthSessionInvalidation {
         message: String,
         source: String
     ) {
-        guard shouldInvalidate(statusCode: statusCode, backendCode: backendCode) else { return }
+        guard shouldInvalidate(statusCode: statusCode, backendCode: backendCode, message: message) else { return }
         NotificationCenter.default.post(
             name: notificationName,
             object: nil,

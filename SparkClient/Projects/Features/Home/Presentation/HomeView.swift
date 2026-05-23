@@ -11,11 +11,13 @@ struct HomeView: View {
 
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
-    @State private var showDeleteConfirmation = false
-    @State private var addMemberMode: AddFamilyMemberView.Mode?
     @State private var showTaskCenter = false
 
     var body: some View {
+        homeContent
+    }
+
+    private var homeContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 headerCard
@@ -35,28 +37,62 @@ struct HomeView: View {
                 .padding(.vertical, 8)
                 .background(.regularMaterial)
         }
-        .sheet(item: $addMemberMode) { mode in
+        .sheet(item: $viewModel.addMemberSheet) { sheet in
             CompatibleNavigationContainer {
-                AddFamilyMemberView(mode: mode, store: viewModel.memberContextStoreForBinding)
-            }
-        }
-        .alert(
-            L10n.text("home.members.delete.confirm_title"),
-            isPresented: $showDeleteConfirmation,
-            presenting: memberActionTarget
-        ) { target in
-            Button(L10n.text("common.ok"), role: .cancel) {
-                memberActionTarget = nil
-            }
-            Button(L10n.text("home.members.delete"), role: .destructive) {
-                Task {
-                    await viewModel.deleteMember(target)
-                    memberActionTarget = nil
-                    triggerNotificationHaptic(.success)
+                switch sheet {
+                case .create(let pendingTicket):
+                    AddFamilyMemberView(
+                        mode: .create,
+                        store: viewModel.memberContextStoreForBinding,
+                        shareUseCase: dependencies.shareMemberUseCase,
+                        initialPendingTicket: pendingTicket,
+                        onBindingAccepted: {
+                            Task { await viewModel.refresh() }
+                        }
+                    )
+                case .edit(let member):
+                    AddFamilyMemberView(mode: .edit(member), store: viewModel.memberContextStoreForBinding)
                 }
             }
-        } message: { target in
-            Text(String(format: L10n.text("home.members.delete.confirm_message"), target.name))
+        }
+        .sheet(isPresented: memberDetailPresented) {
+            if let memberID = viewModel.memberDetailID {
+                CompatibleNavigationContainer {
+                    MemberDetailView(
+                        memberID: memberID,
+                        bindingUseCase: dependencies.manageMemberBindingUseCase,
+                        memberContextStore: viewModel.memberContextStoreForBinding,
+                        memberAPI: dependencies.medicalMemberAPI,
+                        shareUseCase: dependencies.shareMemberUseCase,
+                        onShare: {
+                            if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
+                                viewModel.memberDetailID = nil
+                                viewModel.shareMember = member
+                            }
+                        },
+                        onEdit: {
+                            if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
+                                viewModel.memberDetailID = nil
+                                viewModel.addMemberSheet = .edit(member)
+                            }
+                        },
+                        onDeleted: {
+                            viewModel.memberDetailID = nil
+                            Task { await viewModel.refresh() }
+                        }
+                    )
+                }
+            }
+        }
+        .sheet(item: $viewModel.shareMember) { member in
+            ShareSheet(
+                member: member,
+                shareUseCase: dependencies.shareMemberUseCase,
+                onBindTicketReceived: { ticket in
+                    viewModel.shareMember = nil
+                    viewModel.openAddMemberForShareBinding(ticket: ticket)
+                }
+            )
         }
         .refreshable {
             await viewModel.refresh()
@@ -64,6 +100,7 @@ struct HomeView: View {
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
+            viewModel.consumePendingShareTicketIfNeeded()
             await viewModel.loadInitialIfNeeded(syncRemote: true)
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
@@ -88,7 +125,8 @@ struct HomeView: View {
     }
 
     private var memberSelectorBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(viewModel.dashboard?.members ?? []) { member in
                     MemberSelectorChip(
@@ -99,19 +137,19 @@ struct HomeView: View {
                             viewModel.selectMember(member.id)
                             triggerHaptic(style: .light)
                         },
-                        onEdit: {
-                            addMemberMode = .edit(member)
+                        onViewDetail: {
+                            viewModel.memberDetailID = member.id
                             triggerHaptic(style: .light)
                         },
-                        onDelete: {
-                            memberActionTarget = member
-                            showDeleteConfirmation = true
+                        onShare: {
+                            viewModel.shareMember = member
+                            triggerHaptic(style: .light)
                         }
                     )
                 }
 
                 Button {
-                    addMemberMode = .create
+                    viewModel.addMemberSheet = .create()
                     triggerHaptic(style: .medium)
                 } label: {
                     Image(systemName: "plus")
@@ -128,9 +166,10 @@ struct HomeView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(L10n.text("home.members.create"))
+                .accessibilityLabel(L10n.text("home.members.add.title"))
             }
             .padding(.vertical, 4)
+            }
         }
     }
 
@@ -293,6 +332,17 @@ struct HomeView: View {
         )
     }
 
+    private var memberDetailPresented: Binding<Bool> {
+        Binding(
+            get: { viewModel.memberDetailID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    viewModel.memberDetailID = nil
+                }
+            }
+        )
+    }
+
     private func memberBadgeText(for member: Member) -> String {
         let display = MemberRelationshipCatalog.displayTitle(for: member.relationship)
         guard let first = display.first else { return "·" }
@@ -357,8 +407,8 @@ private struct MemberSelectorChip: View {
     let badgeText: String
     let isSelected: Bool
     let onSelect: () -> Void
-    let onEdit: () -> Void
-    let onDelete: () -> Void
+    let onViewDetail: () -> Void
+    let onShare: () -> Void
 
     @State private var showActionMenu = false
 
@@ -386,7 +436,7 @@ private struct MemberSelectorChip: View {
                     .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
 
                 if isSelected {
-                    Image(systemName: "square.and.pencil")
+                    Image(systemName: "ellipsis.circle")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.95))
                 }
@@ -410,11 +460,13 @@ private struct MemberSelectorChip: View {
         }
         .buttonStyle(.plain)
         .confirmationDialog(L10n.text("home.members.action_title"), isPresented: $showActionMenu, titleVisibility: .visible) {
-            Button(L10n.text("home.members.edit"), systemImage: "square.and.pencil") {
-                onEdit()
+            Button(L10n.text("home.members.action.view_detail"), systemImage: "person.text.rectangle") {
+                onViewDetail()
             }
-            Button(L10n.text("home.members.delete"), systemImage: "trash", role: .destructive) {
-                onDelete()
+            if member.effectiveBinding.canShare {
+                Button(L10n.text("home.members.action.share"), systemImage: "square.and.arrow.up") {
+                    onShare()
+                }
             }
             Button(L10n.text("common.cancel"), role: .cancel) {}
         }
@@ -516,6 +568,8 @@ extension HomeViewModel {
                 logger: previewLogger
             ),
             memberContextStore: memberContextStore,
+            shareMemberUseCase: ShareMemberUseCase(memberAPI: previewBackend.medicalMembers),
+            manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: previewBackend.medicalMembers),
             notificationClient: PreviewNotificationClient(),
             logger: previewLogger
         )
