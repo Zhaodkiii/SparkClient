@@ -57,6 +57,7 @@ final class AppBootstrapper {
             bootstrappedAccounts.insert(session.accountID)
             logger.info("用户档案 \(session.accountID) 引导已完成", module: .general)
         } catch {
+            logger.warning("用户档案引导已结束（降级）：\(error)", module: .general)
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
         await registerDevice()
