@@ -579,6 +579,7 @@ private struct MemberSelectorChip: View {
 }
 #endif
 
+#if DEBUG
 extension HomeViewModel {
     static var preview: HomeViewModel {
         let now = Date()
@@ -717,3 +718,4 @@ private struct PreviewAuthRepository: AuthRepository {
 
     func signOut() async throws {}
 }
+#endif

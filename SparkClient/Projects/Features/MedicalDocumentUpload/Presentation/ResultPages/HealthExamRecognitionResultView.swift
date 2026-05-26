@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 体检报告识别结果页（模块化：ResultPages/HealthExamRecognitionResult）
 struct HealthExamRecognitionResultView: View {
-    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+    private let viewModel: MedicalDocumentUploadViewModel?
     private let detailContent: HealthExamRecognitionResultContentView?
     private let memberContextStore: MemberContextStore?
     private let title: String
@@ -39,7 +39,7 @@ struct HealthExamRecognitionResultView: View {
         notificationClient: any NotificationClient,
         onDeleted: ((Int) -> Void)? = nil
     ) {
-        self.viewModel = .preview()
+        self.viewModel = nil
         self.detailContent = HealthExamRecognitionResultContentView(
             item: item,
             fileTransferService: fileTransferService,
@@ -80,7 +80,7 @@ struct HealthExamRecognitionResultView: View {
     private var content: some View {
         if let detailContent {
             detailContent
-        } else if viewModel.typedOutput != nil, let memberContextStore {
+        } else if let viewModel, viewModel.typedOutput != nil, let memberContextStore {
             HealthExamRecognitionResultContentView(
                 viewModel: viewModel,
                 memberContextStore: memberContextStore
@@ -140,6 +140,7 @@ struct HealthExamRecognitionResultView: View {
     }
 }
 
+#if DEBUG
 #Preview("Health exam result - Light") {
     CompatibleNavigationContainer {
         HealthExamRecognitionResultView(
@@ -244,3 +245,4 @@ private extension MedicalDocumentTypedExtractionOutput {
         )
     }
 }
+#endif

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HealthExamRecognitionResultContentView: View {
-    @ObservedObject private var viewModel: MedicalDocumentUploadViewModel
+    private let viewModel: MedicalDocumentUploadViewModel?
     @ObservedObject var memberContextStore: MemberContextStore
     let attachmentSource: HealthExamResultAttachmentSource
     let mode: HealthExamResultMode
@@ -45,7 +45,7 @@ struct HealthExamRecognitionResultContentView: View {
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore
     ) {
-        self.viewModel = .preview()
+        self.viewModel = nil
         self.memberContextStore = memberContextStore
         self.attachmentSource = .remote(item.attachments ?? [], fileTransferService)
         self.mode = .detail
@@ -53,8 +53,8 @@ struct HealthExamRecognitionResultContentView: View {
         _draft = State(initialValue: HealthExamRecognitionDraft(remoteReport: item))
     }
 
-    private var isSaving: Bool { viewModel.isSaving }
-    private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var isSaving: Bool { viewModel?.isSaving ?? false }
+    private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel?.saveReceipt }
 
     private var indexedItems: [HealthExamRiskDisplayItem] {
         draft.items.enumerated().map { pair in
@@ -114,7 +114,7 @@ struct HealthExamRecognitionResultContentView: View {
                     draft: draft,
                     onSelectMember: mode.isEditable ? { memberID in
                         selectedMemberID = memberID
-                        viewModel.updateResultMemberID(memberID)
+                        viewModel?.updateResultMemberID(memberID)
                     } : nil
                 )
 
@@ -196,7 +196,7 @@ struct HealthExamRecognitionResultContentView: View {
     private var bottomBar: some View {
         HStack(spacing: 12) {
             Button(L10n.text("medical.upload.result.common.back")) {
-                viewModel.reset(keepAttachments: true)
+                viewModel?.reset(keepAttachments: true)
             }
                 .buttonStyle(.bordered)
 
@@ -218,6 +218,7 @@ struct HealthExamRecognitionResultContentView: View {
     }
 
     private func submitSave() {
+        guard let viewModel else { return }
         viewModel.updateResultMemberID(selectedMemberID)
         viewModel.updateTypedResult(.healthExamReport(draft))
         Task { _ = await viewModel.saveResult() }

@@ -19,6 +19,7 @@ struct PrescriptionRecognitionResultView: View {
     }
 }
 
+#if DEBUG
 #Preview("Prescription result - Light") {
     CompatibleNavigationContainer {
         PrescriptionRecognitionResultView(viewModel: .preview(output: .previewPrescriptionOutput))
@@ -89,3 +90,4 @@ private extension MedicalDocumentTypedExtractionOutput {
         )
     }
 }
+#endif

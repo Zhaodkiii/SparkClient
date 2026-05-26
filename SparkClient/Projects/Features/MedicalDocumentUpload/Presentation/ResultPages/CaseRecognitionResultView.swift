@@ -19,6 +19,7 @@ struct CaseRecognitionResultView: View {
     }
 }
 
+#if DEBUG
 #Preview("Case result - Light") {
     CompatibleNavigationContainer {
         CaseRecognitionResultView(viewModel: .preview(output: .previewCase))
@@ -139,3 +140,4 @@ private extension MedicalDocumentTypedExtractionOutput {
         )
     }
 }
+#endif

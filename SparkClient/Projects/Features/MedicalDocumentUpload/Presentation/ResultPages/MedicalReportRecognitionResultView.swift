@@ -19,6 +19,7 @@ struct MedicalReportRecognitionResultView: View {
     }
 }
 
+#if DEBUG
 #Preview("Medical report result - Light") {
     CompatibleNavigationContainer {
         MedicalReportRecognitionResultView(viewModel: .preview(output: .previewMedicalReportOutput))
@@ -87,3 +88,4 @@ private extension MedicalDocumentTypedExtractionOutput {
         )
     }
 }
+#endif

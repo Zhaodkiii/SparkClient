@@ -56,8 +56,10 @@ struct MedicalDocumentUploadHostView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     CompatibleNavigationContainer {
         MedicalDocumentUploadHostView(viewModel: .preview())
     }
 }
+#endif
