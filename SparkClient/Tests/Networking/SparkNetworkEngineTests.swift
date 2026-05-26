@@ -479,6 +479,87 @@ final class SparkNetworkEngineTests: XCTestCase {
         XCTAssertEqual(refreshCount, 1)
         XCTAssertGreaterThanOrEqual(protectedCalls, 2)
     }
+
+    func testRefresh401PostsAuthInvalidationNotification() async throws {
+        URLProtocolStub.reset()
+
+        let baseURL = URL(string: "http://localhost")!
+        let accessJWT = makeFakeJWT(expDate: Date().addingTimeInterval(3600), sub: "u1")
+        let refreshJWT = makeFakeJWT(expDate: Date().addingTimeInterval(7200), sub: "u1")
+
+        URLProtocolStub.requestHandler = { req in
+            let url = req.url!.absoluteString
+            if url.contains("/api/v1/auth/token/refresh/") {
+                let body = """
+                {"code":40102,"msg":"token_not_valid","data":{"request_id":"test-refresh-401"}}
+                """
+                .data(using: .utf8)!
+                return StubHTTPResponse(statusCode: 401, headers: [:], body: body)
+            }
+
+            if url.contains("/api/v1/test/protected/") {
+                let body = """
+                {"code":-1,"msg":{"detail":"User not found","code":"user_not_found"},"data":{"request_id":"test-protected-401"}}
+                """
+                .data(using: .utf8)!
+                return StubHTTPResponse(statusCode: 401, headers: [:], body: body)
+            }
+
+            return StubHTTPResponse(statusCode: 404, headers: [:], body: Data())
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let session = URLSession(configuration: config)
+        let transport = URLSessionNetworkTransport(session: session, logger: ConsoleLogger())
+
+        let engine = SparkNetworkEngine(
+            baseURL: baseURL,
+            transport: transport,
+            gate: SerialRequestGate(),
+            etagInterceptor: ETagHTTPInterceptor(store: FileETagStore(baseDirectory: FileManager.default.temporaryDirectory)),
+            retryPolicy: RetryPolicy(config: .default, scheduler: DefaultRetryScheduler()),
+            authProvider: AuthTokenProvider(transport: transport, baseURL: baseURL, logger: ConsoleLogger())
+        )
+
+        await engine.tokenProvider().setTokens(
+            AuthTokens(
+                accessToken: accessJWT,
+                refreshToken: refreshJWT,
+                expiresAt: Date().addingTimeInterval(3600),
+                tokenType: "Bearer"
+            )
+        )
+
+        let invalidation = expectation(forNotification: AuthSessionInvalidation.notificationName, object: nil) { notification in
+            notification.userInfo?["source"] as? String == "SparkNetworkEngine.sendRaw.refreshFailed"
+        }
+
+        struct ProtectedResponse: Decodable {
+            let ok: Bool
+        }
+
+        let request = SparkNetworkRequest(
+            method: .get,
+            path: "/api/v1/test/protected/",
+            queryItems: nil,
+            headers: [:],
+            body: .none,
+            timeoutInterval: nil,
+            strategy: NetworkStrategy(requiresAuth: true, allowETag: false, serialKey: "refresh-401", retryConfig: RetryConfig.default, isIdempotent: true)
+        )
+
+        do {
+            let _: ProtectedResponse = try await engine.send(request)
+            XCTFail("Expected refresh failure")
+        } catch SparkNetworkError.refreshFailed {
+            // Expected.
+        } catch {
+            XCTFail("Expected SparkNetworkError.refreshFailed, got \(error)")
+        }
+
+        await fulfillment(of: [invalidation], timeout: 1.0)
+    }
 }
 
 #endif

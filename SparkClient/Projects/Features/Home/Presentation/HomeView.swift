@@ -541,7 +541,7 @@ private struct MemberSelectorChip: View {
 
 
 
-
+#if DEBUG
 #Preview("Light") {
     CompatibleNavigationContainer {
         HomeView(
@@ -577,6 +577,7 @@ private struct MemberSelectorChip: View {
     }
     .preferredColorScheme(.dark)
 }
+#endif
 
 extension HomeViewModel {
     static var preview: HomeViewModel {

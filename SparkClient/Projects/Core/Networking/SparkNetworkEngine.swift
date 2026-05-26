@@ -87,7 +87,19 @@ final class SparkNetworkEngine {
                 // 401：强制刷新 token 后重试；`AuthTokenProvider` 内会去重并发刷新。
                 if request.strategy.requiresAuth, response.httpResponse.statusCode == 401, retryCount < request.strategy.retryConfig.maxRetryCount + 1 {
                     logger.info(SparkNetworkingStrings.HTTPClient.authRefreshTriggered(path: request.path), module: .network)
-                    _ = try await authProvider.forceRefreshTokens()
+                    do {
+                        _ = try await authProvider.forceRefreshTokens()
+                    } catch {
+                        let backendError = try? decodeBackendError(from: response.data)
+                        postAuthInvalidationIfNeeded(
+                            statusCode: response.httpResponse.statusCode,
+                            backendCode: backendError?.code,
+                            message: backendError?.msg ?? "",
+                            source: "SparkNetworkEngine.sendRaw.refreshFailed",
+                            refreshError: error
+                        )
+                        throw SparkNetworkError.refreshFailed(backendError, error)
+                    }
                     retryCount += 1
                     continue
                 }
@@ -155,6 +167,34 @@ final class SparkNetworkEngine {
     func tokenProvider() -> AuthTokenProvider { authProvider }
     /// 与引擎关联的设备/ETag 等缓存句柄。
     func cache() -> DeviceCache { deviceCache }
+
+    private func postAuthInvalidationIfNeeded(
+        statusCode: Int,
+        backendCode: Int?,
+        message: String,
+        source: String,
+        refreshError: Error
+    ) {
+        let shouldInvalidateForRefreshError: Bool
+        if let providerError = refreshError as? AuthTokenProviderError {
+            switch providerError {
+            case .missingTokens, .refreshFailed:
+                shouldInvalidateForRefreshError = true
+            case .refreshTemporarilyUnavailable, .invalidRefreshResponse:
+                shouldInvalidateForRefreshError = false
+            }
+        } else {
+            shouldInvalidateForRefreshError = false
+        }
+
+        guard shouldInvalidateForRefreshError else { return }
+        AuthSessionInvalidation.postIfNeeded(
+            statusCode: statusCode,
+            backendCode: backendCode,
+            message: message,
+            source: source
+        )
+    }
 
     // MARK: - 单次请求：组装与发送
 

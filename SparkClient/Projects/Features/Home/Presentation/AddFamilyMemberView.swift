@@ -663,11 +663,11 @@ struct AddFamilyMemberView: View {
 #endif
     }
 }
-
+#if DEBUG
 #Preview {
     AddFamilyMemberView(mode: .create, store: HomeViewModel.preview.memberContextStoreForBinding)
 }
-
+#endif
 @available(iOS 16.0, *)
 private struct DatePickerSheet: View {
     @Binding var selectedDate: Date?
