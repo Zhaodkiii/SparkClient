@@ -644,6 +644,7 @@ struct ToolInteractionPresentationSheet: View {
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var stateStore: ChatStateStore
     let toolPreviewRenderContext: ChatRenderContext?
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let fetchMemberCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
     let onClearToolPreviewRenderContext: () -> Void
@@ -717,6 +718,17 @@ struct ToolInteractionPresentationSheet: View {
                 onSetMemberBinding: onAskReportSetMemberBinding,
                 onMaxRefsReached: onAskReportMaxRefsReached
             )
+        case .apiKeysSettings:
+            CompatibleNavigationContainer(legacyStackStyle: true) {
+                APIKeysSettingsView(viewModel: aiSettingsViewModel)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(L10n.text("common.done")) {
+                                coordinator.dismissAPIKeysSettings(id: active.id)
+                            }
+                        }
+                    }
+            }
         }
     }
 }

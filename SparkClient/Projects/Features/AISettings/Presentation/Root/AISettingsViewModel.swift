@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import UIKit
+import UserNotifications
 
 struct AISettingsPromptTooling {
     let autoFillAgentPrompt: (_ displayName: String, _ baseModelName: String) async throws -> String
@@ -43,6 +44,13 @@ final class AISettingsViewModel: ObservableObject {
     /// 本地与服务合并后的有效小任务列表（local 覆盖 service）
     @Published private(set) var effectiveSmallTasks: [SmallTask] = []
 
+    /// 是否展示 Pro 试用入口：
+    /// - 已经是 Pro（trial active）：默认展示入口（用于查看/续期/状态提示等）。
+    /// - 非 Pro：仅中国大陆用户展示入口。
+    var shouldShowTrialEntry: Bool {
+        snapshot.trial.isActive || SparkSystemInfo().isMostLikelyMainlandChina
+    }
+
     // MARK: - 依赖服务
     /// 加载AI设置用例
     private let loadUseCase: LoadAISettingsUseCase
@@ -54,6 +62,8 @@ final class AISettingsViewModel: ObservableObject {
     private let aiConfigAPI: SparkAIConfigAPI?
     /// AI配置中心
     private let aiConfigCenter: AIConfigCenter?
+    /// Push（通知权限申请、APNs token 注册）
+    private let pushAdapter: PushAdapter?
     /// 提示词工具
     let promptTooling: AISettingsPromptTooling
     /// 记忆档案工具
@@ -70,6 +80,7 @@ final class AISettingsViewModel: ObservableObject {
     // MARK: - 私有属性
     /// 最后一次持久化的快照（用于对比是否有修改）
     private var lastPersistedSnapshot: AISettingsSnapshot = .default
+    private var hasLoadedSnapshot = false
     private var cachedMemoryArchiveViewModel: MemoryArchiveSettingsViewModel?
     /// 订阅者集合
     private var cancellables: Set<AnyCancellable> = []
@@ -114,6 +125,7 @@ final class AISettingsViewModel: ObservableObject {
         ownerAccountIDForLoad: Int64? = nil,
         aiConfigAPI: SparkAIConfigAPI? = nil,
         aiConfigCenter: AIConfigCenter? = nil,
+        pushAdapter: PushAdapter? = nil,
         promptTooling: AISettingsPromptTooling = .unavailable,
         memoryTooling: AISettingsMemoryTooling? = nil
     ) {
@@ -126,10 +138,20 @@ final class AISettingsViewModel: ObservableObject {
         self.modelCoordinator = modelCoordinator
         self.aiConfigAPI = aiConfigAPI
         self.aiConfigCenter = aiConfigCenter
+        self.pushAdapter = pushAdapter
         self.promptTooling = promptTooling
         self.memoryTooling = memoryTooling
         // 绑定快照变化监听
         bindSnapshotChanges()
+
+        NotificationCenter.default.addObserver(
+            forName: .aiTrialApplicationResultReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { await self.refreshProviderRuntimeConfiguration() }
+        }
     }
 
     // MARK: - 数据加载与保存
@@ -152,8 +174,15 @@ final class AISettingsViewModel: ObservableObject {
         // 更新本地快照与UI
         lastPersistedSnapshot = loaded
         snapshot = loaded
+        hasLoadedSnapshot = true
         hasUnsavedChanges = false
         await refreshEffectiveSmallTasks()
+    }
+
+    /// 直接进入子设置页时，先确保账号级配置已从仓储/运行时载入。
+    func loadIfNeeded() async {
+        guard hasLoadedSnapshot == false else { return }
+        await load()
     }
 
     /// 保存所有修改的设置
@@ -198,6 +227,7 @@ final class AISettingsViewModel: ObservableObject {
     /// 刷新试用状态
     func refreshTrialStatus() async {
         guard let aiConfigAPI else { return }
+        await loadIfNeeded()
         
         trialOperationInFlight = true
         defer { trialOperationInFlight = false }
@@ -207,10 +237,33 @@ final class AISettingsViewModel: ObservableObject {
             // 状态变化则更新快照
             if snapshot.trial != state {
                 snapshot.trial = state
+                _ = await persistSnapshotNowReturningBool()
             }
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// 重新拉取 Pro 配置与本地持久化模型配置，并刷新试用状态。
+    func refreshProviderRuntimeConfiguration() async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        await aiConfigCenter?.refreshRemoteConfig()
+
+        let loaded: AISettingsSnapshot
+        if let aiConfigCenter {
+            loaded = await aiConfigCenter.reloadLocalSnapshot(ownerAccountID: ownerAccountIDForLoad)
+        } else {
+            loaded = await loadUseCase.execute(ownerAccountID: ownerAccountIDForLoad)
+        }
+        lastPersistedSnapshot = loaded
+        snapshot = loaded
+        hasLoadedSnapshot = true
+        hasUnsavedChanges = false
+        await refreshEffectiveSmallTasks()
+        await refreshTrialStatus()
     }
 
     /// 提交试用申请
@@ -224,13 +277,35 @@ final class AISettingsViewModel: ObservableObject {
         defer { trialOperationInFlight = false }
         
         do {
-            let state = try await aiConfigAPI.applyTrial(note: note)
-            snapshot.trial = state
+            let submission = try await aiConfigAPI.applyTrial(note: note)
+            // 提交接口不返回最终审核结果：客户端仅更新为 pending 并等待通知刷新。
+            snapshot.trial.status = submission.status
+            snapshot.trial.isActive = false
+            _ = await persistSnapshotNowReturningBool()
+            await requestRemoteNotificationPermissionIfNeededAfterTrialSubmission()
             return true
         } catch {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    /// 提交成功后：检查通知权限，必要时由用户行为触发权限请求与 APNs 注册。
+    private func requestRemoteNotificationPermissionIfNeededAfterTrialSubmission() async {
+        guard let pushAdapter else { return }
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        if settings.authorizationStatus == .notDetermined {
+            // UI 层会先弹出“我们将统一通知你”，再调用 requestAuthorizationFromUserAction()。
+            NotificationCenter.default.post(name: .aiTrialNotificationPermissionNeedsPrePrompt, object: nil)
+            return
+        }
+        // 已经授权/拒绝：不再弹预提示；若用户愿意可在系统设置里开启。
+        // 这里不主动调用 requestAuthorizationIfNeeded，避免无上下文触发。
+    }
+
+    /// UI 在用户点击“继续”后调用：触发系统通知权限请求（必须由用户行为触发）。
+    func requestTrialNotificationAuthorizationFromUserAction() {
+        pushAdapter?.requestAuthorizationIfNeeded()
     }
 
     // MARK: - 厂商连接测试
@@ -1282,4 +1357,6 @@ final class AISettingsViewModel: ObservableObject {
             effectiveSmallTasks = snapshot.smallTasks
         }
     }
+
+    // 国家/区域判断统一收敛到 SparkSystemInfo，避免各模块重复实现。
 }

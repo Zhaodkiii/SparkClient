@@ -25,6 +25,7 @@ enum APIResponseDecoder {
         }
 
         guard wrapped.code == 0 else {
+            let backendData: JSONValue? = (try? decoder.decode(BackendWrappedResponse<JSONValue>.self, from: response.data))?.data
             AuthSessionInvalidation.postIfNeeded(
                 statusCode: response.httpResponse.statusCode,
                 backendCode: wrapped.code,
@@ -33,7 +34,7 @@ enum APIResponseDecoder {
             )
             throw SparkNetworkError.httpError(
                 statusCode: response.httpResponse.statusCode,
-                backend: BackendError(code: wrapped.code, msg: wrapped.msg, data: nil),
+                backend: BackendError(code: wrapped.code, msg: wrapped.msg, data: backendData),
                 rawBody: response.data
             )
         }

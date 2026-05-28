@@ -29,6 +29,17 @@ final class AppBootstrapper {
         self.ossAPI = ossAPI
         self.registerDevice = registerDevice
         self.logger = logger
+
+        NotificationCenter.default.addObserver(
+            forName: .aiTrialApplicationResultReceived,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task {
+                await self.aiConfigCenter.refreshRemoteConfig()
+            }
+        }
     }
 
     func bootstrapAppLaunchIfNeeded() async {

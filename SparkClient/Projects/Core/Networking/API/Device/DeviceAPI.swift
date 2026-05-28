@@ -42,6 +42,7 @@ struct SparkDeviceAPI {
         let time_zone: String
         let language_code: String
         let region_code: String
+        let country_code: String
         let is_simulator: Bool
     }
 
@@ -77,6 +78,7 @@ struct SparkDeviceAPI {
             time_zone: systemInfo.timeZone,
             language_code: systemInfo.languageCode,
             region_code: systemInfo.regionCode,
+            country_code: systemInfo.mostLikelyCountryCode,
             is_simulator: systemInfo.isSimulator
         )
 

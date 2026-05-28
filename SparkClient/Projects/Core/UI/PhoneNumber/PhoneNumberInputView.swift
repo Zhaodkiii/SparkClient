@@ -14,7 +14,7 @@ struct PhoneNumberInputView: View {
     var regions: [PhoneRegion] = defaultRegions
 
     @FocusState private var isFocused: Bool
-    @State private var chosenRegion: PhoneRegion = defaultRegions.first ?? .init(name: "", dial: "+86", flag: "🇨🇳")
+    @State private var chosenRegion: PhoneRegion = defaultRegions.first ?? .init(name: "", dial: "+86", flag: "🇨🇳", countryCode: "CN")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -66,6 +66,11 @@ struct PhoneNumberInputView: View {
         .onAppear {
             if !model.countryCode.isEmpty {
                 chosenRegion = regions.first { $0.dial == model.countryCode } ?? chosenRegion
+            } else {
+                let country = SparkSystemInfo().mostLikelyCountryCode
+                chosenRegion = regions.first { $0.countryCode == country }
+                    ?? regions.first { $0.countryCode == "CN" }
+                    ?? chosenRegion
             }
             recompute()
         }

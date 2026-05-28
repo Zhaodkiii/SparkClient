@@ -12,6 +12,10 @@
 "tab.chat" = "Chat";
 "tab.settings" = "Settings";
 
+"chat.thread.edit" = "Edit";
+"chat.thread.pin" = "Pin";
+"chat.thread.unpin" = "Unpin";
+
 "login.subtitle" = "Sign in securely with your Apple Account.";
 "login.tip" = "Your Apple account will be linked automatically on first sign-in.";
 
@@ -573,6 +577,9 @@
 "chat.list.search.placeholder" = "Search conversations";
 "chat.list.empty.title" = "No conversations yet";
 "chat.list.empty.create" = "Create conversation";
+"chat.list.no_available_model.title" = "Unable to Create Conversation";
+"chat.list.no_available_model.message" = "No conversation model is available. Configure a model API key or enable a model for chat first.";
+"chat.list.no_available_model.action" = "Go to Settings";
 "common.yesterday" = "Yesterday";
 
 "settings.title" = "Settings";

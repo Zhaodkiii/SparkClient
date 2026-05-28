@@ -347,6 +347,16 @@ final class ChatDetailViewModel: ObservableObject {
         return chatScenarioModels.first?.name
     }
 
+    /// 新建会话前校验：当前运行时是否存在可用于聊天场景的模型。
+    func hasAvailableChatModel() async -> Bool {
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
+            chatScenarioModels = []
+            return false
+        }
+        chatScenarioModels = bundles.chat.models
+        return chatScenarioModels.isEmpty == false
+    }
+
 
     /// 将所选模型立即写入线程并尝试上送同步（不等待发送消息）。
     func updateThreadModel(_ preferredModelName: String?, for threadID: UUID) async {

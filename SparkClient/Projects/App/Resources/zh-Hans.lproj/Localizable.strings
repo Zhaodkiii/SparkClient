@@ -12,6 +12,10 @@
 "tab.chat" = "AI 对话";
 "tab.settings" = "设置";
 
+"chat.thread.edit" = "编辑";
+"chat.thread.pin" = "置顶";
+"chat.thread.unpin" = "取消置顶";
+
 "login.subtitle" = "使用 Apple 账号安全登录。";
 "login.tip" = "首次登录会自动完成账号创建与绑定。";
 
@@ -573,6 +577,9 @@
 "chat.list.search.placeholder" = "搜索会话";
 "chat.list.empty.title" = "还没有会话";
 "chat.list.empty.create" = "新建会话";
+"chat.list.no_available_model.title" = "无法新建对话";
+"chat.list.no_available_model.message" = "当前没有可用的对话模型，请先配置模型密钥或启用可用于对话的模型。";
+"chat.list.no_available_model.action" = "前往设置";
 "common.yesterday" = "昨天";
 
 "settings.title" = "设置";

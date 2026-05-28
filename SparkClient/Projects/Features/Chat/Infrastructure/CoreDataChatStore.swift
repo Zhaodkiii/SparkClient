@@ -112,7 +112,7 @@ actor CoreDataChatStore {
                 )
             }
 
-            return items.sorted { $0.latestMessageAt > $1.latestMessageAt }
+            return Self.sortThreadListItems(items)
         }) ?? []
     }
 
@@ -175,6 +175,10 @@ actor CoreDataChatStore {
             maxMessages: maxMessages,
             rolePrompt: rolePrompt,
             imageDeliveryModeRaw: imageDeliveryModeRaw,
+            iconName: nil,
+            iconColorName: nil,
+            isPinned: false,
+            pinnedAt: nil,
             isDeleted: false,
             deletedAt: nil,
             createdAt: now,
@@ -210,6 +214,10 @@ actor CoreDataChatStore {
             object.setValue(thread.maxTokens, forKey: "maxTokens")
             object.setValue(thread.maxMessages, forKey: "maxMessages")
             object.setValue(thread.rolePrompt, forKey: "rolePrompt")
+            object.setValue(thread.iconName, forKey: "iconName")
+            object.setValue(thread.iconColorName, forKey: "iconColorName")
+            object.setValue(thread.isPinned, forKey: "isPinned")
+            object.setValue(thread.pinnedAt, forKey: "pinnedAt")
             object.setValue(true, forKey: "isActive")
         }
         await kernel.postChangeNotification(
@@ -248,6 +256,50 @@ actor CoreDataChatStore {
                 return
             }
             object.setValue(currentModelName, forKey: "currentModelName")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
+    }
+
+    func updateThreadAppearance(
+        threadID: UUID,
+        title: String,
+        iconName: String?,
+        iconColorName: String?
+    ) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(title, forKey: "title")
+            object.setValue(iconName, forKey: "iconName")
+            object.setValue(iconColorName, forKey: "iconColorName")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
+    }
+
+    func updateThreadPinState(threadID: UUID, isPinned: Bool, pinnedAt: Date?) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(isPinned, forKey: "isPinned")
+            object.setValue(pinnedAt, forKey: "pinnedAt")
             object.setValue(Date(), forKey: "updatedAt")
         }
         await kernel.postChangeNotification(
@@ -851,6 +903,10 @@ actor CoreDataChatStore {
                 object.setValue(thread.maxTokens, forKey: "maxTokens")
                 object.setValue(thread.maxMessages, forKey: "maxMessages")
                 object.setValue(thread.rolePrompt, forKey: "rolePrompt")
+                object.setValue(thread.iconName, forKey: "iconName")
+                object.setValue(thread.iconColorName, forKey: "iconColorName")
+                object.setValue(thread.isPinned, forKey: "isPinned")
+                object.setValue(thread.pinnedAt, forKey: "pinnedAt")
 
                 if thread.isDeleted {
                     object.setValue(false, forKey: "isActive")
@@ -1588,12 +1644,37 @@ actor CoreDataChatStore {
             maxMessages: object.value(forKey: "maxMessages") as? Int ?? 20,
             rolePrompt: object.value(forKey: "rolePrompt") as? String ?? "",
             imageDeliveryModeRaw: object.value(forKey: "imageDeliveryModeRaw") as? String,
+            iconName: object.value(forKey: "iconName") as? String,
+            iconColorName: object.value(forKey: "iconColorName") as? String,
+            isPinned: object.value(forKey: "isPinned") as? Bool ?? false,
+            pinnedAt: object.value(forKey: "pinnedAt") as? Date,
             isDeleted: object.value(forKey: "isSoftDeleted") as? Bool ?? false,
             deletedAt: object.value(forKey: "deletedAt") as? Date,
             createdAt: createdAt,
             updatedAt: updatedAt,
             serverUpdatedAt: object.value(forKey: "serverUpdatedAt") as? Date
         )
+    }
+
+    private static func sortThreadListItems(_ items: [ChatThreadListItem]) -> [ChatThreadListItem] {
+        let pinned = items.filter { $0.thread.isPinned }
+        let unpinned = items.filter { !$0.thread.isPinned }
+
+        let pinnedSorted = pinned.sorted { lhs, rhs in
+            switch (lhs.thread.pinnedAt, rhs.thread.pinnedAt) {
+            case (.some(let l), .some(let r)):
+                if l != r { return l > r }
+                return lhs.latestMessageAt > rhs.latestMessageAt
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return lhs.latestMessageAt > rhs.latestMessageAt
+            }
+        }
+        let unpinnedSorted = unpinned.sorted { $0.latestMessageAt > $1.latestMessageAt }
+        return pinnedSorted + unpinnedSorted
     }
 
     private static func doubleValue(_ value: Any?) -> Double? {

@@ -30,6 +30,17 @@ protocol ChatThreadStoring: Sendable {
         maxMessages: Int,
         rolePrompt: String
     ) async
+    func updateThreadAppearance(
+        threadID: UUID,
+        title: String,
+        iconName: String?,
+        iconColorName: String?
+    ) async
+    func updateThreadPinState(
+        threadID: UUID,
+        isPinned: Bool,
+        pinnedAt: Date?
+    ) async
     func softDeleteThread(id: UUID) async
     func loadPendingThreadDeletionIDs(limit: Int) async -> [UUID]
     func removePendingThreadDeletionIDs(_ ids: [UUID]) async

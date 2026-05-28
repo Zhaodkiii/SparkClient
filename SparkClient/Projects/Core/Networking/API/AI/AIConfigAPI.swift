@@ -70,7 +70,7 @@ struct SparkAIConfigAPI {
         return payload.toModel()
     }
 
-    func applyTrial(note: String = "") async throws -> AITrialState {
+    func applyTrial(note: String = "") async throws -> AITrialApplicationSubmission {
         struct ApplyTrialBody: Encodable {
             let note: String
         }
@@ -92,7 +92,7 @@ struct SparkAIConfigAPI {
             )
         )
         let response = try await configuration.execute(operation)
-        let payload = try APIResponseDecoder.decodeWrappedData(RemoteTrialStatusPayload.self, from: response)
+        let payload = try APIResponseDecoder.decodeWrappedData(RemoteTrialApplySubmissionPayload.self, from: response)
         return payload.toModel()
     }
 
@@ -254,6 +254,26 @@ private struct RemoteTrialStatusPayload: Decodable {
             startedAt: parseDate(startedAt),
             expiresAt: parseDate(expiresAt),
             remainingSeconds: remainingSeconds ?? 0
+        )
+    }
+}
+
+private struct RemoteTrialApplySubmissionPayload: Decodable {
+    /// 兼容服务端失败响应 data 可能缺字段的情况（例如只返回 request_id）。
+    /// 注意：最终是否成功仍以 wrapped.code == 0 判断；这里的默认值只用于避免解码阶段崩溃。
+    let submitted: Bool?
+    let applicationId: Int?
+    let sequence: Int?
+    let status: String?
+    let message: String?
+
+    func toModel() -> AITrialApplicationSubmission {
+        AITrialApplicationSubmission(
+            submitted: submitted ?? false,
+            applicationId: applicationId ?? 0,
+            sequence: sequence ?? 0,
+            status: status ?? "failed",
+            message: message ?? "申请失败，请稍后重试"
         )
     }
 }

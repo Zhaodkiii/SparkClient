@@ -500,6 +500,7 @@ final class AppContainer {
             loadChatMessagesUseCase: chat.loadChatMessagesUseCase,
             createThreadUseCase: chat.createThreadUseCase,
             deleteThreadUseCase: chat.deleteThreadUseCase,
+            updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase(repository: chat.chatRepository),
             chatSyncSupervisor: chat.chatSyncSupervisor,
             notificationClient: notification.notificationClient
         )
@@ -734,6 +735,7 @@ final class AppContainer {
             ownerAccountIDForLoad: ownerAccountID,
             aiConfigAPI: backend.aiConfig,
             aiConfigCenter: aiConfigCenter,
+            pushAdapter: pushAdapter,
             promptTooling: AISettingsPromptTooling(
                 autoFillAgentPrompt: { displayName, baseModelName in
                     try await autoFillAgentPromptUseCase.execute(displayName: displayName, baseModelName: baseModelName)

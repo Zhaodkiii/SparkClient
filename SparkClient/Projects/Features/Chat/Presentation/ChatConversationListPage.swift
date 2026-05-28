@@ -6,10 +6,18 @@ struct ChatConversationListPage: View {
     @ObservedObject var detailViewModel: ChatDetailViewModel
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
 
     @State private var searchText = ""
     @State private var navigationSelection: UUID?
     @State private var hasLoaded = false
+    @State private var showNoAvailableChatModelAlert = false
+    @State private var showAPIKeysSettingsSheet = false
+    @State private var isEditingThreadAppearance = false
+    @State private var editingThreadID: UUID?
+    @State private var editingTitle: String = ""
+    @State private var editingIconName: String? = nil
+    @State private var editingIconColorName: String? = nil
     /// 拖拽手势防抖标记：仅在一次拖拽开始时触发一次收键盘动作。
     @State private var hasDismissedKeyboardInCurrentDrag = false
 
@@ -51,10 +59,7 @@ struct ChatConversationListPage: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     Task {
-                        await listViewModel.createThread()
-                        guard let threadID = stateStore.selectedThreadID else { return }
-                        await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
-                        navigationSelection = threadID
+                        await createThreadIfAvailable()
                     }
                 } label: {
                     Image(systemName: "plus.bubble")
@@ -69,6 +74,45 @@ struct ChatConversationListPage: View {
         .refreshable {
             await listViewModel.refreshThreads()
         }
+        .alert(L10n.text("chat.list.no_available_model.title"), isPresented: $showNoAvailableChatModelAlert) {
+            Button(L10n.text("chat.list.no_available_model.action")) {
+                showAPIKeysSettingsSheet = true
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("chat.list.no_available_model.message"))
+        }
+        .sheet(isPresented: $showAPIKeysSettingsSheet) {
+            NavigationView {
+                APIKeysSettingsView(viewModel: aiSettingsViewModel)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(L10n.text("common.done")) {
+                                showAPIKeysSettingsSheet = false
+                            }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $isEditingThreadAppearance) {
+            ChatThreadAppearanceEditSheet(
+                title: editingTitle,
+                iconName: editingIconName,
+                iconColorName: editingIconColorName,
+                onSave: { title, iconName, iconColorName in
+                    guard let id = editingThreadID else { return }
+                    Task {
+                        await listViewModel.updateThreadAppearance(
+                            threadID: id,
+                            title: title,
+                            iconName: iconName,
+                            iconColorName: iconColorName
+                        )
+                    }
+                },
+                onCancel: {}
+            )
+        }
     }
 
     @ViewBuilder
@@ -82,10 +126,7 @@ struct ChatConversationListPage: View {
                 .foregroundColor(.secondary)
             Button {
                 Task {
-                    await listViewModel.createThread()
-                    guard let threadID = stateStore.selectedThreadID else { return }
-                    await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
-                    navigationSelection = threadID
+                    await createThreadIfAvailable()
                 }
             } label: {
                 Text(L10n.text("chat.list.empty.create"))
@@ -98,77 +139,138 @@ struct ChatConversationListPage: View {
 
     @ViewBuilder
     private func threadRow(_ item: ChatThreadListItem) -> some View {
-        ZStack {
-            NavigationLink(
-                destination: ChatView(
-                    threadID: item.id,
-                    stateStore: stateStore,
-                    listViewModel: listViewModel,
-                    detailViewModel: detailViewModel,
-                    taskManager: taskManager,
-                    homeViewModel: homeViewModel
-                )
-                .hidesMainTabBarWhenPushed(),
-                tag: item.id,
-                selection: $navigationSelection
-            ) {
-                EmptyView()
-            }
-            .hidden()
-
-            Button {
-                Task {
-                    await listViewModel.selectAndPrepare(threadID: item.id)
-                    navigationSelection = item.id
-                }
-            } label: {
-                HStack(alignment: .center, spacing: 10) {
-                    if let thumb = item.latestListImageAttachment {
-                        ChatThreadListThumbnailView(
-                            attachment: thumb,
-                            fileTransferService: detailViewModel.attachmentFileTransferService
-                        )
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(item.thread.listDisplayTitle)
-                                .font(.headline)
-                                .lineLimit(1)
-                            Spacer()
-                            Text(formattedDate(item.latestMessageAt))
+        NavigationLink(
+            destination: ChatView(
+                threadID: item.id,
+                stateStore: stateStore,
+                listViewModel: listViewModel,
+                detailViewModel: detailViewModel,
+                taskManager: taskManager,
+                homeViewModel: homeViewModel,
+                aiSettingsViewModel: aiSettingsViewModel
+            )
+            .hidesMainTabBarWhenPushed(),
+            tag: item.id,
+            selection: $navigationSelection
+        ) {
+            HStack(alignment: .center, spacing: 10) {
+                threadIcon(item.thread)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(item.thread.listDisplayTitle)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if item.thread.isPinned {
+                            Image(systemName: "pin.fill")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Text(item.latestMessagePreview)
-                            .font(.subheadline)
+                        Spacer()
+                        Text(formattedDate(item.latestMessageAt))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
-                Button(role: .destructive) {
-                    Task {
-                        await listViewModel.deleteThread(item.id)
-                    }
-                } label: {
-                    Label(L10n.text("common.delete"), systemImage: "trash")
+                    Text(item.latestMessagePreview)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                Button(role: .destructive) {
-                    Task {
-                        await listViewModel.deleteThread(item.id)
-                    }
-                } label: {
-                    Label(L10n.text("common.delete"), systemImage: "trash")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+        }
+        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                beginEditingAppearance(for: item.thread)
+            } label: {
+                Label(L10n.text("chat.thread.edit", fallback: "编辑"), systemImage: "paintbrush")
+            }
+
+            Button {
+                Task { await listViewModel.toggleThreadPinned(item.id) }
+            } label: {
+                Label(
+                    item.thread.isPinned
+                        ? L10n.text("chat.thread.unpin", fallback: "取消置顶")
+                        : L10n.text("chat.thread.pin", fallback: "置顶"),
+                    systemImage: item.thread.isPinned ? "pin.slash" : "pin"
+                )
+            }
+
+            Button(role: .destructive) {
+                Task {
+                    await listViewModel.deleteThread(item.id)
                 }
+            } label: {
+                Label(L10n.text("common.delete"), systemImage: "trash")
             }
         }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                Task { await listViewModel.toggleThreadPinned(item.id) }
+            } label: {
+                Label(
+                    item.thread.isPinned
+                        ? L10n.text("chat.thread.unpin", fallback: "取消置顶")
+                        : L10n.text("chat.thread.pin", fallback: "置顶"),
+                    systemImage: item.thread.isPinned ? "pin.slash" : "pin"
+                )
+            }
+            .tint(ChatThreadAppearanceResources.color(from: "hlBlue"))
+
+            Button {
+                beginEditingAppearance(for: item.thread)
+            } label: {
+                Label(L10n.text("chat.thread.edit", fallback: "编辑"), systemImage: "paintbrush")
+            }
+            .tint(ChatThreadAppearanceResources.color(from: "hlGreen"))
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                Task {
+                    await listViewModel.deleteThread(item.id)
+                }
+            } label: {
+                Label(L10n.text("common.delete"), systemImage: "trash")
+            }
+        }
+
+    }
+
+    @ViewBuilder
+    private func threadIcon(_ thread: ChatThread) -> some View {
+        let icon = (thread.iconName?.isEmpty == false ? thread.iconName : nil) ?? "bubble.left.circle"
+        let colorName = (thread.iconColorName?.isEmpty == false ? thread.iconColorName : nil) ?? "accent"
+        let tint = ChatThreadAppearanceResources.color(from: colorName)
+
+        Image(systemName: icon)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 34, height: 34)
+            .foregroundStyle(tint)
+            .padding(6)
+            .background(Circle().fill(.thinMaterial))
+    }
+
+    private func beginEditingAppearance(for thread: ChatThread) {
+        editingThreadID = thread.id
+        editingTitle = thread.title
+        editingIconName = thread.iconName
+        editingIconColorName = thread.iconColorName
+        isEditingThreadAppearance = true
+    }
+
+    private func createThreadIfAvailable() async {
+        guard await detailViewModel.hasAvailableChatModel() else {
+            showNoAvailableChatModelAlert = true
+            return
+        }
+        await listViewModel.createThread()
+        guard let threadID = stateStore.selectedThreadID else { return }
+        await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
+        navigationSelection = threadID
     }
 
     private func formattedDate(_ date: Date) -> String {

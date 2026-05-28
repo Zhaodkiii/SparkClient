@@ -137,6 +137,24 @@ actor CoreDataChatRepository: ChatRepository {
         )
     }
 
+    func updateThreadAppearance(
+        threadID: UUID,
+        title: String,
+        iconName: String?,
+        iconColorName: String?
+    ) async {
+        await store.updateThreadAppearance(
+            threadID: threadID,
+            title: title,
+            iconName: iconName,
+            iconColorName: iconColorName
+        )
+    }
+
+    func updateThreadPinState(threadID: UUID, isPinned: Bool, pinnedAt: Date?) async {
+        await store.updateThreadPinState(threadID: threadID, isPinned: isPinned, pinnedAt: pinnedAt)
+    }
+
     func loadOutboxMessages(limit: Int) async -> [ChatMessage] {
         await store.loadOutboxMessages(limit: limit)
     }

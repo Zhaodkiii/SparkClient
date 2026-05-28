@@ -60,6 +60,10 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
     let updatedAt: Date
     let serverUpdatedAt: Date
     let imageDeliveryMode: String?
+    let iconName: String?
+    let iconColorName: String?
+    let isPinned: Bool?
+    let pinnedAt: Date?
     let currentModelName: String?
     let temperature: Double?
     let topP: Double?
@@ -84,6 +88,10 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         updatedAt: Date,
         serverUpdatedAt: Date,
         imageDeliveryModeRaw: String?,
+        iconName: String? = nil,
+        iconColorName: String? = nil,
+        isPinned: Bool? = nil,
+        pinnedAt: Date? = nil,
         currentModelName: String?,
         temperature: Double?,
         topP: Double?,
@@ -102,6 +110,10 @@ struct ChatRemoteThreadDTO: Codable, Sendable {
         self.updatedAt = updatedAt
         self.serverUpdatedAt = serverUpdatedAt
         self.imageDeliveryMode = imageDeliveryModeRaw
+        self.iconName = iconName
+        self.iconColorName = iconColorName
+        self.isPinned = isPinned
+        self.pinnedAt = pinnedAt
         self.currentModelName = currentModelName
         self.temperature = temperature
         self.topP = topP

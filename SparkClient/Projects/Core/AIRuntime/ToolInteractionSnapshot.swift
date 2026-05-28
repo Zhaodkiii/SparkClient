@@ -13,11 +13,13 @@ enum ToolInteractionSnapshot: Codable, Equatable, Sendable {
     case healthResourceCandidates(HealthResourceToolCandidatePrompt)
     /// 手动「问报告」资料选择（与工具候选共用呈现队列）。
     case askReportPicker(AskReportPickerPrompt)
+    /// API Keys / Provider 设置（只展示，不阻塞工具执行队列）。
+    case apiKeysSettings
 
     /// `true`：禁止下滑关闭（同意/提问/选成员）；`false`：允许工具详情 Sheet 手势关闭。
     var requiresForcedSheetDismiss: Bool {
         switch self {
-        case .toolPreview, .systemMessageSettings, .healthResourceCandidates, .askReportPicker: return false
+        case .toolPreview, .systemMessageSettings, .healthResourceCandidates, .askReportPicker, .apiKeysSettings: return false
         case .consent, .question, .member: return true
         }
     }

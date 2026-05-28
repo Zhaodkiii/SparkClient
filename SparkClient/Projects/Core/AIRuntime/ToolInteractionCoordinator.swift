@@ -45,6 +45,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case toolPreviewDismissed
         case systemMessageSettingsDismissed
         case askReportPickerDismissed
+        case apiKeysSettingsDismissed
     }
 
     // MARK: - 内部状态
@@ -143,6 +144,17 @@ final class ToolInteractionCoordinator: ObservableObject {
         )
     }
 
+    /// 展示 API Keys 设置（仅展示，不等待用户回调）
+    func presentAPIKeysSettings() {
+        enqueue(
+            QueuedWork(
+                id: UUID(),
+                snapshot: .apiKeysSettings,
+                completion: nil
+            )
+        )
+    }
+
     /// 请求用户确认健康资料候选（阻塞直至确认或取消，与敏感数据授权一致）。
     func requestHealthResourceCandidateSelection(
         prompt: HealthResourceToolCandidatePrompt
@@ -171,6 +183,13 @@ final class ToolInteractionCoordinator: ObservableObject {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
         guard case .systemMessageSettings = activePresentation?.snapshot else { return }
         pendingOutcome = .systemMessageSettingsDismissed
+        resumeUserGate()
+    }
+
+    func dismissAPIKeysSettings(id: UUID) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        guard case .apiKeysSettings = activePresentation?.snapshot else { return }
+        pendingOutcome = .apiKeysSettingsDismissed
         resumeUserGate()
     }
 
@@ -285,6 +304,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case .systemMessageSettings: return .systemMessageSettingsDismissed
         case .healthResourceCandidates: return .healthResourceCandidates(.cancelled)
         case .askReportPicker: return .askReportPickerDismissed
+        case .apiKeysSettings: return .apiKeysSettingsDismissed
         }
     }
 
@@ -300,6 +320,8 @@ final class ToolInteractionCoordinator: ObservableObject {
             completeHealthResourceCandidatesCancelled(id: active.id)
         case .askReportPicker:
             completeAskReportPickerCancelled(id: active.id)
+        case .apiKeysSettings:
+            dismissAPIKeysSettings(id: active.id)
         case .consent, .question, .member:
             break
         }

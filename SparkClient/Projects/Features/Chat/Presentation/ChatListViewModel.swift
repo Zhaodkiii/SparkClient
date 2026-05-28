@@ -13,6 +13,7 @@ final class ChatListViewModel: ObservableObject {
     private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let createThreadUseCase: CreateThreadUseCase
     private let deleteThreadUseCase: DeleteThreadUseCase
+    private let updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase
     private let chatSyncSupervisor: ChatSyncSupervisor
     private let notificationClient: any NotificationClient
     private var hasLoadedForList = false
@@ -29,6 +30,7 @@ final class ChatListViewModel: ObservableObject {
         loadChatMessagesUseCase: LoadChatMessagesUseCase,
         createThreadUseCase: CreateThreadUseCase,
         deleteThreadUseCase: DeleteThreadUseCase,
+        updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase,
         chatSyncSupervisor: ChatSyncSupervisor,
         notificationClient: any NotificationClient
     ) {
@@ -42,6 +44,7 @@ final class ChatListViewModel: ObservableObject {
         self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.createThreadUseCase = createThreadUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
+        self.updateThreadMetadataUseCase = updateThreadMetadataUseCase
         self.chatSyncSupervisor = chatSyncSupervisor
         self.notificationClient = notificationClient
 
@@ -121,6 +124,34 @@ final class ChatListViewModel: ObservableObject {
     func deleteThread(_ threadID: UUID) async {
         await deleteThreadUseCase.execute(threadID: threadID)
         await reloadThreads(selectFirstIfNeeded: true)
+    }
+
+    func updateThreadAppearance(
+        threadID: UUID,
+        title: String,
+        iconName: String?,
+        iconColorName: String?
+    ) async {
+        await updateThreadMetadataUseCase.updateAppearance(
+            threadID: threadID,
+            title: title,
+            iconName: iconName,
+            iconColorName: iconColorName
+        )
+        await reloadThreads(selectFirstIfNeeded: false)
+    }
+
+    func toggleThreadPinned(_ threadID: UUID) async {
+        guard let item = stateStore.threadItems.first(where: { $0.id == threadID }) else { return }
+        let now = Date()
+        let isPinned = !item.thread.isPinned
+        let pinnedAt: Date? = isPinned ? now : nil
+        await updateThreadMetadataUseCase.updatePinState(
+            threadID: threadID,
+            isPinned: isPinned,
+            pinnedAt: pinnedAt
+        )
+        await reloadThreads(selectFirstIfNeeded: false)
     }
 
     func resetForSessionSwitch() {

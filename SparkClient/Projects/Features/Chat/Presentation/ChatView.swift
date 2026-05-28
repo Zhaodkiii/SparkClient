@@ -18,6 +18,7 @@ struct ChatView: View {
     @ObservedObject var detailViewModel: ChatDetailViewModel
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
 
     @State private var hasLoaded = false
     @State private var conversationListLayoutNonce: UInt64 = 0
@@ -26,6 +27,7 @@ struct ChatView: View {
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showCaptureFileImporter = false
     @State private var showClearChatConfirmation = false
+    @State private var showNoAvailableChatModelAlert = false
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.hanlin.rawValue
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
@@ -78,8 +80,7 @@ struct ChatView: View {
                 threadID: threadID,
                 stateStore: stateStore,
                 onSend: {
-                    KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.startSendingCurrentDraft()
+                    sendCurrentDraftIfChatModelAvailable()
                 },
                 onCancel: {
                     KeyboardDismissHelper.dismissKeyboard()
@@ -113,8 +114,7 @@ struct ChatView: View {
                 medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
                 fileTransferService: detailViewModel.attachmentFileTransferService,
                 onSend: {
-                    KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.startSendingCurrentDraft()
+                    sendCurrentDraftIfChatModelAvailable()
                 },
                 onCancel: {
                     KeyboardDismissHelper.dismissKeyboard()
@@ -367,6 +367,7 @@ struct ChatView: View {
                     memberContextStore: homeViewModel.memberContextStoreForBinding,
                     stateStore: stateStore,
                     toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
+                    aiSettingsViewModel: aiSettingsViewModel,
                     initialCompleteData: homeViewModel.dashboard?.medical.completeData,
                     fetchMemberCompleteData: { memberID in
                         try await detailViewModel.fetchMemberCompleteData(memberID: memberID)
@@ -388,6 +389,14 @@ struct ChatView: View {
                     }
                 )
                 .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
+            }
+            .alert(L10n.text("chat.list.no_available_model.title"), isPresented: $showNoAvailableChatModelAlert) {
+                Button(L10n.text("chat.list.no_available_model.action")) {
+                    detailViewModel.toolInteractionCoordinator.presentAPIKeysSettings()
+                }
+                Button(L10n.text("common.cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.text("chat.list.no_available_model.message"))
             }
             .alert(L10n.text("chat.management.clear_confirm_title"), isPresented: $showClearChatConfirmation) {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
@@ -653,6 +662,15 @@ struct ChatView: View {
             promptTemplates: detailViewModel.chatPromptTemplates
         )
         detailViewModel.presentSystemMessageSettings(prompt: prompt)
+    }
+
+    private func sendCurrentDraftIfChatModelAvailable() {
+        KeyboardDismissHelper.dismissKeyboard()
+        guard detailViewModel.chatScenarioModels.isEmpty == false else {
+            showNoAvailableChatModelAlert = true
+            return
+        }
+        detailViewModel.startSendingCurrentDraft()
     }
 
     private func updateOverlaySetting(

@@ -79,6 +79,34 @@ struct HandleRemoteNotificationUseCase {
     }
 
     func execute(payload: RemoteNotificationPayload, entryPoint: RemoteNotificationEntryPoint) {
+        if payload.type == "ai_trial_application_result" {
+            NotificationCenter.default.post(name: .aiTrialApplicationResultReceived, object: nil)
+            let tapPayload = payload
+            let coordinator = routeCoordinator
+            switch entryPoint {
+            case .foreground:
+                notificationClient.publish(
+                    NotificationIntent(
+                        title: payload.title ?? "试用申请结果",
+                        message: payload.body,
+                        level: .info,
+                        presentation: .banner,
+                        dedupeKey: "ai_trial_application_result",
+                        source: payload.source,
+                        onTap: { [weak coordinator] in
+                            coordinator?.routeRemoteNotification(
+                                tapPayload,
+                                entryPoint: .interaction(actionIdentifier: "ai_trial_application_result_tap")
+                            )
+                        }
+                    )
+                )
+            case .interaction:
+                routeCoordinator.routeRemoteNotification(payload, entryPoint: entryPoint)
+            }
+            return
+        }
+
         // Special-case member_invite: foreground = tappable banner; tap = route.
         if payload.type == "member_invite", let route = payload.route,
            case .memberInvite(let inviteID) = route {

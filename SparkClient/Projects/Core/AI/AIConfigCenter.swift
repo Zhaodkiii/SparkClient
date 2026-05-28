@@ -129,6 +129,18 @@ final class AIConfigCenter {
         return snapshot
     }
 
+    /// 强制从本地仓储重载账号级 AI 设置，并重建本地运行时 bundle。
+    func reloadLocalSnapshot(ownerAccountID: Int64? = nil) async -> AISettingsSnapshot {
+        let resolved = await resolvedOwnerAccountID(explicit: ownerAccountID)
+        let snapshot = await repository.loadSnapshot(ownerAccountID: ownerAccountID)
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: resolved)
+        logger.info(
+            "AIConfigCenter.reloadLocalSnapshot 已重载本地配置 厂商Key=\(snapshot.apiKeys.count) 模型=\(snapshot.allModels.count) 提示词=\(snapshot.promptRepo.count)",
+            module: .aiConfig
+        )
+        return snapshot
+    }
+
     // MARK: - 获取场景 bundle
     /// 获取当前生效的场景 bundle 集合（本地+远程合并）
     func effectiveScenarioBundles() async throws -> AIScenarioRemoteBundlesCollection {

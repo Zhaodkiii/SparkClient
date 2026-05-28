@@ -51,7 +51,8 @@ struct MainTabCoordinatorView: View {
                     listViewModel: chatListViewModel,
                     detailViewModel: chatDetailViewModel,
                     taskManager: taskManager,
-                    homeViewModel: homeViewModel
+                    homeViewModel: homeViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
                 )
             } destination: { route in
                 routeDestination(route)
@@ -100,7 +101,8 @@ struct MainTabCoordinatorView: View {
                 listViewModel: chatListViewModel,
                 detailViewModel: chatDetailViewModel,
                 taskManager: taskManager,
-                homeViewModel: homeViewModel
+                homeViewModel: homeViewModel,
+                aiSettingsViewModel: aiSettingsViewModel
             )
             .hidesMainTabBarWhenPushed()
             .task(id: threadID) {

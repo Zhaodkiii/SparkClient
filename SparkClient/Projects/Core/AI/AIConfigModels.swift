@@ -123,13 +123,13 @@ enum AIConfigError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidEndpoint(let endpoint):
-            return "Invalid AI endpoint: \(endpoint)"
+            return "AI 服务地址非法：\(endpoint)"
         case .missingScenario(let scenario):
-            return "Missing AI config for scenario: \(scenario.rawValue)"
+            return "未找到场景「\(scenario.rawValue)」对应的 AI 配置"
         case .missingModelForScenario(let scenario):
-            return "No AI model available for scenario: \(scenario.rawValue)"
+            return "场景「\(scenario.rawValue)」暂无可用的 AI 模型"
         case .runtimeNotBootstrapped:
-            return "AI runtime config is not ready"
+            return "AI 运行环境未初始化完成，请稍后重试"
         }
     }
 }
@@ -159,6 +159,15 @@ struct AITrialState: Codable, Equatable, Sendable {
         expiresAt: nil,
         remainingSeconds: 0
     )
+}
+
+/// 试用申请提交结果（`/api/v1/ai/trial/apply/`）。
+struct AITrialApplicationSubmission: Codable, Equatable, Sendable {
+    var submitted: Bool
+    var applicationId: Int
+    var sequence: Int
+    var status: String
+    var message: String
 }
 
 /// 试用策略中“场景 -> 模型配置”的一条映射记录。

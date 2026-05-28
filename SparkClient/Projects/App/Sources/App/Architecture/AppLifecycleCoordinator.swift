@@ -35,9 +35,13 @@ final class AppLifecycleCoordinator: ObservableObject {
         logger.info("AppLifecycleCoordinator 已初始化", module: .general)
     }
 
-    func bootstrapLaunchAfterNetworkEvaluation(_ hasEvaluatedPath: Bool) async {
+    func bootstrapLaunchAfterNetworkEvaluation(hasEvaluatedPath: Bool, isNetworkSatisfied: Bool) async {
         guard hasEvaluatedPath else { return }
-        logger.info("启动流程：网络路径已评估，开始应用级引导与会话恢复", module: .general)
+        guard isNetworkSatisfied else {
+            logger.info("启动流程：网络路径已评估但当前不可用，等待网络恢复后再执行引导与会话恢复", module: .general)
+            return
+        }
+        logger.info("启动流程：网络路径已评估且可用，开始应用级引导与会话恢复", module: .general)
         await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
         await sessionStore.restoreIfNeeded()

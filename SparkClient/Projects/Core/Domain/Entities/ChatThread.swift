@@ -32,6 +32,16 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
     /// 图片传输模式原始值（用于持久化存储）
     /// nil 表示旧版本数据，产品默认按【直发多模态】处理
     let imageDeliveryModeRaw: String?
+
+    // MARK: - 会话外观与置顶
+    /// SF Symbol 名称，例如 `bubble.left.circle`
+    let iconName: String?
+    /// 颜色 key，例如 `blue`、`green`；由客户端色板映射
+    let iconColorName: String?
+    /// 是否置顶
+    let isPinned: Bool
+    /// 置顶时间：用于多个置顶会话内部排序
+    let pinnedAt: Date?
     
     // MARK: - 状态与时间
     /// 是否已删除
@@ -88,6 +98,10 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         maxMessages: Int = 20,
         rolePrompt: String = "",
         imageDeliveryModeRaw: String? = nil,
+        iconName: String? = nil,
+        iconColorName: String? = nil,
+        isPinned: Bool = false,
+        pinnedAt: Date? = nil,
         isDeleted: Bool = false,
         deletedAt: Date? = nil,
         createdAt: Date = Date(),
@@ -106,10 +120,15 @@ struct ChatThread: Identifiable, Codable, Equatable, Sendable {
         self.maxMessages = max(maxMessages, 1)
         self.rolePrompt = rolePrompt
         self.imageDeliveryModeRaw = imageDeliveryModeRaw
+        self.iconName = iconName
+        self.iconColorName = iconColorName
+        self.isPinned = isPinned
+        self.pinnedAt = pinnedAt
         self.isDeleted = isDeleted
         self.deletedAt = deletedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.serverUpdatedAt = serverUpdatedAt
     }
+
 }

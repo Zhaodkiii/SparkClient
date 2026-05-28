@@ -41,8 +41,11 @@ struct AppCoordinatorView: View {
         switch lifecycle.sessionState {
         case .loading:
             ProgressView(L10n.text("app.loading.preparing"))
-                .task(id: networkMonitor.hasEvaluatedPath) {
-                    await lifecycle.bootstrapLaunchAfterNetworkEvaluation(networkMonitor.hasEvaluatedPath)
+                .task(id: networkMonitor.hasEvaluatedPath ? networkMonitor.isSatisfied : false) {
+                    await lifecycle.bootstrapLaunchAfterNetworkEvaluation(
+                        hasEvaluatedPath: networkMonitor.hasEvaluatedPath,
+                        isNetworkSatisfied: networkMonitor.isSatisfied
+                    )
                 }
 
         case .signedOut:

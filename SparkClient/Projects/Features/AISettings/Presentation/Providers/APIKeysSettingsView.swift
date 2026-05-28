@@ -20,7 +20,9 @@ struct APIKeysSettingsView: View {
 
     var body: some View {
         List {
-            AITrialSettingsView(viewModel: viewModel)
+            if viewModel.shouldShowTrialEntry {
+                AITrialSettingsView(viewModel: viewModel)
+            }
 
             Section(L10n.text("ai_settings.providers.section.providers")) {
                 ForEach(sortedProviders) { provider in
@@ -39,6 +41,12 @@ struct APIKeysSettingsView: View {
         }
         .navigationTitle(L10n.text("ai_settings.providers.nav_title"))
         .listStyle(.insetGrouped)
+        .task {
+            await viewModel.loadIfNeeded()
+        }
+        .refreshable {
+            await viewModel.refreshProviderRuntimeConfiguration()
+        }
         .sheet(isPresented: $showAddCustomProvider) {
             AddCustomProviderSheet { newProvider in
                 Task {
