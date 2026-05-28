@@ -74,28 +74,9 @@ struct PhoneNumberInputView: View {
     private func recompute() {
         let raw = model.rawInput
         let dial = chosenRegion.dial
-        let digits = raw.filter(\.isNumber)
-        var e164 = ""
-        var national = digits
-
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let compact = trimmed
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "-", with: "")
-            .replacingOccurrences(of: "(", with: "")
-            .replacingOccurrences(of: ")", with: "")
-
-        if compact.hasPrefix("+") {
-            e164 = compact.hasPrefix("+") ? (compact.hasPrefix("00") ? "+\(compact.dropFirst(2))" : compact) : compact
-            national = String(e164.dropFirst()).filter(\.isNumber)
-        } else if compact.hasPrefix("86") && compact.count > 11 {
-            e164 = "+\(compact)"
-            national = String(compact.dropFirst(2))
-        } else {
-            e164 = "\(dial)\(digits)"
-            national = digits
-        }
-
+        let normalized = PhoneNumberNormalizer.normalize(rawInput: raw, defaultDial: dial)
+        let e164 = normalized.e164
+        let national = normalized.nationalDigits
         let isValid = national.count >= 7 && national.count <= 15
         model = PhoneNumberInputModel(
             rawInput: raw,

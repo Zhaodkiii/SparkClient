@@ -3,6 +3,7 @@ import SwiftUI
 struct VerificationCodeField: View {
     @Binding var code: String
     var length: Int = 6
+    var onComplete: (() -> Void)? = nil
     @FocusState private var isKeyboardShowing: Bool
 
     var body: some View {
@@ -33,6 +34,13 @@ struct VerificationCodeField: View {
         .contentShape(Rectangle())
         .onTapGesture { isKeyboardShowing = true }
         .onAppear { isKeyboardShowing = true }
+        .onChange(of: code) { value in
+            guard value.count == length else { return }
+            isKeyboardShowing = false
+            DispatchQueue.main.async {
+                onComplete?()
+            }
+        }
     }
 
     private func character(at index: Int) -> String {

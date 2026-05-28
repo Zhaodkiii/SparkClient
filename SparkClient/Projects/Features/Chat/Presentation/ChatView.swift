@@ -26,7 +26,7 @@ struct ChatView: View {
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showCaptureFileImporter = false
     @State private var showClearChatConfirmation = false
-    @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.signal.rawValue
+    @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.hanlin.rawValue
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
     static let inlineErrorClientMessageID = UUID(uuidString: "00000000-0000-0000-0000-000000000999")!

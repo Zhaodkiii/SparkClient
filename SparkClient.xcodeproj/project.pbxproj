@@ -312,7 +312,7 @@
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "用于在对话中获取您的位置、搜索附近地点与规划路线。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在对话中获取您的位置、搜索附近地点与规划路线。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制语音消息，方便您通过语音与AI健康助手进行交流，获得更便捷的健康咨询服务。";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问相册来保存处理后的医疗报告和病例照片。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于在聊天中选择图片并生成发送前预览。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音输入实时转写为文本。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -366,7 +366,7 @@
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "用于在对话中获取您的位置、搜索附近地点与规划路线。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在对话中获取您的位置、搜索附近地点与规划路线。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制语音消息，方便您通过语音与AI健康助手进行交流，获得更便捷的健康咨询服务。";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问相册来保存处理后的医疗报告和病例照片。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于在聊天中选择图片并生成发送前预览。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音输入实时转写为文本。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -482,7 +482,7 @@
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "用于在对话中获取您的位置、搜索附近地点与规划路线。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在对话中获取您的位置、搜索附近地点与规划路线。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制语音消息，方便您通过语音与AI健康助手进行交流，获得更便捷的健康咨询服务。";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问相册来保存处理后的医疗报告和病例照片。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于在聊天中选择图片并生成发送前预览。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音输入实时转写为文本。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

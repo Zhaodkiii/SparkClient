@@ -50,6 +50,9 @@ final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>:
         self.onReportsUpdated = onReportsUpdated
     }
 
+    deinit {}
+
+    
     func loadDetailsIfNeeded(for reportID: Int) async {
         guard let index = reports.firstIndex(where: { $0.id == reportID }) else { return }
         guard reports[index].medExamDetails == nil else { return }

@@ -23,14 +23,16 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 headerCard
                 medicalInfoSection
+
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        
-        
+        .refreshable {
+            await viewModel.refresh()
+        }
         .navigationBarHidden(true)
         .safeAreaInset(edge: .top, spacing: 0) {
             memberSelectorBar
@@ -124,9 +126,7 @@ struct HomeView: View {
                 inviteUseCase: dependencies.memberInviteUseCase
             )
         }
-        .refreshable {
-            await viewModel.refresh()
-        }
+
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true

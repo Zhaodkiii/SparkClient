@@ -10,6 +10,8 @@ final class Atomic<Value>: @unchecked Sendable {
         self.storage = value
     }
 
+    deinit {}
+    
     nonisolated var value: Value {
         get {
             lock.lock()

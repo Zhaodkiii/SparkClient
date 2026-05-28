@@ -8,10 +8,49 @@ struct PhoneRegion: Identifiable, Equatable {
 }
 
 let defaultRegions: [PhoneRegion] = [
+    // 东亚
     .init(name: L10n.text("auth.region.cn"), dial: "+86", flag: "🇨🇳"),
-    .init(name: L10n.text("auth.region.us"), dial: "+1", flag: "🇺🇸"),
+    .init(name: L10n.text("auth.region.hk"), dial: "+852", flag: "🇭🇰"),
+    .init(name: L10n.text("auth.region.tw"), dial: "+886", flag: "🇹🇼"),
     .init(name: L10n.text("auth.region.jp"), dial: "+81", flag: "🇯🇵"),
-    .init(name: L10n.text("auth.region.hk"), dial: "+852", flag: "🇭🇰")
+    .init(name: L10n.text("auth.region.kr"), dial: "+82", flag: "🇰🇷"),
+    .init(name: L10n.text("auth.region.mo"), dial: "+853", flag: "🇲🇴"),
+
+    // 东南亚
+    .init(name: L10n.text("auth.region.sg"), dial: "+65", flag: "🇸🇬"),
+    .init(name: L10n.text("auth.region.my"), dial: "+60", flag: "🇲🇾"),
+    .init(name: L10n.text("auth.region.th"), dial: "+66", flag: "🇹🇭"),
+    .init(name: L10n.text("auth.region.id"), dial: "+62", flag: "🇮🇩"),
+    .init(name: L10n.text("auth.region.ph"), dial: "+63", flag: "🇵🇭"),
+    .init(name: L10n.text("auth.region.vn"), dial: "+84", flag: "🇻🇳"),
+
+    // 欧美
+    .init(name: L10n.text("auth.region.us"), dial: "+1", flag: "🇺🇸"),
+    .init(name: L10n.text("auth.region.ca"), dial: "+1", flag: "🇨🇦"),
+    .init(name: L10n.text("auth.region.uk"), dial: "+44", flag: "🇬🇧"),
+    .init(name: L10n.text("auth.region.de"), dial: "+49", flag: "🇩🇪"),
+    .init(name: L10n.text("auth.region.fr"), dial: "+33", flag: "🇫🇷"),
+    .init(name: L10n.text("auth.region.it"), dial: "+39", flag: "🇮🇹"),
+    .init(name: L10n.text("auth.region.es"), dial: "+34", flag: "🇪🇸"),
+    .init(name: L10n.text("auth.region.pt"), dial: "+351", flag: "🇵🇹"),
+    .init(name: L10n.text("auth.region.ru"), dial: "+7", flag: "🇷🇺"),
+
+    // 澳洲 / 新西兰
+    .init(name: L10n.text("auth.region.au"), dial: "+61", flag: "🇦🇺"),
+    .init(name: L10n.text("auth.region.nz"), dial: "+64", flag: "🇳🇿"),
+
+    // 中东 / 南亚
+    .init(name: L10n.text("auth.region.in"), dial: "+91", flag: "🇮🇳"),
+    .init(name: L10n.text("auth.region.ae"), dial: "+971", flag: "🇦🇪"),
+    .init(name: L10n.text("auth.region.sa"), dial: "+966", flag: "🇸🇦"),
+    .init(name: L10n.text("auth.region.il"), dial: "+972", flag: "🇮🇱"),
+
+    // 其他常用
+    .init(name: L10n.text("auth.region.ch"), dial: "+41", flag: "🇨🇭"),
+    .init(name: L10n.text("auth.region.se"), dial: "+46", flag: "🇸🇪"),
+    .init(name: L10n.text("auth.region.no"), dial: "+47", flag: "🇳🇴"),
+    .init(name: L10n.text("auth.region.dk"), dial: "+45", flag: "🇩🇰"),
+    .init(name: L10n.text("auth.region.ie"), dial: "+353", flag: "🇮🇪")
 ]
 
 struct PhoneLoginView: View {
@@ -22,6 +61,7 @@ struct PhoneLoginView: View {
     @State private var phone: String = ""
     @State private var isRequesting: Bool = false
     @State private var otpId: String?
+    @State private var isApplyingAutoRegion: Bool = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -120,10 +160,13 @@ struct PhoneLoginView: View {
                         .frame(height: 22)
 
                     TextField(L10n.text("auth.phone.placeholder"), text: $phone)
-                        .keyboardType(.numberPad)
+                        .keyboardType(.phonePad)
                         .textContentType(.telephoneNumber)
                         .padding(.horizontal, 12)
                         .frame(height: 48)
+                        .onChange(of: phone) { newValue in
+                            applyAutoRegionAndStripPrefixIfNeeded(newValue)
+                        }
                 }
                 .padding(6)
                 .background(Color(uiColor: .secondarySystemBackground))
@@ -156,11 +199,32 @@ struct PhoneLoginView: View {
         return trimmed.count >= 6
     }
 
+    /// 如果用户粘贴了完整的国际手机号（例如 +861538... / 00861538... / 861538...）
+    /// 自动匹配并选中对应的国家/地区，同时从输入框中移除国家码
+    /// 只保留国内号码用于显示（例如 1538...）
+    private func applyAutoRegionAndStripPrefixIfNeeded(_ raw: String) {
+        guard isApplyingAutoRegion == false else { return }
+        isApplyingAutoRegion = true
+        defer { isApplyingAutoRegion = false }
+
+        let detected = PhoneNumberNormalizer.detectRegionNumber(
+            rawInput: raw,
+            supportedDials: regions.map(\.dial)
+        )
+        guard let detected,
+              let region = regions.first(where: { $0.dial == detected.dial }) else {
+            return
+        }
+
+        chosenRegion = region
+        phone = detected.nationalDigits
+    }
+
     private func requestOTP() {
         guard phoneIsLikelyValid else { return }
         isRequesting = true
         Task { @MainActor in
-            let full = "\(chosenRegion.dial) \(phone)"
+            let full = PhoneNumberNormalizer.normalize(rawInput: phone, defaultDial: chosenRegion.dial).e164
             let response = await viewModel.sendOTP(phoneNumber: full)
             isRequesting = false
             if let response {
@@ -193,7 +257,9 @@ struct OTPVerifyView: View {
             }
             .padding(.top, 6)
 
-            VerificationCodeField(code: $code, length: 6)
+            VerificationCodeField(code: $code, length: 6, onComplete: {
+                verify()
+            })
                 .padding(.top, 6)
 
             if countdown > 0 {
@@ -222,9 +288,6 @@ struct OTPVerifyView: View {
         }
         .padding()
         .onAppear { startTimer() }
-        .onChange(of: code) { value in
-            if value.count == 6 { verify() }
-        }
         .overlay(alignment: .bottom) {
             Button(action: { verify() }) {
                 HStack {
@@ -256,7 +319,7 @@ struct OTPVerifyView: View {
 
     private func resendOTP() {
         Task { @MainActor in
-            let full = "\(region.dial) \(phone)"
+            let full = PhoneNumberNormalizer.normalize(rawInput: phone, defaultDial: region.dial).e164
             let response = await viewModel.sendOTP(phoneNumber: full)
             if let response {
                 otpId = response.otpID
@@ -267,9 +330,10 @@ struct OTPVerifyView: View {
 
     private func verify() {
         guard code.count == 6 else { return }
+        guard isVerifying == false else { return }
         isVerifying = true
         Task { @MainActor in
-            let full = "\(region.dial) \(phone)"
+            let full = PhoneNumberNormalizer.normalize(rawInput: phone, defaultDial: region.dial).e164
             await viewModel.phoneLogin(phoneNumber: full, verificationCode: code, otpId: otpId)
             isVerifying = false
         }
