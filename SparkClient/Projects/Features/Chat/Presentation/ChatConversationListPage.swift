@@ -118,20 +118,27 @@ struct ChatConversationListPage: View {
     @ViewBuilder
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "message.circle")
-                .font(.system(size: 52))
-                .foregroundColor(.secondary)
-            Text(L10n.text("chat.list.empty.title"))
-                .font(.headline)
-                .foregroundColor(.secondary)
-            Button {
-                Task {
-                    await createThreadIfAvailable()
+            if listViewModel.isRefreshingEmptyListFallback {
+                ProgressView()
+                Text(L10n.text("chat.list.empty.syncing"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Image(systemName: "message.circle")
+                    .font(.system(size: 52))
+                    .foregroundColor(.secondary)
+                Text(L10n.text("chat.list.empty.title"))
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+                Button {
+                    Task {
+                        await createThreadIfAvailable()
+                    }
+                } label: {
+                    Text(L10n.text("chat.list.empty.create"))
                 }
-            } label: {
-                Text(L10n.text("chat.list.empty.create"))
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 48)

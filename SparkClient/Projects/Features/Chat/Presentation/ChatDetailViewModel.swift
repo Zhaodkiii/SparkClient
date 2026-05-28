@@ -351,10 +351,21 @@ final class ChatDetailViewModel: ObservableObject {
     func hasAvailableChatModel() async -> Bool {
         guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
             chatScenarioModels = []
+            logger.warning(
+                "聊天详情：无可用对话模型（effectiveScenarioBundles 失败，常见原因：未 prewarm 或 SessionSnapshot 无 accountID）",
+                module: .general
+            )
             return false
         }
         chatScenarioModels = bundles.chat.models
-        return chatScenarioModels.isEmpty == false
+        if chatScenarioModels.isEmpty {
+            logger.warning(
+                "聊天详情：chat 场景模型列表为空，无法新建/发送对话",
+                module: .general
+            )
+            return false
+        }
+        return true
     }
 
 

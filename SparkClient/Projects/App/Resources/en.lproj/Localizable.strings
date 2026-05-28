@@ -576,6 +576,7 @@
 "chat.history.load_more" = "Loading earlier messages…";
 "chat.list.search.placeholder" = "Search conversations";
 "chat.list.empty.title" = "No conversations yet";
+"chat.list.empty.syncing" = "Syncing conversations…";
 "chat.list.empty.create" = "Create conversation";
 "chat.list.no_available_model.title" = "Unable to Create Conversation";
 "chat.list.no_available_model.message" = "No conversation model is available. Configure a model API key or enable a model for chat first.";

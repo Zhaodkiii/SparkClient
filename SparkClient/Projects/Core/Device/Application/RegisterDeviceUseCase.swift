@@ -13,7 +13,8 @@ final class RegisterDeviceUseCase {
         self.logger = logger
     }
 
-    func execute(pushToken: String? = nil, notificationsEnabled: Bool? = nil) async {
+    @discardableResult
+    func execute(pushToken: String? = nil, notificationsEnabled: Bool? = nil) async -> Bool {
         let bundleId = systemInfo.bundleIdentifier
         let deviceId = systemInfo.installationDeviceID
 
@@ -46,8 +47,10 @@ final class RegisterDeviceUseCase {
                 return c ? "1" : "0"
             }()
             logger.info("设备登记成功 id=\(idStr) created=\(createdStr)", module: .network)
+            return true
         } catch {
             logger.warning("设备登记失败（忽略）: \(error.localizedDescription)", module: .network)
+            return false
         }
     }
 }

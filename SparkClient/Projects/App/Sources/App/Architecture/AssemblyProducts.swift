@@ -13,7 +13,6 @@ struct AppInfrastructureAssemblyProduct {
 
 /// 认证领域装配产物。
 struct AuthAssemblyProduct {
-    let userProfileRepository: any UserProfileRepository
     let selectedMemberIDPersistence: any SelectedMemberIDPersisting
     let sessionSnapshotStore: SessionSnapshotStore
     let authRepository: any AuthRepository
@@ -92,6 +91,7 @@ struct NotificationAssemblyProduct {
     let medicalSyncService: MedicalSyncService
     let handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase
     let registerDeviceUseCase: RegisterDeviceUseCase
+    let deviceRegistrationCoordinator: DeviceRegistrationCoordinator
     let pushAdapter: PushAdapter
 }
 
@@ -181,7 +181,12 @@ extension AppAssembly {
             chatSyncSupervisor: chat.chatSyncSupervisor,
             ossConfigurationStore: infrastructure.ossConfigurationStore,
             ossAPI: backend.oss,
-            registerDevice: { await notification.registerDeviceUseCase.execute() },
+            requestDeviceRegistration: { reason in
+                await notification.deviceRegistrationCoordinator.requestRegister(reason: reason)
+            },
+            onResetDeviceRegistration: {
+                notification.deviceRegistrationCoordinator.reset()
+            },
             logger: logger
         )
     }
@@ -193,17 +198,14 @@ extension AuthAssembly {
         logger: Logger
     ) -> AuthAssemblyProduct {
         logger.info("AuthAssembly 装配认证核心", module: .auth)
-        let profileRepository = SessionBackedUserProfileRepository()
         let selectedMemberIDPersistence = UserDefaultsSelectedMemberIDStore()
         let sessionSnapshotStore = SessionSnapshotStore()
         let authRepository = DefaultAuthRepository(
             backend: backend,
-            userProfileRepository: profileRepository,
             snapshotStore: sessionSnapshotStore,
             logger: logger
         )
         return AuthAssemblyProduct(
-            userProfileRepository: profileRepository,
             selectedMemberIDPersistence: selectedMemberIDPersistence,
             sessionSnapshotStore: sessionSnapshotStore,
             authRepository: authRepository,
@@ -282,7 +284,6 @@ extension MedicalAssembly {
     static func makeCore(
         backend: Backend,
         fileTransferService: FileTransferService,
-        userProfileRepository: any UserProfileRepository,
         selectedMemberIDPersistence: any SelectedMemberIDPersisting,
         aiRuntimeService: AIRuntimeService,
         ocrConfiguration: OCRConfiguration,
@@ -332,7 +333,6 @@ extension MedicalAssembly {
             medicalSyncPreferenceRepository: DefaultMedicalSyncPreferenceRepository(),
             membersRepository: membersRepository,
             loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase(
-                userProfileRepository: userProfileRepository,
                 medicalQueryAPI: backend.medicalQuery,
                 selectedMemberIDPersistence: selectedMemberIDPersistence,
                 logger: logger
@@ -401,21 +401,20 @@ extension NotificationAssembly {
             notificationClient: notificationClient
         )
         let registerDeviceUseCase = RegisterDeviceUseCase(backend: backend, logger: logger)
+        let deviceRegistrationCoordinator = DeviceRegistrationCoordinator(
+            registerDevice: registerDeviceUseCase,
+            currentUserID: { backend.deviceCache.currentUserIDInt },
+            logger: logger
+        )
         let pushAdapter = PushAdapter(
             handleRemoteNotificationUseCase: handleRemoteNotificationUseCase,
             notificationCenter: SystemRemoteNotificationCenterClient(),
             logger: logger,
             onApnsTokenHex: { hex in
-                await registerDeviceUseCase.execute(pushToken: hex, notificationsEnabled: true)
+                await deviceRegistrationCoordinator.updateApnsToken(hex)
             },
             onRemoteNotificationAuthorizationResolved: { granted in
-                if granted {
-                    // 用户同意后先标记通知开启；APNs token 回调再写入真实 token，避免覆盖旧值。
-                    await registerDeviceUseCase.execute(pushToken: nil, notificationsEnabled: true)
-                } else {
-                    // 用户拒绝或权限异常时，服务端同步关闭推送并清空 token。
-                    await registerDeviceUseCase.execute(pushToken: "", notificationsEnabled: false)
-                }
+                await deviceRegistrationCoordinator.updateNotificationAuthorization(granted: granted)
             }
         )
         return NotificationAssemblyProduct(
@@ -432,6 +431,7 @@ extension NotificationAssembly {
             medicalSyncService: medicalSyncService,
             handleRemoteNotificationUseCase: handleRemoteNotificationUseCase,
             registerDeviceUseCase: registerDeviceUseCase,
+            deviceRegistrationCoordinator: deviceRegistrationCoordinator,
             pushAdapter: pushAdapter
         )
     }

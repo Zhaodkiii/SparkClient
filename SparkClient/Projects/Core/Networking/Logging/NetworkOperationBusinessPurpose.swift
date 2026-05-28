@@ -51,6 +51,7 @@ enum NetworkOperationBusinessPurpose: Sendable {
         "AIConfig.ProviderConnectionTest": "探测上游模型供应商连通性（连接测试）",
         "OSS.STS": "获取阿里云 OSS 临时访问凭证（直传/下载）",
         "OCR.STS": "获取 OCR 服务临时凭证或配置",
+        "Auth.CurrentSession": "鉴权：拉取当前账号最新会话（含 Pro 状态）",
         "Device.Register": "设备域：上送安装 device_id 与全量终端画像（bundle、系统、机型、时区语言、可选推送与 JWT）",
         "Device.RegisterTrusted": "设备域：登记可信设备（兼容旧 operation 名，同全量登记）",
         "Deactivation.GetStatus": "查询账号注销进度",
@@ -150,6 +151,7 @@ enum NetworkOperationBusinessPurpose: Sendable {
         switch operationName {
         case "Auth.Login": return "登录：账号密码或通用登录"
         case "Auth.AppleLogin": return "登录：Sign in with Apple"
+        case "Auth.CurrentSession": return "鉴权：拉取当前账号最新会话（含 Pro 状态）"
         case "Auth.Refresh": return "鉴权：刷新访问令牌"
         case "OTP.RequestEmail": return "OTP：请求邮箱验证码"
         case "OTP.VerifyEmail": return "OTP：校验邮箱验证码"

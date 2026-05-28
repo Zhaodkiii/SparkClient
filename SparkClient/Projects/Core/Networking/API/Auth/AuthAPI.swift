@@ -233,4 +233,42 @@ struct SparkAuthAPI {
 
         return tokens
     }
+
+    /// 冷启动刷新当前账号会话（含最新 `is_pro`），需有效 access token。
+    struct CurrentSessionResult: Decodable {
+        let userId: Int
+        let email: String?
+        let displayName: String?
+        let isPro: Bool?
+        let isNewUser: Bool?
+        let signInMethod: String?
+    }
+
+    func fetchCurrentSession() async throws -> CurrentSessionResult {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Auth.CurrentSession",
+            apiName: "AuthAPI",
+            request: SparkNetworkRequest(
+                method: .get,
+                path: "/api/v1/auth/session/",
+                headers: [:],
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "auth.session.current",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        let result = try APIResponseDecoder.decodeWrappedData(CurrentSessionResult.self, from: response)
+        configuration.logger.info(
+            "认证解码：当前会话刷新成功 userId=\(result.userId) isPro=\(result.isPro ?? false)",
+            module: .auth
+        )
+        return result
+    }
 }

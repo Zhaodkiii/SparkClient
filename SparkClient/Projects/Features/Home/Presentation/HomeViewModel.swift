@@ -104,7 +104,7 @@ final class HomeViewModel: ObservableObject {
         let medicalResult: HomeMedicalLoadResult
         do {
             medicalResult = try await loadHomeMedicalOverviewUseCase.execute(
-                accountID: session.accountID,
+                session: session,
                 selectedMemberID: selectedMemberID,
                 refreshRemoteSnapshot: syncRemote
             )
@@ -118,7 +118,7 @@ final class HomeViewModel: ObservableObject {
         isLoadingMedical = false
 
         let loaded = HomeDashboard(
-            profile: medicalResult.profile,
+            session: session,
             members: medicalResult.members,
             selectedMemberID: medicalResult.selectedMemberID,
             medical: medicalResult.medical

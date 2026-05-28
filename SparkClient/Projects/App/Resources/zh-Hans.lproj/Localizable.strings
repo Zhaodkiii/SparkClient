@@ -576,6 +576,7 @@
 "chat.history.load_more" = "正在加载更早消息…";
 "chat.list.search.placeholder" = "搜索会话";
 "chat.list.empty.title" = "还没有会话";
+"chat.list.empty.syncing" = "正在同步会话…";
 "chat.list.empty.create" = "新建会话";
 "chat.list.no_available_model.title" = "无法新建对话";
 "chat.list.no_available_model.message" = "当前没有可用的对话模型，请先配置模型密钥或启用可用于对话的模型。";

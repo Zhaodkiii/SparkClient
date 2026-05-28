@@ -603,14 +603,16 @@ extension HomeViewModel {
             binding: .ownerLike(bindingID: 2)
         )
 
+        let previewSession = UserSession(
+            accountID: accountID,
+            email: "preview@spark.com",
+            displayName: "Spark User",
+            signedInAt: now,
+            signInMethod: .apple
+        )
+
         let dashboard = HomeDashboard(
-            profile: UserProfile(
-                id: accountID,
-                email: "preview@spark.com",
-                displayName: "Spark User",
-                createdAt: now.addingTimeInterval(-86_400 * 120),
-                lastSignedInAt: now
-            ),
+            session: previewSession,
             members: [memberA, memberB],
             selectedMemberID: memberA.id,
             medical: HomeMedicalOverview(cards: [
@@ -624,15 +626,7 @@ extension HomeViewModel {
         let sessionStore = AppSessionStore(
             restoreSessionUseCase: RestoreSessionUseCase(authRepository: PreviewAuthRepository())
         )
-        sessionStore.setAuthenticated(
-            UserSession(
-                accountID: accountID,
-                email: "preview@spark.com",
-                displayName: "Spark User",
-                signedInAt: now,
-                signInMethod: .apple
-            )
-        )
+        sessionStore.setAuthenticated(previewSession)
 
         let previewPersistence = UserDefaultsSelectedMemberIDStore(
             defaults: UserDefaults(suiteName: "SparkClient.Preview.MemberContext") ?? .standard
@@ -646,7 +640,6 @@ extension HomeViewModel {
         let viewModel = HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase(
-                userProfileRepository: PreviewUserProfileRepository(profile: dashboard.profile),
                 medicalQueryAPI: SparkMedicalQueryAPI(configuration: previewBackend.configuration),
                 selectedMemberIDPersistence: previewPersistence,
                 logger: previewLogger
@@ -671,34 +664,6 @@ private final class PreviewNotificationClient: NotificationClient {
     func error(_ message: String, title: String?, source: String) {}
     func warning(_ message: String, title: String?, source: String) {}
     func info(_ message: String, title: String?, source: String) {}
-}
-
-private struct PreviewUserProfileRepository: UserProfileRepository {
-    let profile: UserProfile
-
-    func fetchProfile(id: Int64) async throws -> UserProfile? {
-        profile
-    }
-
-    func fetchLastActiveProfile() async throws -> UserProfile? {
-        profile
-    }
-
-    func upsertProfile(
-        accountID: Int64,
-        email: String,
-        displayName: String,
-        signedInAt: Date,
-        signInMethod: UserSession.SignInMethod
-    ) async throws -> UserProfile {
-        UserProfile(
-            id: accountID,
-            email: email,
-            displayName: displayName,
-            createdAt: profile.createdAt,
-            lastSignedInAt: signedInAt
-        )
-    }
 }
 
 private struct PreviewAuthRepository: AuthRepository {

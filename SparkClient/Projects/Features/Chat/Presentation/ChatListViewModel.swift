@@ -16,8 +16,13 @@ final class ChatListViewModel: ObservableObject {
     private let updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase
     private let chatSyncSupervisor: ChatSyncSupervisor
     private let notificationClient: any NotificationClient
+    private let logger: Logger
     private var hasLoadedForList = false
+    private var didAttemptEmptyListRemoteRefresh = false
     private var cancellables = Set<AnyCancellable>()
+
+    @Published private(set) var hasFinishedInitialLocalLoad = false
+    @Published private(set) var isRefreshingEmptyListFallback = false
 
     init(
         stateStore: ChatStateStore,
@@ -32,7 +37,8 @@ final class ChatListViewModel: ObservableObject {
         deleteThreadUseCase: DeleteThreadUseCase,
         updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase,
         chatSyncSupervisor: ChatSyncSupervisor,
-        notificationClient: any NotificationClient
+        notificationClient: any NotificationClient,
+        logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
         self.sessionStore = sessionStore
@@ -47,6 +53,7 @@ final class ChatListViewModel: ObservableObject {
         self.updateThreadMetadataUseCase = updateThreadMetadataUseCase
         self.chatSyncSupervisor = chatSyncSupervisor
         self.notificationClient = notificationClient
+        self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
             .receive(on: DispatchQueue.main)
@@ -70,6 +77,24 @@ final class ChatListViewModel: ObservableObject {
         guard hasLoadedForList == false else { return }
         hasLoadedForList = true
         await loadIfNeeded()
+        hasFinishedInitialLocalLoad = true
+        await refreshThreadsIfLocalEmpty(isSearching: false)
+    }
+
+    /// 本地列表首次加载完成且仍为空时，触发一次远端线程列表刷新（每页面生命周期最多一次）。
+    func refreshThreadsIfLocalEmpty(isSearching: Bool) async {
+        guard hasFinishedInitialLocalLoad else { return }
+        guard isSearching == false else { return }
+        guard didAttemptEmptyListRemoteRefresh == false else { return }
+        guard isRefreshingEmptyListFallback == false else { return }
+        guard stateStore.threadItems.isEmpty else { return }
+
+        didAttemptEmptyListRemoteRefresh = true
+        isRefreshingEmptyListFallback = true
+        defer { isRefreshingEmptyListFallback = false }
+
+        logger.info("会话列表本地为空，触发空结果兜底 refreshThreads", module: .general)
+        await refreshThreads()
     }
 
     func loadIfNeeded() async {
@@ -156,6 +181,9 @@ final class ChatListViewModel: ObservableObject {
 
     func resetForSessionSwitch() {
         hasLoadedForList = false
+        hasFinishedInitialLocalLoad = false
+        didAttemptEmptyListRemoteRefresh = false
+        isRefreshingEmptyListFallback = false
     }
 
     private func reloadThreads(selectFirstIfNeeded: Bool) async {

@@ -77,11 +77,13 @@ actor AuthTokenProvider {
     }
 
     func clearTokens() {
+        let hadKeychainAccess = keychainGet("accessToken") != nil
         cachedTokens = nil
         keychainDelete("accessToken")
         keychainDelete("refreshToken")
         keychainDelete("expiresAt")
         keychainDelete("tokenType")
+        logger.debug("AuthTokenProvider：已清除 Keychain 令牌 hadAccess=\(hadKeychainAccess)", module: .auth)
     }
 
     func authorizationHeaderValue() async throws -> String {

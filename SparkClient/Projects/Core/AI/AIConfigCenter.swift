@@ -48,7 +48,14 @@ final class AIConfigCenter {
         if let explicitID {
             return explicitID
         }
-        return await sessionSnapshotStore.load()?.accountID
+        guard let session = await sessionSnapshotStore.load() else {
+            logger.debug(
+                "AIConfigCenter：SessionSnapshotStore 无可用 UserSession，ownerAccountID 解析为 nil",
+                module: .aiConfig
+            )
+            return nil
+        }
+        return session.accountID
     }
 
     // MARK: - 场景配置解析
@@ -118,6 +125,13 @@ final class AIConfigCenter {
                 module: .aiConfig
             )
             return hit
+        }
+
+        if resolved == nil, let boundOwner = await runtimeConfigStore.boundOwnerAccountIDForDiagnostics() {
+            logger.warning(
+                "AIConfigCenter.currentSnapshot 未命中缓存：resolved=nil 但运行时曾绑定 accountID=\(boundOwner)，即将回填空快照可能清空 bundle",
+                module: .aiConfig
+            )
         }
 
         let snapshot = await repository.loadSnapshot(ownerAccountID: ownerAccountID)

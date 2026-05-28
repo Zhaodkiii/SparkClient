@@ -116,7 +116,10 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         }
 
         guard let ownerAccountID else {
-            logger.debug("AI loadSnapshot 读链路结束：无 ownerAccountID，返回空目录", module: .aiConfig)
+            logger.warning(
+                "AI loadSnapshot 读链路结束：无 ownerAccountID（来源=\(ownerSource)），返回空目录；新建对话/模型校验将失败",
+                module: .aiConfig
+            )
             return AISettingsSnapshot(
                 allModels: [],
                 apiKeys: []

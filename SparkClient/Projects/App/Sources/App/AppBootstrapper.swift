@@ -8,7 +8,8 @@ final class AppBootstrapper {
     private let ossConfigurationStore: SparkOSSConfigurationStore
     private let ossAPI: SparkOSSAPI
     private let logger: Logger
-    private let registerDevice: () async -> Void
+    private let requestDeviceRegistration: (DeviceRegistrationReason) async -> Void
+    private let onResetDeviceRegistration: () -> Void
 
     private var didBootstrapLaunch = false
     private var bootstrappedAccounts: Set<Int64> = []
@@ -19,7 +20,8 @@ final class AppBootstrapper {
         chatSyncSupervisor: ChatSyncSupervisor? = nil,
         ossConfigurationStore: SparkOSSConfigurationStore,
         ossAPI: SparkOSSAPI,
-        registerDevice: @escaping () async -> Void = {},
+        requestDeviceRegistration: @escaping (DeviceRegistrationReason) async -> Void = { _ in },
+        onResetDeviceRegistration: @escaping () -> Void = {},
         logger: Logger = ConsoleLogger()
     ) {
         self.aiConfigCenter = aiConfigCenter
@@ -27,7 +29,8 @@ final class AppBootstrapper {
         self.chatSyncSupervisor = chatSyncSupervisor
         self.ossConfigurationStore = ossConfigurationStore
         self.ossAPI = ossAPI
-        self.registerDevice = registerDevice
+        self.requestDeviceRegistration = requestDeviceRegistration
+        self.onResetDeviceRegistration = onResetDeviceRegistration
         self.logger = logger
 
         NotificationCenter.default.addObserver(
@@ -48,7 +51,7 @@ final class AppBootstrapper {
 
         // AI 目录进运行时缓存在 `bootstrapIfNeeded(for:)` 中按 `UserSession.accountID` 执行（与 `prepareSignedInSessionIfNeeded` 内 `prewarm` 对齐，避免与随后的运行时重置重复）。
         logger.info("应用启动引导：设备注册等（AI 运行时由已登录引导按账号预热）", module: .general)
-        await registerDevice()
+        await requestDeviceRegistration(.appLaunch)
     }
 
     /// 账号进入已登录态：DB 目录（仅首次无初始化记录时从 bundle 灌入）→ 本地场景 bundle → 运行时缓存；Pro 再拉 bootstrap 仅进内存。
@@ -67,11 +70,20 @@ final class AppBootstrapper {
             }
             bootstrappedAccounts.insert(session.accountID)
             logger.info("用户档案 \(session.accountID) 引导已完成", module: .general)
+        } catch let error as AIConfigError {
+            switch error {
+            case .missingModelForScenario(let scenario):
+                logger.warning(
+                    "AI 启动预热：场景「\(scenario.rawValue)」暂无可用模型，等待 Pro 配置刷新或用户配置",
+                    module: .general
+                )
+            default:
+                logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
+            }
         } catch {
-            logger.warning("用户档案引导已结束（降级）：\(error)", module: .general)
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
-        await registerDevice()
+        await requestDeviceRegistration(.signedInBootstrap)
         await chatSyncSupervisor?.kickAttachmentDrain()
     }
 
@@ -79,5 +91,6 @@ final class AppBootstrapper {
     func reset() async {
         didBootstrapLaunch = false
         bootstrappedAccounts.removeAll()
+        onResetDeviceRegistration()
     }
 }

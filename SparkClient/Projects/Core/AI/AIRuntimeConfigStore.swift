@@ -40,6 +40,11 @@ actor AIRuntimeConfigStore {
         return cached
     }
 
+    /// 诊断：当前运行时缓存绑定的账号（`nil` 表示未绑定或仅草稿）。
+    func boundOwnerAccountIDForDiagnostics() -> Int64? {
+        cachedOwnerAccountID
+    }
+
     func setProOverlay(_ bundles: AIScenarioRemoteBundlesCollection?, revision: String?, smallTasks: [SmallTask] = []) {
         proBundles = bundles
         proRevision = revision

@@ -1,8 +1,8 @@
 import Foundation
 
-/// 首页聚合：成员上下文 + 医疗摘要（按所选成员）。
+/// 首页聚合：当前账号会话 + 成员上下文 + 医疗摘要（按所选成员）。
 struct HomeDashboard: Equatable, Sendable {
-    let profile: UserProfile
+    let session: UserSession
     let members: [Member]
     let selectedMemberID: Int?
     /// 当前成员在服务端医疗快照中的汇总（首页卡片统计）。

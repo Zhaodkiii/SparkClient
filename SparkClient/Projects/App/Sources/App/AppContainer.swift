@@ -86,8 +86,6 @@ final class AppContainer {
     //
     // 界面与用例只应依赖这些协议类型，而非具体 `Default*` 类（由容器在 `init` 里装配）。
 
-    /// 当前登录用户资料（会话态，如 Apple 用户标识展示名）。
-    let userProfileRepository: any UserProfileRepository
     /// 登录、刷新 token、登出。
     let authRepository: any AuthRepository
     /// 账户资料、二次验证与销户提交。
@@ -348,7 +346,6 @@ final class AppContainer {
         let medical = MedicalAssembly.makeCore(
             backend: backend,
             fileTransferService: infrastructure.fileTransferService,
-            userProfileRepository: auth.userProfileRepository,
             selectedMemberIDPersistence: auth.selectedMemberIDPersistence,
             aiRuntimeService: ai.aiRuntimeService,
             ocrConfiguration: ocrConfiguration,
@@ -393,7 +390,6 @@ final class AppContainer {
         self.fileTransferService = infrastructure.fileTransferService
         self.ossConfigurationStore = infrastructure.ossConfigurationStore
 
-        self.userProfileRepository = auth.userProfileRepository
         self.authRepository = auth.authRepository
         self.accountManagementRepository = accountManagementRepository
         self.restoreSessionUseCase = auth.restoreSessionUseCase
@@ -475,7 +471,10 @@ final class AppContainer {
 
         // MARK: 会话 Store 与跨界面共享 ViewModel
         // 注意：`sessionStore` 使用刚赋值的 `restoreSessionUseCase`，`chatListViewModel` 依赖 `sessionStore`，顺序不可颠倒。
-        self.sessionStore = AppSessionStore(restoreSessionUseCase: restoreSessionUseCase)
+        self.sessionStore = AppSessionStore(
+            restoreSessionUseCase: restoreSessionUseCase,
+            sessionSnapshotStore: auth.sessionSnapshotStore
+        )
         self.onboardingStore = OnboardingStore(repository: UserDefaultsOnboardingStateRepository())
         self.memberContextStore = notification.memberContextStore
         self.memberContextStore.configure(manage: manageHomeMemberUseCase)

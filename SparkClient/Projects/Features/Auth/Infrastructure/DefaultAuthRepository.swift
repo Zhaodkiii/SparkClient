@@ -16,40 +16,68 @@ enum AuthFeatureError: LocalizedError {
 /// 负责桥接远端认证、会话快照存储与本地首屏数据初始化。
 final class DefaultAuthRepository: AuthRepository {
     private let backend: Backend
-    private let userProfileRepository: any UserProfileRepository
     private let snapshotStore: SessionSnapshotStore
     private let logger: Logger
 
     init(
         backend: Backend,
-        userProfileRepository: any UserProfileRepository,
         snapshotStore: SessionSnapshotStore = SessionSnapshotStore(),
         logger: Logger = ConsoleLogger()
     ) {
         self.backend = backend
-        self.userProfileRepository = userProfileRepository
         self.snapshotStore = snapshotStore
         self.logger = logger
     }
 
     func restoreSession() async -> UserSession? {
-        guard let session = await snapshotStore.load() else { return nil }
+        guard let cachedSession = await snapshotStore.load() else {
+            await logMissingSnapshotWithTokenHint(context: "restoreSession")
+            return nil
+        }
 
         do {
-            // 冷启动先预热 token：若 access 近过期会在这里静默 refresh，
-            // 后续业务同步请求可直接拿到最新 Authorization。
             _ = try await backend.tokenProvider().authorizationHeaderValue()
-            logger.info("会话恢复成功，认证令牌已就绪", module: .auth)
-            return session
+            logger.info("会话恢复：认证令牌已就绪，开始拉取服务端最新 UserSession", module: .auth)
         } catch let authError as AuthTokenProviderError {
-            // 约束：只有用户主动退出登录时才清理会话。
-            // 因此这里不自动回退登录页，保留本地会话并交由后续请求继续自愈。
             logger.warning("会话恢复鉴权异常（保留会话）：\(authError.localizedDescription)", module: .auth)
-            return session
+            return cachedSession
         } catch {
-            // 网络波动等非认证错误：保留本地会话，允许用户先离线使用。
             logger.warning("会话恢复时 token 预热失败（降级保留会话）：\(error.localizedDescription)", module: .auth)
-            return session
+            return cachedSession
+        }
+
+        do {
+            let remote = try await backend.auth.fetchCurrentSession()
+            let latestSession = mergeCurrentSession(remote, into: cachedSession)
+            try await snapshotStore.save(latestSession)
+            if latestSession.isPro != cachedSession.isPro {
+                logger.info(
+                    "会话恢复：Pro 状态已更新 accountID=\(latestSession.accountID) cached=\(cachedSession.isPro) latest=\(latestSession.isPro)",
+                    module: .auth
+                )
+            }
+            logger.info(
+                "会话恢复成功：已使用服务端最新 UserSession accountID=\(latestSession.accountID) isPro=\(latestSession.isPro)",
+                module: .auth
+            )
+            return latestSession
+        } catch {
+            if shouldSignOutOnSessionRefreshFailure(error) {
+                logger.warning(
+                    "会话恢复：服务端鉴权失效，清空本地会话 error=\(error.localizedDescription)",
+                    module: .auth
+                )
+                await backend.tokenProvider().clearTokens()
+                backend.deviceCache.clearDeviceMetadata()
+                await snapshotStore.clear()
+                return nil
+            }
+
+            logger.warning(
+                "会话恢复：拉取最新 UserSession 失败，使用 SessionSnapshotStore 兜底 cachedIsPro=\(cachedSession.isPro) error=\(error.localizedDescription)",
+                module: .auth
+            )
+            return cachedSession
         }
     }
 
@@ -89,14 +117,6 @@ final class DefaultAuthRepository: AuthRepository {
         }()
 
         let signedInAt = Date()
-        _ = try await userProfileRepository.upsertProfile(
-            accountID: Int64(context.userId),
-            email: normalizedEmail,
-            displayName: displayName,
-            signedInAt: signedInAt,
-            signInMethod: .apple
-        )
-
         let session = UserSession(
             accountID: Int64(context.userId),
             email: normalizedEmail,
@@ -108,6 +128,7 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         try await snapshotStore.save(session)
+        await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "apple")
         logger.info("用户已通过 Apple 登录，session 已保存 accountID=\(session.accountID) 令牌类型=\(context.tokens.tokenType)", module: .auth)
         return session
     }
@@ -147,14 +168,6 @@ final class DefaultAuthRepository: AuthRepository {
             ? (result.displayName ?? normalizedPhone)
             : normalizedPhone
         let signedInAt = Date()
-        _ = try await userProfileRepository.upsertProfile(
-            accountID: Int64(result.userId),
-            email: normalizedPhone,
-            displayName: displayName,
-            signedInAt: signedInAt,
-            signInMethod: .phone
-        )
-
         let session = UserSession(
             accountID: Int64(result.userId),
             email: normalizedPhone,
@@ -166,14 +179,116 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         try await snapshotStore.save(session)
+        await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "phone")
         logger.info("用户已通过手机号验证码登录，session 已保存 accountID=\(session.accountID)", module: .auth)
         return session
     }
 
     func signOut() async throws {
+        logger.info("认证仓储：开始登出，将清除 Keychain token 与 SessionSnapshot", module: .auth)
         await backend.tokenProvider().clearTokens()
         backend.deviceCache.clearDeviceMetadata()
         await snapshotStore.clear()
         logger.info("用户已登出", module: .auth)
+    }
+
+    /// 登录/刷新写快照后立即读回，便于发现 save 失败或读写时序问题。
+    private func verifySnapshotAfterSave(expectedAccountID: Int64, signInMethod: String) async {
+        guard let persisted = await snapshotStore.load() else {
+            logger.error(
+                "认证仓储：\(signInMethod) 登录 save 后快照仍不可读 accountID=\(expectedAccountID)（AppSessionStore 若已 signedIn 将产生分裂）",
+                module: .auth
+            )
+            return
+        }
+        guard persisted.accountID == expectedAccountID else {
+            logger.error(
+                "认证仓储：\(signInMethod) 登录 save 后快照 accountID=\(persisted.accountID) 与预期 \(expectedAccountID) 不一致",
+                module: .auth
+            )
+            return
+        }
+    }
+
+    /// 无 UserDefaults 会话但 Keychain 仍有 token 时打 warning，便于定位「能调鉴权 API 但解析不到 accountID」。
+    private func logMissingSnapshotWithTokenHint(context: String) async {
+        do {
+            _ = try await backend.tokenProvider().authorizationHeaderValue()
+            logger.warning(
+                "认证仓储：\(context) 无可用 SessionSnapshot，但 Keychain 中仍有 access token（鉴权与 accountID 可能分裂）",
+                module: .auth
+            )
+        } catch {
+            logger.debug(
+                "认证仓储：\(context) 无可用 SessionSnapshot，且无可用 access token",
+                module: .auth
+            )
+        }
+    }
+
+    private func mergeCurrentSession(
+        _ remote: SparkAuthAPI.CurrentSessionResult,
+        into cached: UserSession
+    ) -> UserSession {
+        let accountID = Int64(remote.userId)
+        let email = (remote.email ?? cached.email).trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedEmail = email.isEmpty ? cached.email : email
+
+        let remoteDisplayName = remote.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let displayName = remoteDisplayName.isEmpty ? cached.displayName : remoteDisplayName
+
+        let signInMethod = parseSignInMethod(remote.signInMethod) ?? cached.signInMethod
+
+        return UserSession(
+            accountID: accountID,
+            email: resolvedEmail,
+            displayName: displayName,
+            signedInAt: cached.signedInAt,
+            signInMethod: signInMethod,
+            isPro: remote.isPro ?? false,
+            isNewUser: remote.isNewUser ?? cached.isNewUser
+        )
+    }
+
+    private func parseSignInMethod(_ raw: String?) -> UserSession.SignInMethod? {
+        guard let raw else { return nil }
+        switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "apple":
+            return .apple
+        case "phone":
+            return .phone
+        default:
+            return nil
+        }
+    }
+
+    private func shouldSignOutOnSessionRefreshFailure(_ error: Error) -> Bool {
+        if let authError = error as? AuthTokenProviderError {
+            switch authError {
+            case .refreshFailed, .missingTokens, .invalidRefreshResponse:
+                return true
+            case .refreshTemporarilyUnavailable:
+                return false
+            }
+        }
+
+        if let networkError = error as? SparkNetworkError {
+            switch networkError {
+            case .refreshFailed:
+                return true
+            case .httpError(let statusCode, let backend, _):
+                let backendCode = backend?.code
+                let message = backend?.msg ?? ""
+                return AuthSessionInvalidation.shouldInvalidate(
+                    statusCode: statusCode,
+                    backendCode: backendCode,
+                    message: message
+                )
+            case .cancelled, .transport, .invalidResponse, .decoding, .timeout:
+                return false
+            }
+        }
+
+        return false
     }
 }

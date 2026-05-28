@@ -145,6 +145,10 @@ actor CoreDataChatStore {
         rolePrompt: String = ""
     ) async -> ChatThread {
         guard let accountID = await activeAccountID() else {
+            logger.warning(
+                "聊天仓储：createThread 时 SessionSnapshotStore 无 accountID，仅返回内存 thread（未写入 Core Data）title=\(title)",
+                module: .general
+            )
             return ChatThread(
                 memberID: memberID,
                 title: title,

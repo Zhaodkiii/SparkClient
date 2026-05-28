@@ -101,8 +101,9 @@ struct LoginView: View {
                 }
             )
             .signInWithAppleButtonStyle(.black)
+            .frame(maxWidth: 375)
             .frame(height: 48)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .frame(maxWidth: .infinity, alignment: .center)
 
             if showPhoneLogin {
                 HStack {

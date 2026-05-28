@@ -2,7 +2,6 @@ import Foundation
 
 /// 首页医疗摘要加载用例（直接走 ``SparkMedicalQueryAPI``，无本地聚合快照）。
 struct LoadHomeMedicalOverviewUseCase: Sendable {
-    let userProfileRepository: any UserProfileRepository
     let medicalQueryAPI: SparkMedicalQueryAPI
     let selectedMemberIDPersistence: any SelectedMemberIDPersisting
     let logger: Logger
@@ -10,14 +9,11 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
     private let logModule = LogModule.home
 
     func execute(
-        accountID: Int64,
+        session: UserSession,
         selectedMemberID: Int?,
         refreshRemoteSnapshot: Bool
     ) async throws -> HomeMedicalLoadResult {
         let startedAt = Date()
-        guard let profile = try await userProfileRepository.fetchProfile(id: accountID) else {
-            throw NSError(domain: "SparkClient.Home", code: 404, userInfo: [NSLocalizedDescriptionKey: "未找到当前档案"])
-        }
 
         // 成员列表是首页的关键数据，失败时不应静默降级为空数组（会导致 UI 被“清空”）。
         // 这里改为显式抛错，让上层保留已有 dashboard 并展示错误提示。
@@ -31,7 +27,7 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
 
         let resolvedSelectedID: Int? = {
             guard members.isEmpty == false else { return nil }
-            let persisted = selectedMemberIDPersistence.load(for: accountID)
+            let persisted = selectedMemberIDPersistence.load(for: session.accountID)
             let preferred = selectedMemberID ?? persisted
             if let preferred, members.contains(where: { $0.id == preferred }) {
                 return preferred
@@ -53,12 +49,11 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
 
         let cost = Date().timeIntervalSince(startedAt)
         logger.info(
-            "医疗摘要完成 cost=\(String(format: "%.3f", cost))s refreshRemote=\(refreshRemoteSnapshot) memberID=\(resolvedSelectedID.map(String.init) ?? "nil") cards=\(medical.cards.count)",
+            "医疗摘要完成 cost=\(String(format: "%.3f", cost))s refreshRemote=\(refreshRemoteSnapshot) accountID=\(session.accountID) memberID=\(resolvedSelectedID.map(String.init) ?? "nil") cards=\(medical.cards.count)",
             module: logModule
         )
 
         return HomeMedicalLoadResult(
-            profile: profile,
             members: members,
             selectedMemberID: resolvedSelectedID,
             medical: medical
@@ -116,7 +111,6 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
 }
 
 struct HomeMedicalLoadResult: Equatable, Sendable {
-    let profile: UserProfile
     let members: [Member]
     let selectedMemberID: Int?
     let medical: HomeMedicalOverview
