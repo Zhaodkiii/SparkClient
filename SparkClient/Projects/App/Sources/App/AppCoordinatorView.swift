@@ -86,7 +86,7 @@ struct AppCoordinatorView: View {
                     .id(session.accountID)
                     .task(id: session.accountID) {
                         // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-                        lifecycle.requestNotificationAuthorizationIfNeeded()
+//                        lifecycle.requestNotificationAuthorizationIfNeeded()
                         await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
                     }
                 }

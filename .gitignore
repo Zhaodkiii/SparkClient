@@ -8,3 +8,8 @@
 # Build
 DerivedData/
 build/
+
+# Xcode custom Derived Data (project-local)
+.derived/
+.derived-staging/
+.derived-release/
