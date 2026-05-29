@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "sparkles.png",
+      "filename" : "ai302-color.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "sparkles 1.png",
+      "filename" : "ai302-color 1.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "sparkles 2.png",
+      "filename" : "ai302-color 2.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
