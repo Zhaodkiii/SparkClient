@@ -672,8 +672,8 @@ final class ToolHub: @unchecked Sendable {
             return await runFetchWorkout(invocation: invocation, context: context)
 
         case .makeNutritionData:
-            /// 构建营养数据（纯计算逻辑，无需 async）
-            return runMakeNutritionData(invocation: invocation)
+            /// 构建营养数据并在对话内插入营养卡片
+            return runMakeNutritionData(invocation: invocation, context: context)
 
 
         // MARK: ===== 知识库类工具 =====

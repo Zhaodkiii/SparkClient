@@ -128,7 +128,9 @@ struct ChatConversationMessageRow: View {
                 }
             },
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
+            savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,
             onStructuredHealthCardAction: handleStructuredHealthCardAction,
+            onNutritionCardAction: handleNutritionCardAction,
             onCaptureOpenCamera: {
                 stateStore.setCameraPresented(true, for: threadID)
             },
@@ -165,6 +167,16 @@ struct ChatConversationMessageRow: View {
     private func handleStructuredHealthCardAction(_ action: ChatStructuredHealthCardAction) {
         Task {
             await detailViewModel.handleStructuredHealthCardAction(
+                threadID: threadID,
+                message: message,
+                action: action
+            )
+        }
+    }
+
+    private func handleNutritionCardAction(_ action: ChatNutritionCardAction) {
+        Task {
+            await detailViewModel.handleNutritionCardAction(
                 threadID: threadID,
                 message: message,
                 action: action

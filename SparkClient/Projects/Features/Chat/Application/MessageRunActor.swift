@@ -631,7 +631,7 @@ actor MessageRunActor: ChatSideEffectSink {
                 return false
             }
             return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
-        case .knowledgeCards, .taskCards, .captureCard, .workoutVisualization, .sleepVisualization, .externalConnectorRichBlocks:
+        case .knowledgeCards, .taskCards, .captureCard, .workoutVisualization, .sleepVisualization, .nutritionCards, .externalConnectorRichBlocks:
             guard let blocks = ToolSideEffectBlockMapper.blocks(
                 for: effect,
                 assistantClientMessageID: assistantClientMessageID,
@@ -817,7 +817,7 @@ actor MessageRunActor: ChatSideEffectSink {
         case .structuredHealthCards:
             // 须与父 tool 的 orderKey 绑定；无 tool 上下文时仅作兜底。
             return 2_100
-        case .sleepVisualization, .workoutVisualization, .healthResourceReference,
+        case .sleepVisualization, .workoutVisualization, .nutritionCards, .healthResourceReference,
                 .captureCard, .knowledgeCards, .html, .taskCards,
                 .pendingMemberToolCards:
             return 2_100
@@ -978,6 +978,7 @@ private extension ChatMessageBlock {
             healthCards: healthCards,
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
+            nutritionCards: nutritionCards,
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,
             smallTaskCard: smallTaskCard,

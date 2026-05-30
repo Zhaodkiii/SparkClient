@@ -107,6 +107,15 @@ extension ChatMessageBlock {
         case .sleepVisualization(let sleep):
             ChatSleepVisualizationMessageCard(model: sleep)
 
+            // 12b. 营养卡片
+        case .nutritionCards(let payload):
+            ChatNutritionCardsBlockView(
+                blockID: id,
+                cards: payload.cards,
+                savingCardIDs: context.savingNutritionCardIDs,
+                onAction: context.onNutritionCardAction
+            )
+
             // 13. 运动数据可视化
         case .workoutVisualization(let workout):
             ChatWorkoutVisualizationMessageCard(model: workout)
@@ -241,6 +250,8 @@ extension ChatMessageBlock {
             return "正在结构化健康数据..."
         case .sleepVisualization:
             return "正在生成睡眠可视化..."
+        case .nutritionCards:
+            return "正在生成营养卡片..."
         case .workoutVisualization:
             return "正在生成运动可视化..."
         case .healthResourceReference:

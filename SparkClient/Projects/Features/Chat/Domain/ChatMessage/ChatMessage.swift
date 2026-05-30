@@ -102,6 +102,8 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case structuredHealthCards
     /// 睡眠可视化展示块
     case sleepVisualization
+    /// 营养卡片块（写入 Apple 健康）
+    case nutritionCards
     /// 运动/健身可视化展示块
     case workoutVisualization
     /// 快速捕获卡片块
@@ -193,35 +195,6 @@ nonisolated enum ChatStableBlockID {
     }
 }
 
-nonisolated struct ChatToolBlockPayload: Codable, Equatable, Sendable {
-    let name: String?
-    let content: String
-    /// 工具执行侧归一化参数（来自 `ToolExecutionResult.arguments`），供工具详情 Sheet。
-    let invocationArguments: [String: String]?
-
-    init(
-        name: String?,
-        content: String,
-        invocationArguments: [String: String]? = nil
-    ) {
-        self.name = name
-        self.content = content
-        self.invocationArguments = invocationArguments
-    }
-}
-
-nonisolated struct ChatMapRouteBlockPayload: Codable, Equatable, Sendable {
-    let locations: [ChatMapLocationPayload]
-    let routes: [ChatRoutePayload]
-}
-
-nonisolated struct ChatDeepThoughtCardPayload: Equatable, Codable, Sendable {
-    var reasoningContent: String?
-    var reasoningDurationMs: Int64?
-    var reasoningExpanded: Bool
-    var reasoningVisibility: ChatReasoningVisibility
-}
-
 nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case text(String)
     case deepThought(ChatDeepThoughtCardPayload)
@@ -236,6 +209,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case pendingMemberToolCards([PendingMemberToolCard])
     case structuredHealthCards(StructuredHealthCardsBlob)
     case sleepVisualization(ChatHealthSleepModel)
+    case nutritionCards(ChatNutritionCardsPayload)
     case workoutVisualization(ChatHealthWorkoutModel)
     case captureCard(ChatCaptureMessageCardPayload)
     case html(String)
@@ -260,6 +234,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .pendingMemberToolCards: return .pendingMemberToolCards
         case .structuredHealthCards: return .structuredHealthCards
         case .sleepVisualization: return .sleepVisualization
+        case .nutritionCards: return .nutritionCards
         case .workoutVisualization: return .workoutVisualization
         case .captureCard: return .captureCard
         case .html: return .html
@@ -269,21 +244,6 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .assistantStatusCard: return .assistantStatusCard
         case .healthResourceReference: return .healthResourceReference
         }
-    }
-}
-
-nonisolated enum ChatAssistantStatusCardType: String, Codable, Sendable {
-    case interrupted
-    case sendFailed
-}
-
-nonisolated struct ChatAssistantStatusCardPayload: Codable, Equatable, Sendable {
-    let type: ChatAssistantStatusCardType
-    let message: String
-
-    init(type: ChatAssistantStatusCardType, message: String) {
-        self.type = type
-        self.message = message
     }
 }
 
@@ -414,6 +374,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         guard case .sleepVisualization(let model) = payload else { return nil }
         return model
     }
+
+    /// 营养卡片数据
+    nonisolated var nutritionCards: ChatNutritionCardsPayload? {
+        guard case .nutritionCards(let payload) = payload else { return nil }
+        return payload
+    }
     
     /// 运动可视化模型
     nonisolated var workoutVisualization: ChatHealthWorkoutModel? {
@@ -462,6 +428,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         healthCards: [ChatHealthCardPayload] = [],
         structuredHealthCards: StructuredHealthCardsBlob? = nil,
         sleepVisualization: ChatHealthSleepModel? = nil,
+        nutritionCards: ChatNutritionCardsPayload? = nil,
         workoutVisualization: ChatHealthWorkoutModel? = nil,
         captureMessageCard: ChatCaptureMessageCardPayload? = nil,
         smallTaskCard: ChatSmallTaskMessageCardPayload? = nil,
@@ -496,6 +463,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             healthCards: healthCards,
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
+            nutritionCards: nutritionCards,
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,
             smallTaskCard: smallTaskCard,
@@ -527,6 +495,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         healthCards: [ChatHealthCardPayload],
         structuredHealthCards: StructuredHealthCardsBlob?,
         sleepVisualization: ChatHealthSleepModel?,
+        nutritionCards: ChatNutritionCardsPayload?,
         workoutVisualization: ChatHealthWorkoutModel?,
         captureMessageCard: ChatCaptureMessageCardPayload?,
         smallTaskCard: ChatSmallTaskMessageCardPayload?,
@@ -577,6 +546,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing sleep visualization payload for sleepVisualization block")
             }
             return .sleepVisualization(sleepVisualization)
+        case .nutritionCards:
+            guard let nutritionCards else {
+                preconditionFailure("Missing nutrition cards payload for nutritionCards block")
+            }
+            return .nutritionCards(nutritionCards)
         case .workoutVisualization:
             guard let workoutVisualization else {
                 preconditionFailure("Missing workout visualization payload for workoutVisualization block")

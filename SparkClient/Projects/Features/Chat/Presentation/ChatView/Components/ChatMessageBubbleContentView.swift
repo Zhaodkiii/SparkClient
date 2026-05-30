@@ -37,7 +37,9 @@ struct ChatMessageBubbleContentView: View {
     let onTaskCardAction: (TaskCard.Action) -> Void
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
+    let savingNutritionCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
+    let onNutritionCardAction: (ChatNutritionCardAction) -> Void
     let onCaptureOpenCamera: () -> Void
     let onCaptureOpenPhotoLibrary: () -> Void
     let onCaptureOpenFiles: () -> Void
@@ -72,6 +74,7 @@ struct ChatMessageBubbleContentView: View {
             savingKnowledgeCardIDs: savingKnowledgeCardIDs,
             savedKnowledgeCardIDs: savedKnowledgeCardIDs,
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
+            savingNutritionCardIDs: savingNutritionCardIDs,
             memberContextStore: memberContextStore,
             unifiedFilePreview: $unifiedFilePreview,
             errorCardBodyText: errorCardBodyText,
@@ -80,6 +83,7 @@ struct ChatMessageBubbleContentView: View {
             onTaskCardAction: onTaskCardAction,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
+            onNutritionCardAction: onNutritionCardAction,
             onCaptureOpenCamera: onCaptureOpenCamera,
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
@@ -422,6 +426,7 @@ private enum ChatMessageTimelineProjector {
                 .pendingMemberToolCards,
                 .structuredHealthCards,
                 .sleepVisualization,
+                .nutritionCards,
                 .workoutVisualization,
                 .captureCard,
                 .html,
@@ -468,6 +473,8 @@ private struct ChatToolTimelineNodeView: View {
             return "正在结构化健康数据..."
         case .sleepVisualization:
             return "正在生成睡眠可视化..."
+        case .nutritionCards:
+            return "正在生成营养卡片..."
         case .workoutVisualization:
             return "正在生成运动可视化..."
         case .knowledgeCards:

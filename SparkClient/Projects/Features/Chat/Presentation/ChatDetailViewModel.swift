@@ -36,6 +36,8 @@ final class ChatDetailViewModel: ObservableObject {
 
     /// 结构化医疗卡片保存中（用于按钮 Progress）。
     @Published private(set) var savingStructuredHealthCardIDs: Set<UUID> = []
+    /// 营养卡片写入 Apple 健康中（用于按钮 Progress）。
+    @Published private(set) var savingNutritionCardIDs: Set<UUID> = []
 
     /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
     @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
@@ -1394,6 +1396,86 @@ final class ChatDetailViewModel: ObservableObject {
             return next
         }
         return nil
+    }
+
+    // MARK: - 对话内营养卡片写入 Apple 健康
+
+    func handleNutritionCardAction(
+        threadID: UUID,
+        message: ChatMessage,
+        action: ChatNutritionCardAction
+    ) async {
+        switch action {
+        case .writeToHealth(let blockID, let cardID):
+            await writeNutritionCardToHealth(
+                threadID: threadID,
+                message: message,
+                blockID: blockID,
+                cardID: cardID
+            )
+        }
+    }
+
+    private func writeNutritionCardToHealth(
+        threadID: UUID,
+        message: ChatMessage,
+        blockID: UUID,
+        cardID: UUID
+    ) async {
+        guard let block = message.blocks.first(where: { $0.id == blockID }),
+              case .nutritionCards(let payload) = block.payload,
+              let cardIndex = payload.cards.firstIndex(where: { $0.id == cardID }),
+              payload.cards[cardIndex].isWritten == false else {
+            return
+        }
+
+        let card = payload.cards[cardIndex]
+        savingNutritionCardIDs.insert(cardID)
+        defer { savingNutritionCardIDs.remove(cardID) }
+
+        do {
+            _ = try await SparkHealthTool.shared.writeNutritionData(card.sparkNutritionCard())
+            notificationClient.success(
+                L10n.text("chat.nutrition_card.written.toast"),
+                title: nil,
+                source: "chat.nutrition.write"
+            )
+            var updatedCards = payload.cards
+            updatedCards[cardIndex].isWritten = true
+            updatedCards[cardIndex].writtenAt = Date()
+            let updatedBlock = block.replacingPayload(
+                .nutritionCards(ChatNutritionCardsPayload(cards: updatedCards)),
+                status: block.status
+            )
+            await persistNutritionCardsBlock(
+                threadID: threadID,
+                message: message,
+                block: updatedBlock
+            )
+        } catch {
+            logger.error("营养卡片写入 Apple 健康失败：\(error.localizedDescription)", module: .general)
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("chat.nutrition_card.write_failed.title"),
+                source: "chat.nutrition.write"
+            )
+        }
+    }
+
+    private func persistNutritionCardsBlock(
+        threadID: UUID,
+        message: ChatMessage,
+        block: ChatMessageBlock
+    ) async {
+        let didApply = await chatRepository.upsertMessageBlock(
+            clientMessageID: message.clientMessageID,
+            block: block,
+            markPendingForSync: true
+        )
+        guard didApply else { return }
+        if let updatedMessage = message.replacingBlock(block) {
+            stateStore.updateMessages([updatedMessage], for: threadID)
+        }
     }
 
     // MARK: - 对话内结构化医疗卡片保存

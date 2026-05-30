@@ -95,6 +95,19 @@ enum ToolSideEffectBlockMapper {
                     sleepVisualization: model
                 )
             ]
+        case .nutritionCards(let cards):
+            guard cards.isEmpty == false else { return nil }
+            let payload = ChatNutritionCardsPayload(cards: cards)
+            guard isEncodable(payload) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .nutritionCards,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    nutritionCards: payload
+                )
+            ]
         case .externalConnectorRichBlocks(let blocks):
             return blocks.isEmpty ? nil : blocks
         case .structuredHealthCardsPending,

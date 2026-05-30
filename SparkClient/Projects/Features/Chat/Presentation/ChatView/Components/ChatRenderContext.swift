@@ -13,6 +13,7 @@ struct ChatRenderContext {
     let savingKnowledgeCardIDs: Set<UUID>                  // 正在保存中的知识库卡片 ID
     let savedKnowledgeCardIDs: Set<UUID>                   // 已保存的知识库卡片 ID
     let savingStructuredHealthCardIDs: Set<UUID>           // 正在保存的结构化健康卡片 ID
+    let savingNutritionCardIDs: Set<UUID>                  // 正在写入 Apple 健康的营养卡片 ID
     
     // MARK: - 全局依赖
     let memberContextStore: MemberContextStore             // 成员上下文数据仓库
@@ -27,6 +28,7 @@ struct ChatRenderContext {
     let onTaskCardAction: (TaskCard.Action) -> Void        // 任务卡片操作（完成/删除等）
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void  // 待处理成员工具选择
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void  // 健康卡片操作
+    let onNutritionCardAction: (ChatNutritionCardAction) -> Void                // 营养卡片操作
     let onCaptureOpenCamera: () -> Void                    // 打开相机
     let onCaptureOpenPhotoLibrary: () -> Void              // 打开相册
     let onCaptureOpenFiles: () -> Void                    // 打开文件
@@ -57,6 +59,7 @@ extension ChatRenderContext {
             savingKnowledgeCardIDs: savingKnowledgeCardIDs,
             savedKnowledgeCardIDs: savedKnowledgeCardIDs,
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
+            savingNutritionCardIDs: savingNutritionCardIDs,
             memberContextStore: memberContextStore,
             unifiedFilePreview: unifiedFilePreview,
             errorCardBodyText: errorCardBodyText,
@@ -65,6 +68,7 @@ extension ChatRenderContext {
             onTaskCardAction: onTaskCardAction,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
+            onNutritionCardAction: onNutritionCardAction,
             onCaptureOpenCamera: onCaptureOpenCamera,
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,

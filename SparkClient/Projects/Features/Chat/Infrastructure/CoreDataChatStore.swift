@@ -1348,7 +1348,7 @@ actor CoreDataChatStore {
     private static func isToolPresentationRichBlock(_ block: ChatMessageBlock) -> Bool {
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
-        case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
+        case .structuredHealthCards, .sleepVisualization, .workoutVisualization, .nutritionCards,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards:
             return true
@@ -1504,7 +1504,7 @@ actor CoreDataChatStore {
         }
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
-        case .structuredHealthCards, .sleepVisualization, .workoutVisualization,
+        case .structuredHealthCards, .sleepVisualization, .workoutVisualization, .nutritionCards,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards:
             return true

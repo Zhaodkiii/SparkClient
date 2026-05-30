@@ -1,0 +1,135 @@
+# ToolInteraction 模块说明
+
+对话场景下的**工具交互全局 Sheet** 模块。负责展示 AI 工具调用过程中需要用户介入的弹层（授权、追问、成员选择、详情预览等），**不写入消息流**，由 `ToolInteractionCoordinator` 统一排队与分发。
+
+入口挂载于 `ChatView`，通过 `ToolInteractionPresentationSheet` 按 `active.snapshot` 路由到具体 Sheet。
+
+---
+
+## 目录结构
+
+```
+Chat/Presentation/ToolInteraction/
+├── README.md                                # 本说明文档
+├── ToolInteractionPresentationSheet.swift   # 路由入口（按 snapshot 分发）
+├── Shared/
+│   ├── ToolSheetDisplayLimits.swift         # 文本截断上限
+│   ├── ToolSheetSection.swift               # 通用 Section 容器
+│   └── ToolLargeTextPreview.swift           # 大文本展示 + 复制
+└── Sheets/
+    ├── ExternalToolDataConsentSheet.swift   # 工具数据授权
+    ├── ToolQuestionSheet.swift              # 工具追问
+    ├── MemberSelectionToolSheet.swift       # 成员选择
+    ├── ToolPreviewSheet.swift               # 工具详情预览
+    └── SystemMessageSettingsSheet.swift     # 系统提示词设置
+```
+
+---
+
+## 模块职责
+
+| 层级 | 职责 |
+| --- | --- |
+| `ToolInteractionPresentationSheet` | 唯一对外 View 入口；读取 `ToolInteractionCoordinator.ActivePresentation`，switch 到对应 Sheet |
+| `Sheets/` | 各交互场景的独立 Sheet 实现，彼此无直接依赖 |
+| `Shared/` | Sheet 间复用的布局组件与常量，避免重复实现 |
+
+**设计原则：**
+
+1. **全局 Sheet，不进消息流** — 与对话气泡内的 message block 渲染分离；工具详情预览虽可渲染关联 block，但 Sheet 本身不落库。
+2. **Coordinator 驱动** — 展示/完成/取消均由 `ToolInteractionCoordinator` 回调，Sheet 只负责 UI 与收集用户输入。
+3. **一 Sheet 一文件** — 新增交互类型时优先在 `Sheets/` 加文件，并在 `ToolInteractionPresentationSheet` 增加 case 分支。
+
+---
+
+## 路由对照表
+
+`ToolInteractionPresentationSheet` 根据 `active.snapshot` 分发：
+
+| Snapshot | Sheet | 文件位置 | 说明 |
+| --- | --- | --- | --- |
+| `.consent` | `ExternalToolDataConsentSheet` | `Sheets/` | 外部工具/健康数据共享授权（允许、始终允许、拒绝） |
+| `.question` | `ToolQuestionSheet` | `Sheets/` | 工具追问（单选/多选 + 可选「其他」输入） |
+| `.member` | `MemberSelectionToolSheet` | `Sheets/` | 成员工具调用前选择家庭成员 |
+| `.toolPreview` | `ToolPreviewSheet` | `Sheets/` | 工具调用详情：参数、输出、关联 message block |
+| `.systemMessageSettings` | `SystemMessageSettingsSheet` | `Sheets/` | 会话/智能体系统提示词编辑 |
+| `.healthResourceCandidates` | `ChatHealthSourceCandidateSheet` | 外部（AskReport） | 健康资料候选多选，尚未迁入本目录 |
+| `.askReportPicker` | `ChatAskReportSheet` | 外部（AskReport） | 问报告资料 picker，尚未迁入本目录 |
+| `.apiKeysSettings` | `APIKeysSettingsView` | 外部（AISettings） | API Key 设置，内联 Navigation 包装 |
+
+---
+
+## 文件说明
+
+### 入口
+
+**`ToolInteractionPresentationSheet.swift`**
+
+- 由 `ChatView` 以 `.sheet` 形式挂载。
+- 注入 `coordinator`、`memberContextStore`、`stateStore`、`toolPreviewRenderContext` 等上下文。
+- 对外部 Sheet（问报告、API Key）仅做路由，实现仍保留在原 Feature 目录。
+
+### Shared
+
+**`ToolSheetDisplayLimits.swift`**
+
+- 工具 consent / preview 中大段文本的字符上限常量（参数、结果、预览输出）。
+
+**`ToolSheetSection.swift`**
+
+- 带圆角背景的分组容器，供 consent、question、member、preview 等 Sheet 统一视觉。
+
+**`ToolLargeTextPreview.swift`**
+
+- `ToolLargeTextDisplay`：按上限截断并记录是否 truncated。
+- `ToolLargeTextPreview`：等宽字体展示 + 超长时「复制全部」按钮。
+
+### Sheets
+
+**`ExternalToolDataConsentSheet.swift`**
+
+- 展示 Provider / Endpoint / Model、待共享数据摘要、各工具 payload 块（参数/结果 DisclosureGroup）。
+- 操作：拒绝、允许一次、始终允许。
+
+**`ToolQuestionSheet.swift`**
+
+- 渲染 `ToolQuestionPrompt` 中的多道题；支持单选/多选及 `allowsOther` 文本框。
+- 全部题目有答案后才可提交。
+
+**`MemberSelectionToolSheet.swift`**
+
+- 列出 `MemberContextStore` 成员，单选后提交 `memberID`。
+
+**`ToolPreviewSheet.swift`**
+
+- 只读展示工具名、tool_call_id、调用参数、输出文本。
+- 若存在 `relatedBlockIDs`，用 `ChatRenderContext` 渲染关联 message block（如营养卡片、睡眠可视化等）。
+
+**`SystemMessageSettingsSheet.swift`**
+
+- 普通模型：默认/自定义系统提示词切换与编辑。
+- 智能体模型：只读展示 agent prompt。
+- 支持语音/抽屉文本输入（`SparkVoiceInputSheet`、`SparkPromptInputDrawerSheet`）。
+
+---
+
+## 关联代码（模块外）
+
+| 符号 | 路径 | 关系 |
+| --- | --- | --- |
+| `ToolInteractionCoordinator` | Chat Application 层 | 队列、present/dismiss、完成回调 |
+| `ChatView` | `Presentation/ChatView.swift` | 挂载 `ToolInteractionPresentationSheet` |
+| `ChatDetailViewModel` | `Presentation/ChatDetailViewModel.swift` | 持有 coordinator；提供 preview render context、问报告回调 |
+| `ChatRenderContext` | `ChatView/Components/` | `ToolPreviewSheet` 渲染关联 block 时使用 |
+
+---
+
+## 扩展指南
+
+新增一种工具交互 Sheet 时：
+
+1. 在 `ToolInteractionCoordinator` 增加 snapshot case 与 present/complete API。
+2. 在 `Sheets/` 新建 `XxxSheet.swift`。
+3. 在 `ToolInteractionPresentationSheet` 增加 `case` 分支。
+4. 若有多处复用 UI，提取到 `Shared/`。
+5. 更新本 README 的路由对照表。

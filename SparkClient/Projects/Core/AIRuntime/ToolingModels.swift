@@ -46,6 +46,7 @@ enum ToolSideEffect: Sendable {
     case captureCard(ChatCaptureMessageCardPayload)
     case workoutVisualization(ChatHealthWorkoutModel)
     case sleepVisualization(ChatHealthSleepModel)
+    case nutritionCards([ChatNutritionCardPayload])
     case externalConnectorRichBlocks([ChatMessageBlock])
     case structuredHealthCardsPending
     case structuredHealthCardsReady(StructuredHealthCardsBlob)
