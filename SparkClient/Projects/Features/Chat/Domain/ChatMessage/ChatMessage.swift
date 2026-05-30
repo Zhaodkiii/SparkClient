@@ -120,6 +120,8 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case assistantStatusCard
     /// 健康资料引用（问报告）
     case healthResourceReference
+    /// 医疗风险提示
+    case medicalRiskNotice
 }
 
 nonisolated enum ChatMessageBlockStatus: String, Codable, Sendable {
@@ -218,6 +220,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case error(String)
     case assistantStatusCard(ChatAssistantStatusCardPayload)
     case healthResourceReference(ChatHealthResourceReferencePayload)
+    case medicalRiskNotice(ChatMedicalRiskNoticePayload)
 
     nonisolated var kind: ChatMessageBlockKind {
         switch self {
@@ -243,6 +246,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .error: return .error
         case .assistantStatusCard: return .assistantStatusCard
         case .healthResourceReference: return .healthResourceReference
+        case .medicalRiskNotice: return .medicalRiskNotice
         }
     }
 }
@@ -380,6 +384,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         guard case .nutritionCards(let payload) = payload else { return nil }
         return payload
     }
+
+    /// 医疗风险提示
+    nonisolated var medicalRiskNotice: ChatMedicalRiskNoticePayload? {
+        guard case .medicalRiskNotice(let payload) = payload else { return nil }
+        return payload
+    }
     
     /// 运动可视化模型
     nonisolated var workoutVisualization: ChatHealthWorkoutModel? {
@@ -435,6 +445,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         deepThoughtCard: ChatDeepThoughtCardPayload? = nil,
         assistantStatusCard: ChatAssistantStatusCardPayload? = nil,
         healthResourceReference: ChatHealthResourceReferencePayload? = nil,
+        medicalRiskNotice: ChatMedicalRiskNoticePayload? = nil,
         status: ChatMessageBlockStatus = .ready,
         revision: Int64 = 1,
         orderKey: Double? = nil,
@@ -469,7 +480,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             smallTaskCard: smallTaskCard,
             deepThoughtCard: deepThoughtCard,
             assistantStatusCard: assistantStatusCard,
-            healthResourceReference: healthResourceReference
+            healthResourceReference: healthResourceReference,
+            medicalRiskNotice: medicalRiskNotice
         )
         self.status = status
         self.revision = revision
@@ -501,7 +513,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         smallTaskCard: ChatSmallTaskMessageCardPayload?,
         deepThoughtCard: ChatDeepThoughtCardPayload?,
         assistantStatusCard: ChatAssistantStatusCardPayload?,
-        healthResourceReference: ChatHealthResourceReferencePayload?
+        healthResourceReference: ChatHealthResourceReferencePayload?,
+        medicalRiskNotice: ChatMedicalRiskNoticePayload?
     ) -> ChatMessageBlockPayload {
         switch kind {
         case .text:
@@ -582,6 +595,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing health resource reference payload")
             }
             return .healthResourceReference(healthResourceReference)
+        case .medicalRiskNotice:
+            guard let medicalRiskNotice else {
+                preconditionFailure("Missing medical risk notice payload for medicalRiskNotice block")
+            }
+            return .medicalRiskNotice(medicalRiskNotice)
         }
     }
 

@@ -7,6 +7,7 @@
 "tool.summary.fetch_energy_details" = "Purpose: hourly resting/active/total energy (kcal). Trigger: user checks calorie expenditure. Same date input rules as steps. Pair with: fetch_step_details, fetch_nutrition_details for burn‑intake comparison.";
 "tool.summary.fetch_nutrition_details" = "Purpose: 3‑hour nutrition breakdown (protein, carbs, fat, kcal). Trigger: user reviews diet or plans meals. Same date input. Pair with: make_nutrition_data to create health card.";
 "tool.summary.make_nutrition_data" = "Purpose: Generate nutrition cards from dietary info; values must be non‑negative (g/kcal). Trigger: recording or analyzing a meal. Can pair with fetch_nutrition_details.";
+"tool.summary.show_medical_risk_notice" = "Purpose: Insert a structured medical risk notice when the reply involves health/medical risk. Trigger: interpreting labs/meds/symptoms, treatment or medication advice, sensitive populations, or emergency symptoms. risk_level is required; message should explain the specific caution.";
 "tool.summary.fetch_sleep_details" = "Purpose: Retrieve sleep by session and daily summary (core/deep/REM/unspecified). Trigger: sleep quality review. Input start_date/end_date ≤ today, yyyy‑MM‑dd. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.fetch_workout_details" = "Purpose: retrieve workout records. Input: start_date, end_date; optional types filter; max_items limit. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.generate_structured_health_card" = "Purpose: Saveable structured health cards (async AI extraction). Pass report_type; raw_text must be distilled excerpt (not full OCR). Optional oss_file_id.";
@@ -48,6 +49,11 @@
 "tool.param.carbohydrates_g" = "Carbohydrates g";
 "tool.param.fat_g" = "Fat g";
 "tool.param.energy_kcal" = "Energy kcal";
+"tool.param.medical_risk_level" = "Risk level: low / medium / high / emergency";
+"tool.param.medical_risk_title" = "Optional card title";
+"tool.param.medical_risk_message" = "Risk notice body text";
+"tool.param.medical_risk_recommended_action" = "Suggested action, e.g. consult a doctor";
+"tool.param.medical_risk_related_reason" = "Brief reason for showing the notice";
 "tool.param.activity_types_filter" = "Optional activity types filter; empty = all.";
 "tool.param.activity_type_item" = "Activity type";
 "tool.param.max_items" = "Optional max items, default 100";

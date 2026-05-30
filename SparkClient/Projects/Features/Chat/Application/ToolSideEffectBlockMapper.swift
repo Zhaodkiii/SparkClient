@@ -113,7 +113,8 @@ enum ToolSideEffectBlockMapper {
         case .structuredHealthCardsPending,
              .structuredHealthCardsReady,
              .structuredHealthCardsFailed,
-             .timelineNotice:
+             .timelineNotice,
+             .medicalRiskNotice:
             return nil
         }
     }

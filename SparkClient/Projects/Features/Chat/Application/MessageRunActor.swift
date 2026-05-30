@@ -685,7 +685,37 @@ actor MessageRunActor: ChatSideEffectSink {
         case .timelineNotice(let text):
             await appendTimelineNotice(text, assistantClientMessageID: assistantClientMessageID)
             return true
+        case .medicalRiskNotice(let payload):
+            return await publishMedicalRiskNotice(
+                payload: payload,
+                anchorToolCallID: normalizedAnchor,
+                assistantClientMessageID: assistantClientMessageID
+            )
         }
+    }
+
+    @discardableResult
+    private func publishMedicalRiskNotice(
+        payload: ChatMedicalRiskNoticePayload,
+        anchorToolCallID: String?,
+        assistantClientMessageID: UUID
+    ) async -> Bool {
+        let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+        if let existing = messages.first?.blocks.first(where: { $0.kind == .medicalRiskNotice }),
+           case .medicalRiskNotice(let existingPayload) = existing.payload,
+           payload.riskLevel <= existingPayload.riskLevel {
+            return false
+        }
+
+        let block = ChatMessageBlock(
+            anchor: anchorToolCallID.map(ChatBlockAnchor.toolCall),
+            kind: .medicalRiskNotice,
+            toolCallID: anchorToolCallID,
+            parentToolCallID: anchorToolCallID,
+            medicalRiskNotice: payload,
+            status: .ready
+        )
+        return await submitRichBlocks([block], assistantClientMessageID: assistantClientMessageID)
     }
 
     @discardableResult
@@ -785,6 +815,8 @@ actor MessageRunActor: ChatSideEffectSink {
                 resourceID: payload.resourceId,
                 memberID: payload.memberId
             )
+        } else if block.kind == .medicalRiskNotice {
+            stableID = ChatStableBlockID.rich(messageID: assistantClientMessageID, kind: .medicalRiskNotice)
         } else if let toolCallID = block.toolCallID {
             stableID = ChatStableBlockID.rich(
                 messageID: assistantClientMessageID,
@@ -821,6 +853,8 @@ actor MessageRunActor: ChatSideEffectSink {
                 .captureCard, .knowledgeCards, .html, .taskCards,
                 .pendingMemberToolCards:
             return 2_100
+        case .medicalRiskNotice:
+            return 2_900
         default:
             return 3_000
         }
@@ -984,6 +1018,7 @@ private extension ChatMessageBlock {
             smallTaskCard: smallTaskCard,
             deepThoughtCard: deepThoughtCard,
             healthResourceReference: healthResourceReferencePayload,
+            medicalRiskNotice: medicalRiskNotice,
             status: status,
             revision: revision,
             orderKey: orderKey,

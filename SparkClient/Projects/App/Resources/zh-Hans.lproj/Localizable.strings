@@ -1073,6 +1073,7 @@
 "ai_settings.tools.fetch_energy_details" = "能量详情";
 "ai_settings.tools.fetch_nutrition_details" = "营养详情";
 "ai_settings.tools.make_nutrition_data" = "生成营养数据";
+"ai_settings.tools.show_medical_risk_notice" = "医疗风险提示";
 "ai_settings.tools.fetch_sleep_details" = "睡眠详情";
 "ai_settings.tools.fetch_workout_details" = "运动详情";
 "ai_settings.tools.search_knowledge_bag" = "搜索知识库";
@@ -1755,6 +1756,19 @@
 "tool.result.nutrition_card.generated" = "营养卡片已生成，请在消息内确认后写入健康应用。";
 "tool.error.nutrition_card.missing_values" = "营养数据无效：蛋白质、碳水、脂肪、能量不能全部为空。";
 "tool.error.nutrition_card.invalid_values" = "营养数据无效：数值必须是 0 以上的有限数字，且需在合理范围内。";
+"chat.medical_risk_notice.title.low" = "健康提示";
+"chat.medical_risk_notice.title.medium" = "医疗风险提示";
+"chat.medical_risk_notice.title.high" = "重要医疗风险提示";
+"chat.medical_risk_notice.title.emergency" = "紧急医疗风险提示";
+"chat.medical_risk_notice.level.low" = "低风险";
+"chat.medical_risk_notice.level.medium" = "中风险";
+"chat.medical_risk_notice.level.high" = "高风险";
+"chat.medical_risk_notice.level.emergency" = "急症";
+"chat.medical_risk_notice.message.default" = "AI 提供的信息仅用于辅助理解和整理，不能替代专业医生的诊断、治疗或用药建议。";
+"chat.medical_risk_notice.message.emergency_fallback" = "如果出现胸痛、呼吸困难、意识障碍、严重过敏、大出血等紧急情况，请立即寻求急救帮助。";
+"chat.medical_risk_notice.recommended_action" = "建议：";
+"tool.result.medical_risk_notice.inserted" = "医疗风险提示卡片已插入消息。";
+"tool.error.medical_risk_notice.invalid_level" = "无效的风险等级，请使用 low、medium、high 或 emergency。";
 "chat.sleep.visualization.title" = "睡眠数据";
 "chat.sleep.timeline.title" = "睡眠时间";
 "chat.sleep.comparison.title" = "睡眠对比";

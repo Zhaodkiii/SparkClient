@@ -47,6 +47,7 @@ enum ToolSideEffect: Sendable {
     case workoutVisualization(ChatHealthWorkoutModel)
     case sleepVisualization(ChatHealthSleepModel)
     case nutritionCards([ChatNutritionCardPayload])
+    case medicalRiskNotice(ChatMedicalRiskNoticePayload)
     case externalConnectorRichBlocks([ChatMessageBlock])
     case structuredHealthCardsPending
     case structuredHealthCardsReady(StructuredHealthCardsBlob)
@@ -260,6 +261,7 @@ enum SparkToolName: String, CaseIterable {
     case fetchEnergyDetails          = "fetch_energy_details"           // 获取能量详情
     case fetchNutritionDetails       = "fetch_nutrition_details"        // 获取营养详情
     case makeNutritionData           = "make_nutrition_data"            // 生成营养数据
+    case showMedicalRiskNotice       = "show_medical_risk_notice"       // 医疗风险提示卡片
     case fetchSleepDetails           = "fetch_sleep_details"            // 获取睡眠详情
     case fetchWorkoutDetails         = "fetch_workout_details"          // 获取运动详情
     case generateStructuredHealthCard = "generate_structured_health_card" // 生成结构化健康卡片（后台抽取）
@@ -336,7 +338,7 @@ extension SparkToolName {
             return .calendar
         case .searchOnline, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
             return .publicWeb
-        case .showCustomMessageCard, .askUserQuestion:
+        case .showCustomMessageCard, .askUserQuestion, .showMedicalRiskNotice:
             return .ui
         case .generateChatTitle, .createCanvas, .editCanvas, .queryTasksByMember, .generateTask:
             return .system
@@ -544,6 +546,7 @@ enum SparkToolGroup: String, CaseIterable {
                 .searchCalendarAndReminders,
                 .writeSystemEvent,
                 .showCustomMessageCard,
+                .showMedicalRiskNotice,
                 .createCanvas,
                 .editCanvas,
                 .queryTasksByMember,

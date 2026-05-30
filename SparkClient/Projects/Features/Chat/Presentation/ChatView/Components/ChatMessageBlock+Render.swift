@@ -192,6 +192,9 @@ extension ChatMessageBlock {
                 )
             }
 
+        case .medicalRiskNotice(let payload):
+            ChatMedicalRiskNoticeCardView(payload: payload)
+
         }
         }
     }
@@ -252,6 +255,8 @@ extension ChatMessageBlock {
             return "正在生成睡眠可视化..."
         case .nutritionCards:
             return "正在生成营养卡片..."
+        case .medicalRiskNotice:
+            return "正在生成医疗风险提示..."
         case .workoutVisualization:
             return "正在生成运动可视化..."
         case .healthResourceReference:

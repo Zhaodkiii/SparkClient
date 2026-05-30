@@ -7,6 +7,7 @@
 "tool.summary.fetch_energy_details" = "用途：按小时统计静息/活动/总能量 (kcal)。触发场景：用户评估热量消耗。输入要求与步数相同。可与 fetch_step_details、fetch_nutrition_details 联用，实现消耗‑摄入对比。";
 "tool.summary.fetch_nutrition_details" = "用途：以 3 小时粒度统计蛋白质、碳水、脂肪、能量摄入 (g/kcal)。触发场景：用户审视饮食结构或准备饮食计划。输入日期规则同上。可与 make_nutrition_data 联用，用于生成健康卡片。";
 "tool.summary.make_nutrition_data" = "用途：根据用户提供或模型解析的饮食信息生成营养卡片；字段值需为非负 (g/kcal)。触发场景：记录或分析一次具体饮食或用户提到营养卡片。可与 fetch_nutrition_details 联用，校正和补全数据。";
+"tool.summary.show_medical_risk_notice" = "用途：在涉及医疗/健康风险时插入结构化风险提示卡片。触发场景：解读检查/用药/症状、给出治疗或用药建议、涉及慢病/孕期/儿童/老人等敏感健康建议、或出现急症相关描述。参数 risk_level 必填；message 建议填写具体提醒。";
 "tool.summary.fetch_sleep_details" = "用途：按会话和日汇总检索睡眠数据（核心/深度/REM/未指定睡眠阶段）。触发场景：用户回顾睡眠质量、分析睡眠模式、制定睡眠计划。输入要求：start_date、end_date ≤ 今天，格式 yyyy‑MM‑dd。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.fetch_workout_details" = "用途：检索运动记录（跑步、步行、骑行等）。输入：start_date、end_date；可选 types 筛选活动类型；max_items 限制返回条数。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.generate_structured_health_card" = "用途：生成可保存的结构化健康卡片（后台 AI 抽取）。调用时 report_type 指定卡片类型，raw_text 必须是你提炼后的关键摘录（勿传完整 OCR）。可选 oss_file_id（整数）。";
@@ -58,6 +59,11 @@
 "tool.param.carbohydrates_g" = "碳水化合物 g";
 "tool.param.fat_g" = "脂肪 g";
 "tool.param.energy_kcal" = "能量 kcal";
+"tool.param.medical_risk_level" = "风险等级：low / medium / high / emergency";
+"tool.param.medical_risk_title" = "卡片标题（可选）";
+"tool.param.medical_risk_message" = "风险提示正文";
+"tool.param.medical_risk_recommended_action" = "建议行动，例如咨询医生、尽快就医";
+"tool.param.medical_risk_related_reason" = "触发原因摘要，例如涉及用药调整";
 "tool.param.activity_types_filter" = "可选，活动类型筛选，如 running/walking/cycling。空则全部。";
 "tool.param.activity_type_item" = "活动类型";
 "tool.param.max_items" = "可选，最大返回条数，默认 100";

@@ -1073,6 +1073,7 @@
 "ai_settings.tools.fetch_energy_details" = "Energy Details";
 "ai_settings.tools.fetch_nutrition_details" = "Nutrition Details";
 "ai_settings.tools.make_nutrition_data" = "Create Nutrition Data";
+"ai_settings.tools.show_medical_risk_notice" = "Medical Risk Notice";
 "ai_settings.tools.fetch_sleep_details" = "Sleep Details";
 "ai_settings.tools.fetch_workout_details" = "Workout Details";
 "ai_settings.tools.search_knowledge_bag" = "Search Knowledge Bag";
@@ -1755,6 +1756,19 @@
 "tool.result.nutrition_card.generated" = "Nutrition card generated. Confirm it in the message before writing to Health.";
 "tool.error.nutrition_card.missing_values" = "Invalid nutrition data: protein, carbs, fat, and energy cannot all be empty.";
 "tool.error.nutrition_card.invalid_values" = "Invalid nutrition data: values must be finite, non-negative numbers within a reasonable range.";
+"chat.medical_risk_notice.title.low" = "Health notice";
+"chat.medical_risk_notice.title.medium" = "Medical risk notice";
+"chat.medical_risk_notice.title.high" = "Important medical risk notice";
+"chat.medical_risk_notice.title.emergency" = "Emergency medical notice";
+"chat.medical_risk_notice.level.low" = "Low risk";
+"chat.medical_risk_notice.level.medium" = "Medium risk";
+"chat.medical_risk_notice.level.high" = "High risk";
+"chat.medical_risk_notice.level.emergency" = "Emergency";
+"chat.medical_risk_notice.message.default" = "AI-generated information is for reference only and does not replace professional medical diagnosis, treatment, or medication advice.";
+"chat.medical_risk_notice.message.emergency_fallback" = "If you experience chest pain, difficulty breathing, loss of consciousness, severe allergic reaction, or heavy bleeding, seek emergency care immediately.";
+"chat.medical_risk_notice.recommended_action" = "Suggested action:";
+"tool.result.medical_risk_notice.inserted" = "Medical risk notice card inserted.";
+"tool.error.medical_risk_notice.invalid_level" = "Invalid risk level. Use low, medium, high, or emergency.";
 "chat.sleep.visualization.title" = "Sleep Data";
 "chat.sleep.timeline.title" = "Sleep";
 "chat.sleep.comparison.title" = "Sleep Comparison";

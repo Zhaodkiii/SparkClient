@@ -408,6 +408,18 @@ final class ToolHub: @unchecked Sendable {
                     enumValues: ["report_photo", "medicine_box_photo", "skin_photo"]
                 )
             ]
+        case .showMedicalRiskNotice:
+            return [
+                "risk_level": AIRuntimeToolProperty(
+                    type: "string",
+                    description: td("tool.param.medical_risk_level"),
+                    enumValues: ["low", "medium", "high", "emergency"]
+                ),
+                "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_title")),
+                "message": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_message")),
+                "recommended_action": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_recommended_action")),
+                "related_reason": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_related_reason"))
+            ]
         case .findMember:
             return [
                 "name": AIRuntimeToolProperty(type: "string", description: td("tool.param.member_name_optional")),
@@ -510,6 +522,8 @@ final class ToolHub: @unchecked Sendable {
             return ["originalContent", "updatedContent"]
         case .showCustomMessageCard:
             return ["card_type"]
+        case .showMedicalRiskNotice:
+            return ["risk_level", "message"]
         case .askUserQuestion:
             return []
         case .queryMemberProfile:
@@ -757,6 +771,10 @@ final class ToolHub: @unchecked Sendable {
         case .showCustomMessageCard:
             /// 展示自定义消息卡片（强 UI 交互）
             return await runShowCustomMessageCard(invocation: invocation, context: context)
+
+        case .showMedicalRiskNotice:
+            /// 插入医疗风险提示卡片
+            return runShowMedicalRiskNotice(invocation: invocation, context: context)
 
         case .askUserQuestion:
             /// 回调 UI 弹出问题 sheet，用户提交后继续工具循环。
