@@ -96,6 +96,7 @@ struct DefaultTypedMedicalDocumentSaver: TypedMedicalDocumentSaving, Sendable {
             return try await saveMedicineBoxes(
                 memberID: memberID,
                 drafts: boxes,
+                envelope: output.envelope,
                 now: now
             )
         }
@@ -153,12 +154,14 @@ private extension DefaultTypedMedicalDocumentSaver {
     func saveMedicineBoxes(
         memberID: Int,
         drafts: [MedicineBoxRecognitionDraft],
+        envelope: MedicalDocumentRecognitionEnvelope,
         now: Date
     ) async throws -> MedicalDocumentSaveReceipt {
         var savedIDs: [Int] = []
         for draft in drafts {
-            let payload = MedicineBoxCreatePayload(
+            let payload = SparkMedicalWorkflowAPI.MedicineBoxWritePayload(
                 member: memberID,
+                entryMemberID: memberID,
                 medicineName: resolvedMedicineBoxName(draft),
                 medicineType: draft.medicineType?.nilIfBlank,
                 brandName: draft.brandName?.nilIfBlank ?? "",
@@ -168,7 +171,8 @@ private extension DefaultTypedMedicalDocumentSaver {
                 totalQuantity: draft.totalQuantity.parsedAsTotalQuantity(),
                 expireDate: draft.expireDate?.nilIfBlank,
                 notes: draft.notes?.nilIfBlank ?? "",
-                extra: mergeTypedUploadExtra(draft.extra)
+                extra: mergeTypedUploadExtra(draft.extra),
+                fileIds: resolvedMedicineBoxFileIds(for: draft, envelope: envelope, allDrafts: drafts)
             )
             let saved = try await workflowAPI.create(
                 SparkMedicalSyncAPI.RemoteMedicineBox.self,
@@ -254,21 +258,6 @@ private extension DefaultTypedMedicalDocumentSaver {
             return "daily"
         }
     }
-}
-
-private struct MedicineBoxCreatePayload: Encodable {
-    let member: Int
-    let medicineName: String
-    let medicineType: String?
-    let brandName: String
-    let dosageForm: String
-    let strength: String
-    let doseUnit: String
-    let totalQuantity: Double?
-    let expireDate: String?
-    let notes: String
-    let extra: [String: String]
-
 }
 
 // MARK: - Date 扩展工具
@@ -645,6 +634,20 @@ private extension DefaultTypedMedicalDocumentSaver {
             savedAt: now,
             isSuccess: true
         )
+    }
+
+    /// 药箱保存时解析附件：优先草稿已关联的本地文件；单条识别且未关联时回退为本次上传的全部源文件。
+    func resolvedMedicineBoxFileIds(
+        for draft: MedicineBoxRecognitionDraft,
+        envelope: MedicalDocumentRecognitionEnvelope,
+        allDrafts: [MedicineBoxRecognitionDraft]
+    ) -> [Int] {
+        let matched = fileIds(from: draft.attachmentFileIds, envelope: envelope)
+        if matched.isEmpty == false {
+            return matched
+        }
+        guard allDrafts.count == 1 else { return [] }
+        return fileIds(from: envelope.sourceFiles.map(\.id), envelope: envelope)
     }
 
     func fileIds(

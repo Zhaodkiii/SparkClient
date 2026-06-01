@@ -106,6 +106,16 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         return try await resources.list([SparkMedicalSyncAPI.RemoteMedExamDetail].self, kind: .medExamDetails, query: q)
     }
 
+    /// 家庭药箱汇总：按入口成员 ID 返回其创建者名下全部成员药品与公共药品。
+    func listFamilyMedicineCabinet(memberID: Int) async throws -> [SparkMedicalSyncAPI.RemoteMedicineBox] {
+        try await request(
+            path: "/api/v1/medical/medicine-cabinet/summary/",
+            query: [URLQueryItem(name: "member_id", value: "\(memberID)")],
+            responseType: [SparkMedicalSyncAPI.RemoteMedicineBox].self,
+            etagTTL: 120
+        )
+    }
+
     /// 查询药箱库存（按成员可选过滤）。
     func listMedicineBoxes(
         memberID: Int? = nil,

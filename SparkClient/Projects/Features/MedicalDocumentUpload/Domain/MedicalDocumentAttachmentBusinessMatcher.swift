@@ -305,19 +305,20 @@ enum MedicalDocumentAttachmentBusinessMatcher {
 
     /// 药盒匹配逻辑
     private static func matchMedicineBoxes(files: [MedicalUploadLocalFile], boxes: inout [MedicineBoxRecognitionDraft]) {
+        guard boxes.isEmpty == false else { return }
+
         for file in files {
-            guard let ocrText = file.ocrText, !ocrText.isEmpty else { continue }
-            var matched = false
-
-            // 遍历匹配药盒
-            for index in boxes.indices where matchText(ocrText, with: boxes[index]) {
-                boxes[index].appendAttachmentFileID(file.id)
-                matched = true
-                break
-            }
-
-            // 无匹配绑定到第一个药盒
-            if !matched, !boxes.isEmpty {
+            if let ocrText = file.ocrText, ocrText.isEmpty == false {
+                var matched = false
+                for index in boxes.indices where matchText(ocrText, with: boxes[index]) {
+                    boxes[index].appendAttachmentFileID(file.id)
+                    matched = true
+                    break
+                }
+                if matched == false {
+                    boxes[boxes.startIndex].appendAttachmentFileID(file.id)
+                }
+            } else {
                 boxes[boxes.startIndex].appendAttachmentFileID(file.id)
             }
         }

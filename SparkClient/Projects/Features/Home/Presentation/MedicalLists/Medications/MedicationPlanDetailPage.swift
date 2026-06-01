@@ -73,10 +73,11 @@ struct MedicationPlanDetailPage: View {
         List {
          
             if let medicineBox {
-                Section("关联药品") {
+                Section(L10n.text("home.medical.medication_plan.section.linked_box")) {
                     NavigationLink {
                         MedicineBoxDetailPage(
                             box: medicineBox,
+                            entryMemberID: memberID,
                             typeOptions: MedicineBoxTypeCatalog.options(in: medicineBoxes),
                             specOptionBoxes: medicineBoxes,
                             workflowAPI: workflowAPI,
@@ -108,17 +109,29 @@ struct MedicationPlanDetailPage: View {
                 }
              
             }else if currentPlan.medicineBox != nil {
-                MedicationPlanDetailInfoRow(title: "药箱药品", value: "信息暂不可用，请同步药箱列表后重试")
+                MedicationPlanDetailInfoRow(
+                    title: L10n.text("home.medical.medication_plan.section.linked_box"),
+                    value: L10n.text("home.medical.medication_plan.box_unavailable")
+                )
             }
             
-            Section("服药计划") {
-                MedicationPlanDetailInfoRow(title: "药品", value: currentPlan.drugName)
-                MedicationPlanDetailInfoRow(title: "剂量", value: currentPlan.dosePerTime)
-                MedicationPlanDetailInfoRow(title: "频次", value: currentPlan.frequencyText)
-                MedicationPlanDetailInfoRow(title: "提醒", value: currentPlan.reminderTimes.map(\.time).joined(separator: ", "))
-                MedicationPlanDetailInfoRow(title: "状态", value: medicationPlanDetailStatusLabel(currentPlan.status))
+            Section(L10n.text("home.medical.medication_plan.section.plan")) {
+                MedicationPlanDetailInfoRow(title: L10n.text("home.medical.medication_plan.field.drug"), value: currentPlan.drugName)
+                MedicationPlanDetailInfoRow(title: L10n.text("home.medical.list.medications.dose_short"), value: currentPlan.dosePerTime)
+                MedicationPlanDetailInfoRow(title: L10n.text("home.medical.list.medications.frequency_title"), value: currentPlan.frequencyText)
+                MedicationPlanDetailInfoRow(
+                    title: L10n.text("home.medical.medication_plan.field.reminder"),
+                    value: currentPlan.reminderTimes.map(\.time).joined(separator: ", ")
+                )
+                MedicationPlanDetailInfoRow(
+                    title: L10n.text("common.status"),
+                    value: medicationPlanDetailStatusLabel(currentPlan.status)
+                )
                 if currentPlan.instructions.isEmpty == false {
-                    MedicationPlanDetailInfoRow(title: "说明", value: currentPlan.instructions)
+                    MedicationPlanDetailInfoRow(
+                        title: L10n.text("medical_record.forms.field.instructions"),
+                        value: currentPlan.instructions
+                    )
                 }
                 
                 MedicalResourceMedicalCaseLinkSection(
@@ -132,10 +145,10 @@ struct MedicationPlanDetailPage: View {
                     completeData: completeData,
                     memberContextStore: memberContextStore,
                     notificationClient: notificationClient,
-                    linkedTitle: L10n.text("home.medical.list.medications.linked_case.title", fallback: "已关联病例"),
-                    linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle", fallback: "点击查看病历详情与时间线"),
-                    unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title", fallback: "关联病例"),
-                    unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle", fallback: "未关联，点击选择要归档的病历"),
+                    linkedTitle: L10n.text("home.medical.list.medications.linked_case.title"),
+                    linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle"),
+                    unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title"),
+                    unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle"),
                     onResourceUpdated: { (updated: SparkMedicalSyncAPI.RemoteMedicationPlan) in
                         currentPlan = updated
                         onSaved(updated)
@@ -146,7 +159,7 @@ struct MedicationPlanDetailPage: View {
             }
             
             if let attachments = currentPlan.attachments, attachments.isEmpty == false {
-                Section("附件") {
+                Section(L10n.text("common.attachments")) {
                     MedicalAttachmentGridPreview(
                         attachments: attachments,
                         fileTransferService: fileTransferService
@@ -155,9 +168,9 @@ struct MedicationPlanDetailPage: View {
                 }
             }
 
-            Section("服药记录") {
+            Section(L10n.text("home.medical.medication_plan.section.records")) {
                 if sortedRecords.isEmpty {
-                    Text("暂无服药记录")
+                    Text(L10n.text("home.medical.medication_plan.no_records"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedRecords, id: \.id) { record in
@@ -170,16 +183,26 @@ struct MedicationPlanDetailPage: View {
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(record.status == "taken" ? Color(uiColor: .systemGreen) : Color(uiColor: .secondaryLabel))
                             }
-                            Text("计划剂量 \(record.plannedDose)")
+                            Text(String(format: L10n.text("home.medical.medication_plan.record.planned_dose_format"), record.plannedDose))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let takenAt = record.takenAt {
-                                Text("实际时间 \(takenAt.formatted(date: .omitted, time: .shortened))")
+                                Text(
+                                    String(
+                                        format: L10n.text("home.medical.medication_plan.record.taken_at_format"),
+                                        takenAt.formatted(date: .omitted, time: .shortened)
+                                    )
+                                )
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             if record.actualDose.isEmpty == false {
-                                Text("实际剂量 \(record.actualDose)")
+                                Text(
+                                    String(
+                                        format: L10n.text("home.medical.medication_plan.record.actual_dose_format"),
+                                        record.actualDose
+                                    )
+                                )
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -189,7 +212,7 @@ struct MedicationPlanDetailPage: View {
                 }
             }
         }
-        .navigationTitle(currentPlan.drugName.nilIfBlank ?? "服药计划")
+        .navigationTitle(currentPlan.drugName.nilIfBlank ?? L10n.text("home.medical.medication_plan.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -197,14 +220,14 @@ struct MedicationPlanDetailPage: View {
                     Button {
                         showingEditSheet = true
                     } label: {
-                        Label("编辑", systemImage: "pencil")
+                        Label(L10n.text("common.edit"), systemImage: "pencil")
                     }
                     .disabled(memberID == nil)
 
                     Button(role: .destructive) {
                         showingDeleteConfirm = true
                     } label: {
-                        Label("删除", systemImage: "trash")
+                        Label(L10n.text("common.delete"), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -229,25 +252,25 @@ struct MedicationPlanDetailPage: View {
                     }
                 )
             } else {
-                Text("请先选择成员")
+                Text(L10n.text("home.medical.medicine_box.select_member_first"))
                     .font(.headline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .alert("确认删除", isPresented: $showingDeleteConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) {
+        .alert(L10n.text("home.medical.medicine_box.delete.confirm_title"), isPresented: $showingDeleteConfirm) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(L10n.text("common.delete"), role: .destructive) {
                 Task { await deleteCurrentPlan() }
             }
         } message: {
-            Text("删除后该服药计划及关联记录将不再显示。")
+            Text(L10n.text("home.medical.medication_plan.delete.message"))
         }
-        .alert("操作失败", isPresented: Binding(
+        .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
-            Button("知道了", role: .cancel) {}
+            Button(L10n.text("common.got_it"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
@@ -295,38 +318,41 @@ private struct MedicationPlanDetailInfoRow: View {
             Text(title)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 16)
-            Text(value.isEmpty ? "未填写" : value)
+            Text(value.isEmpty ? L10n.text("home.medical.medicine_box.not_filled") : value)
                 .multilineTextAlignment(.trailing)
         }
     }
 }
 
 private func medicationPlanDetailStockText(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
-    guard let q = box.totalQuantity else { return "总量未填" }
-    return "总量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
+    guard let q = box.totalQuantity else { return L10n.text("home.medical.medication_plan.stock_not_filled") }
+    return String(
+        format: L10n.text("home.medical.medication_plan.stock_format"),
+        q.formatted(.number.precision(.fractionLength(0...2)))
+    )
 }
 
 private func medicationPlanDetailLinkedBoxTitle(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
-    box.medicineName.nilIfBlank ?? "未命名药品"
+    box.medicineName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed")
 }
 
 private func medicationPlanDetailLinkedBoxSubtitle(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
     let detail = [box.strength.nilIfBlank, box.dosageForm.nilIfBlank, medicationPlanDetailStockText(box)]
         .compactMap { $0 }
         .joined(separator: " · ")
-    return detail.isEmpty ? "已关联药箱药品" : detail
+    return detail.isEmpty ? L10n.text("home.medical.medication_plan.linked_box_fallback") : detail
 }
 
 private func medicationPlanDetailStatusLabel(_ status: String) -> String {
     switch status {
     case "active":
-        return "执行中"
+        return L10n.text("home.medical.medication_plan.detail.status.active")
     case "paused":
-        return "未开始"
+        return L10n.text("home.medical.medication_plan.detail.status.paused")
     case "completed":
-        return "已完成"
+        return L10n.text("home.medical.medication_plan.detail.status.completed")
     case "cancelled":
-        return "已取消"
+        return L10n.text("home.medical.medication_plan.detail.status.cancelled")
     default:
         return status
     }
@@ -335,13 +361,13 @@ private func medicationPlanDetailStatusLabel(_ status: String) -> String {
 private func medicationPlanDetailRecordStatusLabel(_ status: String) -> String {
     switch status {
     case "scheduled":
-        return "待服药"
+        return L10n.text("home.medical.medication_plan.record.status.scheduled")
     case "taken":
-        return "已服药"
+        return L10n.text("home.medical.medication_plan.record.status.taken")
     case "skipped":
-        return "已漏服"
+        return L10n.text("home.medical.medication_plan.record.status.skipped")
     case "snoozed":
-        return "稍后提醒"
+        return L10n.text("home.medical.medication_plan.record.status.snoozed")
     default:
         return status
     }

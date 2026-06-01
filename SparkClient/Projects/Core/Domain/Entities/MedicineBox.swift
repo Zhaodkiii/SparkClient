@@ -2,7 +2,7 @@ import Foundation
 
 struct MedicineBox: Identifiable, Codable, Equatable, Sendable {
     let id: Int
-    var memberID: Int
+    var memberID: Int?
     var medicineName: String
     var medicineType: String?
     var brandName: String

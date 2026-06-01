@@ -188,6 +188,9 @@ struct MedicationsListPage: View {
             .onChange(of: completeData?.prescriptions ?? [], perform: handlePrescriptionsChange)
             .onChange(of: completeData?.medicationPlans ?? [], perform: handleMedicationPlansChange)
             .onChange(of: completeData?.todayMedicationRecords ?? [], perform: handleMedicationRecordsChange)
+            .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
+                Task { await refreshAfterMedicalUploadSave() }
+            }
     }
 
     private var contentChrome: some View {
@@ -593,6 +596,19 @@ struct MedicationsListPage: View {
         } catch {
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.medication_plans.refresh")
             logger.warning("服药计划下拉刷新失败 memberID=\(memberID) error=\(error.localizedDescription)", module: logModule)
+        }
+    }
+
+    @MainActor
+    private func refreshAfterMedicalUploadSave() async {
+        await refreshMedicationPlans()
+        guard let memberID else { return }
+        do {
+            let boxes = try await medicalQueryAPI.listMedicineBoxes(memberID: memberID)
+            medicineBoxes = boxes
+            onMedicineBoxesChanged?(boxes)
+        } catch {
+            logger.warning("AI 保存后刷新药箱失败 memberID=\(memberID) error=\(error.localizedDescription)", module: logModule)
         }
     }
 
@@ -1590,7 +1606,8 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
         .sheet(item: $sheetDestination) { destination in
             MedicineBoxFormView(
                 mode: destination.formMode,
-                memberID: memberID,
+                entryMemberID: memberID,
+                defaultBindingMemberID: memberID,
                 workflowAPI: workflowAPI,
                 fileTransferService: fileTransferService,
                 typeOptions: medicineTypeOptions,

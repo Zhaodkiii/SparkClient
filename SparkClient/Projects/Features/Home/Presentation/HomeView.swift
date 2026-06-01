@@ -289,14 +289,26 @@ struct HomeView: View {
                 Label(L10n.text("home.medical.title"), systemImage: "cross.case")
                     .font(.headline)
                 Spacer()
-                Button {
-                    medicalDocumentUploadViewModel.presentUploadPage()
-                    triggerHaptic(style: .medium)
-                } label: {
-                    Label(L10n.text("home.medical.upload"), systemImage: "sparkles.rectangle.stack")
+                if let entryMemberID = viewModel.selectedMemberID {
+                    NavigationLink {
+                        FamilyMedicineCabinetPage(
+                            entryMemberID: entryMemberID,
+                            dependencies: dependencies
+                        )
+                        .hidesMainTabBarWhenPushed()
+                    } label: {
+                        Label(
+                            L10n.text("home.medical.family_cabinet.title"),
+                            systemImage: "cross.vial.fill"
+                        )
                         .font(.footnote.weight(.semibold))
+                    }
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            triggerHaptic(style: .light)
+                        }
+                    )
                 }
-                .buttonStyle(.borderedProminent)
                 if viewModel.dashboard?.selectedMember != nil {
                     Text(viewModel.dashboard?.selectedMember?.name ?? "")
                         .font(.footnote)
@@ -356,7 +368,51 @@ struct HomeView: View {
                     )
                 }
             }
+
+            medicalAIReportButton
         }
+    }
+
+    private var medicalAIReportButton: some View {
+        Button {
+            medicalDocumentUploadViewModel.presentUploadPage()
+            triggerHaptic(style: .medium)
+        } label: {
+            Label(
+                L10n.text("home.medical.ai_report", fallback: "AI 智能整理报告"),
+                systemImage: "sparkles"
+            )
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Color(uiColor: .systemBlue), Color(uiColor: .systemPurple)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color(uiColor: .systemBlue).opacity(0.35),
+                                Color(uiColor: .systemPurple).opacity(0.35)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.selectedMemberID == nil)
     }
 
     private func medicalCard(_ card: HomeDashboard.MedicalCard) -> some View {

@@ -94,6 +94,11 @@ extension JSONEncoder {
         return encoder
     }
 
+    /// 医疗 API 出站 JSON：属性 camelCase → 字段 snake_case（与 Django REST / ``MedicineBoxSerializer`` 等一致）。
+    nonisolated static var medicalAPI: JSONEncoder {
+        JSONEncoder.default
+    }
+
     /// 聊天同步 API：snake_case + 毫秒 ISO8601（与 Django `DateTimeField` 对齐）。
     nonisolated static var chatRemote: JSONEncoder {
         let encoder = JSONEncoder.default

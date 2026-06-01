@@ -126,34 +126,60 @@ struct MedicationPrescriptionEditPage: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                SparkFormCard(title: "处方信息", titleSystemImage: "doc.text.fill") {
+                SparkFormCard(title: L10n.text("home.medical.prescription.section.info"), titleSystemImage: "doc.text.fill") {
                     VStack(spacing: 14) {
-                        SparkFormTextRow(title: "开方机构", text: $institutionName, placeholder: "医院、门诊或药房", keyboardVisible: $formKeyboardVisible)
-                        SparkFormTextRow(title: "开方医生", text: $prescriberName, placeholder: "医生姓名", keyboardVisible: $formKeyboardVisible)
-                        SparkFormTextRow(title: "处方编号", text: $prescriptionNo, placeholder: "处方号 / 流水号", keyboardVisible: $formKeyboardVisible)
-                        SparkFormTextAreaRow(title: "诊断", text: $diagnosis, minHeight: 88, maxHeight: 180, placeholder: "诊断或临床说明", keyboardVisible: $formKeyboardVisible)
+                        SparkFormTextRow(
+                            title: L10n.text("home.medical.prescription.field.institution"),
+                            text: $institutionName,
+                            placeholder: L10n.text("home.medical.prescription.placeholder.institution"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
+                        SparkFormTextRow(
+                            title: L10n.text("home.medical.prescription.field.prescriber"),
+                            text: $prescriberName,
+                            placeholder: L10n.text("home.medical.prescription.placeholder.prescriber"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
+                        SparkFormTextRow(
+                            title: L10n.text("home.medical.prescription.field.prescription_no"),
+                            text: $prescriptionNo,
+                            placeholder: L10n.text("home.medical.prescription.placeholder.prescription_no"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
+                        SparkFormTextAreaRow(
+                            title: L10n.text("common.diagnosis"),
+                            text: $diagnosis,
+                            minHeight: 88,
+                            maxHeight: 180,
+                            placeholder: L10n.text("home.medical.prescription.placeholder.diagnosis"),
+                            keyboardVisible: $formKeyboardVisible
+                        )
                     }
                 }
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
 
-                SparkFormCard(title: "开方与状态", titleSystemImage: "calendar.badge.clock") {
+                SparkFormCard(title: L10n.text("home.medical.prescription.section.schedule_status"), titleSystemImage: "calendar.badge.clock") {
                     VStack(spacing: 14) {
-                        Toggle("设置开方日期", isOn: $hasPrescribedAt)
+                        Toggle(L10n.text("home.medical.prescription.field.set_prescribed_at"), isOn: $hasPrescribedAt)
                             .font(.subheadline.weight(.medium))
                         if hasPrescribedAt {
-                            DatePicker("开方日期", selection: $prescribedAt, displayedComponents: .date)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 12)
-                                .frame(height: 44)
-                                .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            DatePicker(
+                                L10n.text("home.medical.prescription.field.prescribed_at"),
+                                selection: $prescribedAt,
+                                displayedComponents: .date
+                            )
+                            .font(.subheadline.weight(.medium))
+                            .padding(.horizontal, 12)
+                            .frame(height: 44)
+                            .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        Picker("处方状态", selection: $status) {
-                            Text("有效").tag("active")
-                            Text("草稿").tag("draft")
-                            Text("已支付").tag("paid")
-                            Text("已发药").tag("dispensed")
-                            Text("已完成").tag("completed")
-                            Text("已取消").tag("cancelled")
+                        Picker(L10n.text("home.medical.prescription.field.status"), selection: $status) {
+                            Text(L10n.text("home.medical.prescription.status.active")).tag("active")
+                            Text(L10n.text("home.medical.prescription.status.draft")).tag("draft")
+                            Text(L10n.text("home.medical.prescription.status.paid")).tag("paid")
+                            Text(L10n.text("home.medical.prescription.status.dispensed")).tag("dispensed")
+                            Text(L10n.text("home.medical.prescription.status.completed")).tag("completed")
+                            Text(L10n.text("home.medical.prescription.status.cancelled")).tag("cancelled")
                         }
                         .pickerStyle(.menu)
                     }
@@ -165,7 +191,7 @@ struct MedicationPrescriptionEditPage: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("编辑处方")
+        .navigationTitle(L10n.text("home.medical.prescription.edit.title"))
         .navigationBarTitleDisplayMode(.inline)
         .sparkFormBottomBar(
             canSubmit: !isSaving,
@@ -177,15 +203,15 @@ struct MedicationPrescriptionEditPage: View {
             },
             onSave: { saveNow() }
         )
-        .alert("保存失败", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
-            Button("好", role: .cancel) {}
+        .alert(L10n.text("home.medical.medicine_box.save_failed"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
     }
 
     private var saveTitle: String {
-        L10n.text("common.save", fallback: "保存")
+        L10n.text("common.save")
     }
 
     private func saveNow() {
@@ -202,16 +228,16 @@ struct MedicationPrescriptionEditPage: View {
     private var linkedMedicationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("关联用药", systemImage: "pills.fill")
+                Label(L10n.text("home.medical.prescription.linked_medications"), systemImage: "pills.fill")
                     .font(.headline)
                 Spacer()
-                Text("\(plans.count) 项")
+                Text(String(format: L10n.text("home.medical.prescription.linked_count"), plans.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
             if plans.isEmpty {
-                Text("暂无关联用药计划")
+                Text(L10n.text("home.medical.prescription.no_linked_plans"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -262,7 +288,11 @@ struct MedicationPrescriptionEditPage: View {
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
-            notificationClient.error(error.localizedDescription, title: "保存失败", source: "home.prescription.edit")
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("home.medical.medicine_box.save_failed"),
+                source: "home.prescription.edit"
+            )
         }
     }
 
@@ -298,7 +328,11 @@ struct MedicationPrescriptionEditPage: View {
             onPlanUnlinked(updated)
         } catch {
             alertMessage = error.localizedDescription
-            notificationClient.error(error.localizedDescription, title: "取消关联失败", source: "home.prescription.unlink_medication")
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("home.medical.prescription.unlink_failed"),
+                source: "home.prescription.unlink_medication"
+            )
         }
     }
 }
@@ -329,11 +363,11 @@ private struct EditablePrescriptionMedicationRow: View {
                 .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(plan.drugName.nilIfBlank ?? "未命名药品")
+                Text(plan.drugName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(subtitle.isEmpty ? "暂无补充信息" : subtitle)
+                Text(subtitle.isEmpty ? L10n.text("home.medical.prescription.no_supplemental_info") : subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -347,7 +381,7 @@ private struct EditablePrescriptionMedicationRow: View {
                 if isUnlinking {
                     ProgressView()
                 } else {
-                    Label("取消关联", systemImage: "link.badge.minus")
+                    Label(L10n.text("home.medical.prescription.unlink"), systemImage: "link.badge.minus")
                         .labelStyle(.iconOnly)
                 }
             }

@@ -63,7 +63,7 @@ struct MedicationPrescriptionDetailPage: View {
     }
 
     private var title: String {
-        currentPrescription?.institutionName.nilIfBlank ?? "处方详情"
+        currentPrescription?.institutionName.nilIfBlank ?? L10n.text("home.medical.prescription.detail.title")
     }
 
     var body: some View {
@@ -86,7 +86,7 @@ struct MedicationPrescriptionDetailPage: View {
                     Button {
                         showingEditSheet = true
                     } label: {
-                        Label("编辑", systemImage: "pencil")
+                        Label(L10n.text("common.edit"), systemImage: "pencil")
                     }
                     .disabled(memberID == nil || currentPrescription == nil)
 
@@ -94,7 +94,7 @@ struct MedicationPrescriptionDetailPage: View {
                         deleteLinkedPlans = false
                         showingDeleteConfirm = true
                     } label: {
-                        Label("删除", systemImage: "trash")
+                        Label(L10n.text("common.delete"), systemImage: "trash")
                     }
                     .disabled(currentPrescription == nil)
                 } label: {
@@ -127,8 +127,8 @@ struct MedicationPrescriptionDetailPage: View {
         .sheet(isPresented: $showingDeleteConfirm) {
             deleteConfirmSheet
         }
-        .alert("操作失败", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
-            Button("好", role: .cancel) {}
+        .alert(L10n.text("common.operation_failed"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
@@ -146,10 +146,10 @@ struct MedicationPrescriptionDetailPage: View {
             completeData: completeData,
             memberContextStore: memberContextStore,
             notificationClient: notificationClient,
-            linkedTitle: L10n.text("home.medical.list.medications.linked_case.title", fallback: "已关联病例"),
-            linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle", fallback: "点击查看病历详情与时间线"),
-            unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title", fallback: "关联病例"),
-            unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle", fallback: "未关联，点击选择要归档的病历"),
+            linkedTitle: L10n.text("home.medical.list.medications.linked_case.title"),
+            linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle"),
+            unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title"),
+            unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle"),
             onResourceUpdated: { (updated: SparkMedicalSyncAPI.RemotePrescription) in
                 currentPrescription = updated
                 onPrescriptionSaved(updated)
@@ -178,7 +178,7 @@ struct MedicationPrescriptionDetailPage: View {
                 .frame(width: 48, height: 48)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(currentPrescription?.institutionName.nilIfBlank ?? "处方批次")
+                    Text(currentPrescription?.institutionName.nilIfBlank ?? L10n.text("home.medical.prescription.batch_fallback_title"))
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                     Text(headerSubtitle)
@@ -202,19 +202,39 @@ struct MedicationPrescriptionDetailPage: View {
 
     private var headerSubtitle: String {
         [
-            currentPrescription?.prescriberName.nilIfBlank.map { "医生：\($0)" },
-            currentPrescription?.prescriptionNo?.nilIfBlank.map { "处方号：\($0)" },
+            currentPrescription?.prescriberName.nilIfBlank.map {
+                String(format: L10n.text("home.medical.prescription.header.doctor_format"), $0)
+            },
+            currentPrescription?.prescriptionNo?.nilIfBlank.map {
+                String(format: L10n.text("home.medical.prescription.header.rx_no_format"), $0)
+            },
             currentPrescription?.prescribedAt.map { $0.formatted(date: .abbreviated, time: .omitted) }
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var detailGrid: some View {
         VStack(spacing: 10) {
-            PrescriptionDetailInfoRow(title: "处方状态", value: currentPrescription?.status.nilIfBlank.map(prescriptionStatusText) ?? "未填写")
-            PrescriptionDetailInfoRow(title: "开方机构", value: currentPrescription?.institutionName.nilIfBlank ?? "未填写")
-            PrescriptionDetailInfoRow(title: "开方医生", value: currentPrescription?.prescriberName.nilIfBlank ?? "未填写")
-            PrescriptionDetailInfoRow(title: "处方编号", value: currentPrescription?.prescriptionNo?.nilIfBlank ?? "未填写")
-            PrescriptionDetailInfoRow(title: "开方日期", value: currentPrescription?.prescribedAt.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "未填写")
+            PrescriptionDetailInfoRow(
+                title: L10n.text("home.medical.prescription.field.status"),
+                value: currentPrescription?.status.nilIfBlank.map(prescriptionStatusText) ?? L10n.text("home.medical.medicine_box.not_filled")
+            )
+            PrescriptionDetailInfoRow(
+                title: L10n.text("home.medical.prescription.field.institution"),
+                value: currentPrescription?.institutionName.nilIfBlank ?? L10n.text("home.medical.medicine_box.not_filled")
+            )
+            PrescriptionDetailInfoRow(
+                title: L10n.text("home.medical.prescription.field.prescriber"),
+                value: currentPrescription?.prescriberName.nilIfBlank ?? L10n.text("home.medical.medicine_box.not_filled")
+            )
+            PrescriptionDetailInfoRow(
+                title: L10n.text("home.medical.prescription.field.prescription_no"),
+                value: currentPrescription?.prescriptionNo?.nilIfBlank ?? L10n.text("home.medical.medicine_box.not_filled")
+            )
+            PrescriptionDetailInfoRow(
+                title: L10n.text("home.medical.prescription.field.prescribed_at"),
+                value: currentPrescription?.prescribedAt.map { $0.formatted(date: .abbreviated, time: .omitted) }
+                    ?? L10n.text("home.medical.medicine_box.not_filled")
+            )
         }
     }
 
@@ -222,7 +242,7 @@ struct MedicationPrescriptionDetailPage: View {
     private var attachmentsSection: some View {
         if let attachments = currentPrescription?.attachments, attachments.isEmpty == false {
             VStack(alignment: .leading, spacing: 12) {
-                Label("附件", systemImage: "paperclip")
+                Label(L10n.text("common.attachments"), systemImage: "paperclip")
                     .font(.headline)
                 MedicalAttachmentGridPreview(
                     attachments: attachments,
@@ -238,7 +258,7 @@ struct MedicationPrescriptionDetailPage: View {
     private var diagnosisCard: some View {
         if let diagnosis = currentPrescription?.diagnosis.nilIfBlank {
             VStack(alignment: .leading, spacing: 8) {
-                Label("诊断", systemImage: "stethoscope")
+                Label(L10n.text("common.diagnosis"), systemImage: "stethoscope")
                     .font(.headline)
                     .foregroundStyle(Color(uiColor: .systemBlue))
                 Text(diagnosis)
@@ -258,16 +278,16 @@ struct MedicationPrescriptionDetailPage: View {
     private var medicationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("关联用药", systemImage: "pills.fill")
+                Label(L10n.text("home.medical.prescription.linked_medications"), systemImage: "pills.fill")
                     .font(.headline)
                 Spacer()
-                Text("\(currentPlans.count) 项")
+                Text(String(format: L10n.text("home.medical.prescription.linked_count"), currentPlans.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
 
             if currentPlans.isEmpty {
-                Text("暂无关联用药计划")
+                Text(L10n.text("home.medical.prescription.no_linked_plans"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -313,21 +333,21 @@ struct MedicationPrescriptionDetailPage: View {
 
     private var deleteConfirmSheet: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("删除处方")
+            Text(L10n.text("home.medical.prescription.delete.title"))
                 .font(.title3.weight(.semibold))
-            Text("删除后处方信息将不再显示。未勾选时，关联用药计划会保留并解除处方关联。")
+            Text(L10n.text("home.medical.prescription.delete.message"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Toggle("同时删除关联用药计划", isOn: $deleteLinkedPlans)
+            Toggle(L10n.text("home.medical.prescription.delete.linked_plans"), isOn: $deleteLinkedPlans)
                 .font(.subheadline.weight(.medium))
                 .toggleStyle(.switch)
 
             Spacer(minLength: 0)
 
             HStack(spacing: 12) {
-                Button("取消") {
+                Button(L10n.text("common.cancel")) {
                     showingDeleteConfirm = false
                 }
                 .buttonStyle(.bordered)
@@ -340,7 +360,7 @@ struct MedicationPrescriptionDetailPage: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text("确认删除")
+                        Text(L10n.text("home.medical.medicine_box.delete.confirm_title"))
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -381,7 +401,11 @@ struct MedicationPrescriptionDetailPage: View {
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
-            notificationClient.error(error.localizedDescription, title: "删除失败", source: "home.prescription.delete")
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("home.medical.prescription.delete.failed"),
+                source: "home.prescription.delete"
+            )
         }
     }
 }
@@ -407,17 +431,17 @@ private struct PrescriptionDetailInfoRow: View {
 private func prescriptionStatusText(_ status: String) -> String {
     switch status {
     case "active":
-        return "有效"
+        return L10n.text("home.medical.prescription.status.active")
     case "draft":
-        return "草稿"
+        return L10n.text("home.medical.prescription.status.draft")
     case "paid":
-        return "已支付"
+        return L10n.text("home.medical.prescription.status.paid")
     case "dispensed":
-        return "已发药"
+        return L10n.text("home.medical.prescription.status.dispensed")
     case "completed":
-        return "已完成"
+        return L10n.text("home.medical.prescription.status.completed")
     case "cancelled":
-        return "已取消"
+        return L10n.text("home.medical.prescription.status.cancelled")
     default:
         return status
     }

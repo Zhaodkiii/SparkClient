@@ -239,6 +239,24 @@ struct SparkMedicalWorkflowAPI {
 
     }
 
+    /// 药箱创建/更新请求体（与 ``MedicineBoxSerializer`` 对齐；编码使用 ``JSONEncoder.medicalAPI`` → snake_case）。
+    struct MedicineBoxWritePayload: Encodable, Sendable {
+        let member: Int?
+        let entryMemberID: Int
+        let medicineName: String
+        let medicineType: String?
+        let brandName: String
+        let dosageForm: String
+        let strength: String
+        let doseUnit: String
+        let totalQuantity: Double?
+        let expireDate: String?
+        let notes: String
+        let extra: [String: String]
+        let fileIds: [Int]
+    }
+
+    /// 用药计划 bundle 内嵌药箱字段（无 member / entryMemberID）。
     struct MedicineBoxPayload: Encodable, Sendable {
         let medicineType: String?
         let medicineName: String
@@ -250,7 +268,6 @@ struct SparkMedicalWorkflowAPI {
         let expireDate: String?
         let notes: String
         let extra: [String: String]
-
     }
 
     /// 通用「仅返回 id」的响应解码结构。

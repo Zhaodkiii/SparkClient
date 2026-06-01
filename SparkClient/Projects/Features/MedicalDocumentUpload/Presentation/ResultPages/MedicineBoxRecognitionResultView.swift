@@ -150,7 +150,7 @@ struct MedicineBoxRecognitionResultView: View {
                     items[editor.index] = draft.recognitionDraft(sortOrder: editor.item.sortOrder)
                     onUpdate(.medicineBoxes(items))
                 }),
-                memberID: output.envelope.memberID ?? 0,
+                entryMemberID: output.envelope.memberID ?? 0,
                 workflowAPI: AppContainer.preview.backend.medicalWorkflow
             )
         }

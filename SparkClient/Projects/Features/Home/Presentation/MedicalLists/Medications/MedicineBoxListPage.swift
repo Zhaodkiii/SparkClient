@@ -54,13 +54,14 @@ struct MedicineBoxListPage: View {
     var body: some View {
         List {
             if sortedBoxes.isEmpty {
-                Text("暂无药箱药品")
+                Text(L10n.text("home.medical.medicine_box.empty"))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(sortedBoxes, id: \.id) { box in
                     NavigationLink {
                         MedicineBoxDetailPage(
                             box: box,
+                            entryMemberID: memberID,
                             typeOptions: medicineTypeOptions,
                             specOptionBoxes: localMedicineBoxes,
                             workflowAPI: workflowAPI,
@@ -77,13 +78,13 @@ struct MedicineBoxListPage: View {
         .refreshable {
             await refreshMedicineBoxes()
         }
-        .navigationTitle("药箱")
+        .navigationTitle(L10n.text("home.medical.medicine_box.title"))
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button {
                 showingUploadSheet = true
             } label: {
-                Label("拍照添加药品", systemImage: "camera.fill")
+                Label(L10n.text("home.medical.medicine_box.camera_add"), systemImage: "camera.fill")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -105,14 +106,15 @@ struct MedicineBoxListPage: View {
                         .font(.body.weight(.semibold))
                 }
                 .disabled(memberID == nil)
-                .accessibilityLabel("添加药品")
+                .accessibilityLabel(L10n.text("home.medical.medicine_box.add_a11y"))
             }
         }
         .sheet(item: $sheetDestination) { destination in
             if let memberID {
                 MedicineBoxFormView(
                     mode: destination.formMode,
-                    memberID: memberID,
+                    entryMemberID: memberID,
+                    defaultBindingMemberID: memberID,
                     workflowAPI: workflowAPI,
                     fileTransferService: fileTransferService,
                     typeOptions: medicineTypeOptions,
@@ -125,6 +127,9 @@ struct MedicineBoxListPage: View {
         }
         .onChange(of: medicineBoxes) { newValue in
             localMedicineBoxes = newValue
+        }
+        .onChange(of: viewModel.saveSucceededRevision) { _ in
+            Task { await refreshMedicineBoxes() }
         }
         .sheet(isPresented: $showingUploadSheet) {
             MedicineBoxUploadSheet { files in
@@ -185,7 +190,7 @@ struct MedicineBoxListPage: View {
 
     @ViewBuilder
     private var missingMemberSheet: some View {
-        let content = Text("请先选择成员")
+        let content = Text(L10n.text("home.medical.medicine_box.select_member_first"))
             .font(.headline)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -240,7 +245,7 @@ private struct MedicineBoxRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(box.medicineName.nilIfBlank ?? "未命名药品")
+                    Text(box.medicineName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Spacer()
@@ -254,7 +259,12 @@ private struct MedicineBoxRow: View {
                     .foregroundStyle(.secondary)
 
                 if let expireDate = box.expireDate {
-                    Text("有效期 \(expireDate.formatted(date: .numeric, time: .omitted))")
+                    Text(
+                        String(
+                            format: L10n.text("home.medical.medicine_box.expire_prefix"),
+                            expireDate.formatted(date: .numeric, time: .omitted)
+                        )
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -266,6 +276,9 @@ private struct MedicineBoxRow: View {
 
 struct MedicineBoxDetailPage: View {
     let box: SparkMedicalSyncAPI.RemoteMedicineBox
+    let entryMemberID: Int?
+    let memberOptions: [Member]
+    let allowsHouseholdPublic: Bool
     let typeOptions: [String]
     let specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     let workflowAPI: SparkMedicalWorkflowAPI
@@ -282,6 +295,9 @@ struct MedicineBoxDetailPage: View {
 
     init(
         box: SparkMedicalSyncAPI.RemoteMedicineBox,
+        entryMemberID: Int? = nil,
+        memberOptions: [Member] = [],
+        allowsHouseholdPublic: Bool = false,
         typeOptions: [String],
         specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         workflowAPI: SparkMedicalWorkflowAPI,
@@ -290,6 +306,9 @@ struct MedicineBoxDetailPage: View {
         onDeleted: @escaping (Int) -> Void
     ) {
         self.box = box
+        self.entryMemberID = entryMemberID
+        self.memberOptions = memberOptions
+        self.allowsHouseholdPublic = allowsHouseholdPublic
         self.typeOptions = typeOptions
         self.specOptionBoxes = specOptionBoxes
         self.workflowAPI = workflowAPI
@@ -299,25 +318,49 @@ struct MedicineBoxDetailPage: View {
         _currentBox = State(initialValue: box)
     }
 
+    private var resolvedEntryMemberID: Int {
+        entryMemberID ?? box.member ?? memberOptions.first?.id ?? 0
+    }
+
+    private var ownershipDisplay: String {
+        guard let memberID = currentBox.member else {
+            return L10n.text("home.medical.medicine_box.ownership.household")
+        }
+        return memberOptions.first(where: { $0.id == memberID })?.name
+            ?? L10n.text("home.medical.medicine_box.ownership.member_fallback")
+    }
+
     var body: some View {
         List {
-            Section("药品信息") {
-                MedicineBoxDetailRow(title: "药品名称", value: currentBox.medicineName)
-                MedicineBoxDetailRow(title: "药品类型", value: medicineTypeText(currentBox.medicineType) ?? "")
-                MedicineBoxDetailRow(title: "品牌名", value: currentBox.brandName)
-                MedicineBoxDetailRow(title: "剂型", value: currentBox.dosageForm)
-                MedicineBoxDetailRow(title: "规格", value: medicineStrengthDetailValue(currentBox.strength))
+            if allowsHouseholdPublic {
+                Section(L10n.text("home.medical.medicine_box.section.ownership")) {
+                    MedicineBoxDetailRow(
+                        title: L10n.text("home.medical.medicine_box.field.binding_member"),
+                        value: ownershipDisplay
+                    )
+                }
             }
 
-            Section("库存信息") {
-                MedicineBoxDetailRow(title: "总数量", value: medicineBoxStockText(currentBox))
+            Section(L10n.text("home.medical.medicine_box.section.info")) {
+                MedicineBoxDetailRow(title: L10n.text("home.medical.medicine_box.field.medicine_name"), value: currentBox.medicineName)
+                MedicineBoxDetailRow(title: L10n.text("home.medical.medicine_box.field.medicine_type"), value: medicineTypeText(currentBox.medicineType) ?? "")
+                MedicineBoxDetailRow(title: L10n.text("medical_record.forms.field.brand_name"), value: currentBox.brandName)
+                MedicineBoxDetailRow(title: L10n.text("medical_record.forms.field.dosage_form"), value: currentBox.dosageForm)
+                MedicineBoxDetailRow(title: L10n.text("medical_record.forms.field.strength"), value: medicineStrengthDetailValue(currentBox.strength))
+            }
+
+            Section(L10n.text("home.medical.medicine_box.section.stock")) {
+                MedicineBoxDetailRow(title: L10n.text("home.medical.medicine_box.field.total_quantity"), value: medicineBoxStockText(currentBox))
                 if let expireDate = currentBox.expireDate {
-                    MedicineBoxDetailRow(title: "有效期", value: expireDate.formatted(date: .numeric, time: .omitted))
+                    MedicineBoxDetailRow(
+                        title: L10n.text("home.medical.medicine_box.field.expire_date"),
+                        value: expireDate.formatted(date: .numeric, time: .omitted)
+                    )
                 }
             }
 
             if currentBox.notes.nilIfBlank != nil {
-                Section("备注") {
+                Section(L10n.text("medical_record.forms.field.notes")) {
                     Text(currentBox.notes)
                         .font(.body)
                         .foregroundStyle(.primary)
@@ -325,7 +368,7 @@ struct MedicineBoxDetailPage: View {
             }
 
             if let attachments = currentBox.attachments, attachments.isEmpty == false {
-                Section("附件") {
+                Section(L10n.text("common.attachments")) {
                     MedicalAttachmentGridPreview(
                         attachments: attachments,
                         fileTransferService: fileTransferService
@@ -334,7 +377,7 @@ struct MedicineBoxDetailPage: View {
                 }
             }
         }
-        .navigationTitle(currentBox.medicineName.nilIfBlank ?? "药品详情")
+        .navigationTitle(currentBox.medicineName.nilIfBlank ?? L10n.text("home.medical.medicine_box.detail_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -342,13 +385,13 @@ struct MedicineBoxDetailPage: View {
                     Button {
                         showingEditSheet = true
                     } label: {
-                        Label("编辑", systemImage: "pencil")
+                        Label(L10n.text("common.edit"), systemImage: "pencil")
                     }
 
                     Button(role: .destructive) {
                         showingDeleteConfirm = true
                     } label: {
-                        Label("删除", systemImage: "trash")
+                        Label(L10n.text("common.delete"), systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -359,7 +402,10 @@ struct MedicineBoxDetailPage: View {
         .sheet(isPresented: $showingEditSheet) {
             MedicineBoxFormView(
                 mode: .serverEdit(existing: currentBox),
-                memberID: currentBox.member,
+                entryMemberID: resolvedEntryMemberID,
+                defaultBindingMemberID: currentBox.member,
+                memberOptions: memberOptions,
+                allowsHouseholdPublic: allowsHouseholdPublic,
                 workflowAPI: workflowAPI,
                 fileTransferService: fileTransferService,
                 typeOptions: typeOptions,
@@ -371,19 +417,19 @@ struct MedicineBoxDetailPage: View {
                 }
             )
         }
-        .alert("确认删除", isPresented: $showingDeleteConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) {
+        .alert(L10n.text("home.medical.medicine_box.delete.confirm_title"), isPresented: $showingDeleteConfirm) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(L10n.text("common.delete"), role: .destructive) {
                 Task { await deleteCurrentBox() }
             }
         } message: {
-            Text("删除后该药品将从药箱中移除。")
+            Text(L10n.text("home.medical.medicine_box.delete.message"))
         }
-        .alert("操作失败", isPresented: Binding(
+        .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
-            Button("知道了", role: .cancel) {}
+            Button(L10n.text("common.got_it"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
@@ -431,11 +477,11 @@ struct MedicineBoxUploadSheet: View {
     private let logger: Logger = ConsoleLogger()
 
     init(
-        title: String = L10n.text("medical.upload.medicine_box.sheet.title", fallback: "选择药品图片"),
-        headerTitle: String = L10n.text("medical.upload.medicine_box.sheet.header", fallback: "选择上传方式"),
-        headerSubtitle: String = L10n.text("medical.upload.medicine_box.sheet.subtitle", fallback: "可一次选择多张药盒、药瓶或说明书图片，确认后开始识别。"),
-        emptyTitle: String = "尚未选择文件",
-        emptySubtitle: String = "可拍照、从相册选择或上传 PDF/图片",
+        title: String = L10n.text("medical.upload.medicine_box.sheet.title"),
+        headerTitle: String = L10n.text("medical.upload.medicine_box.sheet.header"),
+        headerSubtitle: String = L10n.text("medical.upload.medicine_box.sheet.subtitle"),
+        emptyTitle: String = L10n.text("medical.upload.medicine_box.sheet.empty_title"),
+        emptySubtitle: String = L10n.text("medical.upload.medicine_box.sheet.empty_subtitle"),
         fileNamePrefix: String = "medicine_box",
         maxFileCount: Int = 5,
         onConfirm: @escaping ([MedicalUploadLocalFile]) -> Void
@@ -526,16 +572,16 @@ struct MedicineBoxUploadSheet: View {
                 }
             }
         }
-        .alert("无法打开相机", isPresented: $showCameraUnavailableAlert) {
-            Button("好", role: .cancel) {}
+        .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCameraUnavailableAlert) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
-            Text("当前设备不支持相机。")
+            Text(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_message"))
         }
-        .alert("文件数量已达上限", isPresented: Binding(
+        .alert(L10n.text("medical.upload.medicine_box.sheet.file_limit_title"), isPresented: Binding(
             get: { fileLimitMessage != nil },
             set: { if !$0 { fileLimitMessage = nil } }
         )) {
-            Button("好", role: .cancel) {}
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(fileLimitMessage ?? "")
         }
@@ -554,13 +600,28 @@ struct MedicineBoxUploadSheet: View {
 
     private var entryTiles: some View {
         HStack(spacing: 12) {
-            medicineUploadTile(icon: "camera", title: "拍照上传", subtitle: "即时拍摄", tint: .blue) {
+            medicineUploadTile(
+                icon: "camera",
+                title: L10n.text("medical.upload.medicine_box.sheet.tile.camera.title"),
+                subtitle: L10n.text("medical.upload.medicine_box.sheet.tile.camera.subtitle"),
+                tint: .blue
+            ) {
                 presentCamera()
             }
-            medicineUploadTile(icon: "photo.on.rectangle", title: "照片上传", subtitle: "选择相册", tint: .purple) {
+            medicineUploadTile(
+                icon: "photo.on.rectangle",
+                title: L10n.text("medical.upload.medicine_box.sheet.tile.photo.title"),
+                subtitle: L10n.text("medical.upload.medicine_box.sheet.tile.photo.subtitle"),
+                tint: .purple
+            ) {
                 presentPhotoLibrary()
             }
-            medicineUploadTile(icon: "doc", title: "文件上传", subtitle: "PDF/图片", tint: .green) {
+            medicineUploadTile(
+                icon: "doc",
+                title: L10n.text("medical.upload.medicine_box.sheet.tile.file.title"),
+                subtitle: L10n.text("medical.upload.medicine_box.sheet.tile.file.subtitle"),
+                tint: .green
+            ) {
                 presentFileImporter()
             }
         }
@@ -593,10 +654,16 @@ struct MedicineBoxUploadSheet: View {
     private var selectionPreview: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("已选择")
+                Text(L10n.text("medical.upload.medicine_box.sheet.selected_label"))
                     .font(.system(size: 14, weight: .semibold))
                 Spacer()
-                Text("\(localFiles.count)/\(maxFileCount) 个文件")
+                Text(
+                    String(
+                        format: L10n.text("medical.upload.medicine_box.sheet.selected_count"),
+                        localFiles.count,
+                        maxFileCount
+                    )
+                )
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -622,7 +689,7 @@ struct MedicineBoxUploadSheet: View {
             Button {
                 localFiles.removeAll()
             } label: {
-                Label("清空", systemImage: "trash")
+                Label(L10n.text("medical.upload.medicine_box.sheet.clear"), systemImage: "trash")
             }
             .buttonStyle(.bordered)
 
@@ -632,7 +699,7 @@ struct MedicineBoxUploadSheet: View {
                 onConfirm(localFiles)
                 dismiss()
             } label: {
-                Label("开始识别", systemImage: "wand.and.stars")
+                Label(L10n.text("medical.upload.medicine_box.sheet.start_recognition"), systemImage: "wand.and.stars")
             }
             .buttonStyle(.borderedProminent)
             .disabled(localFiles.isEmpty)
@@ -757,7 +824,10 @@ struct MedicineBoxUploadSheet: View {
     }
 
     private func showFileLimitMessage() {
-        fileLimitMessage = "最多可选择 \(maxFileCount) 个文件。"
+        fileLimitMessage = String(
+            format: L10n.text("medical.upload.medicine_box.sheet.file_limit_message"),
+            maxFileCount
+        )
     }
 }
 
@@ -837,7 +907,9 @@ struct MedicineBoxFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let memberID: Int
+    let entryMemberID: Int
+    let allowsHouseholdPublic: Bool
+    let memberOptions: [Member]
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService?
     let typeOptions: [String]
@@ -845,6 +917,7 @@ struct MedicineBoxFormView: View {
     let onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicineBox) -> Void)?
 
     @State private var draft: MedicineBoxDraft
+    @State private var bindingMemberID: Int?
     @State private var isSubmitting = false
     @State private var alertMessage: String?
     @State private var sheetKeyboardVisible = false
@@ -862,7 +935,10 @@ struct MedicineBoxFormView: View {
 
     init(
         mode: Mode,
-        memberID: Int,
+        entryMemberID: Int,
+        defaultBindingMemberID: Int? = nil,
+        memberOptions: [Member] = [],
+        allowsHouseholdPublic: Bool = false,
         workflowAPI: SparkMedicalWorkflowAPI,
         fileTransferService: FileTransferService? = nil,
         typeOptions: [String] = MedicineBoxTypeCatalog.defaultStoredOptions,
@@ -870,21 +946,32 @@ struct MedicineBoxFormView: View {
         onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicineBox) -> Void)? = nil
     ) {
         self.mode = mode
-        self.memberID = memberID
+        self.entryMemberID = entryMemberID
+        self.memberOptions = memberOptions
+        self.allowsHouseholdPublic = allowsHouseholdPublic
         self.workflowAPI = workflowAPI
         self.fileTransferService = fileTransferService
         self.typeOptions = MedicineBoxTypeCatalog.mergedOptions(typeOptions)
         self.specOptionBoxes = specOptionBoxes
         self.onServerSaved = onServerSaved
 
+        let initialBinding: Int?
         switch mode {
         case .create:
             _draft = State(initialValue: MedicineBoxDraft())
+            initialBinding = allowsHouseholdPublic
+                ? defaultBindingMemberID
+                : (defaultBindingMemberID ?? entryMemberID)
         case .serverEdit(let existing):
             _draft = State(initialValue: MedicineBoxDraft(existing: existing))
+            initialBinding = existing.member ?? defaultBindingMemberID
         case .localEdit(let existing, _):
             _draft = State(initialValue: existing)
+            initialBinding = allowsHouseholdPublic
+                ? defaultBindingMemberID
+                : (defaultBindingMemberID ?? entryMemberID)
         }
+        _bindingMemberID = State(initialValue: allowsHouseholdPublic ? initialBinding : (initialBinding ?? entryMemberID))
     }
 
     private var canSubmit: Bool {
@@ -895,9 +982,9 @@ struct MedicineBoxFormView: View {
     private var navigationTitle: String {
         switch mode {
         case .create:
-            return "添加药品"
+            return L10n.text("home.medical.medicine_box.form.add_title")
         case .serverEdit, .localEdit:
-            return "编辑药品"
+            return L10n.text("home.medical.medicine_box.form.edit_title")
         }
     }
 
@@ -928,11 +1015,11 @@ struct MedicineBoxFormView: View {
         .unifiedFilePreview(selection: $localAttachmentPreview)
 
 
-        .alert("保存失败", isPresented: Binding(
+        .alert(L10n.text("home.medical.medicine_box.save_failed"), isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
-            Button("知道了", role: .cancel) {}
+            Button(L10n.text("common.got_it"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
@@ -954,16 +1041,32 @@ struct MedicineBoxFormView: View {
             extraChromeHeight: Self.formSheetNavChromeHeight + Self.formSheetBottomBarChromeHeight
         ) {
             VStack(spacing: 14) {
-      
-                SparkFormCard(title: "药品信息", titleSystemImage: "pills.fill") {
+
+                if allowsHouseholdPublic {
+                    SparkFormCard(title: L10n.text("home.medical.medicine_box.section.ownership"), titleSystemImage: "person.2.fill") {
+                        ownershipPicker
+                    }
+                }
+
+                SparkFormCard(title: L10n.text("home.medical.medicine_box.section.info"), titleSystemImage: "pills.fill") {
                     VStack(spacing: 12) {
-                        SparkFormTextRow(title: "药品名称", text: $draft.medicineName, placeholder: "如 对乙酰氨基酚或泰诺林", required: true, keyboardVisible: $sheetKeyboardVisible)
+                        SparkFormTextRow(
+                            title: L10n.text("home.medical.medicine_box.field.medicine_name"),
+                            text: $draft.medicineName,
+                            placeholder: L10n.text("home.medical.medicine_box.form.name_placeholder"),
+                            required: true,
+                            keyboardVisible: $sheetKeyboardVisible
+                        )
                         
                         VStack{
-                            Toggle("设置有效期", isOn: $draft.hasExpireDate)
+                            Toggle(L10n.text("home.medical.medicine_box.field.set_expire"), isOn: $draft.hasExpireDate)
                                 .font(.subheadline.weight(.medium))
                             if draft.hasExpireDate {
-                                DatePicker("有效期", selection: $draft.expireDate, displayedComponents: .date)
+                                DatePicker(
+                                    L10n.text("home.medical.medicine_box.field.expire_date"),
+                                    selection: $draft.expireDate,
+                                    displayedComponents: .date
+                                )
                                     .font(.subheadline.weight(.medium))
 //                                    .padding(.horizontal, 12)
 //                                    .frame(height: 44)
@@ -973,20 +1076,20 @@ struct MedicineBoxFormView: View {
                         }
                         
                         SparkFormMenuCustomRow(
-                            title: "药品类型",
+                            title: L10n.text("home.medical.medicine_box.field.medicine_type"),
                             required: false,
                             sections: [(nil, MedicineBoxTypeCatalog.displayOptions(for: typeOptions))],
                             text: medicineTypeBinding,
                             customMenuTitle: L10n.text("medical_record.forms.lab_item.unit_custom_menu"),
-                            customPlaceholder: "输入药品类型",
+                            customPlaceholder: L10n.text("home.medical.medicine_box.form.type_placeholder"),
                             keyboardVisible: $sheetKeyboardVisible,
                             optionSystemImage: MedicineBoxTypeCatalog.systemImage(for:),
                             customAutofocus: false
                         )
                         SparkFormSheetPickerRow(
-                            title: L10n.text("medical_record.forms.field.dosage_form", fallback: "剂型"),
+                            title: L10n.text("medical_record.forms.field.dosage_form"),
                             displayValue: MedicineBoxDosageFormCatalog.displayString(stored: draft.dosageForm),
-                            placeholder: L10n.text("medical_record.medicine_box.dosage_form_sheet.placeholder", fallback: "请选择剂型")
+                            placeholder: L10n.text("medical_record.medicine_box.dosage_form_sheet.placeholder")
                         ) {
                             showDosageFormSheet.toggle()
                         }
@@ -1000,16 +1103,33 @@ struct MedicineBoxFormView: View {
                             showSpecificationSheet.toggle()
                         }
                         
-                        SparkFormTextRow(title: "总数量", text: $draft.totalQuantity, placeholder: "如 24", keyboardVisible: $sheetKeyboardVisible)
+                        SparkFormTextRow(
+                            title: L10n.text("home.medical.medicine_box.field.total_quantity"),
+                            text: $draft.totalQuantity,
+                            placeholder: L10n.text("home.medical.medicine_box.form.qty_placeholder"),
+                            keyboardVisible: $sheetKeyboardVisible
+                        )
                             .keyboardType(.decimalPad)
                     }
                 }
                 
-                SparkFormCard(title: "更多信息", titleSystemImage: "shippingbox.fill") {
+                SparkFormCard(title: L10n.text("home.medical.medicine_box.form.more_info"), titleSystemImage: "shippingbox.fill") {
                     
-                    SparkFormTextRow(title: "品牌名", text: $draft.brandName, placeholder: "可选", keyboardVisible: $sheetKeyboardVisible)
+                    SparkFormTextRow(
+                        title: L10n.text("medical_record.forms.field.brand_name"),
+                        text: $draft.brandName,
+                        placeholder: L10n.text("home.medical.medicine_box.form.brand_placeholder"),
+                        keyboardVisible: $sheetKeyboardVisible
+                    )
                     
-                    SparkFormTextAreaRow(title: "备注", text: $draft.notes, minHeight: 80, maxHeight: 160, placeholder: "用法、存放位置或注意事项", keyboardVisible: $sheetKeyboardVisible)
+                    SparkFormTextAreaRow(
+                        title: L10n.text("medical_record.forms.field.notes"),
+                        text: $draft.notes,
+                        minHeight: 80,
+                        maxHeight: 160,
+                        placeholder: L10n.text("home.medical.medicine_box.form.notes_placeholder"),
+                        keyboardVisible: $sheetKeyboardVisible
+                    )
                 }
 
                 if fileTransferService != nil {
@@ -1021,11 +1141,11 @@ struct MedicineBoxFormView: View {
     }
 
     private var attachmentFormCard: some View {
-        SparkFormCard(title: "附件", titleSystemImage: "paperclip") {
+        SparkFormCard(title: L10n.text("common.attachments"), titleSystemImage: "paperclip") {
             VStack(alignment: .leading, spacing: 12) {
                 if let fileTransferService, draft.attachments.isEmpty == false {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("已保存附件")
+                        Text(L10n.text("home.medical.medicine_box.attachment.saved"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.secondary)
 
@@ -1038,7 +1158,7 @@ struct MedicineBoxFormView: View {
 
                 if pendingAttachmentFiles.isEmpty == false {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("待上传附件")
+                        Text(L10n.text("home.medical.medicine_box.attachment.pending"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.secondary)
 
@@ -1078,7 +1198,7 @@ struct MedicineBoxFormView: View {
     }
 
     private var addAttachmentButtonLabel: some View {
-        Label("添加附件", systemImage: "plus.circle.fill")
+        Label(L10n.text("home.medical.medicine_box.attachment.add"), systemImage: "plus.circle.fill")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(Color.accentColor)
             .frame(maxWidth: .infinity)
@@ -1104,6 +1224,69 @@ struct MedicineBoxFormView: View {
         )
     }
 
+    private var ownershipPicker: some View {
+        Menu {
+            Button {
+                bindingMemberID = nil
+            } label: {
+                if bindingMemberID == nil {
+                    Label(L10n.text("home.medical.medicine_box.ownership.household"), systemImage: "checkmark")
+                } else {
+                    Text(L10n.text("home.medical.medicine_box.ownership.household"))
+                }
+            }
+            if memberOptions.isEmpty {
+                Button {
+                    bindingMemberID = entryMemberID
+                } label: {
+                    if bindingMemberID == entryMemberID {
+                        Label(L10n.text("home.medical.medicine_box.ownership.current_member"), systemImage: "checkmark")
+                    } else {
+                        Text(L10n.text("home.medical.medicine_box.ownership.current_member"))
+                    }
+                }
+            } else {
+                ForEach(memberOptions) { member in
+                    Button {
+                        bindingMemberID = member.id
+                    } label: {
+                        if bindingMemberID == member.id {
+                            Label(member.name, systemImage: "checkmark")
+                        } else {
+                            Text(member.name)
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                Text(L10n.text("home.medical.medicine_box.section.ownership"))
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text(ownershipPickerTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 44)
+            .sparkFormTextFieldChrome(isFocused: false, isError: false)
+        }
+    }
+
+    private var ownershipPickerTitle: String {
+        if bindingMemberID == nil {
+            return L10n.text("home.medical.medicine_box.ownership.household")
+        }
+        if let id = bindingMemberID,
+           let member = memberOptions.first(where: { $0.id == id }) {
+            return member.name
+        }
+        return L10n.text("home.medical.medicine_box.ownership.member_fallback")
+    }
+
     private func submitDraft() {
         switch mode {
         case .localEdit(_, let onSubmit):
@@ -1126,7 +1309,11 @@ struct MedicineBoxFormView: View {
         do {
             let uploadedFileIDs = try await uploadPendingAttachmentsIfNeeded()
             let fileIDs = draft.attachments.map(\.id) + uploadedFileIDs
-            let payload = try draft.payload(memberID: memberID, fileIds: fileIDs)
+            let payload = try draft.payload(
+                entryMemberID: entryMemberID,
+                bindingMemberID: allowsHouseholdPublic ? bindingMemberID : entryMemberID,
+                fileIds: fileIDs
+            )
             let saved: SparkMedicalSyncAPI.RemoteMedicineBox
             switch mode {
             case .create:
@@ -1154,7 +1341,7 @@ struct MedicineBoxFormView: View {
 
     private func validateDraft() -> Bool {
         guard canSubmit else {
-            alertMessage = "请填写药品名称"
+            alertMessage = L10n.text("home.medical.medicine_box.form.validation_name")
             return false
         }
         return true
@@ -1165,7 +1352,7 @@ struct MedicineBoxFormView: View {
         guard let fileTransferService else { return [] }
 
         let uploader = UploadMedicalDocumentFilesUseCase(fileTransferService: fileTransferService)
-        let uploaded = try await uploader.execute(memberID: memberID, files: pendingAttachmentFiles)
+        let uploaded = try await uploader.execute(memberID: bindingMemberID ?? entryMemberID, files: pendingAttachmentFiles)
         return uploaded.compactMap { $0.remoteFile?.id }
     }
 
@@ -1195,18 +1382,18 @@ private struct MedicineBoxDosageFormPickerSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 32)
 
-                    Text(L10n.text("medical_record.medicine_box.dosage_form_sheet.title", fallback: "选取药品类型"))
+                    Text(L10n.text("medical_record.medicine_box.dosage_form_sheet.title"))
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                         .padding(.horizontal, 20)
 
                     dosageFormSection(
-                        title: L10n.text("medical_record.medicine_box.dosage_form_sheet.common_section", fallback: "常见形式"),
+                        title: L10n.text("medical_record.medicine_box.dosage_form_sheet.common_section"),
                         items: MedicineBoxDosageFormCatalog.commonForms
                     )
                     dosageFormSection(
-                        title: L10n.text("medical_record.medicine_box.dosage_form_sheet.more_section", fallback: "更多形式"),
+                        title: L10n.text("medical_record.medicine_box.dosage_form_sheet.more_section"),
                         items: MedicineBoxDosageFormCatalog.moreForms
                     )
                 }
@@ -1725,7 +1912,7 @@ struct MedicineBoxDraft {
         Double(totalQuantity.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    fileprivate func payload(memberID: Int, fileIds: [Int] = []) throws -> MedicineBoxPayload {
+    fileprivate func payload(entryMemberID: Int, bindingMemberID: Int?, fileIds: [Int] = []) throws -> SparkMedicalWorkflowAPI.MedicineBoxWritePayload {
         let trimmedQty = totalQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedTotal: Double?
         if trimmedQty.isEmpty {
@@ -1735,8 +1922,9 @@ struct MedicineBoxDraft {
         } else {
             throw MedicineBoxFormError.invalidQuantity
         }
-        return MedicineBoxPayload(
-            member: memberID,
+        return SparkMedicalWorkflowAPI.MedicineBoxWritePayload(
+            member: bindingMemberID,
+            entryMemberID: entryMemberID,
             medicineName: medicineName.trimmed,
             medicineType: medicineType.nilIfBlank,
             brandName: brandName.nilIfBlank ?? "",
@@ -1772,45 +1960,13 @@ struct MedicineBoxDraft {
     }
 }
 
-private struct MedicineBoxPayload: Encodable {
-    let member: Int
-    let medicineName: String
-    let medicineType: String?
-    let brandName: String
-    let dosageForm: String
-    let strength: String
-    let doseUnit: String
-    let totalQuantity: Double?
-    let expireDate: String?
-    let notes: String
-    let extra: [String: String]
-    let fileIds: [Int]
-
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodableKey.self)
-        try c.encode(member, forKey: .key("member"))
-        try c.encode(medicineName, forKey: .key("medicineName"))
-        try c.encodeIfPresent(medicineType, forKey: .key("medicineType"))
-        try c.encode(brandName, forKey: .key("brandName"))
-        try c.encode(dosageForm, forKey: .key("dosageForm"))
-        try c.encode(strength, forKey: .key("strength"))
-        try c.encode(doseUnit, forKey: .key("doseUnit"))
-        try c.encodeIfPresent(totalQuantity, forKey: .key("totalQuantity"))
-        try c.encodeIfPresent(expireDate, forKey: .key("expireDate"))
-        try c.encode(notes, forKey: .key("notes"))
-        try c.encode(extra, forKey: .key("extra"))
-        try c.encode(fileIds, forKey: .key("fileIds"))
-    }
-}
-
 private enum MedicineBoxFormError: LocalizedError {
     case invalidQuantity
 
     var errorDescription: String? {
         switch self {
         case .invalidQuantity:
-            return "数量格式不正确"
+            return L10n.text("home.medical.medicine_box.form.invalid_quantity")
         }
     }
 }
@@ -1824,35 +1980,52 @@ private struct MedicineBoxDetailRow: View {
             Text(title)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 16)
-            Text(value.isEmpty ? "未填写" : value)
+            Text(value.isEmpty ? L10n.text("home.medical.medicine_box.not_filled") : value)
                 .multilineTextAlignment(.trailing)
         }
     }
 }
 
 enum MedicineBoxTypeCatalog {
+    struct DefaultItem: Sendable {
+        let key: String
+        let cn: String
+        let en: String
+    }
+
     nonisolated static let defaultStoredValue = ""
 
-    nonisolated static let defaults: [SparkBilingualItem] = [
-        .init(cn: "感冒发烧", en: "Cold & Fever"),
-        .init(cn: "胃肠消化", en: "GI & Digestion"),
-        .init(cn: "咳嗽咽痛", en: "Cough & Throat"),
-        .init(cn: "皮肤骨痛", en: "Skin, Bone & Pain"),
-        .init(cn: "慢病用药", en: "Chronic Medication"),
-        .init(cn: "儿童用药", en: "Pediatric")
+    nonisolated static let defaults: [DefaultItem] = [
+        .init(key: "cold_fever", cn: "感冒发烧", en: "Cold & Fever"),
+        .init(key: "gi_digestion", cn: "胃肠消化", en: "GI & Digestion"),
+        .init(key: "cough_throat", cn: "咳嗽咽痛", en: "Cough & Throat"),
+        .init(key: "skin_bone", cn: "皮肤骨痛", en: "Skin, Bone & Pain"),
+        .init(key: "chronic", cn: "慢病用药", en: "Chronic Medication"),
+        .init(key: "pediatric", cn: "儿童用药", en: "Pediatric")
     ]
 
     nonisolated static let defaultStoredOptions: [String] = defaults.map(\.cn)
 
     nonisolated private static let legacyCodeMap: [String: String] = [
-        "cold_fever": "感冒发烧",
-        "gi_digestion": "胃肠消化",
-        "cough_throat": "咳嗽咽痛",
-        "skin_bone": "皮肤骨痛",
-        "chronic": "慢病用药",
-        "pediatric": "儿童用药",
+        "cold_fever": defaults[0].cn,
+        "gi_digestion": defaults[1].cn,
+        "cough_throat": defaults[2].cn,
+        "skin_bone": defaults[3].cn,
+        "chronic": defaults[4].cn,
+        "pediatric": defaults[5].cn,
         "uncategorized": ""
     ]
+
+    nonisolated private static func localizedLabel(for item: DefaultItem) -> String {
+        L10n.text(
+            "home.medical.medicine_box.type.\(item.key)",
+            fallback: prefersEnglish ? item.en : item.cn
+        )
+    }
+
+    nonisolated private static func defaultItem(matching stored: String) -> DefaultItem? {
+        defaults.first { $0.cn == stored || $0.en == stored || $0.key == stored }
+    }
 
     nonisolated private static var prefersEnglish: Bool {
         if #available(iOS 16, *) {
@@ -1877,15 +2050,17 @@ enum MedicineBoxTypeCatalog {
 
     nonisolated static func displayString(stored: String?) -> String {
         let stored = storedValue(fromAny: stored)
-        guard let item = defaults.first(where: { $0.cn == stored || $0.en == stored }) else {
+        guard let item = defaultItem(matching: stored) else {
             return blankToNil(stored) ?? defaultStoredValue
         }
-        return prefersEnglish ? item.en : item.cn
+        return localizedLabel(for: item)
     }
 
     nonisolated static func storedValue(fromDisplay display: String) -> String {
         let text = display.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let item = defaults.first(where: { $0.cn == text || $0.en == text }) {
+        if let item = defaults.first(where: {
+            $0.cn == text || $0.en == text || localizedLabel(for: $0) == text
+        }) {
             return item.cn
         }
         return text
@@ -1898,25 +2073,28 @@ enum MedicineBoxTypeCatalog {
         if let mapped = legacyCodeMap[raw] {
             return mapped
         }
-        if let item = defaults.first(where: { $0.cn == raw || $0.en == raw }) {
+        if let item = defaultItem(matching: raw) {
             return item.cn
         }
         return raw
     }
 
     nonisolated static func systemImage(for display: String) -> String? {
-        switch storedValue(fromDisplay: display) {
-        case "感冒发烧":
+        guard let item = defaultItem(matching: storedValue(fromDisplay: display)) else {
+            return "tag"
+        }
+        switch item.key {
+        case "cold_fever":
             return "thermometer.medium"
-        case "胃肠消化":
+        case "gi_digestion":
             return "cross.case"
-        case "咳嗽咽痛":
+        case "cough_throat":
             return "lungs"
-        case "皮肤骨痛":
+        case "skin_bone":
             return "figure.walk"
-        case "慢病用药":
+        case "chronic":
             return "calendar.badge.clock"
-        case "儿童用药":
+        case "pediatric":
             return "person.crop.circle"
         default:
             return "tag"
@@ -1944,7 +2122,7 @@ enum MedicineBoxTypeCatalog {
 }
 
 private func medicineBoxStockText(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
-    guard let q = box.totalQuantity else { return "未填写" }
+    guard let q = box.totalQuantity else { return L10n.text("home.medical.medicine_box.not_filled") }
     return q.formatted(.number.precision(.fractionLength(0...2)))
 }
 

@@ -110,6 +110,7 @@ struct HealthResourceReferenceDestination: View {
         case .medicineBox(let box, let allBoxes):
             MedicineBoxDetailPage(
                 box: box,
+                entryMemberID: reference.memberID,
                 typeOptions: MedicineBoxTypeCatalog.options(in: allBoxes),
                 specOptionBoxes: allBoxes.filter { $0.medicineName == box.medicineName },
                 workflowAPI: workflowAPI,

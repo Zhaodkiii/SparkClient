@@ -248,7 +248,7 @@ enum SparkMedicalSyncAPI {
     /// 药箱：用户/成员拥有的物理药品库存。
     struct RemoteMedicineBox: Codable, Sendable, Equatable {
         var id: Int
-        var member: Int
+        var member: Int?
         var medicineName: String
         var medicineType: String?
         var brandName: String
