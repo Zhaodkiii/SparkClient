@@ -181,6 +181,7 @@ private struct RemoteScenarioCollection: Decodable {
     let medicalReportExtraction: AIScenarioRemoteBundle?
     let prescriptionExtraction: AIScenarioRemoteBundle?
     let medicationExtraction: AIScenarioRemoteBundle?
+    let medicineBoxExtraction: AIScenarioRemoteBundle?
     let optimizationText: AIScenarioRemoteBundle?
     let optimizationVisual: AIScenarioRemoteBundle?
     let contextFolding: AIScenarioRemoteBundle?
@@ -204,6 +205,7 @@ private struct RemoteScenarioCollection: Decodable {
             medicalReportExtraction: markPro(medicalReportExtraction) ?? empty,
             prescriptionExtraction: markPro(prescriptionExtraction) ?? empty,
             medicationExtraction: markPro(medicationExtraction) ?? empty,
+            medicineBoxExtraction: markPro(medicineBoxExtraction) ?? empty,
             optimizationText: markPro(optimizationText) ?? empty,
             optimizationVisual: markPro(optimizationVisual) ?? empty,
             contextFolding: markPro(contextFolding) ?? empty,

@@ -75,10 +75,10 @@ struct VerificationMethodCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("安全验证", systemImage: "shield.fill")
+            Label(L10n.text("account_management.verify.security_title"), systemImage: "shield.fill")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.orange)
-            Text("为了确保账户安全，注销账户前需要进行身份验证。")
+            Text(L10n.text("account_management.verify.security_message"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -111,7 +111,7 @@ struct VerificationMethodCard: View {
 
             HStack {
                 Spacer()
-                Button("取消", action: onCancel)
+                Button(L10n.text("common.cancel"), action: onCancel)
                     .buttonStyle(.bordered)
             }
         }
@@ -165,17 +165,29 @@ struct OTPVerificationCard: View {
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("验证码已发送至 \(target)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    String(
+                        format: L10n.text("account_management.deactivation.otp.sent_format"),
+                        locale: Locale.current,
+                        target
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             VerificationCodeField(code: $code, length: 6)
             if countdown > 0 {
-                Text("重新发送 \(countdown)s")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Text(
+                    String(
+                        format: L10n.text("account_management.otp.resend_countdown"),
+                        locale: Locale.current,
+                        countdown
+                    )
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             } else {
-                Button("重新发送", action: onResend)
+                Button(L10n.text("account_management.otp.resend"), action: onResend)
                     .buttonStyle(.bordered)
             }
         }
@@ -189,9 +201,9 @@ struct AppleReauthCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Apple 身份验证", systemImage: "applelogo")
+            Label(L10n.text("account_management.apple_reauth.title"), systemImage: "applelogo")
                 .font(.title3.weight(.bold))
-            Text("请使用注册时的 Apple ID 重新验证身份。")
+            Text(L10n.text("account_management.apple_reauth.message"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             SignInWithAppleButton(.continue) { request in
@@ -203,7 +215,7 @@ struct AppleReauthCard: View {
             .frame(height: 46)
             HStack {
                 Spacer()
-                Button("取消", action: onCancel)
+                Button(L10n.text("common.cancel"), action: onCancel)
                     .buttonStyle(.bordered)
             }
         }
@@ -219,24 +231,30 @@ struct FinalDeleteConfirmationDialog: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("确认注销账户")
+            Text(L10n.text("account_management.deactivation.final.title"))
                 .font(.headline)
-            Text("注销账户将会：")
+            Text(L10n.text("account_management.deactivation.final.intro"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 8) {
-                BulletLine("永久删除所有聊天与知识库数据")
-                BulletLine("删除所有健康档案与医疗记录")
-                BulletLine("清除账户身份、设备和同步状态")
-                BulletLine("该操作不可恢复")
+                BulletLine(L10n.text("account_management.deactivation.final.bullet.chat"))
+                BulletLine(L10n.text("account_management.deactivation.final.bullet.health"))
+                BulletLine(L10n.text("account_management.deactivation.final.bullet.identity"))
+                BulletLine(L10n.text("account_management.deactivation.final.bullet.irreversible"))
             }
             .font(.subheadline)
-            Text("此操作不可恢复！")
+            Text(L10n.text("account_management.deactivation.final.warning"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.red)
             VStack(alignment: .leading, spacing: 8) {
-                Text(#"请输入"删除我的账户"确认："#)
-                    .font(.subheadline.weight(.medium))
+                Text(
+                    String(
+                        format: L10n.text("account_management.deactivation.confirm_prompt"),
+                        locale: Locale.current,
+                        phrase
+                    )
+                )
+                .font(.subheadline.weight(.medium))
                 TextField(phrase, text: $confirmText)
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
@@ -244,9 +262,9 @@ struct FinalDeleteConfirmationDialog: View {
             }
             HStack {
                 Spacer()
-                Button("取消", action: onCancel)
+                Button(L10n.text("common.cancel"), action: onCancel)
                     .buttonStyle(.bordered)
-                Button("确认删除", role: .destructive, action: onConfirm)
+                Button(L10n.text("account_management.deactivation.confirm_delete"), role: .destructive, action: onConfirm)
                     .buttonStyle(.borderedProminent)
                     .disabled(confirmText != phrase)
                     .opacity(confirmText == phrase ? 1 : 0.6)
@@ -263,7 +281,7 @@ struct AccountFailureCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("处理失败", systemImage: "exclamationmark.triangle.fill")
+            Label(L10n.text("account_management.failure.title"), systemImage: "exclamationmark.triangle.fill")
                 .font(.headline)
                 .foregroundStyle(.red)
             Text(message)
@@ -271,9 +289,9 @@ struct AccountFailureCard: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("取消", action: onCancel)
+                Button(L10n.text("common.cancel"), action: onCancel)
                     .buttonStyle(.bordered)
-                Button("重新开始", action: onBack)
+                Button(L10n.text("account_management.failure.restart"), action: onBack)
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -311,4 +329,3 @@ private extension View {
             .padding(.horizontal, 16)
     }
 }
-

@@ -52,6 +52,7 @@ struct SendChatMessageUseCase: Sendable {
         inference: ChatOrchestratorInferenceOptions = .default,    // 推理选项
         modelReasoning: ChatModelReasoningContext = .unknown,      // 模型推理上下文
         smallTask: SmallTask? = nil,          // 小任务（可选）
+        sendsOriginalImagesToAI: Bool = false, // 本次多模态发送是否使用原图
         cancellationToken: AIRuntimeCancellationToken? = nil,      // 取消令牌
         onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,           // 图片上传进度
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,  // 用户消息落库回调
@@ -410,6 +411,7 @@ struct SendChatMessageUseCase: Sendable {
                 maxMessages: thread.maxMessages,
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: smallTask == nil && deliverMultimodal,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI,
                 providerCompanyUppercased: providerCompany,
                 onPartial: { delta in
                     await messageRunActor.apply(
@@ -477,6 +479,7 @@ struct SendChatMessageUseCase: Sendable {
         assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
+        sendsOriginalImagesToAI: Bool = false,
         cancellationToken: AIRuntimeCancellationToken? = nil,
         onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil,
         cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil
@@ -614,6 +617,7 @@ struct SendChatMessageUseCase: Sendable {
                 maxMessages: thread.maxMessages,
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: deliverMultimodal,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI,
                 providerCompanyUppercased: providerCompany,
                 onPartial: { delta in
                     await messageRunActor.apply(

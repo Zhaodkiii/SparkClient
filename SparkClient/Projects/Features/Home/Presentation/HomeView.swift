@@ -21,7 +21,9 @@ struct HomeView: View {
     private var homeContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                headerCard
+                
+                // 当前版本 展示 注释 任务功能
+//                headerCard
                 medicalInfoSection
 
             }

@@ -31,12 +31,12 @@ struct AccountManagementView: View {
                 overlay
             }
         }
-        .navigationTitle("账户管理")
+        .navigationTitle(L10n.text("settings.account_management"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.load(session: session)
         }
-        .alert("操作失败", isPresented: Binding(
+        .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { presented in
                 if presented == false {
@@ -44,17 +44,17 @@ struct AccountManagementView: View {
                 }
             }
         )) {
-            Button("好") {}
+            Button(L10n.text("common.ok")) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .alert("确认退出登录？", isPresented: $showSignOutConfirm) {
-            Button("退出登录", role: .destructive) {
+        .alert(L10n.text("account_management.sign_out.confirm.title"), isPresented: $showSignOutConfirm) {
+            Button(L10n.text("settings.sign_out"), role: .destructive) {
                 Task { await viewModel.signOut() }
             }
-            Button("取消", role: .cancel) {}
+            Button(L10n.text("common.cancel"), role: .cancel) {}
         } message: {
-            Text("退出后将清除本机登录态与缓存的会话信息。")
+            Text(L10n.text("account_management.sign_out.confirm.message"))
         }
         .onChange(of: viewModel.otpCode) { _ in
             viewModel.completeOTPIfReady()
@@ -62,29 +62,51 @@ struct AccountManagementView: View {
     }
 
     private func accountInfoSection(_ profile: AccountProfile) -> some View {
-        AccountSection(title: "账户信息") {
-            AccountInfoRow(icon: "person.text.rectangle", tint: .blue, title: "账户 ID", value: "\(profile.accountID)")
+        AccountSection(title: L10n.text("account_management.section.account_info")) {
+            AccountInfoRow(
+                icon: "person.text.rectangle",
+                tint: .blue,
+                title: L10n.text("account_management.field.account_id"),
+                value: "\(profile.accountID)"
+            )
             Divider()
-            AccountInfoRow(icon: profile.signInMethod == .phone ? "phone.fill" : "envelope.fill", tint: .green, title: profile.signInMethod == .phone ? "手机号" : "邮箱", value: profile.contact)
+            AccountInfoRow(
+                icon: profile.signInMethod == .phone ? "phone.fill" : "envelope.fill",
+                tint: .green,
+                title: profile.signInMethod == .phone
+                    ? L10n.text("account_management.field.phone")
+                    : L10n.text("settings.email"),
+                value: profile.contact
+            )
             Divider()
-            AccountInfoRow(icon: "checkmark.shield.fill", tint: .purple, title: "登录方式", value: profile.signInMethodDescription)
+            AccountInfoRow(
+                icon: "checkmark.shield.fill",
+                tint: .purple,
+                title: L10n.text("settings.sign_in_method"),
+                value: profile.signInMethodDescription
+            )
             Divider()
-            AccountInfoRow(icon: "clock.fill", tint: .orange, title: "登录时间", value: profile.signedInAt.formatted(date: .abbreviated, time: .shortened))
+            AccountInfoRow(
+                icon: "clock.fill",
+                tint: .orange,
+                title: L10n.text("settings.sign_in_time"),
+                value: profile.signedInAt.formatted(date: .abbreviated, time: .shortened)
+            )
         }
     }
 
     private var sessionSection: some View {
-        AccountSection(title: "会话") {
+        AccountSection(title: L10n.text("account_management.section.session")) {
             Button {
                 showSignOutConfirm = true
             } label: {
                 HStack(spacing: 12) {
                     AccountSquareBadge(color: .orange, icon: "rectangle.portrait.and.arrow.right")
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("退出登录")
+                        Text(L10n.text("settings.sign_out"))
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.red)
-                        Text("清除本机登录态与缓存的会话信息")
+                        Text(L10n.text("account_management.sign_out.subtitle"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -101,9 +123,9 @@ struct AccountManagementView: View {
     }
 
     private var dangerSection: some View {
-        AccountSection(title: "危险操作") {
+        AccountSection(title: L10n.text("account_management.section.danger")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("销户将停用当前账户，相关数据会按服务端策略匿名化或清理。该流程需要身份验证和最终短语确认。")
+                Text(L10n.text("account_management.deactivation.intro"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
@@ -113,7 +135,11 @@ struct AccountManagementView: View {
                     }
                 } label: {
                     HStack {
-                        Text(showAdvancedOptions ? "隐藏高级选项" : "显示高级选项")
+                        Text(
+                            showAdvancedOptions
+                                ? L10n.text("account_management.advanced.hide")
+                                : L10n.text("account_management.advanced.show")
+                        )
                         Image(systemName: showAdvancedOptions ? "chevron.up" : "chevron.down")
                     }
                     .font(.footnote.weight(.medium))
@@ -123,28 +149,40 @@ struct AccountManagementView: View {
 
                 if showAdvancedOptions {
                     VStack(spacing: 12) {
-                        Toggle("立即销户", isOn: $viewModel.options.immediateDeactivation)
+                        Toggle(L10n.text("account_management.deactivation.immediate"), isOn: $viewModel.options.immediateDeactivation)
                         if viewModel.options.immediateDeactivation == false {
                             Stepper(value: $viewModel.options.countdownHours, in: 1...168) {
                                 HStack {
-                                    Text("销户倒计时")
+                                    Text(L10n.text("account_management.deactivation.countdown_label"))
                                     Spacer()
-                                    Text("\(viewModel.options.countdownHours) 小时")
-                                        .foregroundStyle(.secondary)
+                                    Text(
+                                        String(
+                                            format: L10n.text("account_management.deactivation.countdown_hours"),
+                                            locale: Locale.current,
+                                            viewModel.options.countdownHours
+                                        )
+                                    )
+                                    .foregroundStyle(.secondary)
                                 }
                             }
                         }
-                        Toggle("匿名化个人数据", isOn: $viewModel.options.anonymizePersonalData)
-                        Toggle("删除关联数据", isOn: $viewModel.options.deleteRelatedData)
+                        Toggle(L10n.text("account_management.deactivation.anonymize"), isOn: $viewModel.options.anonymizePersonalData)
+                        Toggle(L10n.text("account_management.deactivation.delete_related"), isOn: $viewModel.options.deleteRelatedData)
                         Stepper(value: $viewModel.options.dataRetentionDays, in: 0...365) {
                             HStack {
-                                Text("数据保留天数")
+                                Text(L10n.text("account_management.deactivation.retention_label"))
                                 Spacer()
-                                Text("\(viewModel.options.dataRetentionDays) 天")
-                                    .foregroundStyle(.secondary)
+                                Text(
+                                    String(
+                                        format: L10n.text("account_management.deactivation.retention_days"),
+                                        locale: Locale.current,
+                                        viewModel.options.dataRetentionDays
+                                    )
+                                )
+                                .foregroundStyle(.secondary)
                             }
                         }
-                        TextField("销户原因（可选）", text: $viewModel.options.reason)
+                        TextField(L10n.text("account_management.deactivation.reason_placeholder"), text: $viewModel.options.reason)
                             .textFieldStyle(.roundedBorder)
                     }
                     .font(.subheadline)
@@ -160,9 +198,9 @@ struct AccountManagementView: View {
                 HStack(spacing: 12) {
                     AccountSquareBadge(color: .red, icon: "trash.fill")
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("注销账户")
+                        Text(L10n.text("account_management.deactivation.request_title"))
                             .font(.body.weight(.semibold))
-                        Text("永久删除账户和所有数据")
+                        Text(L10n.text("account_management.deactivation.request_subtitle"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -201,8 +239,8 @@ struct AccountManagementView: View {
                 )
             case .enteringOTP(let channel, _):
                 OTPVerificationCard(
-                    title: "账户注销验证",
-                    subtitle: "请输入收到的 6 位验证码",
+                    title: L10n.text("account_management.deactivation.otp.title"),
+                    subtitle: L10n.text("account_management.deactivation.otp.subtitle"),
                     target: viewModel.maskedTarget(for: channel),
                     code: $viewModel.otpCode,
                     countdown: viewModel.resendCountdown,
@@ -229,7 +267,7 @@ struct AccountManagementView: View {
             case .submitting:
                 VStack(spacing: 14) {
                     ProgressView()
-                    Text("正在提交注销申请...")
+                    Text(L10n.text("account_management.deactivation.submitting"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

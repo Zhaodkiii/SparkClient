@@ -178,3 +178,48 @@ struct ChatThreadSettingCard<Value: Hashable>: View {
         selectedIndex >= options.count - 1 ? Color(uiColor: .tertiarySystemFill) : Color.accentColor
     }
 }
+
+struct ChatThreadToggleSettingCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 34, height: 34)
+                    .background(Color.accentColor.opacity(0.12), in: Circle())
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Toggle(title, isOn: $isOn)
+                    .labelsHidden()
+            }
+        }
+        .padding(18)
+        .background(backgroundShape)
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: Color.accentColor.opacity(0.12), radius: 8, x: 0, y: 3)
+    }
+
+    private var backgroundShape: some View {
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
+            .fill(Color(uiColor: .systemBackground))
+    }
+}

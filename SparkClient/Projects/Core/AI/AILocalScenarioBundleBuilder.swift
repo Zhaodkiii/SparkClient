@@ -22,6 +22,7 @@ enum AILocalScenarioBundleBuilder {
             medicalReportExtraction: buildBundle(for: .medicalReportExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             prescriptionExtraction: buildBundle(for: .prescriptionExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             medicationExtraction: buildBundle(for: .medicationExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            medicineBoxExtraction: buildBundle(for: .medicineBoxExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             optimizationText: buildBundle(for: .optimizationText, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             optimizationVisual: buildBundle(for: .optimizationVisual, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             contextFolding: buildBundle(for: .contextFolding, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),

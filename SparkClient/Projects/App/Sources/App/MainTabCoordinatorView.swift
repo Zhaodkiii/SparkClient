@@ -35,15 +35,16 @@ struct MainTabCoordinatorView: View {
             }
             .tag(AppRouteStore.RootTab.home)
 
-            CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
-                KnowledgeLibraryView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
-            } destination: { route in
-                routeDestination(route)
-            }
-            .tabItem {
-                Label("Knowledge", systemImage: "books.vertical.fill")
-            }
-            .tag(AppRouteStore.RootTab.knowledge)
+            // 当前版本暂时关闭知识库
+//            CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
+//                KnowledgeLibraryView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
+//            } destination: { route in
+//                routeDestination(route)
+//            }
+//            .tabItem {
+//                Label("Knowledge", systemImage: "books.vertical.fill")
+//            }
+//            .tag(AppRouteStore.RootTab.knowledge)
 
             CompatibleRouteNavigationContainer(path: routePath(.chat)) {
                 ChatConversationListPage(

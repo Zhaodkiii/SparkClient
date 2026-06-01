@@ -657,17 +657,20 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
-    func startSendingCurrentDraft() {
+    func startSendingCurrentDraft(sendsOriginalImagesToAI: Bool = false) {
         guard currentGenerationTask == nil else { return }
         currentGenerationTask = Task { [weak self] in
-            await self?.sendCurrentDraft()
+            await self?.sendCurrentDraft(sendsOriginalImagesToAI: sendsOriginalImagesToAI)
         }
     }
 
-    func startSmallTask(_ task: SmallTask) {
+    func startSmallTask(_ task: SmallTask, sendsOriginalImagesToAI: Bool = false) {
         guard currentGenerationTask == nil else { return }
         currentGenerationTask = Task { [weak self] in
-            await self?.sendCurrentDraft(smallTask: task)
+            await self?.sendCurrentDraft(
+                smallTask: task,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI
+            )
         }
     }
 
@@ -691,7 +694,10 @@ final class ChatDetailViewModel: ObservableObject {
     }
 
     /// 发送当前编辑框的草稿消息（主入口函数）
-    func sendCurrentDraft(smallTask: SmallTask? = nil) async {
+    func sendCurrentDraft(
+        smallTask: SmallTask? = nil,
+        sendsOriginalImagesToAI: Bool = false
+    ) async {
         // 防止重复发送：如果正在发送中，直接返回
         guard stateStore.isSending == false else { return }
         // 必须选中对话线程，否则无法发送
@@ -785,6 +791,7 @@ final class ChatDetailViewModel: ObservableObject {
                 inference: inference,
                 modelReasoning: modelReasoning,
                 smallTask: smallTask,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI,
                 cancellationToken: cancellationToken,
                 
                 // 图片上传进度回调 → 更新UI

@@ -20,8 +20,10 @@ enum AIScenario: String, Codable, CaseIterable, Sendable {
     case medicalReportExtraction = "medical_report_extraction"
     /// 处方结构化抽取场景。
     case prescriptionExtraction = "prescription_extraction"
-    /// 用药结构化抽取场景。
+    /// 用药结构化抽取场景（服药计划等）。
     case medicationExtraction = "medication_extraction"
+    /// 药品结构化抽取场景（药盒/药箱标签等）。
+    case medicineBoxExtraction = "medicine_box_extraction"
     /// 文本优化场景（润色、改写、纠错、摘要等）。
     case optimizationText = "optimization_text"
     /// 视觉内容优化场景（图像相关理解/优化链路）。
@@ -59,6 +61,8 @@ extension AIScenario {
             return L10n.text("ai_settings.scenario.prescription_extraction")
         case .medicationExtraction:
             return L10n.text("ai_settings.scenario.medication_extraction")
+        case .medicineBoxExtraction:
+            return L10n.text("ai_settings.scenario.medicine_box_extraction")
         case .optimizationText:
             return L10n.text("ai_settings.scenario.optimization_text")
         case .optimizationVisual:
@@ -96,6 +100,8 @@ extension AIScenario {
             return "pills"
         case .medicationExtraction:
             return "cross.case.circle"
+        case .medicineBoxExtraction:
+            return "shippingbox.fill"
         case .optimizationText:
             return "paintbrush.pointed"
         case .optimizationVisual:
@@ -133,6 +139,8 @@ extension AIScenario {
             return L10n.text("ai_settings.prefs.explain.prescription_extraction")
         case .medicationExtraction:
             return L10n.text("ai_settings.prefs.explain.medication_extraction")
+        case .medicineBoxExtraction:
+            return L10n.text("ai_settings.prefs.explain.medicine_box_extraction")
         case .optimizationText:
             return L10n.text("ai_settings.prefs.explain.optimization_text")
         case .optimizationVisual:

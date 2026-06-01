@@ -368,7 +368,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         case .medicineBox:
             let final = try await extractStructured(
                 prompt: prompt,
-                scenario: .medicationExtraction,
+                scenario: .medicineBoxExtraction,
                 kindLabel: "medicine_box",
                 as: [MedicineBoxRecognitionDraft].self,
                 preferredModelName: preferredModelName,

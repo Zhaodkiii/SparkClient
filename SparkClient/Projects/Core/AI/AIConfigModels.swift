@@ -520,6 +520,8 @@ extension AIScenarioRemoteBundlesCollection {
             prescriptionExtraction = bundle
         case .medicationExtraction:
             medicationExtraction = bundle
+        case .medicineBoxExtraction:
+            medicineBoxExtraction = bundle
         case .optimizationText:
             optimizationText = bundle
         case .optimizationVisual:
@@ -558,6 +560,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     var prescriptionExtraction: AIScenarioRemoteBundle
     /// 用药结构化抽取场景模型集合。
     var medicationExtraction: AIScenarioRemoteBundle
+    /// 药品结构化抽取场景模型集合。
+    var medicineBoxExtraction: AIScenarioRemoteBundle
     /// 文本优化场景模型集合。
     var optimizationText: AIScenarioRemoteBundle
     /// 视觉优化场景模型集合。
@@ -582,6 +586,7 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         medicalReportExtraction: AIScenarioRemoteBundle,
         prescriptionExtraction: AIScenarioRemoteBundle,
         medicationExtraction: AIScenarioRemoteBundle,
+        medicineBoxExtraction: AIScenarioRemoteBundle,
         optimizationText: AIScenarioRemoteBundle,
         optimizationVisual: AIScenarioRemoteBundle,
         contextFolding: AIScenarioRemoteBundle,
@@ -599,6 +604,7 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         self.medicalReportExtraction = medicalReportExtraction
         self.prescriptionExtraction = prescriptionExtraction
         self.medicationExtraction = medicationExtraction
+        self.medicineBoxExtraction = medicineBoxExtraction
         self.optimizationText = optimizationText
         self.optimizationVisual = optimizationVisual
         self.contextFolding = contextFolding
@@ -630,6 +636,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         medicalReportExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalReportExtraction"))
         prescriptionExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("prescriptionExtraction"))
         medicationExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicationExtraction"))
+        medicineBoxExtraction = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .key("medicineBoxExtraction"))
+            ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
     }
 
     /// 根据业务场景取对应 bundle。
@@ -655,6 +663,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
             return prescriptionExtraction
         case .medicationExtraction:
             return medicationExtraction
+        case .medicineBoxExtraction:
+            return medicineBoxExtraction
         case .optimizationText:
             return optimizationText
         case .optimizationVisual:
@@ -690,6 +700,7 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
             medicalReportExtraction,
             prescriptionExtraction,
             medicationExtraction,
+            medicineBoxExtraction,
             optimizationText,
             optimizationVisual,
             contextFolding,

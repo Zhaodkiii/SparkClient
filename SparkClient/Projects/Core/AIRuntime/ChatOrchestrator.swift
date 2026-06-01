@@ -77,6 +77,7 @@ struct ChatOrchestrator: Sendable {
         maxMessages: Int? = nil,                              // 最大消息数
         cancellationToken: AIRuntimeCancellationToken? = nil, // 取消令牌
         deliverMultimodalImages: Bool = false,                // 是否发送多模态图片
+        sendsOriginalImagesToAI: Bool = false,                 // 多模态图片是否使用原图
         providerCompanyUppercased: String? = nil,              // 模型厂商
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil, // 流式回调
         messageRunActor: MessageRunActor? = nil               // 工具 UI 副作用串行落库
@@ -143,6 +144,7 @@ struct ChatOrchestrator: Sendable {
             memberContextSummary: memberContextSummary,
             reasoning: reasoningOpts,
             deliverMultimodalImages: deliverMultimodalImages,
+            sendsOriginalImagesToAI: sendsOriginalImagesToAI,
             maxMessages: maxMessages
         )
         
@@ -518,6 +520,7 @@ struct ChatOrchestrator: Sendable {
         memberContextSummary: String,
         reasoning: AIRuntimeReasoningOptions,
         deliverMultimodalImages: Bool,
+        sendsOriginalImagesToAI: Bool,
         maxMessages: Int?
     ) async -> [AIRuntimeMessage] {
         let promptLocalizer = PromptLocalizer()
@@ -546,13 +549,21 @@ struct ChatOrchestrator: Sendable {
         }
 
         for chatMessage in effectiveHistory where chatMessage.role != .system {
-            let msg = await runtimeMessage(from: chatMessage, deliverMultimodalImages: deliverMultimodalImages)
+            let msg = await runtimeMessage(
+                from: chatMessage,
+                deliverMultimodalImages: deliverMultimodalImages,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI
+            )
             runtimeMessages.append(msg)
         }
         return runtimeMessages
     }
 
-    private func runtimeMessage(from message: ChatMessage, deliverMultimodalImages: Bool) async -> AIRuntimeMessage {
+    private func runtimeMessage(
+        from message: ChatMessage,
+        deliverMultimodalImages: Bool,
+        sendsOriginalImagesToAI: Bool
+    ) async -> AIRuntimeMessage {
         let messageText = message.blocks
             .compactMap(\.text)
             .joined(separator: "\n")
@@ -563,7 +574,10 @@ struct ChatOrchestrator: Sendable {
 
         // 多模态模式：从本地缓存读取 JPEG 字节并内联 base64（不向模型发送远端 URL）
         if deliverMultimodalImages, message.role == .user {
-            if let parts = await buildMultimodalParts(from: message) {
+            if let parts = await buildMultimodalParts(
+                from: message,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI
+            ) {
                 return AIRuntimeMessage(role: .user, content: nil, contentParts: parts)
             }
         }
@@ -579,7 +593,10 @@ struct ChatOrchestrator: Sendable {
         return AIRuntimeMessage(role: message.role.runtimeRole, content: messageText)
     }
 
-    private func buildMultimodalParts(from message: ChatMessage) async -> [AIRuntimeContentPart]? {
+    private func buildMultimodalParts(
+        from message: ChatMessage,
+        sendsOriginalImagesToAI: Bool
+    ) async -> [AIRuntimeContentPart]? {
         let text = message.blocks
             .compactMap(\.text)
             .joined(separator: "\n")
@@ -596,21 +613,38 @@ struct ChatOrchestrator: Sendable {
             parts.append(.textPart(" "))
         }
         for att in imageAttachments {
-            let jpegData: Data?
+            let originalImageData: Data?
             if let parsed = att.sparkClientOSSFileUUIDAndFileName(),
                let localURL = await fileCacheManager.cachedFileURL(fileUUID: parsed.fileUUID, fileName: parsed.fileName),
-               let data = try? Data(contentsOf: localURL),
-               let converted = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
-                jpegData = converted
+               let data = try? Data(contentsOf: localURL) {
+                originalImageData = data
             } else if let url = att.url,
-                      let data = try? await URLSession.shared.data(from: url).0,
-                      let converted = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
-                jpegData = converted
+                      let data = try? await URLSession.shared.data(from: url).0 {
+                originalImageData = data
             } else {
-                jpegData = nil
+                originalImageData = nil
+            }
+            guard let originalImageData else {
+                logger.debug("多模态：无法取得图片字节（缓存或 URL），跳过", module: .aiConfig)
+                return nil
+            }
+
+            let jpegData: Data?
+            if sendsOriginalImagesToAI {
+                jpegData = UIImage(data: originalImageData)?.jpegData(compressionQuality: 0.9)
+                logger.debug("多模态：AI 使用原图 JPEG，bytes=\(jpegData?.count ?? 0)", module: .aiConfig)
+            } else {
+                let compressed = await Task.detached(priority: .utility) {
+                    ChatAIImageCompressor.compressForAI(imageData: originalImageData)
+                }.value
+                jpegData = compressed ?? UIImage(data: originalImageData)?.jpegData(compressionQuality: 0.45)
+                logger.debug(
+                    "多模态：AI 使用压缩图，originalBytes=\(originalImageData.count), aiBytes=\(jpegData?.count ?? 0), targetBytes=\(ChatAIImageCompressor.defaultTargetByteCount)",
+                    module: .aiConfig
+                )
             }
             guard let jpegData else {
-                logger.debug("多模态：无法取得图片字节（缓存或 URL），跳过", module: .aiConfig)
+                logger.debug("多模态：无法生成 AI 图片 JPEG，跳过", module: .aiConfig)
                 return nil
             }
             parts.append(.imageInlineJPEGBase64(jpegData.base64EncodedString()))

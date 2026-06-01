@@ -25,11 +25,12 @@ struct SettingsView: View {
                 }
             }
 
-            Section(L10n.text("settings.section.architecture")) {
-                Text(L10n.text("settings.architecture.description"))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            //当前版本关闭
+//            Section(L10n.text("settings.section.architecture")) {
+//                Text(L10n.text("settings.architecture.description"))
+//                    .font(.footnote)
+//                    .foregroundStyle(.secondary)
+//            }
 
             Section(L10n.text("settings.section.ai")) {
                 NavigationLink {
@@ -49,86 +50,71 @@ struct SettingsView: View {
                 }
             }
 
-            Section("版本") {
-                HStack {
-                    Text("当前版本")
-                    Spacer()
-                    Text("\(SparkSystemInfo().appVersion) (\(SparkSystemInfo().buildVersion))")
-                        .foregroundStyle(.secondary)
-                }
-                Button {
-                    Task { await versionUpdateCoordinator.manualCheck() }
+            Section {
+                NavigationLink {
+                    GeneralSettingsView(
+                        viewModel: viewModel,
+                        versionUpdateCoordinator: versionUpdateCoordinator
+                    )
+                    .hidesMainTabBarWhenPushed()
                 } label: {
-                    if versionUpdateCoordinator.isCheckingManually {
-                        ProgressView()
-                    } else {
-                        Text("检查更新")
-                    }
-                }
-                .disabled(versionUpdateCoordinator.isCheckingManually)
-                if let message = versionUpdateCoordinator.manualCheckMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section(L10n.text("settings.section.sync")) {
-                Toggle(isOn: $viewModel.syncEnabled) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.text("settings.sync.enable"))
-                        Text(L10n.text("settings.sync.subtitle"))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .onChange(of: viewModel.syncEnabled) { enabled in
-                    Task { await viewModel.updateSyncEnabled(enabled) }
-                }
-
-                Picker(L10n.text("settings.sync.priority"), selection: $viewModel.syncPriority) {
-                    Text(L10n.text("settings.sync.priority.realtime")).tag(CloudSyncPriority.realtime)
-                    Text(L10n.text("settings.sync.priority.balanced")).tag(CloudSyncPriority.balanced)
-                    Text(L10n.text("settings.sync.priority.background")).tag(CloudSyncPriority.background)
-                }
-                .pickerStyle(.segmented)
-                .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
-                .onChange(of: viewModel.syncPriority) { priority in
-                    Task { await viewModel.updateSyncPriority(priority) }
-                }
-
-                HStack {
-                    Text(L10n.text("settings.sync.last_time"))
-                    Spacer()
-                    Text(viewModel.lastSyncDescription)
-                        .foregroundStyle(.secondary)
-                        .font(.footnote)
-                }
-
-                Button {
-                    Task { await viewModel.triggerSyncNow() }
-                } label: {
-                    if viewModel.isSyncing {
-                        ProgressView()
-                    } else {
-                        Text(L10n.text("settings.sync.now"))
-                    }
-                }
-                .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
-            }
-
-            Section(L10n.text("settings.section.cache")) {
-                Button {
-                    viewModel.clearETagCache()
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.text("settings.cache.clear_etag"))
-                        Text(L10n.text("settings.cache.clear_etag.subtitle"))
+                    HStack {
+                        Label(
+                            L10n.text("settings.general.entry"),
+                            systemImage: "slider.horizontal.3"
+                        )
+                        Spacer()
+                        Text(L10n.text("settings.general.subtitle"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
+
+            // 当前版本 展示关闭
+//            Section(L10n.text("settings.section.sync")) {
+//                Toggle(isOn: $viewModel.syncEnabled) {
+//                    VStack(alignment: .leading, spacing: 4) {
+//                        Text(L10n.text("settings.sync.enable"))
+//                        Text(L10n.text("settings.sync.subtitle"))
+//                            .font(.footnote)
+//                            .foregroundStyle(.secondary)
+//                    }
+//                }
+//                .onChange(of: viewModel.syncEnabled) { enabled in
+//                    Task { await viewModel.updateSyncEnabled(enabled) }
+//                }
+//
+//                Picker(L10n.text("settings.sync.priority"), selection: $viewModel.syncPriority) {
+//                    Text(L10n.text("settings.sync.priority.realtime")).tag(CloudSyncPriority.realtime)
+//                    Text(L10n.text("settings.sync.priority.balanced")).tag(CloudSyncPriority.balanced)
+//                    Text(L10n.text("settings.sync.priority.background")).tag(CloudSyncPriority.background)
+//                }
+//                .pickerStyle(.segmented)
+//                .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
+//                .onChange(of: viewModel.syncPriority) { priority in
+//                    Task { await viewModel.updateSyncPriority(priority) }
+//                }
+//
+//                HStack {
+//                    Text(L10n.text("settings.sync.last_time"))
+//                    Spacer()
+//                    Text(viewModel.lastSyncDescription)
+//                        .foregroundStyle(.secondary)
+//                        .font(.footnote)
+//                }
+//
+//                Button {
+//                    Task { await viewModel.triggerSyncNow() }
+//                } label: {
+//                    if viewModel.isSyncing {
+//                        ProgressView()
+//                    } else {
+//                        Text(L10n.text("settings.sync.now"))
+//                    }
+//                }
+//                .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
+//            }
 
         }
         .navigationTitle(L10n.text("settings.title"))

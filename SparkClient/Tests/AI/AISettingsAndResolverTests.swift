@@ -214,6 +214,7 @@ final class AISettingsAndResolverTests: XCTestCase {
             medicalReportExtraction: empty,
             prescriptionExtraction: empty,
             medicationExtraction: empty,
+            medicineBoxExtraction: empty,
             optimizationText: empty,
             optimizationVisual: empty,
             contextFolding: empty,

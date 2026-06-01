@@ -12,7 +12,9 @@ final class AccountManagementViewModel: ObservableObject {
     @Published var otpCode = ""
     @Published private(set) var resendCountdown = 0
 
-    let requiredConfirmationPhrase = "删除我的账户"
+    var requiredConfirmationPhrase: String {
+        L10n.text("account_management.deactivation.confirm_phrase", fallback: "删除我的账户")
+    }
 
     private let loadAccountProfileUseCase: LoadAccountProfileUseCase
     private let requestAccountVerificationUseCase: RequestAccountVerificationUseCase
@@ -159,7 +161,7 @@ final class AccountManagementViewModel: ObservableObject {
     func maskedTarget(for channel: AccountVerificationChannel) -> String {
         switch channel {
         case .apple:
-            return "Apple ID"
+            return L10n.text("account_management.target.apple_id", fallback: "Apple ID")
         case .phone(let value):
             let compact = value.replacingOccurrences(of: " ", with: "")
             guard compact.count >= 7 else { return value }

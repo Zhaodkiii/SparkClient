@@ -45,7 +45,7 @@ enum AccountVerificationChannel: Equatable, Sendable {
     var target: String {
         switch self {
         case .apple:
-            return "Apple ID"
+            return L10n.text("account_management.target.apple_id", fallback: "Apple ID")
         case .phone(let value), .email(let value):
             return value
         }

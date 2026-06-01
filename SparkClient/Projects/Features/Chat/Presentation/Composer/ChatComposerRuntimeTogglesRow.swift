@@ -79,8 +79,8 @@ struct ChatComposerRuntimeTogglesRow: View {
             HStack(spacing: 6) {
                 memberProfileToggle
                 toolToggle
-                knowledgeToggle
-                webToggle
+//                knowledgeToggle   // 当前版本 展示关闭 知识库
+//                webToggle         // 当前版本展示关闭联网搜索
                 reasoningControls
             }
         }

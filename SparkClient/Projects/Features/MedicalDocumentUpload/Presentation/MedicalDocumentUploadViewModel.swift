@@ -851,8 +851,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             return .medicalReportExtraction
         case .prescription:
             return .prescriptionExtraction
-        case .medicationPlan, .medicineBox:
+        case .medicationPlan:
             return .medicationExtraction
+        case .medicineBox:
+            return .medicineBoxExtraction
         }
     }
 
@@ -868,6 +870,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             return "处方抽取"
         case .medicationExtraction:
             return "用药抽取"
+        case .medicineBoxExtraction:
+            return "药品抽取"
         default:
             return "结构化抽取"
         }

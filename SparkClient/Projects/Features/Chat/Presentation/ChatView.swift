@@ -42,6 +42,7 @@ struct ChatView: View {
         rolePrompt: "",
         imageDeliveryMode: .directMultimodal
     )
+    @State private var sendsOriginalImagesToAITemporarily = false
 
     private var reasoningRefreshId: String {
         let name = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName ?? "-"
@@ -95,7 +96,10 @@ struct ChatView: View {
                 smallTasks: composerAssociatedSmallTasks,
                 onSmallTaskTapped: { task in
                     KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.startSmallTask(task)
+                    detailViewModel.startSmallTask(
+                        task,
+                        sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
+                    )
                 }
             )
         case .hanlin:
@@ -122,7 +126,10 @@ struct ChatView: View {
                 },
                 onSmallTaskTapped: { task in
                     KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.startSmallTask(task)
+                    detailViewModel.startSmallTask(
+                        task,
+                        sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
+                    )
                 },
                 onAttachmentsPicked: { attachments in
                     detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
@@ -541,16 +548,27 @@ struct ChatView: View {
                 )
             )
         case .imageDeliveryMode:
-            ChatThreadSettingCard(
-                title: L10n.text("chat.settings.image_delivery.title"),
-                subtitle: L10n.text("chat.settings.image_delivery.subtitle"),
-                systemImage: "photo.on.rectangle.angled",
-                options: imageDeliveryOptions,
-                selection: Binding(
-                    get: { overlaySettings.imageDeliveryMode },
-                    set: { updateOverlaySetting(imageDeliveryMode: $0) }
+            VStack(spacing: 12) {
+                ChatThreadSettingCard(
+                    title: L10n.text("chat.settings.image_delivery.title"),
+                    subtitle: L10n.text("chat.settings.image_delivery.subtitle"),
+                    systemImage: "photo.on.rectangle.angled",
+                    options: imageDeliveryOptions,
+                    selection: Binding(
+                        get: { overlaySettings.imageDeliveryMode },
+                        set: { updateOverlaySetting(imageDeliveryMode: $0) }
+                    )
                 )
-            )
+                ChatThreadToggleSettingCard(
+                    title: L10n.text("chat.settings.send_original_images_to_ai.title"),
+                    subtitle: L10n.text("chat.settings.send_original_images_to_ai.subtitle"),
+                    systemImage: "photo.badge.checkmark",
+                    isOn: Binding(
+                        get: { sendsOriginalImagesToAITemporarily },
+                        set: { sendsOriginalImagesToAITemporarily = $0 }
+                    )
+                )
+            }
         }
     }
 
@@ -670,7 +688,9 @@ struct ChatView: View {
             showNoAvailableChatModelAlert = true
             return
         }
-        detailViewModel.startSendingCurrentDraft()
+        detailViewModel.startSendingCurrentDraft(
+            sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
+        )
     }
 
     private func updateOverlaySetting(

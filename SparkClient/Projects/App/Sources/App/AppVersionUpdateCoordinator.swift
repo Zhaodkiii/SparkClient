@@ -97,7 +97,11 @@ final class AppVersionUpdateCoordinator: ObservableObject {
             if response.hasUpdate {
                 // 有新版本
                 updateInfo = response
-                manualCheckMessage = "发现新版本 \(response.latestVersion ?? "")"
+                manualCheckMessage = String(
+                    format: L10n.text("settings.version.new_available", fallback: "发现新版本 %@"),
+                    locale: Locale.current,
+                    response.latestVersion ?? ""
+                )
 
                 if response.forceUpdate == true {
                     // 强制更新：直接弹窗
@@ -112,14 +116,18 @@ final class AppVersionUpdateCoordinator: ObservableObject {
             }
             else if isManual {
                 // 无更新（仅手动检查时提示）
-                manualCheckMessage = response.message ?? "当前已是最新版本"
+                manualCheckMessage = response.message ?? L10n.text("settings.version.up_to_date", fallback: "当前已是最新版本")
             }
         }
         catch {
             // 检查失败
             logger.warning("版本检查失败：\(error.localizedDescription)", module: .network)
             if isManual {
-                manualCheckMessage = "检查失败：\(error.localizedDescription)"
+                manualCheckMessage = String(
+                    format: L10n.text("settings.version.check_failed", fallback: "检查失败：%@"),
+                    locale: Locale.current,
+                    error.localizedDescription
+                )
             }
         }
     }

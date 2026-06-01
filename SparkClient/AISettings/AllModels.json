@@ -18,7 +18,7 @@
     "icon": "",
     "briefDescription": "Flagship reasoning and multimodal chat model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -41,7 +41,7 @@
     "icon": "",
     "briefDescription": "Faster GPT-5 variant for daily use.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -87,7 +87,7 @@
     "icon": "",
     "briefDescription": "General purpose high quality model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -110,7 +110,7 @@
     "icon": "",
     "briefDescription": "Lightweight multimodal chat model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -133,7 +133,7 @@
     "icon": "",
     "briefDescription": "Reasoning-focused compact OpenAI model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -225,7 +225,7 @@
     "icon": "",
     "briefDescription": "Balanced Claude model for complex multimodal work.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -248,7 +248,7 @@
     "icon": "",
     "briefDescription": "Most capable Claude model for high-end tasks.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -271,7 +271,7 @@
     "icon": "",
     "briefDescription": "Advanced long-context multimodal Gemini model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -294,7 +294,7 @@
     "icon": "",
     "briefDescription": "Fast Gemini model for general multimodal chat.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -317,7 +317,7 @@
     "icon": "",
     "briefDescription": "Top-tier Qwen model for reasoning and multimodal tasks.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -340,7 +340,7 @@
     "icon": "",
     "briefDescription": "Balanced Qwen model for general assistant use.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -363,7 +363,7 @@
     "icon": "",
     "briefDescription": "Low-latency Qwen chat model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -432,7 +432,7 @@
     "icon": "",
     "briefDescription": "Fast and cost-effective chat model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -455,7 +455,7 @@
     "icon": "",
     "briefDescription": "Reasoning-focused model for complex tasks.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -478,7 +478,7 @@
     "icon": "",
     "briefDescription": "General purpose GLM model with reasoning support.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
@@ -524,7 +524,7 @@
     "icon": "",
     "briefDescription": "Balanced multimodal Doubao model.",
     "characterDesign": "",
-    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
+    "aiScenarios": ["chat", "medical_structured_extraction", "medical_document_type_recognition", "medical_case_extraction", "health_exam_extraction", "medical_report_extraction", "prescription_extraction", "medication_extraction", "medicine_box_extraction", "optimization_text", "optimization_visual", "context_folding", "router", "report_interpretation"],
     "aiToolScenarios": [],
     "source": "system"
   },
