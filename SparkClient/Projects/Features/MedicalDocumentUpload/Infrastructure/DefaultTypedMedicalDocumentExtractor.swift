@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 // MARK: - 错误类型
 /// 抽取过程中的错误类型
 enum ExtractionError: Error {
-    case decodingFailed
+    case decodingFailed(context: StructuredJSONDecodingFailureContext?)
     case invalidDebugPayload
 }
 
@@ -89,6 +89,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             mergedOCRText: mergedOCR,
             resolution: resolution,
             preferredModelName: nil,
+            retryFeedback: nil,
             cancellationToken: cancellationToken
         )
 //#endif
@@ -157,6 +158,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         mergedOCRText: String,
         resolution: MedicalDocumentTypeResolution,
         preferredModelName: String? = nil,
+        retryFeedback: MedicalExtractionRetryFeedback? = nil,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
         try cancellationToken?.checkCancellation()
@@ -167,7 +169,13 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 //#endif
         
         // 3. 根据文档类型，生成对应的AI抽取提示词（Prompt）
-        let prompt = promptFactory.extractionPrompt(for: MedicalPromptInput(kind: kind, mergedOCRText: mergedOCRText))
+        let prompt = promptFactory.extractionPrompt(
+            for: MedicalPromptInput(
+                kind: kind,
+                mergedOCRText: mergedOCRText,
+                retryFeedback: retryFeedback
+            )
+        )
         
         // 4. 调用AI，执行结构化抽取，得到类型化结果 + 标准JSON
         let extraction = try await extractTypedResult(
@@ -219,7 +227,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     ) async throws -> MedicalDocumentTypedExtractionOutput {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
-            throw ExtractionError.decodingFailed
+            throw ExtractionError.decodingFailed(context: nil)
         }
         let kind = Self.medicalDocumentKind(fromChatReportType: reportType)
         let resolution = MedicalDocumentTypeResolution(
@@ -298,7 +306,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
-                throw ExtractionError.decodingFailed
+                throw Self.decodingFailedError(from: final, kindLabel: "case_document")
             }
             let normalized = Self.normalizedCaseDraft(draft)
             return (.caseDocument(normalized), Self.normalizedExtractedJSON(for: .caseDocument(normalized), fallback: final.normalizedJSON))
@@ -314,7 +322,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
-                throw ExtractionError.decodingFailed
+                throw Self.decodingFailedError(from: final, kindLabel: "health_exam_report")
             }
             return (.healthExamReport(draft), final.normalizedJSON)
 
@@ -329,7 +337,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
-                throw ExtractionError.decodingFailed
+                throw Self.decodingFailedError(from: final, kindLabel: "medical_report")
             }
             return (.medicalReport(draft), final.normalizedJSON)
 
@@ -344,7 +352,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
-                throw ExtractionError.decodingFailed
+                throw Self.decodingFailedError(from: final, kindLabel: "prescription")
             }
             let normalized = Self.normalizedPrescriptionDraft(draft)
             return (.prescription(normalized), Self.normalizedExtractedJSON(for: .prescription(normalized), fallback: final.normalizedJSON))
@@ -360,7 +368,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
-                throw ExtractionError.decodingFailed
+                throw Self.decodingFailedError(from: final, kindLabel: "medication")
             }
             let plans = Self.normalizedMedicationPlanDrafts(draft)
             return (.medicationPlan(plans), Self.normalizedExtractedJSON(for: .medicationPlan(plans), fallback: final.normalizedJSON))
@@ -375,10 +383,30 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 cancellationToken: cancellationToken
             )
             guard let draft = final.decoded else {
-                throw ExtractionError.decodingFailed
+                throw Self.decodingFailedError(from: final, kindLabel: "medicine_box")
             }
             return (.medicineBoxes(draft), final.normalizedJSON)
         }
+    }
+
+    private static func decodingFailedError<T>(
+        from final: StructuredJSONStreamFinal<T>,
+        kindLabel: String
+    ) -> ExtractionError {
+        .decodingFailed(
+            context: StructuredJSONDecodingFailureContext(
+                error: final.lastDecodingError ?? ExtractionError.decodingFailed(context: nil),
+                outputPreview: truncatedOutputPreview(final.normalizedJSON),
+                kindLabel: kindLabel
+            )
+        )
+    }
+
+    private static func truncatedOutputPreview(_ text: String, limit: Int = 1200) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > limit else { return trimmed }
+        let end = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<end])
     }
 
     // MARK: - AI 流式结构化抽取通用方法

@@ -69,32 +69,57 @@ struct MedicalDocumentUploadProgressView: View {
                 }
 
             case .failed:
-                // 失败时显示两个按钮
-                Button {
-                    viewModel.resetRecognitionState()
-                    viewModel.stage = .picking
-                } label: {
-                    Text(L10n.text("medical.upload.action.return_to_picker"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                VStack(spacing: 10) {
+                    if viewModel.failedStep == .extract, viewModel.lastExtractionRetryFeedback != nil {
+                        if viewModel.maxAutoRetryAttempts > 0,
+                           viewModel.autoRetryAttempt >= viewModel.maxAutoRetryAttempts {
+                            Text(L10n.text("medical.upload.extract.auto_retry.exhausted"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        } else {
+                            Text(L10n.text("medical.upload.extract.retry.hint"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+#if DEBUG
+                        ForEach(Array(viewModel.extractionRetryDebugLines.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.tertiary)
+                        }
+#endif
+                    }
 
-                Button {
-                    viewModel.resetRecognitionState()
-                    viewModel.startRecognitionTask()
-                } label: {
-                    Text("从头重来")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                    HStack(spacing: 16) {
+                        Button {
+                            viewModel.resetRecognitionState()
+                            viewModel.stage = .picking
+                        } label: {
+                            Text(L10n.text("medical.upload.action.return_to_picker"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
 
-                Button {
-                    viewModel.resumeRecognitionTask()
-                } label: {
-                    Text("继续识别")
+                        Button {
+                            viewModel.resetRecognitionState()
+                            viewModel.startRecognitionTask()
+                        } label: {
+                            Text(L10n.text("medical.upload.action.restart"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button {
+                            viewModel.resumeRecognitionTask()
+                        } label: {
+                            Text(L10n.text("medical.upload.action.continue_recognition"))
+                        }
                         .font(.subheadline)
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
 
             case .success, .skipped, .pending:
                 // 完成或空闲时不显示按钮

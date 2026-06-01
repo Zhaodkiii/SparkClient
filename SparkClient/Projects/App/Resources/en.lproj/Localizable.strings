@@ -1483,7 +1483,22 @@
 // MARK: - Action Buttons
 "medical.upload.action.cancel" = "Cancel";
 "medical.upload.action.return_to_picker" = "Back to selection";
-"medical.upload.action.restart" = "Retry recognition";
+"medical.upload.action.restart" = "Start over";
+"medical.upload.action.continue_recognition" = "Continue recognition";
+"medical.upload.extract.retry.hint" = "The last result did not match the required format. Retry will include the failure details so the AI can correct the output.";
+"medical.upload.extract.retry.summary" = "Re-extracting · includes last failure context";
+"medical.upload.extract.retry.debug_field" = "Invalid field: %@";
+"medical.upload.extract.retry.debug_expected" = "Expected type: %@";
+"medical.upload.extract.retry.debug_actual" = "Actual type: %@";
+"medical.upload.extract.auto_retry.summary" = "Re-extracting · attempt %d/%d · includes last failure context";
+"medical.upload.extract.auto_retry.exhausted" = "The result still does not match the required format after automatic retries. You can continue recognition manually or start over.";
+
+"settings.medical_extraction.section_title" = "Medical report extraction";
+"settings.medical_extraction.auto_retry.title" = "Auto-retry on extraction failure";
+"settings.medical_extraction.auto_retry.subtitle" = "When enabled, only JSON decoding or schema mismatches trigger automatic re-extraction with failure context.";
+"settings.medical_extraction.auto_retry.count_title" = "Auto-retry count";
+"settings.medical_extraction.auto_retry.count_value" = "Up to %d extra retries";
+"settings.medical_extraction.auto_retry.count_subtitle" = "If all retries fail, you can continue recognition manually from the failure screen.";
 
 // MARK: - Time Display
 "medical.upload.time.elapsed.seconds" = "Elapsed: %d seconds";

@@ -7,6 +7,7 @@ struct GeneralSettingsView: View {
     var body: some View {
         List {
             versionSection
+            MedicalExtractionRetrySettingsSection()
             cacheSection
         }
         .navigationTitle(L10n.text("settings.general.title"))

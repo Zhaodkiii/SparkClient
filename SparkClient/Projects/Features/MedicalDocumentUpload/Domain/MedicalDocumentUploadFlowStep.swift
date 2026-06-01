@@ -13,7 +13,7 @@ struct MedicalDocumentUploadFlowStep: Equatable, Sendable {
     }
 
     /// 步骤种类（与流水线拓扑一一对应）。
-    enum Kind: String, CaseIterable, Sendable, Hashable {
+    enum Kind: String, CaseIterable, Sendable, Hashable, Codable {
         case upload
         case ocr
         case typeRecognition = "type_recognition"

@@ -82,12 +82,16 @@ struct ExternalToolDataConsentSheet: View {
     }
 
     private func payloadBlockView(_ block: ExternalToolDataSharePayloadBlock) -> some View {
-        let maxA = ToolSheetDisplayLimits.maxArgumentChars
-        let maxR = ToolSheetDisplayLimits.maxResultChars
-        let argsTruncated = block.argumentsText.count > maxA
-        let resultTruncated = block.resultText.count > maxR
-        let argsDisplay = argsTruncated ? String(block.argumentsText.prefix(maxA)) : block.argumentsText
-        let resultDisplay = resultTruncated ? String(block.resultText.prefix(maxR)) : block.resultText
+        let argumentsDisplay = ToolLargeTextDisplay(
+            text: block.argumentsText,
+            emptyPlaceholder: "-",
+            limit: ToolSheetDisplayLimits.maxArgumentChars
+        )
+        let resultDisplay = ToolLargeTextDisplay(
+            text: block.resultText,
+            emptyPlaceholder: "-",
+            limit: ToolSheetDisplayLimits.maxResultChars
+        )
         return VStack(alignment: .leading, spacing: 8) {
             Text(block.friendlyTitle)
                 .font(.subheadline.weight(.semibold))
@@ -95,21 +99,10 @@ struct ExternalToolDataConsentSheet: View {
                 .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
             DisclosureGroup(L10n.text("chat.tool_consent.arguments")) {
-                Text(argsDisplay.isEmpty ? "-" : argsDisplay)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ToolLargeTextPreview(display: argumentsDisplay)
             }
             DisclosureGroup(L10n.text("chat.tool_consent.result")) {
-                Text(resultDisplay)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if resultTruncated {
-                    Text(L10n.text("chat.tool_consent.truncated"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                ToolLargeTextPreview(display: resultDisplay)
             }
         }
         .padding(12)

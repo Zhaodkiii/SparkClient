@@ -127,6 +127,113 @@ struct PromptLocalizer: Sendable {
         l10n.promptFormat("ai.prompt.medication.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
+    func medicalExtractionRetryCorrectionPrompt(
+        kind: MedicalDocumentKind,
+        feedback: MedicalExtractionRetryFeedback
+    ) -> String {
+        let kindLabel = localizedMedicalDocumentKindLabel(kind)
+        let fieldPath = feedback.fieldPath ?? notAvailableLabel()
+        let expectedType = feedback.expectedType ?? notAvailableLabel()
+        let actualType = feedback.actualType ?? notAvailableLabel()
+        let rawMessage = feedback.rawMessage.isEmpty ? notAvailableLabel() : feedback.rawMessage
+        let suggestion = feedback.suggestion ?? notAvailableLabel()
+
+        let template = l10n.prompt(
+            "ai.prompt.medical_extraction.retry_correction.template",
+            fallback: """
+            [Retry correction]
+            The previous structured extraction failed:
+            - Document type: %@
+            - Invalid field: %@
+            - Expected type: %@
+            - Previous actual type: %@
+            - Error: %@
+            - Fix suggestion: %@
+
+            Please return pure JSON that follows the original schema, without changing OCR facts.
+            Do not return Markdown or explanatory text.
+            Use schema-compatible empty values when unknown; for example, use {} for unknown extra and [] for unknown arrays.
+            """
+        )
+        let body = String(
+            format: template,
+            kindLabel,
+            fieldPath,
+            expectedType,
+            actualType,
+            rawMessage,
+            suggestion
+        )
+        return truncatedCorrectionBlock(body, limit: 2500)
+    }
+
+    func medicalExtractionRetrySuggestion(forField field: String) -> String {
+        let key = "ai.prompt.medical_extraction.retry.suggestion.\(field)"
+        return l10n.prompt(key, fallback: fallbackRetrySuggestion(forField: field))
+    }
+
+    func medicalExtractionRetrySuggestionTypeMismatch(expected: String, actual: String) -> String {
+        l10n.promptFormat(
+            "ai.prompt.medical_extraction.retry.suggestion.type_mismatch",
+            fallback: "Expected type %@ but got %@. Return schema-compatible JSON types.",
+            expected,
+            actual
+        )
+    }
+
+    private func localizedMedicalDocumentKindLabel(_ kind: MedicalDocumentKind) -> String {
+        switch kind {
+        case .auto:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.auto", fallback: "auto")
+        case .caseDocument:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.case_document", fallback: "case document")
+        case .healthExamReport:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.health_exam_report", fallback: "health exam report")
+        case .medicalReport:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.medical_report", fallback: "medical report")
+        case .prescription:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.prescription", fallback: "prescription")
+        case .medicationPlan:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.medication_plan", fallback: "medication plan")
+        case .medicineBox:
+            return l10n.prompt("ai.prompt.medical_extraction.retry.kind.medicine_box", fallback: "medicine box")
+        }
+    }
+
+    private func notAvailableLabel() -> String {
+        l10n.prompt("ai.prompt.medical_extraction.retry.not_available", fallback: "N/A")
+    }
+
+    private func fallbackRetrySuggestion(forField field: String) -> String {
+        switch field {
+        case "extra":
+            return "`extra` must be a JSON object. Use `{}` when unknown. Do not use `\"\"`."
+        case "items":
+            return "`items` must be an array. Use `[]` when no item is available."
+        case "medicines":
+            return "`medicines` must be an array of medicine objects."
+        case "indicators":
+            return "`indicators` must be an array of exam indicator objects."
+        case "sortOrder":
+            return "Use integer number for `sortOrder`, not string."
+        case "date":
+            return "Use `yyyy-MM-dd` when visible; otherwise use the schema-compatible empty value."
+        case "json_shape":
+            return "Return pure JSON only. Do not wrap the payload in Markdown or prose."
+        case "generic_type":
+            return "Match the schema field types exactly."
+        default:
+            return "Return JSON that matches the original schema and field types."
+        }
+    }
+
+    private func truncatedCorrectionBlock(_ text: String, limit: Int) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > limit else { return trimmed }
+        let end = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<end])
+    }
+
     func medicineBoxExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medicine_box.extraction.template",

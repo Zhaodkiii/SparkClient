@@ -67,6 +67,7 @@ struct ExtractTypedMedicalDocumentUseCase: Sendable {
     ///   - mergedOCRText: OCR合并文本
     ///   - resolution: 单据类型识别结果
     ///   - preferredModelName: 优先使用的AI模型
+    ///   - retryFeedback: 上次结构化抽取失败反馈，继续识别时追加到 Prompt
     ///   - cancellationToken: 取消令牌
     /// - Returns: 结构化提取输出（格式化好的医疗数据）
     func extractStructured(
@@ -75,6 +76,7 @@ struct ExtractTypedMedicalDocumentUseCase: Sendable {
         mergedOCRText: String,
         resolution: MedicalDocumentTypeResolution,
         preferredModelName: String? = nil,
+        retryFeedback: MedicalExtractionRetryFeedback? = nil,
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypedExtractionOutput {
         try cancellationToken?.checkCancellation()
@@ -84,6 +86,7 @@ struct ExtractTypedMedicalDocumentUseCase: Sendable {
             mergedOCRText: mergedOCRText,
             resolution: resolution,
             preferredModelName: preferredModelName,
+            retryFeedback: retryFeedback,
             cancellationToken: cancellationToken
         )
     }

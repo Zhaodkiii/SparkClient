@@ -10,6 +10,7 @@ struct StructuredJSONStreamFinal<T: Decodable>: Sendable {
     let rawText: String
     let normalizedJSON: String
     let decoded: T?
+    let lastDecodingError: Error?
 }
 
 struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
@@ -34,6 +35,7 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
         var rawText = ""
         var latestDecoded: T?
         var fallbackFinalText = ""
+        var lastDecodingError: Error?
 
         for try await event in stream {
             // 结构化 JSON 解析可能持续较久，逐帧检查取消可避免 UI 已返回但仍继续解析。
@@ -41,7 +43,9 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
             switch event {
             case .textDelta(let delta):
                 rawText.append(delta)
-                latestDecoded = decodeCandidate(from: rawText) ?? latestDecoded
+                if let decoded = decodeCandidate(from: rawText, lastDecodingError: &lastDecodingError) {
+                    latestDecoded = decoded
+                }
             case .completed(let response):
                 fallbackFinalText = response.text
             case .reasoningDelta, .toolCallDelta:
@@ -54,11 +58,16 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
             rawText = fallbackFinalText
         }
         let normalized = normalizer.normalizedModelJSONText(rawText)
-        let finalDecoded = decodeCandidate(from: normalized) ?? latestDecoded
-        return .init(rawText: rawText, normalizedJSON: normalized, decoded: finalDecoded)
+        let finalDecoded = decodeCandidate(from: normalized, lastDecodingError: &lastDecodingError) ?? latestDecoded
+        return .init(
+            rawText: rawText,
+            normalizedJSON: normalized,
+            decoded: finalDecoded,
+            lastDecodingError: lastDecodingError
+        )
     }
 
-    private func decodeCandidate(from text: String) -> T? {
+    private func decodeCandidate(from text: String, lastDecodingError: inout Error?) -> T? {
         guard let candidate = normalizer.jsonCandidateString(from: text),
               let data = candidate.data(using: .utf8) else {
             return nil
@@ -66,10 +75,9 @@ struct StructuredJSONStreamDecoder<T: Decodable>: Sendable {
         do {
             return try JSONDecoder.default.decode(T.self, from: data)
         } catch {
-            
+            lastDecodingError = error
             logger.error("流式结构化解码失败 error=\(error)", module: .medical)
             logger.error("流式结构化解码失败 kind=\(error.localizedDescription)", module: .medical)
-            
             return nil
         }
     }

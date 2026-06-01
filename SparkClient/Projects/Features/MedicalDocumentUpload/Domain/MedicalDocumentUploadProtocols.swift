@@ -42,6 +42,7 @@ protocol TypedMedicalDocumentExtracting: Sendable {
         mergedOCRText: String,
         resolution: MedicalDocumentTypeResolution,
         preferredModelName: String?,
+        retryFeedback: MedicalExtractionRetryFeedback?,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> MedicalDocumentTypedExtractionOutput
 

@@ -87,6 +87,21 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 执行失败的步骤（用于失败重试）
     @Published private(set) var failedStep: MedicalDocumentUploadFlowStep.Kind?
 
+    /// 最近一次结构化抽取失败反馈（继续识别时追加到 Prompt）
+    @Published private(set) var lastExtractionRetryFeedback: MedicalExtractionRetryFeedback?
+
+    /// 是否正在携带失败反馈重试结构化抽取
+    @Published private(set) var isRetryingExtraction = false
+
+    /// 当前自动重试次数（仅解码失败且开启自动重试时有意义）
+    @Published private(set) var autoRetryAttempt = 0
+
+    /// 配置的最大自动重试次数
+    @Published private(set) var maxAutoRetryAttempts = 0
+
+    /// 是否正在执行解码失败自动重试
+    @Published private(set) var isAutoRetryingExtraction = false
+
     /// 可切换的信息提取模型列表
     @Published private(set) var extractModelOptions: [RecognitionModelOption] = []
 
@@ -127,6 +142,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 日志记录器
     private let logger: Logger
 
+    /// 医疗抽取自动重试本地配置
+    private let extractionRetrySettingsStore: MedicalExtractionRetrySettingsStore
+
     /// 当前正在执行的 上传/OCR/AI识别 任务
     /// 取消时会中断任务并触发取消令牌
     private var recognitionTask: Task<Void, Never>?
@@ -140,6 +158,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 各步骤开始时刻，用于在步骤完成时写入实际墙钟耗时（毫秒）
     private var stepStartedAt: [MedicalDocumentUploadFlowStep.Kind: Date] = [:]
 
+    /// 当前流水线绑定的成员 ID，用于检测切换成员后清空抽取重试反馈
+    private var pipelineMemberID: Int?
+
     // MARK: - Initialization
 
     init(
@@ -151,6 +172,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         aiConfigCenter: AIConfigCenter,
         workflowAPIForLocalForms: SparkMedicalWorkflowAPI? = nil,
         notificationClient: (any NotificationClient)? = nil,
+        extractionRetrySettingsStore: MedicalExtractionRetrySettingsStore = MedicalExtractionRetrySettingsStore(),
         logger: Logger = ConsoleLogger()
     ) {
         self.memberContextStore = memberContextStore
@@ -161,6 +183,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.aiConfigCenter = aiConfigCenter
         self.workflowAPIForLocalForms = workflowAPIForLocalForms
         self.notificationClient = notificationClient
+        self.extractionRetrySettingsStore = extractionRetrySettingsStore
         self.logger = logger
         self.selectedMemberName = memberContextStore.context.selectedMember?.name
     }
@@ -269,6 +292,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
         // 保存患者姓名用于 UI 展示
         selectedMemberName = member.name
+        if let pipelineMemberID, pipelineMemberID != member.id {
+            clearExtractionRetryFeedback()
+        }
+        pipelineMemberID = member.id
         // 清空历史错误、识别结果等数据，避免脏数据干扰
         errorMessage = nil
         typedOutput = nil
@@ -280,6 +307,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         // 如果是全新运行 或 进度对象为空，则清空检查点并创建新进度
         if resetForFreshRun || progress == nil {
             clearPipelineCheckpoints()
+            isRetryingExtraction = false
             progress = createProgress()
         } else {
             // 否则从指定断点步骤准备重试进度
@@ -424,21 +452,27 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             
             preferredExtractModelName = modelSummary
 
+            let manualRetryFeedback = extractionRetryFeedbackForCurrentRun(startingAt: requestedStartStep)
             start(.extract)
-            updateStepResultSummary(.extract, resultSummary: "\(scenarioLabel(for: extractScenario)) · \(modelSummary)")
-            
-            // 执行核心结构化数据提取
-            let output = try await extractUseCase.extractStructured(
+            updateExtractStepSummary(
+                extractScenario: extractScenario,
+                modelSummary: modelSummary,
+                manualRetryFeedback: manualRetryFeedback
+            )
+
+            let output = try await runExtractWithOptionalAutoRetry(
                 memberID: member.id,
                 files: selectedFiles,
                 mergedOCRText: mergedOCRText,
                 resolution: resolution,
-                preferredModelName: preferredExtractModelName,
+                extractScenario: extractScenario,
+                modelSummary: modelSummary,
+                manualRetryFeedback: manualRetryFeedback,
                 cancellationToken: cancellationToken
             )
             try cancellationToken.checkCancellation()
-            
-            
+
+            clearExtractionRetryState()
             complete(
                 .extract,
                 outcome: .success,
@@ -488,7 +522,20 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             // 记录失败步骤并更新 UI 错误信息
             failedStep = currentStep
             fail(currentStep)
-            errorMessage = error.localizedDescription
+            if currentStep == .extract {
+                if MedicalExtractionFailureClassifier.isDecodingFailure(error) {
+                    recordExtractionFailure(error: error, resolution: typeResolution)
+                } else {
+                    clearExtractionRetryFeedback()
+                    clearAutoRetryState()
+                }
+            } else {
+                clearExtractionRetryFeedback()
+                clearAutoRetryState()
+            }
+            isRetryingExtraction = false
+            isAutoRetryingExtraction = false
+            errorMessage = localizedRecognitionErrorMessage(for: error, failedStep: currentStep)
             logger.error("Typed 识别流程失败 step=\(currentStep.rawValue)：\(error)", module: .medical)
         }
     }
@@ -654,6 +701,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         errorMessage = nil
         failedStep = nil
         stepStartedAt = [:]
+        clearExtractionRetryState()
         // 注意：不重置 selectedFiles，保留用户选择的文件及其中的上传/OCR结果
         logger.info("已重置识别状态（保留已选文件）", module: .medical)
     }
@@ -713,7 +761,172 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         preferredExtractModelName = nil
         extractModelOptions = []
         stepStartedAt = [:]
+        pipelineMemberID = nil
+        clearExtractionRetryState()
     }
+
+    private func clearExtractionRetryFeedback() {
+        lastExtractionRetryFeedback = nil
+    }
+
+    private func clearAutoRetryState() {
+        autoRetryAttempt = 0
+        maxAutoRetryAttempts = 0
+        isAutoRetryingExtraction = false
+    }
+
+    private func clearExtractionRetryState() {
+        clearExtractionRetryFeedback()
+        clearAutoRetryState()
+        isRetryingExtraction = false
+    }
+
+    private func runExtractWithOptionalAutoRetry(
+        memberID: Int,
+        files: [MedicalUploadLocalFile],
+        mergedOCRText: String,
+        resolution: MedicalDocumentTypeResolution,
+        extractScenario: AIScenario,
+        modelSummary: String,
+        manualRetryFeedback: MedicalExtractionRetryFeedback?,
+        cancellationToken: AIRuntimeCancellationToken
+    ) async throws -> MedicalDocumentTypedExtractionOutput {
+        let settings = extractionRetrySettingsStore.load()
+        let maxAutoRetry = settings.autoRetryOnDecodingFailureEnabled
+            ? settings.maxDecodingFailureAutoRetryCount
+            : 0
+        maxAutoRetryAttempts = maxAutoRetry
+        autoRetryAttempt = 0
+        isAutoRetryingExtraction = false
+
+        var attempt = 0
+        var retryFeedback = manualRetryFeedback
+        isRetryingExtraction = retryFeedback != nil
+
+        while true {
+            updateExtractStepSummary(
+                extractScenario: extractScenario,
+                modelSummary: modelSummary,
+                manualRetryFeedback: retryFeedback
+            )
+
+            do {
+                let output = try await extractUseCase.extractStructured(
+                    memberID: memberID,
+                    files: files,
+                    mergedOCRText: mergedOCRText,
+                    resolution: resolution,
+                    preferredModelName: preferredExtractModelName,
+                    retryFeedback: retryFeedback,
+                    cancellationToken: cancellationToken
+                )
+                return output
+            } catch {
+                try cancellationToken.checkCancellation()
+
+                guard MedicalExtractionFailureClassifier.isDecodingFailure(error) else {
+                    clearExtractionRetryState()
+                    throw error
+                }
+
+                recordExtractionFailure(error: error, resolution: resolution)
+
+                guard settings.autoRetryOnDecodingFailureEnabled, attempt < maxAutoRetry else {
+                    isAutoRetryingExtraction = false
+                    throw error
+                }
+
+                attempt += 1
+                autoRetryAttempt = attempt
+                isAutoRetryingExtraction = true
+                isRetryingExtraction = true
+                retryFeedback = lastExtractionRetryFeedback
+                logger.info(
+                    "结构化抽取解码失败，自动重试 attempt=\(attempt)/\(maxAutoRetry)",
+                    module: .medical
+                )
+            }
+        }
+    }
+
+    private func updateExtractStepSummary(
+        extractScenario: AIScenario,
+        modelSummary: String,
+        manualRetryFeedback: MedicalExtractionRetryFeedback?
+    ) {
+        let prefix: String
+        if isAutoRetryingExtraction, maxAutoRetryAttempts > 0 {
+            prefix = String(
+                format: L10n.text("medical.upload.extract.auto_retry.summary"),
+                autoRetryAttempt,
+                maxAutoRetryAttempts
+            )
+        } else if manualRetryFeedback != nil {
+            prefix = L10n.text("medical.upload.extract.retry.summary")
+        } else {
+            prefix = scenarioLabel(for: extractScenario)
+        }
+        updateStepResultSummary(.extract, resultSummary: "\(prefix) · \(modelSummary)")
+    }
+
+    private func extractionRetryFeedbackForCurrentRun(
+        startingAt requestedStartStep: MedicalDocumentUploadFlowStep.Kind
+    ) -> MedicalExtractionRetryFeedback? {
+        guard requestedStartStep == .extract else { return nil }
+        return lastExtractionRetryFeedback
+    }
+
+    private func recordExtractionFailure(
+        error: Error,
+        resolution: MedicalDocumentTypeResolution?
+    ) {
+        let kind = resolution?.kind ?? overrideDocumentKindForRetry ?? selectedKind
+        let preview: String?
+        if case ExtractionError.decodingFailed(let context) = error {
+            preview = context?.outputPreview
+        } else {
+            preview = nil
+        }
+        lastExtractionRetryFeedback = MedicalExtractionErrorNormalizer.makeFeedbackIfDecodingFailure(
+            kind: kind == .auto ? (resolution?.kind ?? .medicalReport) : kind,
+            step: .extract,
+            error: error,
+            aiOutputPreview: preview
+        )
+    }
+
+    private func localizedRecognitionErrorMessage(
+        for error: Error,
+        failedStep: MedicalDocumentUploadFlowStep.Kind
+    ) -> String {
+        var message = error.localizedDescription
+        guard failedStep == .extract, lastExtractionRetryFeedback != nil else {
+            return message
+        }
+        if maxAutoRetryAttempts > 0, autoRetryAttempt >= maxAutoRetryAttempts {
+            message += "\n" + L10n.text("medical.upload.extract.auto_retry.exhausted")
+        } else {
+            message += "\n" + L10n.text("medical.upload.extract.retry.hint")
+        }
+        return message
+    }
+
+#if DEBUG
+    var extractionRetryDebugLines: [String] {
+        guard let feedback = lastExtractionRetryFeedback else { return [] }
+        var lines: [String] = []
+        if let fieldPath = feedback.fieldPath {
+            lines.append(String(format: L10n.text("medical.upload.extract.retry.debug_field"), fieldPath))
+        }
+        if let expectedType = feedback.expectedType {
+            lines.append(String(format: L10n.text("medical.upload.extract.retry.debug_expected"), expectedType))
+        }
+        if let actualType = feedback.actualType {
+            lines.append(String(format: L10n.text("medical.upload.extract.retry.debug_actual"), actualType))
+        }
+        return lines
+    }
+#endif
 
     private func shouldRun(_ step: MedicalDocumentUploadFlowStep.Kind, from startStep: MedicalDocumentUploadFlowStep.Kind) -> Bool {
         step.pipelineOrder >= startStep.pipelineOrder
@@ -801,6 +1014,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     func selectOverrideDocumentKindForRetry(_ kind: MedicalDocumentKind) {
         overrideDocumentKindForRetry = kind
+        clearExtractionRetryFeedback()
         preferredExtractModelName = nil
         extractModelOptions = []
 

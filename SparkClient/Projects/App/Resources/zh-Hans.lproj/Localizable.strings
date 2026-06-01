@@ -1483,7 +1483,22 @@
 // MARK: - 操作按钮
 "medical.upload.action.cancel" = "取消";
 "medical.upload.action.return_to_picker" = "返回选择";
-"medical.upload.action.restart" = "重新识别";
+"medical.upload.action.restart" = "从头重来";
+"medical.upload.action.continue_recognition" = "继续识别";
+"medical.upload.extract.retry.hint" = "上次识别结果格式不符合要求，继续识别时将携带失败原因让 AI 修正。";
+"medical.upload.extract.retry.summary" = "重新抽取 · 已携带上次失败原因";
+"medical.upload.extract.retry.debug_field" = "失败字段：%@";
+"medical.upload.extract.retry.debug_expected" = "期望类型：%@";
+"medical.upload.extract.retry.debug_actual" = "实际类型：%@";
+"medical.upload.extract.auto_retry.summary" = "重新抽取 · 第 %d/%d 次 · 已携带上次失败原因";
+"medical.upload.extract.auto_retry.exhausted" = "识别结果格式仍不符合要求，已达到自动重试次数。你可以手动继续识别或从头重来。";
+
+"settings.medical_extraction.section_title" = "医疗报告抽取";
+"settings.medical_extraction.auto_retry.title" = "抽取失败自动重试";
+"settings.medical_extraction.auto_retry.subtitle" = "开启后，仅当 AI 输出格式不符合要求时，系统会自动携带失败原因重新抽取。";
+"settings.medical_extraction.auto_retry.count_title" = "自动重试次数";
+"settings.medical_extraction.auto_retry.count_value" = "最多额外重试 %d 次";
+"settings.medical_extraction.auto_retry.count_subtitle" = "达到次数后仍失败，将停留在失败页，可手动继续识别。";
 
 // MARK: - 时间显示
 "medical.upload.time.elapsed.seconds" = "当前已用时 %d 秒";

@@ -8,10 +8,21 @@ protocol MedicalPromptBuilding: Sendable {
     func extractionPrompt(for input: MedicalPromptInput) -> String
 }
 
-/// 构造 `MedicalPromptBuilding.extractionPrompt(for:)` 的输入：文书类型与合并后的 OCR 文本。
+/// 构造 `MedicalPromptBuilding.extractionPrompt(for:)` 的输入：文书类型、合并后的 OCR 文本与可选的重试纠错反馈。
 struct MedicalPromptInput: Sendable {
     let kind: MedicalDocumentKind
     let mergedOCRText: String
+    let retryFeedback: MedicalExtractionRetryFeedback?
+
+    init(
+        kind: MedicalDocumentKind,
+        mergedOCRText: String,
+        retryFeedback: MedicalExtractionRetryFeedback? = nil
+    ) {
+        self.kind = kind
+        self.mergedOCRText = mergedOCRText
+        self.retryFeedback = retryFeedback
+    }
 }
 
 /// 默认实现：委托 `PromptLocalizer` 读取 `Prompts.strings`（按当前 `Locale`），保证类型识别与各类抽取模板与用户语言一致。
@@ -27,9 +38,20 @@ struct MedicalPromptFactory: MedicalPromptBuilding {
     }
 
     func extractionPrompt(for input: MedicalPromptInput) -> String {
+        let base = baseExtractionPrompt(for: input)
+        guard let feedback = input.retryFeedback else { return base }
+        let correction = localizer.medicalExtractionRetryCorrectionPrompt(
+            kind: input.kind,
+            feedback: feedback
+        )
+        return [base, correction]
+            .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+            .joined(separator: "\n\n---\n\n")
+    }
+
+    private func baseExtractionPrompt(for input: MedicalPromptInput) -> String {
         switch input.kind {
         case .auto:
-            // 未指定类型：使用通用医疗文档 schema（含 rawType、items 等扩展字段）。
             return localizer.medicalDocumentExtractionPrompt(ocrText: input.mergedOCRText)
         case .caseDocument:
             return localizer.medicalCaseExtractionPrompt(ocrText: input.mergedOCRText)
