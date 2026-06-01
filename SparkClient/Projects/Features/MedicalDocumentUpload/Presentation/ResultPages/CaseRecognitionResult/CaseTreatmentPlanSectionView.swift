@@ -2,6 +2,8 @@ import SwiftUI
 
 struct CaseTreatmentPlanSectionView: View {
     let batches: [PrescriptionRecognitionDraft]
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
+    var expandedSectionIDs: Binding<Set<String>>?
     let followUps: [FollowUpRecognitionDraft]
     let attachmentsForIDs: ([UUID]) -> [MedicalDocumentLocalAttachmentItem]
     let onEditBatch: (PrescriptionRecognitionDraft) -> Void
@@ -15,6 +17,8 @@ struct CaseTreatmentPlanSectionView: View {
     var body: some View {
         PrescriptionBatchListSectionView(
             batches: batches,
+            validationIssues: validationIssues,
+            expandedSectionIDs: expandedSectionIDs,
             followUps: followUps,
             title: "治疗方案",
             subtitle: "处方批次",

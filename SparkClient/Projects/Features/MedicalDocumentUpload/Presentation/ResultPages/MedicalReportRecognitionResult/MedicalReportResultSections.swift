@@ -77,6 +77,8 @@ struct MedicalReportStatsSectionView: View {
 
 struct MedicalReportCardsSectionView: View {
     let reports: [MedicalReportRecognitionDraft]
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
+    var expandedSectionIDs: Binding<Set<String>>?
     var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
     var detailNavigationContext: MedicalDocumentResultDetailNavigationContext?
     let onEdit: (Int, MedicalReportRecognitionDraft) -> Void
@@ -94,7 +96,9 @@ struct MedicalReportCardsSectionView: View {
                 reports.count
             ),
             enableCollapse: true,
-            defaultCollapsed:true
+            defaultCollapsed: true,
+            collapseSectionID: MedicalPreSubmitValidationSectionID.examinationReports,
+            expandedSectionIDs: expandedSectionIDs
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(ExaminationReportCategory.allCases, id: \.rawValue) { category in
@@ -168,17 +172,27 @@ struct MedicalReportCardsSectionView: View {
     }
 
     private func reportRowContent(index: Int, report: MedicalReportRecognitionDraft, category: ExaminationReportCategory) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let cardIssues = validationIssues.issues(forCardIndex: index, resourceType: .examinationReport)
+        let hasError = cardIssues.isEmpty == false
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(report.title)
+                Text(report.title.nilIfBlank ?? L10n.text("medical.upload.presubmit.value.not_filled"))
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(hasError ? .red : .primary)
                     .lineLimit(1)
                 Spacer()
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
                 Button(L10n.text("common.edit")) {
                     onEdit(index, report)
                 }
                 .font(.caption.weight(.semibold))
+            }
+
+            ForEach(cardIssues.prefix(3)) { issue in
+                MedicalValidationIssueInlineView(message: issue.summaryLine)
             }
 
             let header = [report.hospital, report.doctor, report.date]
@@ -222,6 +236,10 @@ struct MedicalReportCardsSectionView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: "preSubmitValidation.card.examinationReport.\(index)"
         )
     }
 }

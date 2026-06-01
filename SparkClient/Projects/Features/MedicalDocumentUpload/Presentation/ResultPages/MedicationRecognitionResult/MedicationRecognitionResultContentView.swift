@@ -12,7 +12,8 @@ struct MedicationRecognitionResultContentView: View {
     /// 本地编辑弹窗（批量编辑 / 单个药品编辑）
     @State private var localEditor: MedicationResultLocalEditor?
     @State private var attachmentTarget: MedicationAttachmentTarget?
-
+    @State private var expandedValidationSections: Set<String> = []
+    @State private var lastAutoRevealedIssueID: UUID?
     /// 日志工具
     private let logger: Logger = ConsoleLogger()
     private let logModule: LogModule = .medical
@@ -33,6 +34,7 @@ struct MedicationRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var validationIssues: [MedicalPreSubmitValidationIssue] { viewModel.preSubmitValidationIssues }
     private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
         MedicalDocumentResultDetailNavigationContext(
             memberID: output.envelope.memberID,
@@ -73,8 +75,17 @@ struct MedicationRecognitionResultContentView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                    MedicalPreSubmitValidationNavigation.reveal(
+                        issue: issue,
+                        expandedSectionIDs: $expandedValidationSections,
+                        scrollProxy: scrollProxy
+                    )
+                }
+
                 // MARK: 1. 成员确认区域（归属哪个家庭成员）
                 MedicationMemberConfirmSectionView(
                     memberID: output.envelope.memberID,
@@ -86,6 +97,8 @@ struct MedicationRecognitionResultContentView: View {
                 /// 支持：批量编辑全部药品 / 编辑单个药品
                 MedicationListSectionView(
                     medications: medicationPlans,
+                    validationIssues: validationIssues,
+                    expandedSectionIDs: $expandedValidationSections,
                     attachmentsForIDs: matchedAttachments(for:),
                     onBatchEdit: {
                         logger.info("Medication result: open local batch editor", module: logModule)
@@ -120,6 +133,15 @@ struct MedicationRecognitionResultContentView: View {
                 }
             }
             .padding(16)
+        }
+        .onChange(of: validationIssues.map(\.id)) { _ in
+            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                issues: validationIssues,
+                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                expandedSectionIDs: $expandedValidationSections,
+                scrollProxy: scrollProxy
+            )
+        }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         // 底部固定工具栏：返回 + 保存

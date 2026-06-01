@@ -12,7 +12,8 @@ struct MedicineBoxRecognitionResultView: View {
     /// 当前正在编辑的药品项（弹出编辑页）
     @State private var editingItem: MedicineBoxRecognitionEditor?
     @State private var attachmentTarget: MedicineBoxAttachmentTarget?
-
+    @State private var expandedValidationSections: Set<String> = []
+    @State private var lastAutoRevealedIssueID: UUID?
     init(viewModel: MedicalDocumentUploadViewModel) {
         self.viewModel = viewModel
         let output = viewModel.typedOutput!
@@ -44,6 +45,8 @@ struct MedicineBoxRecognitionResultView: View {
 
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
 
+    private var validationIssues: [MedicalPreSubmitValidationIssue] { viewModel.preSubmitValidationIssues }
+
     private func onBack() {
         viewModel.reset(keepAttachments: true)
     }
@@ -66,8 +69,17 @@ struct MedicineBoxRecognitionResultView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                    MedicalPreSubmitValidationNavigation.reveal(
+                        issue: issue,
+                        expandedSectionIDs: $expandedValidationSections,
+                        scrollProxy: scrollProxy
+                    )
+                }
+
                 // MARK: - 成员信息区域
                 MedicalDocumentResultSectionCard(
                     title: L10n.text("medical.upload.result.medicine_box.member.title", fallback: "确认成员"),
@@ -93,7 +105,11 @@ struct MedicineBoxRecognitionResultView: View {
                     subtitle: L10n.text("medical.upload.result.medicine_box.section.subtitle", fallback: "可逐条编辑识别结果后保存"),
                     systemImage: "shippingbox.fill",
             tintColor: Color(uiColor: .systemTeal),
-                    badgeText: String(format: L10n.text("medical.upload.result.medication.count_format"), locale: .current, items.count)
+                    badgeText: String(format: L10n.text("medical.upload.result.medication.count_format"), locale: .current, items.count),
+                    enableCollapse: true,
+                    defaultCollapsed: true,
+                    collapseSectionID: MedicalPreSubmitValidationSectionID.medicineBoxList,
+                    expandedSectionIDs: $expandedValidationSections
                 ) {
                     if items.isEmpty {
                         // 无药品时展示空状态
@@ -130,6 +146,15 @@ struct MedicineBoxRecognitionResultView: View {
                 }
             }
             .padding(16)
+        }
+        .onChange(of: validationIssues.map(\.id)) { _ in
+            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                issues: validationIssues,
+                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                expandedSectionIDs: $expandedValidationSections,
+                scrollProxy: scrollProxy
+            )
+        }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.medicine_box.title", fallback: "药箱"))
@@ -201,7 +226,10 @@ struct MedicineBoxRecognitionResultView: View {
     // MARK: - 单行药品条目
     /// 展示单个药品信息 + 编辑按钮
     private func itemRow(index: Int, item: MedicineBoxRecognitionDraft) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let cardIssues = validationIssues.issues(forCardIndex: index, resourceType: .medicineBox)
+        let hasError = cardIssues.isEmpty == false
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 // 药品图标
                 Image(systemName: "capsule")
@@ -210,9 +238,9 @@ struct MedicineBoxRecognitionResultView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     // 药品名称
-                    Text(item.medicineName?.nilIfBlank ?? L10n.text("medical.upload.result.medication.unnamed"))
+                    Text(item.medicineName?.nilIfBlank ?? L10n.text("medical.upload.presubmit.value.not_filled"))
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(hasError ? .red : .primary)
                         .lineLimit(1)
                     // 药品详情：规格 + 剂型 + 有效期
                     let detail = [item.strength, item.dosageForm, item.expireDate]
@@ -228,11 +256,19 @@ struct MedicineBoxRecognitionResultView: View {
 
                 Spacer()
 
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
+
                 // 编辑按钮
                 Button(L10n.text("common.edit")) {
                     editingItem = MedicineBoxRecognitionEditor(index: index, item: item)
                 }
                 .font(.caption.weight(.semibold))
+            }
+
+            ForEach(cardIssues.prefix(2)) { issue in
+                MedicalValidationIssueInlineView(message: issue.message)
             }
 
             CaseMatchedAttachmentsGridView(
@@ -247,6 +283,10 @@ struct MedicineBoxRecognitionResultView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: "preSubmitValidation.card.medicineBox.\(index)"
         )
     }
 }

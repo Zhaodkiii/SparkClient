@@ -60,6 +60,12 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
     /// 仅在 enableCollapse = true 时生效
     var defaultCollapsed: Bool = false
 
+    /// 折叠模块标识；配合 `expandedSectionIDs` 在预校验定位时强制展开。
+    var collapseSectionID: String?
+
+    /// 由结果页维护的已展开模块集合。
+    var expandedSectionIDs: Binding<Set<String>>?
+
     // MARK: - 内容
 
     /// 卡片内容区域
@@ -82,6 +88,8 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
         action: (() -> Void)? = nil,
         enableCollapse: Bool = false,
         defaultCollapsed: Bool = false,
+        collapseSectionID: String? = nil,
+        expandedSectionIDs: Binding<Set<String>>? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -93,10 +101,21 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
         self.action = action
         self.enableCollapse = enableCollapse
         self.defaultCollapsed = defaultCollapsed
+        self.collapseSectionID = collapseSectionID
+        self.expandedSectionIDs = expandedSectionIDs
         self.content = content()
 
         // 初始化默认折叠状态
         self._isCollapsed = State(initialValue: defaultCollapsed)
+    }
+
+    private var isForceExpanded: Bool {
+        guard let collapseSectionID, let expandedSectionIDs else { return false }
+        return expandedSectionIDs.wrappedValue.contains(collapseSectionID)
+    }
+
+    private var showsContent: Bool {
+        enableCollapse == false || isCollapsed == false || isForceExpanded
     }
 
     // MARK: - Body
@@ -107,9 +126,7 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
 
             headerView
 
-            // 未折叠时展示内容
-            if enableCollapse == false || isCollapsed == false {
-
+            if showsContent {
                 content
                     .transition(
                         .opacity.combined(with: .move(edge: .top))
@@ -117,6 +134,7 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
             }
         }
         .padding(16)
+        .id(collapseSectionID)
 
         // 卡片背景
         .background(
@@ -217,7 +235,7 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
 
                     // 旋转箭头
                     .rotationEffect(
-                        .degrees(isCollapsed ? -90 : 0)
+                        .degrees(showsContent ? 0 : -90)
                     )
             }
         }
@@ -232,7 +250,14 @@ struct MedicalDocumentResultSectionCard<Content: View>: View {
                 return
             }
 
-            isCollapsed.toggle()
+            if showsContent {
+                if let collapseSectionID {
+                    expandedSectionIDs?.wrappedValue.remove(collapseSectionID)
+                }
+                isCollapsed = true
+            } else {
+                isCollapsed = false
+            }
         }
     }
 }

@@ -74,6 +74,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 保存成功事件版本号，供首页等宿主页面监听后刷新最新数据。
     @Published private(set) var saveSucceededRevision = 0
 
+    /// 提交前本地预校验错误（阻断保存并驱动结果页高亮）。
+    @Published private(set) var preSubmitValidationIssues: [MedicalPreSubmitValidationIssue] = []
+
     /// 用户手动指定的文档类型
     /// 为 .auto 时表示由服务端/AI 自动推断类型
     @Published var selectedKind: MedicalDocumentKind = .auto
@@ -145,6 +148,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 医疗抽取自动重试本地配置
     private let extractionRetrySettingsStore: MedicalExtractionRetrySettingsStore
 
+    /// 保存前本地字段预校验
+    private let preSubmitValidator: any MedicalPreSubmitValidating
+
     /// 当前正在执行的 上传/OCR/AI识别 任务
     /// 取消时会中断任务并触发取消令牌
     private var recognitionTask: Task<Void, Never>?
@@ -173,6 +179,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         workflowAPIForLocalForms: SparkMedicalWorkflowAPI? = nil,
         notificationClient: (any NotificationClient)? = nil,
         extractionRetrySettingsStore: MedicalExtractionRetrySettingsStore = MedicalExtractionRetrySettingsStore(),
+        preSubmitValidator: any MedicalPreSubmitValidating = MedicalPreSubmitValidator(),
         logger: Logger = ConsoleLogger()
     ) {
         self.memberContextStore = memberContextStore
@@ -184,6 +191,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.workflowAPIForLocalForms = workflowAPIForLocalForms
         self.notificationClient = notificationClient
         self.extractionRetrySettingsStore = extractionRetrySettingsStore
+        self.preSubmitValidator = preSubmitValidator
         self.logger = logger
         self.selectedMemberName = memberContextStore.context.selectedMember?.name
     }
@@ -570,6 +578,20 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             module: .medical
         )
 
+        let issues = preSubmitValidator.validate(output: typedOutput)
+        if issues.blockingIssues.isEmpty == false {
+            preSubmitValidationIssues = issues
+            fail(.save)
+            errorMessage = L10n.text("medical.upload.presubmit.error.save_blocked")
+            logger.warning(
+                "保存前本地预校验失败，阻断请求 issues=\(issues.blockingIssues.count)",
+                module: .medical
+            )
+            return false
+        }
+
+        preSubmitValidationIssues = []
+
         do {
             // 执行保存用例，获取保存回执
             let receipt = try await saveUseCase.execute(output: typedOutput)
@@ -583,6 +605,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 module: .medical
             )
 
+            preSubmitValidationIssues = []
             reset()
             dismissUploadPage()
             notificationClient?.success(
@@ -648,6 +671,20 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         )
     }
 
+    /// 用户编辑字段后，移除已修复字段对应的本地预校验错误。
+    func clearPreSubmitValidationIssues(matchingFieldKeys keys: Set<String>) {
+        guard keys.isEmpty == false else { return }
+        preSubmitValidationIssues.removeAll { keys.contains($0.fieldKey) }
+    }
+
+    func clearPreSubmitValidationIssues(matchingFieldKey key: String) {
+        clearPreSubmitValidationIssues(matchingFieldKeys: [key])
+    }
+
+    func clearAllPreSubmitValidationIssues() {
+        preSubmitValidationIssues = []
+    }
+
     func prepareAndStart(files: [MedicalUploadLocalFile], kind: MedicalDocumentKind) {
         reset()
         selectedKind = kind
@@ -683,6 +720,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         needsManualModeSelection = false
         typedOutput = nil
         saveReceipt = nil
+        preSubmitValidationIssues = []
         errorMessage = nil
         selectedKind = .auto
         clearPipelineCheckpoints()

@@ -27,6 +27,8 @@ struct MedicationMemberConfirmSectionView: View {
 
 struct MedicationListSectionView: View {
     let medications: [MedicationPlanRecognitionDraft]
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
+    var expandedSectionIDs: Binding<Set<String>>?
     var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
     let onBatchEdit: () -> Void
     let onEditItem: (Int, MedicationPlanRecognitionDraft) -> Void
@@ -44,7 +46,11 @@ struct MedicationListSectionView: View {
                 medications.count
             ),
             actionTitle: L10n.text("medical.upload.result.medication.batch_edit"),
-            action: onBatchEdit
+            action: onBatchEdit,
+            enableCollapse: true,
+            defaultCollapsed: true,
+            collapseSectionID: MedicalPreSubmitValidationSectionID.medicationList,
+            expandedSectionIDs: expandedSectionIDs
         ) {
             if medications.isEmpty {
                 Text(L10n.text("medical.upload.result.medication.empty"))
@@ -62,7 +68,11 @@ struct MedicationListSectionView: View {
     }
 
     private func row(index: Int, item: MedicationPlanRecognitionDraft) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let pathPrefix = "medication_plans[\(index)]"
+        let itemIssues = validationIssues.issues(matchingFieldPathPrefix: pathPrefix)
+        let hasError = itemIssues.isEmpty == false
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "capsule")
                     .font(.caption)
@@ -71,7 +81,7 @@ struct MedicationListSectionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.medicineName ?? item.medicineBox?.medicineName ?? item.brandName ?? L10n.text("medical.upload.result.medication.unnamed"))
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(hasError ? .red : .primary)
                         .lineLimit(1)
 
                     let detail = [item.medicineType, item.strength, item.frequencyText, item.instructions]
@@ -87,10 +97,18 @@ struct MedicationListSectionView: View {
 
                 Spacer()
 
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
+
                 Button(L10n.text("common.edit")) {
                     onEditItem(index, item)
                 }
                 .font(.caption.weight(.semibold))
+            }
+
+            ForEach(itemIssues.prefix(2)) { issue in
+                MedicalValidationIssueInlineView(message: issue.message)
             }
 
             if let attachmentsForIDs {
@@ -107,6 +125,16 @@ struct MedicationListSectionView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: itemIssues.first?.scrollTargetID
+                ?? MedicalPreSubmitValidationIssue.makeScrollTargetID(
+                    resourceType: .medicationPlan,
+                    fieldKey: "medication_plans[\(index)].drug_name",
+                    cardIndex: index,
+                    prescriptionIndex: nil
+                )
         )
     }
 }

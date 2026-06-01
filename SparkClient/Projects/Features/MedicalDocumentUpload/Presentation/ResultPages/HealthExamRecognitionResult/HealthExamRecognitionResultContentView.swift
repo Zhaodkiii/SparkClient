@@ -11,6 +11,8 @@ struct HealthExamRecognitionResultContentView: View {
     @State private var summaryFilter: HealthExamResultSummaryFilter = .all
     @State private var localEditor: HealthExamResultLocalEditor?
     @State private var expandedCategories: Set<String> = []
+    @State private var expandedValidationSections: Set<String> = []
+    @State private var lastAutoRevealedIssueID: UUID?
 
     private let logger: Logger = ConsoleLogger()
     private let logModule: LogModule = .medical
@@ -55,6 +57,9 @@ struct HealthExamRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel?.isSaving ?? false }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel?.saveReceipt }
+    private var validationIssues: [MedicalPreSubmitValidationIssue] {
+        viewModel?.preSubmitValidationIssues ?? []
+    }
 
     private var indexedItems: [HealthExamRiskDisplayItem] {
         draft.items.enumerated().map { pair in
@@ -106,8 +111,21 @@ struct HealthExamRecognitionResultContentView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                if mode.isEditable {
+                    MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                        MedicalPreSubmitValidationNavigation.reveal(
+                            issue: issue,
+                            expandedSectionIDs: $expandedValidationSections,
+                            expandedHealthExamCategories: $expandedCategories,
+                            healthExamCategoryForItemIndex: healthExamCategory(forItemIndex:),
+                            scrollProxy: scrollProxy
+                        )
+                    }
+                }
+
                 HealthExamMemberSectionView(
                     memberContextStore: memberContextStore,
                     selectedMemberID: selectedMemberID,
@@ -120,6 +138,7 @@ struct HealthExamRecognitionResultContentView: View {
 
                 HealthExamBasicInfoSectionView(
                     draft: draft,
+                    validationIssues: validationIssues,
                     onEdit: mode.isEditable ? {
                         logger.info("Health exam result: open basic info editor", module: logModule)
                         localEditor = .basicInfo(draft)
@@ -145,6 +164,7 @@ struct HealthExamRecognitionResultContentView: View {
 
                 HealthExamCategoryGroupsSectionView(
                     groups: groupedItems,
+                    validationIssues: validationIssues,
                     onEditItem: mode.isEditable ? { item in
                         logger.info("Health exam result: open risk item editor index=\(item.originalIndex)", module: logModule)
                         localEditor = .riskItem(index: item.originalIndex, item: item.item)
@@ -169,6 +189,18 @@ struct HealthExamRecognitionResultContentView: View {
                 }
             }
             .padding(16)
+        }
+        .onChange(of: validationIssues.map(\.id)) { _ in
+            guard mode.isEditable else { return }
+            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                issues: validationIssues,
+                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                expandedSectionIDs: $expandedValidationSections,
+                expandedHealthExamCategories: $expandedCategories,
+                healthExamCategoryForItemIndex: healthExamCategory(forItemIndex:),
+                scrollProxy: scrollProxy
+            )
+        }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
@@ -239,6 +271,12 @@ struct HealthExamRecognitionResultContentView: View {
                 logger.info("Health exam result: risk item updated index=\(index)", module: logModule)
             })
         }
+    }
+
+    private func healthExamCategory(forItemIndex index: Int) -> String? {
+        guard draft.items.indices.contains(index) else { return nil }
+        return draft.items[index].category.nilIfBlank
+            ?? L10n.text("medical.upload.result.health_exam.category.other")
     }
 
     private func sortRows(lhs: HealthExamRiskDisplayItem, rhs: HealthExamRiskDisplayItem) -> Bool {

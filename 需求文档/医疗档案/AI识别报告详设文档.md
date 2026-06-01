@@ -8,7 +8,8 @@
 | --- | --- | --- | --- |
 | `MEDICAL-AI-OCR-000001` | 结构化抽取失败后继续识别需携带上次失败原因 | 已实现 | AI 识别报告、解码失败反馈、公共 Prompt 追加、本地化、继续识别流程 |
 | `MEDICAL-AI-OCR-000002` | 解码失败自动重试与本地配置开关 | 已实现 | 仅解码失败带入失败原因、自动重试、通用设置、重试次数本地配置 |
-| `MEDICAL-AI-OCR-000003` | 保存字段校验失败后的结果页纠错引导 | 设计中 | 服务端字段错误协议、客户端字段定位、结果页高亮、跳转对应编辑模块、重新提交 |
+| `MEDICAL-AI-OCR-000003` | 提交前本地预校验与字段高亮纠错 | 已实现 | 客户端按服务端规则预校验、对应模块提示、字段高亮、用户修复后重新提交 |
+| `MEDICAL-AI-OCR-000004` | 折叠模块内预校验错误自动展开并定位 | 设计中 | 提交失败后展开错误所在折叠模块、再滚动到对应卡片或字段 |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -1022,3 +1023,867 @@ struct MedicalExtractionAutoRetryState: Equatable, Sendable {
 2. 对部分安全字段做本地 normalizer 自动修复，减少重试调用。
 3. 对不同模型统计解码失败率，用于模型选择策略。
 4. 自动重试失败后建议切换更强模型。
+
+## 工单 `MEDICAL-AI-OCR-000003`：提交前本地预校验与字段高亮纠错
+
+### 工单状态
+
+已实现。
+
+## 1. 背景与问题
+
+AI 识别结果进入结果确认页后，用户点击“提交”时，当前流程会直接调用保存接口。由于 AI 抽取结果可能存在字段缺失、日期格式不完整、枚举值不合法等问题，后端可能返回 400。
+
+典型问题：
+
+```text
+symptom.started_at = "2025-06"
+服务端要求完整日期或 DateTime，导致保存失败。
+```
+
+```text
+examination_reports[1].item_name = ""
+服务端要求报告名称必填，导致保存失败。
+```
+
+本工单不改服务端接口、不新增服务端字段错误协议、不依赖服务端返回字段定位。目标是在点击提交按钮后、真正上送服务器前，客户端参考服务端存储规则做一次本地预校验：
+
+1. 如果本地预校验通过，继续走现有提交接口流程。
+2. 如果本地预校验失败，不发起网络请求。
+3. 结果页保留当前识别和编辑状态。
+4. 将不符合要求的字段在对应模块和字段位置高亮展示。
+5. 顶部提示用户修复错误后再提交。
+
+## 2. 设计目标
+
+### 核心目标
+
+在 `saveResult()` 触发保存前增加本地预校验层，按服务端约束检查当前识别草稿。校验失败时生成客户端本地 `MedicalPreSubmitValidationIssue`，写入 ViewModel 状态，结果页按 issue 高亮对应模块和字段；校验成功时再执行原有保存逻辑。
+
+### 第一期目标
+
+1. 点击提交后先执行本地预校验。
+2. 本地预校验失败时不调用服务端保存接口。
+3. 本地预校验错误展示在结果页顶部摘要。
+4. 对应模块卡片展示错误角标或红色提示。
+5. 对应字段行展示错误原因。
+6. 用户可自行点击卡片或编辑按钮进入对应编辑页修改。
+7. 用户修改字段后，本地错误可即时清除或下次提交重新计算。
+8. 预校验通过后，保存接口流程保持不变。
+9. 保存成功后清空本地预校验错误。
+
+### 非目标
+
+1. 不新增服务端字段错误协议。
+2. 不解析服务端 400 字段错误来驱动 UI 高亮。
+3. 不改变现有保存接口、请求 payload、响应结构。
+4. 不让 AI 自动修复保存字段错误。
+5. 不在本工单内覆盖所有后端复杂业务规则，只覆盖客户端可稳定判断的规则。
+
+## 3. 总体流程
+
+现有流程：
+
+```text
+用户点击提交
+  -> viewModel.updateTypedResult(...)
+  -> viewModel.saveResult()
+  -> saveUseCase.execute(output:)
+  -> 请求服务端保存接口
+```
+
+调整后：
+
+```text
+用户点击提交
+  -> viewModel.updateTypedResult(...)
+  -> viewModel.saveResult()
+      -> MedicalPreSubmitValidator.validate(output:)
+          -> 有错误：写入 preSubmitValidationIssues，fail(.save)，不请求服务端
+          -> 无错误：清空 preSubmitValidationIssues，继续 saveUseCase.execute(output:)
+  -> 请求服务端保存接口
+```
+
+关键点：
+
+1. 预校验只拦截客户端能明确判断的问题。
+2. 预校验不代替服务端校验，服务端仍是最终数据边界。
+3. 预校验失败不清空 `typedOutput`、不重置页面、不丢失用户编辑内容。
+4. 预校验通过后的保存接口流程不变。
+
+## 4. 客户端错误模型
+
+新增本地预校验错误模型：
+
+```swift
+struct MedicalPreSubmitValidationIssue: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let resourceType: MedicalPreSubmitValidationResourceType
+    let fieldPath: String
+    let fieldKey: String
+    let fieldLabel: String
+    let message: String
+    let severity: MedicalPreSubmitValidationSeverity
+    let sectionTitle: String
+    let cardIndex: Int?
+}
+```
+
+资源类型：
+
+```swift
+enum MedicalPreSubmitValidationResourceType: String, Sendable {
+    case caseDocument
+    case symptom
+    case visit
+    case surgery
+    case followUp
+    case healthExamReport
+    case examinationReport
+    case prescription
+    case medicationPlan
+    case medicineBox
+}
+```
+
+错误级别：
+
+```swift
+enum MedicalPreSubmitValidationSeverity: Sendable {
+    case blocking
+    case warning
+}
+```
+
+第一期只使用 `blocking`。只有阻断错误会阻止提交。`warning` 可留给后续非必填但可疑字段提醒。
+
+ViewModel 增加状态：
+
+```swift
+@Published private(set) var preSubmitValidationIssues: [MedicalPreSubmitValidationIssue] = []
+```
+
+## 5. 预校验器设计
+
+新增：
+
+```text
+MedicalPreSubmitValidator
+```
+
+职责：
+
+1. 接收当前 `MedicalDocumentTypedExtractionOutput`。
+2. 根据 `typedResult` 分发到不同类型校验。
+3. 生成本地字段错误列表。
+4. 不做网络请求，不依赖服务端响应。
+5. 不修改原始草稿数据，只返回错误。
+
+建议协议：
+
+```swift
+protocol MedicalPreSubmitValidating: Sendable {
+    func validate(output: MedicalDocumentTypedExtractionOutput) -> [MedicalPreSubmitValidationIssue]
+}
+```
+
+分类型内部方法：
+
+```swift
+validateCaseDocument(_ draft: CaseRecognitionDraft) -> [MedicalPreSubmitValidationIssue]
+validateHealthExamReports(_ drafts: [HealthExamRecognitionDraft]) -> [MedicalPreSubmitValidationIssue]
+validateMedicalReports(_ drafts: [MedicalReportRecognitionDraft]) -> [MedicalPreSubmitValidationIssue]
+validateMedication(_ drafts: [MedicationRecognitionDraft]) -> [MedicalPreSubmitValidationIssue]
+validateMedicineBoxes(_ drafts: [MedicineBoxRecognitionDraft]) -> [MedicalPreSubmitValidationIssue]
+```
+
+## 6. 第一期校验规则
+
+规则来源：参考服务端存储要求和当前保存接口常见失败，不追求一次性覆盖所有规则。
+
+### 通用规则
+
+| 规则 | 说明 | 错误提示 |
+| --- | --- | --- |
+| 必填字符串不能为空 | 去除空格和换行后为空视为错误 | 请填写{字段名} |
+| 日期必须完整 | 不接受 `2025-06`、`2025` 等不完整日期 | 请选择完整日期 |
+| 数组内必填项逐条检查 | 多个报告、多个药品、多个指标分别生成错误 | 第 n 项的{字段名}不能为空 |
+| 枚举值必须在客户端可选范围内 | 如报告分类、用药状态、频次类型 | 请选择有效的{字段名} |
+| 数值字段不能写入明显非法文本 | 年龄、数量等字段不能为负数或非数字 | 请填写有效数字 |
+
+### 病例文档
+
+文件：
+
+```text
+CaseRecognitionResultContentView.swift
+```
+
+校验对象：
+
+```text
+CaseRecognitionDraft
+```
+
+规则：
+
+| 字段路径 | 模块 | 规则 |
+| --- | --- | --- |
+| `medical_case.title` | 病史与诊断 | 不能为空 |
+| `medical_case.occurred_at` | 病史与诊断 | 如果有值，必须是完整日期 |
+| `medical_case.age_at_visit` | 病史与诊断 | 如果有值，必须大于等于 0 |
+| `symptom.name` | 症状 | 症状存在时不能为空 |
+| `symptom.started_at` | 症状 | 如果有值，必须是完整日期 |
+| `visit.visited_at` | 就诊 | 如果有值，必须是完整日期 |
+| `visit.department` | 就诊 | 就诊记录存在时建议不能为空，第一期可先不阻断 |
+| `examination_reports[n].item_name` | 检查报告 | 每份报告名称不能为空 |
+| `examination_reports[n].performed_at` | 检查报告 | 如果有值，必须是完整日期 |
+| `prescriptions[n].medication_plans[m].drug_name` | 用药 | 药品名称不能为空 |
+| `prescriptions[n].medication_plans[m].start_date` | 用药 | 如果有值，必须是完整日期 |
+
+### 体检报告
+
+文件：
+
+```text
+HealthExamRecognitionResultContentView.swift
+```
+
+规则：
+
+| 字段路径 | 模块 | 规则 |
+| --- | --- | --- |
+| `health_exam_reports[n].title` | 体检报告 | 报告标题不能为空 |
+| `health_exam_reports[n].exam_date` | 体检报告 | 如果有值，必须是完整日期 |
+| `health_exam_reports[n].items[m].item_name` | 体检指标 | 指标名称不能为空 |
+| `health_exam_reports[n].items[m].result_value` | 体检指标 | 指标结果不能为空 |
+
+### 医疗报告
+
+文件：
+
+```text
+MedicalReportRecognitionResultContentView.swift
+```
+
+规则：
+
+| 字段路径 | 模块 | 规则 |
+| --- | --- | --- |
+| `examination_reports[n].item_name` | 检查报告 | 报告名称不能为空 |
+| `examination_reports[n].performed_at` | 检查报告 | 如果有值，必须是完整日期 |
+| `examination_reports[n].category` | 检查报告 | 如果有值，必须在可选分类内 |
+| `examination_reports[n].details[m].item_name` | 报告明细 | 如果明细存在，项目名不能为空 |
+| `examination_reports[n].details[m].result_value` | 报告明细 | 如果明细存在，结果值不能为空 |
+
+### 处方 / 用药计划
+
+文件：
+
+```text
+MedicationRecognitionResultContentView.swift
+```
+
+规则：
+
+| 字段路径 | 模块 | 规则 |
+| --- | --- | --- |
+| `prescriptions[n].prescribed_at` | 处方 | 如果有值，必须是完整日期 |
+| `prescriptions[n].medication_plans[m].drug_name` | 药品 | 药品名称不能为空 |
+| `prescriptions[n].medication_plans[m].start_date` | 药品 | 如果有值，必须是完整日期 |
+| `prescriptions[n].medication_plans[m].dose_per_time` | 药品 | 如果填写了单位，剂量建议不能为空，第一期可阻断 |
+| `prescriptions[n].medication_plans[m].frequency_type` | 药品 | 必须是客户端支持的频次类型 |
+
+### 药箱
+
+文件：
+
+```text
+MedicineBoxRecognitionResultView.swift
+```
+
+规则：
+
+| 字段路径 | 模块 | 规则 |
+| --- | --- | --- |
+| `medicine_boxes[n].medicine_name` | 药箱 | 药品名称不能为空 |
+| `medicine_boxes[n].expire_date` | 药箱 | 如果有值，必须是完整日期 |
+| `medicine_boxes[n].total_quantity` | 药箱 | 如果有值，不能为负数 |
+
+## 7. 日期与格式规则
+
+### 日期完整性
+
+客户端应统一使用本地工具判断“完整日期”，不要在各页面写正则。
+
+建议新增：
+
+```text
+MedicalPreSubmitValidationRules
+```
+
+规则：
+
+1. `yyyy-MM-dd` 视为完整日期。
+2. ISO8601 DateTime 视为完整日期。
+3. `yyyy-MM`、`yyyy`、空字符串不视为完整日期。
+4. 空值是否允许由字段规则决定。
+
+示例：
+
+| 输入 | 结果 |
+| --- | --- |
+| `2025-06-21` | 通过 |
+| `2025-06-21T00:00:00Z` | 通过 |
+| `2025-06` | 不通过 |
+| `2025` | 不通过 |
+| `` | 由字段必填规则决定 |
+
+## 8. 结果页 UI 设计
+
+### 顶部错误摘要
+
+在所有识别结果页顶部增加统一错误摘要组件：
+
+```text
+MedicalPreSubmitValidationSummaryBanner
+```
+
+展示内容：
+
+```text
+有 2 处内容需要修改后再提交
+请检查下方红色标记的字段。修改完成后再次提交。
+
+1. 症状开始时间：请选择完整日期
+2. 第 2 份检查报告 - 报告名称：请填写报告名称
+```
+
+交互：
+
+1. 点击某条错误，滚动到对应卡片或模块。
+2. 不自动打开编辑页。
+3. 用户通过结果页已有卡片点击、编辑按钮或编辑入口自行进入对应编辑页。
+
+### 卡片高亮
+
+对应卡片增加错误态：
+
+1. 卡片边框使用 `Color.red.opacity(0.45)`。
+2. 卡片标题右侧显示“需修改”角标。
+3. 字段行下方展示具体错误文案。
+4. 编辑按钮文案保持原有。
+
+示例：
+
+```text
+检查报告 #2                         需修改
+报告名称：未填写
+  请填写报告名称
+检查日期：2026-02-10
+机构：苏州大学附属第四医院
+```
+
+### 字段行高亮
+
+建议抽象公共字段错误渲染：
+
+```text
+MedicalValidationIssueInlineView
+MedicalValidationIssueBadge
+```
+
+字段行渲染规则：
+
+1. 当前字段有错误：字段下方展示红色错误说明。
+2. 当前字段缺失：值展示“未填写”。
+3. 当前字段格式错误：保留原始值，并提示正确格式。
+
+### 编辑页内错误提示
+
+用户自行打开对应编辑页后，编辑表单也接收本地预校验错误：
+
+```swift
+validationIssues: [MedicalPreSubmitValidationIssue]
+```
+
+编辑页表现：
+
+1. 对应输入框边框高亮。
+2. 输入框下方展示错误说明。
+3. 用户修改该字段后，本地可清除该字段错误。
+4. 再次提交时重新执行全量本地预校验。
+
+## 9. 各结果页接入方案
+
+### 路由层
+
+`MedicalDocumentResultRouterView.swift`
+
+职责不变，仍按类型路由：
+
+```text
+caseDocument -> CaseRecognitionResultView
+healthExamReport -> HealthExamRecognitionResultView
+medicalReport -> MedicalReportRecognitionResultView
+prescription -> PrescriptionRecognitionResultView
+medicationPlan -> MedicationRecognitionResultView
+medicineBoxes -> MedicineBoxRecognitionResultView
+```
+
+各结果页统一从 `viewModel.preSubmitValidationIssues` 读取错误状态。
+
+### 病例结果页
+
+文件：
+
+```text
+CaseRecognitionResultContentView.swift
+```
+
+接入点：
+
+1. 顶部展示 `MedicalPreSubmitValidationSummaryBanner`。
+2. `CaseHistoryDiagnosisSectionView` 支持接收病例、症状、就诊、手术相关 issues。
+3. `MedicalReportCardsSectionView` 支持接收 `examination_reports[n]` issues。
+4. `CaseTreatmentPlanSectionView` 支持接收处方、药品、随访相关 issues。
+5. 用户编辑后刷新草稿，并清理已修改字段相关 issue 或等待下次提交重新计算。
+
+### 体检结果页
+
+文件：
+
+```text
+HealthExamRecognitionResultContentView.swift
+```
+
+接入点：
+
+1. 顶部展示本地预校验错误摘要。
+2. 报告卡片高亮报告标题、体检日期等错误。
+3. 指标列表高亮指标名称、结果值等错误。
+
+### 医疗报告结果页
+
+文件：
+
+```text
+MedicalReportRecognitionResultContentView.swift
+```
+
+接入点：
+
+1. 顶部展示本地预校验错误摘要。
+2. `MedicalReportCardsSectionView` 支持报告级和明细级错误。
+3. 多份报告时按 `cardIndex` 高亮对应报告。
+
+### 用药结果页
+
+文件：
+
+```text
+MedicationRecognitionResultContentView.swift
+```
+
+接入点：
+
+1. 顶部展示本地预校验错误摘要。
+2. 处方卡片高亮开方日期等错误。
+3. 药品卡片高亮药品名称、开始日期、剂量、频次等错误。
+
+### 药箱结果页
+
+文件：
+
+```text
+MedicineBoxRecognitionResultView.swift
+```
+
+接入点：
+
+1. 顶部展示本地预校验错误摘要。
+2. 药箱卡片高亮药品名称、有效期、数量等错误。
+
+## 10. ViewModel 接入
+
+`MedicalDocumentUploadViewModel.saveResult()` 调整：
+
+```text
+saveResult()
+  -> guard typedOutput != nil
+  -> let issues = preSubmitValidator.validate(output)
+  -> if issues contains blocking:
+         preSubmitValidationIssues = issues
+         fail(.save)
+         errorMessage = "有内容需要修改后再提交"
+         return false
+  -> preSubmitValidationIssues = []
+  -> continue saveUseCase.execute(output:)
+```
+
+注意：
+
+1. `viewModel.updateTypedResult(...)` 必须在预校验前执行，确保校验的是用户最新编辑后的草稿。
+2. 预校验失败不进入 `DefaultTypedMedicalDocumentSaver`。
+3. 预校验失败不影响 upload / ocr / extract 的完成状态。
+4. 预校验失败后保存按钮仍可再次点击。
+
+## 11. 涉及文件
+
+| 文件 | 改动 |
+| --- | --- |
+| `MedicalDocumentUploadViewModel.swift` | 增加 `preSubmitValidationIssues`，保存前执行本地预校验 |
+| `MedicalDocumentResultRouterView.swift` | 路由不变，结果页通过 ViewModel 读取本地预校验错误 |
+| `CaseRecognitionResultContentView.swift` | 顶部错误摘要、病历/症状/就诊/报告/用药模块字段高亮 |
+| `HealthExamRecognitionResultContentView.swift` | 顶部错误摘要、体检报告和指标行高亮 |
+| `MedicalReportRecognitionResultContentView.swift` | 顶部错误摘要、报告卡片和明细高亮 |
+| `MedicationRecognitionResultContentView.swift` | 顶部错误摘要、处方/药品卡片高亮 |
+| `MedicineBoxRecognitionResultView.swift` | 顶部错误摘要、药箱卡片高亮 |
+| 新增 `MedicalPreSubmitValidationIssue.swift` | 本地预校验错误模型 |
+| 新增 `MedicalPreSubmitValidator.swift` | 提交前本地预校验器 |
+| 新增 `MedicalPreSubmitValidationRules.swift` | 必填、日期、数值、枚举等公共规则 |
+| 新增 `MedicalPreSubmitValidationSummaryBanner.swift` | 顶部错误摘要组件 |
+| 新增 `MedicalValidationIssueInlineView.swift` | 字段行错误展示组件 |
+| `Localizable.strings` | 字段名、模块名、错误提示本地化 |
+
+## 12. 验收标准
+
+### 流程验收
+
+1. 点击提交后先执行本地预校验。
+2. 本地预校验失败时，不发起保存接口请求。
+3. 本地预校验通过时，继续走原有保存接口流程。
+4. 保存接口请求 payload 和接口路径不因本工单变化。
+5. 预校验失败后不离开结果页、不清空草稿。
+6. 保存成功后清空本地预校验错误。
+
+### UI 验收
+
+1. 顶部展示“有内容需要修改后再提交”摘要。
+2. 对应卡片高亮展示。
+3. 对应字段展示错误文案。
+4. 点击错误项只定位到对应模块或卡片，不直接打开编辑页。
+5. 用户修改字段后可重新提交。
+
+### 典型错误验收
+
+1. `symptom.started_at = "2025-06"` 时，提交前拦截，症状模块高亮。
+2. `examination_reports[1].item_name` 为空时，提交前拦截，第 2 张检查报告高亮。
+3. 药品名称为空时，提交前拦截，对应药品卡片高亮。
+4. 药箱药品名称为空时，提交前拦截，对应药箱卡片高亮。
+5. 所有阻断错误修复后，再次提交会发起服务端保存请求。
+
+## 13. 风险与注意事项
+
+1. 客户端预校验不能替代服务端校验，服务端仍需保持最终校验。
+2. 不要把所有后端规则都搬到客户端，第一期只做稳定、明确、可本地判断的规则。
+3. 不要在每个 View 内散落规则，规则必须集中在 `MedicalPreSubmitValidator` / `MedicalPreSubmitValidationRules`。
+4. 不要把技术字段直接展示给用户，字段名和错误文案必须本地化。
+5. 不要预校验失败后重置 `typedOutput`，否则用户会丢失已编辑内容。
+6. 日期规则要和保存 payload 的实际格式保持一致，避免客户端误拦截。
+
+## 14. 后续扩展
+
+1. 对日期格式错误提供“一键补全为当天”或日期选择器快捷入口。
+2. 将服务端仍然返回的 400 统计为规则缺口，后续补充本地预校验。
+3. 增加 warning 级别，对可疑但不阻断的字段做黄色提醒。
+4. 将校验规则与表单组件进一步绑定，做到编辑中实时提示。
+
+## 工单 `MEDICAL-AI-OCR-000004`：折叠模块内预校验错误自动展开并定位
+
+### 工单状态
+
+设计中。
+
+## 1. 背景与问题
+
+`MEDICAL-AI-OCR-000003` 已要求点击提交前执行本地预校验，并在错误字段所在模块和字段位置高亮。但识别结果页存在大量折叠模块，例如：
+
+1. 病例结果页的病史/症状/就诊/检查报告/用药方案折叠区。
+2. 体检结果页按分类折叠的指标列表。
+3. 处方/用药结果页的处方批次、药品列表。
+4. 药箱结果页的药品列表或分组。
+
+如果错误字段位于折叠区块内，用户点击“提交”后只看到顶部错误摘要，但对应卡片仍被折叠隐藏，会造成两个问题：
+
+1. 页面无法滚动到被折叠隐藏的字段。
+2. 用户不知道需要先展开哪个模块才能看到红色错误。
+
+因此需要在预校验失败后，客户端根据错误字段所在位置，自动展开对应折叠模块，再滚动到对应卡片或字段。
+
+## 2. 设计目标
+
+### 核心目标
+
+当用户点击提交且本地预校验失败时，如果错误字段位于折叠模块内部，结果页应先展开包含该错误的模块，再滚动定位到对应卡片或字段，并展示高亮错误。
+
+### 第一期目标
+
+1. 提交失败后，自动处理第一条阻断错误的定位。
+2. 如果第一条错误位于折叠模块内，先展开对应模块。
+3. 展开完成后再滚动到对应卡片或字段。
+4. 顶部错误摘要内点击任意错误，也执行同样的“展开 -> 滚动”流程。
+5. 不直接打开编辑页，仍由用户自行点击卡片或编辑按钮进入编辑。
+6. 不改变 `MEDICAL-AI-OCR-000003` 的保存前本地预校验逻辑。
+
+### 非目标
+
+1. 不改变保存接口流程。
+2. 不解析服务端字段错误。
+3. 不要求一次性展开所有错误模块，第一期优先定位用户当前点击或第一条错误。
+4. 不自动进入编辑页。
+
+## 3. 交互流程
+
+### 点击提交后预校验失败
+
+```text
+用户点击提交
+  -> updateTypedResult(...)
+  -> saveResult()
+  -> MedicalPreSubmitValidator.validate(output)
+  -> 返回 blocking issues
+  -> ViewModel 写入 preSubmitValidationIssues
+  -> 结果页收到 issues
+  -> 取第一条 blocking issue
+  -> 根据 issue.resourceType / fieldPath / cardIndex 找到折叠模块
+  -> 展开该模块
+  -> 等待布局刷新
+  -> 滚动到 issue.scrollTargetID
+  -> 展示字段高亮
+```
+
+### 点击错误摘要
+
+```text
+用户点击顶部错误摘要中的某一条
+  -> 根据该 issue 找到折叠模块
+  -> 展开对应模块
+  -> 滚动到对应卡片或字段
+  -> 用户自行点击编辑入口修改
+```
+
+## 4. 数据设计
+
+`MedicalPreSubmitValidationIssue` 需要支持定位折叠区块：
+
+```swift
+struct MedicalPreSubmitValidationIssue {
+    let resourceType: MedicalPreSubmitValidationResourceType
+    let fieldPath: String
+    let fieldKey: String
+    let cardIndex: Int?
+
+    var scrollTargetID: String { ... }
+    var collapseSectionID: String? { ... }
+}
+```
+
+### `collapseSectionID`
+
+用于描述错误字段所在的可折叠模块：
+
+```swift
+enum MedicalPreSubmitValidationSectionID {
+    static let caseHistory = "preSubmitValidation.section.caseHistory"
+    static let examinationReports = "preSubmitValidation.section.examinationReports"
+    static let treatmentPlan = "preSubmitValidation.section.treatmentPlan"
+    static let medicationList = "preSubmitValidation.section.medicationList"
+    static let medicineBoxList = "preSubmitValidation.section.medicineBoxList"
+    static let healthExamGroups = "preSubmitValidation.section.healthExamGroups"
+}
+```
+
+映射示例：
+
+| 错误字段 | 需要展开的模块 |
+| --- | --- |
+| `symptom.started_at` | `caseHistory` |
+| `visit.visited_at` | `caseHistory` |
+| `examination_reports[n].item_name` | `examinationReports` |
+| `prescriptions[n].medication_plans[m].drug_name` | `treatmentPlan` |
+| `medication_plans[n].drug_name` | `medicationList` |
+| `medicine_boxes[n].medicine_name` | `medicineBoxList` |
+| `health_exam.items[n].item_name` | `healthExamGroups` |
+
+## 5. 页面状态设计
+
+各结果页维护本地展开状态：
+
+```swift
+@State private var expandedValidationSections: Set<String> = []
+```
+
+体检结果页还需要维护指标分类展开状态：
+
+```swift
+@State private var expandedCategories: Set<String> = []
+```
+
+当需要定位 issue 时：
+
+1. 先将 `issue.collapseSectionID` 插入 `expandedValidationSections`。
+2. 如果是体检指标错误，根据指标 index 找到分类名称，并插入 `expandedCategories`。
+3. 等待下一轮布局刷新后执行 `scrollProxy.scrollTo(issue.scrollTargetID, anchor: .top)`。
+
+## 6. 公共定位工具
+
+建议新增公共工具：
+
+```text
+MedicalPreSubmitValidationNavigation.swift
+```
+
+职责：
+
+1. 根据 issue 计算需要展开的折叠模块。
+2. 根据体检指标 index 计算需要展开的分类。
+3. 统一执行“展开 -> 延迟 -> 滚动”。
+
+示例：
+
+```swift
+@MainActor
+static func reveal(
+    issue: MedicalPreSubmitValidationIssue,
+    expandedSectionIDs: inout Set<String>,
+    expandedHealthExamCategories: inout Set<String>,
+    healthExamCategoryForItemIndex: ((Int) -> String?)?,
+    scrollProxy: ScrollViewProxy
+)
+```
+
+## 7. 各结果页接入要求
+
+### 病例结果页
+
+文件：
+
+```text
+CaseRecognitionResultContentView.swift
+CaseHistoryDiagnosisSectionView.swift
+CaseTreatmentPlanSectionView.swift
+MedicalReportResultSections.swift
+```
+
+要求：
+
+1. 病史/症状/就诊折叠时，症状或就诊错误应先展开病史模块。
+2. 检查报告列表折叠时，报告名称、日期、明细错误应先展开检查报告模块。
+3. 用药方案折叠时，药品名称、开始日期、剂量、频次错误应先展开治疗方案模块。
+4. 滚动 ID 必须能唯一定位到具体卡片，不能只定位到整个列表。
+
+### 体检结果页
+
+文件：
+
+```text
+HealthExamRecognitionResultContentView.swift
+HealthExamResultSections.swift
+```
+
+要求：
+
+1. 基础信息错误定位到基础信息卡。
+2. 指标错误必须先展开对应指标分类。
+3. 分类展开后再滚动到对应指标行。
+4. `cardIndex` 或定位 ID 需要区分“基础信息卡”和“第 1 个指标”，避免二者都使用同一个定位。
+
+### 医疗报告结果页
+
+文件：
+
+```text
+MedicalReportRecognitionResultContentView.swift
+MedicalReportResultSections.swift
+```
+
+要求：
+
+1. 报告列表折叠时，先展开报告列表。
+2. 多份报告时滚动到对应报告卡片。
+3. 报告明细错误可以先定位到报告卡片，第一期不要求滚到明细行。
+
+### 处方 / 用药结果页
+
+文件：
+
+```text
+PrescriptionRecognitionResultContentView.swift
+MedicationRecognitionResultContentView.swift
+PrescriptionResultSections.swift
+MedicationResultSections.swift
+```
+
+要求：
+
+1. 多处方、多药品时，定位 ID 必须包含处方 index 和药品 index。
+2. 不允许多个处方下的第 1 个药品共用同一个滚动 ID。
+3. 批次折叠时先展开批次，再定位到药品卡。
+
+### 药箱结果页
+
+文件：
+
+```text
+MedicineBoxRecognitionResultView.swift
+```
+
+要求：
+
+1. 药品列表折叠时先展开药品列表。
+2. 多个药品时滚动到对应药品卡。
+3. 不自动打开药品编辑页。
+
+## 8. 自动定位触发时机
+
+### 提交失败后自动定位
+
+预校验失败后，应自动定位第一条阻断错误：
+
+```text
+preSubmitValidationIssues 从空变为非空
+  -> 取 blockingIssues.first
+  -> reveal(issue)
+```
+
+注意：
+
+1. 避免每次 View 刷新都重复滚动。
+2. 可记录最近一次自动定位的 issue id 或 validation revision。
+3. 用户手动点击错误摘要时，不受自动定位去重限制。
+
+### 点击摘要定位
+
+顶部摘要点击某条错误时，始终执行定位流程：
+
+```text
+点击 issue
+  -> reveal(issue)
+```
+
+## 9. 验收标准
+
+### 通用验收
+
+1. 错误字段在折叠模块内时，提交失败后模块会自动展开。
+2. 模块展开后页面滚动到对应卡片或字段。
+3. 顶部错误摘要点击任意错误，也能展开并定位。
+4. 不自动打开编辑页。
+5. 用户修复后重新提交，错误消失。
+
+### 典型场景
+
+1. 病例页症状模块折叠，`symptom.started_at = "2025-06"`，点击提交后展开病史/症状模块并滚动到症状卡。
+2. 病例页检查报告列表折叠，第 2 份报告名称为空，点击提交后展开检查报告列表并滚动到第 2 份报告。
+3. 体检页指标分类折叠，第 3 个指标名称为空，点击提交后展开对应分类并滚动到该指标。
+4. 多处方场景下，第 2 张处方第 1 个药品名称为空，点击提交后滚动到第 2 张处方下的第 1 个药品，而不是第 1 张处方下的第 1 个药品。
+5. 药箱列表折叠，第 2 个药品名称为空，点击提交后展开药箱列表并滚动到第 2 个药品。
+
+## 10. 风险与注意事项
+
+1. 展开和滚动之间必须有布局刷新间隔，否则 `scrollTo` 可能找不到目标。
+2. 滚动 ID 必须全局唯一，尤其是多处方、多药品、多报告场景。
+3. 不要把展开状态写入持久化，只作为结果页本地 UI 状态。
+4. 不要为定位逻辑引入服务端字段协议，本工单仍然完全基于本地预校验 issue。
+5. 如果无法定位具体字段，至少展开对应模块并滚动到模块顶部。

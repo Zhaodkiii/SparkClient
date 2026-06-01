@@ -71,28 +71,45 @@ struct HealthExamMemberSectionView: View {
 
 struct HealthExamBasicInfoSectionView: View {
     let draft: HealthExamRecognitionDraft
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
     var onEdit: (() -> Void)?
+
+    private var hasError: Bool {
+        validationIssues.contains { issue in
+            issue.resourceType == .healthExamReport
+                && (issue.fieldKey == "health_exam.institution_name" || issue.fieldKey == "health_exam.exam_date")
+        }
+    }
+
+    private var basicInfoScrollTargetID: String? {
+        validationIssues.first {
+            $0.resourceType == .healthExamReport && $0.fieldKey.contains(".items[") == false
+        }?.scrollTargetID
+    }
 
     var body: some View {
         MedicalDocumentResultSectionCard(
             title: L10n.text("medical.upload.result.health_exam.basic_info.title"),
             subtitle: L10n.text("medical.upload.result.health_exam.basic_info.subtitle"),
             systemImage: "doc.text",
+            badgeText: hasError ? L10n.text("medical.upload.presubmit.badge.needs_fix") : nil,
             actionTitle: onEdit == nil ? nil : L10n.text("common.edit"),
             action: onEdit
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                MedicalDocumentResultInfoLine(
+                MedicalValidatedResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.institution"),
-                    value: draft.institutionName ?? ""
+                    value: draft.institutionName ?? "",
+                    issues: validationIssues.issues(forFieldKey: "health_exam.institution_name")
                 )
                 MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.report_no"),
                     value: draft.reportNo ?? ""
                 )
-                MedicalDocumentResultInfoLine(
+                MedicalValidatedResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.exam_date"),
-                    value: draft.examDate ?? ""
+                    value: draft.examDate ?? "",
+                    issues: validationIssues.issues(forFieldKey: "health_exam.exam_date")
                 )
                 MedicalDocumentResultInfoLine(
                     title: L10n.text("medical.upload.result.health_exam.basic_info.exam_type"),
@@ -104,6 +121,7 @@ struct HealthExamBasicInfoSectionView: View {
                 )
             }
         }
+        .id(basicInfoScrollTargetID)
     }
 }
 
@@ -194,6 +212,7 @@ struct HealthExamSummaryRow: View {
 
 struct HealthExamCategoryGroupsSectionView: View {
     let groups: [(category: String, rows: [HealthExamRiskDisplayItem])]
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
     var onEditItem: ((HealthExamRiskDisplayItem) -> Void)?
     @Binding var expandedCategories: Set<String>
 
@@ -251,6 +270,7 @@ struct HealthExamCategoryGroupsSectionView: View {
                     ForEach(group.rows) { row in
                         HealthExamRiskItemCell(
                             item: row,
+                            validationIssues: validationIssues.issues(matchingFieldKeyPrefix: "health_exam.items[\(row.originalIndex)]"),
                             onEdit: onEditItem.map { edit in
                                 { edit(row) }
                             }
@@ -270,14 +290,17 @@ struct HealthExamCategoryGroupsSectionView: View {
 
 struct HealthExamRiskItemCell: View {
     let item: HealthExamRiskDisplayItem
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
     var onEdit: (() -> Void)?
+
+    private var hasError: Bool { validationIssues.isEmpty == false }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.item.itemName ?? L10n.text("medical.upload.result.health_exam.item.unnamed"))
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(hasError ? .red : .primary)
                 let detail = [item.item.resultValue, item.item.unit, item.item.referenceRange]
                     .compactMap { $0?.nilIfBlank }
                     .joined(separator: " · ")
@@ -286,9 +309,17 @@ struct HealthExamRiskItemCell: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                ForEach(validationIssues.prefix(2)) { issue in
+                    MedicalValidationIssueInlineView(message: issue.message)
+                }
             }
 
             Spacer()
+
+            if hasError {
+                MedicalValidationIssueBadge()
+            }
 
             Text(L10n.text(item.riskLevel.titleKey))
                 .font(.caption.weight(.semibold))
@@ -309,6 +340,16 @@ struct HealthExamRiskItemCell: View {
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(uiColor: .systemBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: validationIssues.first?.scrollTargetID
+                ?? MedicalPreSubmitValidationIssue.makeScrollTargetID(
+                    resourceType: .healthExamReport,
+                    fieldKey: "health_exam.items[\(item.originalIndex)].item_name",
+                    cardIndex: item.originalIndex,
+                    prescriptionIndex: nil
+                )
         )
     }
 }

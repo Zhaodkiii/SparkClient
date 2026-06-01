@@ -15,6 +15,8 @@ struct CaseRecognitionResultContentView: View {
     @State private var localEditor: CaseRecognitionLocalEditor?
     @State private var attachmentTarget: CaseRecognitionAttachmentTarget?
     @State private var deletionTarget: CaseRecognitionLocalEditor?
+    @State private var expandedValidationSections: Set<String> = []
+    @State private var lastAutoRevealedIssueID: UUID?
 
     /// 初始化：从 AI 识别结果中加载病历数据
     init(viewModel: MedicalDocumentUploadViewModel) {
@@ -45,6 +47,7 @@ struct CaseRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var validationIssues: [MedicalPreSubmitValidationIssue] { viewModel.preSubmitValidationIssues }
     private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
         MedicalDocumentResultDetailNavigationContext(
             memberID: output.envelope.memberID,
@@ -70,17 +73,29 @@ struct CaseRecognitionResultContentView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                    MedicalPreSubmitValidationNavigation.reveal(
+                        issue: issue,
+                        expandedSectionIDs: $expandedValidationSections,
+                        scrollProxy: scrollProxy
+                    )
+                }
+
                 // MARK: 1. 成员信息区域（归属家庭成员）
                 CaseMemberInfoSectionView(
                     memberID: output.envelope.memberID,
-                    draft: draft
+                    draft: draft,
+                    validationIssues: validationIssues
                 )
 
                 // MARK: 2. 病史 & 诊断区域
                 CaseHistoryDiagnosisSectionView(
                     draft: draft,
+                    validationIssues: validationIssues,
+                    expandedSectionIDs: $expandedValidationSections,
                     caseAttachments: matchedAttachments(for: draft.attachmentFileIds),
                     symptomAttachments: matchedAttachments(for: draft.symptom?.attachmentFileIds ?? []),
                     visitAttachments: matchedAttachments(for: draft.visit?.attachmentFileIds ?? []),
@@ -98,6 +113,8 @@ struct CaseRecognitionResultContentView: View {
                 // MARK: 4. 检查报告列表区域
                 MedicalReportCardsSectionView(
                     reports: draft.examinationReports ?? [],
+                    validationIssues: validationIssues,
+                    expandedSectionIDs: $expandedValidationSections,
                     attachmentsForIDs: matchedAttachments(for:),
                     detailNavigationContext: detailNavigationContext,
                     onEdit: { index, report in
@@ -111,6 +128,8 @@ struct CaseRecognitionResultContentView: View {
                 // MARK: 5. 治疗方案区域（处方 + 用药 + 随访）
                 CaseTreatmentPlanSectionView(
                     batches: draft.prescriptions ?? [],
+                    validationIssues: validationIssues,
+                    expandedSectionIDs: $expandedValidationSections,
                     followUps: draft.followUps ?? [],
                     attachmentsForIDs: matchedAttachments(for:),
                     onEditBatch: { localEditor = .medicationBatch($0) },        // 编辑整张开方
@@ -146,6 +165,15 @@ struct CaseRecognitionResultContentView: View {
                 }
             }
             .padding(16)
+        }
+        .onChange(of: validationIssues.map(\.id)) { _ in
+            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                issues: validationIssues,
+                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                expandedSectionIDs: $expandedValidationSections,
+                scrollProxy: scrollProxy
+            )
+        }
         }
         .background(Color(uiColor: .systemGroupedBackground))
 

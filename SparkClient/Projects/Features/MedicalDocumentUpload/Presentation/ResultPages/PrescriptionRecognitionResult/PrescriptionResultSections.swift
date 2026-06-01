@@ -34,6 +34,8 @@ struct PrescriptionMemberConfirmSectionView: View {
 
 struct PrescriptionBatchListSectionView: View {
     let batches: [PrescriptionRecognitionDraft]
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
+    var expandedSectionIDs: Binding<Set<String>>?
     var followUps: [FollowUpRecognitionDraft] = []
     var title: String = L10n.text("medical.upload.result.prescription.batch_section.title")
     var subtitle: String = L10n.text("medical.upload.result.prescription.batch_section.subtitle")
@@ -59,7 +61,9 @@ struct PrescriptionBatchListSectionView: View {
             actionTitle: firstBatch == nil ? nil : actionTitle,
             action: { firstBatch.map { onEditBatch(0, $0) } },
             enableCollapse: true,
-            defaultCollapsed:true
+            defaultCollapsed: true,
+            collapseSectionID: MedicalPreSubmitValidationSectionID.treatmentPlan,
+            expandedSectionIDs: expandedSectionIDs
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 if batches.isEmpty {
@@ -132,16 +136,26 @@ struct PrescriptionBatchListSectionView: View {
     }
 
     private func batchCardContent(index: Int, batch: PrescriptionRecognitionDraft) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let batchIssues = validationIssues.issues(matchingFieldPathPrefix: "prescriptions[\(index)]")
+        let hasError = batchIssues.isEmpty == false
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Text(batch.institutionName ?? "处方批次")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(hasError ? .red : .primary)
                 Spacer()
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
                 Button(L10n.text("medical.upload.result.prescription.edit_batch")) {
                     onEditBatch(index, batch)
                 }
                 .font(.subheadline.weight(.semibold))
+            }
+
+            ForEach(batchIssues.filter { $0.fieldKey.contains("prescribed_at") }.prefix(1)) { issue in
+                MedicalValidationIssueInlineView(message: issue.message)
             }
 
             let head = [batch.prescriberName, batch.prescribedAt, batch.diagnosis]
@@ -180,6 +194,10 @@ struct PrescriptionBatchListSectionView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
         )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: "preSubmitValidation.card.prescription.\(index)"
+        )
     }
 
     @ViewBuilder
@@ -202,7 +220,17 @@ struct PrescriptionBatchListSectionView: View {
     }
 
     private func medicationRowContent(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let itemIssues = validationIssues.issues(forMedicationPlan: batchIndex, itemIndex: itemIndex)
+        let hasError = itemIssues.isEmpty == false
+        let scrollTargetID = itemIssues.first?.scrollTargetID
+            ?? MedicalPreSubmitValidationIssue.makeScrollTargetID(
+                resourceType: .medicationPlan,
+                fieldKey: "prescriptions[\(batchIndex)].medication_plans[\(itemIndex)].drug_name",
+                cardIndex: itemIndex,
+                prescriptionIndex: batchIndex
+            )
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Image(systemName: "capsule")
                     .font(.caption)
@@ -211,7 +239,7 @@ struct PrescriptionBatchListSectionView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(draft.medicineName ?? draft.medicineBox?.medicineName ?? draft.brandName ?? L10n.text("medical.upload.result.medication.unnamed"))
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(hasError ? .red : .primary)
                         .lineLimit(1)
 
                     let detail = [draft.strength, draft.frequencyText, draft.instructions]
@@ -227,10 +255,18 @@ struct PrescriptionBatchListSectionView: View {
 
                 Spacer()
 
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
+
                 Button(L10n.text("common.edit")) {
                     onEditMedication(batchIndex, itemIndex, draft)
                 }
                 .font(.caption.weight(.semibold))
+            }
+
+            ForEach(itemIssues.prefix(2)) { issue in
+                MedicalValidationIssueInlineView(message: issue.message)
             }
 
             if let attachmentsForIDs {
@@ -247,6 +283,10 @@ struct PrescriptionBatchListSectionView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: scrollTargetID
         )
     }
 

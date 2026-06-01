@@ -12,7 +12,8 @@ struct MedicalReportRecognitionResultContentView: View {
     /// 本地编辑弹窗（编辑单份报告）
     @State private var localEditor: MedicalReportResultLocalEditor?
     @State private var attachmentTarget: MedicalReportAttachmentTarget?
-
+    @State private var expandedValidationSections: Set<String> = []
+    @State private var lastAutoRevealedIssueID: UUID?
     /// 日志工具
     private let logger: Logger = ConsoleLogger()
     private let logModule: LogModule = .medical
@@ -33,6 +34,7 @@ struct MedicalReportRecognitionResultContentView: View {
 
     private var isSaving: Bool { viewModel.isSaving }
     private var saveReceipt: MedicalDocumentSaveReceipt? { viewModel.saveReceipt }
+    private var validationIssues: [MedicalPreSubmitValidationIssue] { viewModel.preSubmitValidationIssues }
     private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
         MedicalDocumentResultDetailNavigationContext(
             memberID: output.envelope.memberID,
@@ -57,8 +59,17 @@ struct MedicalReportRecognitionResultContentView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                    MedicalPreSubmitValidationNavigation.reveal(
+                        issue: issue,
+                        expandedSectionIDs: $expandedValidationSections,
+                        scrollProxy: scrollProxy
+                    )
+                }
+
                 // MARK: 1. 成员信息区域（报告归属的家庭成员）
                 MedicalReportMemberSectionView(
                     memberID: output.envelope.memberID,
@@ -73,6 +84,8 @@ struct MedicalReportRecognitionResultContentView: View {
                 /// 支持点击编辑每一份报告
                 MedicalReportCardsSectionView(
                     reports: reports,
+                    validationIssues: validationIssues,
+                    expandedSectionIDs: $expandedValidationSections,
                     attachmentsForIDs: matchedAttachments(for:),
                     detailNavigationContext: detailNavigationContext,
                     onEdit: { index, draft in
@@ -104,6 +117,15 @@ struct MedicalReportRecognitionResultContentView: View {
                 }
             }
             .padding(16)
+        }
+        .onChange(of: validationIssues.map(\.id)) { _ in
+            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                issues: validationIssues,
+                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                expandedSectionIDs: $expandedValidationSections,
+                scrollProxy: scrollProxy
+            )
+        }
         }
         .background(Color(uiColor: .systemGroupedBackground))
         // 底部固定工具栏：返回 + 保存

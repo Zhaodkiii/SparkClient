@@ -2,6 +2,8 @@ import SwiftUI
 
 struct CaseHistoryDiagnosisSectionView: View {
     let draft: CaseRecognitionDraft
+    var validationIssues: [MedicalPreSubmitValidationIssue] = []
+    var expandedSectionIDs: Binding<Set<String>>?
     let caseAttachments: [MedicalDocumentLocalAttachmentItem]
     let symptomAttachments: [MedicalDocumentLocalAttachmentItem]
     let visitAttachments: [MedicalDocumentLocalAttachmentItem]
@@ -23,7 +25,9 @@ struct CaseHistoryDiagnosisSectionView: View {
             actionTitle: "编辑",
             action: onEditCase,
             enableCollapse: true,
-            defaultCollapsed: true
+            defaultCollapsed: true,
+            collapseSectionID: MedicalPreSubmitValidationSectionID.caseHistory,
+            expandedSectionIDs: expandedSectionIDs
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 MedicalDocumentResultInfoLine(title: "诊断结论", value: draft.diagnosis ?? "")
@@ -34,19 +38,12 @@ struct CaseHistoryDiagnosisSectionView: View {
                 )
 
                 if let symptom = draft.symptom {
-                    block(
-                        title: symptom.name,
-                        detail: [
-                            symptom.severity,
-                            symptom.bodyPart,
-                            symptom.startedAt,
-                            symptom.notes
-                        ],
+                    symptomBlock(
+                        symptom: symptom,
                         attachments: symptomAttachments,
-                        onManageAttachments: onManageSymptomAttachments
-                    ) {
-                        onEditSymptom(symptom)
-                    }
+                        onManageAttachments: onManageSymptomAttachments,
+                        onEdit: { onEditSymptom(symptom) }
+                    )
                 } else {
                     emptyHint("暂无主诉症状")
                 }
@@ -117,24 +114,95 @@ struct CaseHistoryDiagnosisSectionView: View {
         )
     }
 
+    private func symptomBlock(
+        symptom: SymptomRecognitionDraft,
+        attachments: [MedicalDocumentLocalAttachmentItem],
+        onManageAttachments: (() -> Void)?,
+        onEdit: @escaping () -> Void
+    ) -> some View {
+        let nameIssues = validationIssues.issues(forFieldKey: "symptom.name")
+        let dateIssues = validationIssues.issues(forFieldKey: "symptom.started_at")
+        let hasError = nameIssues.isEmpty == false || dateIssues.isEmpty == false
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Text(symptom.name.nilIfBlank ?? L10n.text("medical.upload.presubmit.value.not_filled"))
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(hasError ? .red : .primary)
+                Spacer()
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
+                Button("编辑", action: onEdit)
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            if let message = nameIssues.first?.message ?? dateIssues.first?.message {
+                MedicalValidationIssueInlineView(message: message)
+            }
+
+            let merged = [symptom.severity, symptom.bodyPart, symptom.notes]
+                .compactMap { $0?.nilIfBlank }
+                .joined(separator: " · ")
+            if merged.isEmpty == false {
+                Text(merged)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            MedicalValidatedResultInfoLine(
+                title: L10n.text("medical.upload.presubmit.field.started_at"),
+                value: symptom.startedAt ?? "",
+                issues: dateIssues
+            )
+
+            CaseMatchedAttachmentsGridView(
+                title: "匹配附件",
+                attachments: attachments,
+                onManage: onManageAttachments
+            )
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: "preSubmitValidation.field.symptom.name"
+        )
+    }
+
     private func visitBlock(
         _ visit: VisitRecognitionDraft,
         attachments: [MedicalDocumentLocalAttachmentItem],
         onEdit: @escaping () -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let dateIssues = validationIssues.issues(forFieldKey: "visit.visited_at")
+        let hasError = dateIssues.isEmpty == false
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Label("就诊信息", systemImage: "stethoscope")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(hasError ? .red : .primary)
                 Spacer()
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
                 Button("编辑", action: onEdit)
                     .font(.subheadline.weight(.semibold))
             }
 
             VStack(alignment: .leading, spacing: 10) {
                 MedicalDocumentResultInfoLine(title: "就诊类型", value: visit.visitType ?? "")
-                MedicalDocumentResultInfoLine(title: "就诊时间", value: visit.visitedAt ?? "")
+                MedicalValidatedResultInfoLine(
+                    title: "就诊时间",
+                    value: visit.visitedAt ?? "",
+                    issues: dateIssues
+                )
                 MedicalDocumentResultInfoLine(title: "科室", value: visit.department ?? "")
                 MedicalDocumentResultInfoLine(title: "医生", value: visit.doctorName ?? "")
                 MedicalDocumentResultInfoLine(title: "备注", value: visit.notes ?? "")
@@ -151,6 +219,10 @@ struct CaseHistoryDiagnosisSectionView: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .medicalValidationCardChrome(
+            hasError: hasError,
+            scrollTargetID: "preSubmitValidation.field.visit.visited_at"
         )
     }
 
