@@ -183,6 +183,12 @@ extension AppAssembly {
             ossAPI: backend.oss,
             requestDeviceRegistration: { reason in
                 await notification.deviceRegistrationCoordinator.requestRegister(reason: reason)
+                // 设备画像上送后，若系统已授权通知则触发 APNs token 回调并二次登记（含 push_token）。
+                if reason == .appLaunch || reason == .signedInBootstrap {
+                    await notification.pushAdapter.syncRemoteNotificationRegistrationFromSystemSettings(
+                        requestAuthorizationIfNotDetermined: false
+                    )
+                }
             },
             onResetDeviceRegistration: {
                 notification.deviceRegistrationCoordinator.reset()

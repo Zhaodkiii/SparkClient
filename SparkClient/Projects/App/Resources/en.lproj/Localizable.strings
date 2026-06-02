@@ -882,6 +882,13 @@
 "api_error.msg.apple_audience_mismatch" = "Apple verification failed. Please try again.";
 "api_error.msg.user_inactive" = "This account has been deactivated. Please contact support.";
 "api_error.msg.token_not_valid" = "Your session has expired. Please sign in again.";
+"auth.session.device_replaced" = "Your account was signed in on another device. Please sign in again.";
+"auth.session.device_mismatch" = "This device could not be verified. Please sign in again.";
+"auth.session.device_not_found" = "Your device session is no longer valid. Please sign in again.";
+"api_error.msg.device_session_revoked" = "Your account was signed in on another device. Please sign in again.";
+"api_error.msg.device_session_replaced" = "Your account was signed in on another device. Please sign in again.";
+"api_error.msg.device_session_not_found" = "Your device session is no longer valid. Please sign in again.";
+"api_error.msg.device_mismatch" = "This device could not be verified. Please sign in again.";
 "api_error.msg.invalid_credentials" = "The account or password is incorrect.";
 "api_error.msg.permission_denied" = "You do not have permission to manage this member, or the binding is no longer active.";
 "api_error.code.40011" = "This verification code has already been used. Please request a new one.";

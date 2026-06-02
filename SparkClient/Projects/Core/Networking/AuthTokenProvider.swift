@@ -8,9 +8,9 @@ struct AuthTokens: Sendable {
     var tokenType: String
 }
 
-enum AuthTokenProviderError: Error, LocalizedError, Sendable, Equatable {
+enum AuthTokenProviderError: Error, LocalizedError, Sendable {
     case missingTokens
-    case refreshFailed
+    case refreshFailed(message: String, code: Int?)
     case refreshTemporarilyUnavailable
     case invalidRefreshResponse
 
@@ -107,7 +107,7 @@ actor AuthTokenProvider {
             }
             do {
                 return try await refreshTokensDeDuplicated()
-            } catch let error as AuthTokenProviderError where error == .refreshTemporarilyUnavailable {
+            } catch AuthTokenProviderError.refreshTemporarilyUnavailable {
                 logger.warning("令牌刷新暂不可用，回退使用本地 access token。", module: .auth)
                 return tokens
             }
@@ -118,7 +118,7 @@ actor AuthTokenProvider {
             }
             do {
                 return try await refreshTokensDeDuplicated()
-            } catch let error as AuthTokenProviderError where error == .refreshTemporarilyUnavailable {
+            } catch AuthTokenProviderError.refreshTemporarilyUnavailable {
                 logger.warning("从 Keychain 恢复后刷新暂不可用，回退使用本地 access token。", module: .auth)
                 return tokens
             }
@@ -167,7 +167,13 @@ actor AuthTokenProvider {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue(RequestIdGenerator.make(), forHTTPHeaderField: "X-Request-ID")
 
-        let payload = ["refresh": refreshToken] as [String: String]
+        let systemInfo = SparkSystemInfo()
+        let payload: [String: String] = [
+            "refresh": refreshToken,
+            "refresh_token": refreshToken,
+            "device_id": systemInfo.installationDeviceID,
+            "bundle_id": systemInfo.bundleIdentifier,
+        ]
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
 
         logger.info(SparkNetworkingStrings.Auth.refreshing(), module: .auth)
@@ -217,11 +223,16 @@ actor AuthTokenProvider {
         }
 
         // 仅在响应体可解析且业务码/msg 明确为鉴权失效时清理 token；仅凭 HTTP 状态或网关/HTML 错误页时保留本地登录态。
-        // 不在此处发送 AuthSessionInvalidation：避免刷新失败时强制登出/回登录页；业务 API 的 401 仍由 SparkNetworkEngine 处理。
         if let backend = backendError, isDefinitiveRefreshAuthFailure(backend) {
             clearTokens()
             logger.error(SparkNetworkingStrings.Auth.refreshFailed(), module: .auth)
-            throw AuthTokenProviderError.refreshFailed
+            AuthSessionInvalidation.postIfNeeded(
+                statusCode: statusCode,
+                backendCode: backend.code,
+                message: backend.msg,
+                source: "AuthTokenProvider.performRefresh"
+            )
+            throw AuthTokenProviderError.refreshFailed(message: backend.msg, code: backend.code)
         } else {
             if let backend = backendError {
                 logger.warning(
@@ -240,7 +251,15 @@ actor AuthTokenProvider {
         if (40100...40199).contains(backend.code) || (40300...40399).contains(backend.code) {
             return true
         }
-        if backend.msg == "token_not_valid" {
+        let normalized = backend.msg.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let definitiveMessages = [
+            "token_not_valid",
+            "device_session_revoked",
+            "device_session_replaced",
+            "device_session_not_found",
+            "device_mismatch",
+        ]
+        if definitiveMessages.contains(normalized) {
             return true
         }
         return false

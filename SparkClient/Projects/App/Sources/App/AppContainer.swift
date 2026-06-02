@@ -800,7 +800,7 @@ final class AppContainer {
 
     /// 服务端明确返回鉴权失效时触发：
     /// 清理本地会话与 token，并切回登录态。
-    func forceSignOutAfterServerAuthInvalidation() async {
+    func forceSignOutAfterServerAuthInvalidation(invalidationMessage: String = "") async {
         logger.warning("检测到服务端明确鉴权失效，准备强制回到登录页。", module: .auth)
         do {
             try await signOutUseCase.execute()
@@ -808,6 +808,30 @@ final class AppContainer {
             logger.warning("强制登出执行失败，继续回收本地会话状态：\(error.localizedDescription)", module: .auth)
         }
         await accountSessionRuntime.clearSessionPersistenceAndActivateGuest()
-        sessionStore.setSignedOut()
+        publishAuthInvalidationBanner(for: invalidationMessage)
+    }
+
+    func publishAuthInvalidationBanner(for invalidationMessage: String) {
+        let normalized = invalidationMessage.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let localizationKey: String
+        switch normalized {
+        case "device_session_revoked", "device_session_replaced":
+            localizationKey = "auth.session.device_replaced"
+        case "device_mismatch":
+            localizationKey = "auth.session.device_mismatch"
+        case "device_session_not_found":
+            localizationKey = "auth.session.device_not_found"
+        case "token_not_valid":
+            localizationKey = "api_error.msg.token_not_valid"
+        default:
+            if normalized.isEmpty {
+                return
+            }
+            localizationKey = "api_error.msg.\(normalized.replacingOccurrences(of: " ", with: "_"))"
+        }
+        notificationClient.warning(
+            L10n.text(localizationKey, fallback: L10n.text("api_error.msg.token_not_valid")),
+            source: "auth.session"
+        )
     }
 }

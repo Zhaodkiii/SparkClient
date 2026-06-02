@@ -31,5 +31,15 @@ final class AuthSessionInvalidationTests: XCTestCase {
             )
         )
     }
+
+    func testDeviceSessionReplacedMessageInvalidates() {
+        XCTAssertTrue(
+            AuthSessionInvalidation.shouldInvalidate(
+                statusCode: 200,
+                backendCode: 40105,
+                message: "device_session_replaced"
+            )
+        )
+    }
 }
 #endif

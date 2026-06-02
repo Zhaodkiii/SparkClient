@@ -492,6 +492,10 @@ enum AuthSessionInvalidation {
         guard normalized.isEmpty == false else { return false }
         let authFailureTokens = [
             "token_not_valid",
+            "device_session_revoked",
+            "device_session_replaced",
+            "device_session_not_found",
+            "device_mismatch",
             "authentication_failed",
             "not_authenticated",
             "invalid_token",

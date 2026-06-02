@@ -58,6 +58,36 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// 按系统当前授权状态同步 APNs（不向用户弹窗，除非 `requestAuthorizationIfNotDetermined == true`）。
+    ///
+    /// 已授权时调用 `registerForRemoteNotifications()`，token 在 `handleDeviceToken` 中经协调器写入设备登记；
+    /// 解决「用户已在系统设置中开启通知，但冷启动登记 body 无 push_token」的问题。
+    func syncRemoteNotificationRegistrationFromSystemSettings(
+        requestAuthorizationIfNotDetermined: Bool = false
+    ) async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            logger.info(
+                "业务=远程推送 系统已授权(status=\(settings.authorizationStatus.rawValue))，补调 registerForRemoteNotifications",
+                module: .push
+            )
+            UIApplication.shared.registerForRemoteNotifications()
+            await onRemoteNotificationAuthorizationResolved?(true)
+        case .denied:
+            logger.info("业务=远程推送 系统已拒绝通知，同步后端关闭推送", module: .push)
+            await onRemoteNotificationAuthorizationResolved?(false)
+        case .notDetermined:
+            if requestAuthorizationIfNotDetermined {
+                await requestRemoteNotificationAuthorizationAndRegister()
+            } else {
+                logger.debug("业务=远程推送 通知权限未决定，跳过主动弹窗", module: .push)
+            }
+        @unknown default:
+            break
+        }
+    }
+
     /// 请求系统通知权限；同意则向 APNs 注册（token 在 `handleDeviceToken` 中上送），拒绝则同步后端关闭推送并清空 token。
     private func requestRemoteNotificationAuthorizationAndRegister() async {
         do {

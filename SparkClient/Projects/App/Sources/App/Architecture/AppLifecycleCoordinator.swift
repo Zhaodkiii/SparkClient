@@ -47,6 +47,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         await sessionStore.restoreIfNeeded()
         if case .signedIn(let session) = sessionStore.state {
             await prepareSignedInSessionIfNeeded(session)
+            await syncPushRegistrationIfNeeded()
         }
     }
 
@@ -86,11 +87,21 @@ final class AppLifecycleCoordinator: ObservableObject {
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         preparedAccountID = session.accountID
         logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
+        await syncPushRegistrationIfNeeded()
     }
 
+    /// 用户主动触发：弹出系统通知权限对话框（如试用申请引导）。
     func requestNotificationAuthorizationIfNeeded() {
         logger.debug("通知流程：请求通知权限（如尚未请求）", module: .push)
         container.pushAdapter.requestAuthorizationIfNeeded()
+    }
+
+    /// 冷启动 / 会话恢复：若系统已授权通知，则补调 APNs 登记并上送 push_token（不弹窗）。
+    func syncPushRegistrationIfNeeded() async {
+        logger.debug("通知流程：按系统授权状态同步 APNs 与设备登记", module: .push)
+        await container.pushAdapter.syncRemoteNotificationRegistrationFromSystemSettings(
+            requestAuthorizationIfNotDetermined: false
+        )
     }
 
     func syncForegroundWorkIfNeeded() async {
@@ -100,14 +111,21 @@ final class AppLifecycleCoordinator: ObservableObject {
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
     }
 
-    func handleServerAuthInvalidationIfNeeded() async {
-        guard case .signedIn = sessionStore.state else { return }
+    func handleServerAuthInvalidationIfNeeded(invalidationMessage: String = "") async {
         guard isHandlingServerAuthInvalidation == false else { return }
+
+        switch sessionStore.state {
+        case .signedOut:
+            return
+        case .loading, .signedIn:
+            break
+        }
 
         logger.warning("认证流程：收到服务端鉴权失效通知，准备强制回到登录态", module: .auth)
         isHandlingServerAuthInvalidation = true
         defer { isHandlingServerAuthInvalidation = false }
-        await container.forceSignOutAfterServerAuthInvalidation()
+        await container.forceSignOutAfterServerAuthInvalidation(invalidationMessage: invalidationMessage)
+        sessionStore.setSignedOut()
     }
 }
 

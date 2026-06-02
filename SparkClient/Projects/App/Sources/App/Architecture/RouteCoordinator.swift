@@ -37,9 +37,10 @@ final class RouteCoordinator: ObservableObject, RouteCoordinating {
 
         NotificationCenter.default.publisher(for: AuthSessionInvalidation.notificationName)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] notification in
+                let message = notification.userInfo?["message"] as? String ?? ""
                 Task { @MainActor in
-                    await self?.handleServerAuthInvalidation()
+                    await self?.handleServerAuthInvalidation(invalidationMessage: message)
                 }
             }
             .store(in: &cancellables)
@@ -108,9 +109,9 @@ final class RouteCoordinator: ObservableObject, RouteCoordinating {
         await lifecycle?.syncForegroundWorkIfNeeded()
     }
 
-    private func handleServerAuthInvalidation() async {
+    private func handleServerAuthInvalidation(invalidationMessage: String) async {
         logger.warning("路由流程：收到服务端鉴权失效事件，交给生命周期协调器处理", module: .auth)
-        await lifecycle?.handleServerAuthInvalidationIfNeeded()
+        await lifecycle?.handleServerAuthInvalidationIfNeeded(invalidationMessage: invalidationMessage)
     }
 }
 

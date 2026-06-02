@@ -197,7 +197,18 @@ struct SparkAuthAPI {
     func refresh(refreshToken: String) async throws -> AuthTokens {
         struct Payload: Encodable {
             let refresh_token: String
+            let refresh: String
+            let device_id: String
+            let bundle_id: String
         }
+
+        let systemInfo = SparkSystemInfo()
+        let body = Payload(
+            refresh_token: refreshToken,
+            refresh: refreshToken,
+            device_id: systemInfo.installationDeviceID,
+            bundle_id: systemInfo.bundleIdentifier
+        )
 
         let operation = CacheableSparkNetworkOperation(
             name: "Auth.Refresh",
@@ -206,7 +217,7 @@ struct SparkAuthAPI {
                 method: .post,
                 path: "/api/v1/auth/token/refresh/",
                 headers: [:],
-                body: .json(AnyEncodable(Payload(refresh_token: refreshToken))),
+                body: .json(AnyEncodable(body)),
                 strategy: NetworkStrategy(
                     requiresAuth: false,
                     allowETag: false,

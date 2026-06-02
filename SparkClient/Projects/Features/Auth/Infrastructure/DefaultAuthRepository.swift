@@ -39,8 +39,41 @@ final class DefaultAuthRepository: AuthRepository {
             _ = try await backend.tokenProvider().authorizationHeaderValue()
             logger.info("会话恢复：认证令牌已就绪，开始拉取服务端最新 UserSession", module: .auth)
         } catch let authError as AuthTokenProviderError {
-            logger.warning("会话恢复鉴权异常（保留会话）：\(authError.localizedDescription)", module: .auth)
-            return cachedSession
+            switch authError {
+            case .refreshTemporarilyUnavailable:
+                logger.warning("会话恢复时 token 刷新暂不可用（降级保留会话）：\(authError.localizedDescription)", module: .auth)
+                return cachedSession
+            case .missingTokens, .invalidRefreshResponse:
+                logger.warning(
+                    "会话恢复：令牌刷新明确失败，清空本地会话 error=\(authError.localizedDescription)",
+                    module: .auth
+                )
+                await backend.tokenProvider().clearTokens()
+                backend.deviceCache.clearDeviceMetadata()
+                await snapshotStore.clear()
+                AuthSessionInvalidation.postIfNeeded(
+                    statusCode: 401,
+                    backendCode: nil,
+                    message: "token_not_valid",
+                    source: "DefaultAuthRepository.restoreSession"
+                )
+                return nil
+            case .refreshFailed(let message, let code):
+                logger.warning(
+                    "会话恢复：令牌刷新明确失败，清空本地会话 msg=\(message)",
+                    module: .auth
+                )
+                await backend.tokenProvider().clearTokens()
+                backend.deviceCache.clearDeviceMetadata()
+                await snapshotStore.clear()
+                AuthSessionInvalidation.postIfNeeded(
+                    statusCode: 401,
+                    backendCode: code,
+                    message: message,
+                    source: "DefaultAuthRepository.restoreSession"
+                )
+                return nil
+            }
         } catch {
             logger.warning("会话恢复时 token 预热失败（降级保留会话）：\(error.localizedDescription)", module: .auth)
             return cachedSession
