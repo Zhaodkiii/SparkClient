@@ -632,6 +632,7 @@
 "chat.capture_card.action.camera" = "Camera";
 "chat.capture_card.action.photo_library" = "Photos";
 "chat.capture_card.action.files" = "Files";
+"chat.keyboard.settings.menu" = "Keyboard settings";
 "chat.composer.style.title" = "Input layout";
 "chat.composer.style.signal" = "Compact";
 "chat.composer.style.hanlin" = "Pro";
@@ -1415,6 +1416,15 @@
 "auth.error.apple_credential_invalid" = "Apple credential is invalid.";
 "auth.error.apple_identity_token_missing" = "Unable to read Apple identity token.";
 "auth.error.apple_user_identifier_missing" = "Apple user identifier is missing.";
+"auth.notification.sign_in_success" = "Signed in successfully";
+"auth.notification.apple_sign_in_failed" = "Apple sign-in failed. Please try again later.";
+"auth.notification.apple_sign_in_cancelled" = "Apple sign-in was canceled";
+"auth.notification.otp_sent" = "Verification code sent";
+"auth.notification.otp_send_failed" = "Failed to send verification code. Please try again later.";
+"auth.notification.otp_resent" = "Verification code resent";
+"auth.notification.otp_resend_failed" = "Failed to resend verification code. Please try again later.";
+"auth.notification.phone_login_failed" = "The verification code is incorrect or has expired. Please try again.";
+"auth.notification.network_unavailable" = "Network connection issue. Please try again later.";
 "auth.apple.default_display_name" = "Apple User";
 "auth.login.title" = "Sign In";
 "auth.login.welcome" = "Welcome to Health Assistant";
@@ -1428,6 +1438,53 @@
 "auth.login.legal.privacy" = "Privacy Policy";
 "auth.login.legal.toggle_accessibility" = "Agree to Terms of Service and Privacy Policy";
 "auth.login.legal.must_agree_hint" = "Please agree to the Terms of Service and Privacy Policy before signing in";
+"auth.login.guest_mode" = "Guest Mode";
+
+"guest.chat.title" = "Guest Mode";
+"guest.chat.exit" = "Exit";
+"guest.chat.settings" = "Settings";
+"guest.chat.clear" = "Clear Chat";
+"guest.chat.config_prompt_title" = "AI Setup Required";
+"guest.chat.config_prompt_body" = "Configure Base URL, model, and API Key to start chatting. Settings are kept in memory only and cleared when you exit.";
+"guest.chat.start_config" = "Configure";
+"guest.chat.input_placeholder" = "Type a message…";
+"guest.chat.sending" = "Sending…";
+"guest.chat.welcome" = "Hello! You are in guest mode and conversations are not saved. How can I help?";
+"guest.chat.error_prefix" = "Sorry, an error occurred: %@";
+
+"guest.disclaimer.title" = "About Guest Mode";
+"guest.disclaimer.intro" = "To protect your privacy and data, guest mode is strictly isolated. Please review the following before continuing:";
+"guest.disclaimer.point.privacy" = "No account is created. Conversations and API keys are not saved locally, in Keychain, or synced to the cloud";
+"guest.disclaimer.point.simple_chat" = "Only basic text AI chat is supported—no medical reports, health profiles, attachments, or OCR";
+"guest.disclaimer.point.no_sync" = "Tool calls, conversation history, sync, and personalized services are not available";
+"guest.disclaimer.point.memory_only" = "Temporary settings exist in memory only and are cleared when you exit guest mode or close the app";
+"guest.disclaimer.footer" = "For full features and data protection, go back and sign in or create an account.";
+"guest.disclaimer.continue" = "Continue";
+"guest.disclaimer.exit" = "Exit to Login";
+
+"guest.config.title" = "AI Configuration";
+"guest.config.cancel" = "Cancel";
+"guest.config.save" = "Save";
+"guest.config.quick_select" = "Quick Select";
+"guest.config.custom" = "Custom Configuration";
+"guest.config.base_url" = "Base URL";
+"guest.config.model" = "Model";
+"guest.config.api_key" = "API Key";
+"guest.config.preset.openai" = "OpenAI";
+"guest.config.preset.deepseek" = "DeepSeek";
+"guest.config.preset.doubao" = "Doubao (ByteDance)";
+"guest.config.preset.qwen" = "Alibaba Qwen";
+"guest.config.err.invalid_url" = "Invalid Base URL";
+"guest.config.err.empty_model" = "Model name is required";
+"guest.config.err.empty_api_key" = "API Key is required";
+"guest.config.err.invalid" = "Invalid configuration. Please check your input.";
+
+"guest.ai.error.invalid_configuration" = "Invalid AI configuration";
+"guest.ai.error.invalid_response" = "Invalid server response";
+"guest.ai.error.invalid_payload" = "Unable to parse AI response";
+"guest.ai.error.empty_reply" = "AI returned an empty reply";
+"guest.ai.error.http_failed" = "Request failed (HTTP %d)";
+"guest.ai.error.http_failed_detail" = "Request failed (HTTP %d): %@";
 "auth.phone.hero_title" = "Secure and Fast Sign-In";
 "auth.phone.hero_subtitle" = "Bank-level security with multi-region support";
 "auth.phone.field_title" = "Phone Number *";

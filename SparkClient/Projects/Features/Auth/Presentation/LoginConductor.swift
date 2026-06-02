@@ -330,7 +330,7 @@ struct OTPVerifyView: View {
     private func resendOTP() {
         Task { @MainActor in
             let full = PhoneNumberNormalizer.normalize(rawInput: phone, defaultDial: region.dial).e164
-            let response = await viewModel.sendOTP(phoneNumber: full)
+            let response = await viewModel.sendOTP(phoneNumber: full, isResend: true)
             if let response {
                 otpId = response.otpID
                 startTimer()

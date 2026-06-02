@@ -309,11 +309,11 @@ struct HomeView: View {
                         }
                     )
                 }
-                if viewModel.dashboard?.selectedMember != nil {
-                    Text(viewModel.dashboard?.selectedMember?.name ?? "")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+//                if viewModel.dashboard?.selectedMember != nil {
+//                    Text(viewModel.dashboard?.selectedMember?.name ?? "")
+//                        .font(.footnote)
+//                        .foregroundStyle(.secondary)
+//                }
             }
 
             let cards = viewModel.dashboard?.medical.cards ?? []

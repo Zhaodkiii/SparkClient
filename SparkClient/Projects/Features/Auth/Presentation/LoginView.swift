@@ -6,6 +6,7 @@ struct LoginView: View {
     @ObservedObject var viewModel: LoginViewModel
 
     @State private var goPhone = false
+    @State private var goGuest = false
     @State private var showPhoneLogin = false
     @State private var tapCount = 0
     @State private var lastTapTime: Date?
@@ -25,24 +26,26 @@ struct LoginView: View {
                     shakeTrigger: legalAgreementShakeTrigger,
                     showsValidationHighlight: showsLegalValidationHighlight
                 )
-                safetyCard
-
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                        .font(.footnote)
-                        .multilineTextAlignment(.center)
-                }
+//                safetyCard
             }
             .padding(24)
             .background(
-                NavigationLink(isActive: $goPhone) {
-                    PhoneLoginView(viewModel: viewModel)
-                        .navigationTitle("手机号登录")
-                } label: {
-                    EmptyView()
+                Group {
+                    NavigationLink(isActive: $goPhone) {
+                        PhoneLoginView(viewModel: viewModel)
+                            .navigationTitle("手机号登录")
+                    } label: {
+                        EmptyView()
+                    }
+                    .hidden()
+
+                    NavigationLink(isActive: $goGuest) {
+                        GuestChatView()
+                    } label: {
+                        EmptyView()
+                    }
+                    .hidden()
                 }
-                .hidden()
             )
         }
         .background(Color(uiColor: .systemGroupedBackground))
@@ -181,6 +184,15 @@ struct LoginView: View {
                     )
                 )
             }
+
+            Button {
+                goGuest = true
+            } label: {
+                Text(L10n.text("auth.login.guest_mode"))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
         }
     }
 

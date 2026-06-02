@@ -632,6 +632,7 @@
 "chat.capture_card.action.camera" = "拍照";
 "chat.capture_card.action.photo_library" = "上传照片";
 "chat.capture_card.action.files" = "选择文件";
+"chat.keyboard.settings.menu" = "键盘设置";
 "chat.composer.style.title" = "输入栏样式";
 "chat.composer.style.signal" = "简洁";
 "chat.composer.style.hanlin" = "专业";
@@ -1415,6 +1416,15 @@
 "auth.error.apple_credential_invalid" = "Apple 凭证无效。";
 "auth.error.apple_identity_token_missing" = "无法读取 Apple 身份令牌。";
 "auth.error.apple_user_identifier_missing" = "Apple 用户标识缺失。";
+"auth.notification.sign_in_success" = "登录成功";
+"auth.notification.apple_sign_in_failed" = "Apple 登录失败，请稍后重试";
+"auth.notification.apple_sign_in_cancelled" = "已取消 Apple 登录";
+"auth.notification.otp_sent" = "验证码已发送";
+"auth.notification.otp_send_failed" = "验证码发送失败，请稍后重试";
+"auth.notification.otp_resent" = "验证码已重新发送";
+"auth.notification.otp_resend_failed" = "验证码重发失败，请稍后重试";
+"auth.notification.phone_login_failed" = "验证码错误或已过期，请重新输入";
+"auth.notification.network_unavailable" = "网络连接异常，请稍后重试";
 "auth.apple.default_display_name" = "Apple 用户";
 "auth.login.title" = "登录";
 "auth.login.welcome" = "欢迎使用健康助手";
@@ -1428,6 +1438,53 @@
 "auth.login.legal.privacy" = "《隐私政策》";
 "auth.login.legal.toggle_accessibility" = "同意服务条款与隐私政策";
 "auth.login.legal.must_agree_hint" = "请先勾选同意服务条款与隐私政策后再登录";
+"auth.login.guest_mode" = "游客模式";
+
+"guest.chat.title" = "游客模式";
+"guest.chat.exit" = "退出";
+"guest.chat.settings" = "设置";
+"guest.chat.clear" = "清空对话";
+"guest.chat.config_prompt_title" = "需要配置 AI 服务";
+"guest.chat.config_prompt_body" = "请配置 Base URL、模型和 API Key 以开始对话。配置仅保存在当前内存，退出后失效。";
+"guest.chat.start_config" = "开始配置";
+"guest.chat.input_placeholder" = "输入消息…";
+"guest.chat.sending" = "发送中…";
+"guest.chat.welcome" = "您好！当前为游客模式，对话记录不会被保存。请问有什么可以帮您？";
+"guest.chat.error_prefix" = "抱歉，发生错误：%@";
+
+"guest.disclaimer.title" = "游客模式说明";
+"guest.disclaimer.intro" = "为保护您的隐私与数据安全，游客模式采用严格隔离设计。继续使用前，请了解以下说明：";
+"guest.disclaimer.point.privacy" = "不会创建账号，对话内容与 API Key 不会写入本地存储、Keychain 或云端同步";
+"guest.disclaimer.point.simple_chat" = "仅支持最基础的文本 AI 对话，不提供问报告、健康档案、附件、OCR 等完整能力";
+"guest.disclaimer.point.no_sync" = "不支持工具调用、会话列表、历史恢复及个性化服务";
+"guest.disclaimer.point.memory_only" = "临时配置仅保存在当前内存，退出游客模式或关闭 App 后自动清除";
+"guest.disclaimer.footer" = "如需完整功能与数据保障，请返回登录页注册或登录账号。";
+"guest.disclaimer.continue" = "继续";
+"guest.disclaimer.exit" = "退出，返回登录页";
+
+"guest.config.title" = "AI 配置";
+"guest.config.cancel" = "取消";
+"guest.config.save" = "保存";
+"guest.config.quick_select" = "快速选择";
+"guest.config.custom" = "自定义配置";
+"guest.config.base_url" = "Base URL";
+"guest.config.model" = "模型名称";
+"guest.config.api_key" = "API Key";
+"guest.config.preset.openai" = "OpenAI";
+"guest.config.preset.deepseek" = "DeepSeek";
+"guest.config.preset.doubao" = "豆包（字节跳动）";
+"guest.config.preset.qwen" = "阿里云百炼";
+"guest.config.err.invalid_url" = "无效的 Base URL";
+"guest.config.err.empty_model" = "模型名称不能为空";
+"guest.config.err.empty_api_key" = "API Key 不能为空";
+"guest.config.err.invalid" = "配置无效，请检查输入";
+
+"guest.ai.error.invalid_configuration" = "AI 配置无效";
+"guest.ai.error.invalid_response" = "服务器响应无效";
+"guest.ai.error.invalid_payload" = "无法解析 AI 响应";
+"guest.ai.error.empty_reply" = "AI 返回空内容";
+"guest.ai.error.http_failed" = "请求失败（HTTP %d）";
+"guest.ai.error.http_failed_detail" = "请求失败（HTTP %d）：%@";
 "auth.phone.hero_title" = "安全快速登录";
 "auth.phone.hero_subtitle" = "银行级别安全保护，支持全球多地区";
 "auth.phone.field_title" = "手机号码 *";

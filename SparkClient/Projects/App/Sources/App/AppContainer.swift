@@ -573,7 +573,8 @@ final class AppContainer {
             signInWithAppleUseCase: signInWithAppleUseCase,
             requestPhoneOTPUseCase: requestPhoneOTPUseCase,
             signInWithPhoneOTPUseCase: signInWithPhoneOTPUseCase,
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            notificationClient: notificationClient
         )
     }
 

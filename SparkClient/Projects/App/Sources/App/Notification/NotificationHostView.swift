@@ -12,24 +12,22 @@ struct NotificationHostView<Content: View>: View {
     var body: some View {
         content
             .overlay(alignment: .top) {
-                if let banner = store.currentBanner {
-                    NotificationBannerView(
-                        message: banner,
-                        onTap: store.tapAction(for: banner.id),
-                        onDismiss: { store.dismissBanner(id: banner.id) }
-                    )
-                    .padding(.top, 8)
-                    .padding(.horizontal, 12)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                VStack(spacing: 8) {
+                    if let banner = store.currentBanner {
+                        NotificationBannerView(
+                            message: banner,
+                            onTap: store.tapAction(for: banner.id),
+                            onDismiss: { store.dismissBanner(id: banner.id) }
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    if let toast = store.currentToast {
+                        NotificationToastView(message: toast)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
-            }
-            .overlay(alignment: .bottom) {
-                if let toast = store.currentToast {
-                    NotificationToastView(message: toast)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 26)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                .padding(.top, 8)
+                .padding(.horizontal, 12)
             }
             .alert(
                 store.currentAlert?.title ?? L10n.text("common.notice"),

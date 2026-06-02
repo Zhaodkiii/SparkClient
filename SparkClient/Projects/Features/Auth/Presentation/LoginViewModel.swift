@@ -8,25 +8,29 @@ import Security
 /// 登录场景状态管理：串联输入校验、用例调用与会话状态更新。
 final class LoginViewModel: ObservableObject {
     @Published var isLoading = false
-    @Published var errorMessage: String?
 
     private let signInWithAppleUseCase: SignInWithAppleUseCase
     private let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
     private let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     private let sessionStore: AppSessionStore
+    private let notificationClient: any NotificationClient
     private let logger: Logger = ConsoleLogger()
     private var currentNonce: String?
+
+    private let notificationSource = "auth.login"
 
     init(
         signInWithAppleUseCase: SignInWithAppleUseCase,
         requestPhoneOTPUseCase: RequestPhoneOTPUseCase,
         signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase,
-        sessionStore: AppSessionStore
+        sessionStore: AppSessionStore,
+        notificationClient: any NotificationClient
     ) {
         self.signInWithAppleUseCase = signInWithAppleUseCase
         self.requestPhoneOTPUseCase = requestPhoneOTPUseCase
         self.signInWithPhoneOTPUseCase = signInWithPhoneOTPUseCase
         self.sessionStore = sessionStore
+        self.notificationClient = notificationClient
     }
 
     func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
@@ -52,19 +56,40 @@ final class LoginViewModel: ObservableObject {
             logger.info("登录流程：Apple 登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
             sessionStore.setAuthenticated(session)
             logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
-            errorMessage = nil
+            notificationClient.success(
+                L10n.text("auth.notification.sign_in_success"),
+                source: notificationSource
+            )
         } catch {
-            logger.error("登录流程：Apple 登录失败 error=\(error.localizedDescription)", module: .auth)
-            errorMessage = error.localizedDescription
+            if AuthUserFacingErrorMapper.isAppleSignInCancelled(error) {
+                logger.info("登录流程：用户取消 Apple 登录", module: .auth)
+                notificationClient.info(
+                    L10n.text("auth.notification.apple_sign_in_cancelled"),
+                    source: notificationSource
+                )
+                return
+            }
+
+            let message = AuthUserFacingErrorMapper.message(for: error, scenario: .appleSignIn)
+            logger.error("登录流程：Apple 登录失败 error=\(message)", module: .auth)
+            notifyFailure(message: message, error: error)
         }
     }
 
-    func sendOTP(phoneNumber: String) async -> PhoneOTPRequestContext? {
-        errorMessage = nil
+    func sendOTP(phoneNumber: String, isResend: Bool = false) async -> PhoneOTPRequestContext? {
+        let scenario: AuthUserFacingErrorMapper.Scenario = isResend ? .phoneOTPResend : .phoneOTPRequest
+
         do {
-            return try await requestPhoneOTPUseCase.execute(phoneNumber: phoneNumber)
+            let context = try await requestPhoneOTPUseCase.execute(phoneNumber: phoneNumber)
+            let successMessage = isResend
+                ? L10n.text("auth.notification.otp_resent")
+                : L10n.text("auth.notification.otp_sent")
+            notificationClient.success(successMessage, source: notificationSource)
+            return context
         } catch {
-            errorMessage = error.localizedDescription
+            let message = AuthUserFacingErrorMapper.message(for: error, scenario: scenario)
+            logger.error("登录流程：验证码\(isResend ? "重发" : "发送")失败 error=\(message)", module: .auth)
+            notifyFailure(message: message, error: error)
             return nil
         }
     }
@@ -72,7 +97,6 @@ final class LoginViewModel: ObservableObject {
     func phoneLogin(phoneNumber: String, verificationCode: String, otpId: String) async {
         isLoading = true
         defer { isLoading = false }
-        errorMessage = nil
 
         do {
             let session = try await signInWithPhoneOTPUseCase.execute(
@@ -83,9 +107,22 @@ final class LoginViewModel: ObservableObject {
             logger.info("登录流程：手机号登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
             sessionStore.setAuthenticated(session)
             logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
+            notificationClient.success(
+                L10n.text("auth.notification.sign_in_success"),
+                source: notificationSource
+            )
         } catch {
-            logger.error("登录流程：手机号登录失败 error=\(error.localizedDescription)", module: .auth)
-            errorMessage = error.localizedDescription
+            let message = AuthUserFacingErrorMapper.message(for: error, scenario: .phoneOTPLogin)
+            logger.error("登录流程：手机号登录失败 error=\(message)", module: .auth)
+            notifyFailure(message: message, error: error)
+        }
+    }
+
+    private func notifyFailure(message: String, error: Error) {
+        if AuthUserFacingErrorMapper.isNetworkUnavailable(error) {
+            notificationClient.warning(message, source: notificationSource)
+        } else {
+            notificationClient.error(message, source: notificationSource)
         }
     }
 
@@ -151,19 +188,5 @@ final class LoginViewModel: ObservableObject {
     private static func sha256(_ input: String) -> String {
         let digest = SHA256.hash(data: Data(input.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
-    }
-}
-
-private enum AuthViewModelError: LocalizedError {
-    case invalidAppleCredential
-    case missingIdentityToken
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidAppleCredential:
-            return L10n.text("auth.error.apple_credential_invalid")
-        case .missingIdentityToken:
-            return L10n.text("auth.error.apple_identity_token_missing")
-        }
     }
 }

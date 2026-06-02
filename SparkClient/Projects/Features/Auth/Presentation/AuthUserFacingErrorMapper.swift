@@ -1,0 +1,106 @@
+import AuthenticationServices
+import Foundation
+
+enum AuthViewModelError: LocalizedError {
+    case invalidAppleCredential
+    case missingIdentityToken
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidAppleCredential:
+            return L10n.text("auth.error.apple_credential_invalid")
+        case .missingIdentityToken:
+            return L10n.text("auth.error.apple_identity_token_missing")
+        }
+    }
+}
+
+enum AuthUserFacingErrorMapper {
+    enum Scenario: Sendable {
+        case appleSignIn
+        case phoneOTPRequest
+        case phoneOTPResend
+        case phoneOTPLogin
+    }
+
+    static func isAppleSignInCancelled(_ error: Error) -> Bool {
+        if let authError = error as? ASAuthorizationError {
+            return authError.code == .canceled
+        }
+        let nsError = error as NSError
+        return nsError.domain == ASAuthorizationError.errorDomain
+            && nsError.code == ASAuthorizationError.canceled.rawValue
+    }
+
+    static func message(for error: Error, scenario: Scenario) -> String {
+        if isNetworkUnavailable(error) {
+            return L10n.text("auth.notification.network_unavailable")
+        }
+
+        if let credentialMessage = (error as? AuthViewModelError)?.errorDescription {
+            return credentialMessage
+        }
+
+        if let networkError = error as? SparkNetworkError {
+            return message(for: networkError, scenario: scenario)
+        }
+
+        return fallback(for: scenario)
+    }
+
+    private static func message(for networkError: SparkNetworkError, scenario: Scenario) -> String {
+        switch networkError {
+        case .transport, .timeout:
+            return L10n.text("auth.notification.network_unavailable")
+        case .httpError(let statusCode, let backend, _):
+            let backendMessage = BackendErrorLocalizer.message(for: backend, statusCode: statusCode)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if backendMessage.isEmpty == false, isSafeUserFacingBackendMessage(backendMessage) {
+                return backendMessage
+            }
+            return fallback(for: scenario)
+        case .cancelled, .invalidResponse, .decoding, .refreshFailed:
+            return fallback(for: scenario)
+        }
+    }
+
+    static func isNetworkUnavailable(_ error: Error) -> Bool {
+        if let networkError = error as? SparkNetworkError {
+            switch networkError {
+            case .transport, .timeout:
+                return true
+            default:
+                return false
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
+    }
+
+    /// 避免把 requestId、堆栈等技术信息直接展示给用户。
+    private static func isSafeUserFacingBackendMessage(_ message: String) -> Bool {
+        let lowered = message.lowercased()
+        let blockedMarkers = ["requestid", "request_id", "trace", "stack", "token", "exception"]
+        return blockedMarkers.contains { lowered.contains($0) } == false
+    }
+
+    private static func fallback(for scenario: Scenario) -> String {
+        switch scenario {
+        case .appleSignIn:
+            return L10n.text("auth.notification.apple_sign_in_failed")
+        case .phoneOTPRequest:
+            return L10n.text("auth.notification.otp_send_failed")
+        case .phoneOTPResend:
+            return L10n.text("auth.notification.otp_resend_failed")
+        case .phoneOTPLogin:
+            return L10n.text("auth.notification.phone_login_failed")
+        }
+    }
+}
