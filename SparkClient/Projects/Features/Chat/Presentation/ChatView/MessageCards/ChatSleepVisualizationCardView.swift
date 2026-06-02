@@ -13,6 +13,7 @@ struct ChatSleepVisualizationMessageCard: View {
                 Spacer()
             }
             ChatSleepCardView(model: model)
+            HealthKitDataSourceAttribution()
         }
     }
 }

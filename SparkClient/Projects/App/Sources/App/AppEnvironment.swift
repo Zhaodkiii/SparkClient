@@ -28,6 +28,40 @@ enum AppEnvironment: String, CaseIterable, Sendable {
         }
     }
 
+    /// 法律文档站点根地址（隐私政策、服务条款等非 API 页面）。
+    var siteBaseURL: URL {
+        let productionFallback = URL(string: "https://www.dreamhua.top")!
+        guard var components = URLComponents(url: apiBaseURL, resolvingAgainstBaseURL: false) else {
+            return productionFallback
+        }
+
+        if let host = components.host {
+            let isLocalDevHost = host == "localhost"
+                || host.range(of: #"^\d{1,3}(\.\d{1,3}){3}$"#, options: .regularExpression) != nil
+            if isLocalDevHost {
+                return productionFallback
+            }
+            if host.hasPrefix("api.") {
+                components.host = "www." + String(host.dropFirst(4))
+            }
+        }
+
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        return components.url ?? productionFallback
+    }
+
+    /// 应用隐私政策页面。
+    var privacyPolicyURL: URL {
+        siteBaseURL.appendingPathComponent("legal/privacy/")
+    }
+
+    /// 应用服务条款页面。
+    var termsOfServiceURL: URL {
+        siteBaseURL.appendingPathComponent("legal/terms/")
+    }
+
     var logLevel: LogLevel {
         switch self {
         case .debug, .staging:

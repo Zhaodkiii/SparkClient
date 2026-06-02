@@ -1422,6 +1422,12 @@
 "auth.login.phone_button" = "手机号登录";
 "auth.login.safety_title" = "数据安全保障";
 "auth.login.safety_body" = "我们采用银行级加密技术保护您的个人信息和医疗数据，不会出售您的个人信息，仅在隐私政策说明范围内进行必要处理。";
+"auth.login.legal.checkbox_lead" = "我已阅读并同意";
+"auth.login.legal.conjunction" = "和";
+"auth.login.legal.terms" = "《服务条款》";
+"auth.login.legal.privacy" = "《隐私政策》";
+"auth.login.legal.toggle_accessibility" = "同意服务条款与隐私政策";
+"auth.login.legal.must_agree_hint" = "请先勾选同意服务条款与隐私政策后再登录";
 "auth.phone.hero_title" = "安全快速登录";
 "auth.phone.hero_subtitle" = "银行级别安全保护，支持全球多地区";
 "auth.phone.field_title" = "手机号码 *";
@@ -2013,6 +2019,8 @@
 "chat.medical_risk_notice.recommended_action" = "建议：";
 "tool.result.medical_risk_notice.inserted" = "医疗风险提示卡片已插入消息。";
 "tool.error.medical_risk_notice.invalid_level" = "无效的风险等级，请使用 low、medium、high 或 emergency。";
+"chat.medical_disclaimer.title" = "免责声明";
+"chat.medical_disclaimer.message" = "以上分析仅供参考，不能替代专业医生的诊断。请根据体检结果的异常程度及时就医咨询，特别是高风险项目需要尽快专科就诊。";
 "chat.sleep.visualization.title" = "睡眠数据";
 "chat.sleep.timeline.title" = "睡眠时间";
 "chat.sleep.comparison.title" = "睡眠对比";
@@ -2240,6 +2248,8 @@
 "ai_settings.search.editor.note" = "注意：配置 API 后，请在列表中打开您要使用的搜索引擎。联网搜索同一时间最多启用一个搜索引擎。";
 "ai_settings.search.editor.nav_add" = "添加搜索引擎";
 "ai_settings.search.editor.nav_edit" = "编辑密钥";
+
+"chat.healthkit.data_source.attribution" = "数据来自您 iPhone 上的「健康」App（通过 Apple HealthKit 读取）。";
 
 "chat.workout.title" = "运动数据";
 "chat.workout.metric.sessions" = "次数";

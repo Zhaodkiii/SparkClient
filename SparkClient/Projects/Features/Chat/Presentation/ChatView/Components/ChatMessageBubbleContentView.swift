@@ -435,6 +435,8 @@ private enum ChatMessageTimelineProjector {
                 .taskCards,
                 .healthResourceReference:
             return true
+        case .medicalDisclaimerCard:
+            return false
         }
     }
 }

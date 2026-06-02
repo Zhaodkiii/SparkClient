@@ -1422,6 +1422,12 @@
 "auth.login.phone_button" = "Sign in with phone";
 "auth.login.safety_title" = "Security Protection";
 "auth.login.safety_body" = "We use bank-level encryption to protect your personal and medical data. Your information is never sold and is only processed within the scope of our privacy policy.";
+"auth.login.legal.checkbox_lead" = "I have read and agree to the";
+"auth.login.legal.conjunction" = "and";
+"auth.login.legal.terms" = "Terms of Service";
+"auth.login.legal.privacy" = "Privacy Policy";
+"auth.login.legal.toggle_accessibility" = "Agree to Terms of Service and Privacy Policy";
+"auth.login.legal.must_agree_hint" = "Please agree to the Terms of Service and Privacy Policy before signing in";
 "auth.phone.hero_title" = "Secure and Fast Sign-In";
 "auth.phone.hero_subtitle" = "Bank-level security with multi-region support";
 "auth.phone.field_title" = "Phone Number *";
@@ -2013,6 +2019,8 @@
 "chat.medical_risk_notice.recommended_action" = "Suggested action:";
 "tool.result.medical_risk_notice.inserted" = "Medical risk notice card inserted.";
 "tool.error.medical_risk_notice.invalid_level" = "Invalid risk level. Use low, medium, high, or emergency.";
+"chat.medical_disclaimer.title" = "Disclaimer";
+"chat.medical_disclaimer.message" = "The analysis above is for reference only and does not replace a professional medical diagnosis. Please seek medical advice based on how abnormal your results are, especially for high-risk findings that may need prompt specialist care.";
 "chat.sleep.visualization.title" = "Sleep Data";
 "chat.sleep.timeline.title" = "Sleep";
 "chat.sleep.comparison.title" = "Sleep Comparison";
@@ -2240,6 +2248,8 @@
 "ai_settings.search.editor.note" = "After configuring an API key, enable the search provider you want to use in the list. Web search can use only one provider at a time.";
 "ai_settings.search.editor.nav_add" = "Add Search Provider";
 "ai_settings.search.editor.nav_edit" = "Edit Key";
+
+"chat.healthkit.data_source.attribution" = "Data is from the Health app on your iPhone (read via Apple HealthKit).";
 
 "chat.workout.title" = "Workout Data";
 "chat.workout.metric.sessions" = "Sessions";

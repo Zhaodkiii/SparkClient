@@ -138,7 +138,7 @@ struct ChatOrchestrator: Sendable {
 
         // MARK: - 无工具直接命中 → 进入AI模型推理流程
         // 构建给AI模型的消息上下文（历史+系统提示+用户上下文）
-        let runtimeMessages = await makeRuntimeMessages(
+        let buildResult = await makeRuntimeMessages(
             from: history,
             systemPrompt: systemPrompt,
             memberContextSummary: memberContextSummary,
@@ -161,15 +161,19 @@ struct ChatOrchestrator: Sendable {
         let toolLockedNotice = "本轮对话内已禁止继续调用工具。请基于现有信息直接完成回复，不要再发起工具调用。"
         
         logger.debug(
-            "进入 AI 推理路径，runtimeMessages=\(runtimeMessages.count), memberContextLength=\(memberContextSummary.count), tools=\(baseToolDefinitions.count), toolChoice=\(String(describing: activeToolChoice))",
+            "进入 AI 推理路径，runtimeMessages=\(buildResult.messages.count), memberContextLength=\(memberContextSummary.count), tools=\(baseToolDefinitions.count), toolChoice=\(String(describing: activeToolChoice))",
             module: .aiConfig
         )
 
-        // 问报告：健康上下文与本轮用户问题拆成两条 user 消息，避免与历史 text block 混在一条里。
         var loopMessages = Self.applyOutboundUserTurn(
             userInput: userInput,
             healthResourceContext: healthResourceContext,
-            to: runtimeMessages
+            buildResult: buildResult
+        )
+        logOutboundUserTurnMerge(
+            buildResult: buildResult,
+            loopMessages: loopMessages,
+            healthResourceContext: healthResourceContext
         )
         var loopMemberID = memberID
         let maxToolRounds = 30 // 最大工具调用轮次
@@ -445,44 +449,111 @@ struct ChatOrchestrator: Sendable {
         )
     }
 
-    /// 将本轮 `userInput`（可能含健康资料解析前缀）写入发给模型的最后一条 user 消息。
-    /// 将本轮用户问题与健康资料上下文写入网关消息列表（不修改历史中的 block 结构）。
+    /// 将本轮出站上下文合并进发给模型的 `messages`（不修改本地历史的 block 结构）。
+    ///
+    /// - `userInput`：本轮纯文本问题（`SendChatMessageUseCase` 传入，不等于最终 provider body）。
+    /// - `healthResourceContext`：问报告等场景的健康资料前缀，可为空。
+    /// - `buildResult`：`makeRuntimeMessages` 产物，含最后一条 user 的组包来源标记。
+    ///
+    /// 合并策略按 `LastUserTurnSource` 分支，避免用纯文本覆盖 LocalOCR 已拼好的 `【图片识别】` 等内容。
     private static func applyOutboundUserTurn(
         userInput: String,
         healthResourceContext: String?,
-        to messages: [AIRuntimeMessage]
+        buildResult: RuntimeMessagesBuildResult
     ) -> [AIRuntimeMessage] {
         let question = userInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        let context = healthResourceContext?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard question.isEmpty == false || context.isEmpty == false else { return messages }
+        let prefix = healthResourceContext?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // 本轮既无问题也无健康上下文，直接沿用历史 runtime 消息
+        guard question.isEmpty == false || prefix.isEmpty == false else { return buildResult.messages }
 
-        if context.isEmpty {
-            return applyCurrentUserInput(question, to: messages)
+        var messages = buildResult.messages
+
+        // 历史中尚无 user，或索引越界：追加一条合并后的 user
+        guard let turn = buildResult.lastUserTurn, messages.indices.contains(turn.index) else {
+            let content = mergeOutboundContent(prefix: prefix, base: question)
+            guard content.isEmpty == false else { return messages }
+            messages.append(AIRuntimeMessage(role: .user, content: content))
+            return messages
         }
 
-        var next = messages
-        if next.isEmpty {
-            next.append(AIRuntimeMessage(role: .user, content: context))
-            if question.isEmpty == false {
-                next.append(AIRuntimeMessage(role: .user, content: question))
+        let lastIndex = turn.index
+        // 最后一条不是 user（异常兜底）：同样追加，不覆盖非 user 消息
+        guard messages[lastIndex].role == .user else {
+            let content = mergeOutboundContent(prefix: prefix, base: question)
+            guard content.isEmpty == false else { return messages }
+            messages.append(AIRuntimeMessage(role: .user, content: content))
+            return messages
+        }
+
+        // 多模态：只更新 text part，不替换整条 message（避免丢掉 inline 图片）
+        if turn.source == .directMultimodal {
+            if prefix.isEmpty {
+                return applyCurrentUserInput(question, to: messages)
             }
-            return next
-        }
-
-        guard let lastIndex = next.indices.last, next[lastIndex].role == .user else {
-            next.append(AIRuntimeMessage(role: .user, content: context))
+            messages.insert(AIRuntimeMessage(role: .user, content: prefix), at: lastIndex)
             if question.isEmpty == false {
-                next.append(AIRuntimeMessage(role: .user, content: question))
+                return applyCurrentUserInput(question, to: messages)
             }
-            return next
+            return messages
         }
 
-        next.insert(AIRuntimeMessage(role: .user, content: context), at: lastIndex)
-        let questionIndex = lastIndex + 1
-        if question.isEmpty == false {
-            next[questionIndex] = AIRuntimeMessage(role: .user, content: question)
+        let existing = messages[lastIndex].content?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        let base: String
+        switch turn.source {
+        case .plainText:
+            base = question.isEmpty ? existing : question
+        case .localOCRAttachmentEnhanced,
+             .healthResourceEnhanced,
+             .unknownEnhanced:
+            base = existing.isEmpty ? question : existing
+        case .directMultimodal:
+            return messages
         }
-        return next
+
+        let merged = mergeOutboundContent(prefix: prefix, base: base)
+        guard merged.isEmpty == false else { return messages }
+        messages[lastIndex] = AIRuntimeMessage(role: .user, content: merged)
+        return messages
+    }
+
+    /// 合并出站前缀与正文，避免健康上下文重复拼接。
+    private static func mergeOutboundContent(prefix: String, base: String) -> String {
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedPrefix.isEmpty { return trimmedBase }
+        if trimmedBase.isEmpty { return trimmedPrefix }
+        // 正文已含相同前缀时不再重复
+        if trimmedBase.hasPrefix(trimmedPrefix) { return trimmedBase }
+        return "\(trimmedPrefix)\n\n\(trimmedBase)"
+    }
+
+    /// 记录本轮 user 组包摘要（不打印完整 OCR，避免敏感信息进日志）。
+    private func logOutboundUserTurnMerge(
+        buildResult: RuntimeMessagesBuildResult,
+        loopMessages: [AIRuntimeMessage],
+        healthResourceContext: String?
+    ) {
+        let turn = buildResult.lastUserTurn
+        let lastContent: String = {
+            guard let turn, loopMessages.indices.contains(turn.index) else { return "" }
+            return loopMessages[turn.index].content ?? ""
+        }()
+        let appliedHealthContext = healthResourceContext?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
+        let preservedEnhanced = turn?.preservedEnhancedContentAfterMerge ?? false
+        logger.debug(
+            """
+            AI组包 user turn merge: lastUserSource=\(turn.map { String(describing: $0.source) } ?? "-"), \
+            hasLocalOCR=\(turn?.hasLocalOCRContext ?? false), hasAttachment=\(turn?.hasAttachmentContext ?? false), \
+            alreadyContainsCurrentUserInput=\(turn?.alreadyContainsCurrentUserInput ?? false), \
+            appliedHealthContext=\(appliedHealthContext), preservedEnhancedContent=\(preservedEnhanced), \
+            finalUserLength=\(lastContent.count)
+            """,
+            module: .aiConfig
+        )
     }
 
     private static func applyCurrentUserInput(
@@ -522,7 +593,7 @@ struct ChatOrchestrator: Sendable {
         deliverMultimodalImages: Bool,
         sendsOriginalImagesToAI: Bool,
         maxMessages: Int?
-    ) async -> [AIRuntimeMessage] {
+    ) async -> RuntimeMessagesBuildResult {
         let promptLocalizer = PromptLocalizer()
         var systemBlocks = [
             (systemPrompt?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
@@ -548,22 +619,45 @@ struct ChatOrchestrator: Sendable {
             effectiveHistory = history[history.startIndex..<history.endIndex]
         }
 
+        var lastUserTurn: LastUserTurnComposition?
+
         for chatMessage in effectiveHistory where chatMessage.role != .system {
-            let msg = await runtimeMessage(
+            let build = await buildRuntimeMessage(
                 from: chatMessage,
                 deliverMultimodalImages: deliverMultimodalImages,
                 sendsOriginalImagesToAI: sendsOriginalImagesToAI
             )
-            runtimeMessages.append(msg)
+            runtimeMessages.append(build.message)
+            if let flags = build.userTurnFlags {
+                lastUserTurn = LastUserTurnComposition(
+                    index: runtimeMessages.count - 1,
+                    source: flags.source,
+                    alreadyContainsCurrentUserInput: flags.alreadyContainsCurrentUserInput,
+                    hasAttachmentContext: flags.hasAttachmentContext,
+                    hasLocalOCRContext: flags.hasLocalOCRContext
+                )
+            }
         }
-        return runtimeMessages
+        return RuntimeMessagesBuildResult(messages: runtimeMessages, lastUserTurn: lastUserTurn)
     }
 
-    private func runtimeMessage(
+    private struct RuntimeMessageBuild: Sendable {
+        let message: AIRuntimeMessage
+        let userTurnFlags: LastUserTurnFlags?
+    }
+
+    private struct LastUserTurnFlags: Sendable {
+        let source: LastUserTurnSource
+        let alreadyContainsCurrentUserInput: Bool
+        let hasAttachmentContext: Bool
+        let hasLocalOCRContext: Bool
+    }
+
+    private func buildRuntimeMessage(
         from message: ChatMessage,
         deliverMultimodalImages: Bool,
         sendsOriginalImagesToAI: Bool
-    ) async -> AIRuntimeMessage {
+    ) async -> RuntimeMessageBuild {
         let messageText = message.blocks
             .compactMap(\.text)
             .joined(separator: "\n")
@@ -571,6 +665,8 @@ struct ChatOrchestrator: Sendable {
         let messageAttachments = message.blocks
             .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
             .flatMap(\.attachments)
+        let hasAttachmentContext = messageAttachments.isEmpty == false
+        let hasHealthResourceBlocks = message.blocks.contains { $0.kind == .healthResourceReference }
 
         // 多模态模式：从本地缓存读取 JPEG 字节并内联 base64（不向模型发送远端 URL）
         if deliverMultimodalImages, message.role == .user {
@@ -578,19 +674,57 @@ struct ChatOrchestrator: Sendable {
                 from: message,
                 sendsOriginalImagesToAI: sendsOriginalImagesToAI
             ) {
-                return AIRuntimeMessage(role: .user, content: nil, contentParts: parts)
+                return RuntimeMessageBuild(
+                    message: AIRuntimeMessage(role: .user, content: nil, contentParts: parts),
+                    userTurnFlags: LastUserTurnFlags(
+                        source: .directMultimodal,
+                        alreadyContainsCurrentUserInput: messageText.isEmpty == false,
+                        hasAttachmentContext: true,
+                        hasLocalOCRContext: false
+                    )
+                )
             }
         }
 
         // LocalOCR 模式：非多模态但有图片附件时，从附件中提取 OCR 文本拼接
-        if message.role == .user, messageAttachments.isEmpty == false {
-            let enhancedContent = buildLocalOCRContent(from: message)
-            if enhancedContent != messageText {
-                return AIRuntimeMessage(role: .user, content: enhancedContent)
+        if message.role == .user, hasAttachmentContext {
+            let ocrBuild = buildLocalOCRContent(from: message)
+            if ocrBuild.content != messageText {
+                return RuntimeMessageBuild(
+                    message: AIRuntimeMessage(role: .user, content: ocrBuild.content),
+                    userTurnFlags: LastUserTurnFlags(
+                        source: .localOCRAttachmentEnhanced,
+                        alreadyContainsCurrentUserInput: ocrBuild.includesUserInput,
+                        hasAttachmentContext: true,
+                        hasLocalOCRContext: ocrBuild.ocrTextCount > 0
+                    )
+                )
             }
+            return RuntimeMessageBuild(
+                message: AIRuntimeMessage(role: .user, content: messageText),
+                userTurnFlags: LastUserTurnFlags(
+                    source: .unknownEnhanced,
+                    alreadyContainsCurrentUserInput: messageText.isEmpty == false,
+                    hasAttachmentContext: true,
+                    hasLocalOCRContext: false
+                )
+            )
         }
 
-        return AIRuntimeMessage(role: message.role.runtimeRole, content: messageText)
+        let runtime = AIRuntimeMessage(role: message.role.runtimeRole, content: messageText)
+        if message.role == .user {
+            let source: LastUserTurnSource = hasHealthResourceBlocks ? .healthResourceEnhanced : .plainText
+            return RuntimeMessageBuild(
+                message: runtime,
+                userTurnFlags: LastUserTurnFlags(
+                    source: source,
+                    alreadyContainsCurrentUserInput: messageText.isEmpty == false,
+                    hasAttachmentContext: false,
+                    hasLocalOCRContext: false
+                )
+            )
+        }
+        return RuntimeMessageBuild(message: runtime, userTurnFlags: nil)
     }
 
     private func buildMultimodalParts(
@@ -652,8 +786,8 @@ struct ChatOrchestrator: Sendable {
         return parts.count > 1 ? parts : nil
     }
 
-    /// LocalOCR 模式：从附件元数据中提取 OCR 文本，构造增强后的用户内容
-    private func buildLocalOCRContent(from message: ChatMessage) -> String {
+    /// LocalOCR 模式：从附件元数据中提取 OCR 文本，构造增强后的用户内容（结构化结果供组包元数据使用）。
+    private func buildLocalOCRContent(from message: ChatMessage) -> LocalOCRContentBuildResult {
         let userText = message.blocks
             .compactMap(\.text)
             .joined(separator: "\n")
@@ -662,11 +796,20 @@ struct ChatOrchestrator: Sendable {
             .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
             .flatMap(\.attachments)
             .filter { $0.isUserFileForLocalOCR }
-        guard attachments.isEmpty == false else { return userText }
+        guard attachments.isEmpty == false else {
+            return LocalOCRContentBuildResult(
+                content: userText,
+                includesUserInput: userText.isEmpty == false,
+                attachmentCount: 0,
+                ocrTextCount: 0
+            )
+        }
 
         var blocks: [String] = []
+        var ocrTextCount = 0
         for attachment in attachments {
             let ocr = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if ocr.isEmpty == false { ocrTextCount += 1 }
             let fileIdStr = "file_id=\(attachment.fileId.map(String.init) ?? "-")"
             let uuidHint = attachment.sparkClientOSSFileUUIDAndFileName()?.fileUUID ?? "-"
             let fileUUIDStr = "file_uuid=\(uuidHint)"
@@ -695,11 +838,18 @@ struct ChatOrchestrator: Sendable {
             )
         }
         
-        if userText.isEmpty == false {
+        let includesUserInput = userText.isEmpty == false
+        if includesUserInput {
             blocks.append("【用户输入】\n\(userText)")
         }
-        
-        return blocks.isEmpty ? userText : blocks.joined(separator: "\n\n")
+
+        let content = blocks.isEmpty ? userText : blocks.joined(separator: "\n\n")
+        return LocalOCRContentBuildResult(
+            content: content,
+            includesUserInput: includesUserInput,
+            attachmentCount: attachments.count,
+            ocrTextCount: ocrTextCount
+        )
     }
 
     private func filteredToolDefinitions(inference: ChatOrchestratorInferenceOptions) -> [AIRuntimeToolDefinition] {
@@ -998,6 +1148,50 @@ struct ChatOrchestrator: Sendable {
         }
         return localized
     }
+}
+
+// MARK: - Runtime message composition (LocalOCR / outbound merge)
+
+private struct RuntimeMessagesBuildResult: Sendable {
+    var messages: [AIRuntimeMessage]
+    var lastUserTurn: LastUserTurnComposition?
+}
+
+private struct LocalOCRContentBuildResult: Sendable {
+    let content: String
+    let includesUserInput: Bool
+    let attachmentCount: Int
+    let ocrTextCount: Int
+}
+
+private struct LastUserTurnComposition: Sendable {
+    let index: Int
+    let source: LastUserTurnSource
+    let alreadyContainsCurrentUserInput: Bool
+    let hasAttachmentContext: Bool
+    let hasLocalOCRContext: Bool
+
+    /// 合并后是否保留了构造阶段的增强正文（不依赖 `【图片识别】` 等字符串 marker）。
+    var preservedEnhancedContentAfterMerge: Bool {
+        switch source {
+        case .plainText:
+            return false
+        case .localOCRAttachmentEnhanced:
+            return hasLocalOCRContext || hasAttachmentContext
+        case .directMultimodal:
+            return hasAttachmentContext
+        case .healthResourceEnhanced, .unknownEnhanced:
+            return hasAttachmentContext || hasLocalOCRContext || alreadyContainsCurrentUserInput
+        }
+    }
+}
+
+private enum LastUserTurnSource: Sendable {
+    case plainText
+    case localOCRAttachmentEnhanced
+    case directMultimodal
+    case healthResourceEnhanced
+    case unknownEnhanced
 }
 
 /// 模型工具循环策略。

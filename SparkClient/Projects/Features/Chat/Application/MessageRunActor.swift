@@ -129,6 +129,9 @@ actor MessageRunActor: ChatSideEffectSink {
                     )
                 }
             }
+            if didApply, block.kind != .medicalDisclaimerCard {
+                await syncMedicalDisclaimerIfNeeded(assistantClientMessageID: assistantClientMessageID)
+            }
             return didApply
 
         case .toolSideEffect(let effect, let anchorToolCallID, let assistantClientMessageID):
@@ -202,6 +205,8 @@ actor MessageRunActor: ChatSideEffectSink {
                 clientMessageID: assistantClientMessageID,
                 state: .pending
             )
+
+            await syncMedicalDisclaimerIfNeeded(assistantClientMessageID: assistantClientMessageID)
             
             // 7. 清理：消息已定稿，移除运行状态，释放内存
             let messagePrefix = assistantClientMessageID.uuidString + ":"
@@ -471,6 +476,8 @@ actor MessageRunActor: ChatSideEffectSink {
             state: .pending
         )
 
+        await syncMedicalDisclaimerIfNeeded(assistantClientMessageID: assistantClientMessageID)
+
         let messagePrefix = assistantClientMessageID.uuidString + ":"
         runStates.removeValue(forKey: assistantClientMessageID)
         lastAllocatedRevision.removeValue(forKey: assistantClientMessageID)
@@ -718,6 +725,58 @@ actor MessageRunActor: ChatSideEffectSink {
         return await submitRichBlocks([block], assistantClientMessageID: assistantClientMessageID)
     }
 
+    /// 助手消息完全结束后追加免责声明（不在流式回复过程中展示），并保证同消息仅一张且位于最底部。
+    private func syncMedicalDisclaimerIfNeeded(assistantClientMessageID: UUID) async {
+        let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
+        guard let message = messages.first, message.role == .assistant else { return }
+        guard message.deliveryState != .sending else { return }
+        guard ChatMedicalDisclaimerTrigger.shouldAppendDisclaimer(to: message) else { return }
+
+        let blocks = message.blocks
+        let maxOrderKey = blocks.compactMap(\.orderKey).max() ?? 1_000
+        let disclaimerOrderKey = maxOrderKey + 1
+        let now = Date()
+        let stableID = ChatStableBlockID.rich(
+            messageID: assistantClientMessageID,
+            kind: .medicalDisclaimerCard
+        )
+
+        if let existing = blocks.first(where: { $0.kind == .medicalDisclaimerCard }) {
+            guard existing.orderKey != disclaimerOrderKey else { return }
+            let repositioned = existing.replacingIdentity(id: existing.id, orderKey: disclaimerOrderKey)
+                .replacingPayload(
+                    existing.payload,
+                    status: existing.status,
+                    revision: nextRevision(for: assistantClientMessageID),
+                    updatedAt: now
+                )
+            _ = await repository.upsertMessageBlock(
+                clientMessageID: assistantClientMessageID,
+                block: repositioned,
+                markPendingForSync: true
+            )
+            return
+        }
+
+        let payload = ChatMedicalDisclaimerCardPayload.makeStandard()
+        let block = ChatMessageBlock(
+            id: stableID,
+            kind: .medicalDisclaimerCard,
+            nodeRole: .timeline,
+            medicalDisclaimerCard: payload,
+            status: .ready,
+            revision: nextRevision(for: assistantClientMessageID),
+            orderKey: disclaimerOrderKey,
+            createdAt: now,
+            updatedAt: now
+        )
+        _ = await repository.upsertMessageBlock(
+            clientMessageID: assistantClientMessageID,
+            block: block,
+            markPendingForSync: true
+        )
+    }
+
     @discardableResult
     private func publishStructuredHealthCardsReady(
         blob: StructuredHealthCardsBlob,
@@ -817,6 +876,8 @@ actor MessageRunActor: ChatSideEffectSink {
             )
         } else if block.kind == .medicalRiskNotice {
             stableID = ChatStableBlockID.rich(messageID: assistantClientMessageID, kind: .medicalRiskNotice)
+        } else if block.kind == .medicalDisclaimerCard {
+            stableID = ChatStableBlockID.rich(messageID: assistantClientMessageID, kind: .medicalDisclaimerCard)
         } else if let toolCallID = block.toolCallID {
             stableID = ChatStableBlockID.rich(
                 messageID: assistantClientMessageID,
@@ -855,6 +916,8 @@ actor MessageRunActor: ChatSideEffectSink {
             return 2_100
         case .medicalRiskNotice:
             return 2_900
+        case .medicalDisclaimerCard:
+            return 3_100
         default:
             return 3_000
         }

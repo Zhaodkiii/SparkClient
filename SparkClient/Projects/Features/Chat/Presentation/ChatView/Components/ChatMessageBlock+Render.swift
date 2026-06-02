@@ -195,6 +195,13 @@ extension ChatMessageBlock {
         case .medicalRiskNotice(let payload):
             ChatMedicalRiskNoticeCardView(payload: payload)
 
+        case .medicalDisclaimerCard(let payload):
+            if context.message.deliveryState == .sending {
+                EmptyView()
+            } else {
+                ChatMedicalDisclaimerCardView(payload: payload)
+            }
+
         }
         }
     }

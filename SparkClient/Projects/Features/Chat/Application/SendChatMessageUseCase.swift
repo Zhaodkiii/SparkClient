@@ -392,6 +392,8 @@ struct SendChatMessageUseCase: Sendable {
                 )
             }
 
+            // userQuestionForAI 为本轮纯文本/问报告前缀问题；最终 provider user.content 由 ChatOrchestrator
+            // 基于消息块、附件 OCR 与健康上下文合成，勿假定与网关 body 一致。
             // MARK: 核心：调用AI编排器生成回复（流式）
             let output = try await orchestrator.generateReply(
                 userInput: userQuestionForAI,

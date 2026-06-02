@@ -76,6 +76,8 @@ struct ChatWorkoutVisualizationMessageCard: View {
                     }
                 }
             }
+
+            HealthKitDataSourceAttribution()
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

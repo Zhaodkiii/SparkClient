@@ -1352,6 +1352,8 @@ actor CoreDataChatStore {
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards:
             return true
+        case .medicalDisclaimerCard:
+            return false
         default:
             return false
         }
@@ -1499,7 +1501,7 @@ actor CoreDataChatStore {
 
     private static func shouldPreserveLocalBlockOnRemoteMerge(_ block: ChatMessageBlock?) -> Bool {
         guard let block else { return false }
-        if block.kind == .healthResourceReference {
+        if block.kind == .healthResourceReference || block.kind == .medicalDisclaimerCard {
             return true
         }
         guard block.nodeRole == .toolPresentation else { return false }
@@ -1518,13 +1520,14 @@ actor CoreDataChatStore {
         local: [ChatMessageBlock],
         remote: [ChatMessageBlock]
     ) -> [ChatMessageBlock] {
-        let remoteHealthIDs = Set(
+        let remotePreservedIDs = Set(
             remote
-                .filter { $0.kind == .healthResourceReference }
+                .filter { $0.kind == .healthResourceReference || $0.kind == .medicalDisclaimerCard }
                 .map(\.id)
         )
         let preserved = local.filter { block in
-            block.kind == .healthResourceReference && remoteHealthIDs.contains(block.id) == false
+            (block.kind == .healthResourceReference || block.kind == .medicalDisclaimerCard)
+                && remotePreservedIDs.contains(block.id) == false
         }
         guard preserved.isEmpty == false else { return remote }
         return sortBlocksByOrderKey(remote + preserved)

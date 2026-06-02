@@ -106,6 +106,7 @@ struct ChatHealthCardListView: View {
                         .fill(Color(uiColor: .tertiarySystemFill))
                 )
             }
+            HealthKitDataSourceAttribution()
         }
     }
 

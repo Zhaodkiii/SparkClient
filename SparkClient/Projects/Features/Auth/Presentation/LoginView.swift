@@ -1,5 +1,6 @@
 import AuthenticationServices
 import SwiftUI
+import UIKit
 
 struct LoginView: View {
     @ObservedObject var viewModel: LoginViewModel
@@ -8,12 +9,22 @@ struct LoginView: View {
     @State private var showPhoneLogin = false
     @State private var tapCount = 0
     @State private var lastTapTime: Date?
+    @State private var legalURL: URL?
+    @State private var hasAgreedToLegal = false
+    @State private var legalAgreementShakeTrigger = 0
+    @State private var showsLegalValidationHighlight = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 headerCluster
                 actionButtons
+                LoginLegalAgreementNote(
+                    hasAgreed: $hasAgreedToLegal,
+                    legalURL: $legalURL,
+                    shakeTrigger: legalAgreementShakeTrigger,
+                    showsValidationHighlight: showsLegalValidationHighlight
+                )
                 safetyCard
 
                 if let errorMessage = viewModel.errorMessage {
@@ -50,6 +61,23 @@ struct LoginView: View {
                     .scaleEffect(1.5)
             }
         }
+        .sheet(item: Binding(
+            get: { legalURL.map(IdentifiableURL.init(url:)) },
+            set: { legalURL = $0?.url }
+        )) { item in
+            SafariWebViewSheet(url: item.url)
+        }
+        .onChange(of: hasAgreedToLegal) { agreed in
+            if agreed {
+                showsLegalValidationHighlight = false
+            }
+        }
+    }
+
+    private func requireLegalAgreementBeforeLogin() {
+        legalAgreementShakeTrigger += 1
+        showsLegalValidationHighlight = true
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
 
     private var headerCluster: some View {
@@ -89,21 +117,35 @@ struct LoginView: View {
 
     private var actionButtons: some View {
         VStack(spacing: 14) {
-            SignInWithAppleButton(
-                .signIn,
-                onRequest: { request in
-                    viewModel.prepareAppleRequest(request)
-                },
-                onCompletion: { result in
-                    Task {
-                        await viewModel.signInWithApple(result: result)
+            ZStack {
+                SignInWithAppleButton(
+                    .signIn,
+                    onRequest: { request in
+                        viewModel.prepareAppleRequest(request)
+                    },
+                    onCompletion: { result in
+                        Task {
+                            await viewModel.signInWithApple(result: result)
+                        }
                     }
+                )
+                .signInWithAppleButtonStyle(.black)
+                .frame(maxWidth: 375)
+                .frame(height: 48)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .opacity(hasAgreedToLegal ? 1 : 0.55)
+                .allowsHitTesting(hasAgreedToLegal)
+
+                if hasAgreedToLegal == false {
+                    Color.clear
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            requireLegalAgreementBeforeLogin()
+                        }
+                        .accessibilityLabel(L10n.text("auth.login.legal.must_agree_hint"))
                 }
-            )
-            .signInWithAppleButtonStyle(.black)
-            .frame(maxWidth: 375)
-            .frame(height: 48)
-            .frame(maxWidth: .infinity, alignment: .center)
+            }
 
             if showPhoneLogin {
                 HStack {
@@ -117,7 +159,11 @@ struct LoginView: View {
                 .padding(.vertical, 6)
 
                 Button {
-                    goPhone = true
+                    if hasAgreedToLegal {
+                        goPhone = true
+                    } else {
+                        requireLegalAgreementBeforeLogin()
+                    }
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "phone").font(.body)
