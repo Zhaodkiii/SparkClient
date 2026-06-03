@@ -22,7 +22,6 @@ enum AppEnvironment: String, CaseIterable, Sendable {
 //            return URL(string: "https://api.dreamhua.top")!
 
             return URL(string: "http://175.178.12.93:2026")! //192.168.31.140 // localhost //172.20.10.2 //192.168.31.39  //172.169.8.88 // 192.168.31.128  // 192.168.31.38 //192.168.31.210
-//            return URL(string: "https://api.dreamhua.top")! //192.168.31.140 // localhost //172.20.10.2 //192.168.31.39  //172.169.8.88 // 192.168.31.128  // 192.168.31.38 //192.168.31.192
         case .staging:
             return URL(string: "https://api.dreamhua.top")!
         case .production:
@@ -67,7 +66,7 @@ enum AppEnvironment: String, CaseIterable, Sendable {
     var logLevel: LogLevel {
         switch self {
         case .debug, .staging:
-            return .debug
+            return .verbose
         case .production:
             return .error
         }
