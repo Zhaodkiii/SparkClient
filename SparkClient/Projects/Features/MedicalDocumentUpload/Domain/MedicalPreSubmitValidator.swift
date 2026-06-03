@@ -237,6 +237,7 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
             ))
         }
 
+        let reportCategory = ExaminationReportCategory.from(report.category)
         for (detailIndex, detail) in report.details.enumerated() {
             if MedicalPreSubmitValidationRules.isBlank(detail.itemName) {
                 issues.append(issue(
@@ -252,7 +253,9 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
                     cardIndex: index
                 ))
             }
-            if MedicalPreSubmitValidationRules.isBlank(detail.resultValue) {
+            // 实验室检查子项需填写结果数值；影像/病理结论在 diagnosis，不校验 resultValue。
+            if reportCategory == .laboratory,
+               MedicalPreSubmitValidationRules.isBlank(detail.resultValue) {
                 issues.append(issue(
                     resourceType: .examinationReport,
                     fieldPath: "examination_reports[\(index)].details[\(detailIndex)].result_value",

@@ -6,7 +6,7 @@ enum OnboardingStep: Int, CaseIterable, Codable, Equatable, Sendable {
     case agent = 2
     case start = 3
 
-    static let activeSteps: [OnboardingStep] = [.welcome, .profile, .agent, .start]
+    static let activeSteps: [OnboardingStep] = [.welcome, .profile, /*.agent,*/ .start]
 
     var isSkippable: Bool {
         switch self {

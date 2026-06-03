@@ -74,12 +74,12 @@ struct AddFamilyMemberView: View {
         case .create, .bind, .acceptInvite:
             _name = State(initialValue: "")
             _relationshipCode = State(initialValue: MemberRelationshipCatalog.defaultCode)
-            _gender = State(initialValue: MemberRelationshipCatalog.defaultGender)
+            _gender = State(initialValue: MemberRelationshipCatalog.unsetGender)
             _birthDate = State(initialValue: nil)
         case .edit(let member):
             _name = State(initialValue: member.name)
             _relationshipCode = State(initialValue: MemberRelationshipCatalog.compatibleCode(from: member.relationship))
-            _gender = State(initialValue: member.gender)
+            _gender = State(initialValue: MemberRelationshipCatalog.editableGender(from: member.gender))
             _birthDate = State(initialValue: member.birthDate)
         }
     }
@@ -107,7 +107,9 @@ struct AddFamilyMemberView: View {
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && birthDate != nil
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && birthDate != nil
+            && MemberRelationshipCatalog.isSelectableGender(gender)
     }
 
     var body: some View {
@@ -499,6 +501,8 @@ struct AddFamilyMemberView: View {
                                 relationshipCode = code
                                 if let inferredGender = option.inferredGender {
                                     gender = inferredGender
+                                } else {
+                                    gender = MemberRelationshipCatalog.unsetGender
                                 }
                                 triggerHaptic(style: .light)
                             }
@@ -532,7 +536,6 @@ struct AddFamilyMemberView: View {
             HStack(spacing: 12) {
                 genderChip(title: L10n.text("home.members.gender.male"), value: "male")
                 genderChip(title: L10n.text("home.members.gender.female"), value: "female")
-                genderChip(title: L10n.text("home.members.gender.unknown"), value: "unknown")
             }
         }
     }
@@ -714,7 +717,21 @@ enum MemberRelationshipCatalog {
     }
 
     static let defaultCode = "self"
-    static let defaultGender = "unknown"
+    /// 未选择性别（本人等需用户手动勾选）。
+    static let unsetGender = ""
+
+    static func isSelectableGender(_ gender: String) -> Bool {
+        switch gender.lowercased() {
+        case "male", "female":
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func editableGender(from stored: String) -> String {
+        isSelectableGender(stored) ? stored.lowercased() : unsetGender
+    }
 
     static let rows: [[String]] = [
         ["father", "mother", "husband", "wife"],
