@@ -69,7 +69,7 @@ struct URLSessionNetworkTransport: SparkNetworkTransport {
                 ),
                 module: .network
             )
-            logger.info(
+            logger.verbose(
                 SparkNetworkingStrings.HTTPClient.inboundRaw(
                     method: method,
                     url: urlForLog,

@@ -108,6 +108,7 @@ enum SparkLogger {
 
 /// 轻量日志协议；每条日志单行，模块使用 `LogModule`。
 nonisolated protocol Logger: Sendable {
+    nonisolated func verbose(_ message: String, module: LogModule)
     nonisolated func debug(_ message: String, module: LogModule)
     nonisolated func info(_ message: String, module: LogModule)
     nonisolated func warning(_ message: String, module: LogModule)
@@ -115,6 +116,10 @@ nonisolated protocol Logger: Sendable {
 }
 
 nonisolated extension Logger {
+    func verbose(_ message: String) {
+        verbose(message, module: .general)
+    }
+
     func debug(_ message: String) {
         debug(message, module: .general)
     }
@@ -133,6 +138,10 @@ nonisolated extension Logger {
 }
 
 nonisolated struct ConsoleLogger: Logger {
+    nonisolated func verbose(_ message: String, module: LogModule) {
+        SparkLogger.log(level: .verbose, module: module, message: message)
+    }
+
     nonisolated func debug(_ message: String, module: LogModule) {
         SparkLogger.log(level: .debug, module: module, message: message)
     }

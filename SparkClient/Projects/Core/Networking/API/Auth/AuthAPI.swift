@@ -255,6 +255,28 @@ struct SparkAuthAPI {
         let signInMethod: String?
     }
 
+    func logout() async throws {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Auth.Logout",
+            apiName: "AuthAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/auth/logout/",
+                headers: [:],
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "auth.logout",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+        _ = try await configuration.execute(operation)
+        configuration.logger.info("认证：服务端登出成功", module: .auth)
+    }
+
     func fetchCurrentSession() async throws -> CurrentSessionResult {
         let operation = CacheableSparkNetworkOperation(
             name: "Auth.CurrentSession",

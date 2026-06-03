@@ -1,16 +1,19 @@
 import Foundation
 import Security
 
-/// Spark 安装级设备 ID：与 HealthClient 一致，使用 Keychain 持久化 UUID（账户名与 HealthClient 区分以免同机冲突）。
+/// Spark 安装级设备 ID：与 HealthClient 共用同一 Keychain item，升级后 device_id 连续。
 ///
-/// HealthClient 参考：`Health/HealthClient/HealthClient/Core/Storage/Keychain.getOrCreateDeviceID()`。
+/// Keychain：`service = com.dreamhealth.healthclient`，`account = device_unique_id`。
+/// 参考：`Health/HealthClient/HealthClient/Core/Storage/Keychain.getOrCreateDeviceID()`。
 enum SparkKeychain {
-    private static let deviceIDAccount = "spark_client_device_unique_id"
+    private static let service = "com.dreamhealth.healthclient"
+    private static let deviceIDAccount = "device_unique_id"
 
     static func getOrCreateDeviceID() -> String {
-        if let existing = load(account: deviceIDAccount) {
-            return existing
+        if let existingID = load(account: deviceIDAccount) {
+            return existingID
         }
+
         let newID = UUID().uuidString
         do {
             try save(newID, account: deviceIDAccount)
@@ -22,7 +25,7 @@ enum SparkKeychain {
             SparkLogger.log(
                 level: .warning,
                 module: .general,
-                message: "Keychain 保存安装级 device_id 失败，本次进程仍使用内存 UUID（下次冷启动会重试）。domain=\(ns.domain) code=\(ns.code)"
+                message: "Keychain 保存 HealthClient 兼容 device_id 失败，本次进程仍使用内存 UUID（下次冷启动会重试）。domain=\(ns.domain) code=\(ns.code)"
             )
         }
         return newID
@@ -32,9 +35,10 @@ enum SparkKeychain {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecValueData as String: data,
         ]
         SecItemDelete(query as CFDictionary)
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -46,6 +50,7 @@ enum SparkKeychain {
     private static func load(account: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,

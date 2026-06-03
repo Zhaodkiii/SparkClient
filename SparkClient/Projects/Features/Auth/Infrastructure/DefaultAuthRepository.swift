@@ -49,7 +49,7 @@ final class DefaultAuthRepository: AuthRepository {
                     module: .auth
                 )
                 await backend.tokenProvider().clearTokens()
-                backend.deviceCache.clearDeviceMetadata()
+                backend.deviceCache.clearAuthenticatedDeviceState()
                 await snapshotStore.clear()
                 AuthSessionInvalidation.postIfNeeded(
                     statusCode: 401,
@@ -64,7 +64,7 @@ final class DefaultAuthRepository: AuthRepository {
                     module: .auth
                 )
                 await backend.tokenProvider().clearTokens()
-                backend.deviceCache.clearDeviceMetadata()
+                backend.deviceCache.clearAuthenticatedDeviceState()
                 await snapshotStore.clear()
                 AuthSessionInvalidation.postIfNeeded(
                     statusCode: 401,
@@ -101,7 +101,7 @@ final class DefaultAuthRepository: AuthRepository {
                     module: .auth
                 )
                 await backend.tokenProvider().clearTokens()
-                backend.deviceCache.clearDeviceMetadata()
+                backend.deviceCache.clearAuthenticatedDeviceState()
                 await snapshotStore.clear()
                 return nil
             }
@@ -161,6 +161,7 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         try await snapshotStore.save(session)
+        backend.deviceCache.cacheLastLoggedInAccountID(session.accountID)
         await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "apple")
         logger.info("用户已通过 Apple 登录，session 已保存 accountID=\(session.accountID) 令牌类型=\(context.tokens.tokenType)", module: .auth)
         return session
@@ -212,17 +213,23 @@ final class DefaultAuthRepository: AuthRepository {
         )
 
         try await snapshotStore.save(session)
+        backend.deviceCache.cacheLastLoggedInAccountID(session.accountID)
         await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "phone")
         logger.info("用户已通过手机号验证码登录，session 已保存 accountID=\(session.accountID)", module: .auth)
         return session
     }
 
     func signOut() async throws {
-        logger.info("认证仓储：开始登出，将清除 Keychain token 与 SessionSnapshot", module: .auth)
+        logger.info("认证仓储：开始登出，将通知服务端并清除 Keychain token 与 SessionSnapshot", module: .auth)
+        do {
+            try await backend.auth.logout()
+        } catch {
+            logger.warning("认证仓储：服务端登出失败（继续清理本地会话）：\(error.localizedDescription)", module: .auth)
+        }
         await backend.tokenProvider().clearTokens()
-        backend.deviceCache.clearDeviceMetadata()
+        backend.deviceCache.clearAuthenticatedDeviceState()
         await snapshotStore.clear()
-        logger.info("用户已登出", module: .auth)
+        logger.info("用户已登出（保留 lastLoggedInAccountID）", module: .auth)
     }
 
     /// 登录/刷新写快照后立即读回，便于发现 save 失败或读写时序问题。

@@ -14,6 +14,8 @@ final class LoginViewModel: ObservableObject {
     private let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     private let sessionStore: AppSessionStore
     private let notificationClient: any NotificationClient
+    private let onBeginAccountSwitch: () async -> Void
+    private let onEndAccountSwitch: (_ commit: Bool) async -> Void
     private let logger: Logger = ConsoleLogger()
     private var currentNonce: String?
 
@@ -24,13 +26,27 @@ final class LoginViewModel: ObservableObject {
         requestPhoneOTPUseCase: RequestPhoneOTPUseCase,
         signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase,
         sessionStore: AppSessionStore,
-        notificationClient: any NotificationClient
+        notificationClient: any NotificationClient,
+        onBeginAccountSwitch: @escaping () async -> Void = {},
+        onEndAccountSwitch: @escaping (_ commit: Bool) async -> Void = { _ in }
     ) {
         self.signInWithAppleUseCase = signInWithAppleUseCase
         self.requestPhoneOTPUseCase = requestPhoneOTPUseCase
         self.signInWithPhoneOTPUseCase = signInWithPhoneOTPUseCase
         self.sessionStore = sessionStore
         self.notificationClient = notificationClient
+        self.onBeginAccountSwitch = onBeginAccountSwitch
+        self.onEndAccountSwitch = onEndAccountSwitch
+    }
+
+    private func prepareAccountSwitchIfNeeded() async {
+        if case .signedIn = sessionStore.state {
+            await onBeginAccountSwitch()
+        }
+    }
+
+    private func finishAccountSwitch(commit: Bool) async {
+        await onEndAccountSwitch(commit)
     }
 
     func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
@@ -44,6 +60,7 @@ final class LoginViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        var accountSwitchStarted = false
         do {
             let authorization = try result.get()
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
@@ -52,7 +69,13 @@ final class LoginViewModel: ObservableObject {
 
             let payload = try makePayload(from: credential)
             logger.info("登录流程：Apple credential 已生成 payload，开始执行登录用例", module: .auth)
+            if case .signedIn = sessionStore.state {
+                await prepareAccountSwitchIfNeeded()
+                accountSwitchStarted = true
+            }
             let session = try await signInWithAppleUseCase.execute(payload: payload)
+            await finishAccountSwitch(commit: true)
+            accountSwitchStarted = false
             logger.info("登录流程：Apple 登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
             sessionStore.setAuthenticated(session)
             logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
@@ -61,6 +84,9 @@ final class LoginViewModel: ObservableObject {
                 source: notificationSource
             )
         } catch {
+            if accountSwitchStarted {
+                await finishAccountSwitch(commit: false)
+            }
             if AuthUserFacingErrorMapper.isAppleSignInCancelled(error) {
                 logger.info("登录流程：用户取消 Apple 登录", module: .auth)
                 notificationClient.info(
@@ -98,12 +124,19 @@ final class LoginViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        var accountSwitchStarted = false
         do {
+            if case .signedIn = sessionStore.state {
+                await prepareAccountSwitchIfNeeded()
+                accountSwitchStarted = true
+            }
             let session = try await signInWithPhoneOTPUseCase.execute(
                 phoneNumber: phoneNumber,
                 verificationCode: verificationCode,
                 otpID: otpId
             )
+            await finishAccountSwitch(commit: true)
+            accountSwitchStarted = false
             logger.info("登录流程：手机号登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
             sessionStore.setAuthenticated(session)
             logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
@@ -112,6 +145,9 @@ final class LoginViewModel: ObservableObject {
                 source: notificationSource
             )
         } catch {
+            if accountSwitchStarted {
+                await finishAccountSwitch(commit: false)
+            }
             let message = AuthUserFacingErrorMapper.message(for: error, scenario: .phoneOTPLogin)
             logger.error("登录流程：手机号登录失败 error=\(message)", module: .auth)
             notifyFailure(message: message, error: error)

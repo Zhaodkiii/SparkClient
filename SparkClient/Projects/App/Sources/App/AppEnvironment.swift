@@ -67,7 +67,7 @@ enum AppEnvironment: String, CaseIterable, Sendable {
     var logLevel: LogLevel {
         switch self {
         case .debug, .staging:
-            return .verbose
+            return .debug
         case .production:
             return .error
         }

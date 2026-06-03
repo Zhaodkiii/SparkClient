@@ -182,6 +182,10 @@ extension AppAssembly {
             ossAPI: backend.oss,
             requestDeviceRegistration: { reason in
                 await notification.deviceRegistrationCoordinator.requestRegister(reason: reason)
+                if reason == .signedInBootstrap {
+                    return !notification.deviceRegistrationCoordinator.shouldHaltSignedInBootstrap
+                }
+                return true
             },
             onResetDeviceRegistration: {
                 notification.deviceRegistrationCoordinator.reset()

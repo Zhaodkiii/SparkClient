@@ -48,8 +48,14 @@ final class DeviceRegistrationCoordinator {
     private var apnsWaitTask: Task<Void, Never>?
     private var isAwaitingUserAuthorizationApnsToken = false
     private var isSubmissionSuspended = false
+    private var lastFlushOutcome: RegisterDeviceOutcome?
 
     private var authInvalidationObserver: NSObjectProtocol?
+
+    /// signedInBootstrap 登记若触发鉴权失效，账号引导应中止后续 AI/OSS/Task 请求。
+    var shouldHaltSignedInBootstrap: Bool {
+        isSubmissionSuspended || lastFlushOutcome == .authSessionInvalidated
+    }
 
     /// 冷启动/登录引导等待 APNs token（纳秒）。
     private let bootstrapApnsWaitWindowNs: UInt64 = 1_500_000_000
@@ -116,9 +122,14 @@ final class DeviceRegistrationCoordinator {
     /// App 冷启动（未登录）或登录后账号引导：写入意图并由协调器统一 flush（含 APNs 短等待）。
     func requestRegister(reason: DeviceRegistrationReason) async {
         guard !isSubmissionSuspended else { return }
+        lastFlushOutcome = nil
         pendingReasons.insert(reason)
         rebuildPendingBaseSnapshot()
-        await scheduleFlushAfterResolvingNotifications(apnsWaitWindowNs: bootstrapApnsWaitWindowNs)
+        let blockUntilFlush = reason == .signedInBootstrap
+        await scheduleFlushAfterResolvingNotifications(
+            apnsWaitWindowNs: bootstrapApnsWaitWindowNs,
+            blockUntilFlush: blockUntilFlush
+        )
     }
 
     /// 用户主动改变系统通知权限（设置页或应用内弹窗）。由协调器统一触发 APNs 注册。
@@ -212,10 +223,12 @@ final class DeviceRegistrationCoordinator {
     // MARK: - Private
 
     private func rebuildPendingBaseSnapshot() {
+        let signedInAccountID = currentUserID()
         pendingState = DeviceRegistrationState.baseSnapshot(
-            accountID: currentUserID(),
+            accountID: signedInAccountID ?? deviceCache.lastLoggedInAccountID,
             systemInfo: systemInfo
         )
+        pendingState?.isAuthenticated = signedInAccountID != nil
     }
 
     private func ensurePendingSnapshot() {
@@ -228,12 +241,16 @@ final class DeviceRegistrationCoordinator {
         pendingReasons.contains(.appLaunch) || pendingReasons.contains(.signedInBootstrap)
     }
 
+    private var effectiveRegistrationAccountID: Int? {
+        currentUserID() ?? deviceCache.lastLoggedInAccountID
+    }
+
     private func hasForegroundRegistrationDelta(statusRaw: Int) -> Bool {
         let tokenHash = latestApnsTokenHex.map { DeviceRegistrationSubmittedSnapshot.hashPushToken(.value($0)) } ?? nil
         let snapshot = deviceCache.lastDeviceRegistrationSnapshot
 
         if let snapshot {
-            let accountID = currentUserID()
+            let accountID = effectiveRegistrationAccountID
             if snapshot.accountID != accountID { return true }
             if snapshot.bundleID != systemInfo.bundleIdentifier { return true }
             if snapshot.deviceID != systemInfo.installationDeviceID { return true }
@@ -259,7 +276,10 @@ final class DeviceRegistrationCoordinator {
         return authChanged || tokenChanged
     }
 
-    private func scheduleFlushAfterResolvingNotifications(apnsWaitWindowNs: UInt64) async {
+    private func scheduleFlushAfterResolvingNotifications(
+        apnsWaitWindowNs: UInt64,
+        blockUntilFlush: Bool = false
+    ) async {
         let status = await notificationEnvironment.authorizationStatus()
         applyNotificationFields(for: status)
 
@@ -273,7 +293,8 @@ final class DeviceRegistrationCoordinator {
             notificationEnvironment.registerForRemoteNotifications()
             await scheduleApnsWaitThenFlush(
                 waitNs: apnsWaitWindowNs,
-                allowFlushWithoutToken: true
+                allowFlushWithoutToken: true,
+                blockUntilFlush: blockUntilFlush
             )
             return
         }
@@ -303,30 +324,42 @@ final class DeviceRegistrationCoordinator {
         }
     }
 
-    private func scheduleApnsWaitThenFlush(waitNs: UInt64, allowFlushWithoutToken: Bool = true) async {
+    private func scheduleApnsWaitThenFlush(
+        waitNs: UInt64,
+        allowFlushWithoutToken: Bool = true,
+        blockUntilFlush: Bool = false
+    ) async {
         cancelApnsWait()
+        if blockUntilFlush {
+            await runApnsWaitThenFlush(waitNs: waitNs, allowFlushWithoutToken: allowFlushWithoutToken)
+            return
+        }
         apnsWaitTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(nanoseconds: waitNs)
-            guard !Task.isCancelled, !self.isSubmissionSuspended else { return }
+            await self.runApnsWaitThenFlush(waitNs: waitNs, allowFlushWithoutToken: allowFlushWithoutToken)
             self.apnsWaitTask = nil
-            if let hex = self.latestApnsTokenHex {
-                self.pendingState?.pushToken = .value(hex)
-                self.pendingState?.notificationsEnabled = true
-                await self.flushIfNeeded()
-                return
-            }
-            guard allowFlushWithoutToken else {
-                self.logger.debug(
-                    "设备登记继续等待 APNs token，冷启动阶段不上送无 token 状态",
-                    module: .network
-                )
-                return
-            }
-            self.pendingState?.notificationsEnabled = true
-            self.pendingState?.pushToken = .unknown
-            await self.flushIfNeeded()
         }
+    }
+
+    private func runApnsWaitThenFlush(waitNs: UInt64, allowFlushWithoutToken: Bool) async {
+        try? await Task.sleep(nanoseconds: waitNs)
+        guard !Task.isCancelled, !isSubmissionSuspended else { return }
+        if let hex = latestApnsTokenHex {
+            pendingState?.pushToken = .value(hex)
+            pendingState?.notificationsEnabled = true
+            await flushIfNeeded()
+            return
+        }
+        guard allowFlushWithoutToken else {
+            logger.debug(
+                "设备登记继续等待 APNs token，冷启动阶段不上送无 token 状态",
+                module: .network
+            )
+            return
+        }
+        pendingState?.notificationsEnabled = true
+        pendingState?.pushToken = .unknown
+        await flushIfNeeded()
     }
 
     private func cancelApnsWait() {
@@ -359,9 +392,13 @@ final class DeviceRegistrationCoordinator {
         )
 
         let outcome = await registerDevice.execute(state: state)
+        lastFlushOutcome = outcome
         switch outcome {
         case .succeeded:
             lastSubmittedState = state
+            if let accountID = state.accountID {
+                deviceCache.cacheLastLoggedInAccountID(accountID)
+            }
             let statusRaw = await notificationEnvironment.authorizationStatus().rawValue
             cachedAuthorizationStatusRaw = statusRaw
             let snapshot = DeviceRegistrationSubmittedSnapshot.from(

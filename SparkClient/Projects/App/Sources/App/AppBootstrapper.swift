@@ -8,7 +8,8 @@ final class AppBootstrapper {
     private let ossConfigurationStore: SparkOSSConfigurationStore
     private let ossAPI: SparkOSSAPI
     private let logger: Logger
-    private let requestDeviceRegistration: (DeviceRegistrationReason) async -> Void
+    /// 返回 true 表示可继续账号级引导（设备登记未触发鉴权失效）。
+    private let requestDeviceRegistration: (DeviceRegistrationReason) async -> Bool
     private let onResetDeviceRegistration: () -> Void
 
     private var didBootstrapLaunch = false
@@ -20,7 +21,7 @@ final class AppBootstrapper {
         chatSyncSupervisor: ChatSyncSupervisor? = nil,
         ossConfigurationStore: SparkOSSConfigurationStore,
         ossAPI: SparkOSSAPI,
-        requestDeviceRegistration: @escaping (DeviceRegistrationReason) async -> Void = { _ in },
+        requestDeviceRegistration: @escaping (DeviceRegistrationReason) async -> Bool = { _ in true },
         onResetDeviceRegistration: @escaping () -> Void = {},
         logger: Logger = ConsoleLogger()
     ) {
@@ -58,7 +59,13 @@ final class AppBootstrapper {
     func bootstrapIfNeeded(for session: UserSession) async {
         guard bootstrappedAccounts.contains(session.accountID) == false else { return }
 
-        await requestDeviceRegistration(.signedInBootstrap)
+        guard await requestDeviceRegistration(.signedInBootstrap) else {
+            logger.warning(
+                "用户档案 \(session.accountID) 引导中止：设备登记鉴权失效，跳过后续账号级请求",
+                module: .general
+            )
+            return
+        }
 
         do {
             await aiConfigCenter.prewarm(ownerAccountID: session.accountID)

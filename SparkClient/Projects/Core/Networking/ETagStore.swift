@@ -145,7 +145,7 @@ struct ETagHTTPInterceptor: Sendable {
         if httpResponse.statusCode == 304 {
             if let cached = store.cachedBody(forKey: cacheKey) {
                 let presentation = JSONPayloadFormatting.prettyUTF8StringForLog(from: cached)
-                logger.info(
+                logger.verbose(
                     SparkNetworkingStrings.ETag.merged304FullPayload(
                         path: request.path,
                         cacheKey: cacheKey,

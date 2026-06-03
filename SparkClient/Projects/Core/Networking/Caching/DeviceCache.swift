@@ -9,6 +9,7 @@ final class DeviceCache: @unchecked Sendable {
     private enum Keys {
         static let currentUserID = "spark.device_cache.current_user_id"
         static let trustedDeviceID = "spark.device_cache.trusted_device_id"
+        static let lastLoggedInAccountID = "spark.device_cache.last_logged_in_account_id"
         static let logLevel = "spark.device_cache.log_level"
         static let registrationSubmittedSnapshot = "spark.device_cache.registration_submitted_snapshot"
     }
@@ -20,6 +21,7 @@ final class DeviceCache: @unchecked Sendable {
 
     private let cachedCurrentUserID: Atomic<String?>
     private let cachedTrustedDeviceID: Atomic<String?>
+    private let cachedLastLoggedInAccountID: Atomic<String?>
     private let cachedLogLevel: Atomic<LogLevel?>
 
     init(
@@ -41,6 +43,7 @@ final class DeviceCache: @unchecked Sendable {
 
         self.cachedCurrentUserID = Atomic(userDefaults.string(forKey: Keys.currentUserID))
         self.cachedTrustedDeviceID = Atomic(userDefaults.string(forKey: Keys.trustedDeviceID))
+        self.cachedLastLoggedInAccountID = Atomic(userDefaults.string(forKey: Keys.lastLoggedInAccountID))
 
         if let storedLevelRaw = userDefaults.object(forKey: Keys.logLevel) as? Int,
            let level = LogLevel(rawValue: storedLevelRaw) {
@@ -53,6 +56,7 @@ final class DeviceCache: @unchecked Sendable {
     var currentUserID: String? { cachedCurrentUserID.value }
     var currentUserIDInt: Int? { cachedCurrentUserID.value.flatMap(Int.init) }
     var trustedDeviceID: String? { cachedTrustedDeviceID.value }
+    var lastLoggedInAccountID: Int? { cachedLastLoggedInAccountID.value.flatMap(Int.init) }
     var persistedLogLevel: LogLevel? { cachedLogLevel.value }
 
     func cache(currentUserID: String) {
@@ -69,6 +73,17 @@ final class DeviceCache: @unchecked Sendable {
         userDefaults.set(trustedDeviceID, forKey: Keys.trustedDeviceID)
         cachedTrustedDeviceID.value = trustedDeviceID
         logger.debug("已缓存可信设备 ID=\(trustedDeviceID)", module: .cache)
+    }
+
+    func cacheLastLoggedInAccountID(_ accountID: Int64) {
+        let value = String(accountID)
+        userDefaults.set(value, forKey: Keys.lastLoggedInAccountID)
+        cachedLastLoggedInAccountID.value = value
+        logger.debug("已缓存上次登录账号 ID=\(accountID)", module: .cache)
+    }
+
+    func cacheLastLoggedInAccountID(_ accountID: Int) {
+        cacheLastLoggedInAccountID(Int64(accountID))
     }
 
     func cache(logLevel: LogLevel) {
@@ -94,7 +109,8 @@ final class DeviceCache: @unchecked Sendable {
         userDefaults.removeObject(forKey: Keys.registrationSubmittedSnapshot)
     }
 
-    func clearDeviceMetadata() {
+    /// 登出/鉴权失效：清理当前会话相关设备缓存，保留 `lastLoggedInAccountID`（APP-STARTUP-000009）。
+    func clearAuthenticatedDeviceState() {
         userDefaults.removeObject(forKey: Keys.currentUserID)
         userDefaults.removeObject(forKey: Keys.trustedDeviceID)
         userDefaults.removeObject(forKey: Keys.registrationSubmittedSnapshot)
@@ -102,8 +118,14 @@ final class DeviceCache: @unchecked Sendable {
         cachedTrustedDeviceID.value = nil
     }
 
+    func clearDeviceMetadata() {
+        clearAuthenticatedDeviceState()
+    }
+
     func clearAllCaches() {
-        clearDeviceMetadata()
+        clearAuthenticatedDeviceState()
+        userDefaults.removeObject(forKey: Keys.lastLoggedInAccountID)
+        cachedLastLoggedInAccountID.value = nil
         userDefaults.removeObject(forKey: Keys.logLevel)
         cachedLogLevel.value = nil
 

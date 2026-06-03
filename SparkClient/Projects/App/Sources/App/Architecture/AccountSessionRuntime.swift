@@ -20,7 +20,10 @@ final class AccountSessionRuntime {
     private let aiConfigCenter: AIConfigCenter
     private let logger: Logger
     private let clearSessionScopedViewModels: () -> Void
+    private let chatSyncSupervisorForResume: ChatSyncSupervisor?
     private var mode: Mode?
+    private(set) var isAccountSwitchInProgress = false
+    private var suspendedAccountIDForSwitch: Int64?
 
     init(
         routeCoordinator: RouteCoordinator,
@@ -32,7 +35,8 @@ final class AccountSessionRuntime {
         knowledgeViewModel: KnowledgeLibraryViewModel,
         aiConfigCenter: AIConfigCenter,
         logger: Logger,
-        clearSessionScopedViewModels: @escaping () -> Void
+        clearSessionScopedViewModels: @escaping () -> Void,
+        chatSyncSupervisorForResume: ChatSyncSupervisor? = nil
     ) {
         self.routeCoordinator = routeCoordinator
         self.storageRegistry = storageRegistry
@@ -40,10 +44,43 @@ final class AccountSessionRuntime {
         self.chatStateStore = chatStateStore
         self.chatListViewModel = chatListViewModel
         self.chatSyncSupervisor = chatSyncSupervisor
+        self.chatSyncSupervisorForResume = chatSyncSupervisorForResume ?? chatSyncSupervisor
         self.knowledgeViewModel = knowledgeViewModel
         self.aiConfigCenter = aiConfigCenter
         self.logger = logger
         self.clearSessionScopedViewModels = clearSessionScopedViewModels
+    }
+
+    /// 同设备账号切换登录前：暂停旧账号实时同步，避免 B1 登录过程中 A1 仍发账号级请求。
+    func beginAccountSwitch(suspendedAccountID: Int64?) async {
+        guard isAccountSwitchInProgress == false else { return }
+        isAccountSwitchInProgress = true
+        suspendedAccountIDForSwitch = suspendedAccountID
+        logger.info(
+            "账号运行时：账号切换登录开始，暂停实时同步 accountID=\(suspendedAccountID.map(String.init) ?? "-")",
+            module: .auth
+        )
+        await chatSyncSupervisor.stopRealtimeSync()
+    }
+
+    /// 登录流程结束：commit=true 表示已切到新账号；false 且仍为原账号时恢复实时同步。
+    func endAccountSwitch(commit: Bool, currentSignedInAccountID: Int64?) async {
+        defer {
+            isAccountSwitchInProgress = false
+            suspendedAccountIDForSwitch = nil
+        }
+        guard commit == false,
+              let suspended = suspendedAccountIDForSwitch,
+              let current = currentSignedInAccountID,
+              suspended == current
+        else {
+            return
+        }
+        logger.info(
+            "账号运行时：账号切换登录失败，恢复实时同步 accountID=\(suspended)",
+            module: .auth
+        )
+        await chatSyncSupervisorForResume?.startRealtimeSync()
     }
 
     func activateUser(accountID: Int64) async {

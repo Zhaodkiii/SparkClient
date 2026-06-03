@@ -86,6 +86,13 @@ final class AppLifecycleCoordinator: ObservableObject {
         await container.onboardingStore.activate(session: session)
         logger.debug("会话流程：准备步骤 bootstrapIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
         await container.appBootstrapper.bootstrapIfNeeded(for: session)
+        guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else {
+            logger.warning(
+                "会话流程：设备登记后鉴权失效，跳过后续 home/task 同步 accountID=\(session.accountID)",
+                module: .auth
+            )
+            return
+        }
         logger.debug("会话流程：准备步骤 home loadInitialIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
         await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)
         logger.debug("会话流程：准备步骤 task syncIncremental 开始 accountID=\(session.accountID)", module: .auth)
@@ -103,6 +110,7 @@ final class AppLifecycleCoordinator: ObservableObject {
     func syncForegroundWorkIfNeeded() async {
         guard case .signedIn = sessionStore.state else { return }
         guard isHandlingServerAuthInvalidation == false else { return }
+        guard container.accountSessionRuntime.isAccountSwitchInProgress == false else { return }
         logger.debug("前台流程：应用回到前台，先检查设备登记再同步业务", module: .general)
         await container.deviceRegistrationCoordinator.handleForegroundResume()
         guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else { return }

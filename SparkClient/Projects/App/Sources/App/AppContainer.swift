@@ -569,12 +569,33 @@ final class AppContainer {
 
     /// 登录页：Apple 登录用例 + 会话 Store。
     func makeLoginViewModel() -> LoginViewModel {
-        LoginViewModel(
+        let runtime = accountSessionRuntime
+        return LoginViewModel(
             signInWithAppleUseCase: signInWithAppleUseCase,
             requestPhoneOTPUseCase: requestPhoneOTPUseCase,
             signInWithPhoneOTPUseCase: signInWithPhoneOTPUseCase,
             sessionStore: sessionStore,
-            notificationClient: notificationClient
+            notificationClient: notificationClient,
+            onBeginAccountSwitch: { [weak self] in
+                let suspendedID: Int64? = {
+                    guard let self else { return nil }
+                    if case .signedIn(let session) = self.sessionStore.state {
+                        return session.accountID
+                    }
+                    return nil
+                }()
+                await runtime.beginAccountSwitch(suspendedAccountID: suspendedID)
+            },
+            onEndAccountSwitch: { [weak self] commit in
+                let currentID: Int64? = {
+                    guard let self else { return nil }
+                    if case .signedIn(let session) = self.sessionStore.state {
+                        return session.accountID
+                    }
+                    return nil
+                }()
+                await runtime.endAccountSwitch(commit: commit, currentSignedInAccountID: currentID)
+            }
         )
     }
 
