@@ -8,7 +8,21 @@ import SwiftUI
 /// - `.result`: 显示 MedicalDocumentResultRouterView，展示识别结果
 struct MedicalDocumentUploadHostView: View {
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @Environment(\.dismiss) private var dismiss
+
+    @State private var showAPIKeysSettingsSheet = false
+
+    private var showMissingModelAlert: Binding<Bool> {
+        Binding(
+            get: { viewModel.missingModelScenarioForAlert != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    viewModel.missingModelScenarioForAlert = nil
+                }
+            }
+        )
+    }
 
     var body: some View {
         Group {
@@ -46,6 +60,26 @@ struct MedicalDocumentUploadHostView: View {
                 }
             }
         }
+        .alert(L10n.text("medical.upload.missing_model.title"), isPresented: showMissingModelAlert) {
+            Button(L10n.text("medical.upload.missing_model.action")) {
+                showAPIKeysSettingsSheet = true
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("medical.upload.missing_model.message"))
+        }
+        .sheet(isPresented: $showAPIKeysSettingsSheet) {
+            NavigationView {
+                APIKeysSettingsView(viewModel: aiSettingsViewModel)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(L10n.text("common.done")) {
+                                showAPIKeysSettingsSheet = false
+                            }
+                        }
+                    }
+            }
+        }
         .alert(L10n.text("common.error"), isPresented: .constant(viewModel.errorMessage != nil)) {
             Button(L10n.text("medical.upload.error.confirm")) {
                 viewModel.errorMessage = nil
@@ -59,7 +93,10 @@ struct MedicalDocumentUploadHostView: View {
 #if DEBUG
 #Preview {
     CompatibleNavigationContainer {
-        MedicalDocumentUploadHostView(viewModel: .preview())
+        MedicalDocumentUploadHostView(
+            viewModel: .preview(),
+            aiSettingsViewModel: AppContainer.preview.makeAISettingsViewModel(ownerAccountID: 1)
+        )
     }
 }
 #endif

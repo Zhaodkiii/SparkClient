@@ -68,6 +68,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 错误提示信息
     @Published var errorMessage: String?
 
+    /// 缺模型场景；非 nil 时由 Host 弹出配置引导，不写入 `errorMessage`。
+    @Published var missingModelScenarioForAlert: AIScenario?
+
     /// 保存成功后的回执信息
     @Published var saveReceipt: MedicalDocumentSaveReceipt?
 
@@ -226,6 +229,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         selectedFiles = files
         clearPipelineCheckpoints()
         errorMessage = nil
+        missingModelScenarioForAlert = nil
         logger.info("已更新待识别文件，数量=\(files.count)", module: .medical)
     }
 
@@ -306,6 +310,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         pipelineMemberID = member.id
         // 清空历史错误、识别结果等数据，避免脏数据干扰
         errorMessage = nil
+        missingModelScenarioForAlert = nil
         typedOutput = nil
         saveReceipt = nil
         // 将页面状态切换为处理中
@@ -543,7 +548,12 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             }
             isRetryingExtraction = false
             isAutoRetryingExtraction = false
-            errorMessage = localizedRecognitionErrorMessage(for: error, failedStep: currentStep)
+            if let scenario = missingModelScenario(from: error) {
+                missingModelScenarioForAlert = scenario
+                errorMessage = nil
+            } else {
+                errorMessage = localizedRecognitionErrorMessage(for: error, failedStep: currentStep)
+            }
             logger.error("Typed 识别流程失败 step=\(currentStep.rawValue)：\(error)", module: .medical)
         }
     }
@@ -722,6 +732,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         saveReceipt = nil
         preSubmitValidationIssues = []
         errorMessage = nil
+        missingModelScenarioForAlert = nil
         selectedKind = .auto
         clearPipelineCheckpoints()
         selectedMemberName = memberContextStore.context.selectedMember?.name
@@ -737,6 +748,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         stopProgressTimer(resetElapsedSeconds: true)
         needsManualModeSelection = false
         errorMessage = nil
+        missingModelScenarioForAlert = nil
         failedStep = nil
         stepStartedAt = [:]
         clearExtractionRetryState()
@@ -1130,6 +1142,21 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     }
 
     // MARK: - Errors
+
+    /// 从直接抛出或包装后的错误链中识别 `AIConfigError.missingModelForScenario`。
+    private func missingModelScenario(from error: Error) -> AIScenario? {
+        var current: Error? = error
+        for _ in 0..<8 {
+            guard let err = current else { return nil }
+            if let configError = err as? AIConfigError,
+               case .missingModelForScenario(let scenario) = configError {
+                return scenario
+            }
+            let nsError = err as NSError
+            current = nsError.userInfo[NSUnderlyingErrorKey] as? Error
+        }
+        return nil
+    }
 
     /// 统一保存失败提示：若有 HTTP 后端文案则拼接本地化模板，否则退回 `localizedDescription`。
     private func localizedSaveErrorMessage(from error: Error) -> String {

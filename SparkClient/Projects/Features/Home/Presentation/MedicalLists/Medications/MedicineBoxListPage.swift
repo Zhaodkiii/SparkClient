@@ -12,6 +12,7 @@ struct MedicineBoxListPage: View {
     let medicalQueryAPI: SparkMedicalQueryAPI
     let fileTransferService: FileTransferService
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let notificationClient: any NotificationClient
     let logger: Logger
     let onMedicineBoxesChanged: ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
@@ -27,6 +28,7 @@ struct MedicineBoxListPage: View {
         medicalQueryAPI: SparkMedicalQueryAPI,
         fileTransferService: FileTransferService,
         viewModel: MedicalDocumentUploadViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         logger: Logger,
         onMedicineBoxesChanged: @escaping ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
@@ -37,6 +39,7 @@ struct MedicineBoxListPage: View {
         self.medicalQueryAPI = medicalQueryAPI
         self.fileTransferService = fileTransferService
         self.viewModel = viewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         self.logger = logger
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
@@ -138,7 +141,10 @@ struct MedicineBoxListPage: View {
         }
         .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
             CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(viewModel: viewModel)
+                MedicalDocumentUploadHostView(
+                    viewModel: viewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
             }
         }
     }

@@ -55,8 +55,8 @@ final class AppContainer {
     let routeCoordinator: RouteCoordinator
     /// 应用启动阶段副作用（非 UI）的集中入口。
     let appBootstrapper: AppBootstrapper
-    /// 设备登记（匿名或带 JWT，与冷启动 / 登录后 / APNs token 联动）。
-    let registerDeviceUseCase: RegisterDeviceUseCase
+    /// 设备信息上送聚合协调器（APP-STARTUP-000007）。
+    let deviceRegistrationCoordinator: DeviceRegistrationCoordinator
 
     // MARK: - 通知（应用内队列、指标、收件箱、远程推送适配）
     //
@@ -456,7 +456,7 @@ final class AppContainer {
 
         self.routeStore = notification.routeStore
         self.routeCoordinator = notification.routeCoordinator
-        self.registerDeviceUseCase = notification.registerDeviceUseCase
+        self.deviceRegistrationCoordinator = notification.deviceRegistrationCoordinator
         self.medicalSyncService = notification.medicalSyncService
         self.appBootstrapper = appBootstrapper
         self.notificationStore = notification.notificationStore
@@ -678,6 +678,7 @@ final class AppContainer {
         }
 
         logger.info("主 Tab 依赖首次初始化 accountID=\(ownerAccountID)", module: .general)
+        let aiSettingsViewModel = makeAISettingsViewModel(ownerAccountID: ownerAccountID)
         let created = MainTabDependencies(
             scope: .accountScoped,
             routeStore: routeStore,
@@ -694,6 +695,7 @@ final class AppContainer {
                 memberContextStore: memberContextStore,
                 notificationClient: notificationClient,
                 medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel(),
+                aiSettingsViewModel: aiSettingsViewModel,
                 routeStore: routeStore
             ),
             knowledgeDependencies: KnowledgeFeatureDependencies(
@@ -710,7 +712,7 @@ final class AppContainer {
             chatDetailViewModel: chatDetailViewModel,
             settingsViewModel: makeSettingsViewModel(),
             accountManagementViewModel: makeAccountManagementViewModel(),
-            aiSettingsViewModel: makeAISettingsViewModel(ownerAccountID: ownerAccountID),
+            aiSettingsViewModel: aiSettingsViewModel,
             versionUpdateCoordinator: versionUpdateCoordinator,
             memberContextStore: memberContextStore
         )

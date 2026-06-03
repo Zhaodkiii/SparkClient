@@ -10,6 +10,7 @@ struct ExaminationReportsListPage: View {
     private let medicalResourceAPI: SparkMedicalWorkflowAPI
     @ObservedObject private var memberContextStore: MemberContextStore
     @ObservedObject private var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
     private let notificationClient: any NotificationClient
     private let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     /// 当前成员 ID；`complete-data` 缺失时为 0，此时不展示新增入口。
@@ -27,6 +28,7 @@ struct ExaminationReportsListPage: View {
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil,
         onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)? = nil
@@ -39,6 +41,7 @@ struct ExaminationReportsListPage: View {
         self.medicalResourceAPI = SparkMedicalWorkflowAPI(configuration: medicalQueryAPI.configuration)
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         self.onMedicalCasesUpdated = onMedicalCasesUpdated
         _viewModel = StateObject(
@@ -151,7 +154,10 @@ struct ExaminationReportsListPage: View {
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+                MedicalDocumentUploadHostView(
+                    viewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
             }
         }
     }

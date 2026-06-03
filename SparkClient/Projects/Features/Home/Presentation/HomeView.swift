@@ -147,7 +147,10 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+                MedicalDocumentUploadHostView(
+                    viewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: dependencies.aiSettingsViewModel
+                )
             }
         }
         .sheet(isPresented: $showTaskCenter) {

@@ -10,6 +10,7 @@ struct HealthExamReportsListPage: View {
     private let fileTransferService: FileTransferService
     private let memberContextStore: MemberContextStore
     @ObservedObject private var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
     private let notificationClient: any NotificationClient
 
     @State private var query = ""
@@ -24,6 +25,7 @@ struct HealthExamReportsListPage: View {
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)? = nil
     ) {
@@ -34,6 +36,7 @@ struct HealthExamReportsListPage: View {
         self.fileTransferService = fileTransferService
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
@@ -138,7 +141,10 @@ struct HealthExamReportsListPage: View {
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+                MedicalDocumentUploadHostView(
+                    viewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
             }
         }
     }

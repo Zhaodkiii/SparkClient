@@ -368,6 +368,9 @@
 "medical.upload.step.extract" = "Extracting medical draft";
 "medical.upload.error.no_member" = "Please select a member on Home before extraction.";
 "medical.upload.error.member_invalid" = "Selected member is invalid. Please reselect.";
+"medical.upload.missing_model.title" = "No AI Model Available";
+"medical.upload.missing_model.message" = "Go to Settings to configure Base URL, model, and API Key to start recognition.";
+"medical.upload.missing_model.action" = "Go to Settings";
 "medical.upload.submit_failed_with_server_error" = "Submit failed. Server returned: %@";
 "medical.upload.presubmit.error.save_blocked" = "Some fields need to be fixed before submitting.";
 "medical.upload.presubmit.summary.title" = "%d issue(s) need to be fixed before submitting";

@@ -55,6 +55,11 @@ actor ChatRealtimeSyncClient {
             }
         } catch {
             logger.warning("chat realtime connect failed: \(error.localizedDescription)", module: .general)
+            if Self.shouldInvalidateSession(for: error.localizedDescription) {
+                postAuthSessionInvalidation(message: error.localizedDescription, source: "ChatRealtimeSyncClient.connect")
+                await stop()
+                return
+            }
             scheduleReconnect()
         }
     }
@@ -73,7 +78,6 @@ actor ChatRealtimeSyncClient {
         }
 
         var request = URLRequest(url: url)
-        // 与 HTTP 保持同一 JWT 来源，避免 WS 与 REST 看到不同登录态。
         request.setValue(auth, forHTTPHeaderField: "Authorization")
         return request
     }
@@ -84,12 +88,18 @@ actor ChatRealtimeSyncClient {
         switch event {
         case .connected:
             reconnectAttempt = 0
-            // 连接建立不主动触发全量/全局同步；仅依赖服务端增量事件提示，避免重复拉取。
 
         case .text(let text):
             guard let data = text.data(using: .utf8) else { return }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
             guard let type = json["type"] as? String else { return }
+
+            if Self.shouldInvalidateSession(in: json) {
+                let message = (json["msg"] as? String) ?? type
+                postAuthSessionInvalidation(message: message, source: "ChatRealtimeSyncClient.text")
+                await stop()
+                return
+            }
 
             if type == "chat.sync.updated" {
                 let cursor = json["cursor"] as? String
@@ -98,6 +108,12 @@ actor ChatRealtimeSyncClient {
 
         case .disconnected(let reason):
             logger.warning("chat realtime disconnected: \(reason ?? "-")", module: .general)
+            if Self.shouldInvalidateSessionOnDisconnect(reason: reason) {
+                let message = reason ?? "websocket_auth_close_4401"
+                postAuthSessionInvalidation(message: message, source: "ChatRealtimeSyncClient.disconnected")
+                await stop()
+                return
+            }
             scheduleReconnect()
         }
     }
@@ -108,7 +124,6 @@ actor ChatRealtimeSyncClient {
 
         let attempt = reconnectAttempt
         reconnectAttempt += 1
-        // 指数退避，避免网络抖动时频繁重连打爆服务端。
         let delaySeconds = min(30, max(1, Int(pow(2.0, Double(attempt)))))
 
         reconnectTask = Task {
@@ -116,5 +131,48 @@ actor ChatRealtimeSyncClient {
             try? await Task.sleep(nanoseconds: UInt64(delaySeconds) * 1_000_000_000)
             await connectIfNeeded()
         }
+    }
+
+    private static func shouldInvalidateSession(in json: [String: Any]) -> Bool {
+        let type = (json["type"] as? String) ?? ""
+        if type == "auth.session.invalidated" || type.hasPrefix("device_session.") {
+            return true
+        }
+        let message = (json["msg"] as? String) ?? ""
+        return shouldInvalidateSession(for: message)
+    }
+
+    private static func shouldInvalidateSession(for message: String) -> Bool {
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized.isEmpty == false else { return false }
+        return AuthSessionInvalidation.shouldInvalidate(
+            statusCode: 401,
+            backendCode: nil,
+            message: normalized
+        )
+    }
+
+    private static func shouldInvalidateSessionOnDisconnect(reason: String?) -> Bool {
+        guard let reason else {
+            return false
+        }
+        if isWebSocketAuthCloseCode(reason) {
+            return true
+        }
+        return shouldInvalidateSession(for: reason)
+    }
+
+    private static func isWebSocketAuthCloseCode(_ reason: String) -> Bool {
+        let normalized = reason.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.contains("4401")
+    }
+
+    private func postAuthSessionInvalidation(message: String, source: String) {
+        AuthSessionInvalidation.postIfNeeded(
+            statusCode: 401,
+            backendCode: nil,
+            message: message,
+            source: source
+        )
     }
 }

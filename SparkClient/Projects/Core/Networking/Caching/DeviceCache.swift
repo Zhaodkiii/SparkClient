@@ -10,6 +10,7 @@ final class DeviceCache: @unchecked Sendable {
         static let currentUserID = "spark.device_cache.current_user_id"
         static let trustedDeviceID = "spark.device_cache.trusted_device_id"
         static let logLevel = "spark.device_cache.log_level"
+        static let registrationSubmittedSnapshot = "spark.device_cache.registration_submitted_snapshot"
     }
 
     private let userDefaults: UserDefaults
@@ -76,9 +77,27 @@ final class DeviceCache: @unchecked Sendable {
         logger.info("已持久化日志级别=\(logLevel.symbol)", module: .cache)
     }
 
+    var lastDeviceRegistrationSnapshot: DeviceRegistrationSubmittedSnapshot? {
+        guard let data = userDefaults.data(forKey: Keys.registrationSubmittedSnapshot) else {
+            return nil
+        }
+        return try? JSONDecoder.default.decode(DeviceRegistrationSubmittedSnapshot.self, from: data)
+    }
+
+    func cacheDeviceRegistrationSnapshot(_ snapshot: DeviceRegistrationSubmittedSnapshot) {
+        guard let data = try? JSONEncoder.default.encode(snapshot) else { return }
+        userDefaults.set(data, forKey: Keys.registrationSubmittedSnapshot)
+        logger.debug("已持久化设备登记摘要 bundleID=\(snapshot.bundleID)", module: .cache)
+    }
+
+    func clearDeviceRegistrationSnapshot() {
+        userDefaults.removeObject(forKey: Keys.registrationSubmittedSnapshot)
+    }
+
     func clearDeviceMetadata() {
         userDefaults.removeObject(forKey: Keys.currentUserID)
         userDefaults.removeObject(forKey: Keys.trustedDeviceID)
+        userDefaults.removeObject(forKey: Keys.registrationSubmittedSnapshot)
         cachedCurrentUserID.value = nil
         cachedTrustedDeviceID.value = nil
     }

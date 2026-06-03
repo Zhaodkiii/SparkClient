@@ -9,7 +9,8 @@
 | `MEDICAL-AI-OCR-000001` | 结构化抽取失败后继续识别需携带上次失败原因 | 已实现 | AI 识别报告、解码失败反馈、公共 Prompt 追加、本地化、继续识别流程 |
 | `MEDICAL-AI-OCR-000002` | 解码失败自动重试与本地配置开关 | 已实现 | 仅解码失败带入失败原因、自动重试、通用设置、重试次数本地配置 |
 | `MEDICAL-AI-OCR-000003` | 提交前本地预校验与字段高亮纠错 | 已实现 | 客户端按服务端规则预校验、对应模块提示、字段高亮、用户修复后重新提交 |
-| `MEDICAL-AI-OCR-000004` | 折叠模块内预校验错误自动展开并定位 | 设计中 | 提交失败后展开错误所在折叠模块、再滚动到对应卡片或字段 |
+| `MEDICAL-AI-OCR-000004` | 折叠模块内预校验错误自动展开并定位 | 已实现 | 提交失败后展开错误所在折叠模块、再滚动到对应卡片或字段 |
+| `MEDICAL-AI-OCR-000005` | 缺少识别场景模型时引导配置模型密钥 | 已实现 | missingModelForScenario 弹窗提示、取消/前往设置、Sheet 打开模型密钥页面 |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -1593,7 +1594,7 @@ saveResult()
 
 ### 工单状态
 
-设计中。
+已实现。
 
 ## 1. 背景与问题
 
@@ -1887,3 +1888,192 @@ preSubmitValidationIssues 从空变为非空
 3. 不要把展开状态写入持久化，只作为结果页本地 UI 状态。
 4. 不要为定位逻辑引入服务端字段协议，本工单仍然完全基于本地预校验 issue。
 5. 如果无法定位具体字段，至少展开对应模块并滚动到模块顶部。
+
+## 工单 `MEDICAL-AI-OCR-000005`：缺少识别场景模型时引导配置模型密钥
+
+### 工单状态
+
+已实现。
+
+## 1. 背景与问题
+
+AI 识别报告流程依赖不同 `AIScenario` 的可用模型，例如 OCR 后的类型识别、药盒抽取、病例抽取、体检报告抽取、医疗报告抽取等。当对应场景没有可用模型时，底层会抛出：
+
+```swift
+case .missingModelForScenario(let scenario):
+    return "场景「\(scenario.rawValue)」暂无可用的 AI 模型"
+```
+
+如果只展示这类技术错误，用户不知道下一步应该做什么。医疗识别场景下应像对话列表/会话页一样，引导用户去配置模型、Base URL 和 API Key。
+
+参考现有对话模块：
+
+```text
+ChatConversationListPage.swift:77-84
+ChatConversationListPage.swift:85-97
+ChatView.swift:402-408
+```
+
+## 2. 设计目标
+
+### 核心目标
+
+当医疗 AI 识别流程遇到 `AIConfigError.missingModelForScenario` 时，不只展示错误文案，而是弹窗询问用户是否前往设置。用户选择“前往设置”后，通过 sheet 打开模型密钥页面 `APIKeysSettingsView`。
+
+### 第一期目标
+
+1. 捕获 `AIConfigError.missingModelForScenario`。
+2. 弹窗提示用户需要配置模型。
+3. 弹窗提供“取消”和“前往设置”两个操作。
+4. 点击“前往设置”后，以 sheet 形式打开 `APIKeysSettingsView`。
+5. sheet 内使用 `NavigationView` 包装，并提供“完成”按钮关闭。
+6. 不自动重试识别，用户配置完成后自行重新开始或继续当前流程。
+
+### 非目标
+
+1. 不在本工单内实现临时配置页。
+2. 不改变 AI 模型选择策略。
+3. 不自动创建模型配置。
+4. 不绕过 `AIConfigCenter` / `AISettingsViewModel` 现有配置链路。
+
+## 3. 弹窗文案
+
+### 标题
+
+```text
+暂无可用的 AI 模型
+```
+
+### 内容
+
+```text
+请前往设置配置 Base URL、模型和 API Key，以开始识别。
+```
+
+说明：
+
+1. 文案需要贴合医疗识别场景，使用“开始识别”。
+2. 当前复用 `APIKeysSettingsView`，配置行为与系统 AI 设置保持一致。
+
+### 按钮
+
+| 按钮 | 行为 |
+| --- | --- |
+| 取消 | 关闭弹窗，停留当前页面 |
+| 前往设置 | 关闭弹窗并打开模型密钥 sheet |
+
+## 4. 页面状态设计
+
+医疗文档上传 Host 或 ViewModel 对应页面增加状态：
+
+```swift
+@State private var showMissingModelAlert = false
+@State private var showAPIKeysSettingsSheet = false
+@State private var missingModelScenario: AIScenario?
+```
+
+如果状态放在 ViewModel：
+
+```swift
+@Published var missingModelScenarioForAlert: AIScenario?
+```
+
+推荐：
+
+1. 错误识别和场景记录放在 `MedicalDocumentUploadViewModel`。
+2. alert / sheet 展示状态放在 SwiftUI View。
+3. View 观察 ViewModel 的缺模型事件后触发 alert。
+
+## 5. 错误识别流程
+
+### 捕获位置
+
+候选位置：
+
+```text
+MedicalDocumentUploadViewModel.swift
+localizedRecognitionErrorMessage(for:failedStep:)
+runTypedRecognition / extract / type_recognition 错误 catch 分支
+```
+
+处理原则：
+
+1. 只对 `AIConfigError.missingModelForScenario` 触发配置引导。
+2. 其他错误继续走现有 `errorMessage` 展示。
+3. 不把所有 AI 错误都引导去设置。
+4. 如果错误被包装，需要递归或归一化识别 root error。
+
+伪流程：
+
+```text
+catch error
+  -> if error is missingModelForScenario:
+       missingModelScenarioForAlert = scenario
+       errorMessage = nil 或短提示
+       fail(currentStep)
+     else:
+       errorMessage = localizedRecognitionErrorMessage(...)
+```
+
+## 6. Sheet 打开方式
+
+参考 `ChatConversationListPage`：
+
+```swift
+.alert(title, isPresented: $showMissingModelAlert) {
+    Button("前往设置") {
+        showAPIKeysSettingsSheet = true
+    }
+    Button("取消", role: .cancel) {}
+} message: {
+    Text("请前往设置配置 Base URL、模型和 API Key，以开始识别。")
+}
+.sheet(isPresented: $showAPIKeysSettingsSheet) {
+    NavigationView {
+        APIKeysSettingsView(viewModel: aiSettingsViewModel)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("完成") {
+                        showAPIKeysSettingsSheet = false
+                    }
+                }
+            }
+    }
+}
+```
+
+注意：
+
+1. 使用项目已有 `APIKeysSettingsView`。
+2. 使用当前页面可获得的 `AISettingsViewModel`。
+3. 不新增独立配置页。
+4. 不在医疗识别模块重复实现密钥表单。
+
+## 7. 涉及文件
+
+| 文件 | 改动 |
+| --- | --- |
+| `MedicalDocumentUploadViewModel.swift` | 捕获/归一化 `missingModelForScenario`，暴露缺模型提示状态 |
+| `MedicalDocumentUploadHostView.swift` | 挂载 alert 和 APIKeysSettingsView sheet |
+| `MedicalDocumentUploadView.swift` 或入口页面 | 如 Host 无法拿到 `AISettingsViewModel`，在入口层注入 |
+| `AIConfigModels.swift` | 不改错误定义，只复用 `AIConfigError.missingModelForScenario` |
+| `APIKeysSettingsView.swift` | 不改页面，只复用 |
+| `Localizable.strings` | 增加医疗识别缺模型标题、内容、按钮文案 |
+
+## 8. 验收标准
+
+1. 医疗 AI 识别任一步骤遇到 `missingModelForScenario` 时，弹出缺模型配置提示。
+2. 弹窗展示文案：“请前往设置配置 Base URL、模型和 API Key，以开始识别。”
+3. 点击“取消”后停留当前页面，不打开设置。
+4. 点击“前往设置”后 sheet 打开 `APIKeysSettingsView`。
+5. sheet 点击“完成”后关闭。
+6. 其他错误不触发缺模型配置弹窗。
+7. 配置完成后不自动重试识别，用户可自行重新触发识别。
+
+## 9. 风险与注意事项
+
+1. 不要把所有识别失败都归类为缺模型。
+2. 如果错误被 use case 或 extractor 包装，需要保证仍能识别内部 `missingModelForScenario`。
+3. 医疗上传页面需要能拿到与 AI 设置一致的 `AISettingsViewModel`，避免打开一个空配置上下文。
+4. 避免 alert 和现有 `errorMessage` alert 同时弹出。
+5. 文案需要与 `APIKeysSettingsView` 的持久化配置行为保持一致，避免提示成临时内存配置。

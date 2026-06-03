@@ -55,6 +55,7 @@ struct MedicationsListPage: View {
     let fileTransferService: FileTransferService
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let notificationClient: any NotificationClient
     let logger: Logger
     let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
@@ -78,6 +79,7 @@ struct MedicationsListPage: View {
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         logger: Logger,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
@@ -90,6 +92,7 @@ struct MedicationsListPage: View {
         self.fileTransferService = fileTransferService
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         self.logger = logger
         self.onMedicationPlansChanged = onMedicationPlansChanged
@@ -287,7 +290,10 @@ struct MedicationsListPage: View {
 
     private var uploadHostView: some View {
         CompatibleNavigationContainer {
-            MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+            MedicalDocumentUploadHostView(
+                viewModel: medicalDocumentUploadViewModel,
+                aiSettingsViewModel: aiSettingsViewModel
+            )
         }
     }
 
@@ -320,6 +326,7 @@ struct MedicationsListPage: View {
                 medicalQueryAPI: medicalQueryAPI,
                 fileTransferService: fileTransferService,
                 viewModel: medicalDocumentUploadViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
                 notificationClient: notificationClient,
                 logger: logger,
                 onMedicineBoxesChanged: updateMedicineBoxes
@@ -2309,6 +2316,7 @@ private extension KeyedEncodingContainer {
             fileTransferService: AppContainer.preview.fileTransferService,
             memberContextStore: AppContainer.preview.memberContextStore,
             medicalDocumentUploadViewModel: AppContainer.preview.makeMedicalDocumentUploadViewModel(),
+            aiSettingsViewModel: AppContainer.preview.makeAISettingsViewModel(ownerAccountID: 1),
             notificationClient: AppContainer.preview.notificationClient,
             logger: AppContainer.preview.logger
         )

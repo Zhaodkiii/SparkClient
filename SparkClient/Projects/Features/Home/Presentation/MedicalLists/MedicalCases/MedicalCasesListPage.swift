@@ -8,6 +8,7 @@ struct MedicalCasesListPage: View {
     let fileTransferService: FileTransferService
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let notificationClient: any NotificationClient
     let logger: Logger
     let onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
@@ -24,6 +25,7 @@ struct MedicalCasesListPage: View {
         fileTransferService: FileTransferService,
         memberContextStore: MemberContextStore,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         logger: Logger,
         onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?,
@@ -35,6 +37,7 @@ struct MedicalCasesListPage: View {
         self.fileTransferService = fileTransferService
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         self.logger = logger
         self.onCasesUpdated = onCasesUpdated
@@ -101,7 +104,10 @@ struct MedicalCasesListPage: View {
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(viewModel: medicalDocumentUploadViewModel)
+                MedicalDocumentUploadHostView(
+                    viewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
             }
         }
     }

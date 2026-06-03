@@ -50,13 +50,15 @@ final class AppBootstrapper {
         didBootstrapLaunch = true
 
         // AI 目录进运行时缓存在 `bootstrapIfNeeded(for:)` 中按 `UserSession.accountID` 执行（与 `prepareSignedInSessionIfNeeded` 内 `prewarm` 对齐，避免与随后的运行时重置重复）。
-        logger.info("应用启动引导：设备注册等（AI 运行时由已登录引导按账号预热）", module: .general)
-        await requestDeviceRegistration(.appLaunch)
+        // 设备登记在会话恢复后由 `AppLifecycleCoordinator` 统一触发（未登录 appLaunch / 已登录 signedInBootstrap），避免先匿名后登录态两次上送。
+        logger.info("应用启动引导（设备登记在会话恢复后统一触发）", module: .general)
     }
 
     /// 账号进入已登录态：DB 目录（仅首次无初始化记录时从 bundle 灌入）→ 本地场景 bundle → 运行时缓存；Pro 再拉 bootstrap 仅进内存。
     func bootstrapIfNeeded(for session: UserSession) async {
         guard bootstrappedAccounts.contains(session.accountID) == false else { return }
+
+        await requestDeviceRegistration(.signedInBootstrap)
 
         do {
             await aiConfigCenter.prewarm(ownerAccountID: session.accountID)
@@ -83,14 +85,16 @@ final class AppBootstrapper {
         } catch {
             logger.warning("用户档案引导已结束（降级）：\(error.localizedDescription)", module: .general)
         }
-        await requestDeviceRegistration(.signedInBootstrap)
         await chatSyncSupervisor?.kickAttachmentDrain()
     }
 
     /// 登出等：只清空启动/账号引导去重；真正的账号级状态释放统一交给 `AccountSessionRuntime`。
-    func reset() async {
+    /// - Parameter preserveDeviceRegistration: 为 true 时保留匿名冷启动 pending（signedOut 首屏渲染不取消登记）。
+    func reset(preserveDeviceRegistration: Bool = false) async {
         didBootstrapLaunch = false
         bootstrappedAccounts.removeAll()
-        onResetDeviceRegistration()
+        if preserveDeviceRegistration == false {
+            onResetDeviceRegistration()
+        }
     }
 }

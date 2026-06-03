@@ -48,38 +48,36 @@ struct SparkDeviceAPI {
 
     /// 完整设备登记（匿名 `requiresAuth: false` 或已登录 `requiresAuth: true`）。
     ///
+    /// `push_token`：`nil` 省略表示不覆盖服务端旧 token；`""` 表示清空；非空字符串为当前 token。
+    ///
     /// 业务日志：`SparkBackendConfiguration.execute` 会打印「业务=…」；此处 `operation.name` 固定为 `Device.Register`，
     /// 由 `NetworkOperationBusinessPurpose` 映射为「设备域：上送安装 device_id 与全量终端画像…」。
     func registerDevice(
-        bundleId: String,
-        deviceId: String,
-        userId: Int?,
+        state: DeviceRegistrationState,
         pushToken: String?,
-        notificationsEnabled: Bool?,
-        systemInfo: SparkSystemInfo,
         requiresAuth: Bool
     ) async throws -> DeviceRegisterResult {
         let payload = DeviceRegistrationPayload(
-            device_id: deviceId,
-            user_id: userId,
+            device_id: state.deviceID,
+            user_id: state.accountID,
             push_token: pushToken,
-            notifications_enabled: notificationsEnabled,
-            app_version: systemInfo.appVersion,
-            build_version: systemInfo.buildVersion,
-            bundle_identifier: systemInfo.bundleIdentifier,
-            bundle_id: bundleId,
-            platform: systemInfo.platform,
-            system_version: systemInfo.systemVersion,
-            device_model: systemInfo.deviceModel,
-            device_model_name: systemInfo.deviceModelName,
-            device_name: systemInfo.deviceName,
-            screen_size: systemInfo.screenSize,
-            screen_scale: systemInfo.screenScale,
-            time_zone: systemInfo.timeZone,
-            language_code: systemInfo.languageCode,
-            region_code: systemInfo.regionCode,
-            country_code: systemInfo.mostLikelyCountryCode,
-            is_simulator: systemInfo.isSimulator
+            notifications_enabled: state.notificationsEnabled,
+            app_version: state.appVersion,
+            build_version: state.buildVersion,
+            bundle_identifier: state.bundleID,
+            bundle_id: state.bundleID,
+            platform: state.platform,
+            system_version: state.systemVersion,
+            device_model: state.deviceModel,
+            device_model_name: state.deviceModelName,
+            device_name: state.deviceName,
+            screen_size: state.screenSize,
+            screen_scale: state.screenScale,
+            time_zone: state.timeZone,
+            language_code: state.languageCode,
+            region_code: state.regionCode,
+            country_code: state.countryCode,
+            is_simulator: state.isSimulator
         )
 
         let operation = CacheableSparkNetworkOperation(
@@ -103,23 +101,5 @@ struct SparkDeviceAPI {
 
         let response = try await configuration.execute(operation)
         return try APIResponseDecoder.decodeWrappedData(DeviceRegisterResult.self, from: response)
-    }
-
-    /// 兼容旧调用：仅 device_id / bundle_id / nickname。
-    func registerTrustedDevice(
-        deviceId: String,
-        bundleId: String = "",
-        nickname: String = ""
-    ) async throws -> DeviceRegisterResult {
-        let sys = SparkSystemInfo()
-        return try await registerDevice(
-            bundleId: bundleId.isEmpty ? sys.bundleIdentifier : bundleId,
-            deviceId: deviceId,
-            userId: nil,
-            pushToken: nil,
-            notificationsEnabled: nil,
-            systemInfo: sys,
-            requiresAuth: true
-        )
     }
 }

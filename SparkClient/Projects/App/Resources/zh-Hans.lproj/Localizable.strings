@@ -340,7 +340,7 @@
 "home.medical.list.fallback.prescription_title" = "处方批次";
 "home.medical.list.fallback.medication_name" = "药品";
 "home.medical.list.fallback.no_summary" = "暂无摘要";
-"medical.upload.title" = "AI 病历抽取";
+"medical.upload.title" = "AI 报告抽取";
 "medical.upload.current_member" = "当前成员";
 "medical.upload.member.not_selected" = "未选择";
 "medical.upload.member.hint" = "抽取结果将绑定到当前成员。";
@@ -368,6 +368,9 @@
 "medical.upload.step.extract" = "AI 抽取病历草稿";
 "medical.upload.error.no_member" = "请先在首页选择成员后再识别。";
 "medical.upload.error.member_invalid" = "成员已失效，请重新选择。";
+"medical.upload.missing_model.title" = "暂无可用的 AI 模型";
+"medical.upload.missing_model.message" = "请前往设置配置 Base URL、模型和 API Key，以开始识别。";
+"medical.upload.missing_model.action" = "前往设置";
 "medical.upload.submit_failed_with_server_error" = "提交失败，服务返回错误内容：%@";
 "medical.upload.presubmit.error.save_blocked" = "有内容需要修改后再提交";
 "medical.upload.presubmit.summary.title" = "有 %d 处内容需要修改后再提交";

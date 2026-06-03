@@ -41,13 +41,17 @@ final class AppLifecycleCoordinator: ObservableObject {
             logger.info("启动流程：网络路径已评估但当前不可用，等待网络恢复后再执行引导与会话恢复", module: .general)
             return
         }
-        logger.info("启动流程：网络路径已评估且可用，开始应用级引导与会话恢复", module: .general)
-        await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
-        await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
+        logger.info("启动流程：网络路径已评估且可用，开始会话恢复与应用级引导", module: .general)
         await sessionStore.restoreIfNeeded()
-        if case .signedIn(let session) = sessionStore.state {
+        await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
+
+        switch sessionStore.state {
+        case .signedIn(let session):
             await prepareSignedInSessionIfNeeded(session)
-            await syncPushRegistrationIfNeeded()
+        case .signedOut:
+            await registerDeviceForSignedOutLaunchIfNeeded()
+        case .loading:
+            break
         }
     }
 
@@ -62,7 +66,8 @@ final class AppLifecycleCoordinator: ObservableObject {
         preparedAccountID = nil
         preparingAccountID = nil
         container.onboardingStore.deactivate()
-        await container.appBootstrapper.reset()
+        let preserveDeviceRegistration = container.deviceRegistrationCoordinator.hasPendingAnonymousRegistration
+        await container.appBootstrapper.reset(preserveDeviceRegistration: preserveDeviceRegistration)
         await container.accountSessionRuntime.activateGuest()
     }
 
@@ -87,7 +92,6 @@ final class AppLifecycleCoordinator: ObservableObject {
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         preparedAccountID = session.accountID
         logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
-        await syncPushRegistrationIfNeeded()
     }
 
     /// 用户主动触发：弹出系统通知权限对话框（如试用申请引导）。
@@ -96,17 +100,12 @@ final class AppLifecycleCoordinator: ObservableObject {
         container.pushAdapter.requestAuthorizationIfNeeded()
     }
 
-    /// 冷启动 / 会话恢复：若系统已授权通知，则补调 APNs 登记并上送 push_token（不弹窗）。
-    func syncPushRegistrationIfNeeded() async {
-        logger.debug("通知流程：按系统授权状态同步 APNs 与设备登记", module: .push)
-        await container.pushAdapter.syncRemoteNotificationRegistrationFromSystemSettings(
-            requestAuthorizationIfNotDetermined: false
-        )
-    }
-
     func syncForegroundWorkIfNeeded() async {
         guard case .signedIn = sessionStore.state else { return }
-        logger.debug("前台流程：应用回到前台，触发任务增量同步", module: .general)
+        guard isHandlingServerAuthInvalidation == false else { return }
+        logger.debug("前台流程：应用回到前台，先检查设备登记再同步业务", module: .general)
+        await container.deviceRegistrationCoordinator.handleForegroundResume()
+        guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else { return }
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
     }
@@ -123,9 +122,18 @@ final class AppLifecycleCoordinator: ObservableObject {
 
         logger.warning("认证流程：收到服务端鉴权失效通知，准备强制回到登录态", module: .auth)
         isHandlingServerAuthInvalidation = true
+        container.deviceRegistrationCoordinator.suspendPendingSubmissions()
+        sessionStore.setSignedOut()
         defer { isHandlingServerAuthInvalidation = false }
         await container.forceSignOutAfterServerAuthInvalidation(invalidationMessage: invalidationMessage)
-        sessionStore.setSignedOut()
+        await container.appBootstrapper.reset(preserveDeviceRegistration: false)
+    }
+
+    // MARK: - 设备登记（单一入口）
+
+    private func registerDeviceForSignedOutLaunchIfNeeded() async {
+        logger.debug("设备登记：未登录冷启动，触发匿名登记", module: .network)
+        await container.deviceRegistrationCoordinator.requestRegister(reason: .appLaunch)
     }
 }
 

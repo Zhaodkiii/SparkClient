@@ -90,7 +90,6 @@ struct NotificationAssemblyProduct {
     let notificationClient: any NotificationClient
     let medicalSyncService: MedicalSyncService
     let handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase
-    let registerDeviceUseCase: RegisterDeviceUseCase
     let deviceRegistrationCoordinator: DeviceRegistrationCoordinator
     let pushAdapter: PushAdapter
 }
@@ -183,12 +182,6 @@ extension AppAssembly {
             ossAPI: backend.oss,
             requestDeviceRegistration: { reason in
                 await notification.deviceRegistrationCoordinator.requestRegister(reason: reason)
-                // 设备画像上送后，若系统已授权通知则触发 APNs token 回调并二次登记（含 push_token）。
-                if reason == .appLaunch || reason == .signedInBootstrap {
-                    await notification.pushAdapter.syncRemoteNotificationRegistrationFromSystemSettings(
-                        requestAuthorizationIfNotDetermined: false
-                    )
-                }
             },
             onResetDeviceRegistration: {
                 notification.deviceRegistrationCoordinator.reset()
@@ -409,6 +402,7 @@ extension NotificationAssembly {
         let registerDeviceUseCase = RegisterDeviceUseCase(backend: backend, logger: logger)
         let deviceRegistrationCoordinator = DeviceRegistrationCoordinator(
             registerDevice: registerDeviceUseCase,
+            deviceCache: backend.deviceCache,
             currentUserID: { backend.deviceCache.currentUserIDInt },
             logger: logger
         )
@@ -421,6 +415,9 @@ extension NotificationAssembly {
             },
             onRemoteNotificationAuthorizationResolved: { granted in
                 await deviceRegistrationCoordinator.updateNotificationAuthorization(granted: granted)
+            },
+            onApnsRegistrationFailed: {
+                await deviceRegistrationCoordinator.noteApnsRegistrationFailed()
             }
         )
         return NotificationAssemblyProduct(
@@ -436,7 +433,6 @@ extension NotificationAssembly {
             notificationClient: notificationClient,
             medicalSyncService: medicalSyncService,
             handleRemoteNotificationUseCase: handleRemoteNotificationUseCase,
-            registerDeviceUseCase: registerDeviceUseCase,
             deviceRegistrationCoordinator: deviceRegistrationCoordinator,
             pushAdapter: pushAdapter
         )

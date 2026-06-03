@@ -87,8 +87,7 @@ struct AppCoordinatorView: View {
                     .task(id: session.accountID) {
                         // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
 //                        lifecycle.requestNotificationAuthorizationIfNeeded()
-                        // 已登录：若系统已开启通知则补登记 APNs token，不主动弹权限框。
-                        await lifecycle.syncPushRegistrationIfNeeded()
+                        // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
                         await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
                     }
                 }

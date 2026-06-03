@@ -33,19 +33,22 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
     private let onApnsTokenHex: (@Sendable (String) async -> Void)?
     /// 系统通知权限结果（与 APNs token 解耦）：拒绝或失败时用于同步 `TrustedDevice.notifications_enabled` / 清空 `push_token`。
     private let onRemoteNotificationAuthorizationResolved: (@Sendable (_ granted: Bool) async -> Void)?
+    private let onApnsRegistrationFailed: (@Sendable () async -> Void)?
 
     init(
         handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase,
         notificationCenter: any RemoteNotificationCenterClient,
         logger: Logger = ConsoleLogger(),
         onApnsTokenHex: (@Sendable (String) async -> Void)? = nil,
-        onRemoteNotificationAuthorizationResolved: (@Sendable (_ granted: Bool) async -> Void)? = nil
+        onRemoteNotificationAuthorizationResolved: (@Sendable (_ granted: Bool) async -> Void)? = nil,
+        onApnsRegistrationFailed: (@Sendable () async -> Void)? = nil
     ) {
         self.notificationCenter = notificationCenter
         self.handleRemoteNotificationUseCase = handleRemoteNotificationUseCase
         self.logger = logger
         self.onApnsTokenHex = onApnsTokenHex
         self.onRemoteNotificationAuthorizationResolved = onRemoteNotificationAuthorizationResolved
+        self.onApnsRegistrationFailed = onApnsRegistrationFailed
     }
 
     func installAsNotificationCenterDelegate() {
@@ -58,44 +61,13 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// 按系统当前授权状态同步 APNs（不向用户弹窗，除非 `requestAuthorizationIfNotDetermined == true`）。
-    ///
-    /// 已授权时调用 `registerForRemoteNotifications()`，token 在 `handleDeviceToken` 中经协调器写入设备登记；
-    /// 解决「用户已在系统设置中开启通知，但冷启动登记 body 无 push_token」的问题。
-    func syncRemoteNotificationRegistrationFromSystemSettings(
-        requestAuthorizationIfNotDetermined: Bool = false
-    ) async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        switch settings.authorizationStatus {
-        case .authorized, .provisional, .ephemeral:
-            logger.info(
-                "业务=远程推送 系统已授权(status=\(settings.authorizationStatus.rawValue))，补调 registerForRemoteNotifications",
-                module: .push
-            )
-            UIApplication.shared.registerForRemoteNotifications()
-            await onRemoteNotificationAuthorizationResolved?(true)
-        case .denied:
-            logger.info("业务=远程推送 系统已拒绝通知，同步后端关闭推送", module: .push)
-            await onRemoteNotificationAuthorizationResolved?(false)
-        case .notDetermined:
-            if requestAuthorizationIfNotDetermined {
-                await requestRemoteNotificationAuthorizationAndRegister()
-            } else {
-                logger.debug("业务=远程推送 通知权限未决定，跳过主动弹窗", module: .push)
-            }
-        @unknown default:
-            break
-        }
-    }
-
-    /// 请求系统通知权限；同意则向 APNs 注册（token 在 `handleDeviceToken` 中上送），拒绝则同步后端关闭推送并清空 token。
+    /// 请求系统通知权限；授权结果交给 `DeviceRegistrationCoordinator`，由协调器触发 APNs 注册与聚合上送。
     private func requestRemoteNotificationAuthorizationAndRegister() async {
         do {
             let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
             logger.info("业务=远程推送 请求系统通知权限 granted=\(granted)", module: .push)
             if granted {
-                UIApplication.shared.registerForRemoteNotifications()
-                logger.info("业务=远程推送 已调用 registerForRemoteNotifications，等待 APNs token 回调", module: .push)
+                logger.info("业务=远程推送 权限已授予，交由设备登记协调器触发 APNs 注册", module: .push)
                 await onRemoteNotificationAuthorizationResolved?(true)
             } else {
                 logger.info("业务=远程推送 用户拒绝通知权限，同步后端关闭推送", module: .push)
@@ -118,6 +90,10 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
 
     func handleDeviceTokenRegistrationError(_ error: Error) {
         logger.warning("业务=远程推送 向 APNs 注册 device token 失败（将无法收推送）error=\(error.localizedDescription)", module: .push)
+        guard let onApnsRegistrationFailed else { return }
+        Task {
+            await onApnsRegistrationFailed()
+        }
     }
 
     func userNotificationCenter(

@@ -44,6 +44,7 @@ struct HomeFeatureDependencies {
     let memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    let aiSettingsViewModel: AISettingsViewModel
     let routeStore: AppRouteStore
 }
 
@@ -68,6 +69,7 @@ extension HomeFeatureDependencies {
             memberContextStore: container.memberContextStore,
             notificationClient: container.notificationClient,
             medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
+            aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: 1),
             routeStore: AppRouteStore()
         )
     }

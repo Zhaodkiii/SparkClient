@@ -30,6 +30,7 @@ struct HomeMedicalListView: View {
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                aiSettingsViewModel: dependencies.aiSettingsViewModel,
                 notificationClient: dependencies.notificationClient,
                 logger: dependencies.logger,
                 onCasesUpdated: onMedicalCasesUpdated,
@@ -44,6 +45,7 @@ struct HomeMedicalListView: View {
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                aiSettingsViewModel: dependencies.aiSettingsViewModel,
                 notificationClient: dependencies.notificationClient,
                 onReportsUpdated: onHealthExamReportsUpdated
             )
@@ -55,6 +57,7 @@ struct HomeMedicalListView: View {
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                aiSettingsViewModel: dependencies.aiSettingsViewModel,
                 notificationClient: dependencies.notificationClient,
                 onReportsUpdated: onExaminationReportsUpdated,
                 onMedicalCasesUpdated: onMedicalCasesUpdated
@@ -67,6 +70,7 @@ struct HomeMedicalListView: View {
                 fileTransferService: dependencies.fileTransferService,
                 memberContextStore: dependencies.memberContextStore,
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                aiSettingsViewModel: dependencies.aiSettingsViewModel,
                 notificationClient: dependencies.notificationClient,
                 logger: dependencies.logger,
                 onMedicationPlansChanged: onMedicationPlansUpdated,
