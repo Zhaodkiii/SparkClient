@@ -640,6 +640,7 @@ final class AppContainer {
             aiConfigCenter: aiConfigCenter,
             workflowAPIForLocalForms: backend.medicalWorkflow,
             notificationClient: notificationClient,
+            pushAdapter: pushAdapter,
             logger: logger
         )
         cachedMedicalDocumentUploadViewModel = created
@@ -735,7 +736,8 @@ final class AppContainer {
             accountManagementViewModel: makeAccountManagementViewModel(),
             aiSettingsViewModel: aiSettingsViewModel,
             versionUpdateCoordinator: versionUpdateCoordinator,
-            memberContextStore: memberContextStore
+            memberContextStore: memberContextStore,
+            pushAdapter: pushAdapter
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
         return created

@@ -1,5 +1,4 @@
 import SwiftUI
-import UserNotifications
 
 #if canImport(UIKit)
 import UIKit
@@ -12,7 +11,6 @@ struct AITrialSettingsView: View {
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var hasLoadedTrialStatus = false
-    @State private var showNotificationPrePrompt = false
 
     private var isSignedIn: Bool {
         true
@@ -68,21 +66,10 @@ struct AITrialSettingsView: View {
         } message: {
             Text(errorMessage)
         }
-        .alert("我们将统一通知你", isPresented: $showNotificationPrePrompt) {
-            Button(L10n.text("common.cancel"), role: .cancel) {}
-            Button(L10n.text("common.continue", fallback: "继续")) {
-                viewModel.requestTrialNotificationAuthorizationFromUserAction()
-            }
-        } message: {
-            Text("试用申请审核结果将通过系统通知告知你，并在收到通知后自动刷新 Pro 模型。")
-        }
         .task {
             guard hasLoadedTrialStatus == false else { return }
             hasLoadedTrialStatus = true
             await viewModel.refreshTrialStatus()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .aiTrialNotificationPermissionNeedsPrePrompt)) { _ in
-            showNotificationPrePrompt = true
         }
     }
 

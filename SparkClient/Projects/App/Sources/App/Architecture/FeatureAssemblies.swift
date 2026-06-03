@@ -119,6 +119,7 @@ struct MainTabDependencies {
     let aiSettingsViewModel: AISettingsViewModel
     let versionUpdateCoordinator: AppVersionUpdateCoordinator
     let memberContextStore: MemberContextStore
+    let pushAdapter: PushAdapter
 }
 
 struct MainTabFeatureDependencies {

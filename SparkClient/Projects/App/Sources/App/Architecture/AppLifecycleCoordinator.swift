@@ -101,10 +101,10 @@ final class AppLifecycleCoordinator: ObservableObject {
         logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
     }
 
-    /// 用户主动触发：弹出系统通知权限对话框（如试用申请引导）。
+    /// 用户主动触发：仅在通知权限尚未决定时弹出系统权限对话框。
     func requestNotificationAuthorizationIfNeeded() {
-        logger.debug("通知流程：请求通知权限（如尚未请求）", module: .push)
-        container.pushAdapter.requestAuthorizationIfNeeded()
+        logger.debug("通知流程：请求通知权限（如尚未决定）", module: .push)
+        container.pushAdapter.requestAuthorizationIfNotDetermined()
     }
 
     func syncForegroundWorkIfNeeded() async {

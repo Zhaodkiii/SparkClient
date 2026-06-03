@@ -61,6 +61,15 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// 仅在系统通知权限尚未决定时弹出权限对话框并注册 APNs。
+    func requestAuthorizationIfNotDetermined() {
+        Task { @MainActor in
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            guard settings.authorizationStatus == .notDetermined else { return }
+            await requestRemoteNotificationAuthorizationAndRegister()
+        }
+    }
+
     /// 请求系统通知权限；授权结果交给 `DeviceRegistrationCoordinator`，由协调器触发 APNs 注册与聚合上送。
     private func requestRemoteNotificationAuthorizationAndRegister() async {
         do {

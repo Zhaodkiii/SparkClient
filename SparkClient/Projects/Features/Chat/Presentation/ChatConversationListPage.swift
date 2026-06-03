@@ -7,6 +7,7 @@ struct ChatConversationListPage: View {
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    let pushAdapter: PushAdapter
 
     @State private var searchText = ""
     @State private var navigationSelection: UUID?
@@ -274,6 +275,7 @@ struct ChatConversationListPage: View {
             showNoAvailableChatModelAlert = true
             return
         }
+        pushAdapter.requestAuthorizationIfNotDetermined()
         await listViewModel.createThread()
         guard let threadID = stateStore.selectedThreadID else { return }
         await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)

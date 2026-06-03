@@ -1,7 +1,6 @@
 import Combine
 import Foundation
 import UIKit
-import UserNotifications
 
 struct AISettingsPromptTooling {
     let autoFillAgentPrompt: (_ displayName: String, _ baseModelName: String) async throws -> String
@@ -290,22 +289,9 @@ final class AISettingsViewModel: ObservableObject {
         }
     }
 
-    /// 提交成功后：检查通知权限，必要时由用户行为触发权限请求与 APNs 注册。
+    /// 提交成功后：若通知权限尚未决定，直接请求系统通知权限与 APNs 注册。
     private func requestRemoteNotificationPermissionIfNeededAfterTrialSubmission() async {
-        guard let pushAdapter else { return }
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            // UI 层会先弹出“我们将统一通知你”，再调用 requestAuthorizationFromUserAction()。
-            NotificationCenter.default.post(name: .aiTrialNotificationPermissionNeedsPrePrompt, object: nil)
-            return
-        }
-        // 已经授权/拒绝：不再弹预提示；若用户愿意可在系统设置里开启。
-        // 这里不主动调用 requestAuthorizationIfNeeded，避免无上下文触发。
-    }
-
-    /// UI 在用户点击“继续”后调用：触发系统通知权限请求（必须由用户行为触发）。
-    func requestTrialNotificationAuthorizationFromUserAction() {
-        pushAdapter?.requestAuthorizationIfNeeded()
+        pushAdapter?.requestAuthorizationIfNotDetermined()
     }
 
     // MARK: - 厂商连接测试

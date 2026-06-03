@@ -142,6 +142,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 公共通知客户端，用于保存成功后的统一提示。
     private let notificationClient: (any NotificationClient)?
 
+    /// 远程推送适配器，用于开始识别时请求系统通知权限。
+    private let pushAdapter: PushAdapter?
+
     /// 本地表单编辑复用首页表单组件所需的工作流 API。
     private let workflowAPIForLocalForms: SparkMedicalWorkflowAPI?
     
@@ -181,6 +184,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         aiConfigCenter: AIConfigCenter,
         workflowAPIForLocalForms: SparkMedicalWorkflowAPI? = nil,
         notificationClient: (any NotificationClient)? = nil,
+        pushAdapter: PushAdapter? = nil,
         extractionRetrySettingsStore: MedicalExtractionRetrySettingsStore = MedicalExtractionRetrySettingsStore(),
         preSubmitValidator: any MedicalPreSubmitValidating = MedicalPreSubmitValidator(),
         logger: Logger = ConsoleLogger()
@@ -193,6 +197,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.aiConfigCenter = aiConfigCenter
         self.workflowAPIForLocalForms = workflowAPIForLocalForms
         self.notificationClient = notificationClient
+        self.pushAdapter = pushAdapter
         self.extractionRetrySettingsStore = extractionRetrySettingsStore
         self.preSubmitValidator = preSubmitValidator
         self.logger = logger
@@ -248,6 +253,8 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             logger.debug("忽略重复识别请求：已有识别任务运行中", module: .medical)
             return
         }
+
+        pushAdapter?.requestAuthorizationIfNotDetermined()
 
         recognitionTask = Task { [weak self] in
             await self?.startRecognition()

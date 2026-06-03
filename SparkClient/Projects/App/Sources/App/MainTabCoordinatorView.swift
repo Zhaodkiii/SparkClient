@@ -17,6 +17,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    let pushAdapter: PushAdapter
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
@@ -53,7 +54,8 @@ struct MainTabCoordinatorView: View {
                     detailViewModel: chatDetailViewModel,
                     taskManager: taskManager,
                     homeViewModel: homeViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
+                    aiSettingsViewModel: aiSettingsViewModel,
+                    pushAdapter: pushAdapter
                 )
             } destination: { route in
                 routeDestination(route)

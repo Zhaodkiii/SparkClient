@@ -80,7 +80,8 @@ struct AppCoordinatorView: View {
                         settingsViewModel: mainTab.settingsViewModel,
                         accountManagementViewModel: mainTab.accountManagementViewModel,
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,
-                        versionUpdateCoordinator: mainTab.versionUpdateCoordinator
+                        versionUpdateCoordinator: mainTab.versionUpdateCoordinator,
+                        pushAdapter: mainTab.pushAdapter
                     )
                     .environmentObject(mainTab.memberContextStore)
                     .id(session.accountID)
