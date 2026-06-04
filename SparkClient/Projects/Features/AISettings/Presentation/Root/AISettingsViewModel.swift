@@ -47,7 +47,7 @@ final class AISettingsViewModel: ObservableObject {
     /// - 已经是 Pro（trial active）：默认展示入口（用于查看/续期/状态提示等）。
     /// - 非 Pro：仅中国大陆用户展示入口。
     var shouldShowTrialEntry: Bool {
-        snapshot.trial.isActive || SparkSystemInfo().isMostLikelyMainlandChina
+        snapshot.trial.isActive || SparkSystemInfo.shared.isMostLikelyMainlandChina
     }
 
     // MARK: - 依赖服务

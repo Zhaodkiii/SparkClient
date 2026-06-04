@@ -18,7 +18,7 @@ struct GeneralSettingsView: View {
             HStack {
                 Text(L10n.text("settings.version.current"))
                 Spacer()
-                Text("\(SparkSystemInfo().appVersion) (\(SparkSystemInfo().buildVersion))")
+                Text("\(SparkSystemInfo.shared.appVersion) (\(SparkSystemInfo.shared.buildVersion))")
                     .foregroundStyle(.secondary)
             }
             Button {

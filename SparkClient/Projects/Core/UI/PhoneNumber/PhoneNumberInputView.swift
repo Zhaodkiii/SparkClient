@@ -67,7 +67,7 @@ struct PhoneNumberInputView: View {
             if !model.countryCode.isEmpty {
                 chosenRegion = regions.first { $0.dial == model.countryCode } ?? chosenRegion
             } else {
-                let country = SparkSystemInfo().mostLikelyCountryCode
+                let country = SparkSystemInfo.shared.mostLikelyCountryCode
                 chosenRegion = regions.first { $0.countryCode == country }
                     ?? regions.first { $0.countryCode == "CN" }
                     ?? chosenRegion

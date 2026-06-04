@@ -1,5 +1,6 @@
 #if canImport(XCTest)
 import Foundation
+@testable import SparkClient
 import XCTest
 
 final class ChatMessageMetadataTests: XCTestCase {

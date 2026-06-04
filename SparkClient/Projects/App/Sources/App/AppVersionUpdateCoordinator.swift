@@ -34,7 +34,7 @@ final class AppVersionUpdateCoordinator: ObservableObject {
     private let promptInterval: TimeInterval = 24 * 3600   // 可选更新弹窗间隔：24小时
 
     // MARK: - 初始化
-    init(api: SparkVersionAPI, systemInfo: SparkSystemInfo = SparkSystemInfo(), defaults: UserDefaults = .standard, logger: Logger = ConsoleLogger()) {
+    init(api: SparkVersionAPI, systemInfo: SparkSystemInfo = .shared, defaults: UserDefaults = .standard, logger: Logger = ConsoleLogger()) {
         self.api = api
         self.systemInfo = systemInfo
         self.defaults = defaults

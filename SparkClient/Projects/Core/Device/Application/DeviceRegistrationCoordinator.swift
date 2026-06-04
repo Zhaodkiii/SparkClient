@@ -5,7 +5,10 @@ import UserNotifications
 /// 设备登记触发来源（用于日志区分与聚合）。
 enum DeviceRegistrationReason: String, Sendable {
     case appLaunch = "app_launch"
+    /// 未登录态登录成功后的账号引导登记。
     case signedInBootstrap = "signed_in_bootstrap"
+    /// 已登录会话恢复后的冷启动必经登记（APP-STARTUP-000010）。
+    case signedInColdLaunch = "signed_in_cold_launch"
     case notificationAuthorization = "notification_authorization"
     case apnsTokenUpdate = "apns_token_update"
     case foregroundPermissionCheck = "foreground_permission_check"
@@ -29,10 +32,17 @@ final class SystemDeviceNotificationEnvironment: DeviceNotificationEnvironment {
     }
 }
 
+@MainActor
+protocol DeviceRegistrationExecuting {
+    func execute(state: DeviceRegistrationState) async -> RegisterDeviceOutcome
+}
+
+extension RegisterDeviceUseCase: DeviceRegistrationExecuting {}
+
 /// 设备信息上送：事件源只更新统一状态，由协调器聚合后最多提交一次完整登记。
 @MainActor
 final class DeviceRegistrationCoordinator {
-    private let registerDevice: RegisterDeviceUseCase
+    private let registerDevice: any DeviceRegistrationExecuting
     private let deviceCache: DeviceCache
     private let currentUserID: () -> Int?
     private let systemInfo: SparkSystemInfo
@@ -48,31 +58,31 @@ final class DeviceRegistrationCoordinator {
     private var apnsWaitTask: Task<Void, Never>?
     private var isAwaitingUserAuthorizationApnsToken = false
     private var isSubmissionSuspended = false
-    private var lastFlushOutcome: RegisterDeviceOutcome?
+
+    /// 本进程内已成功完成引导级登记的账号（冷启动/登录引导去重，不跨启动复用）。
+    private var bootstrapSubmittedAccountIDs: Set<Int> = []
+    private var didSubmitAnonymousBootstrapThisLaunch = false
 
     private var authInvalidationObserver: NSObjectProtocol?
 
-    /// signedInBootstrap 登记若触发鉴权失效，账号引导应中止后续 AI/OSS/Task 请求。
-    var shouldHaltSignedInBootstrap: Bool {
-        isSubmissionSuspended || lastFlushOutcome == .authSessionInvalidated
-    }
-
     /// 冷启动/登录引导等待 APNs token（纳秒）。
-    private let bootstrapApnsWaitWindowNs: UInt64 = 1_500_000_000
+    private let bootstrapApnsWaitWindowNs: UInt64
 
     init(
-        registerDevice: RegisterDeviceUseCase,
+        registerDevice: any DeviceRegistrationExecuting,
         deviceCache: DeviceCache,
         currentUserID: @escaping () -> Int? = { nil },
         systemInfo: SparkSystemInfo? = nil,
         notificationEnvironment: (any DeviceNotificationEnvironment)? = nil,
+        bootstrapApnsWaitWindowNs: UInt64 = 1_500_000_000,
         logger: Logger = ConsoleLogger()
     ) {
         self.registerDevice = registerDevice
         self.deviceCache = deviceCache
         self.currentUserID = currentUserID
-        self.systemInfo = systemInfo ?? SparkSystemInfo()
+        self.systemInfo = systemInfo ?? SparkSystemInfo.shared
         self.notificationEnvironment = notificationEnvironment ?? SystemDeviceNotificationEnvironment()
+        self.bootstrapApnsWaitWindowNs = bootstrapApnsWaitWindowNs
         self.logger = logger
 
         authInvalidationObserver = NotificationCenter.default.addObserver(
@@ -108,6 +118,8 @@ final class DeviceRegistrationCoordinator {
         pendingReasons.removeAll()
         latestApnsTokenHex = nil
         cachedAuthorizationStatusRaw = nil
+        bootstrapSubmittedAccountIDs.removeAll()
+        didSubmitAnonymousBootstrapThisLaunch = false
         deviceCache.clearDeviceRegistrationSnapshot()
     }
 
@@ -119,17 +131,103 @@ final class DeviceRegistrationCoordinator {
         logger.info("设备登记已暂停：鉴权失效处理中", module: .network)
     }
 
-    /// App 冷启动（未登录）或登录后账号引导：写入意图并由协调器统一 flush（含 APNs 短等待）。
-    func requestRegister(reason: DeviceRegistrationReason) async {
-        guard !isSubmissionSuspended else { return }
-        lastFlushOutcome = nil
+    /// App 冷启动（未登录）、已登录冷启动或登录后账号引导：写入意图并由协调器统一 flush（含 APNs 短等待）。
+    @discardableResult
+    func requestRegister(
+        reason: DeviceRegistrationReason,
+        accountID: Int? = nil
+    ) async -> DeviceRegistrationRequestOutcome {
+        guard !isSubmissionSuspended else {
+            logger.warning(
+                "设备登记阶段失败 outcome=failed_retryable error=submission_suspended",
+                module: .network
+            )
+            return .failedRetryable
+        }
+
+        if reason == .appLaunch, didSubmitAnonymousBootstrapThisLaunch {
+            logger.info(
+                "设备登记阶段跳过 outcome=skipped_same_launch_submission reason=\(reason.rawValue)",
+                module: .network
+            )
+            return .skippedSameLaunchSubmission
+        }
+
+        if let accountID, isBootstrapRegistrationReason(reason), reason != .appLaunch {
+            if bootstrapSubmittedAccountIDs.contains(accountID) {
+                logger.info(
+                    "设备登记阶段跳过 outcome=skipped_same_launch_submission accountID=\(accountID) reason=\(reason.rawValue)",
+                    module: .network
+                )
+                return .skippedSameLaunchSubmission
+            }
+        }
+
+        let resolvedAccountID = accountID ?? currentUserID()
+        logger.info(
+            "设备登记阶段开始 reason=\(reason.rawValue) accountID=\(resolvedAccountID.map(String.init) ?? "-")",
+            module: .network
+        )
+
         pendingReasons.insert(reason)
         rebuildPendingBaseSnapshot()
-        let blockUntilFlush = reason == .signedInBootstrap
-        await scheduleFlushAfterResolvingNotifications(
+
+        let blockUntilFlush = isBootstrapRegistrationReason(reason)
+        let outcome = await scheduleFlushAfterResolvingNotifications(
             apnsWaitWindowNs: bootstrapApnsWaitWindowNs,
-            blockUntilFlush: blockUntilFlush
+            blockUntilFlush: blockUntilFlush,
+            bootstrapAccountID: resolvedAccountID,
+            forceSubmit: isBootstrapRegistrationReason(reason)
         )
+
+        logger.info(
+            "设备登记阶段完成 outcome=\(outcome.logLabel) reason=\(reason.rawValue) accountID=\(resolvedAccountID.map(String.init) ?? "-")",
+            module: .network
+        )
+        return outcome
+    }
+
+    /// 引导级登记：失败后按固定次数与退避重试（APP-STARTUP-000010）。
+    @discardableResult
+    func requestRegisterWithLimitedRetry(
+        reason: DeviceRegistrationReason,
+        accountID: Int? = nil,
+        maxAttempts: Int = DeviceRegistrationBootstrapRetryPolicy.maxAttempts
+    ) async -> DeviceRegistrationRequestOutcome {
+        guard isBootstrapRegistrationReason(reason) else {
+            return await requestRegister(reason: reason, accountID: accountID)
+        }
+
+        let attempts = max(1, maxAttempts)
+        var lastOutcome: DeviceRegistrationRequestOutcome = .failedRetryable
+
+        for attemptIndex in 0 ..< attempts {
+            let backoff = DeviceRegistrationBootstrapRetryPolicy.backoffBeforeAttempt(attemptIndex)
+            if backoff > 0 {
+                logger.info(
+                    "设备登记重试 backoffMs=\(backoff / 1_000_000) attempt=\(attemptIndex + 1)/\(attempts)",
+                    module: .network
+                )
+                try? await Task.sleep(nanoseconds: backoff)
+            }
+
+            lastOutcome = await requestRegister(reason: reason, accountID: accountID)
+            switch lastOutcome {
+            case .submitted, .skippedSameLaunchSubmission, .authSessionInvalidated:
+                return lastOutcome
+            case .failedRetryable:
+                logger.warning(
+                    "设备登记重试失败 attempt=\(attemptIndex + 1)/\(attempts) reason=\(reason.rawValue)",
+                    module: .network
+                )
+            }
+        }
+
+        logger.warning(
+            "设备登记重试已用尽 attempts=\(attempts) reason=\(reason.rawValue)",
+            module: .network
+        )
+        return lastOutcome
     }
 
     /// 用户主动改变系统通知权限（设置页或应用内弹窗）。由协调器统一触发 APNs 注册。
@@ -142,7 +240,7 @@ final class DeviceRegistrationCoordinator {
             if let hex = latestApnsTokenHex {
                 pendingState?.notificationsEnabled = true
                 pendingState?.pushToken = .value(hex)
-                await flushIfNeeded()
+                _ = await flushIfNeeded(forceSubmit: false)
                 return
             }
             isAwaitingUserAuthorizationApnsToken = true
@@ -156,7 +254,7 @@ final class DeviceRegistrationCoordinator {
         isAwaitingUserAuthorizationApnsToken = false
         pendingState?.notificationsEnabled = false
         pendingState?.pushToken = .cleared
-        await flushIfNeeded()
+        _ = await flushIfNeeded(forceSubmit: false)
     }
 
     /// APNs 注册失败（仅用户授权流程下的兜底一次上送）。
@@ -165,7 +263,7 @@ final class DeviceRegistrationCoordinator {
         isAwaitingUserAuthorizationApnsToken = false
         pendingState?.notificationsEnabled = false
         pendingState?.pushToken = .unknown
-        await flushIfNeeded()
+        _ = await flushIfNeeded(forceSubmit: false)
     }
 
     /// APNs device token 回调：仅更新状态；若已有等待中的聚合 flush 则不提前提交。
@@ -179,7 +277,7 @@ final class DeviceRegistrationCoordinator {
 
         if isAwaitingUserAuthorizationApnsToken {
             isAwaitingUserAuthorizationApnsToken = false
-            await flushIfNeeded()
+            _ = await flushIfNeeded(forceSubmit: false)
             return
         }
 
@@ -190,12 +288,12 @@ final class DeviceRegistrationCoordinator {
         }
 
         if shouldCompensatePushTokenSubmission(newToken: token) {
-            await flushIfNeeded()
+            _ = await flushIfNeeded(forceSubmit: false)
             return
         }
 
         if !hasUnsettledBootstrapIntent() {
-            await flushIfNeeded()
+            _ = await flushIfNeeded(forceSubmit: false)
         }
     }
 
@@ -217,10 +315,23 @@ final class DeviceRegistrationCoordinator {
         pendingReasons.insert(.foregroundPermissionCheck)
         rebuildPendingBaseSnapshot()
         applyNotificationFields(for: status)
-        await scheduleFlushAfterResolvingNotifications(apnsWaitWindowNs: bootstrapApnsWaitWindowNs)
+        _ = await scheduleFlushAfterResolvingNotifications(
+            apnsWaitWindowNs: bootstrapApnsWaitWindowNs,
+            bootstrapAccountID: currentUserID(),
+            forceSubmit: false
+        )
     }
 
     // MARK: - Private
+
+    private func isBootstrapRegistrationReason(_ reason: DeviceRegistrationReason) -> Bool {
+        switch reason {
+        case .appLaunch, .signedInBootstrap, .signedInColdLaunch:
+            return true
+        case .notificationAuthorization, .apnsTokenUpdate, .foregroundPermissionCheck:
+            return false
+        }
+    }
 
     private func rebuildPendingBaseSnapshot() {
         let signedInAccountID = currentUserID()
@@ -238,7 +349,9 @@ final class DeviceRegistrationCoordinator {
     }
 
     private func hasUnsettledBootstrapIntent() -> Bool {
-        pendingReasons.contains(.appLaunch) || pendingReasons.contains(.signedInBootstrap)
+        pendingReasons.contains(.appLaunch)
+            || pendingReasons.contains(.signedInBootstrap)
+            || pendingReasons.contains(.signedInColdLaunch)
     }
 
     private var effectiveRegistrationAccountID: Int? {
@@ -276,10 +389,13 @@ final class DeviceRegistrationCoordinator {
         return authChanged || tokenChanged
     }
 
+    @discardableResult
     private func scheduleFlushAfterResolvingNotifications(
         apnsWaitWindowNs: UInt64,
-        blockUntilFlush: Bool = false
-    ) async {
+        blockUntilFlush: Bool = false,
+        bootstrapAccountID: Int? = nil,
+        forceSubmit: Bool
+    ) async -> DeviceRegistrationRequestOutcome {
         let status = await notificationEnvironment.authorizationStatus()
         applyNotificationFields(for: status)
 
@@ -287,20 +403,32 @@ final class DeviceRegistrationCoordinator {
             if latestApnsTokenHex != nil {
                 pendingState?.pushToken = .value(latestApnsTokenHex!)
                 pendingState?.notificationsEnabled = true
-                await flushIfNeeded()
-                return
+                return await flushIfNeeded(
+                    forceSubmit: forceSubmit,
+                    bootstrapAccountID: bootstrapAccountID
+                )
             }
             notificationEnvironment.registerForRemoteNotifications()
-            await scheduleApnsWaitThenFlush(
+            if blockUntilFlush {
+                logger.info(
+                    "设备登记等待 APNs token timeout=\(Double(apnsWaitWindowNs) / 1_000_000_000)s",
+                    module: .network
+                )
+            }
+            return await scheduleApnsWaitThenFlush(
                 waitNs: apnsWaitWindowNs,
                 allowFlushWithoutToken: true,
-                blockUntilFlush: blockUntilFlush
+                blockUntilFlush: blockUntilFlush,
+                bootstrapAccountID: bootstrapAccountID,
+                forceSubmit: forceSubmit
             )
-            return
         }
 
         cancelApnsWait()
-        await flushIfNeeded()
+        return await flushIfNeeded(
+            forceSubmit: forceSubmit,
+            bootstrapAccountID: bootstrapAccountID
+        )
     }
 
     private func applyNotificationFields(for status: UNAuthorizationStatus) {
@@ -324,42 +452,65 @@ final class DeviceRegistrationCoordinator {
         }
     }
 
+    @discardableResult
     private func scheduleApnsWaitThenFlush(
         waitNs: UInt64,
         allowFlushWithoutToken: Bool = true,
-        blockUntilFlush: Bool = false
-    ) async {
+        blockUntilFlush: Bool = false,
+        bootstrapAccountID: Int? = nil,
+        forceSubmit: Bool
+    ) async -> DeviceRegistrationRequestOutcome {
         cancelApnsWait()
         if blockUntilFlush {
-            await runApnsWaitThenFlush(waitNs: waitNs, allowFlushWithoutToken: allowFlushWithoutToken)
-            return
+            return await runApnsWaitThenFlush(
+                waitNs: waitNs,
+                allowFlushWithoutToken: allowFlushWithoutToken,
+                bootstrapAccountID: bootstrapAccountID,
+                forceSubmit: forceSubmit
+            )
         }
         apnsWaitTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.runApnsWaitThenFlush(waitNs: waitNs, allowFlushWithoutToken: allowFlushWithoutToken)
+            _ = await self.runApnsWaitThenFlush(
+                waitNs: waitNs,
+                allowFlushWithoutToken: allowFlushWithoutToken,
+                bootstrapAccountID: bootstrapAccountID,
+                forceSubmit: forceSubmit
+            )
             self.apnsWaitTask = nil
         }
+        return .submitted
     }
 
-    private func runApnsWaitThenFlush(waitNs: UInt64, allowFlushWithoutToken: Bool) async {
+    private func runApnsWaitThenFlush(
+        waitNs: UInt64,
+        allowFlushWithoutToken: Bool,
+        bootstrapAccountID: Int? = nil,
+        forceSubmit: Bool
+    ) async -> DeviceRegistrationRequestOutcome {
         try? await Task.sleep(nanoseconds: waitNs)
-        guard !Task.isCancelled, !isSubmissionSuspended else { return }
+        guard !Task.isCancelled, !isSubmissionSuspended else { return .failedRetryable }
         if let hex = latestApnsTokenHex {
             pendingState?.pushToken = .value(hex)
             pendingState?.notificationsEnabled = true
-            await flushIfNeeded()
-            return
+            return await flushIfNeeded(
+                forceSubmit: forceSubmit,
+                bootstrapAccountID: bootstrapAccountID
+            )
         }
         guard allowFlushWithoutToken else {
             logger.debug(
                 "设备登记继续等待 APNs token，冷启动阶段不上送无 token 状态",
                 module: .network
             )
-            return
+            return .failedRetryable
         }
         pendingState?.notificationsEnabled = true
         pendingState?.pushToken = .unknown
-        await flushIfNeeded()
+        return await flushIfNeeded(
+            forceSubmit: forceSubmit,
+            bootstrapAccountID: bootstrapAccountID
+        )
     }
 
     private func cancelApnsWait() {
@@ -367,18 +518,22 @@ final class DeviceRegistrationCoordinator {
         apnsWaitTask = nil
     }
 
-    private func flushIfNeeded() async {
-        guard !isSubmissionSuspended else { return }
-        guard let state = pendingState else { return }
+    @discardableResult
+    private func flushIfNeeded(
+        forceSubmit: Bool,
+        bootstrapAccountID: Int? = nil
+    ) async -> DeviceRegistrationRequestOutcome {
+        guard !isSubmissionSuspended else { return .failedRetryable }
+        guard let state = pendingState else { return .failedRetryable }
 
-        if state == lastSubmittedState {
+        if forceSubmit == false, state == lastSubmittedState {
             let reasons = pendingReasons.map(\.rawValue).sorted().joined(separator: ", ")
             logger.info(
                 "设备登记跳过：状态未变化 reasons=[\(reasons)]",
                 module: .network
             )
             pendingReasons.removeAll()
-            return
+            return .skippedSameLaunchSubmission
         }
 
         let reasons = pendingReasons.map(\.rawValue).sorted().joined(separator: ", ")
@@ -391,13 +546,33 @@ final class DeviceRegistrationCoordinator {
             module: .network
         )
 
-        let outcome = await registerDevice.execute(state: state)
-        lastFlushOutcome = outcome
+        let registerOutcome = await registerDevice.execute(state: state)
+        pendingReasons.removeAll()
+        return await mapRegisterOutcome(
+            registerOutcome,
+            state: state,
+            bootstrapAccountID: bootstrapAccountID
+        )
+    }
+
+    private func mapRegisterOutcome(
+        _ outcome: RegisterDeviceOutcome,
+        state: DeviceRegistrationState,
+        bootstrapAccountID: Int?
+    ) async -> DeviceRegistrationRequestOutcome {
         switch outcome {
         case .succeeded:
             lastSubmittedState = state
             if let accountID = state.accountID {
                 deviceCache.cacheLastLoggedInAccountID(accountID)
+            }
+            if state.isAuthenticated {
+                let trackedID = bootstrapAccountID ?? state.accountID
+                if let trackedID {
+                    bootstrapSubmittedAccountIDs.insert(trackedID)
+                }
+            } else {
+                didSubmitAnonymousBootstrapThisLaunch = true
             }
             let statusRaw = await notificationEnvironment.authorizationStatus().rawValue
             cachedAuthorizationStatusRaw = statusRaw
@@ -406,12 +581,30 @@ final class DeviceRegistrationCoordinator {
                 authorizationStatusRaw: statusRaw
             )
             deviceCache.cacheDeviceRegistrationSnapshot(snapshot)
+            return .submitted
         case .authSessionInvalidated:
             suspendPendingSubmissions()
+            return .authSessionInvalidated
         case .failed, .skippedMissingAuthenticatedCredentials:
-            break
+            logger.warning(
+                "设备登记阶段失败 outcome=failed_retryable error=\(registerOutcomeLogLabel(outcome))",
+                module: .network
+            )
+            return .failedRetryable
         }
-        pendingReasons.removeAll()
+    }
+
+    private func registerOutcomeLogLabel(_ outcome: RegisterDeviceOutcome) -> String {
+        switch outcome {
+        case .succeeded:
+            return "succeeded"
+        case .failed:
+            return "failed"
+        case .skippedMissingAuthenticatedCredentials:
+            return "skipped_missing_authenticated_credentials"
+        case .authSessionInvalidated:
+            return "auth_session_invalidated"
+        }
     }
 
     private func submittedApnsTokenHex(from pushToken: PushTokenState) -> String? {
@@ -451,6 +644,21 @@ final class DeviceRegistrationCoordinator {
             return true
         default:
             return false
+        }
+    }
+}
+
+private extension DeviceRegistrationRequestOutcome {
+    var logLabel: String {
+        switch self {
+        case .submitted:
+            return "submitted"
+        case .skippedSameLaunchSubmission:
+            return "skipped_same_launch_submission"
+        case .failedRetryable:
+            return "failed_retryable"
+        case .authSessionInvalidated:
+            return "auth_session_invalidated"
         }
     }
 }

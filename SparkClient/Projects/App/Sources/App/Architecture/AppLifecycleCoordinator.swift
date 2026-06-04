@@ -17,19 +17,28 @@ final class AppLifecycleCoordinator: ObservableObject {
     private let logger: Logger
     private var cancellables: Set<AnyCancellable> = []
     private var isHandlingServerAuthInvalidation = false
-    private var preparingAccountID: Int64?
     private var didHandleSignedOutState = false
+    private var isColdLaunchBootstrapInProgress = false
+    private var lastObservedSessionState: AppSessionStore.State = .loading
+    private let signedInPreparationRegistry = SignedInSessionPreparationRegistry()
 
     init(container: AppContainer) {
         self.container = container
         self.logger = container.logger
         self.sessionStore = container.sessionStore
         self.sessionState = container.sessionStore.state
+        self.lastObservedSessionState = container.sessionStore.state
+        self.preparedAccountID = signedInPreparationRegistry.preparedAccountID
+
         container.sessionStore.$state
             .removeDuplicates()
             .sink { [weak self] state in
-                self?.sessionState = state
-                self?.logger.debug("根生命周期：会话状态已同步到根视图 state=\(state.logValue)", module: .auth)
+                guard let self else { return }
+                let previous = self.lastObservedSessionState
+                self.lastObservedSessionState = state
+                self.sessionState = state
+                self.logger.debug("根生命周期：会话状态已同步到根视图 state=\(state.logValue)", module: .auth)
+                Task { await self.handleSessionStateTransition(from: previous, to: state) }
             }
             .store(in: &cancellables)
         logger.info("AppLifecycleCoordinator 已初始化", module: .general)
@@ -42,12 +51,19 @@ final class AppLifecycleCoordinator: ObservableObject {
             return
         }
         logger.info("启动流程：网络路径已评估且可用，开始会话恢复与应用级引导", module: .general)
+
+        isColdLaunchBootstrapInProgress = true
+        defer { isColdLaunchBootstrapInProgress = false }
+
         await sessionStore.restoreIfNeeded()
         await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
 
         switch sessionStore.state {
         case .signedIn(let session):
-            await prepareSignedInSessionIfNeeded(session)
+            await enqueueSignedInPreparation(
+                session: session,
+                deviceRegistrationReason: .signedInColdLaunch
+            )
         case .signedOut:
             await registerDeviceForSignedOutLaunchIfNeeded()
         case .loading:
@@ -63,48 +79,14 @@ final class AppLifecycleCoordinator: ObservableObject {
 
         logger.info("会话流程：进入未登录态，清理账号运行时", module: .auth)
         didHandleSignedOutState = true
-        preparedAccountID = nil
-        preparingAccountID = nil
+        resetSignedInLaunchPreparationState()
         container.onboardingStore.deactivate()
         let preserveDeviceRegistration = container.deviceRegistrationCoordinator.hasPendingAnonymousRegistration
-        await container.appBootstrapper.reset(preserveDeviceRegistration: preserveDeviceRegistration)
-        await container.accountSessionRuntime.activateGuest()
-    }
-
-    func prepareSignedInSessionIfNeeded(_ session: UserSession) async {
-        guard preparedAccountID != session.accountID else { return }
-        guard preparingAccountID != session.accountID else { return }
-
-        logger.info("会话流程：准备账号运行时 accountID=\(session.accountID)", module: .auth)
-        didHandleSignedOutState = false
-        preparingAccountID = session.accountID
-        defer { preparingAccountID = nil }
-
-        logger.debug("会话流程：准备步骤 activateUser 开始 accountID=\(session.accountID)", module: .auth)
-        await container.accountSessionRuntime.activateUser(accountID: session.accountID)
-        logger.debug("会话流程：准备步骤 onboarding activate 开始 accountID=\(session.accountID)", module: .auth)
-        await container.onboardingStore.activate(session: session)
-        logger.debug("会话流程：准备步骤 bootstrapIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
-        await container.appBootstrapper.bootstrapIfNeeded(for: session)
-        guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else {
-            logger.warning(
-                "会话流程：设备登记后鉴权失效，跳过后续 home/task 同步 accountID=\(session.accountID)",
-                module: .auth
-            )
-            return
+        await container.appBootstrapper.reset()
+        if preserveDeviceRegistration == false {
+            container.deviceRegistrationCoordinator.reset()
         }
-        logger.debug("会话流程：准备步骤 home loadInitialIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
-        await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)
-        logger.debug("会话流程：准备步骤 task syncIncremental 开始 accountID=\(session.accountID)", module: .auth)
-        await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
-        preparedAccountID = session.accountID
-        logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
-    }
-
-    /// 用户主动触发：仅在通知权限尚未决定时弹出系统权限对话框。
-    func requestNotificationAuthorizationIfNeeded() {
-        logger.debug("通知流程：请求通知权限（如尚未决定）", module: .push)
-        container.pushAdapter.requestAuthorizationIfNotDetermined()
+        await container.accountSessionRuntime.activateGuest()
     }
 
     func syncForegroundWorkIfNeeded() async {
@@ -131,17 +113,138 @@ final class AppLifecycleCoordinator: ObservableObject {
         logger.warning("认证流程：收到服务端鉴权失效通知，准备强制回到登录态", module: .auth)
         isHandlingServerAuthInvalidation = true
         container.deviceRegistrationCoordinator.suspendPendingSubmissions()
+        resetSignedInLaunchPreparationState()
         sessionStore.setSignedOut()
         defer { isHandlingServerAuthInvalidation = false }
         await container.forceSignOutAfterServerAuthInvalidation(invalidationMessage: invalidationMessage)
-        await container.appBootstrapper.reset(preserveDeviceRegistration: false)
+        await container.appBootstrapper.reset()
+        container.deviceRegistrationCoordinator.reset()
+    }
+
+    // MARK: - 已登录准备（单一入口，不经过 SwiftUI .task）
+
+    private func handleSessionStateTransition(
+        from previous: AppSessionStore.State,
+        to current: AppSessionStore.State
+    ) async {
+        guard case .signedIn(let session) = current else { return }
+        guard isColdLaunchBootstrapInProgress == false else { return }
+
+        switch previous {
+        case .signedOut:
+            await enqueueSignedInPreparation(
+                session: session,
+                deviceRegistrationReason: .signedInBootstrap
+            )
+        case .signedIn(let previousSession) where previousSession.accountID != session.accountID:
+            await enqueueSignedInPreparation(
+                session: session,
+                deviceRegistrationReason: .signedInBootstrap
+            )
+        case .loading:
+            // 冷启动路径由 `bootstrapLaunchAfterNetworkEvaluation` 负责。
+            break
+        default:
+            break
+        }
+    }
+
+    private func enqueueSignedInPreparation(
+        session: UserSession,
+        deviceRegistrationReason: DeviceRegistrationReason
+    ) async {
+        await signedInPreparationRegistry.runPreparationIfNeeded(accountID: session.accountID) {
+            await self.runSignedInPreparation(
+                session: session,
+                deviceRegistrationReason: deviceRegistrationReason
+            )
+        }
+        preparedAccountID = signedInPreparationRegistry.preparedAccountID
+    }
+
+    private func runSignedInPreparation(
+        session: UserSession,
+        deviceRegistrationReason: DeviceRegistrationReason
+    ) async {
+        logger.info("会话流程：准备账号运行时 accountID=\(session.accountID)", module: .auth)
+        didHandleSignedOutState = false
+
+        logger.debug("会话流程：准备步骤 activateUser 开始 accountID=\(session.accountID)", module: .auth)
+        await container.accountSessionRuntime.activateUser(accountID: session.accountID)
+        logger.debug("会话流程：准备步骤 onboarding activate 开始 accountID=\(session.accountID)", module: .auth)
+        await container.onboardingStore.activate(session: session)
+
+        logger.debug(
+            "会话流程：准备步骤 signedInDeviceRegistration 开始 accountID=\(session.accountID) reason=\(deviceRegistrationReason.rawValue)",
+            module: .auth
+        )
+        let registrationOutcome = await container.deviceRegistrationCoordinator.requestRegisterWithLimitedRetry(
+            reason: deviceRegistrationReason,
+            accountID: Int(session.accountID)
+        )
+        switch registrationOutcome {
+        case .authSessionInvalidated:
+            logger.warning(
+                "会话流程：设备登记鉴权失效，中止账号级引导 accountID=\(session.accountID)",
+                module: .auth
+            )
+            signedInPreparationRegistry.rollbackPreparingIfNeeded(accountID: session.accountID)
+            return
+        case .failedRetryable:
+            logger.warning(
+                "会话流程：设备登记失败且重试已用尽，中止账号级引导 accountID=\(session.accountID)",
+                module: .auth
+            )
+            signedInPreparationRegistry.rollbackPreparingIfNeeded(accountID: session.accountID)
+            return
+        case .submitted, .skippedSameLaunchSubmission:
+            break
+        }
+
+        guard registrationOutcome.allowsAccountBootstrap else {
+            signedInPreparationRegistry.rollbackPreparingIfNeeded(accountID: session.accountID)
+            return
+        }
+
+        guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else {
+            logger.warning(
+                "会话流程：设备登记后鉴权失效，跳过后续账号级引导 accountID=\(session.accountID)",
+                module: .auth
+            )
+            signedInPreparationRegistry.rollbackPreparingIfNeeded(accountID: session.accountID)
+            return
+        }
+
+        logger.debug("会话流程：准备步骤 bootstrapIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
+        await container.appBootstrapper.bootstrapIfNeeded(for: session)
+        guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else {
+            logger.warning(
+                "会话流程：账号引导后鉴权失效，跳过后续 home/task 同步 accountID=\(session.accountID)",
+                module: .auth
+            )
+            signedInPreparationRegistry.rollbackPreparingIfNeeded(accountID: session.accountID)
+            return
+        }
+        logger.debug("会话流程：准备步骤 home loadInitialIfNeeded 开始 accountID=\(session.accountID)", module: .auth)
+        await container.makeHomeViewModel().loadInitialIfNeeded(syncRemote: true)
+        logger.debug("会话流程：准备步骤 task syncIncremental 开始 accountID=\(session.accountID)", module: .auth)
+        await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
+
+        signedInPreparationRegistry.markPrepared(accountID: session.accountID)
+        preparedAccountID = session.accountID
+        logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
     }
 
     // MARK: - 设备登记（单一入口）
 
     private func registerDeviceForSignedOutLaunchIfNeeded() async {
         logger.debug("设备登记：未登录冷启动，触发匿名登记", module: .network)
-        await container.deviceRegistrationCoordinator.requestRegister(reason: .appLaunch)
+        _ = await container.deviceRegistrationCoordinator.requestRegisterWithLimitedRetry(reason: .appLaunch)
+    }
+
+    private func resetSignedInLaunchPreparationState() {
+        signedInPreparationRegistry.reset()
+        preparedAccountID = nil
     }
 }
 

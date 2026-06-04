@@ -93,10 +93,8 @@ struct AppCoordinatorView: View {
                     }
                 }
             } else {
+                // 账号准备由 AppLifecycleCoordinator 统一调度（冷启动 / 登录），避免 SwiftUI .task 取消导致登记中断。
                 ProgressView(L10n.text("app.loading.preparing"))
-                    .task(id: session.accountID) {
-                        await lifecycle.prepareSignedInSessionIfNeeded(session)
-                    }
             }
         }
     }

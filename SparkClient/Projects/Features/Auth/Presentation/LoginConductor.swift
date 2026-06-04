@@ -66,7 +66,7 @@ struct PhoneLoginView: View {
 
     init(viewModel: LoginViewModel) {
         self.viewModel = viewModel
-        let country = SparkSystemInfo().mostLikelyCountryCode
+        let country = SparkSystemInfo.shared.mostLikelyCountryCode
         let initial = defaultRegions.first { $0.countryCode == country }
             ?? defaultRegions.first { $0.countryCode == "CN" }
             ?? defaultRegions[0]

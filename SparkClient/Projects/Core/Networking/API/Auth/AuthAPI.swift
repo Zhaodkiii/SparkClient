@@ -202,7 +202,7 @@ struct SparkAuthAPI {
             let bundle_id: String
         }
 
-        let systemInfo = SparkSystemInfo()
+        let systemInfo = await MainActor.run { SparkSystemInfo.shared }
         let body = Payload(
             refresh_token: refreshToken,
             refresh: refreshToken,

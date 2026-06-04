@@ -167,7 +167,7 @@ actor AuthTokenProvider {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.setValue(RequestIdGenerator.make(), forHTTPHeaderField: "X-Request-ID")
 
-        let systemInfo = SparkSystemInfo()
+        let systemInfo = await MainActor.run { SparkSystemInfo.shared }
         let payload: [String: String] = [
             "refresh": refreshToken,
             "refresh_token": refreshToken,
