@@ -46,6 +46,7 @@ struct HomeFeatureDependencies {
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let routeStore: AppRouteStore
+    let nutritionDependencies: NutritionFeatureDependencies
 }
 
 struct KnowledgeFeatureDependencies {
@@ -53,6 +54,54 @@ struct KnowledgeFeatureDependencies {
 }
 
 extension HomeFeatureDependencies {
+    @MainActor
+    static func makeNutritionDependencies(
+        backend: Backend,
+        memberContextStore: MemberContextStore,
+        aiRuntimeService: AIRuntimeService,
+        configCenter: AIConfigCenter,
+        notificationStore: NotificationStore,
+        logger: Logger
+    ) -> NutritionFeatureDependencies {
+        let repository = NutritionRepository(api: backend.nutrition)
+        let promptFactory = NutritionPromptFactory()
+        let imageDescriber = NutritionFoodImageDescriber(
+            runtimeService: aiRuntimeService,
+            configCenter: configCenter,
+            promptFactory: promptFactory,
+            logger: logger
+        )
+        let intakeExtractor = NutritionIntakeStructuredExtractor(
+            runtimeService: aiRuntimeService,
+            configCenter: configCenter,
+            promptFactory: promptFactory,
+            jsonNormalizer: MedicalDocumentModelJSONNormalizer(),
+            logger: logger
+        )
+        let recognitionPipeline = DefaultNutritionRecognitionPipeline(
+            imageDescriber: imageDescriber,
+            intakeExtractor: intakeExtractor,
+            logger: logger
+        )
+        let healthKitStore = NutritionHealthKitStore(logger: logger)
+        return NutritionFeatureDependencies(
+            dashboardUseCase: NutritionDashboardUseCase(repository: repository, logger: logger),
+            mealRecordUseCase: NutritionMealRecordUseCase(repository: repository, logger: logger),
+            searchUseCase: NutritionSearchUseCase(repository: repository, logger: logger),
+            healthKitSyncUseCase: NutritionHealthKitSyncUseCase(
+                repository: repository,
+                healthKitStore: healthKitStore,
+                logger: logger
+            ),
+            energyBurnUseCase: NutritionEnergyBurnUseCase(repository: repository, logger: logger),
+            recognitionPipeline: recognitionPipeline,
+            configCenter: configCenter,
+            memberContextStore: memberContextStore,
+            notificationStore: notificationStore,
+            logger: logger
+        )
+    }
+
     @MainActor
     static var preview: HomeFeatureDependencies {
         let container = AppContainer.preview
@@ -70,7 +119,15 @@ extension HomeFeatureDependencies {
             notificationClient: container.notificationClient,
             medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
             aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: 1),
-            routeStore: AppRouteStore()
+            routeStore: AppRouteStore(),
+            nutritionDependencies: makeNutritionDependencies(
+                backend: container.backend,
+                memberContextStore: container.memberContextStore,
+                aiRuntimeService: container.aiRuntimeService,
+                configCenter: container.aiConfigCenter,
+                notificationStore: container.notificationStore,
+                logger: container.logger
+            )
         )
     }
 }

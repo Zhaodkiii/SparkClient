@@ -127,6 +127,60 @@ struct PromptLocalizer: Sendable {
         l10n.promptFormat("ai.prompt.medication.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
+    func nutritionFoodDescriptionPrompt(mealType: NutritionMealType) -> String {
+        l10n.promptFormat(
+            "ai.prompt.nutrition.food_description.template",
+            fallback: """
+            You are a food photo description assistant. Describe visible foods, portions, cooking methods, and ingredients in natural language.
+            Respond in the user's language. Do not output JSON.
+            Meal context: %@
+            """,
+            L10n.text(mealType.localizationKey)
+        )
+    }
+
+    func nutritionIntakeExtractionPrompt(mealType: NutritionMealType, sourceText: String) -> String {
+        l10n.promptFormat(
+            "ai.prompt.nutrition.intake_extraction.template",
+            fallback: """
+            You are a nutrition intake extraction assistant. Return one JSON object only (camelCase keys, no markdown).
+            Top-level keys: title, mealType, confidence, overview, items, intakes, uncertainNotes.
+            overview must include energyKcal, proteinG, carbohydrateG, fatG.
+            Put uncertain portions or unknown foods into uncertainNotes instead of inventing precise values.
+            Default mealType: %@
+
+            Input:
+            %@
+            """,
+            mealType.rawValue,
+            sourceText
+        )
+    }
+
+    func nutritionExtractionRetryCorrectionPrompt(errorSummary: String, outputPreview: String) -> String {
+        let notAvailable = nutritionExtractionNotAvailableLabel()
+        let template = l10n.prompt(
+            "ai.prompt.nutrition.extraction.retry_correction.template",
+            fallback: """
+            [Retry correction]
+            The previous nutrition extraction JSON failed to decode.
+            - Error: %@
+            - Previous output preview: %@
+
+            Return pure JSON only with camelCase keys. Do not use markdown or explanatory text.
+            """
+        )
+        return String(
+            format: template,
+            errorSummary.isEmpty ? notAvailable : errorSummary,
+            outputPreview.isEmpty ? notAvailable : outputPreview
+        )
+    }
+
+    func nutritionExtractionNotAvailableLabel() -> String {
+        l10n.prompt("ai.prompt.nutrition.extraction.not_available", fallback: "N/A")
+    }
+
     func medicalExtractionRetryCorrectionPrompt(
         kind: MedicalDocumentKind,
         feedback: MedicalExtractionRetryFeedback

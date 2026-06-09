@@ -25,6 +25,7 @@ struct HomeView: View {
                 // 当前版本 展示 注释 任务功能
 //                headerCard
                 medicalInfoSection
+                nutritionInfoSection
 
             }
             .padding(.horizontal, 16)
@@ -376,6 +377,13 @@ struct HomeView: View {
         }
     }
 
+    private var nutritionInfoSection: some View {
+        HomeNutritionEntrySection(
+            dependencies: dependencies.nutritionDependencies,
+            memberID: viewModel.selectedMemberID
+        )
+    }
+
     private var medicalAIReportButton: some View {
         Button {
             medicalDocumentUploadViewModel.presentUploadPage()
@@ -449,14 +457,13 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        )
+        
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color(uiColor: .separator), lineWidth: 1)
+        }
     }
 
     private var memberDetailPresented: Binding<Bool> {

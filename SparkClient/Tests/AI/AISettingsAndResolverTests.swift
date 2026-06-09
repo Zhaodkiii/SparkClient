@@ -220,7 +220,8 @@ final class AISettingsAndResolverTests: XCTestCase {
             contextFolding: empty,
             router: empty,
             modelConfig: empty,
-            reportInterpretation: empty
+            reportInterpretation: empty,
+            nutritionIntakeExtraction: empty
         )
     }
 }

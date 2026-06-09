@@ -534,6 +534,8 @@ extension AIScenarioRemoteBundlesCollection {
             modelConfig = bundle
         case .reportInterpretation:
             reportInterpretation = bundle
+        case .nutritionIntakeExtraction:
+            nutritionIntakeExtraction = bundle
         }
     }
 }
@@ -574,6 +576,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     var modelConfig: AIScenarioRemoteBundle
     /// 报告解读场景模型集合。
     var reportInterpretation: AIScenarioRemoteBundle
+    /// 营养摄入结构化抽取场景模型集合。
+    var nutritionIntakeExtraction: AIScenarioRemoteBundle
 
     init(
         chat: AIScenarioRemoteBundle,
@@ -592,7 +596,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         contextFolding: AIScenarioRemoteBundle,
         router: AIScenarioRemoteBundle,
         modelConfig: AIScenarioRemoteBundle,
-        reportInterpretation: AIScenarioRemoteBundle
+        reportInterpretation: AIScenarioRemoteBundle,
+        nutritionIntakeExtraction: AIScenarioRemoteBundle
     ) {
         self.chat = chat
         self.embedding = embedding
@@ -611,6 +616,7 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         self.router = router
         self.modelConfig = modelConfig
         self.reportInterpretation = reportInterpretation
+        self.nutritionIntakeExtraction = nutritionIntakeExtraction
     }
 
     /// 与服务端字段命名的映射。
@@ -628,6 +634,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         router = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("router"))
         modelConfig = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("modelConfig"))
         reportInterpretation = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("reportInterpretation"))
+        nutritionIntakeExtraction = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .key("nutritionIntakeExtraction"))
+            ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
 
         medicalStructuredExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalStructuredExtraction"))
         medicalDocumentTypeRecognition = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicalDocumentTypeRecognition"))
@@ -677,6 +685,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
             return modelConfig
         case .reportInterpretation:
             return reportInterpretation
+        case .nutritionIntakeExtraction:
+            return nutritionIntakeExtraction
         }
     }
 
@@ -706,7 +716,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
             contextFolding,
             router,
             modelConfig,
-            reportInterpretation
+            reportInterpretation,
+            nutritionIntakeExtraction
         ]
 
         var seen = Set<String>()

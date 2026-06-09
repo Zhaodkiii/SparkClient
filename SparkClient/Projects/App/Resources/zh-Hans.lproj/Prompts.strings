@@ -652,3 +652,7 @@ OCR文本：
 "ai.prompt.medical_extraction.retry.suggestion.generic_type" = "请严格匹配 schema 中的字段类型。";
 "ai.prompt.medical_extraction.retry.suggestion.generic" = "请返回符合原 schema 的 JSON 结构。";
 "ai.prompt.medical_extraction.retry.suggestion.type_mismatch" = "字段期望类型为 %@，上次实际为 %@，请输出与 schema 兼容的类型。";
+"ai.prompt.nutrition.food_description.template" = "你是食物图片描述助手。请用自然语言描述图片中的可见食物、估算份量、烹饪方式和配料，使用用户语言回复。不要输出 JSON 或 Markdown。\n餐次上下文：%@";
+"ai.prompt.nutrition.intake_extraction.template" = "你是营养摄入结构化抽取助手。仅输出一个合法 JSON 对象，不要 Markdown、解释文字或代码块。\n仅使用 camelCase 键：title、mealType、confidence、overview、items、intakes、uncertainNotes。\noverview 必须包含 energyKcal、proteinG、carbohydrateG、fatG。\nitems[] 可含 foodItemId（可选）、name、servingRatio、servingDescription、confidence。\nintakes[] 必须含 nutrientType、value、unit，可选 confidence。\nuncertainNotes 必须是字符串。\n不要输出 null；数值未知时使用 0，并把不确定原因写入 uncertainNotes。\n不确定的份量或食物请写入 uncertainNotes，不要编造精确值。\n无法判断餐次时默认 mealType：%@\n\n输入：\n%@";
+"ai.prompt.nutrition.extraction.retry_correction.template" = "【重试修正要求】\n上一次营养抽取 JSON 解码失败。\n- 错误：%@\n- 上次输出摘要：%@\n\n请仅返回 camelCase 纯 JSON，不要使用 Markdown、代码块或解释文字。";
+"ai.prompt.nutrition.extraction.not_available" = "无";

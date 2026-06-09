@@ -21,6 +21,7 @@ final class Backend {
     let oss: SparkOSSAPI
     let ocr: SparkOCRAPI
     let version: SparkVersionAPI
+    let nutrition: NutritionAPI
     let deviceCache: DeviceCache
 
     init(
@@ -66,6 +67,7 @@ final class Backend {
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
         self.version = SparkVersionAPI(configuration: configuration)
+        self.nutrition = NutritionAPI(configuration: configuration)
 
         logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
@@ -89,6 +91,7 @@ final class Backend {
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
         self.version = SparkVersionAPI(configuration: configuration)
+        self.nutrition = NutritionAPI(configuration: configuration)
 
         configuration.logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }

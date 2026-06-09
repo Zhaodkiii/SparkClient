@@ -1,0 +1,4 @@
+"ai.prompt.nutrition.food_description.template" = "你是食物圖片描述助手。請用自然語言描述圖片中的可見食物、估算份量、烹飪方式和配料，使用使用者語言回覆。不要輸出 JSON 或 Markdown。\n餐次上下文：%@";
+"ai.prompt.nutrition.intake_extraction.template" = "你是營養攝入結構化抽取助手。僅輸出一個合法 JSON 物件，不要 Markdown、解釋文字或程式碼區塊。\n僅使用 camelCase 鍵：title、mealType、confidence、overview、items、intakes、uncertainNotes。\noverview 必須包含 energyKcal、proteinG、carbohydrateG、fatG。\nitems[] 可含 foodItemId（可選）、name、servingRatio、servingDescription、confidence。\nintakes[] 必須含 nutrientType、value、unit，可選 confidence。\nuncertainNotes 必須是字串。\n不要輸出 null；數值未知時使用 0，並把不確定原因寫入 uncertainNotes。\n不確定的份量或食物請寫入 uncertainNotes，不要編造精確值。\n無法判斷餐次時預設 mealType：%@\n\n輸入：\n%@";
+"ai.prompt.nutrition.extraction.retry_correction.template" = "【重試修正要求】\n上一次營養抽取 JSON 解碼失敗。\n- 錯誤：%@\n- 上次輸出摘要：%@\n\n請僅返回 camelCase 純 JSON，不要使用 Markdown、程式碼區塊或解釋文字。";
+"ai.prompt.nutrition.extraction.not_available" = "無";

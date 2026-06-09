@@ -36,6 +36,8 @@ enum AIScenario: String, Codable, CaseIterable, Sendable {
     case modelConfig = "model_config"
     /// 报告解读场景（对医疗报告进行解释、说明或风险提示）。
     case reportInterpretation = "report_interpretation"
+    /// 营养摄入结构化抽取场景（食物描述/自然语言 → 营养草稿 JSON）。
+    case nutritionIntakeExtraction = "nutrition_intake_extraction"
 }
 
 extension AIScenario {
@@ -75,6 +77,8 @@ extension AIScenario {
             return L10n.text("ai_settings.scenario.model_config")
         case .reportInterpretation:
             return L10n.text("ai_settings.scenario.report_interpretation")
+        case .nutritionIntakeExtraction:
+            return L10n.text("ai_settings.scenario.nutrition_intake_extraction")
         }
     }
 
@@ -114,6 +118,8 @@ extension AIScenario {
             return "slider.horizontal.3"
         case .reportInterpretation:
             return "stethoscope"
+        case .nutritionIntakeExtraction:
+            return "fork.knife"
         }
     }
 
@@ -153,6 +159,8 @@ extension AIScenario {
             return L10n.text("ai_settings.prefs.explain.model_config")
         case .reportInterpretation:
             return L10n.text("ai_settings.prefs.explain.report_interpretation")
+        case .nutritionIntakeExtraction:
+            return L10n.text("ai_settings.prefs.explain.nutrition_intake_extraction")
         }
     }
 }

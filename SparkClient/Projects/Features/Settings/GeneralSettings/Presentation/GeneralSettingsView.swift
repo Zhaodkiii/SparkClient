@@ -3,14 +3,31 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    @ObservedObject private var preferencesStore = HomeNutritionEntryPreferencesStore.shared
 
     var body: some View {
         List {
             versionSection
+            homeNutritionEntrySection
             MedicalExtractionRetrySettingsSection()
             cacheSection
         }
         .navigationTitle(L10n.text("settings.general.title"))
+    }
+
+    private var homeNutritionEntrySection: some View {
+        Section {
+            Picker(
+                L10n.text("settings.general.home_nutrition_entry.title"),
+                selection: $preferencesStore.displayMode
+            ) {
+                ForEach(HomeNutritionEntryDisplayMode.allCases) { mode in
+                    Text(L10n.text(mode.localizationKey)).tag(mode)
+                }
+            }
+        } footer: {
+            Text(L10n.text("settings.general.home_nutrition_entry.footer"))
+        }
     }
 
     private var versionSection: some View {

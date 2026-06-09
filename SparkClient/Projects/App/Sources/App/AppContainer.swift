@@ -718,7 +718,15 @@ final class AppContainer {
                 notificationClient: notificationClient,
                 medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel(),
                 aiSettingsViewModel: aiSettingsViewModel,
-                routeStore: routeStore
+                routeStore: routeStore,
+                nutritionDependencies: HomeFeatureDependencies.makeNutritionDependencies(
+                    backend: backend,
+                    memberContextStore: memberContextStore,
+                    aiRuntimeService: aiRuntimeService,
+                    configCenter: aiConfigCenter,
+                    notificationStore: notificationStore,
+                    logger: logger
+                )
             ),
             knowledgeDependencies: KnowledgeFeatureDependencies(
                 makeEditorViewModel: { [self] documentID in
