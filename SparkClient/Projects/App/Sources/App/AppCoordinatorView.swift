@@ -19,9 +19,7 @@ struct AppCoordinatorView: View {
             sessionContent
 
             if networkMonitor.hasEvaluatedPath == false {
-                ProgressView(L10n.text("app.loading.preparing"))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground).ignoresSafeArea())
+                AppLaunchScreenView()
             } else if networkMonitor.isSatisfied == false {
                 NetworkGateView(monitor: networkMonitor)
                     .transition(.opacity)
@@ -40,7 +38,7 @@ struct AppCoordinatorView: View {
     private var sessionContent: some View {
         switch lifecycle.sessionState {
         case .loading:
-            ProgressView(L10n.text("app.loading.preparing"))
+            AppLaunchScreenView()
                 .task(id: networkMonitor.hasEvaluatedPath ? networkMonitor.isSatisfied : false) {
                     await lifecycle.bootstrapLaunchAfterNetworkEvaluation(
                         hasEvaluatedPath: networkMonitor.hasEvaluatedPath,
@@ -94,7 +92,7 @@ struct AppCoordinatorView: View {
                 }
             } else {
                 // 账号准备由 AppLifecycleCoordinator 统一调度（冷启动 / 登录），避免 SwiftUI .task 取消导致登记中断。
-                ProgressView(L10n.text("app.loading.preparing"))
+                AppLaunchScreenView()
             }
         }
     }
