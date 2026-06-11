@@ -51,7 +51,7 @@ struct PrescriptionMedicationPlanSummaryRow: View {
     var body: some View {
         Group {
             if let nav = planDetailNavigation {
-                NavigationLink {
+                MainNavigationLink {
                     MedicationPlanDetailPage(
                         plan: plan,
                         medicineBoxes: nav.medicineBoxes,
@@ -67,7 +67,6 @@ struct PrescriptionMedicationPlanSummaryRow: View {
                         onMedicineBoxSaved: nav.onMedicineBoxSaved,
                         onMedicineBoxDeleted: nav.onMedicineBoxDeleted
                     )
-                    .hidesMainTabBarWhenPushed()
                 } label: {
                     rowLabel
                 }

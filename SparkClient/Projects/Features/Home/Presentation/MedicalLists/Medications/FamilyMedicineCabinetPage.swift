@@ -205,7 +205,7 @@ struct FamilyMedicineCabinetPage: View {
         } else {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(boxes, id: \.id) { box in
-                    NavigationLink {
+                    MainNavigationLink {
                         MedicineBoxDetailPage(
                             box: box,
                             entryMemberID: entryMemberID,

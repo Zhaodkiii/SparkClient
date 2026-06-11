@@ -66,6 +66,7 @@
 "nutrition.date.today" = "Today";
 "nutrition.date.selected" = "Selected date";
 "nutrition.summary.detail.title" = "Summary details";
+"nutrition.summary.detail.track_food" = "Track food log";
 "nutrition.summary.detail.meals.title" = "Meals";
 "nutrition.detail.title" = "Nutrition details";
 "nutrition.detail.empty.title" = "No nutrition records yet";

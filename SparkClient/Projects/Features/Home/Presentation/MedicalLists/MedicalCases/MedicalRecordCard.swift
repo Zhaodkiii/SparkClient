@@ -62,7 +62,7 @@ struct MedicalRecordCard: View {
     }()
 
     var body: some View {
-        NavigationLink {
+        MainNavigationLink {
             MedicalCaseDetailPage(
                 item: item,
                 completeData: completeData,
@@ -75,7 +75,6 @@ struct MedicalRecordCard: View {
                 logger: logger,
                 onExaminationReportsUpdated: onExaminationReportsUpdated
             )
-            .hidesMainTabBarWhenPushed()
         } label: {
             VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 6) {

@@ -146,7 +146,7 @@ struct MedicalReportCardsSectionView: View {
     @ViewBuilder
     private func reportRow(index: Int, report: MedicalReportRecognitionDraft, category: ExaminationReportCategory) -> some View {
         if let detailNavigationContext {
-            NavigationLink {
+            MainNavigationLink {
                 MedicalCaseTimelineExaminationDetailHost(
                     report: report.remoteExaminationReport(
                         memberID: detailNavigationContext.memberID,

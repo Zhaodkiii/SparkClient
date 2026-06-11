@@ -74,7 +74,7 @@ struct MedicationPlanDetailPage: View {
          
             if let medicineBox {
                 Section(L10n.text("home.medical.medication_plan.section.linked_box")) {
-                    NavigationLink {
+                    MainNavigationLink {
                         MedicineBoxDetailPage(
                             box: medicineBox,
                             entryMemberID: memberID,

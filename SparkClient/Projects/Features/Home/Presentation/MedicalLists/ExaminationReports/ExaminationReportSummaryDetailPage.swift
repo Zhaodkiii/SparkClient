@@ -215,7 +215,7 @@ struct ExaminationReportSummaryDetailPage: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 if category == .laboratory {
-                    NavigationLink {
+                    MainNavigationLink {
                         LaboratoryReportDetailPage(
                             report: report.replacingMedExamDetails(sortedDetails),
                             navigationTitleOverride: nil
@@ -243,7 +243,7 @@ struct ExaminationReportSummaryDetailPage: View {
             }  else {
                 VStack(spacing: 10) {
                     ForEach(sortedDetails, id: \.id) { item in
-                        NavigationLink {
+                        MainNavigationLink {
                             ExaminationReportCategoryDetailPage(
                                 category: category,
                                 report: report.replacingMedExamDetails([item]),

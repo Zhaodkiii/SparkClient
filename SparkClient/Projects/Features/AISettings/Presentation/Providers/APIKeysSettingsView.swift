@@ -70,12 +70,11 @@ struct APIKeysSettingsView: View {
 
     private func providerRow(_ provider: APIKeys) -> some View {
         HStack(spacing: 12) {
-            NavigationLink {
+            MainNavigationLink {
                 ProviderSettingsEditorView(
                     provider: provider,
                     viewModel: viewModel
                 )
-                .hidesMainTabBarWhenPushed()
             } label: {
                 HStack(spacing: 12) {
                     Image(companyIconName(for: provider.company))

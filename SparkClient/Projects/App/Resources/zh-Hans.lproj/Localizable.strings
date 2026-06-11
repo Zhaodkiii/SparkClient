@@ -66,6 +66,7 @@
 "nutrition.date.today" = "今天";
 "nutrition.date.selected" = "所选日期";
 "nutrition.summary.detail.title" = "总结详情";
+"nutrition.summary.detail.track_food" = "追踪食物记录";
 "nutrition.summary.detail.meals.title" = "膳食";
 "nutrition.detail.title" = "营养详情";
 "nutrition.detail.empty.title" = "还没有饮食记录";

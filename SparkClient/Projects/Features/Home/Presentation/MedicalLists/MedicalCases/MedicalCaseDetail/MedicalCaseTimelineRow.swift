@@ -97,7 +97,7 @@ struct MedicalCaseTimelineRow: View {
                     }
 
                     if let route = event.editRoute {
-                        NavigationLink {
+                        MainNavigationLink {
                             MedicalCaseTimelineEditDestination(
                                 route: route,
                                 memberID: memberID,
@@ -110,7 +110,6 @@ struct MedicalCaseTimelineRow: View {
                                     onTimelineEventRemoved?(id)
                                 }
                             )
-                            .hidesMainTabBarWhenPushed()
                         } label: {
                             Image(systemName: "pencil")
                                 .font(.caption)
@@ -142,9 +141,8 @@ struct MedicalCaseTimelineRow: View {
     private var timelineCard: some View {
         Group {
             if hasDetailDestination {
-                NavigationLink {
+                MainNavigationLink {
                     timelineDetailDestination
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     timelineCardContent
                 }

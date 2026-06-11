@@ -124,7 +124,8 @@ struct NutritionRecipeCreateView: View {
                     existingFoodIDs: Set(viewModel.foods.map(\.foodItemID))
                 ) { food in
                     viewModel.addFood(food)
-                },
+                }
+                .hidesMainTabBarWhenPushed(),
                 isActive: $showsPicker
             ) {
                 EmptyView()

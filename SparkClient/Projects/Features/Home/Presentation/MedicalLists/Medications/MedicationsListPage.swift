@@ -298,7 +298,7 @@ struct MedicationsListPage: View {
     }
 
     private var executionCenterToolbarLink: some View {
-        NavigationLink {
+        MainNavigationLink {
             MedicationExecutionCenterPage(
                 medicationPlans: medicationPlans,
                 medicineBoxes: medicineBoxes,
@@ -318,7 +318,7 @@ struct MedicationsListPage: View {
     }
 
     private var medicineBoxToolbarLink: some View {
-        NavigationLink {
+        MainNavigationLink {
             MedicineBoxListPage(
                 medicineBoxes: medicineBoxes,
                 memberID: memberID,
@@ -377,7 +377,7 @@ struct MedicationsListPage: View {
                     ForEach(filteredItems) { item in
                         switch item {
                         case .prescription(_, let prescription, let plans):
-                            NavigationLink {
+                            MainNavigationLink {
                                 MedicationPrescriptionDetailPage(
                                     prescription: prescription,
                                     plans: plans,
@@ -408,7 +408,7 @@ struct MedicationsListPage: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                         case .standalonePlan(let plan):
-                            NavigationLink {
+                            MainNavigationLink {
                                 planDetailPage(for: plan)
                             } label: {
                                 MedicationPlanCard(
@@ -1030,7 +1030,7 @@ struct MedicationPlanFormView: View {
         ) {
             VStack(spacing: 14) {
                 SparkFormCard(title: "关联药品", titleSystemImage: "pills.fill") {
-                    NavigationLink {
+                    MainNavigationLink {
                         MedicationPlanMedicineBoxPickerPage(
                             memberID: memberID,
                             medicineBoxes: medicineBoxes,
@@ -2014,7 +2014,7 @@ private struct MedicationPrescriptionCard<Destination: View>: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(plans, id: \.id) { plan in
-                        NavigationLink {
+                        MainNavigationLink {
                             planDestination(plan)
                         } label: {
                             MedicationPrescriptionPlanRow(

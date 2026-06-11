@@ -402,6 +402,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                     cancellationToken: cancellationToken
                 )
                 try cancellationToken.checkCancellation()
+                print(ocrText)
                 // 缓存 OCR 结果
                 pipelineOCRText = ocrText
                 complete(

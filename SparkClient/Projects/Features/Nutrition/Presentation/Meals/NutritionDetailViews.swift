@@ -2,16 +2,24 @@ import SwiftUI
 
 struct NutritionSummaryDetailView: View {
     @StateObject private var viewModel: NutritionSummaryDetailViewModel
+    private let dependencies: NutritionFeatureDependencies
+    private let memberID: Int
+    private let date: Date
+
+    @State private var isTrackingFood = false
 
     init(
-        dashboardUseCase: NutritionDashboardUseCase,
+        dependencies: NutritionFeatureDependencies,
         memberID: Int,
         date: Date,
         initialDashboard: NutritionDashboardViewData? = nil
     ) {
+        self.dependencies = dependencies
+        self.memberID = memberID
+        self.date = date
         _viewModel = StateObject(
             wrappedValue: NutritionSummaryDetailViewModel(
-                dashboardUseCase: dashboardUseCase,
+                dashboardUseCase: dependencies.dashboardUseCase,
                 memberID: memberID,
                 date: date,
                 initialDashboard: initialDashboard
@@ -44,8 +52,70 @@ struct NutritionSummaryDetailView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("nutrition.summary.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            trackFoodBar
+        }
         .task { await viewModel.loadIfNeeded() }
         .refreshable { await viewModel.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .nutritionMealRecordDidSave)) { _ in
+            Task { await viewModel.reload() }
+        }
+        .notificationFullScreenCover(
+            isPresented: $isTrackingFood,
+            store: dependencies.notificationStore
+        ) {
+            CompatibleNavigationContainer {
+                NutritionFoodAddView(
+                    dependencies: dependencies,
+                    memberID: memberID,
+                    date: date,
+                    mealType: Self.suggestedMealType(now: Date())
+                )
+            }
+        }
+    }
+
+    private var trackFoodBar: some View {
+        Button {
+            isTrackingFood = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.headline)
+                Text(L10n.text("nutrition.summary.detail.track_food"))
+                    .font(.headline)
+                    .fontWeight(.bold)
+            }
+            .foregroundStyle(Color(uiColor: .systemBackground))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.black)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.regularMaterial)
+    }
+
+    /// Chooses a sensible default meal slot based on the time of day so the
+    /// docked "track food" action can open the add-food flow without an extra
+    /// meal picker step.
+    private static func suggestedMealType(now: Date) -> NutritionMealType {
+        let hour = Calendar.current.component(.hour, from: now)
+        switch hour {
+        case 5..<10:
+            return .breakfast
+        case 10..<15:
+            return .lunch
+        case 15..<21:
+            return .dinner
+        default:
+            return .snack
+        }
     }
 
     @ViewBuilder
@@ -136,7 +206,7 @@ struct NutritionDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if viewModel.hasEditableRecords {
-                    NavigationLink {
+                    MainNavigationLink {
                         NutritionMealFoodEditListView(
                             records: viewModel.records,
                             memberID: viewModel.memberID,
@@ -166,7 +236,7 @@ struct NutritionDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(group.foods.enumerated()), id: \.element.id) { index, food in
                         if let record = viewModel.record(for: food) {
-                            NavigationLink {
+                            MainNavigationLink {
                                 NutritionMealFoodDetailEditView(
                                     row: food,
                                     record: record,
@@ -257,7 +327,7 @@ struct NutritionMealDetailView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
                     if let detail = viewModel.detail, detail.foods.isEmpty == false {
-                        NavigationLink {
+                        MainNavigationLink {
                             NutritionMealFoodEditListView(
                                 records: detail.records,
                                 memberID: memberID,
@@ -269,7 +339,7 @@ struct NutritionMealDetailView: View {
                             Text(L10n.text("nutrition.common.edit"))
                         }
                     }
-                    NavigationLink {
+                    MainNavigationLink {
                         NutritionFoodAddView(
                             dependencies: dependencies,
                             memberID: memberID,
@@ -322,7 +392,7 @@ struct NutritionMealDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(detail.foods.enumerated()), id: \.element.id) { index, food in
                         if let record = detail.records.first(where: { $0.id == food.recordID }) {
-                            NavigationLink {
+                            MainNavigationLink {
                                 NutritionMealFoodDetailEditView(
                                     row: food,
                                     record: record,

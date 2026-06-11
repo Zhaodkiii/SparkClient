@@ -26,7 +26,7 @@ struct NutritionHomeView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
+                MainNavigationLink {
                     NutritionHistoryView(
                         mealRecordUseCase: dependencies.mealRecordUseCase,
                         memberID: resolvedMemberID
@@ -98,7 +98,6 @@ struct NutritionHomeView: View {
         case .content(let dashboard):
             NutritionSummarySectionView(
                 dashboard: dashboard,
-                dashboardUseCase: dependencies.dashboardUseCase,
                 dependencies: dependencies,
                 memberID: resolvedMemberID,
                 date: viewModel.state.selectedDate

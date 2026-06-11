@@ -121,7 +121,7 @@ struct ModelsSettingsView: View {
                             Label(L10n.text("ai_settings.models.menu.add_agent"), systemImage: "person.crop.circle.badge.plus")
                         }
 
-                        NavigationLink {
+                        MainNavigationLink {
                             ModelsAdvancedEditorView(
                                 models: Binding(
                                     get: { viewModel.snapshot.allModels },
@@ -130,7 +130,6 @@ struct ModelsSettingsView: View {
                                 selectedIdentity: $selectedIdentity,
                                 searchText: $searchText
                             )
-                            .hidesMainTabBarWhenPushed()
                         } label: {
                             Label(L10n.text("ai_settings.models.menu.advanced"), systemImage: "slider.horizontal.3")
                         }

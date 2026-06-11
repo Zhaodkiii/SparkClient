@@ -158,7 +158,8 @@ struct NutritionMealFoodEditListView: View {
                     sourceDate: viewModel.date,
                     sourceMealType: viewModel.mealType,
                     dependencies: dependencies
-                ),
+                )
+                .hidesMainTabBarWhenPushed(),
                 isActive: $showsCopy
             ) {
                 EmptyView()
@@ -170,7 +171,8 @@ struct NutritionMealFoodEditListView: View {
                     initialFoods: viewModel.selectedItems.map(NutritionViewDataMapper.recipeDraftFood),
                     dependencies: dependencies,
                     memberID: viewModel.memberID
-                ),
+                )
+                .hidesMainTabBarWhenPushed(),
                 isActive: $showsCreateRecipe
             ) {
                 EmptyView()

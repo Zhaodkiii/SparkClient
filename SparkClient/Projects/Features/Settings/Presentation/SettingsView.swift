@@ -10,9 +10,8 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section(L10n.text("settings.section.account")) {
-                NavigationLink {
+                MainNavigationLink {
                     AccountManagementView(viewModel: accountManagementViewModel, session: session)
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     HStack {
                         Label(L10n.text("settings.account_management"), systemImage: "person.crop.circle")
@@ -33,9 +32,8 @@ struct SettingsView: View {
 //            }
 
             Section(L10n.text("settings.section.ai")) {
-                NavigationLink {
+                MainNavigationLink {
                     AISettingsView(viewModel: aiSettingsViewModel)
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     HStack {
                         Label(
@@ -51,12 +49,11 @@ struct SettingsView: View {
             }
 
             Section {
-                NavigationLink {
+                MainNavigationLink {
                     GeneralSettingsView(
                         viewModel: viewModel,
                         versionUpdateCoordinator: versionUpdateCoordinator
                     )
-                    .hidesMainTabBarWhenPushed()
                 } label: {
                     HStack {
                         Label(

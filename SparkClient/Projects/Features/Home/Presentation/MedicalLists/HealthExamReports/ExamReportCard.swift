@@ -205,7 +205,7 @@ struct ExamReportCard: View {
             }
             .foregroundStyle(Color.accentColor)
         } else if canNavigateToDetail {
-            NavigationLink {
+            MainNavigationLink {
                 HealthExamRecognitionResultView(
                     item: item,
                     fileTransferService: fileTransferService,
@@ -214,7 +214,6 @@ struct ExamReportCard: View {
                     notificationClient: notificationClient,
                     onDeleted: onDeleted
                 )
-                .hidesMainTabBarWhenPushed()
             } label: {
                 HStack(spacing: 4) {
                     Text(L10n.text("home.medical.list.health_exam.view_detail"))

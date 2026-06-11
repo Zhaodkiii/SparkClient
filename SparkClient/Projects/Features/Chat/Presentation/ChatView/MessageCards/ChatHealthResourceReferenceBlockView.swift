@@ -39,7 +39,7 @@ struct ChatHealthResourceReferenceBlockView: View {
         Group {
             switch summary.status {
             case .loaded:
-                NavigationLink {
+                MainNavigationLink {
                     destinationBuilder(HealthResourceReference(payload))
                 } label: {
                     cardLabel(summary: summary, showChevron: true)

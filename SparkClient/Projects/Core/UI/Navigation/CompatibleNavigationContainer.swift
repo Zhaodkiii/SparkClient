@@ -57,6 +57,7 @@ struct CompatibleRouteNavigationContainer<Route: Hashable, Content: View, Destin
                 content()
                     .navigationDestination(for: Route.self) { route in
                         destination(route)
+                            .hidesMainTabBarWhenPushed()
                     }
             }
         } else if legacyStackStyle {

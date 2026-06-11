@@ -65,9 +65,8 @@ struct HomeNutritionEntrySection: View {
                 Spacer()
             }
 
-            NavigationLink {
+            MainNavigationLink {
                 NutritionHomeView(dependencies: dependencies)
-                    .hidesMainTabBarWhenPushed()
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "chart.pie.fill")
@@ -145,9 +144,8 @@ struct HomeNutritionEntrySection: View {
                 .font(.headline)
             Spacer()
             if memberID != nil {
-                NavigationLink {
+                MainNavigationLink {
                     NutritionHomeView(dependencies: dependencies)
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     Text(L10n.text("home.nutrition.home_entry"))
                         .font(.subheadline)
@@ -180,7 +178,6 @@ struct HomeNutritionEntrySection: View {
         case .content(let dashboard):
             NutritionSummarySectionView(
                 dashboard: dashboard,
-                dashboardUseCase: dependencies.dashboardUseCase,
                 dependencies: dependencies,
                 memberID: memberID ?? 0,
                 date: viewModel.selectedDate

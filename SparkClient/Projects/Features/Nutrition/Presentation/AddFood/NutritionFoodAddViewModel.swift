@@ -212,6 +212,7 @@ final class NutritionFoodAddViewModel: ObservableObject {
                 await healthKitSyncUseCase.writeMealRecordIfNeeded(member: member, record: record)
             }
             NotificationCenter.default.post(name: .nutritionMealRecordDidSave, object: nil)
+            
             onSuccess()
         } catch {
             saveErrorMessageKey = NutritionErrorMapper.messageKey(for: error)

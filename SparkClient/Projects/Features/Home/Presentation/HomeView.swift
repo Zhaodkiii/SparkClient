@@ -26,6 +26,8 @@ struct HomeView: View {
 //                headerCard
                 medicalInfoSection
                 nutritionInfoSection
+                
+                // 相机模块
 
             }
             .padding(.horizontal, 16)
@@ -294,12 +296,11 @@ struct HomeView: View {
                     .font(.headline)
                 Spacer()
                 if let entryMemberID = viewModel.selectedMemberID {
-                    NavigationLink {
+                    MainNavigationLink {
                         FamilyMedicineCabinetPage(
                             entryMemberID: entryMemberID,
                             dependencies: dependencies
                         )
-                        .hidesMainTabBarWhenPushed()
                     } label: {
                         Label(
                             L10n.text("home.medical.family_cabinet.title"),
@@ -323,7 +324,7 @@ struct HomeView: View {
             let cards = viewModel.dashboard?.medical.cards ?? []
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(cards, id: \.id) { card in
-                    NavigationLink {
+                    MainNavigationLink {
                         HomeMedicalListView(
                             route: medicalRoute(for: card.id),
                             completeData: viewModel.dashboard?.medical.completeData,
@@ -359,7 +360,6 @@ struct HomeView: View {
                                 }
                             }
                         )
-                        .hidesMainTabBarWhenPushed()
                     } label: {
                         medicalCard(card)
                     }

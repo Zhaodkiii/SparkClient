@@ -61,7 +61,7 @@ struct MedicineBoxListPage: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(sortedBoxes, id: \.id) { box in
-                    NavigationLink {
+                    MainNavigationLink {
                         MedicineBoxDetailPage(
                             box: box,
                             entryMemberID: memberID,

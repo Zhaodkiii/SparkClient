@@ -17,9 +17,8 @@ struct KnowledgeLibraryView: View {
                         .listRowBackground(Color.clear)
                 } else {
                     ForEach(viewModel.documents) { document in
-                        NavigationLink {
+                        MainNavigationLink {
                             KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: document.id)
-                                .hidesMainTabBarWhenPushed()
                         } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(document.title)
@@ -54,9 +53,8 @@ struct KnowledgeLibraryView: View {
             .navigationTitle(L10n.text("knowledge.library.title"))
             .toolbar {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
-                    NavigationLink {
+                    MainNavigationLink {
                         KnowledgeSearchView(dependencies: dependencies, viewModel: viewModel)
-                            .hidesMainTabBarWhenPushed()
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }

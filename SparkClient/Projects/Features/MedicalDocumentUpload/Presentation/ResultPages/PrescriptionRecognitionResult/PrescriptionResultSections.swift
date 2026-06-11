@@ -124,7 +124,7 @@ struct PrescriptionBatchListSectionView: View {
     @ViewBuilder
     private func batchCard(index: Int, batch: PrescriptionRecognitionDraft) -> some View {
         if let detailNavigationContext {
-            NavigationLink {
+            MainNavigationLink {
                 prescriptionDetailDestination(index: index, batch: batch, context: detailNavigationContext)
             } label: {
                 batchCardContent(index: index, batch: batch)
@@ -203,7 +203,7 @@ struct PrescriptionBatchListSectionView: View {
     @ViewBuilder
     private func medicationRow(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft) -> some View {
         if let detailNavigationContext {
-            NavigationLink {
+            MainNavigationLink {
                 medicationDetailDestination(
                     batchIndex: batchIndex,
                     itemIndex: itemIndex,

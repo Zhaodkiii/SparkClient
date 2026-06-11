@@ -3,7 +3,6 @@ import SwiftUI
 
 struct NutritionSummarySectionView: View {
     let dashboard: NutritionDashboardViewData
-    let dashboardUseCase: NutritionDashboardUseCase
     let dependencies: NutritionFeatureDependencies
     let memberID: Int
     let date: Date
@@ -34,9 +33,9 @@ struct NutritionSummarySectionView: View {
 
             Spacer()
 
-            NavigationLink {
+            MainNavigationLink {
                 NutritionSummaryDetailView(
-                    dashboardUseCase: dashboardUseCase,
+                    dependencies: dependencies,
                     memberID: memberID,
                     date: date,
                     initialDashboard: dashboard
@@ -319,7 +318,7 @@ struct NutritionMealsSectionView: View {
 
             Spacer()
 
-            NavigationLink {
+            MainNavigationLink {
                 NutritionDetailView(
                     dependencies: dependencies,
                     memberID: memberID,
@@ -337,7 +336,7 @@ struct NutritionMealsSectionView: View {
 
     private func mealRow(_ meal: NutritionMealSectionViewData) -> some View {
         HStack(spacing: 20) {
-            NavigationLink {
+            MainNavigationLink {
                 NutritionMealDetailView(
                     dependencies: dependencies,
                     memberID: memberID,

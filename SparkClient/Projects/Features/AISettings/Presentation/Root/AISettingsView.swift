@@ -6,9 +6,8 @@ struct AISettingsView: View {
     var body: some View {
         List {
             Section(L10n.text("ai_settings.section.model")) {
-                NavigationLink {
+                MainNavigationLink {
                     APIKeysSettingsView(viewModel: viewModel)
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.api_keys"),
@@ -17,9 +16,8 @@ struct AISettingsView: View {
                     )
                 }
 
-                NavigationLink {
+                MainNavigationLink {
                     ModelsSettingsView(viewModel: viewModel)
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.models"),
@@ -28,11 +26,10 @@ struct AISettingsView: View {
                     )
                 }
 
-                NavigationLink {
+                MainNavigationLink {
                     AIModelPreferencesView(
                         viewModel: viewModel.makeScenarioModelPreferencesViewModel()
                     )
-                    .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.default_model_config"),
@@ -43,9 +40,8 @@ struct AISettingsView: View {
             }
 
             Section(L10n.text("ai_settings.section.tools")) {
-                NavigationLink {
+                MainNavigationLink {
                     SmallTasksSettingsView(viewModel: viewModel)
-                        .hidesMainTabBarWhenPushed()
                 } label: {
                     SettingNavRow(
                         title: "小任务",
