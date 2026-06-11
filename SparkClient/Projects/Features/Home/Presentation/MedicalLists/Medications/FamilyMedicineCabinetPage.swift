@@ -118,7 +118,7 @@ struct FamilyMedicineCabinetPage: View {
             )
         }
         .sheet(isPresented: $showingUploadSheet) {
-            MedicineBoxUploadSheet { files in
+            MedicalAttachmentUploadListSheet(documentType: .medicineBox) { files in
                 dependencies.medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicineBox)
             }
         }

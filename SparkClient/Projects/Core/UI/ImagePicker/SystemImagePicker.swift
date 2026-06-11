@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// 供知识 OCR 使用：`UIImagePickerController` 封装（与 `ChatCameraPicker` 同构，支持相机与相册）。
-struct KnowledgeImagePicker: UIViewControllerRepresentable {
+/// 项目内通用的 `UIImagePickerController` 封装，支持系统相机与相册单图选取。
+struct SystemImagePicker: UIViewControllerRepresentable {
     enum Source {
         case camera
         case photoLibrary
@@ -33,9 +33,9 @@ struct KnowledgeImagePicker: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
-        private let parent: KnowledgeImagePicker
+        private let parent: SystemImagePicker
 
-        init(_ parent: KnowledgeImagePicker) {
+        init(_ parent: SystemImagePicker) {
             self.parent = parent
         }
 

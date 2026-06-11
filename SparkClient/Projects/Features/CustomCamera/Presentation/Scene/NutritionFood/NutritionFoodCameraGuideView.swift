@@ -3,11 +3,13 @@ import SwiftUI
 struct NutritionFoodCameraGuideView: View {
     let onDismiss: () -> Void
 
-    private let tips = [
-        "餐点不应超出镜头范围",
-        "清晰展示每个物品",
-        "确保光线充足"
-    ]
+    private var tips: [String] {
+        [
+            L10n.text("nutrition.recognition.camera.guide.tip.keep_in_frame", fallback: "餐点不应超出镜头范围"),
+            L10n.text("nutrition.recognition.camera.guide.tip.show_each_item", fallback: "清晰展示每个物品"),
+            L10n.text("nutrition.recognition.camera.guide.tip.good_lighting", fallback: "确保光线充足")
+        ]
+    }
 
     var body: some View {
         ZStack {
@@ -21,7 +23,7 @@ struct NutritionFoodCameraGuideView: View {
                 illustration
                     .padding(.bottom, 28)
 
-                Text("快照前须知小窍门")
+                Text(L10n.text("nutrition.recognition.camera.guide.title", fallback: "快照前须知小窍门"))
                     .font(.system(.largeTitle, design: .default).weight(.heavy))
                     .foregroundColor(Color(uiColor: .label))
                     .padding(.bottom, 28)
@@ -117,7 +119,7 @@ private extension NutritionFoodCameraGuideView {
 
     var startButton: some View {
         Button(action: onDismiss) {
-            Text("开始拍摄")
+            Text(L10n.text("nutrition.recognition.camera.guide.start", fallback: "开始拍摄"))
                 .font(.system(.headline, design: .default).weight(.bold))
                 .foregroundColor(Color(uiColor: .systemBackground))
                 .frame(maxWidth: .infinity)

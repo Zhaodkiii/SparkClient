@@ -4,11 +4,31 @@ import SwiftUI
 struct MedicineBoxCameraGuideView: View {
     let onDismiss: () -> Void
 
-    private let guideItems: [(title: String, detail: String)] = [
-        ("药盒正面", "拍清楚药品名称、品牌、规格、包装数量"),
-        ("保质期图片", "拍清楚生产日期、有效期、批号等信息"),
-        ("说明书", "拍清楚用法用量、适应症、禁忌、注意事项")
-    ]
+    private var guideItems: [(title: String, detail: String)] {
+        [
+            (
+                L10n.text("home.medical.medicine_box.camera.guide.item.front.title", fallback: "药盒正面"),
+                L10n.text(
+                    "home.medical.medicine_box.camera.guide.item.front.detail",
+                    fallback: "拍清楚药品名称、品牌、规格、包装数量"
+                )
+            ),
+            (
+                L10n.text("home.medical.medicine_box.camera.guide.item.expiry.title", fallback: "保质期图片"),
+                L10n.text(
+                    "home.medical.medicine_box.camera.guide.item.expiry.detail",
+                    fallback: "拍清楚生产日期、有效期、批号等信息"
+                )
+            ),
+            (
+                L10n.text("home.medical.medicine_box.camera.guide.item.instruction.title", fallback: "说明书"),
+                L10n.text(
+                    "home.medical.medicine_box.camera.guide.item.instruction.detail",
+                    fallback: "拍清楚用法用量、适应症、禁忌、注意事项"
+                )
+            )
+        ]
+    }
 
     var body: some View {
         ZStack {
@@ -22,12 +42,15 @@ struct MedicineBoxCameraGuideView: View {
                 illustration
                     .padding(.bottom, 24)
 
-                Text("用药 AI 拍照识别")
+                Text(L10n.text("home.medical.medicine_box.camera.guide.title", fallback: "用药 AI 拍照识别"))
                     .font(.system(.largeTitle, design: .default).weight(.heavy))
                     .foregroundColor(Color(uiColor: .label))
                     .padding(.bottom, 12)
 
-                Text("拍摄前请准备好：\n1. 药盒正面图\n2. 保质期或生产日期图\n3. 药品说明书")
+                Text(L10n.text(
+                    "home.medical.medicine_box.camera.guide.subtitle",
+                    fallback: "拍摄前请准备好：\n1. 药盒正面图\n2. 保质期或生产日期图\n3. 药品说明书"
+                ))
                     .font(.system(.subheadline, design: .default).weight(.medium))
                     .foregroundColor(Color(uiColor: .secondaryLabel))
                     .multilineTextAlignment(.center)
@@ -38,7 +61,10 @@ struct MedicineBoxCameraGuideView: View {
                 tipsCard
                     .padding(.horizontal, 28)
 
-                Text("识别结果请以药品包装和说明书为准")
+                Text(L10n.text(
+                    "home.medical.medicine_box.camera.guide.disclaimer",
+                    fallback: "识别结果请以药品包装和说明书为准"
+                ))
                     .font(.system(.footnote, design: .default))
                     .foregroundColor(Color(uiColor: .tertiaryLabel))
                     .multilineTextAlignment(.center)
@@ -135,7 +161,7 @@ private extension MedicineBoxCameraGuideView {
 
     var startButton: some View {
         Button(action: onDismiss) {
-            Text("开始拍摄")
+            Text(L10n.text("home.medical.medicine_box.camera.guide.start", fallback: "开始拍摄"))
                 .font(.system(.headline, design: .default).weight(.bold))
                 .foregroundColor(Color(uiColor: .systemBackground))
                 .frame(maxWidth: .infinity)

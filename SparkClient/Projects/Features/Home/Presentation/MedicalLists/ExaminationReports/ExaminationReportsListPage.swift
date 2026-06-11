@@ -141,14 +141,7 @@ struct ExaminationReportsListPage: View {
             }
         }
         .sheet(isPresented: $showingUploadSheet) {
-            MedicineBoxUploadSheet(
-                title: L10n.text("medical.upload.examination_report.sheet.title", fallback: "选择检查报告图片"),
-                headerTitle: L10n.text("medical.upload.examination_report.sheet.header", fallback: "选择上传方式"),
-                headerSubtitle: L10n.text("medical.upload.examination_report.sheet.subtitle", fallback: "可一次选择多张检查、检验或影像报告图片，确认后开始识别。"),
-                emptyTitle: L10n.text("medical.upload.examination_report.sheet.empty.title", fallback: "尚未选择文件"),
-                emptySubtitle: L10n.text("medical.upload.examination_report.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片"),
-                fileNamePrefix: "examination_report"
-            ) { files in
+            MedicalAttachmentUploadListSheet(documentType: .examinationReport) { files in
                 startExaminationReportRecognition(files: files)
             }
         }

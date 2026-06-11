@@ -195,7 +195,7 @@ private struct NutritionFoodCameraScreen: CustomCameraScreen {
             .bindCameraCaptureViewfinder(to: cameraManager)
         }
         .ignoresSafeArea(edges: .bottom)
-        .navigationTitle("饮食识别")
+        .navigationTitle(L10n.text("nutrition.recognition.camera.title", fallback: "饮食识别"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -208,7 +208,7 @@ private struct NutritionFoodCameraScreen: CustomCameraScreen {
             }
 
             ToolbarItem(placement: .principal) {
-                Text("饮食识别")
+                Text(L10n.text("nutrition.recognition.camera.title", fallback: "饮食识别"))
                     .font(.system(.largeTitle, design: .default).weight(.heavy))
                     .foregroundColor(.white)
             }
@@ -228,7 +228,7 @@ private struct NutritionFoodCameraScreen: CustomCameraScreen {
 
 private extension NutritionFoodCameraScreen {
     var promptText: some View {
-        Text("请确保在光线充足的环境中\n进行拍摄，且不超出镜头范围。")
+        Text(L10n.text("nutrition.recognition.camera.prompt", fallback: "请确保在光线充足的环境中\n进行拍摄，且不超出镜头范围。"))
             .font(.system(.headline, design: .default).weight(.semibold))
             .foregroundColor(.white)
             .multilineTextAlignment(.center)
@@ -240,7 +240,7 @@ private extension NutritionFoodCameraScreen {
         HStack(alignment: .center) {
             controlButton(
                 systemImage: "photo.on.rectangle.angled",
-                title: "照片",
+                title: L10n.text("nutrition.recognition.camera.photo_library", fallback: "照片"),
                 action: onPickPhoto
             )
 
@@ -272,7 +272,7 @@ private extension NutritionFoodCameraScreen {
 
             controlButton(
                 systemImage: isTorchOn ? "bolt.fill" : "bolt.slash.fill",
-                title: "闪光灯",
+                title: L10n.text("nutrition.recognition.camera.flash", fallback: "闪光灯"),
                 isEnabled: hasLight,
                 action: toggleTorch
             )

@@ -63,7 +63,7 @@ struct MedicalDocumentLegacyFilePickerMenu<ButtonContent: View>: View {
             }
         }
         .sheet(isPresented: $showCameraPicker) {
-            KnowledgeImagePicker(
+            SystemImagePicker(
                 source: .camera,
                 onCancel: { showCameraPicker = false },
                 onImagePicked: { image in
@@ -78,7 +78,7 @@ struct MedicalDocumentLegacyFilePickerMenu<ButtonContent: View>: View {
             )
         }
         .sheet(isPresented: $showPhotoLibraryPicker) {
-            KnowledgeImagePicker(
+            SystemImagePicker(
                 source: .photoLibrary,
                 onCancel: { showPhotoLibraryPicker = false },
                 onImagePicked: { image in

@@ -17,7 +17,7 @@ struct KnowledgeDocumentDetailView: View {
     @State private var showWebInputRow = false
     @State private var webInlineInput = ""
     @State private var showImageSourcePicker = false
-    @State private var imagePickerSource: KnowledgeImagePicker.Source = .photoLibrary
+    @State private var imagePickerSource: SystemImagePicker.Source = .photoLibrary
     @State private var showImagePicker = false
     /// 导航栏标题：点标题进入 `TextField` 编辑（Health 为 ZStack 切换）。
     @State private var isEditingTitle = false
@@ -330,7 +330,7 @@ private struct FileImportOnlyModifier: ViewModifier {
 private struct ImageOCRModifier: ViewModifier {
     @Binding var showImageSourcePicker: Bool
     @Binding var showImagePicker: Bool
-    @Binding var imagePickerSource: KnowledgeImagePicker.Source
+    @Binding var imagePickerSource: SystemImagePicker.Source
     let onImage: (UIImage) -> Void
 
     func body(content: Content) -> some View {
@@ -349,7 +349,7 @@ private struct ImageOCRModifier: ViewModifier {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
             }
             .sheet(isPresented: $showImagePicker) {
-                KnowledgeImagePicker(
+                SystemImagePicker(
                     source: imagePickerSource,
                     onCancel: { showImagePicker = false },
                     onImagePicked: { image in

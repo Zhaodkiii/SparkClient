@@ -268,7 +268,7 @@ struct MedicationsListPage: View {
                 onServerSaved: upsertMedicationPlan
             )
         } else {
-            Text("请先选择成员")
+            Text(L10n.text("home.medical.list.medications.select_member_first", fallback: "请先选择成员"))
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -276,14 +276,7 @@ struct MedicationsListPage: View {
     }
 
     private var medicationUploadSheet: some View {
-        MedicineBoxUploadSheet(
-            title: L10n.text("medical.upload.medication_plan.sheet.title", fallback: "选择服药计划图片"),
-            headerTitle: L10n.text("medical.upload.medication_plan.sheet.header", fallback: "选择上传方式"),
-            headerSubtitle: L10n.text("medical.upload.medication_plan.sheet.subtitle", fallback: "可一次选择多张处方、药品说明或服药计划图片，确认后开始识别。"),
-            emptyTitle: L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件"),
-            emptySubtitle: L10n.text("medical.upload.medication_plan.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片"),
-            fileNamePrefix: "medication_plan"
-        ) { files in
+        MedicalAttachmentUploadListSheet(documentType: .medicationPlan) { files in
             startMedicationPlanRecognition(files: files)
         }
     }
@@ -311,7 +304,7 @@ struct MedicationsListPage: View {
                 logger: logger
             )
         } label: {
-            Label("执行", systemImage: "checklist.checked")
+            Label(L10n.text("home.medical.list.medications.action.execution_center", fallback: "执行"), systemImage: "checklist.checked")
                 .font(.footnote.weight(.semibold))
         }
         .disabled(memberID == nil)
@@ -332,7 +325,7 @@ struct MedicationsListPage: View {
                 onMedicineBoxesChanged: updateMedicineBoxes
             )
         } label: {
-            Label("药箱", systemImage: "pills.fill")
+            Label(L10n.text("home.medical.list.medications.action.medicine_box", fallback: "药箱"), systemImage: "pills.fill")
                 .font(.footnote.weight(.semibold))
         }
     }
@@ -761,7 +754,7 @@ private struct MedicationPlanDoseDetailSheet: View {
                 .background(Color(uiColor: .systemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
-            .navigationTitle(L10n.text("medication_plan.form.single_dose_sheet_title", fallback: "单次剂量数值"))
+            .navigationTitle(L10n.text("medication_plan.form.single_dose_value_sheet_title", fallback: "单次剂量数值"))
             .navigationBarTitleDisplayMode(.inline)
             .sparkKeyboardDoneToolbar {
                 SparkKeyboardDismiss.endEditing()
@@ -937,9 +930,9 @@ struct MedicationPlanFormView: View {
     private var navigationTitle: String {
         switch mode {
         case .create:
-            return "新增服药计划"
+            return L10n.text("medication_plan.form.create_title", fallback: "新增服药计划")
         case .serverEdit, .localEdit:
-            return "编辑服药计划"
+            return L10n.text("medication_plan.form.edit_title", fallback: "编辑服药计划")
         }
     }
 
@@ -966,11 +959,11 @@ struct MedicationPlanFormView: View {
         }
         .background(Color(uiColor: .systemBackground))
         .interactiveDismissDisabled(isSubmitting)
-        .alert("保存失败", isPresented: Binding(
+        .alert(L10n.text("medication_plan.form.save_failed", fallback: "保存失败"), isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
-            Button("知道了", role: .cancel) {}
+            Button(L10n.text("common.got_it"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
         }
@@ -1029,7 +1022,7 @@ struct MedicationPlanFormView: View {
             extraChromeHeight: Self.formSheetNavChromeHeight + Self.formSheetBottomBarChromeHeight
         ) {
             VStack(spacing: 14) {
-                SparkFormCard(title: "关联药品", titleSystemImage: "pills.fill") {
+                SparkFormCard(title: L10n.text("medication_plan.form.section.linked_medicine", fallback: "关联药品"), titleSystemImage: "pills.fill") {
                     MainNavigationLink {
                         MedicationPlanMedicineBoxPickerPage(
                             memberID: memberID,
@@ -1070,9 +1063,15 @@ struct MedicationPlanFormView: View {
                 }
                 
 
-                SparkFormCard(title: "用药规则", titleSystemImage: "calendar.badge.clock") {
+                SparkFormCard(title: L10n.text("medication_plan.form.section.rules", fallback: "用药规则"), titleSystemImage: "calendar.badge.clock") {
                     VStack(spacing: 16) {
-                        SparkFormTextRow(title: "药品名称", text: $draft.drugName, placeholder: "如 阿莫西林胶囊", required: true, keyboardVisible: $sheetKeyboardVisible)
+                        SparkFormTextRow(
+                            title: L10n.text("medication_plan.form.field.drug_name", fallback: "药品名称"),
+                            text: $draft.drugName,
+                            placeholder: L10n.text("medication_plan.form.drug_name_placeholder", fallback: "如 阿莫西林胶囊"),
+                            required: true,
+                            keyboardVisible: $sheetKeyboardVisible
+                        )
                                                 
                         
                         HStack(spacing: 12) {
@@ -1083,7 +1082,7 @@ struct MedicationPlanFormView: View {
                             )
 
                             SparkFormSheetPickerRow(
-                                title: L10n.text("medication_plan.form.single_dose_sheet_title", fallback: "单次剂量单位"),
+                                title: L10n.text("medication_plan.form.single_dose_unit_sheet_title", fallback: "单次剂量单位"),
                                 displayValue: draft.doseUnit,
                                 placeholder: L10n.text("medication_plan.form.single_dose_sheet_placeholder", fallback: "设置单次剂量数值与单位"),
                                 onTap: {
@@ -1094,9 +1093,9 @@ struct MedicationPlanFormView: View {
 //                            SparkFormTextRow(title: "单次剂量说明", text: $draft.dosePerTime, placeholder: "如 1片 / 5ml", required: true, keyboardVisible: $sheetKeyboardVisible)
                         
                            SparkFormSheetPickerRow(
-                               title: "服药频次",
+                               title: L10n.text("medication_plan.form.field.frequency", fallback: "服药频次"),
                                displayValue: draft.reminderFrequencyPickerDisplay,
-                               placeholder: "请选择提醒频率",
+                               placeholder: L10n.text("medication_plan.form.frequency_placeholder", fallback: "请选择提醒频率"),
                                required: true,
                                showsValidationError: draft.isReminderFrequencyComplete == false
                                    || draft.resolvedFrequencyText.nilIfBlank == nil
@@ -1108,8 +1107,13 @@ struct MedicationPlanFormView: View {
                            if #available(iOS 16.0, *) {
                                MedicationReminderTimesSection(draft: $draft, notificationClient: notificationClient)
                            } else {
-                               SparkFormCard(title: "提醒时间", titleSystemImage: "calendar") {
-                                   SparkFormTextRow(title: "提醒时间", text: $draft.reminderTimesText, placeholder: "如 08:00, 12:00, 20:00", keyboardVisible: $sheetKeyboardVisible)
+                               SparkFormCard(title: L10n.text("medication_plan.form.section.reminder_times", fallback: "提醒时间"), titleSystemImage: "calendar") {
+                                   SparkFormTextRow(
+                                       title: L10n.text("medication_plan.form.field.reminder_times", fallback: "提醒时间"),
+                                       text: $draft.reminderTimesText,
+                                       placeholder: L10n.text("medication_plan.form.reminder_times_placeholder", fallback: "如 08:00, 12:00, 20:00"),
+                                       keyboardVisible: $sheetKeyboardVisible
+                                   )
                                    if let reminderTimesError = draft.reminderTimesError {
                                        Text(reminderTimesError)
                                            .font(.caption)
@@ -1119,23 +1123,30 @@ struct MedicationPlanFormView: View {
                                }
                            }
 
-                        SparkFormTextAreaRow(title: "用药说明", text: $draft.instructions, minHeight: 80, maxHeight: 160, placeholder: "饭前/饭后、禁忌或医嘱备注", keyboardVisible: $sheetKeyboardVisible)
+                        SparkFormTextAreaRow(
+                            title: L10n.text("medication_plan.form.field.instructions", fallback: "用药说明"),
+                            text: $draft.instructions,
+                            minHeight: 80,
+                            maxHeight: 160,
+                            placeholder: L10n.text("medication_plan.form.instructions_placeholder", fallback: "饭前/饭后、禁忌或医嘱备注"),
+                            keyboardVisible: $sheetKeyboardVisible
+                        )
                     }
                 }
                 DisclosureGroup(
                     content: {
                         VStack(spacing: 16) {
-                            SparkFormCard(title: "疗程", titleSystemImage: "calendar") {
+                            SparkFormCard(title: L10n.text("medication_plan.form.section.course", fallback: "疗程"), titleSystemImage: "calendar") {
                                 VStack(spacing: 12) {
-                                    DatePicker("开始日期", selection: $draft.startDate, displayedComponents: .date)
+                                    DatePicker(L10n.text("medication_plan.form.field.start_date", fallback: "开始日期"), selection: $draft.startDate, displayedComponents: .date)
                                         .font(.subheadline.weight(.medium))
                                         .padding(.horizontal, 12)
                                         .frame(height: 44)
                                         .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    Toggle("设置结束日期", isOn: $draft.hasEndDate)
+                                    Toggle(L10n.text("medication_plan.form.field.set_end_date", fallback: "设置结束日期"), isOn: $draft.hasEndDate)
                                         .font(.subheadline.weight(.medium))
                                     if draft.hasEndDate {
-                                        DatePicker("结束日期", selection: $draft.endDate, in: draft.startDate..., displayedComponents: .date)
+                                        DatePicker(L10n.text("medication_plan.form.field.end_date", fallback: "结束日期"), selection: $draft.endDate, in: draft.startDate..., displayedComponents: .date)
                                             .font(.subheadline.weight(.medium))
                                             .padding(.horizontal, 12)
                                             .frame(height: 44)
@@ -1144,15 +1155,15 @@ struct MedicationPlanFormView: View {
                                 }
                             }
 
-                            SparkFormCard(title: "状态与提醒", titleSystemImage: "bell.badge.fill") {
+                            SparkFormCard(title: L10n.text("medication_plan.form.section.status_reminder", fallback: "状态与提醒"), titleSystemImage: "bell.badge.fill") {
                                 VStack(spacing: 12) {
-                                    Toggle("开启提醒", isOn: $draft.reminderEnabled)
+                                    Toggle(L10n.text("medication_plan.form.field.reminder_enabled", fallback: "开启提醒"), isOn: $draft.reminderEnabled)
                                         .font(.subheadline.weight(.medium))
-                                    Picker("计划状态", selection: $draft.status) {
-                                        Text("执行中").tag("active")
-                                        Text("已暂停").tag("paused")
-                                        Text("已完成").tag("completed")
-                                        Text("已取消").tag("cancelled")
+                                    Picker(L10n.text("medication_plan.form.field.status", fallback: "计划状态"), selection: $draft.status) {
+                                        Text(planStatusText("active")).tag("active")
+                                        Text(L10n.text("home.medical.list.medications.status.paused_explicit", fallback: "已暂停")).tag("paused")
+                                        Text(planStatusText("completed")).tag("completed")
+                                        Text(planStatusText("cancelled")).tag("cancelled")
                                     }
                                     .pickerStyle(.segmented)
                                 }
@@ -1165,7 +1176,7 @@ struct MedicationPlanFormView: View {
                             Image(systemName: "doc.text")
                                 .font(.headline)
                                 .foregroundStyle(Color.accentColor)
-                            Text("疗程与提醒⏰")
+                            Text(L10n.text("medication_plan.form.section.course_reminder", fallback: "疗程与提醒"))
                                 .font(.headline)
 
                         }
@@ -1178,17 +1189,18 @@ struct MedicationPlanFormView: View {
     }
 
     private var selectedMedicineBoxTitle: String {
-        selectedMedicineBox.map { $0.medicineName.nilIfBlank ?? "未命名药品" } ?? "选择药箱药品"
+        selectedMedicineBox.map { $0.medicineName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed", fallback: "未命名药品") }
+        ?? L10n.text("medication_plan.form.select_medicine_box", fallback: "选择药箱药品")
     }
 
     private var selectedMedicineBoxSubtitle: String {
         guard let selectedMedicineBox else {
-            return "可从药箱选择，也可在选择页新增药品"
+            return L10n.text("medication_plan.form.select_medicine_box_subtitle", fallback: "可从药箱选择，也可在选择页新增药品")
         }
         let detail = [selectedMedicineBox.strength.nilIfBlank, selectedMedicineBox.dosageForm.nilIfBlank, stockText(selectedMedicineBox)]
             .compactMap { $0 }
             .joined(separator: " · ")
-        return detail.isEmpty ? "已关联药箱药品" : detail
+        return detail.isEmpty ? L10n.text("medication_plan.form.linked_medicine_box", fallback: "已关联药箱药品") : detail
     }
 
 //    private var medicationPlanDoseDetailDisplay: String {
@@ -1348,13 +1360,13 @@ private struct MedicationReminderTimesSection: View {
 
     private var countSubtitle: String {
         let n = slots.count
-        return "\(n) 次 / 天"
+        return String(format: L10n.text("medication_plan.form.reminder_times.count_per_day", fallback: "%d times/day"), locale: .current, n)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("用药时间")
+                Text(L10n.text("medication_plan.form.field.medication_times", fallback: "用药时间"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.primary)
                 Spacer(minLength: 12)
@@ -1380,7 +1392,7 @@ private struct MedicationReminderTimesSection: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("新增用药时间")
+                    .accessibilityLabel(L10n.text("medication_plan.form.a11y.add_medication_time", fallback: "新增用药时间"))
 
                     ForEach(Array(slots.enumerated()), id: \.offset) { index, time in
                         Menu {
@@ -1388,12 +1400,12 @@ private struct MedicationReminderTimesSection: View {
                                 timePickerSelection = MedicationPlanDraft.dateForReminderTimeToken(time)
                                 timePickerRoute = .edit(index: index)
                             } label: {
-                                Label("编辑", systemImage: "pencil")
+                                Label(L10n.text("common.edit"), systemImage: "pencil")
                             }
                             Button(role: .destructive) {
                                 removeSlot(at: index)
                             } label: {
-                                Label("删除", systemImage: "trash")
+                                Label(L10n.text("common.delete"), systemImage: "trash")
                             }
                         } label: {
                             HStack(spacing: 6) {
@@ -1412,7 +1424,7 @@ private struct MedicationReminderTimesSection: View {
                                     .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
                             )
                         }
-                        .accessibilityLabel("用药时间 \(time)")
+                        .accessibilityLabel(String(format: L10n.text("medication_plan.form.a11y.medication_time_format", fallback: "Medication time %@"), locale: .current, time))
                     }
                 }
                 .padding(.vertical, 2)
@@ -1452,7 +1464,7 @@ private struct MedicationReminderTimesSection: View {
         case .add:
             if next.contains(picked) {
                 notificationClient.warning(
-                    "该提醒时间已存在",
+                    L10n.text("medication_plan.form.reminder_times.duplicate", fallback: "该提醒时间已存在"),
                     source: "medication.plan.reminder_times"
                 )
                 return
@@ -1462,7 +1474,7 @@ private struct MedicationReminderTimesSection: View {
             guard next.indices.contains(index) else { return }
             if let dup = next.firstIndex(of: picked), dup != index {
                 notificationClient.warning(
-                    "该提醒时间已存在",
+                    L10n.text("medication_plan.form.reminder_times.duplicate", fallback: "该提醒时间已存在"),
                     source: "medication.plan.reminder_times"
                 )
                 return
@@ -1537,7 +1549,7 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                     dismiss()
                 } label: {
                     HStack {
-                        Label("不关联药箱药品", systemImage: "link.badge.minus")
+                        Label(L10n.text("medication_plan.medicine_box_picker.none", fallback: "不关联药箱药品"), systemImage: "link.badge.minus")
                         Spacer()
                         if selectedMedicineBoxID == nil {
                             Image(systemName: "checkmark")
@@ -1547,9 +1559,9 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                 }
             }
 
-            Section("药箱药品") {
+            Section(L10n.text("medication_plan.medicine_box_picker.section.medicines", fallback: "药箱药品")) {
                 if sortedBoxes.isEmpty {
-                    Text("暂无药箱药品")
+                    Text(L10n.text("medication_plan.medicine_box_picker.empty", fallback: "暂无药箱药品"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedBoxes, id: \.id) { box in
@@ -1561,7 +1573,7 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                             } label: {
                                 HStack(spacing: 12) {
                                     VStack(alignment: .leading, spacing: 5) {
-                                        Text(box.medicineName.nilIfBlank ?? "未命名药品")
+                                        Text(box.medicineName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed", fallback: "未命名药品"))
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundStyle(.primary)
                                         Text([
@@ -1590,14 +1602,14 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("编辑药品")
+                            .accessibilityLabel(L10n.text("medication_plan.medicine_box_picker.a11y.edit_medicine", fallback: "编辑药品"))
                         }
                         .padding(.vertical, 4)
                     }
                 }
             }
         }
-        .navigationTitle("选择药品")
+        .navigationTitle(L10n.text("medication_plan.medicine_box_picker.title", fallback: "选择药品"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -1607,7 +1619,7 @@ private struct MedicationPlanMedicineBoxPickerPage: View {
                     Image(systemName: "plus")
                         .font(.body.weight(.semibold))
                 }
-                .accessibilityLabel("新增药品")
+                .accessibilityLabel(L10n.text("home.medical.medicine_box.add_a11y", fallback: "新增药品"))
             }
         }
         .sheet(item: $sheetDestination) { destination in
@@ -1741,24 +1753,24 @@ struct MedicationPlanDraft {
 
     var validationMessage: String {
         if drugName.nilIfBlank == nil {
-            return "请填写药品名称"
+            return L10n.text("medication_plan.form.validation.drug_name_required", fallback: "请填写药品名称")
         }
         if dosePerTime.nilIfBlank == nil {
-            return "请填写单次剂量"
+            return L10n.text("medication_plan.form.validation.dose_required", fallback: "请填写单次剂量")
         }
         if isReminderFrequencyComplete == false {
-            return "请完整选择服药频次（每几天需选天数，每周需至少选一天）"
+            return L10n.text("medication_plan.form.validation.frequency_incomplete", fallback: "请完整选择服药频次（每几天需选天数，每周需至少选一天）")
         }
         if resolvedFrequencyText.nilIfBlank == nil {
-            return "请填写或生成服药频次说明"
+            return L10n.text("medication_plan.form.validation.frequency_text_required", fallback: "请填写或生成服药频次说明")
         }
         if let reminderTimesError {
             return reminderTimesError
         }
         if hasEndDate && endDate < startDate {
-            return "结束日期不能早于开始日期"
+            return L10n.text("medication_plan.form.validation.end_date_before_start", fallback: "结束日期不能早于开始日期")
         }
-        return "请完善服药计划信息"
+        return L10n.text("medication_plan.form.validation.incomplete", fallback: "请完善服药计划信息")
     }
 
     fileprivate func payload(memberID: Int) throws -> MedicationPlanPayload {
@@ -1803,7 +1815,7 @@ struct MedicationPlanDraft {
         var seen = Set<String>()
         for item in rawItems {
             guard Self.isValidTimeText(item) else {
-                return ([], "提醒时间格式应为 HH:mm，例如 08:00")
+                return ([], L10n.text("medication_plan.form.validation.reminder_time_format", fallback: "提醒时间格式应为 HH:mm，例如 08:00"))
             }
             guard seen.insert(item).inserted else { continue }
             result.append(.init(time: item, dose: doseValueValue))
@@ -1950,13 +1962,17 @@ private struct MedicationPrescriptionCard<Destination: View>: View {
     @ViewBuilder let planDestination: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Destination
 
     private var title: String {
-        prescription?.institutionName.nilIfBlank ?? "处方批次"
+        prescription?.institutionName.nilIfBlank ?? L10n.text("home.medical.list.medications.prescription_batch", fallback: "处方批次")
     }
 
     private var subtitleItems: [String] {
         [
-            prescription?.prescriberName.nilIfBlank.map { "医生：\($0)" },
-            prescription?.prescriptionNo?.nilIfBlank.map { "处方号：\($0)" },
+            prescription?.prescriberName.nilIfBlank.map {
+                String(format: L10n.text("home.medical.list.medications.prescriber_format", fallback: "医生：%@"), locale: .current, $0)
+            },
+            prescription?.prescriptionNo?.nilIfBlank.map {
+                String(format: L10n.text("home.medical.list.medications.prescription_no_format", fallback: "处方号：%@"), locale: .current, $0)
+            },
             prescriptionDateText
         ].compactMap { $0 }
     }
@@ -1972,7 +1988,7 @@ private struct MedicationPrescriptionCard<Destination: View>: View {
 
             if let diagnosis = prescription?.diagnosis.nilIfBlank {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("诊断")
+                    Text(L10n.text("common.diagnosis"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color(uiColor: .systemBlue))
                     Text(diagnosis)
@@ -1991,7 +2007,7 @@ private struct MedicationPrescriptionCard<Destination: View>: View {
             Divider()
 
             HStack(spacing: 8) {
-                Text("用药（\(plans.count)种）")
+                Text(String(format: L10n.text("home.medical.list.medications.plan_count_format", fallback: "用药（%d种）"), locale: .current, plans.count))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -2006,7 +2022,7 @@ private struct MedicationPrescriptionCard<Destination: View>: View {
             }
 
             if plans.isEmpty {
-                Text("暂无关联用药计划")
+                Text(L10n.text("home.medical.list.medications.empty.linked_plans", fallback: "暂无关联用药计划"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2111,12 +2127,12 @@ private struct MedicationPrescriptionPlanRow: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(plan.drugName.nilIfBlank ?? "未命名药品")
+                Text(plan.drugName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed", fallback: "未命名药品"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(subtitle.isEmpty ? "暂无补充信息" : subtitle)
+                Text(subtitle.isEmpty ? L10n.text("home.medical.prescription.no_supplemental_info", fallback: "暂无补充信息") : subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -2183,12 +2199,12 @@ private struct MedicationPlanCard: View {
                 .frame(width: 40, height: 40)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.drugName.nilIfBlank ?? "未命名药品")
+                    Text(plan.drugName.nilIfBlank ?? L10n.text("home.medical.medicine_box.unnamed", fallback: "未命名药品"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text(subtitle.isEmpty ? "暂无补充信息" : subtitle)
+                    Text(subtitle.isEmpty ? L10n.text("home.medical.prescription.no_supplemental_info", fallback: "暂无补充信息") : subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -2223,20 +2239,24 @@ private struct MedicationPlanCard: View {
 }
 
 private func stockText(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) -> String {
-    guard let q = box.totalQuantity else { return "总量未填" }
-    return "总量 \(q.formatted(.number.precision(.fractionLength(0...2))))"
+    guard let q = box.totalQuantity else { return L10n.text("home.medical.medication_plan.stock_not_filled", fallback: "总量未填") }
+    return String(
+        format: L10n.text("home.medical.medication_plan.stock_format", fallback: "总量 %@"),
+        locale: .current,
+        q.formatted(.number.precision(.fractionLength(0...2)))
+    )
 }
 
 private func planStatusText(_ status: String) -> String {
     switch status {
     case "active":
-        return "执行中"
+        return L10n.text("home.medical.list.medications.status.active", fallback: "执行中")
     case "paused":
-        return "未开始"
+        return L10n.text("home.medical.list.medications.status.paused", fallback: "未开始")
     case "completed":
-        return "已完成"
+        return L10n.text("home.medical.list.medications.status.completed", fallback: "已完成")
     case "cancelled":
-        return "已取消"
+        return L10n.text("home.medical.list.medications.status.cancelled", fallback: "已取消")
     default:
         return status
     }
@@ -2245,17 +2265,17 @@ private func planStatusText(_ status: String) -> String {
 private func prescriptionStatusText(_ status: String) -> String {
     switch status {
     case "active":
-        return "有效"
+        return L10n.text("home.medical.prescription.status.active", fallback: "有效")
     case "draft":
-        return "草稿"
+        return L10n.text("home.medical.prescription.status.draft", fallback: "草稿")
     case "paid":
-        return "已支付"
+        return L10n.text("home.medical.prescription.status.paid", fallback: "已支付")
     case "dispensed":
-        return "已发药"
+        return L10n.text("home.medical.prescription.status.dispensed", fallback: "已发药")
     case "completed":
-        return "已完成"
+        return L10n.text("home.medical.prescription.status.completed", fallback: "已完成")
     case "cancelled":
-        return "已取消"
+        return L10n.text("home.medical.prescription.status.cancelled", fallback: "已取消")
     default:
         return status
     }
@@ -2264,13 +2284,13 @@ private func prescriptionStatusText(_ status: String) -> String {
 private func recordStatusText(_ status: String) -> String {
     switch status {
     case "scheduled":
-        return "待服药"
+        return L10n.text("home.medical.medication_plan.record.status.scheduled", fallback: "待服药")
     case "taken":
-        return "已服药"
+        return L10n.text("home.medical.medication_plan.record.status.taken", fallback: "已服药")
     case "skipped":
-        return "已漏服"
+        return L10n.text("home.medical.medication_plan.record.status.skipped", fallback: "已漏服")
     case "snoozed":
-        return "稍后提醒"
+        return L10n.text("home.medical.medication_plan.record.status.snoozed", fallback: "稍后提醒")
     default:
         return status
     }

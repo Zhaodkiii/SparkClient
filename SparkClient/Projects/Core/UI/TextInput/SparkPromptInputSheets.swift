@@ -46,7 +46,7 @@ struct SparkPromptInputDrawerSheet: View {
         .background(Color(.systemGray6))
         .onAppear { textFocused = true }
         .sheet(isPresented: $showCameraPicker) {
-            KnowledgeImagePicker(
+            SystemImagePicker(
                 source: .camera,
                 onCancel: { showCameraPicker = false },
                 onImagePicked: { image in
@@ -57,7 +57,7 @@ struct SparkPromptInputDrawerSheet: View {
             .background(Color.black)
         }
         .sheet(isPresented: $showPhotoLibraryPicker) {
-            KnowledgeImagePicker(
+            SystemImagePicker(
                 source: .photoLibrary,
                 onCancel: { showPhotoLibraryPicker = false },
                 onImagePicked: { image in

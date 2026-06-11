@@ -84,7 +84,7 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
             }
         }
         .sheet(isPresented: $showCameraPicker) {
-            KnowledgeImagePicker(
+            SystemImagePicker(
                 source: .camera,
                 onCancel: { showCameraPicker = false },
                 onImagePicked: { image in

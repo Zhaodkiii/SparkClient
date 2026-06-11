@@ -1,5 +1,4 @@
 import SwiftUI
-import PhotosUI
 import UniformTypeIdentifiers
 #if canImport(UIKit)
 import UIKit
@@ -21,7 +20,6 @@ struct MedicineBoxListPage: View {
     @State private var sheetDestination: MedicineBoxSheetDestination?
     @State private var showingUploadSheet = false
     @State private var showingMedicineBoxCamera = false
-    @State private var showingPhotoLibrary = false
     @State private var showCameraUnavailableAlert = false
 
     init(
@@ -138,30 +136,16 @@ struct MedicineBoxListPage: View {
             Task { await refreshMedicineBoxes() }
         }
         .sheet(isPresented: $showingUploadSheet) {
-            MedicineBoxUploadSheet { files in
+            MedicalAttachmentUploadListSheet(documentType: .medicineBox) { files in
                 startMedicineBoxRecognition(files: files)
             }
         }
         .fullScreenCover(isPresented: $showingMedicineBoxCamera) {
             MedicineBoxCameraSceneView(
                 onCancel: { showingMedicineBoxCamera = false },
-                onPickPhoto: {
+                onImagesCaptured: { images in
                     showingMedicineBoxCamera = false
-                    showingPhotoLibrary = true
-                },
-                onImageCaptured: { image in
-                    showingMedicineBoxCamera = false
-                    handleCapturedMedicineBoxImage(image)
-                }
-            )
-        }
-        .sheet(isPresented: $showingPhotoLibrary) {
-            KnowledgeImagePicker(
-                source: .photoLibrary,
-                onCancel: { showingPhotoLibrary = false },
-                onImagePicked: { image in
-                    showingPhotoLibrary = false
-                    handleCapturedMedicineBoxImage(image)
+                    handleCapturedMedicineBoxImages(images)
                 }
             )
         }
@@ -238,8 +222,9 @@ struct MedicineBoxListPage: View {
         #endif
     }
 
-    private func handleCapturedMedicineBoxImage(_ image: UIImage) {
-        guard let file = saveMedicineBoxCameraImageToTemp(image) else {
+    private func handleCapturedMedicineBoxImages(_ images: [MedicineBoxCapturedImage]) {
+        let files = images.compactMap { saveMedicineBoxCameraImageToTemp($0.image, slot: $0.slot) }
+        guard !files.isEmpty else {
             notificationClient.error(
                 L10n.text(
                     "medical.upload.medicine_box.sheet.save_failed_message",
@@ -250,12 +235,26 @@ struct MedicineBoxListPage: View {
             )
             return
         }
-        startMedicineBoxRecognition(files: [file])
+        if files.count < images.count {
+            notificationClient.error(
+                L10n.text(
+                    "medical.upload.medicine_box.sheet.save_failed_message",
+                    fallback: "部分图片保存失败，请重试"
+                ),
+                title: L10n.text("common.error"),
+                source: "home.medicine_box.camera"
+            )
+        }
+        startMedicineBoxRecognition(files: files)
     }
 
-    private func saveMedicineBoxCameraImageToTemp(_ image: UIImage) -> MedicalUploadLocalFile? {
+    private func saveMedicineBoxCameraImageToTemp(
+        _ image: UIImage,
+        slot: MedicineBoxCaptureSlot? = nil
+    ) -> MedicalUploadLocalFile? {
         guard let data = image.jpegData(compressionQuality: 0.95) else { return nil }
-        let filename = "medicine_box_camera_\(UUID().uuidString).jpg"
+        let slotSuffix = slot.map { "_\($0.fileNameSuffix)" } ?? ""
+        let filename = "medicine_box_camera\(slotSuffix)_\(UUID().uuidString).jpg"
         let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
         do {
             try data.write(to: target, options: .atomic)
@@ -532,452 +531,6 @@ struct MedicineBoxDetailPage: View {
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
-        }
-    }
-}
-
-struct MedicineBoxUploadSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let title: String
-    let headerTitle: String
-    let headerSubtitle: String
-    let emptyTitle: String
-    let emptySubtitle: String
-    let fileNamePrefix: String
-    let maxFileCount: Int
-    let onConfirm: ([MedicalUploadLocalFile]) -> Void
-
-    @State private var localFiles: [MedicalUploadLocalFile] = []
-    @State private var showingMedicineBoxCamera = false
-    @State private var showingPhotoPicker = false
-    @State private var showingPhotoLibrary = false
-    @State private var showingFileImporter = false
-    @State private var showCameraUnavailableAlert = false
-    @State private var filePreviewSelection: FilePreviewInput?
-    @State private var fileLimitMessage: String?
-
-    private let logger: Logger = ConsoleLogger()
-
-    init(
-        title: String = L10n.text("medical.upload.medicine_box.sheet.title"),
-        headerTitle: String = L10n.text("medical.upload.medicine_box.sheet.header"),
-        headerSubtitle: String = L10n.text("medical.upload.medicine_box.sheet.subtitle"),
-        emptyTitle: String = L10n.text("medical.upload.medicine_box.sheet.empty_title"),
-        emptySubtitle: String = L10n.text("medical.upload.medicine_box.sheet.empty_subtitle"),
-        fileNamePrefix: String = "medicine_box",
-        maxFileCount: Int = 5,
-        onConfirm: @escaping ([MedicalUploadLocalFile]) -> Void
-    ) {
-        self.title = title
-        self.headerTitle = headerTitle
-        self.headerSubtitle = headerSubtitle
-        self.emptyTitle = emptyTitle
-        self.emptySubtitle = emptySubtitle
-        self.fileNamePrefix = fileNamePrefix
-        self.maxFileCount = max(1, maxFileCount)
-        self.onConfirm = onConfirm
-    }
-
-    var body: some View {
-        CompatibleNavigationContainer {
-            AdaptiveToolSheetScrollView(bottomContentPadding: 0, extraChromeHeight: 120) {
-                VStack(alignment: .leading, spacing: 12) {
-                    header
-                    Divider()
-                    entryTiles
-                    if localFiles.isEmpty {
-                        placeholder
-                    } else {
-                        selectionPreview
-                    }
-                    Spacer(minLength: 8)
-                    
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-            }
-            
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomBar
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.text("common.cancel")) {
-                        dismiss()
-                    }
-                }
-            }
-        
-        }
-        .fullScreenCover(isPresented: $showingMedicineBoxCamera) {
-            MedicineBoxCameraSceneView(
-                onCancel: { showingMedicineBoxCamera = false },
-                onPickPhoto: {
-                    showingMedicineBoxCamera = false
-                    presentPhotoLibrary()
-                },
-                onImageCaptured: { image in
-                    showingMedicineBoxCamera = false
-                    if let file = saveUIImageToTemp(image: image, namePrefix: "\(fileNamePrefix)_camera") {
-                        localFiles.append(file)
-                    }
-                }
-            )
-        }
-        .sheet(isPresented: $showingPhotoLibrary) {
-            KnowledgeImagePicker(
-                source: .photoLibrary,
-                onCancel: { showingPhotoLibrary = false },
-                onImagePicked: { image in
-                    showingPhotoLibrary = false
-                    if let file = saveUIImageToTemp(image: image, namePrefix: "\(fileNamePrefix)_photo") {
-                        localFiles.append(file)
-                    }
-                }
-            )
-        }
-        .fileImporter(
-            isPresented: $showingFileImporter,
-            allowedContentTypes: [.image, .pdf],
-            allowsMultipleSelection: true
-        ) { result in
-            guard case .success(let urls) = result else { return }
-            appendFiles(urls.compactMap(copyToTempFile))
-        }
-        .overlay {
-            if #available(iOS 16.0, *) {
-                MedicineBoxPhotosPickerBridge(
-                    isPresented: $showingPhotoPicker,
-                    maxSelectionCount: remainingFileSlots,
-                    fileNamePrefix: fileNamePrefix
-                ) { files in
-                    appendFiles(files)
-                }
-            }
-        }
-        .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCameraUnavailableAlert) {
-            Button(L10n.text("common.ok"), role: .cancel) {}
-        } message: {
-            Text(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_message"))
-        }
-        .alert(L10n.text("medical.upload.medicine_box.sheet.file_limit_title"), isPresented: Binding(
-            get: { fileLimitMessage != nil },
-            set: { if !$0 { fileLimitMessage = nil } }
-        )) {
-            Button(L10n.text("common.ok"), role: .cancel) {}
-        } message: {
-            Text(fileLimitMessage ?? "")
-        }
-        .unifiedFilePreview(selection: $filePreviewSelection)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(headerTitle)
-                .font(.system(size: 17, weight: .semibold))
-            Text(headerSubtitle)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var entryTiles: some View {
-        HStack(spacing: 12) {
-            medicineUploadTile(
-                icon: "camera",
-                title: L10n.text("medical.upload.medicine_box.sheet.tile.camera.title"),
-                subtitle: L10n.text("medical.upload.medicine_box.sheet.tile.camera.subtitle"),
-                tint: .blue
-            ) {
-                presentCamera()
-            }
-            medicineUploadTile(
-                icon: "photo.on.rectangle",
-                title: L10n.text("medical.upload.medicine_box.sheet.tile.photo.title"),
-                subtitle: L10n.text("medical.upload.medicine_box.sheet.tile.photo.subtitle"),
-                tint: .purple
-            ) {
-                presentPhotoLibrary()
-            }
-            medicineUploadTile(
-                icon: "doc",
-                title: L10n.text("medical.upload.medicine_box.sheet.tile.file.title"),
-                subtitle: L10n.text("medical.upload.medicine_box.sheet.tile.file.subtitle"),
-                tint: .green
-            ) {
-                presentFileImporter()
-            }
-        }
-        .padding(.top, 6)
-    }
-
-    private var placeholder: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 40))
-                .foregroundStyle(.purple.opacity(0.65))
-            Text(emptyTitle)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.purple)
-            Text(emptySubtitle)
-                .font(.system(size: 12))
-                .foregroundStyle(.purple.opacity(0.8))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.purple.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(style: StrokeStyle(lineWidth: 2, dash: [6]))
-                .foregroundStyle(Color.purple.opacity(0.35))
-        )
-        .padding(.top, 6)
-    }
-
-    private var selectionPreview: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L10n.text("medical.upload.medicine_box.sheet.selected_label"))
-                    .font(.system(size: 14, weight: .semibold))
-                Spacer()
-                Text(
-                    String(
-                        format: L10n.text("medical.upload.medicine_box.sheet.selected_count"),
-                        localFiles.count,
-                        maxFileCount
-                    )
-                )
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                spacing: 12
-            ) {
-                ForEach(localFiles) { file in
-                    MedicalDocumentFilePreviewSquareCard(
-                        item: file.previewInput,
-                        onPreview: { filePreviewSelection = file.previewInput },
-                        onDelete: { localFiles.removeAll { $0.id == file.id } }
-                    )
-                }
-            }
-            .padding(.vertical, 4)
-
-        }
-    }
-
-    private var bottomBar: some View {
-        HStack {
-            Button {
-                localFiles.removeAll()
-            } label: {
-                Label(L10n.text("medical.upload.medicine_box.sheet.clear"), systemImage: "trash")
-            }
-            .buttonStyle(.bordered)
-
-            Spacer()
-
-            Button {
-                onConfirm(localFiles)
-                dismiss()
-            } label: {
-                Label(L10n.text("medical.upload.medicine_box.sheet.start_recognition"), systemImage: "wand.and.stars")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(localFiles.isEmpty)
-        }
-        .padding( 10)
-    }
-
-    private var remainingFileSlots: Int {
-        max(0, maxFileCount - localFiles.count)
-    }
-
-    private func medicineUploadTile(icon: String, title: String, subtitle: String, tint: Color, action: @escaping () -> Void) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 22))
-                .foregroundStyle(tint)
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(tint)
-            Text(subtitle)
-                .font(.system(size: 11))
-                .foregroundStyle(tint.opacity(0.8))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(tint.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(tint.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6]))
-        )
-        .contentShape(Rectangle())
-        .onTapGesture(perform: action)
-    }
-
-    private func presentPhotoLibrary() {
-        guard ensureCanAddMoreFiles() else { return }
-        if #available(iOS 16.0, *) {
-            showingPhotoPicker = true
-        } else {
-            showingPhotoLibrary = true
-        }
-    }
-
-    private func presentFileImporter() {
-        guard ensureCanAddMoreFiles() else { return }
-        showingFileImporter = true
-    }
-
-    private func presentCamera() {
-        guard ensureCanAddMoreFiles() else { return }
-        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            showingMedicineBoxCamera = true
-        } else {
-            showCameraUnavailableAlert = true
-        }
-    }
-
-    private func saveUIImageToTemp(image: UIImage, namePrefix: String) -> MedicalUploadLocalFile? {
-        guard let data = image.jpegData(compressionQuality: 0.95) else { return nil }
-        return saveDataToTemp(data: data, preferredExtension: "jpg", namePrefix: namePrefix)
-    }
-
-    private func saveDataToTemp(data: Data, preferredExtension: String, namePrefix: String) -> MedicalUploadLocalFile? {
-        let filename = "\(namePrefix)_\(UUID().uuidString).\(preferredExtension)"
-        let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        do {
-            try data.write(to: target, options: .atomic)
-            return MedicalUploadLocalFile(
-                url: target,
-                displayName: filename,
-                mimeType: UTType(filenameExtension: preferredExtension)?.preferredMIMEType
-            )
-        } catch {
-            logger.error("写入药箱识别临时文件失败：\(error.localizedDescription)", module: .medical)
-            return nil
-        }
-    }
-
-    private func copyToTempFile(url: URL) -> MedicalUploadLocalFile? {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer {
-            if scoped { url.stopAccessingSecurityScopedResource() }
-        }
-        let ext = url.pathExtension.isEmpty ? "pdf" : url.pathExtension
-        let target = FileManager.default.temporaryDirectory.appendingPathComponent("medicine_box_upload_\(UUID().uuidString).\(ext)")
-        do {
-            if FileManager.default.fileExists(atPath: target.path) {
-                try FileManager.default.removeItem(at: target)
-            }
-            try FileManager.default.copyItem(at: url, to: target)
-            return MedicalUploadLocalFile(
-                url: target,
-                displayName: url.lastPathComponent,
-                mimeType: UTType(filenameExtension: ext)?.preferredMIMEType
-            )
-        } catch {
-            logger.error("复制药箱识别文件失败：\(error.localizedDescription)", module: .medical)
-            return nil
-        }
-    }
-
-    private func appendFiles(_ files: [MedicalUploadLocalFile]) {
-        guard files.isEmpty == false else { return }
-        let slots = remainingFileSlots
-        guard slots > 0 else {
-            showFileLimitMessage()
-            return
-        }
-
-        localFiles.append(contentsOf: files.prefix(slots))
-        if files.count > slots {
-            showFileLimitMessage()
-        }
-    }
-
-    private func ensureCanAddMoreFiles() -> Bool {
-        guard remainingFileSlots > 0 else {
-            showFileLimitMessage()
-            return false
-        }
-        return true
-    }
-
-    private func showFileLimitMessage() {
-        fileLimitMessage = String(
-            format: L10n.text("medical.upload.medicine_box.sheet.file_limit_message"),
-            maxFileCount
-        )
-    }
-}
-
-@available(iOS 16.0, *)
-private struct MedicineBoxPhotosPickerBridge: View {
-    @Binding var isPresented: Bool
-    let maxSelectionCount: Int
-    let fileNamePrefix: String
-    let onFilesSelected: ([MedicalUploadLocalFile]) -> Void
-
-    @State private var selectedItems: [PhotosPickerItem] = []
-
-    private let logger: Logger = ConsoleLogger()
-
-    var body: some View {
-        Color.clear
-            .frame(width: 0, height: 0)
-            .photosPicker(
-                isPresented: $isPresented,
-                selection: $selectedItems,
-                maxSelectionCount: max(1, maxSelectionCount),
-                matching: .images
-            )
-            .onChange(of: selectedItems) { newItems in
-                guard newItems.isEmpty == false else { return }
-                Task {
-                    let files = await convertPhotoItems(newItems)
-                    await MainActor.run {
-                        if files.isEmpty == false {
-                            onFilesSelected(files)
-                        }
-                        selectedItems = []
-                    }
-                }
-            }
-    }
-
-    private func convertPhotoItems(_ items: [PhotosPickerItem]) async -> [MedicalUploadLocalFile] {
-        var files: [MedicalUploadLocalFile] = []
-        for item in items {
-            do {
-                if let data = try await item.loadTransferable(type: Data.self),
-                   let file = saveDataToTemp(data: data, preferredExtension: "jpg", namePrefix: "\(fileNamePrefix)_photo") {
-                    files.append(file)
-                }
-            } catch {
-                logger.error("读取药箱相册图片失败：\(error.localizedDescription)", module: .medical)
-            }
-        }
-        return files
-    }
-
-    private func saveDataToTemp(data: Data, preferredExtension: String, namePrefix: String) -> MedicalUploadLocalFile? {
-        let filename = "\(namePrefix)_\(UUID().uuidString).\(preferredExtension)"
-        let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        do {
-            try data.write(to: target, options: .atomic)
-            return MedicalUploadLocalFile(
-                url: target,
-                displayName: filename,
-                mimeType: UTType(filenameExtension: preferredExtension)?.preferredMIMEType
-            )
-        } catch {
-            logger.error("写入药箱相册临时文件失败：\(error.localizedDescription)", module: .medical)
-            return nil
         }
     }
 }
