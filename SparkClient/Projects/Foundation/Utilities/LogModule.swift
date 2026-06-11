@@ -9,6 +9,7 @@ enum LogModule: String, Sendable, CaseIterable {
     case oss = "OSS"
     case auth = "AUTH"
     case home = "HOME"
+    case camera = "CAMERA"
     case nutrition = "NUTRITION"
     case general = "GENERAL"
     case push = "PUSH"

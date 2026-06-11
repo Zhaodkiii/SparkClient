@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
     @State private var showTaskCenter = false
+    @State private var showCustomCamera = false
     @State private var addMemberNearbyTransport = NearbyShareTransport()
 
     var body: some View {
@@ -26,8 +27,7 @@ struct HomeView: View {
 //                headerCard
                 medicalInfoSection
                 nutritionInfoSection
-                
-                // 相机模块
+                customCameraSection
 
             }
             .padding(.horizontal, 16)
@@ -154,6 +154,11 @@ struct HomeView: View {
                     viewModel: medicalDocumentUploadViewModel,
                     aiSettingsViewModel: dependencies.aiSettingsViewModel
                 )
+            }
+        }
+        .fullScreenCover(isPresented: $showCustomCamera) {
+            CustomCameraHomeView {
+                showCustomCamera = false
             }
         }
         .sheet(isPresented: $showTaskCenter) {
@@ -382,6 +387,12 @@ struct HomeView: View {
             dependencies: dependencies.nutritionDependencies,
             memberID: viewModel.selectedMemberID
         )
+    }
+
+    private var customCameraSection: some View {
+        HomeCustomCameraEntrySection {
+            showCustomCamera = true
+        }
     }
 
     private var medicalAIReportButton: some View {

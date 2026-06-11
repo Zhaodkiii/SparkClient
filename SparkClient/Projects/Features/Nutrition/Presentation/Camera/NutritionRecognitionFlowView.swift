@@ -14,7 +14,6 @@ final class NutritionRecognitionFlowViewModel: ObservableObject {
     @Published private(set) var phase: NutritionRecognitionFlowPhase = .camera
     @Published private(set) var capturedImage: UIImage?
     @Published var showPhotoPicker = false
-    @Published var showCameraPicker = false
 
     private let dependencies: NutritionFeatureDependencies
     private let memberID: Int
@@ -111,10 +110,12 @@ struct NutritionRecognitionFlowView: View {
         Group {
             switch viewModel.phase {
             case .camera:
-                NutritionCameraCaptureView(
+                NutritionFoodCameraSceneView(
                     onCancel: { dismiss() },
                     onPickPhoto: { viewModel.showPhotoPicker = true },
-                    onTakePhoto: { viewModel.showCameraPicker = true }
+                    onImageCaptured: { image in
+                        viewModel.handlePickedImage(image)
+                    }
                 )
             case .analyzing:
                 NutritionRecognitionAnalyzingView(
@@ -145,83 +146,13 @@ struct NutritionRecognitionFlowView: View {
             }
         }
         .sheet(isPresented: $viewModel.showPhotoPicker) {
-            NutritionImagePicker(source: .photoLibrary) {
+            NutritionImagePicker {
                 viewModel.showPhotoPicker = false
             } onImagePicked: { image in
                 viewModel.showPhotoPicker = false
                 viewModel.handlePickedImage(image)
             }
         }
-        .fullScreenCover(isPresented: $viewModel.showCameraPicker) {
-            NutritionImagePicker(source: .camera) {
-                viewModel.showCameraPicker = false
-            } onImagePicked: { image in
-                viewModel.showCameraPicker = false
-                viewModel.handlePickedImage(image)
-            }
-        }
-    }
-}
-
-struct NutritionCameraCaptureView: View {
-    let onCancel: () -> Void
-    let onPickPhoto: () -> Void
-    let onTakePhoto: () -> Void
-
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Button(action: onCancel) {
-                    Image(systemName: "chevron.left")
-                }
-                Spacer()
-                Text(L10n.text("nutrition.recognition.camera.title"))
-                    .font(.headline)
-                Spacer()
-                Color.clear.frame(width: 24, height: 24)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-
-            Spacer()
-
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8]))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 280)
-                .overlay {
-                    VStack(spacing: 8) {
-                        Image(systemName: "camera.viewfinder")
-                            .font(.largeTitle)
-                            .foregroundStyle(.secondary)
-                        Text(L10n.text("nutrition.recognition.camera.hint"))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                    }
-                }
-                .padding(.horizontal, 24)
-
-            Spacer()
-
-            HStack(spacing: 48) {
-                Button(L10n.text("nutrition.recognition.camera.photo_library"), action: onPickPhoto)
-                    .font(.subheadline)
-                Button {
-                    onTakePhoto()
-                } label: {
-                    Circle()
-                        .strokeBorder(Color.primary, lineWidth: 4)
-                        .frame(width: 68, height: 68)
-                        .overlay(Circle().fill(Color.primary).frame(width: 56, height: 56))
-                }
-                Color.clear.frame(width: 60)
-            }
-            .padding(.bottom, 32)
-        }
-        .background(Color(uiColor: .systemBackground))
     }
 }
 
@@ -326,12 +257,6 @@ struct NutritionRecognitionFailureView: View {
 }
 
 struct NutritionImagePicker: UIViewControllerRepresentable {
-    enum Source {
-        case camera
-        case photoLibrary
-    }
-
-    let source: Source
     let onCancel: () -> Void
     let onImagePicked: (UIImage) -> Void
 
@@ -342,8 +267,7 @@ struct NutritionImagePicker: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
-        picker.sourceType = source == .camera ? .camera : .photoLibrary
-        picker.cameraCaptureMode = .photo
+        picker.sourceType = .photoLibrary
         picker.allowsEditing = false
         return picker
     }

@@ -20,6 +20,9 @@ struct MedicineBoxListPage: View {
     @State private var localMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var sheetDestination: MedicineBoxSheetDestination?
     @State private var showingUploadSheet = false
+    @State private var showingMedicineBoxCamera = false
+    @State private var showingPhotoLibrary = false
+    @State private var showCameraUnavailableAlert = false
 
     init(
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
@@ -85,7 +88,7 @@ struct MedicineBoxListPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button {
-                showingUploadSheet = true
+                presentMedicineBoxCamera()
             } label: {
                 Label(L10n.text("home.medical.medicine_box.camera_add"), systemImage: "camera.fill")
                     .font(.headline)
@@ -138,6 +141,34 @@ struct MedicineBoxListPage: View {
             MedicineBoxUploadSheet { files in
                 startMedicineBoxRecognition(files: files)
             }
+        }
+        .fullScreenCover(isPresented: $showingMedicineBoxCamera) {
+            MedicineBoxCameraSceneView(
+                onCancel: { showingMedicineBoxCamera = false },
+                onPickPhoto: {
+                    showingMedicineBoxCamera = false
+                    showingPhotoLibrary = true
+                },
+                onImageCaptured: { image in
+                    showingMedicineBoxCamera = false
+                    handleCapturedMedicineBoxImage(image)
+                }
+            )
+        }
+        .sheet(isPresented: $showingPhotoLibrary) {
+            KnowledgeImagePicker(
+                source: .photoLibrary,
+                onCancel: { showingPhotoLibrary = false },
+                onImagePicked: { image in
+                    showingPhotoLibrary = false
+                    handleCapturedMedicineBoxImage(image)
+                }
+            )
+        }
+        .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCameraUnavailableAlert) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_message"))
         }
         .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
             CompatibleNavigationContainer {
@@ -192,6 +223,51 @@ struct MedicineBoxListPage: View {
     @MainActor
     private func startMedicineBoxRecognition(files: [MedicalUploadLocalFile]) {
         viewModel.prepareAndStart(files: files, kind: .medicineBox)
+    }
+
+    private func presentMedicineBoxCamera() {
+        guard memberID != nil else { return }
+        #if canImport(UIKit)
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            showingMedicineBoxCamera = true
+        } else {
+            showCameraUnavailableAlert = true
+        }
+        #else
+        showCameraUnavailableAlert = true
+        #endif
+    }
+
+    private func handleCapturedMedicineBoxImage(_ image: UIImage) {
+        guard let file = saveMedicineBoxCameraImageToTemp(image) else {
+            notificationClient.error(
+                L10n.text(
+                    "medical.upload.medicine_box.sheet.save_failed_message",
+                    fallback: "图片保存失败，请重试"
+                ),
+                title: L10n.text("common.error"),
+                source: "home.medicine_box.camera"
+            )
+            return
+        }
+        startMedicineBoxRecognition(files: [file])
+    }
+
+    private func saveMedicineBoxCameraImageToTemp(_ image: UIImage) -> MedicalUploadLocalFile? {
+        guard let data = image.jpegData(compressionQuality: 0.95) else { return nil }
+        let filename = "medicine_box_camera_\(UUID().uuidString).jpg"
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: target, options: .atomic)
+            return MedicalUploadLocalFile(
+                url: target,
+                displayName: filename,
+                mimeType: UTType.jpeg.preferredMIMEType
+            )
+        } catch {
+            logger.error("写入药箱拍摄临时文件失败：\(error.localizedDescription)", module: .medical)
+            return nil
+        }
     }
 
     @ViewBuilder
@@ -472,7 +548,7 @@ struct MedicineBoxUploadSheet: View {
     let onConfirm: ([MedicalUploadLocalFile]) -> Void
 
     @State private var localFiles: [MedicalUploadLocalFile] = []
-    @State private var showingCamera = false
+    @State private var showingMedicineBoxCamera = false
     @State private var showingPhotoPicker = false
     @State private var showingPhotoLibrary = false
     @State private var showingFileImporter = false
@@ -535,12 +611,15 @@ struct MedicineBoxUploadSheet: View {
             }
         
         }
-        .sheet(isPresented: $showingCamera) {
-            KnowledgeImagePicker(
-                source: .camera,
-                onCancel: { showingCamera = false },
-                onImagePicked: { image in
-                    showingCamera = false
+        .fullScreenCover(isPresented: $showingMedicineBoxCamera) {
+            MedicineBoxCameraSceneView(
+                onCancel: { showingMedicineBoxCamera = false },
+                onPickPhoto: {
+                    showingMedicineBoxCamera = false
+                    presentPhotoLibrary()
+                },
+                onImageCaptured: { image in
+                    showingMedicineBoxCamera = false
                     if let file = saveUIImageToTemp(image: image, namePrefix: "\(fileNamePrefix)_camera") {
                         localFiles.append(file)
                     }
@@ -757,7 +836,7 @@ struct MedicineBoxUploadSheet: View {
     private func presentCamera() {
         guard ensureCanAddMoreFiles() else { return }
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            showingCamera = true
+            showingMedicineBoxCamera = true
         } else {
             showCameraUnavailableAlert = true
         }
