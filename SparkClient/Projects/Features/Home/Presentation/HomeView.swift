@@ -468,7 +468,6 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
         .padding(16)
-        
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {

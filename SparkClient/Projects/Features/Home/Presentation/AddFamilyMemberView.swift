@@ -280,6 +280,7 @@ struct AddFamilyMemberView: View {
         .disabled(!canSave || isSaving)
         .padding(.top, 4)
     }
+    
 
     @ViewBuilder
     private func bindMemberContent(_ resolved: SparkMedicalMemberAPI.ShareResolveResponse) -> some View {
@@ -596,7 +597,7 @@ struct AddFamilyMemberView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .secondarySystemBackground))
+                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)

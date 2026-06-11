@@ -32,10 +32,35 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
 
     var maxFileCount: Int {
         switch self {
+        case .examinationReport:
+            return 3
         case .healthExamReport:
-            return 1
-        case .medicineBox, .medicationPlan, .examinationReport, .caseDocument:
+            return 6
+        case .medicineBox, .medicationPlan, .caseDocument:
             return 5
+        }
+    }
+
+    /// 自定义报告相机单次最多拍摄张数。
+    var reportCameraMaxCaptureCount: Int {
+        switch self {
+        case .examinationReport:
+            return 3
+        case .healthExamReport:
+            return 6
+        default:
+            return 1
+        }
+    }
+
+    var examinationReportCameraContext: ExaminationReportCameraContext? {
+        switch self {
+        case .examinationReport:
+            return .examinationReport
+        case .healthExamReport:
+            return .healthExamReport
+        default:
+            return nil
         }
     }
 
@@ -118,7 +143,9 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         switch self {
         case .medicineBox:
             return .medicineBoxCustomCamera
-        case .medicationPlan, .examinationReport, .healthExamReport, .caseDocument:
+        case .examinationReport, .healthExamReport:
+            return .examinationReportCustomCamera
+        case .medicationPlan, .caseDocument:
             return .systemCamera
         }
     }
@@ -126,12 +153,15 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
 
 enum MedicalAttachmentUploadCameraCover: Identifiable {
     case medicineBoxCustomCamera
+    case examinationReportCustomCamera
     case systemCamera
 
     var id: String {
         switch self {
         case .medicineBoxCustomCamera:
             return "medicineBoxCustomCamera"
+        case .examinationReportCustomCamera:
+            return "examinationReportCustomCamera"
         case .systemCamera:
             return "systemCamera"
         }
@@ -207,16 +237,33 @@ struct MedicalAttachmentUploadListSheet: View {
                     onCancel: { presentedCameraCover = nil },
                     onImagesCaptured: { images in
                         presentedCameraCover = nil
-                        for captured in images {
-                            if let file = saveUIImageToTemp(
+                        let files = images.compactMap { captured in
+                            saveUIImageToTemp(
                                 image: captured.image,
                                 namePrefix: "\(fileNamePrefix)_camera_\(captured.slot.fileNameSuffix)"
-                            ) {
-                                localFiles.append(file)
-                            }
+                            )
                         }
+                        appendFiles(files)
                     }
                 )
+            case .examinationReportCustomCamera:
+                if let context = documentType.examinationReportCameraContext {
+                    ExaminationReportCameraSceneView(
+                        context: context,
+                        maxCaptureCount: min(documentType.reportCameraMaxCaptureCount, remainingFileSlots),
+                        onCancel: { presentedCameraCover = nil },
+                        onImagesCaptured: { images in
+                            presentedCameraCover = nil
+                            let files = images.compactMap { captured in
+                                saveUIImageToTemp(
+                                    image: captured.image,
+                                    namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
+                                )
+                            }
+                            appendFiles(files)
+                        }
+                    )
+                }
             case .systemCamera:
                 SystemImagePicker(
                     source: .camera,
