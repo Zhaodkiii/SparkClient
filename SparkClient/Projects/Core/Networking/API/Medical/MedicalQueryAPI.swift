@@ -1,5 +1,20 @@
 import Foundation
 
+/// 服药记录 `scheduled_at` 区间查询，与服务端 `scheduled_from` / `scheduled_to` 对齐。
+///
+/// 约定：
+/// - `scheduledFrom`：含下界，`scheduled_at >= scheduled_from`
+/// - `scheduledToExclusive`：不含上界，`scheduled_at < scheduled_to`
+struct MedicationRecordScheduledRange: Equatable, Sendable {
+    let scheduledFrom: Date
+    let scheduledToExclusive: Date
+
+    init(scheduledFrom: Date, scheduledToExclusive: Date) {
+        self.scheduledFrom = scheduledFrom
+        self.scheduledToExclusive = scheduledToExclusive
+    }
+}
+
 /// 医疗按需查询 API：替代快照全量拉取，按资源请求并利用 ETag。
 struct SparkMedicalQueryAPI: @unchecked Sendable {
     /// 统一后端配置（网络引擎、鉴权、ETag 存储与日志）。
@@ -173,12 +188,15 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
     }
 
     /// 查询服药记录（按成员、计划、状态、计划时间窗口可选过滤）。
+    ///
+    /// `scheduledRange` 会映射为单次区间查询：
+    /// `scheduled_from = scheduledRange.scheduledFrom`，
+    /// `scheduled_to = scheduledRange.scheduledToExclusive`（开区间上界）。
     func listMedicationRecords(
         memberID: Int? = nil,
         planID: Int? = nil,
         status: String? = nil,
-        scheduledFrom: Date? = nil,
-        scheduledTo: Date? = nil
+        scheduledRange: MedicationRecordScheduledRange? = nil
     ) async throws -> [SparkMedicalSyncAPI.RemoteMedicationRecord] {
         var q: [URLQueryItem] = memberQuery(memberID)
         if let planID {
@@ -187,11 +205,19 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         if let status {
             q.append(URLQueryItem(name: "status", value: status))
         }
-        if let scheduledFrom {
-            q.append(URLQueryItem(name: "scheduled_from", value: MedicalDateCoding.encodeISO8601(scheduledFrom)))
-        }
-        if let scheduledTo {
-            q.append(URLQueryItem(name: "scheduled_to", value: MedicalDateCoding.encodeISO8601(scheduledTo)))
+        if let scheduledRange {
+            q.append(
+                URLQueryItem(
+                    name: "scheduled_from",
+                    value: MedicalDateCoding.encodeISO8601(scheduledRange.scheduledFrom)
+                )
+            )
+            q.append(
+                URLQueryItem(
+                    name: "scheduled_to",
+                    value: MedicalDateCoding.encodeISO8601(scheduledRange.scheduledToExclusive)
+                )
+            )
         }
         return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationRecord].self, kind: .medicationRecords, query: q)
     }

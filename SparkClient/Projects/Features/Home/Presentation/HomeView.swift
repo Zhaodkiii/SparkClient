@@ -24,10 +24,10 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 
                 // 当前版本 展示 注释 任务功能
-//                headerCard
-                medicalInfoSection
-                nutritionInfoSection
-                customCameraSection
+//                headerCard             //任务
+                medicalInfoSection          // 医疗
+//                nutritionInfoSection   // 营养
+//                customCameraSection    // 相机
 
             }
             .padding(.horizontal, 16)
@@ -589,7 +589,7 @@ private struct MemberSelectorChip: View {
             .padding(.vertical, 8)
             .background(
                 Capsule(style: .continuous)
-                    .fill(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemBackground))
+                    .fill(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
             )
             .overlay(
                 Capsule(style: .continuous)

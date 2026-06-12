@@ -204,14 +204,14 @@ struct MedicationsListPage: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    AnyView(executionCenterToolbarLink)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    AnyView(medicineBoxToolbarLink)
-                }
-            }
+//            .toolbar {
+//                ToolbarItem(placement: .navigationBarTrailing) {
+//                    AnyView(executionCenterToolbarLink)
+//                }
+//                ToolbarItem(placement: .navigationBarTrailing) {
+//                    AnyView(medicineBoxToolbarLink)
+//                }
+//            }
     }
 
     private var contentRoot: some View {
@@ -301,7 +301,14 @@ struct MedicationsListPage: View {
                 workflowAPI: workflowAPI,
                 fileTransferService: fileTransferService,
                 notificationClient: notificationClient,
-                logger: logger
+                logger: logger,
+                completeData: completeData,
+                memberContextStore: memberContextStore,
+                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
+                onMedicationPlansChanged: onMedicationPlansChanged,
+                onPrescriptionsChanged: onPrescriptionsChanged,
+                onMedicineBoxesChanged: updateMedicineBoxes
             )
         } label: {
             Label(L10n.text("home.medical.list.medications.action.execution_center", fallback: "执行"), systemImage: "checklist.checked")
