@@ -377,6 +377,7 @@
 "home.medical.list.details.loading" = "Loading details…";
 "home.medical.list.details.section" = "Detail items";
 "home.medical.family_cabinet.title" = "Family medicine cabinet";
+"home.medical.personal_cabinet.title" = "Personal medicine cabinet";
 "home.medical.medicine_box.title" = "Medicine cabinet";
 "home.medical.medicine_box.empty" = "No medicines in cabinet";
 "home.medical.medicine_box.camera_add" = "Add by photo";

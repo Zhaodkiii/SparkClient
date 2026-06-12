@@ -16,6 +16,8 @@ struct MedicationExecutionCenterPage: View {
     let memberContextStore: MemberContextStore?
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel?
     let aiSettingsViewModel: AISettingsViewModel?
+    /// 个人药箱入口所需的完整 Home 依赖（含成员上下文与上传 ViewModel）
+    let homeDependencies: HomeFeatureDependencies?
     let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
     let onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
@@ -29,7 +31,6 @@ struct MedicationExecutionCenterPage: View {
     @State private var isSaving = false
     @State private var logSheet: MedicationExecutionLogSheetContext?
     @State private var dateStripScrollID: String?
-    @State private var navigationDestination: MedicationExecutionNavigationDestination?
     private let calendar = Calendar.current
     private let logModule = LogModule.home
 
@@ -47,6 +48,7 @@ struct MedicationExecutionCenterPage: View {
         memberContextStore: MemberContextStore? = nil,
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel? = nil,
         aiSettingsViewModel: AISettingsViewModel? = nil,
+        homeDependencies: HomeFeatureDependencies? = nil,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
         onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)? = nil,
         onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
@@ -64,6 +66,7 @@ struct MedicationExecutionCenterPage: View {
         self.memberContextStore = memberContextStore
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
         self.aiSettingsViewModel = aiSettingsViewModel
+        self.homeDependencies = homeDependencies
         self.onMedicationPlansChanged = onMedicationPlansChanged
         self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
@@ -135,35 +138,13 @@ struct MedicationExecutionCenterPage: View {
         .navigationTitle("用药")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if canNavigateToMedicationList {
-                    Button {
-                        navigationDestination = .medicationList
-                    } label: {
-                        Label(
-                            L10n.text("home.medical.list.medications.title", fallback: "服药计划"),
-                            systemImage: "list.bullet.rectangle"
-                        )
-                        .labelStyle(.iconOnly)
-                    }
-                    .accessibilityLabel(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
-                }
-
-                if canNavigateToMedicineBoxList {
-                    Button {
-                        navigationDestination = .medicineBoxList
-                    } label: {
-                        Label(
-                            L10n.text("home.medical.medicine_box.title", fallback: "药箱"),
-                            systemImage: "pills.fill"
-                        )
-                        .labelStyle(.iconOnly)
-                    }
-                    .accessibilityLabel(L10n.text("home.medical.medicine_box.title", fallback: "药箱"))
-                }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                AnyView(medicationListToolbarLink)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                AnyView(medicineBoxToolbarLink)
             }
         }
-        .background(navigationLinks)
         .overlay {
             if isLoading || isSaving {
                 ProgressView()
@@ -191,95 +172,59 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
-    private var canNavigateToMedicationList: Bool {
-        memberContextStore != nil
-            && medicalDocumentUploadViewModel != nil
-            && aiSettingsViewModel != nil
-    }
-
-    private var canNavigateToMedicineBoxList: Bool {
-        medicalDocumentUploadViewModel != nil
-            && aiSettingsViewModel != nil
-    }
-
-    private var navigationLinks: some View {
-        Group {
-            NavigationLink(
-                isActive: Binding(
-                    get: { navigationDestination == .medicationList },
-                    set: { isActive in
-                        if isActive == false && navigationDestination == .medicationList {
-                            navigationDestination = nil
-                        }
-                    }
-                )
-            ) {
-                medicationListPage
-                    .hidesMainTabBarWhenPushed()
-            } label: {
-                EmptyView()
-            }
-            .hidden()
-
-            NavigationLink(
-                isActive: Binding(
-                    get: { navigationDestination == .medicineBoxList },
-                    set: { isActive in
-                        if isActive == false && navigationDestination == .medicineBoxList {
-                            navigationDestination = nil
-                        }
-                    }
-                )
-            ) {
-                medicineBoxListPage
-                    .hidesMainTabBarWhenPushed()
-            } label: {
-                EmptyView()
-            }
-            .hidden()
-        }
-    }
-
     @ViewBuilder
-    private var medicationListPage: some View {
+    private var medicationListToolbarLink: some View {
         if let memberContextStore,
            let medicalDocumentUploadViewModel,
            let aiSettingsViewModel {
-            MedicationsListPage(
-                completeData: completeData,
-                workflowAPI: workflowAPI,
-                medicalQueryAPI: medicalQueryAPI,
-                fileTransferService: fileTransferService,
-                memberContextStore: memberContextStore,
-                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                notificationClient: notificationClient,
-                logger: logger,
-                onMedicationPlansChanged: onMedicationPlansChanged,
-                onPrescriptionsChanged: onPrescriptionsChanged,
-                onMedicineBoxesChanged: onMedicineBoxesChanged
-            )
+            MainNavigationLink {
+                MedicationsListPage(
+                    completeData: completeData,
+                    workflowAPI: workflowAPI,
+                    medicalQueryAPI: medicalQueryAPI,
+                    fileTransferService: fileTransferService,
+                    memberContextStore: memberContextStore,
+                    medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel,
+                    notificationClient: notificationClient,
+                    logger: logger,
+                    homeDependencies: homeDependencies,
+                    onMedicationPlansChanged: onMedicationPlansChanged,
+                    onPrescriptionsChanged: onPrescriptionsChanged,
+                    onMedicineBoxesChanged: onMedicineBoxesChanged
+                )
+            } label: {
+                Label(
+                    L10n.text("home.medical.list.medications.title", fallback: "服药计划"),
+                    systemImage: "list.bullet.rectangle"
+                )
+                .font(.footnote.weight(.semibold))
+            }
         }
     }
 
     @ViewBuilder
-    private var medicineBoxListPage: some View {
-        if let medicalDocumentUploadViewModel,
-           let aiSettingsViewModel {
-            MedicineBoxListPage(
-                medicineBoxes: medicineBoxes,
-                memberID: memberID,
-                workflowAPI: workflowAPI,
-                medicalQueryAPI: medicalQueryAPI,
-                fileTransferService: fileTransferService,
-                viewModel: medicalDocumentUploadViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                notificationClient: notificationClient,
-                logger: logger,
-                onMedicineBoxesChanged: { boxes in
-                    onMedicineBoxesChanged?(boxes)
-                }
-            )
+    private var medicineBoxToolbarLink: some View {
+        // 个人药箱入口：复用 FamilyMedicineCabinetPage 的 personal 模式
+        if let memberID,
+           let homeDependencies {
+            MainNavigationLink {
+                FamilyMedicineCabinetPage(
+                    entryMemberID: memberID,
+                    mode: .personal,
+                    initialMedicineBoxes: medicineBoxes,
+                    dependencies: homeDependencies,
+                    onMedicineBoxesChanged: { boxes in
+                        onMedicineBoxesChanged?(boxes)
+                    }
+                )
+            } label: {
+                Label(
+                    L10n.text("home.medical.list.medications.action.medicine_box", fallback: "药箱"),
+                    systemImage: "pills.fill"
+                )
+                .font(.footnote.weight(.semibold))
+            }
         }
     }
 
@@ -681,11 +626,6 @@ struct MedicationExecutionCenterPage: View {
     private func upsertRecord(_ record: SparkMedicalSyncAPI.RemoteMedicationRecord) {
         MedicationExecutionRecordCache.upsertRecord(record, calendar: calendar, into: &recordsByDayID)
     }
-}
-
-private enum MedicationExecutionNavigationDestination {
-    case medicationList
-    case medicineBoxList
 }
 
 #Preview("Medication Execution Light") {

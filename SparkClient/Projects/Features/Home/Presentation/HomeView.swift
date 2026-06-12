@@ -304,6 +304,7 @@ struct HomeView: View {
                     MainNavigationLink {
                         FamilyMedicineCabinetPage(
                             entryMemberID: entryMemberID,
+                            mode: .family,
                             dependencies: dependencies
                         )
                     } label: {

@@ -11,6 +11,7 @@
 | `MEDICAL-AI-OCR-000003` | 提交前本地预校验与字段高亮纠错 | 已实现 | 客户端按服务端规则预校验、对应模块提示、字段高亮、用户修复后重新提交 |
 | `MEDICAL-AI-OCR-000004` | 折叠模块内预校验错误自动展开并定位 | 已实现 | 提交失败后展开错误所在折叠模块、再滚动到对应卡片或字段 |
 | `MEDICAL-AI-OCR-000005` | 缺少识别场景模型时引导配置模型密钥 | 已实现 | missingModelForScenario 弹窗提示、取消/前往设置、Sheet 打开模型密钥页面 |
+| `MEDICAL-AI-OCR-000006` | 处方识别支持多笔处方全流程 | 设计中 | AI 返回 `[PrescriptionRecognitionDraft]`、结果页切换成员、多处方页面展示、预校验、附件关联、逐笔保存提交 |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -2077,3 +2078,360 @@ catch error
 3. 医疗上传页面需要能拿到与 AI 设置一致的 `AISettingsViewModel`，避免打开一个空配置上下文。
 4. 避免 alert 和现有 `errorMessage` alert 同时弹出。
 5. 文案需要与 `APIKeysSettingsView` 的持久化配置行为保持一致，避免提示成临时内存配置。
+
+## 工单 `MEDICAL-AI-OCR-000006`：处方识别支持多笔处方全流程
+
+### 工单状态
+
+设计中。
+
+## 1. 背景与问题
+
+当前独立处方识别链路整体仍以单笔处方为主：
+
+1. `MedicalDocumentTypedResult.prescription` 关联值是 `PrescriptionRecognitionDraft`。
+2. `DefaultTypedMedicalDocumentExtractor` 的处方抽取按单对象解码。
+3. `PrescriptionRecognitionResultContentView` 内部状态是单个 `batch`，页面虽然复用了 `PrescriptionBatchListSectionView(batches:)`，但实际只传入 `[batch]`。
+4. `DefaultTypedMedicalDocumentSaver.savePrescriptionWithPlans` 一次只保存一笔处方。
+
+真实处方照片、PDF 或多页资料里，经常会出现同一次上传包含多张处方单、多名医生处方、门诊处方与续方混在一起的情况。如果仍强制识别成单笔，会导致：
+
+1. AI 把多张处方合并到一张处方内，诊断、开方日期、医生、处方号互相污染。
+2. 多个处方下的药品被塞进同一个药品列表，保存后无法还原真实业务归属。
+3. 用户在结果页只能编辑一个处方头信息，无法分别修正每笔处方。
+4. 保存提交只能生成一条处方记录，后续用药计划、附件、问报告引用都会失真。
+
+本工单要求处方识别从 AI 抽取、页面展示、用户编辑、预校验、附件关联到保存提交全流程支持多笔处方，核心数据形态为：
+
+```swift
+[PrescriptionRecognitionDraft]
+```
+
+## 2. 设计目标
+
+### 核心目标
+
+独立处方识别结果应允许一次上传识别出 0 到 N 笔处方，结果页支持像体检报告结果页一样切换保存归属成员；每笔处方都有自己的处方头信息、药品列表、附件关联、预校验结果和保存结果。
+
+### 第一期目标
+
+1. 处方抽取 Prompt 明确要求返回 JSON 数组。
+2. 处方抽取解码目标改为 `[PrescriptionRecognitionDraft]`。
+3. `MedicalDocumentTypedResult.prescription` 改为承载 `[PrescriptionRecognitionDraft]`。
+4. 结果页状态从单个 `batch` 改为 `batches: [PrescriptionRecognitionDraft]`。
+5. 页面复用现有 `PrescriptionBatchListSectionView` 展示多笔处方。
+6. 结果页支持切换成员，交互方式参考体检报告结果页。
+7. 每笔处方支持编辑处方头信息、编辑药品、管理处方附件、管理药品附件。
+8. 点击提交前对所有处方和药品执行本地预校验。
+9. 校验失败时复用 000003/000004 的字段高亮、折叠展开、滚动定位能力。
+10. 保存提交时按处方逐笔调用现有保存接口，并记录所有保存成功的处方 ID。
+
+### 非目标
+
+1. 不新增服务端批量保存接口，第一期客户端串行或受控并发逐笔保存。
+2. 不改变病例文档内 `CaseRecognitionDraft.prescriptions` 的已有数组结构。
+3. 不把多笔处方强行合并成一个处方。
+4. 不新增独立的多处方编辑页面，优先复用现有详情/编辑组件。
+5. 不改变药品字段、用药计划字段和服务端 payload 字段语义。
+
+## 3. 数据模型调整
+
+### 3.1 Typed Result
+
+目标结构：
+
+```swift
+enum MedicalDocumentTypedResult: Sendable, Equatable {
+    case caseDocument(CaseRecognitionDraft)
+    case healthExamReport(HealthExamRecognitionDraft)
+    case medicalReport([MedicalReportRecognitionDraft])
+    case prescription([PrescriptionRecognitionDraft])
+    case medicationPlan([MedicationPlanRecognitionDraft])
+    case medicineBoxes([MedicineBoxRecognitionDraft])
+}
+```
+
+### 3.2 兼容策略
+
+为降低改动风险，需要提供兼容入口：
+
+1. 新识别结果统一写入 `.prescription([PrescriptionRecognitionDraft])`。
+2. 如果历史调试数据、预览数据或对话结构化卡片仍传入单个 `PrescriptionRecognitionDraft`，在边界层包装成数组。
+3. 解码 AI 输出时优先按数组解码；如确实存在旧模型返回单对象，可在第一期保留 fallback：单对象解码成功后包装成单元素数组，并在 normalized JSON 中转成数组格式。
+4. UI 和保存层只消费数组，不在页面内继续维护“单笔处方特例”。
+
+### 3.3 空结果
+
+如果 AI 判断没有处方：
+
+```json
+[]
+```
+
+客户端展示空态：提示未识别到处方，可返回重新上传或手动补充，不自动创建空处方提交。
+
+## 4. AI 抽取要求
+
+### Prompt 要求
+
+处方抽取场景需要明确：
+
+1. 返回 JSON array only。
+2. 每个数组元素是一笔独立处方。
+3. 如果同一份资料中出现多张处方、多个处方号、多个开方日期或多个医生，应拆成多笔。
+4. 每笔处方内只包含属于该处方的药品列表。
+5. 不确定归属的药品可以放入最可能的处方，并在 `extra` 中标记低置信度说明。
+6. 无法识别处方时返回 `[]`，不要返回空对象。
+
+### 解码目标
+
+```swift
+let final = try await extractStructured(
+    prompt: prompt,
+    scenario: .prescriptionExtraction,
+    kindLabel: "prescription",
+    as: [PrescriptionRecognitionDraft].self,
+    preferredModelName: preferredModelName,
+    cancellationToken: cancellationToken
+)
+```
+
+解码后统一执行：
+
+1. `normalizedPrescriptionDraft(_:)` 对数组逐项处理。
+2. 去除完全空白的处方草稿。
+3. 保留含有有效药品但处方头为空的草稿，让用户在页面修正。
+4. `extractedJSON` 标准化为数组 JSON，方便调试和后续重试反馈。
+
+## 5. 结果页 UI 设计
+
+### 页面状态
+
+从：
+
+```swift
+@State private var batch: PrescriptionRecognitionDraft
+```
+
+调整为：
+
+```swift
+@State private var batches: [PrescriptionRecognitionDraft]
+@State private var selectedMemberID: Int?
+```
+
+`selectedMemberID` 初始值使用 `output.envelope.memberID`，用户在结果页切换成员后同步更新。
+
+### 页面结构
+
+1. 顶部继续展示成员确认区域，并支持切换成员。
+2. 处方内容区展示多笔处方列表。
+3. 每笔处方卡片显示序号，例如“处方 1/3”。
+4. 卡片摘要展示机构、医生、开方日期、诊断、处方号。
+5. 每笔处方下展示该处方的药品列表。
+6. 每笔处方支持进入处方详情编辑。
+7. 每个药品支持进入药品详情编辑。
+8. 未关联附件区域继续展示未匹配到处方或药品的源文件。
+
+现有 `PrescriptionBatchListSectionView` 已接收：
+
+```swift
+let batches: [PrescriptionRecognitionDraft]
+```
+
+因此页面层应优先复用它，不再新建一套多处方列表组件。
+
+### 成员切换
+
+处方结果页成员切换需要参考体检报告结果页：
+
+```swift
+HealthExamMemberSectionView(
+    memberContextStore: memberContextStore,
+    selectedMemberID: selectedMemberID,
+    draft: draft,
+    onSelectMember: mode.isEditable ? { memberID in
+        selectedMemberID = memberID
+        viewModel?.updateResultMemberID(memberID)
+    } : nil
+)
+```
+
+处方页对应要求：
+
+1. `PrescriptionRecognitionResultContentView` 持有 `selectedMemberID`。
+2. 成员确认区域改造为可切换形态，复用 `MemberProfileBindingMenu`。
+3. 切换成员后调用 `viewModel.updateResultMemberID(memberID)`，保证 `typedOutput.envelope.memberID` 和页面状态一致。
+4. `detailNavigationContext`、处方详情预览、药品详情预览使用当前 `selectedMemberID`。
+5. 保存提交使用当前 `selectedMemberID`，不能继续使用初始 `output.envelope.memberID`。
+6. 如果当前没有可选成员或用户清空成员，提交按钮应禁用或预校验提示“请选择成员”。
+
+建议新增或改造：
+
+```swift
+struct PrescriptionMemberConfirmSectionView: View {
+    @ObservedObject var memberContextStore: MemberContextStore
+    let selectedMemberID: Int?
+    var onSelectMember: ((Int?) -> Void)?
+}
+```
+
+展示样式、菜单触发区域、未选择文案与 `HealthExamMemberSectionView` 保持一致，避免不同报告结果页交互割裂。
+
+### 编辑回写
+
+处方编辑回写需要带 `batchIndex`：
+
+```swift
+case batch(index: Int, draft: PrescriptionRecognitionDraft)
+case medication(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft)
+```
+
+回写规则：
+
+1. 编辑处方头：替换 `batches[batchIndex]`。
+2. 编辑药品：替换 `batches[batchIndex].medicationPlans[itemIndex]`。
+3. 删除药品后，如果该处方没有任何有效信息，页面可保留空处方让用户继续编辑，不自动删除。
+4. 删除处方需要二次确认，第一期可不做删除能力，只支持编辑修正。
+
+## 6. 附件关联
+
+多处方后附件关联不能再基于单个 `batch`。
+
+### 关联规则
+
+1. 处方级附件：写入对应 `batches[batchIndex].attachmentFileIds`。
+2. 药品级附件：写入对应 `batches[batchIndex].medicationPlans[itemIndex].attachmentFileIds`。
+3. `unlinkedAttachments` 需要聚合所有处方和药品已关联的附件 ID 后再求差集。
+4. 附件管理 sheet 的 target 需要包含 `batchIndex`。
+
+建议结构：
+
+```swift
+enum PrescriptionAttachmentTarget: Identifiable {
+    case batch(index: Int)
+    case medication(batchIndex: Int, itemIndex: Int)
+}
+```
+
+## 7. 预校验与定位
+
+多处方必须复用 000003/000004 的校验和定位能力。
+
+### 校验范围
+
+提交前遍历所有处方：
+
+```text
+prescriptions[n].prescribed_at
+prescriptions[n].medication_plans[m].drug_name
+prescriptions[n].medication_plans[m].start_date
+prescriptions[n].medication_plans[m].frequency_type
+```
+
+### 定位要求
+
+1. `MedicalPreSubmitValidationIssue` 必须携带处方 index 和药品 index。
+2. 滚动 ID 必须包含 `batchIndex` 和 `itemIndex`。
+3. 多笔处方下第 2 笔第 1 个药品错误时，不能滚动到第 1 笔第 1 个药品。
+4. 错误处方卡片折叠时，点击提交需要自动展开该处方区域并滚动到错误字段。
+5. 顶部错误摘要点击某条错误，也应定位到对应处方/药品。
+
+000004 已对多处方定位 ID 做了要求，本工单需要在独立处方结果页真正接入数组状态后验证。
+
+## 8. 保存提交编排
+
+### 保存策略
+
+第一期不新增批量接口，客户端逐笔保存：
+
+```text
+for draft in batches:
+    savePrescriptionWithPlans(selectedMemberID, draft, envelope, now)
+```
+
+保存前必须确认 `selectedMemberID` 有值，并已同步到 `viewModel.updateResultMemberID(selectedMemberID)`。
+
+建议串行保存，原因：
+
+1. 用户一次识别的处方数量通常不大。
+2. 串行更容易处理部分成功、失败提示和日志定位。
+3. 不需要服务端保证批量事务。
+
+### 部分成功处理
+
+保存过程中可能出现第 1 笔成功、第 2 笔失败：
+
+1. 保存成功的处方 ID 需要记录到回执里。
+2. 失败时提示“已保存 n 笔，m 笔失败”，保留页面草稿，允许用户修正后重新提交。
+3. 已成功保存的处方再次提交前需要有保护策略，避免重复创建。第一期建议保存成功后禁用整页再次提交，失败场景再按具体保存结果设计重试。
+
+### 回执设计
+
+当前 `MedicalDocumentSaveReceipt` 只有单个 `recordID` 时，需要扩展或新增多记录回执能力：
+
+```swift
+struct MedicalDocumentSaveReceipt {
+    let recordID: Int
+    let savedRecordIDs: [Int]
+    let savedAt: Date
+    let isSuccess: Bool
+}
+```
+
+如果不想立刻改公共回执结构，处方保存层可以先用 `recordID = firstSavedID`，并在 `extra`/新增展示模型里保存全部 ID；但长期建议公共回执支持多 ID，因为医疗报告、药箱、多处方都存在多记录保存场景。
+
+## 9. 涉及文件
+
+| 文件 | 改动 |
+| --- | --- |
+| `MedicalDocumentTypedModels.swift` | `MedicalDocumentTypedResult.prescription` 从单个 draft 改为 `[PrescriptionRecognitionDraft]` |
+| `DefaultTypedMedicalDocumentExtractor.swift` | 处方抽取按数组解码，单对象 fallback 包装为数组，normalized JSON 输出数组 |
+| `MedicalDocumentUploadViewModel.swift` | 更新 typed result 更新、保存前预校验、调试预览和错误处理中的处方数组分支 |
+| `PrescriptionRecognitionResultContentView.swift` | 页面状态改为 `batches`，增加 `selectedMemberID`，切换成员后同步 `updateResultMemberID`，提交前写回 `.prescription(batches)` |
+| `PrescriptionResultSections.swift` | 复核多处方展示、编辑、附件、定位 ID，改造成员确认区支持 `MemberProfileBindingMenu` |
+| `PrescriptionRecognitionResultSupport.swift` | 编辑器状态增加 `batchIndex` |
+| `MedicalPreSubmitValidator.swift` | 独立处方页按 `[PrescriptionRecognitionDraft]` 校验 |
+| `MedicalPreSubmitValidationIssue.swift` | 确认 issue 字段路径、scrollTargetID 支持 `prescriptions[n]` |
+| `DefaultTypedMedicalDocumentSaver.swift` | 新增或调整多处方保存编排，逐笔调用现有保存方法 |
+| `MedicalDocumentSaveReceipt` 相关文件 | 如需要，支持多记录 ID 回执展示 |
+| `PrescriptionRecognitionResultView` Preview | 预览数据改为多笔处方，覆盖 2 笔处方、多药品场景 |
+
+## 10. 兼容影响
+
+### 对病例识别的影响
+
+病例识别内 `CaseRecognitionDraft.prescriptions` 已经是数组，不需要改变语义。但如果共用处方卡片、编辑弹窗或校验逻辑，需要确保独立处方页和病例页都传入正确的 `batchIndex`。
+
+### 对对话结构化卡片的影响
+
+对话内保存处方卡片如果当前仍是单个 `PrescriptionRecognitionDraft`，第一期不强制改为多卡片。但进入识别结果页时需要在边界层包装为单元素数组，避免编译期和运行期断裂。
+
+### 对已保存数据的影响
+
+本工单不涉及 CoreData 迁移或服务端历史数据迁移。因为识别结果页是临时草稿态，保存后仍落到既有处方和用药计划资源。
+
+## 11. 验收标准
+
+1. AI 返回两个处方对象时，结果页展示两张处方卡片。
+2. 结果页顶部成员区域可切换成员，交互与体检报告结果页一致。
+3. 切换成员后，详情预览和保存提交均使用新成员 ID。
+4. 每张处方卡片展示自己的机构、医生、日期、诊断、处方号和药品列表。
+5. 编辑第 2 笔处方头信息后，不影响第 1 笔处方。
+6. 编辑第 2 笔第 1 个药品后，不影响其他处方药品。
+7. 附件可分别关联到处方级和药品级，未关联附件区域显示正确。
+8. 第 2 笔处方存在校验错误时，提交后自动展开并滚动到第 2 笔对应字段。
+9. 保存提交后，服务端在当前选中成员下生成多条处方记录及对应用药计划。
+10. 保存成功回执能展示或至少记录所有保存成功的处方 ID。
+11. AI 返回单对象旧格式时，客户端可兼容包装成单笔数组展示。
+12. AI 返回 `[]` 时，页面展示空态，不允许提交空处方。
+
+## 12. 风险与注意事项
+
+1. 不要只改 UI 为数组，Extractor 和 Saver 仍然单笔，否则会形成“看起来支持多笔，实际只保存第一笔”的假支持。
+2. 不要把多笔处方合并成一个 `PrescriptionRecognitionDraft`，这会破坏处方号、开方日期和药品归属。
+3. 滚动定位 ID 必须包含处方 index，避免多处方下定位错位。
+4. 成员切换后保存不能继续读取旧的 `output.envelope.memberID`，否则会保存到错误成员。
+5. 切换成员后详情预览也要使用新成员 ID，否则页面看到的是新成员但详情里还是旧成员。
+6. 保存逐笔执行时要明确部分成功策略，避免重复提交造成重复处方。
+7. Prompt 改为数组后，需要继续保留 000001/000002 的解码失败反馈和自动重试能力。

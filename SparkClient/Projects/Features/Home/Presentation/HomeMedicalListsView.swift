@@ -77,6 +77,7 @@ struct HomeMedicalListView: View {
                 memberContextStore: dependencies.memberContextStore,
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
                 aiSettingsViewModel: dependencies.aiSettingsViewModel,
+                homeDependencies: dependencies,
                 onMedicationPlansChanged: onMedicationPlansUpdated,
                 onPrescriptionsChanged: onPrescriptionsUpdated,
                 onMedicineBoxesChanged: onMedicineBoxesUpdated

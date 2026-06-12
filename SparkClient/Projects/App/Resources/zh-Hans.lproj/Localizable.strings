@@ -377,6 +377,7 @@
 "home.medical.list.details.loading" = "正在加载明细…";
 "home.medical.list.details.section" = "明细项目";
 "home.medical.family_cabinet.title" = "家庭药箱";
+"home.medical.personal_cabinet.title" = "个人药箱";
 "home.medical.medicine_box.title" = "药箱";
 "home.medical.medicine_box.empty" = "暂无药箱药品";
 "home.medical.medicine_box.camera_add" = "拍照添加药品";

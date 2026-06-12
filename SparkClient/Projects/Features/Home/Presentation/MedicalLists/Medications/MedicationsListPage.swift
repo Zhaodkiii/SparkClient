@@ -58,6 +58,8 @@ struct MedicationsListPage: View {
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let notificationClient: any NotificationClient
     let logger: Logger
+    /// 个人药箱入口所需的完整 Home 依赖
+    let homeDependencies: HomeFeatureDependencies?
     let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
     let onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
@@ -82,6 +84,7 @@ struct MedicationsListPage: View {
         aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         logger: Logger,
+        homeDependencies: HomeFeatureDependencies? = nil,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
         onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)? = nil,
         onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
@@ -95,6 +98,7 @@ struct MedicationsListPage: View {
         self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         self.logger = logger
+        self.homeDependencies = homeDependencies
         self.onMedicationPlansChanged = onMedicationPlansChanged
         self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
@@ -317,23 +321,22 @@ struct MedicationsListPage: View {
         .disabled(memberID == nil)
     }
 
+    @ViewBuilder
     private var medicineBoxToolbarLink: some View {
-        MainNavigationLink {
-            MedicineBoxListPage(
-                medicineBoxes: medicineBoxes,
-                memberID: memberID,
-                workflowAPI: workflowAPI,
-                medicalQueryAPI: medicalQueryAPI,
-                fileTransferService: fileTransferService,
-                viewModel: medicalDocumentUploadViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                notificationClient: notificationClient,
-                logger: logger,
-                onMedicineBoxesChanged: updateMedicineBoxes
-            )
-        } label: {
-            Label(L10n.text("home.medical.list.medications.action.medicine_box", fallback: "药箱"), systemImage: "pills.fill")
-                .font(.footnote.weight(.semibold))
+        // 个人药箱入口：复用 FamilyMedicineCabinetPage 的 personal 模式
+        if let memberID, let homeDependencies {
+            MainNavigationLink {
+                FamilyMedicineCabinetPage(
+                    entryMemberID: memberID,
+                    mode: .personal,
+                    initialMedicineBoxes: medicineBoxes,
+                    dependencies: homeDependencies,
+                    onMedicineBoxesChanged: updateMedicineBoxes
+                )
+            } label: {
+                Label(L10n.text("home.medical.list.medications.action.medicine_box", fallback: "药箱"), systemImage: "pills.fill")
+                    .font(.footnote.weight(.semibold))
+            }
         }
     }
 
