@@ -346,7 +346,9 @@ struct PrescriptionBatchListSectionView: View {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     // 只展示开具日期相关第一条校验提示
-                    ForEach(batchIssues.filter { $0.fieldKey.contains("prescribed_at") }.prefix(1)) { issue in
+                    ForEach(batchIssues.filter {
+                        $0.fieldKey.contains("prescribed_at") || $0.fieldKey.hasSuffix(".status")
+                    }.prefix(2)) { issue in
                         MedicalValidationIssueInlineView(message: issue.message)
                     }
 

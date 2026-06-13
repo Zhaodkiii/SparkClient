@@ -318,6 +318,29 @@ struct PrescriptionRecognitionDraft: Sendable, Equatable, Codable {
     var medicationPlans: [MedicationPlanRecognitionDraft]?
     @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 
+    init(
+        medicalCase: Int? = nil,
+        prescriberName: String? = nil,
+        institutionName: String? = nil,
+        prescribedAt: String? = nil,
+        diagnosis: String? = nil,
+        prescriptionNo: String? = nil,
+        status: String? = nil,
+        extra: [String: String]? = nil,
+        medicationPlans: [MedicationPlanRecognitionDraft]? = nil,
+        attachmentFileIds: [UUID] = []
+    ) {
+        self.medicalCase = medicalCase
+        self.prescriberName = prescriberName
+        self.institutionName = institutionName
+        self.prescribedAt = prescribedAt
+        self.diagnosis = diagnosis
+        self.prescriptionNo = prescriptionNo
+        self.status = status
+        self.extra = extra
+        self.medicationPlans = medicationPlans
+        self._attachmentFileIds = DefaultEmptyUUIDArray(wrappedValue: attachmentFileIds)
+    }
 }
 
 // MARK: - 新增 Draft 模型（症状/就诊/手术/随访）

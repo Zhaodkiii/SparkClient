@@ -137,9 +137,15 @@ private extension DefaultTypedMedicalDocumentSaver {
             )
         }
 
+        let requests = buildPrescriptionCreateRequests(drafts, envelope: envelope, now: now)
+        let preflightIssues = PrescriptionPayloadPreflightValidator.validate(prescriptions: requests)
+        if preflightIssues.isEmpty == false {
+            throw PrescriptionPayloadPreflightError(issues: preflightIssues)
+        }
+
         let payload = SparkMedicalWorkflowAPI.PrescriptionBatchSavePayload(
             member: memberID,
-            prescriptions: buildPrescriptionCreateRequests(drafts, envelope: envelope, now: now)
+            prescriptions: requests
         )
         let response = try await workflowAPI.savePrescriptionsBatch(payload)
         logger.info(
@@ -163,7 +169,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             prescribedAt: draft.prescribedAt,
             diagnosis: draft.diagnosis,
             prescriptionNo: draft.prescriptionNo,
-            status: draft.status ?? "active",
+            status: PrescriptionFieldNormalization.resolvedLifecycleStatus(draft.status),
             extra: mergeTypedUploadExtra(draft.extra)
         )
         let payload = SparkMedicalWorkflowAPI.MedicationPlanBundleSavePayload(
@@ -299,7 +305,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             endDate: draft.endDate?.nilIfBlank,
             instructions: draft.instructions?.nilIfBlank ?? "",
             reminderEnabled: draft.reminderEnabled ?? false,
-            status: draft.status?.nilIfBlank ?? "active",
+            status: PrescriptionFieldNormalization.normalizeMedicationPlanStatus(draft.status),
             extra: mergeTypedUploadExtra(extra.merging(["sort_order": "\(index)"]) { current, _ in current }),
             fileIds: envelope.map { fileIds(from: draft.attachmentFileIds, envelope: $0) } ?? []
         )
@@ -576,6 +582,12 @@ private extension DefaultTypedMedicalDocumentSaver {
             $0.toExaminationReportCreateRequest(sourceFileIds: fileIds(from: $0.attachmentFileIds, envelope: envelope))
         }
         let prescriptions = buildPrescriptionCreateRequests(draft.prescriptions ?? [], envelope: envelope, now: now)
+        if prescriptions.isEmpty == false {
+            let preflightIssues = PrescriptionPayloadPreflightValidator.validate(prescriptions: prescriptions)
+            if preflightIssues.isEmpty == false {
+                throw PrescriptionPayloadPreflightError(issues: preflightIssues)
+            }
+        }
 
         let request = CombinedMedicalCreateRequest(
             member: MemberCreateRequestWithId(
@@ -621,7 +633,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 prescribedAt: draft.prescribedAt?.nilIfBlank,
                 diagnosis: draft.diagnosis?.nilIfBlank,
                 prescriptionNo: draft.prescriptionNo?.nilIfBlank,
-                status: draft.status?.nilIfBlank ?? "active",
+                status: PrescriptionFieldNormalization.resolvedLifecycleStatus(draft.status),
                 extra: mergeTypedUploadExtra(draft.extra),
                 medicationPlans: buildMedicationPlanBundleItems(draft.medicationPlans ?? [], envelope: envelope, now: now),
                 sourceFileIds: fileIds(from: draft.attachmentFileIds, envelope: envelope)

@@ -310,6 +310,18 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
             ))
         }
 
+        if MedicalPreSubmitValidationRules.isValidPrescriptionStatus(draft.status) == false {
+            issues.append(issue(
+                resourceType: .prescription,
+                fieldPath: "prescriptions[\(prescriptionIndex)].status",
+                fieldKey: "prescriptions[\(prescriptionIndex)].status",
+                fieldLabel: L10n.text("medical.upload.presubmit.field.prescription_status"),
+                message: MedicalPreSubmitValidationRules.prescriptionStatusMessage(),
+                sectionTitle: section,
+                cardIndex: prescriptionIndex
+            ))
+        }
+
         issues.append(contentsOf: validateMedicationPlans(
             draft.medicationPlans ?? [],
             prescriptionIndex: prescriptionIndex
@@ -406,6 +418,131 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
                     fieldKey: "\(pathPrefix).dose_value",
                     fieldLabel: L10n.text("medical.upload.presubmit.field.dose_value"),
                     message: MedicalPreSubmitValidationRules.doseValueDecimalMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            let resolvedDoseUnit = doseUnit
+            if MedicalPreSubmitValidationRules.isHighRiskDoseValue(
+                doseValue: plan.doseValue,
+                doseUnit: resolvedDoseUnit
+            ) {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).dose_value",
+                    fieldKey: "\(pathPrefix).dose_value",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.dose_value"),
+                    message: MedicalPreSubmitValidationRules.highRiskDoseMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if MedicalPreSubmitValidationRules.isValidMedicationPlanStatus(plan.status) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).status",
+                    fieldKey: "\(pathPrefix).status",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.medication_plan_status"),
+                    message: MedicalPreSubmitValidationRules.medicationPlanStatusMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if MedicalPreSubmitValidationRules.isValidEveryNDays(
+                plan.frequencyType,
+                everyNDays: plan.everyNDays
+            ) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).every_n_days",
+                    fieldKey: "\(pathPrefix).every_n_days",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.every_n_days"),
+                    message: MedicalPreSubmitValidationRules.everyNDaysMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if MedicalPreSubmitValidationRules.isValidWeeklyWeekdays(
+                plan.frequencyType,
+                weekdays: plan.weeklyWeekdays
+            ) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).weekly_weekdays",
+                    fieldKey: "\(pathPrefix).weekly_weekdays",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.weekly_weekdays"),
+                    message: MedicalPreSubmitValidationRules.weeklyWeekdaysMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if MedicalPreSubmitValidationRules.requiresCompleteDateIfPresent(plan.endDate) == false
+                || MedicalPreSubmitValidationRules.isEndDateOnOrAfterStartDate(
+                    startDate: plan.startDate,
+                    endDate: plan.endDate
+                ) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).end_date",
+                    fieldKey: "\(pathPrefix).end_date",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.end_date"),
+                    message: MedicalPreSubmitValidationRules.endDateBeforeStartDateMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if MedicalPreSubmitValidationRules.isValidReminderTimes(plan.reminderTimes) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).reminder_times",
+                    fieldKey: "\(pathPrefix).reminder_times",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.reminder_times"),
+                    message: MedicalPreSubmitValidationRules.reminderTimesMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            let confirmedMedicineBoxID = plan.extra?[PrescriptionRecognitionDraftMapper.confirmedMedicineBoxIDExtraKey]
+            let hasMedicineBox = plan.medicineBox != nil
+                && PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(plan) == false
+            if MedicalPreSubmitValidationRules.hasConflictingMedicineBoxBinding(
+                medicineBoxID: confirmedMedicineBoxID,
+                hasMedicineBox: hasMedicineBox
+            ) {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).medicine_box",
+                    fieldKey: "\(pathPrefix).medicine_box",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.medicine_box_binding"),
+                    message: MedicalPreSubmitValidationRules.medicineBoxBindingConflictMessage(),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if let expireDate = plan.medicineBox?.expireDate ?? plan.expireDate,
+               MedicalPreSubmitValidationRules.isStrictDateOnly(expireDate) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).medicine_box.expire_date",
+                    fieldKey: "\(pathPrefix).medicine_box.expire_date",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.expire_date"),
+                    message: MedicalPreSubmitValidationRules.completeDateMessage(),
                     sectionTitle: section,
                     cardIndex: cardIndex,
                     prescriptionIndex: prescriptionIndex

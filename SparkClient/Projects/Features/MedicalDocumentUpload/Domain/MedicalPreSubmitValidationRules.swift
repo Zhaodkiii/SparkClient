@@ -88,15 +88,125 @@ enum MedicalPreSubmitValidationRules {
 
     static func isValidFrequencyType(_ value: String?) -> Bool {
         guard let raw = trimmedNonEmpty(value) else { return true }
+        let normalized = PrescriptionFieldNormalization.normalizeFrequencyType(raw)
+        return Set(MedicationReminderFrequencyType.allCases.map(\.rawValue)).contains(normalized)
+    }
+
+    static func isValidPrescriptionStatus(_ value: String?) -> Bool {
+        guard let raw = trimmedNonEmpty(value) else { return true }
         let normalized = raw.lowercased()
-        let allowed = Set(MedicationReminderFrequencyType.allCases.map(\.rawValue))
-        if allowed.contains(normalized) { return true }
-        switch normalized {
-        case "every_n_days", "interval", "间隔", "weekly", "week", "每周", "daily", "每天":
-            return true
-        default:
+        return PrescriptionLifecycleStatus.allRawValues.contains(normalized)
+    }
+
+    static func isValidMedicationPlanStatus(_ value: String?) -> Bool {
+        guard let raw = trimmedNonEmpty(value) else { return true }
+        let normalized = raw.lowercased()
+        return MedicationPlanLifecycleStatus.allRawValues.contains(normalized)
+    }
+
+    static func isValidEveryNDays(_ frequencyType: String?, everyNDays: String?) -> Bool {
+        let normalized = PrescriptionFieldNormalization.normalizeFrequencyType(frequencyType)
+        guard normalized == MedicationReminderFrequencyType.everyNDays.rawValue else { return true }
+        guard let raw = trimmedNonEmpty(everyNDays), let days = Int(raw) else { return false }
+        return (1...365).contains(days)
+    }
+
+    static func isValidWeeklyWeekdays(_ frequencyType: String?, weekdays: [Int]?) -> Bool {
+        let normalized = PrescriptionFieldNormalization.normalizeFrequencyType(frequencyType)
+        guard normalized == MedicationReminderFrequencyType.weekly.rawValue else { return true }
+        guard let weekdays, weekdays.isEmpty == false else { return false }
+        return weekdays.allSatisfy { (1...7).contains($0) }
+    }
+
+    static func isEndDateOnOrAfterStartDate(startDate: String?, endDate: String?) -> Bool {
+        guard let end = trimmedNonEmpty(endDate) else { return true }
+        guard let start = trimmedNonEmpty(startDate) else { return isStrictDateOnly(end) }
+        guard let startDate = parseStrictDateOnly(start), let endDate = parseStrictDateOnly(end) else {
             return false
         }
+        return endDate >= startDate
+    }
+
+    static func isStrictDateOnly(_ value: String?) -> Bool {
+        guard let raw = trimmedNonEmpty(value) else { return true }
+        return parseStrictDateOnly(raw) != nil
+    }
+
+    static func isHighRiskDoseValue(doseValue: String?, doseUnit: String?) -> Bool {
+        guard let raw = trimmedNonEmpty(doseValue),
+              let value = Decimal(string: raw, locale: Locale(identifier: "en_US_POSIX")),
+              let unit = trimmedNonEmpty(doseUnit)
+        else { return false }
+        let riskyUnits: Set<String> = ["片", "粒", "袋", "滴"]
+        guard riskyUnits.contains(unit) else { return false }
+        return value > 20
+    }
+
+    static func hasConflictingMedicineBoxBinding(
+        medicineBoxID: String?,
+        hasMedicineBox: Bool
+    ) -> Bool {
+        guard trimmedNonEmpty(medicineBoxID) != nil else { return false }
+        return hasMedicineBox
+    }
+
+    static func isValidReminderTimes(_ times: [ReminderTime]?) -> Bool {
+        guard let times else { return true }
+        for entry in times {
+            let trimmed = entry.time.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return false }
+            if trimmed.range(of: #"^\d{2}:\d{2}$"#, options: .regularExpression) == nil { return false }
+            if let doseText = entry.doseText?.trimmingCharacters(in: .whitespacesAndNewlines),
+               doseText.isEmpty == false,
+               entry.dose == nil {
+                return false
+            }
+        }
+        return true
+    }
+
+    static func prescriptionStatusMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.prescription_status")
+    }
+
+    static func medicationPlanStatusMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.medication_plan_status")
+    }
+
+    static func everyNDaysMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.every_n_days")
+    }
+
+    static func weeklyWeekdaysMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.weekly_weekdays")
+    }
+
+    static func endDateBeforeStartDateMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.end_date_before_start")
+    }
+
+    static func highRiskDoseMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.high_risk_dose")
+    }
+
+    static func medicineBoxBindingConflictMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.medicine_box_binding")
+    }
+
+    static func reminderTimesMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.reminder_times")
+    }
+
+    private static func parseStrictDateOnly(_ raw: String) -> Date? {
+        guard raw.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: raw)
     }
 
     static func requiredFieldMessage(fieldLabel: String) -> String {

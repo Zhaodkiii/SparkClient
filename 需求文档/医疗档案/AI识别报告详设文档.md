@@ -15,7 +15,7 @@
 | `MEDICAL-AI-OCR-000007` | 处方提交前 dose_value 数值预校验修复 | 修复需求/待实现 | combined-create 前拦截 dose_value 非数字、字段高亮、定位到对应处方药品 |
 | `MEDICAL-AI-OCR-000008` | 草稿模式删除关联药箱未清理用药计划草稿 | 修复需求/待实现 | 用药计划详情进入药箱详情后删除药箱，清理本页草稿、父级草稿与最终保存 payload |
 | `MEDICAL-AI-OCR-000009` | 处方识别药箱候选确认与批量保存 | 已实现 | 识别概览、加载家庭药箱、药品候选匹配、确认后由处方批量保存绑定已有药品或新建药箱、未确认剥离 medicineBox |
-| `MEDICAL-AI-OCR-000010` | 处方识别保存前检查点与服务端字段补全 | 修复需求/待实现 | 补全处方/用药计划枚举、日期、频次、剂量、提醒时间、药箱表达等保存前检查点；服务端新增处方类型/支付状态字段承接 AI 识别信息 |
+| `MEDICAL-AI-OCR-000010` | 处方识别保存前检查点补全 | 修复需求/待实现 | 补全处方/用药计划枚举、日期、频次、剂量、提醒时间、药箱表达等保存前检查点；处方状态只保留服务端合法值 |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -4327,7 +4327,7 @@ PrescriptionBatchWorkflowSaveView
 8. 打开 `MedicineBoxFormView` 编辑已有药品和后续处方批量保存是两个动作，UI 需要避免让用户误以为“勾选即自动增加库存”。
 9. 处方批量保存必须保持事务一致性，不能出现处方保存成功但药箱绑定或新建失败的半成功状态。
 
-## 工单 `MEDICAL-AI-OCR-000010`：处方识别保存前检查点与服务端字段补全
+## 工单 `MEDICAL-AI-OCR-000010`：处方识别保存前检查点补全
 
 ### 工单状态
 
@@ -4383,7 +4383,7 @@ completed
 cancelled
 ```
 
-AI 识别把处方类型、处方属性或支付状态误填到了 `status`，客户端没有在提交前归一化或预校验，服务端也没有独立字段承接这些信息，导致可预知错误进入网络层。
+AI 识别把处方类型、处方属性或支付状态误填到了 `status`，客户端没有在提交前归一化或预校验，导致可预知错误进入网络层。
 
 000007 已补 `dose_value` 数值校验，但实际保存链路还需要更完整的处方检查点，覆盖服务端模型和序列化器的主要约束。
 
@@ -4403,8 +4403,8 @@ AI 识别把处方类型、处方属性或支付状态误填到了 `status`，�
 8. 保存前检查 `reminderTimes` 结构，避免时间格式或对象结构错误。
 9. 检查失败时不发网络请求，展示本地预校验错误并定位。
 10. 对可安全归一化的字段，在抽取后或保存 payload 生成前统一归一化，不把 AI 原始脏值直传服务端。
-11. 服务端新增处方扩展字段，承接 AI 识别出的处方类型、支付状态等信息，不再把这些信息塞入 `Prescription.status`。
-12. 客户端 payload 明确区分生命周期状态、处方类型、支付状态。
+11. 不新增 `Prescription` 服务端字段，不新增支付状态字段，不把 `paid` 等支付信息作为结构化字段保存。
+12. 客户端 payload 只提交服务端已支持的处方生命周期状态：`active`、`completed`、`cancelled`。
 13. 客户端处方状态选择项与服务端保持完全一致，只保留 `active`、`completed`、`cancelled`，取消其他所有状态选项。
 
 ## 3. 检查点分层
@@ -4426,16 +4426,16 @@ DefaultTypedMedicalDocumentExtractor
 3. 处方 `status` 非法时，不保留 AI 原始值。
 4. 用药计划 `status` 非法时，默认归一化为 `active`。
 5. `frequencyType` 空值归一化为 `daily`。
-6. 明显属于处方类型、处方类别的文本，例如 `普通`、`门诊`、`急诊`，不要写入 `status`，优先写入新增处方类型字段，并在 `extra` 中保留原文。
-7. 明显属于支付状态的文本，例如 `paid`、`已支付`、`未支付`，不要写入 `status`，优先写入新增支付状态字段。
+6. 明显属于处方类型、处方类别的文本，例如 `普通`、`门诊`、`急诊`，不要写入 `status`，状态默认归一化为 `active`。
+7. 明显属于支付状态的文本，例如 `paid`、`已支付`、`未支付`，不要写入 `status`，状态默认归一化为 `active`；第一期不保存支付状态结构化字段。
 
 推荐规则：
 
 ```text
 prescription.status in active/completed/cancelled -> 保留
 prescription.status 为空 -> active
-prescription.status 为 普通/门诊/急诊/医保/自费 -> status=active，写入 prescriptionType / prescriptionTypeText，并把原文写入 extra
-prescription.status 为 paid/已支付/未支付/待支付 -> status=active，写入 paymentStatus，并把原文写入 extra
+prescription.status 为 普通/门诊/急诊/医保/自费 -> status=active
+prescription.status 为 paid/已支付/未支付/待支付 -> status=active
 prescription.status 其他非法值 -> 清空或 active，并生成 debug 诊断
 ```
 
@@ -4514,8 +4514,8 @@ paid
 
 处理策略：
 
-1. 抽取后归一化：`普通/门诊/急诊` 不作为 status，默认 `active`，原文写入处方类型字段和 `extra.prescriptionTypeText`。
-2. 抽取后归一化：`paid/已支付/未支付/待支付` 不作为 status，默认 `active`，写入支付状态字段和 `extra.paymentStatusText`。
+1. 抽取后归一化：`普通/门诊/急诊` 不作为 status，默认 `active`。
+2. 抽取后归一化：`paid/已支付/未支付/待支付` 不作为 status，默认 `active`；不新增支付状态字段。
 3. 提交前预校验：如果仍然不是合法值，阻断提交。
 4. UI 提示：`处方状态不合法，请选择生效中、已完成或已取消。`
 
@@ -4543,9 +4543,10 @@ paid
 
 说明：
 
-1. `普通/门诊/急诊` 属于处方类型，只能进入 `prescriptionType` / `prescription_type`。
-2. `paid/已支付/未支付/待支付` 属于支付状态，只能进入 `paymentStatus` / `payment_status`。
+1. `普通/门诊/急诊` 属于处方类型，不允许作为 `status` 提交；本期不新增处方类型字段。
+2. `paid/已支付/未支付/待支付` 属于支付状态，不允许作为 `status` 提交；本期不新增支付状态字段。
 3. 结果页、详情页草稿模式、编辑页、保存前校验、payload 生成都必须使用同一组状态定义，不能各自维护一套状态列表。
+4. 如需保留 AI 原始文本，仅可作为本地调试信息或非结构化备注候选，不进入 `Prescription` 新字段。
 
 字段路径：
 
@@ -4553,99 +4554,24 @@ paid
 prescriptions[n].status
 ```
 
-### 4.1.1 服务端新增处方字段
+### 4.1.1 服务端字段边界
 
-当前 `Prescription.status` 是处方生命周期状态，只适合表达：
+本工单不改服务端 `Prescription` 模型，不新增字段。
 
-```text
-active
-completed
-cancelled
-```
+明确不做：
 
-AI 识别出的 `普通`、`门诊`、`急诊`、`paid` 等不是生命周期状态。服务端需要新增字段承接这些信息，避免客户端只能塞到 `extra` 或误塞到 `status`。
+1. 不新增 `prescription_type`。
+2. 不新增 `payment_status`。
+3. 不新增支付状态枚举。
+4. 不改处方保存接口字段契约。
+5. 不为了兼容 AI 脏值放宽服务端 `Prescription.status` choices。
 
-建议服务端模型新增：
+处理原则：
 
-```python
-class Prescription(MedicalBaseModel):
-    class Status(models.TextChoices):
-        ACTIVE = "active", "生效中"
-        COMPLETED = "completed", "已完成"
-        CANCELLED = "cancelled", "已取消"
-
-    class PaymentStatus(models.TextChoices):
-        UNKNOWN = "unknown", "未知"
-        UNPAID = "unpaid", "未支付"
-        PAID = "paid", "已支付"
-        REFUNDED = "refunded", "已退费"
-
-    prescription_type = models.CharField(
-        max_length=64,
-        blank=True,
-        default="",
-        db_comment="处方类型/类别，如普通、门诊、急诊、医保、自费等原始展示文本",
-    )
-    payment_status = models.CharField(
-        max_length=20,
-        choices=PaymentStatus.choices,
-        default=PaymentStatus.UNKNOWN,
-        db_index=True,
-        db_comment="处方支付状态",
-    )
-```
-
-字段设计说明：
-
-1. `status` 继续只表示处方生命周期。
-2. `prescription_type` 使用普通字符串，不强行枚举，避免各医院票据类型差异导致频繁迁移。
-3. `payment_status` 使用低风险枚举，`paid` 应成为合法支付状态。
-4. 原始 AI 文本仍建议保留到 `extra.rawStatusText` 或 `extra.prescriptionTypeText`，便于排查。
-
-后端改动范围：
-
-| 文件 | 改动 |
-| --- | --- |
-| `SparkService/medical/models.py` | `Prescription` 新增 `prescription_type`、`payment_status` 字段 |
-| `SparkService/medical/serializers.py` | `PrescriptionSerializer` 暴露新字段；校验 `payment_status` choices |
-| `SparkService/medical/views.py` | `PrescriptionBatchWorkflowSaveView` 和 `CombinedMedicalCreateView` 从 payload 读取并保存新字段 |
-| `SparkService/medical/migrations/*` | 新增数据库迁移 |
-| `SparkService/medical/tests.py` | 增加 batch-save / combined-create 保存 `prescription_type`、`payment_status` 的测试 |
-
-客户端字段映射：
-
-| AI/草稿值 | 保存 payload |
-| --- | --- |
-| `普通` | `status=active`, `prescription_type="普通"` |
-| `门诊` | `status=active`, `prescription_type="门诊"` |
-| `急诊` | `status=active`, `prescription_type="急诊"` |
-| `paid` | `status=active`, `payment_status="paid"` |
-| `已支付` | `status=active`, `payment_status="paid"` |
-| `未支付` | `status=active`, `payment_status="unpaid"` |
-| `已退费` | `status=active`, `payment_status="refunded"` |
-
-客户端模型改动：
-
-```swift
-struct PrescriptionRecognitionDraft {
-    var status: String?
-    var prescriptionType: String?
-    var paymentStatus: String?
-    ...
-}
-```
-
-保存 payload 需要支持 snake_case：
-
-```json
-{
-  "status": "active",
-  "prescription_type": "普通",
-  "payment_status": "paid"
-}
-```
-
-注意：项目已使用统一 snake_case 编解码策略，不要为这些字段手写 `CodingKeys`，除非所在模型当前不是走统一编码。
+1. 服务端 `Prescription.status` 仍是唯一生命周期状态字段。
+2. 客户端提交前必须把 `status` 归一化为 `active/completed/cancelled` 之一。
+3. `普通/门诊/急诊/paid/已支付/未支付` 等识别文本只能用于本地判断和提示，不能进入保存 payload。
+4. 如果后续产品明确需要保存处方类型或支付状态，应另开工单重新评估服务端模型、历史数据和展示入口。
 
 ### 4.2 用药计划状态 `medicationPlans.status`
 
@@ -4806,38 +4732,36 @@ prescriptions[n].medicationPlans[m].medicineBox
 | `DefaultTypedMedicalDocumentExtractor.swift` | 抽取后归一化处方/用药状态、频次默认值，保留原始异常文本到 extra | 降低 AI 脏值进入结果页 |
 | `MedicalPreSubmitValidator.swift` | 增加处方保存前检查点规则：status、frequency、date、dose、reminderTimes、medicineBox 表达 | 保存前阻断 |
 | `DefaultTypedMedicalDocumentSaver.swift` | 增加 payload preflight，最终发请求前再次检查服务端不可接受字段 | 网络前兜底 |
-| `MedicalDocumentTypedModels.swift` | `PrescriptionRecognitionDraft` 增加 `prescriptionType`、`paymentStatus` | 草稿承接新字段 |
-| `SparkMedicalWorkflowAPI.swift` / 批量保存 payload | 增加 `prescriptionType`、`paymentStatus` 并编码为 `prescription_type`、`payment_status` | 客户端请求 |
+| `MedicalDocumentTypedModels.swift` | 不新增处方类型/支付状态字段；确认 `status` 仅承载 `active/completed/cancelled` | 模型收敛 |
+| `SparkMedicalWorkflowAPI.swift` / 批量保存 payload | 不新增 `prescription_type/payment_status`；payload 只提交服务端既有字段 | 客户端请求 |
 | `PrescriptionRecognitionResultContentView.swift` | 展示检查点错误、同步编辑后重新校验 | UI 状态 |
 | `PrescriptionResultSections.swift` | 处方卡、药品卡、药箱候选区域展示检查点错误；处方状态选择项只保留 `active/completed/cancelled` | UI 定位 |
 | `MedicationPrescriptionDetailPage.swift` / 处方编辑入口 | 草稿预览和本地编辑时复用同一组处方状态选项，取消其他状态 | 编辑一致性 |
 | `Localizable.strings` | 增加处方状态、频次、日期、提醒、异常剂量、药箱表达错误文案 | 本地化 |
-| `SparkService/medical/models.py` | `Prescription` 增加 `prescription_type`、`payment_status` | 服务端存储 |
-| `SparkService/medical/serializers.py` | `PrescriptionSerializer` 暴露并校验新字段 | 服务端 API |
-| `SparkService/medical/views.py` | batch-save / combined-create 保存新字段 | 服务端保存流程 |
-| `SparkService/medical/migrations/*` | 新增字段迁移 | 数据库 |
+| `SparkService/medical/models.py` | 不改动 `Prescription` 字段；保持 `status` choices 不变 | 服务端边界 |
+| `SparkService/medical/serializers.py` | 不放宽 `status` 校验，不新增支付状态字段 | 服务端 API |
+| `SparkService/medical/views.py` | 不改接口契约；继续按既有字段保存 | 服务端保存流程 |
 
 ## 7. 验收标准
 
 1. 处方 `status = "普通"` 时，点击提交不会请求 `/api/v1/medical/workflows/prescriptions/batch-save/`。
-2. 处方 `status = "普通"` 可在抽取后归一化为 `active`，且原文保留到 `extra.prescriptionTypeText`。
-3. 处方 `status = "paid"` 可在抽取后归一化为 `active`，并保存为 `payment_status = "paid"`。
-4. 服务端 `Prescription` 能持久化 `prescription_type` 和 `payment_status`。
-5. batch-save 接口能接收并保存 `prescription_type`、`payment_status`。
-6. combined-create 接口能接收并保存 `prescription_type`、`payment_status`。
-7. 如果保存前仍存在非法 status，顶部展示本地预校验错误，并高亮对应处方卡片。
-8. 客户端处方状态选择器只展示 `active`、`completed`、`cancelled` 对应文案，不再展示 `普通/门诊/急诊/paid/已支付/未支付` 等选项。
-9. 草稿详情、编辑页、结果页卡片内展示的处方状态文案来自同一份状态定义。
-10. 用药计划非法 status 不发请求。
-11. `frequencyType = every_n_days` 但 `everyNDays` 为空时不发请求。
-12. `frequencyType = weekly` 但 `weeklyWeekdays` 为空或含非法值时不发请求。
-13. `endDate < startDate` 时不发请求。
-14. `reminderTimes = [{"time": ""}]` 或 `time = "8点"` 时不发请求。
-15. 同一条药品同时带 `medicineBoxID` 和 `medicineBox` 时不发请求。
-16. `doseValue = "20mg"` 继续由 000007 拦截。
-17. `doseValue = "93"` 且 `doseUnit = "片"` 时提示高风险剂量，需要用户编辑确认或阻断。
-18. 所有检查点通过后，才允许进入处方批量保存接口。
-19. 服务端不再收到可由客户端检查点提前发现的 `status invalid choice` 请求。
+2. 处方 `status = "普通"` 可在抽取后归一化为 `active`，但不新增字段保存“普通”。
+3. 处方 `status = "paid"` 可在抽取后归一化为 `active`，但不新增字段保存支付状态。
+4. 客户端不向 batch-save / combined-create 发送 `prescription_type`、`payment_status`。
+5. 服务端 `Prescription` 不新增字段，不新增迁移。
+6. 如果保存前仍存在非法 status，顶部展示本地预校验错误，并高亮对应处方卡片。
+7. 客户端处方状态选择器只展示 `active`、`completed`、`cancelled` 对应文案，不再展示 `普通/门诊/急诊/paid/已支付/未支付` 等选项。
+8. 草稿详情、编辑页、结果页卡片内展示的处方状态文案来自同一份状态定义。
+9. 用药计划非法 status 不发请求。
+10. `frequencyType = every_n_days` 但 `everyNDays` 为空时不发请求。
+11. `frequencyType = weekly` 但 `weeklyWeekdays` 为空或含非法值时不发请求。
+12. `endDate < startDate` 时不发请求。
+13. `reminderTimes = [{"time": ""}]` 或 `time = "8点"` 时不发请求。
+14. 同一条药品同时带 `medicineBoxID` 和 `medicineBox` 时不发请求。
+15. `doseValue = "20mg"` 继续由 000007 拦截。
+16. `doseValue = "93"` 且 `doseUnit = "片"` 时提示高风险剂量，需要用户编辑确认或阻断。
+17. 所有检查点通过后，才允许进入处方批量保存接口。
+18. 服务端不再收到可由客户端检查点提前发现的 `status invalid choice` 请求。
 
 ## 8. 风险与注意事项
 
@@ -4846,6 +4770,5 @@ prescriptions[n].medicationPlans[m].medicineBox
 3. 高风险剂量第一期建议阻断，后续如要支持“确认无误继续”，必须有明确确认状态写入草稿。
 4. payload preflight 不能只打日志，必须阻断网络请求。
 5. 检查点规则需要和服务端模型/Serializer 同步维护，新增服务端约束时要补客户端规则。
-6. 新增服务端字段后，客户端不能继续把 `paid`、`普通` 发送到 `status`，否则新增字段没有真正解决问题。
-7. `prescription_type` 不建议做严格枚举，避免医院差异导致识别结果频繁被服务端拒绝。
-8. 客户端不要为了展示方便再增加本地专用状态枚举；处方生命周期状态必须以服务端 `Prescription.Status` 为唯一来源。
+6. 客户端不能继续把 `paid`、`普通` 发送到 `status`，也不能通过新增临时字段绕过服务端模型边界。
+7. 客户端不要为了展示方便再增加本地专用状态枚举；处方生命周期状态必须以服务端 `Prescription.Status` 为唯一来源。

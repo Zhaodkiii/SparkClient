@@ -2273,22 +2273,10 @@ private func planStatusText(_ status: String) -> String {
 }
 
 private func prescriptionStatusText(_ status: String) -> String {
-    switch status {
-    case "active":
-        return L10n.text("home.medical.prescription.status.active", fallback: "有效")
-    case "draft":
-        return L10n.text("home.medical.prescription.status.draft", fallback: "草稿")
-    case "paid":
-        return L10n.text("home.medical.prescription.status.paid", fallback: "已支付")
-    case "dispensed":
-        return L10n.text("home.medical.prescription.status.dispensed", fallback: "已发药")
-    case "completed":
-        return L10n.text("home.medical.prescription.status.completed", fallback: "已完成")
-    case "cancelled":
-        return L10n.text("home.medical.prescription.status.cancelled", fallback: "已取消")
-    default:
-        return status
+    if PrescriptionLifecycleStatus.allRawValues.contains(status) {
+        return PrescriptionLifecycleStatus.displayLabel(for: status)
     }
+    return status
 }
 
 private func recordStatusText(_ status: String) -> String {

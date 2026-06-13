@@ -174,12 +174,9 @@ struct MedicationPrescriptionEditPage: View {
                             .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         Picker(L10n.text("home.medical.prescription.field.status"), selection: $status) {
-                            Text(L10n.text("home.medical.prescription.status.active")).tag("active")
-                            Text(L10n.text("home.medical.prescription.status.draft")).tag("draft")
-                            Text(L10n.text("home.medical.prescription.status.paid")).tag("paid")
-                            Text(L10n.text("home.medical.prescription.status.dispensed")).tag("dispensed")
-                            Text(L10n.text("home.medical.prescription.status.completed")).tag("completed")
-                            Text(L10n.text("home.medical.prescription.status.cancelled")).tag("cancelled")
+                            ForEach(PrescriptionLifecycleStatus.allCases, id: \.rawValue) { item in
+                                Text(PrescriptionLifecycleStatus.displayLabel(for: item.rawValue)).tag(item.rawValue)
+                            }
                         }
                         .pickerStyle(.menu)
                     }
@@ -275,7 +272,7 @@ struct MedicationPrescriptionEditPage: View {
                 prescribedAt: hasPrescribedAt ? MedicalDateCoding.encodeDateOnly(prescribedAt) : nil,
                 diagnosis: diagnosis.nilIfBlank,
                 prescriptionNo: prescriptionNo.nilIfBlank,
-                status: status.nilIfBlank ?? "active",
+                status: PrescriptionFieldNormalization.resolvedLifecycleStatus(status.nilIfBlank),
                 extra: prescription.extra ?? [:]
             )
             let saved = try await workflowAPI.update(
@@ -304,7 +301,7 @@ struct MedicationPrescriptionEditPage: View {
             prescribedAt: hasPrescribedAt ? MedicalDateCoding.encodeDateOnly(prescribedAt) : nil,
             diagnosis: diagnosis.nilIfBlank,
             prescriptionNo: prescriptionNo.nilIfBlank,
-            status: status.nilIfBlank ?? "active",
+            status: PrescriptionFieldNormalization.resolvedLifecycleStatus(status.nilIfBlank),
             extra: existing.extra,
             medicationPlans: existing.medicationPlans,
             attachmentFileIds: existing.attachmentFileIds

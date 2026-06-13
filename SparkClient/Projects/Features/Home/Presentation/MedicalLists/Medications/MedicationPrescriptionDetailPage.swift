@@ -656,22 +656,7 @@ private struct PrescriptionDetailInfoRow: View {
 
 // MARK: 处方状态码转本地化展示文案
 private func prescriptionStatusText(_ status: String) -> String {
-    switch status {
-    case "active":
-        return L10n.text("home.medical.prescription.status.active")
-    case "draft":
-        return L10n.text("home.medical.prescription.status.draft")
-    case "paid":
-        return L10n.text("home.medical.prescription.status.paid")
-    case "dispensed":
-        return L10n.text("home.medical.prescription.status.dispensed")
-    case "completed":
-        return L10n.text("home.medical.prescription.status.completed")
-    case "cancelled":
-        return L10n.text("home.medical.prescription.status.cancelled")
-    default:
-        return status
-    }
+    PrescriptionLifecycleStatus.displayLabel(for: status)
 }
 
 // MARK: 用药方案解绑处方专用请求体

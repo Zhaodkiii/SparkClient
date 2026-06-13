@@ -634,6 +634,15 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
             // 保存+绑定全部成功
             return true
+        } catch let error as PrescriptionPayloadPreflightError {
+            fail(.save)
+            preSubmitValidationIssues = error.issues
+            errorMessage = L10n.text("medical.upload.presubmit.error.save_blocked")
+            logger.warning(
+                "保存前 payload preflight 失败，阻断请求 issues=\(error.issues.count)",
+                module: .medical
+            )
+            return false
         } catch {
             // 标记保存流程失败
             fail(.save)

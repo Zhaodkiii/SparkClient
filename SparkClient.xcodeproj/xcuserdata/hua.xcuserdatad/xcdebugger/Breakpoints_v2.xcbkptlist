@@ -7,16 +7,16 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "42FA7B5B-2CDA-4EB9-BB84-E20B0B3ED82D"
+            uuid = "980AD03B-97A5-4A91-B582-0E945F22EF28"
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "SparkClient/Projects/Features/Nutrition/Presentation/AddFood/NutritionFoodAddViewModel.swift"
+            filePath = "SparkClient/Projects/Features/MedicalDocumentUpload/Presentation/ResultPages/PrescriptionRecognitionResult/PrescriptionRecognitionResultContentView.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "215"
-            endingLineNumber = "215"
-            landmarkName = "save(onSuccess:)"
+            startingLineNumber = "333"
+            endingLineNumber = "333"
+            landmarkName = "resetMedicineBoxCandidateState()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

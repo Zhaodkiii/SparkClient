@@ -500,27 +500,11 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     private static func normalizedMedicationPlanDrafts(
         _ drafts: [MedicationPlanRecognitionDraft]
     ) -> [MedicationPlanRecognitionDraft] {
-        drafts.map { draft in
-            var next = draft
-            next.reminderTimes = .normalized(from: draft.reminderTimes)
-            return next
-        }
+        drafts.map { PrescriptionFieldNormalization.normalizeMedicationPlanDraft($0) }
     }
 
     private static func normalizedPrescriptionDraft(_ draft: PrescriptionRecognitionDraft) -> PrescriptionRecognitionDraft {
-        var next = draft
-        if var plans = next.medicationPlans {
-            plans = normalizedMedicationPlanDrafts(plans)
-            for index in plans.indices where plans[index].sortOrder?.nilIfBlank == nil {
-                var item = plans[index]
-                item.sortOrder = String(index)
-                plans[index] = item
-            }
-            next.medicationPlans = plans
-        } else {
-            next.medicationPlans = []
-        }
-        return next
+        PrescriptionFieldNormalization.normalizePrescriptionDraft(draft)
     }
 
     private static func normalizedPrescriptionDrafts(
