@@ -1,14 +1,18 @@
 import SwiftUI
 
+/// 处方详情页面
+/// 展示单张处方完整信息：头部基础信息、诊断、附件、关联用药方案；支持编辑、删除处方、解绑/同步病历、单条用药方案操作
 struct MedicationPrescriptionDetailPage: View {
     @Environment(\.dismiss) private var dismiss
 
+    let mode: MedicationPrescriptionDetailMode
     let memberID: Int?
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     @ObservedObject var memberContextStore: MemberContextStore
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
     let notificationClient: any NotificationClient
+
     let onPrescriptionSaved: (SparkMedicalSyncAPI.RemotePrescription) -> Void
     let onPrescriptionDeleted: (Int) -> Void
     let onPlanSaved: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
@@ -16,10 +20,20 @@ struct MedicationPrescriptionDetailPage: View {
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
 
+    var onLocalDraftPrescriptionUpdated: ((PrescriptionRecognitionDraft) -> Void)?
+    var onLocalDraftPrescriptionDeleted: (() -> Void)?
+    var onLocalDraftMedicationPlanSaved: ((Int, MedicationPlanRecognitionDraft) -> Void)?
+    var onLocalDraftMedicationPlanDeleted: ((Int) -> Void)?
+    var onLocalDraftMedicineBoxSaved: ((Int, MedicineBoxRecognitionDraft) -> Void)?
+    var onLocalDraftMedicineBoxDeleted: ((Int) -> Void)?
+
+    private let prescriptionIndex: Int
+
     @State private var currentPrescription: SparkMedicalSyncAPI.RemotePrescription?
     @State private var currentPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
     @State private var medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var recordsByPlanID: [Int: [SparkMedicalSyncAPI.RemoteMedicationRecord]]
+    @State private var sourceBatchDraft: PrescriptionRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
     @State private var deleteLinkedPlans = false
@@ -27,6 +41,7 @@ struct MedicationPrescriptionDetailPage: View {
     @State private var alertMessage: String?
 
     init(
+        mode: MedicationPrescriptionDetailMode = .server,
         prescription: SparkMedicalSyncAPI.RemotePrescription?,
         plans: [SparkMedicalSyncAPI.RemoteMedicationPlan],
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
@@ -37,17 +52,28 @@ struct MedicationPrescriptionDetailPage: View {
         workflowAPI: SparkMedicalWorkflowAPI,
         fileTransferService: FileTransferService,
         notificationClient: any NotificationClient,
+        prescriptionIndex: Int = 0,
+        sourceBatchDraft: PrescriptionRecognitionDraft? = nil,
         onPrescriptionSaved: @escaping (SparkMedicalSyncAPI.RemotePrescription) -> Void,
         onPrescriptionDeleted: @escaping (Int) -> Void,
         onPlanSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void,
         onPlanDeleted: @escaping (Int) -> Void,
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil,
-        onMedicalCaseDeleted: ((Int) -> Void)? = nil
+        onMedicalCaseDeleted: ((Int) -> Void)? = nil,
+        onLocalDraftPrescriptionUpdated: ((PrescriptionRecognitionDraft) -> Void)? = nil,
+        onLocalDraftPrescriptionDeleted: (() -> Void)? = nil,
+        onLocalDraftMedicationPlanSaved: ((Int, MedicationPlanRecognitionDraft) -> Void)? = nil,
+        onLocalDraftMedicationPlanDeleted: ((Int) -> Void)? = nil,
+        onLocalDraftMedicineBoxSaved: ((Int, MedicineBoxRecognitionDraft) -> Void)? = nil,
+        onLocalDraftMedicineBoxDeleted: ((Int) -> Void)? = nil
     ) {
+        self.mode = mode
         _currentPrescription = State(initialValue: prescription)
         _currentPlans = State(initialValue: plans)
         _medicineBoxesByID = State(initialValue: Dictionary(uniqueKeysWithValues: medicineBoxes.map { ($0.id, $0) }))
         _recordsByPlanID = State(initialValue: recordsByPlanID)
+        _sourceBatchDraft = State(initialValue: sourceBatchDraft)
+
         self.memberID = memberID
         self.completeData = completeData
         self.memberContextStore = memberContextStore
@@ -60,19 +86,28 @@ struct MedicationPrescriptionDetailPage: View {
         self.onPlanDeleted = onPlanDeleted
         self.onMedicalCaseUpdated = onMedicalCaseUpdated
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
+        self.onLocalDraftPrescriptionUpdated = onLocalDraftPrescriptionUpdated
+        self.onLocalDraftPrescriptionDeleted = onLocalDraftPrescriptionDeleted
+        self.onLocalDraftMedicationPlanSaved = onLocalDraftMedicationPlanSaved
+        self.onLocalDraftMedicationPlanDeleted = onLocalDraftMedicationPlanDeleted
+        self.onLocalDraftMedicineBoxSaved = onLocalDraftMedicineBoxSaved
+        self.onLocalDraftMedicineBoxDeleted = onLocalDraftMedicineBoxDeleted
+        self.prescriptionIndex = prescriptionIndex
     }
 
+    // MARK: 导航栏标题计算属性
     private var title: String {
+        // 优先使用医院名称，无则使用默认多语言标题
         currentPrescription?.institutionName.nilIfBlank ?? L10n.text("home.medical.prescription.detail.title")
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                headerCard
-                diagnosisCard
-                attachmentsSection
-                medicationSection
+                headerCard          // 头部信息卡片
+                diagnosisCard       // 诊断内容卡片
+                attachmentsSection  // 附件预览区域
+                medicationSection   // 关联用药方案列表
             }
             .padding(16)
             .padding(.bottom, 24)
@@ -80,9 +115,11 @@ struct MedicationPrescriptionDetailPage: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        // 右上角更多操作菜单：编辑、删除
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
+                    // 编辑处方按钮
                     Button {
                         showingEditSheet = true
                     } label: {
@@ -90,6 +127,7 @@ struct MedicationPrescriptionDetailPage: View {
                     }
                     .disabled(memberID == nil || currentPrescription == nil)
 
+                    // 删除处方按钮（危险操作）
                     Button(role: .destructive) {
                         deleteLinkedPlans = false
                         showingDeleteConfirm = true
@@ -103,30 +141,45 @@ struct MedicationPrescriptionDetailPage: View {
                 .disabled(isDeleting)
             }
         }
+        // 编辑处方弹窗
         .sheet(isPresented: $showingEditSheet) {
             if let currentPrescription {
                 CompatibleNavigationContainer {
-                    MedicationPrescriptionEditPage(
-                        prescription: currentPrescription,
-                        plans: currentPlans,
-                        workflowAPI: workflowAPI,
-                        fileTransferService: fileTransferService,
-                        notificationClient: notificationClient,
-                        onSaved: { saved in
-                            self.currentPrescription = saved
-                            onPrescriptionSaved(saved)
-                        },
-                        onPlanUnlinked: { plan in
-                            currentPlans.removeAll { $0.id == plan.id }
-                            onPlanSaved(plan)
-                        }
-                    )
+                    if mode == .localDraft {
+                        MedicationPrescriptionEditPage(
+                            mode: .localEdit(existing: currentSourceDraft(), onSubmit: { updated in
+                                applyLocalPrescriptionDraft(updated)
+                                showingEditSheet = false
+                            }),
+                            workflowAPI: workflowAPI,
+                            fileTransferService: fileTransferService,
+                            notificationClient: notificationClient
+                        )
+                    } else {
+                        MedicationPrescriptionEditPage(
+                            prescription: currentPrescription,
+                            plans: currentPlans,
+                            workflowAPI: workflowAPI,
+                            fileTransferService: fileTransferService,
+                            notificationClient: notificationClient,
+                            onSaved: { saved in
+                                self.currentPrescription = saved
+                                onPrescriptionSaved(saved)
+                            },
+                            onPlanUnlinked: { plan in
+                                currentPlans.removeAll { $0.id == plan.id }
+                                onPlanSaved(plan)
+                            }
+                        )
+                    }
                 }
             }
         }
+        // 删除确认弹窗
         .sheet(isPresented: $showingDeleteConfirm) {
             deleteConfirmSheet
         }
+        // 接口异常全局提示弹窗
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
             Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
@@ -134,6 +187,8 @@ struct MedicationPrescriptionDetailPage: View {
         }
     }
 
+    // MARK: 病历绑定/解绑子组件
+    /// 处方关联病历绑定、解绑模块
     private func prescriptionMedicalCaseLinkSection(prescription: SparkMedicalSyncAPI.RemotePrescription) -> some View {
         MedicalResourceMedicalCaseLinkSection(
             memberID: prescription.member,
@@ -151,6 +206,7 @@ struct MedicationPrescriptionDetailPage: View {
             unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title"),
             unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle"),
             onResourceUpdated: { (updated: SparkMedicalSyncAPI.RemotePrescription) in
+                // 病历绑定变更后刷新本地处方并回调上层
                 currentPrescription = updated
                 onPrescriptionSaved(updated)
             },
@@ -159,9 +215,11 @@ struct MedicationPrescriptionDetailPage: View {
         )
     }
 
+    // MARK: 头部信息卡片
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
+                // 渐变图标背景
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(
@@ -189,10 +247,11 @@ struct MedicationPrescriptionDetailPage: View {
                 Spacer(minLength: 8)
             }
 
+            // 处方详情信息网格行
             detailGrid
-            
-            
-            if let prescription = currentPrescription {
+
+            // 病历绑定模块（草稿模式隐藏，避免误调用服务端）
+            if mode == .server, let prescription = currentPrescription {
                 prescriptionMedicalCaseLinkSection(prescription: prescription)
             }
         }
@@ -200,6 +259,7 @@ struct MedicationPrescriptionDetailPage: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    // MARK: 头部副标题拼接（医师+处方号+开具日期）
     private var headerSubtitle: String {
         [
             currentPrescription?.prescriberName.nilIfBlank.map {
@@ -212,6 +272,7 @@ struct MedicationPrescriptionDetailPage: View {
         ].compactMap { $0 }.joined(separator: " · ")
     }
 
+    // MARK: 详情多行信息列表
     private var detailGrid: some View {
         VStack(spacing: 10) {
             PrescriptionDetailInfoRow(
@@ -238,6 +299,7 @@ struct MedicationPrescriptionDetailPage: View {
         }
     }
 
+    // MARK: 附件预览区域
     @ViewBuilder
     private var attachmentsSection: some View {
         if let attachments = currentPrescription?.attachments, attachments.isEmpty == false {
@@ -254,6 +316,7 @@ struct MedicationPrescriptionDetailPage: View {
         }
     }
 
+    // MARK: 诊断内容卡片
     @ViewBuilder
     private var diagnosisCard: some View {
         if let diagnosis = currentPrescription?.diagnosis.nilIfBlank {
@@ -275,6 +338,7 @@ struct MedicationPrescriptionDetailPage: View {
         }
     }
 
+    // MARK: 关联用药方案列表区域
     private var medicationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -286,6 +350,7 @@ struct MedicationPrescriptionDetailPage: View {
                     .foregroundStyle(.secondary)
             }
 
+            // 无用药方案空提示
             if currentPlans.isEmpty {
                 Text(L10n.text("home.medical.prescription.no_linked_plans"))
                     .font(.callout)
@@ -294,13 +359,18 @@ struct MedicationPrescriptionDetailPage: View {
                     .padding(.vertical, 12)
             } else {
                 VStack(spacing: 10) {
-                    ForEach(currentPlans, id: \.id) { plan in
+                    ForEach(Array(currentPlans.enumerated()), id: \.element.id) { pair in
+                        let medicationIndex = pair.offset
+                        let plan = pair.element
                         PrescriptionMedicationPlanSummaryRow(
                             plan: plan,
                             medicineBox: plan.medicineBox.flatMap { medicineBoxesByID[$0] },
-                            records: recordsByPlanID[plan.id] ?? [],
+                            records: mode == .localDraft ? [] : (recordsByPlanID[plan.id] ?? []),
                             fileTransferService: fileTransferService,
                             planDetailNavigation: PrescriptionMedicationPlanSummaryRow.PlanDetailNavigation(
+                                mode: mode == .localDraft ? .localDraft : .server,
+                                medicationIndex: medicationIndex,
+                                sourcePlanDraft: sourceBatchDraft?.medicationPlans?[safe: medicationIndex],
                                 medicineBoxes: Array(medicineBoxesByID.values),
                                 memberID: memberID,
                                 completeData: completeData,
@@ -320,7 +390,19 @@ struct MedicationPrescriptionDetailPage: View {
                                 onMedicineBoxSaved: { box in
                                     medicineBoxesByID[box.id] = box
                                 },
-                                onMedicineBoxDeleted: nil
+                                onMedicineBoxDeleted: nil,
+                                onLocalDraftPlanSaved: { updatedDraft in
+                                    handleLocalDraftPlanSaved(medicationIndex: medicationIndex, updatedDraft: updatedDraft)
+                                },
+                                onLocalDraftPlanDeleted: {
+                                    handleLocalDraftPlanDeleted(medicationIndex: medicationIndex)
+                                },
+                                onLocalDraftMedicineBoxSaved: { updatedBox in
+                                    handleLocalDraftMedicineBoxSaved(medicationIndex: medicationIndex, updatedBox: updatedBox)
+                                },
+                                onLocalDraftMedicineBoxDeleted: {
+                                    handleLocalDraftMedicineBoxDeleted(medicationIndex: medicationIndex)
+                                }
                             )
                         )
                     }
@@ -331,28 +413,35 @@ struct MedicationPrescriptionDetailPage: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    // MARK: 删除确认弹窗内容视图
     private var deleteConfirmSheet: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.text("home.medical.prescription.delete.title"))
                 .font(.title3.weight(.semibold))
-            Text(L10n.text("home.medical.prescription.delete.message"))
+            Text(mode == .localDraft
+                ? L10n.text("home.medical.prescription.delete.message")
+                : L10n.text("home.medical.prescription.delete.message"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Toggle(L10n.text("home.medical.prescription.delete.linked_plans"), isOn: $deleteLinkedPlans)
-                .font(.subheadline.weight(.medium))
-                .toggleStyle(.switch)
+            if mode == .server {
+                Toggle(L10n.text("home.medical.prescription.delete.linked_plans"), isOn: $deleteLinkedPlans)
+                    .font(.subheadline.weight(.medium))
+                    .toggleStyle(.switch)
+            }
 
             Spacer(minLength: 0)
 
             HStack(spacing: 12) {
+                // 取消按钮
                 Button(L10n.text("common.cancel")) {
                     showingDeleteConfirm = false
                 }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
 
+                // 确认删除按钮，loading状态展示进度圈
                 Button(role: .destructive) {
                     Task { await deleteCurrentPrescription() }
                 } label: {
@@ -371,9 +460,19 @@ struct MedicationPrescriptionDetailPage: View {
         .padding(20)
     }
 
+    // MARK: 执行处方删除异步逻辑
     @MainActor
     private func deleteCurrentPrescription() async {
-        guard let prescription = currentPrescription, isDeleting == false else { return }
+        guard currentPrescription != nil, isDeleting == false else { return }
+
+        if mode == .localDraft {
+            onLocalDraftPrescriptionDeleted?()
+            showingDeleteConfirm = false
+            dismiss()
+            return
+        }
+
+        guard let prescription = currentPrescription else { return }
         isDeleting = true
         defer { isDeleting = false }
 
@@ -408,8 +507,135 @@ struct MedicationPrescriptionDetailPage: View {
             )
         }
     }
+
+    private func currentSourceDraft() -> PrescriptionRecognitionDraft {
+        if let sourceBatchDraft {
+            return sourceBatchDraft
+        }
+        return PrescriptionRecognitionDraftMapper.prescriptionDraft(
+            from: currentPrescription ?? SparkMedicalSyncAPI.RemotePrescription(
+                id: 0,
+                member: memberID ?? 0,
+                medicalCase: nil,
+                prescriberName: "",
+                institutionName: "",
+                prescribedAt: nil,
+                diagnosis: "",
+                prescriptionNo: nil,
+                status: "active",
+                extra: nil,
+                attachments: nil,
+                updatedAt: Date()
+            ),
+            plans: currentPlans,
+            medicineBoxesByID: medicineBoxesByID,
+            preserving: nil
+        )
+    }
+
+    private func applyLocalPrescriptionDraft(_ updated: PrescriptionRecognitionDraft) {
+        sourceBatchDraft = updated
+        guard let memberID else { return }
+        let prescriptionID = currentPrescription?.id
+            ?? PrescriptionRecognitionDraftMapper.temporaryPrescriptionID(prescriptionIndex: prescriptionIndex)
+        currentPrescription = updated.remotePrescription(memberID: memberID, id: prescriptionID)
+        let boxes = PrescriptionRecognitionDraftMapper.remoteMedicineBoxes(
+            from: updated,
+            memberID: memberID,
+            prescriptionIndex: prescriptionIndex
+        )
+        medicineBoxesByID = Dictionary(uniqueKeysWithValues: boxes.map { ($0.id, $0) })
+        currentPlans = PrescriptionRecognitionDraftMapper.remoteMedicationPlans(
+            from: updated,
+            memberID: memberID,
+            prescriptionIndex: prescriptionIndex,
+            medicineBoxes: boxes
+        )
+        onLocalDraftPrescriptionUpdated?(updated)
+    }
+
+    private func handleLocalDraftPlanSaved(medicationIndex: Int, updatedDraft: MedicationPlanRecognitionDraft) {
+        guard currentPlans.indices.contains(medicationIndex), let memberID, let prescription = currentPrescription else { return }
+
+        let boxID: Int?
+        if PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(updatedDraft) {
+            boxID = nil
+            if let oldBoxID = currentPlans[medicationIndex].medicineBox {
+                medicineBoxesByID.removeValue(forKey: oldBoxID)
+            }
+        } else {
+            boxID = currentPlans[medicationIndex].medicineBox
+                ?? PrescriptionRecognitionDraftMapper.temporaryMedicineBoxID(
+                    prescriptionIndex: prescriptionIndex,
+                    medicationIndex: medicationIndex
+                )
+        }
+
+        let updatedPlan = PrescriptionRecognitionDraftMapper.remoteMedicationPlan(
+            from: updatedDraft,
+            preserving: currentPlans[medicationIndex],
+            medicineBoxID: boxID
+        )
+        currentPlans[medicationIndex] = updatedPlan
+
+        if let boxID, !PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(updatedDraft) {
+            let remoteBox = updatedDraft.remoteMedicineBox(memberID: memberID, id: boxID)
+            medicineBoxesByID[remoteBox.id] = remoteBox
+        }
+
+        var draft = currentSourceDraft()
+        var plans = draft.medicationPlans ?? []
+        if plans.indices.contains(medicationIndex) {
+            plans[medicationIndex] = updatedDraft
+            draft.medicationPlans = plans
+            sourceBatchDraft = draft
+        }
+        onLocalDraftMedicationPlanSaved?(medicationIndex, updatedDraft)
+    }
+
+    private func handleLocalDraftPlanDeleted(medicationIndex: Int) {
+        guard currentPlans.indices.contains(medicationIndex) else { return }
+        let removedPlan = currentPlans.remove(at: medicationIndex)
+        if let boxID = removedPlan.medicineBox {
+            medicineBoxesByID.removeValue(forKey: boxID)
+        }
+
+        var draft = currentSourceDraft()
+        var plans = draft.medicationPlans ?? []
+        if plans.indices.contains(medicationIndex) {
+            plans.remove(at: medicationIndex)
+            draft.medicationPlans = plans
+            sourceBatchDraft = draft
+        }
+        onLocalDraftMedicationPlanDeleted?(medicationIndex)
+    }
+
+    private func handleLocalDraftMedicineBoxSaved(medicationIndex: Int, updatedBox: MedicineBoxRecognitionDraft) {
+        guard currentPlans.indices.contains(medicationIndex), let memberID else { return }
+        let boxID = currentPlans[medicationIndex].medicineBox
+            ?? PrescriptionRecognitionDraftMapper.temporaryMedicineBoxID(
+                prescriptionIndex: prescriptionIndex,
+                medicationIndex: medicationIndex
+            )
+        let remoteBox = updatedBox.remoteMedicineBox(memberID: memberID, id: boxID)
+        medicineBoxesByID[remoteBox.id] = remoteBox
+    }
+
+    private func handleLocalDraftMedicineBoxDeleted(medicationIndex: Int) {
+        guard currentPlans.indices.contains(medicationIndex) else { return }
+        if let boxID = currentPlans[medicationIndex].medicineBox {
+            medicineBoxesByID.removeValue(forKey: boxID)
+        }
+    }
 }
 
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+// MARK: 详情页单行键值对信息行
 private struct PrescriptionDetailInfoRow: View {
     let title: String
     let value: String
@@ -428,6 +654,7 @@ private struct PrescriptionDetailInfoRow: View {
     }
 }
 
+// MARK: 处方状态码转本地化展示文案
 private func prescriptionStatusText(_ status: String) -> String {
     switch status {
     case "active":
@@ -447,10 +674,12 @@ private func prescriptionStatusText(_ status: String) -> String {
     }
 }
 
+// MARK: 用药方案解绑处方专用请求体
+/// 用于PATCH接口，将用药方案的prescription字段置空（解绑处方）
 struct MedicationPlanPrescriptionUpdatePayload: Encodable {
     let prescription: Int?
 
-
+    // 自定义编码：字段存在则传ID，不存在显式传null
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodableKey.self)
         if let prescription {

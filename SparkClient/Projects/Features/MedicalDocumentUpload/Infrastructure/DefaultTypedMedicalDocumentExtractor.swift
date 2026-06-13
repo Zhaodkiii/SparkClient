@@ -341,21 +341,24 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             }
             return (.medicalReport(draft), final.normalizedJSON)
 
-        // 处方单
+        // 处方单（JSON array；兼容单对象包装为数组）
         case .prescription:
             let final = try await extractStructured(
                 prompt: prompt,
                 scenario: .prescriptionExtraction,
                 kindLabel: "prescription",
-                as: PrescriptionRecognitionDraft.self,
+                as: PrescriptionDraftsPayload.self,
                 preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )
-            guard let draft = final.decoded else {
+            guard let payload = final.decoded else {
                 throw Self.decodingFailedError(from: final, kindLabel: "prescription")
             }
-            let normalized = Self.normalizedPrescriptionDraft(draft)
-            return (.prescription(normalized), Self.normalizedExtractedJSON(for: .prescription(normalized), fallback: final.normalizedJSON))
+            let normalized = Self.normalizedPrescriptionDrafts(payload.drafts)
+            return (
+                .prescription(normalized),
+                Self.normalizedExtractedJSON(for: .prescription(normalized), fallback: final.normalizedJSON)
+            )
 
         // 用药单
         case .medicationPlan:
@@ -508,9 +511,22 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         var next = draft
         if var plans = next.medicationPlans {
             plans = normalizedMedicationPlanDrafts(plans)
+            for index in plans.indices where plans[index].sortOrder?.nilIfBlank == nil {
+                var item = plans[index]
+                item.sortOrder = String(index)
+                plans[index] = item
+            }
             next.medicationPlans = plans
+        } else {
+            next.medicationPlans = []
         }
         return next
+    }
+
+    private static func normalizedPrescriptionDrafts(
+        _ drafts: [PrescriptionRecognitionDraft]
+    ) -> [PrescriptionRecognitionDraft] {
+        drafts.map { normalizedPrescriptionDraft($0) }
     }
 
     private static func normalizedCaseDraft(_ draft: CaseRecognitionDraft) -> CaseRecognitionDraft {
@@ -535,8 +551,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             data = try? encoder.encode(draft)
         case .medicalReport(let drafts):
             data = try? encoder.encode(drafts)
-        case .prescription(let draft):
-            data = try? encoder.encode(draft)
+        case .prescription(let drafts):
+            data = try? encoder.encode(drafts)
         case .medicationPlan(let drafts):
             data = try? encoder.encode(drafts)
         case .medicineBoxes(let drafts):
@@ -548,6 +564,20 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         return text
     }
 
+}
+
+/// 处方抽取 JSON 载荷：兼容 AI 输出 array 或单 object。
+private struct PrescriptionDraftsPayload: Decodable, Sendable {
+    let drafts: [PrescriptionRecognitionDraft]
+
+    init(from decoder: Decoder) throws {
+        if let array = try? [PrescriptionRecognitionDraft](from: decoder) {
+            drafts = array
+            return
+        }
+        let single = try PrescriptionRecognitionDraft(from: decoder)
+        drafts = [single]
+    }
 }
 
 #if DEBUG
@@ -605,7 +635,7 @@ private extension DefaultTypedMedicalDocumentExtractor {
 
         case .prescription:
             let payload: PrescriptionRecognitionDraft = try decodeDebugPayload(Self.debugPretendPrescriptionJSON)
-            return (.prescription(payload), try prettyJSONString(from: payload))
+            return (.prescription([payload]), try prettyJSONString(from: [payload]))
 
         case .medicationPlan:
             let payload: [MedicationPlanRecognitionDraft] = try decodeDebugPayload(Self.debugPretendMedicationPlanJSON)

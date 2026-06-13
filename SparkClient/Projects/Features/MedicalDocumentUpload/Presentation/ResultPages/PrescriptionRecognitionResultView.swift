@@ -54,7 +54,7 @@ private extension MedicalDocumentTypedExtractionOutput {
                     reason: "命中处方批次结构"
                 )
             ),
-            typedResult: .prescription(
+            typedResult: .prescription([
                 PrescriptionRecognitionDraft(
                     medicalCase: 7,
                     prescriberName: "王医生",
@@ -84,7 +84,7 @@ private extension MedicalDocumentTypedExtractionOutput {
                         )
                     ]
                 )
-            ),
+            ]),
             extractedJSON: "",
             payloadPreview: ""
         )

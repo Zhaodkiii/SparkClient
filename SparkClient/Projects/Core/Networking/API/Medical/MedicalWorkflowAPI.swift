@@ -219,7 +219,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     struct MedicationPlanBundleItemPayload: Encodable, Sendable {
-        let medicineBox: MedicineBoxPayload
+        let medicineBox: MedicineBoxPayload?
         let drugName: String
         let dosePerTime: String
         let doseValue: String?
@@ -277,6 +277,18 @@ struct SparkMedicalWorkflowAPI {
         let prescriptionId: Int?
     }
 
+    struct PrescriptionBatchSavePayload: Encodable, Sendable {
+        let member: Int
+        let prescriptions: [PrescriptionCreateRequest]
+    }
+
+    struct PrescriptionBatchSaveResponse: Decodable, Sendable {
+        let memberId: Int
+        let prescriptionIds: [Int]
+        let medicineBoxIds: [Int]
+        let medicationPlanIds: [Int]
+    }
+
     /// 保存病历类文档；成功返回新建或更新后的记录 ID。
     func saveCase(_ payload: CaseSavePayload) async throws -> Int {
         try await post(path: "/api/v1/medical/workflows/case-documents/save/", body: payload, decode: IDResponse.self).id
@@ -326,6 +338,15 @@ struct SparkMedicalWorkflowAPI {
             path: "/api/v1/medical/workflows/medication-plans/save/",
             body: payload,
             decode: MedicationPlanBundleSaveResponse.self
+        )
+    }
+
+    /// 批量保存处方识别结果（不创建病历，一次提交多条处方及用药计划）。
+    func savePrescriptionsBatch(_ payload: PrescriptionBatchSavePayload) async throws -> PrescriptionBatchSaveResponse {
+        try await post(
+            path: "/api/v1/medical/workflows/prescriptions/batch-save/",
+            body: payload,
+            decode: PrescriptionBatchSaveResponse.self
         )
     }
 

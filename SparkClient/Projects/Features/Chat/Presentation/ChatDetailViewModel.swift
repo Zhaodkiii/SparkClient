@@ -1639,12 +1639,21 @@ final class ChatDetailViewModel: ObservableObject {
                 extractedJSON: item.draftJson
             )
         case .prescription:
+            if let drafts = decodeStructuredHealthCardDraft([PrescriptionRecognitionDraft].self, from: data) {
+                return makeStructuredHealthCardSaveOutput(
+                    memberID: memberID,
+                    kind: .prescription,
+                    rawText: item.rawTrace,
+                    typedResult: .prescription(drafts),
+                    extractedJSON: item.draftJson
+                )
+            }
             guard let draft = decodeStructuredHealthCardDraft(PrescriptionRecognitionDraft.self, from: data) else { return nil }
             return makeStructuredHealthCardSaveOutput(
                 memberID: memberID,
                 kind: .prescription,
                 rawText: item.rawTrace,
-                typedResult: .prescription(draft),
+                typedResult: .prescription([draft]),
                 extractedJSON: item.draftJson
             )
         case .examReport:

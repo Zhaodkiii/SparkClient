@@ -90,10 +90,10 @@ enum MedicalDocumentAttachmentBusinessMatcher {
             matchReports(files: files, reports: &drafts)
             return .medicalReport(drafts)
 
-            // 处方单：执行处方匹配
-        case .prescription(var draft):
-            matchPrescription(files: files, prescription: &draft)
-            return .prescription(draft)
+            // 处方单：执行处方匹配（支持多处方数组）
+        case .prescription(var drafts):
+            matchPrescriptions(files: files, prescriptions: &drafts)
+            return .prescription(drafts)
 
             // 用药计划：执行用药匹配
         case .medicationPlan(var drafts):
@@ -251,6 +251,44 @@ enum MedicalDocumentAttachmentBusinessMatcher {
             // 无匹配时绑定到第一个报告
             if !matched, !reports.isEmpty {
                 reports[reports.startIndex].appendAttachmentFileID(file.id)
+            }
+        }
+    }
+
+    /// 多处方专用匹配逻辑
+    private static func matchPrescriptions(
+        files: [MedicalUploadLocalFile],
+        prescriptions: inout [PrescriptionRecognitionDraft]
+    ) {
+        guard prescriptions.isEmpty == false else { return }
+        for file in files {
+            guard let ocrText = file.ocrText, !ocrText.isEmpty else { continue }
+            let (detectedMode, confidence) = DocumentTypeDetector.detect(text: ocrText)
+            var matched = false
+
+            if confidence >= 35, detectedMode == .medication {
+                for index in prescriptions.indices where matchText(ocrText, with: prescriptions[index]) {
+                    prescriptions[index].appendAttachmentFileID(file.id)
+                    matched = true
+                    break
+                }
+            }
+
+            if matched == false {
+                for index in prescriptions.indices {
+                    if bindPrescriptionOrMedication(
+                        ocrText: ocrText,
+                        fileID: file.id,
+                        prescription: &prescriptions[index]
+                    ) {
+                        matched = true
+                        break
+                    }
+                }
+            }
+
+            if matched == false {
+                prescriptions[prescriptions.startIndex].appendAttachmentFileID(file.id)
             }
         }
     }

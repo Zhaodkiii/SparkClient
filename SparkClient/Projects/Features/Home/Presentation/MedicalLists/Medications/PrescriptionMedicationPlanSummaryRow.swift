@@ -3,6 +3,9 @@ import SwiftUI
 /// 处方 / 病例时间轴等处共用的「用药计划」摘要行；可选 `NavigationLink` 进入用药计划详情。
 struct PrescriptionMedicationPlanSummaryRow: View {
     struct PlanDetailNavigation {
+        var mode: MedicationPlanDetailMode = .server
+        var medicationIndex: Int = 0
+        var sourcePlanDraft: MedicationPlanRecognitionDraft?
         let medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
         let memberID: Int?
         let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
@@ -13,6 +16,10 @@ struct PrescriptionMedicationPlanSummaryRow: View {
         let onPlanDeleted: (Int) -> Void
         let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
         var onMedicineBoxDeleted: ((Int) -> Void)?
+        var onLocalDraftPlanSaved: ((MedicationPlanRecognitionDraft) -> Void)?
+        var onLocalDraftPlanDeleted: (() -> Void)?
+        var onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)?
+        var onLocalDraftMedicineBoxDeleted: (() -> Void)?
     }
 
     let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
@@ -53,6 +60,7 @@ struct PrescriptionMedicationPlanSummaryRow: View {
             if let nav = planDetailNavigation {
                 MainNavigationLink {
                     MedicationPlanDetailPage(
+                        mode: nav.mode,
                         plan: plan,
                         medicineBoxes: nav.medicineBoxes,
                         records: records,
@@ -62,10 +70,15 @@ struct PrescriptionMedicationPlanSummaryRow: View {
                         workflowAPI: nav.workflowAPI,
                         fileTransferService: fileTransferService,
                         notificationClient: nav.notificationClient,
+                        sourcePlanDraft: nav.sourcePlanDraft,
                         onSaved: nav.onPlanSaved,
                         onDeleted: nav.onPlanDeleted,
                         onMedicineBoxSaved: nav.onMedicineBoxSaved,
-                        onMedicineBoxDeleted: nav.onMedicineBoxDeleted
+                        onMedicineBoxDeleted: nav.onMedicineBoxDeleted,
+                        onLocalDraftSaved: nav.onLocalDraftPlanSaved,
+                        onLocalDraftDeleted: nav.onLocalDraftPlanDeleted,
+                        onLocalDraftMedicineBoxSaved: nav.onLocalDraftMedicineBoxSaved,
+                        onLocalDraftMedicineBoxDeleted: nav.onLocalDraftMedicineBoxDeleted
                     )
                 } label: {
                     rowLabel

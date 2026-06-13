@@ -66,6 +66,12 @@ enum MedicalPreSubmitValidationRules {
         return number >= 0
     }
 
+    /// 服务端 `dose_value` 要求纯数值字符串；空值不阻断。
+    static func isValidDecimalString(_ value: String?) -> Bool {
+        guard let raw = trimmedNonEmpty(value) else { return true }
+        return Decimal(string: raw, locale: Locale(identifier: "en_US_POSIX")) != nil
+    }
+
     static func isValidExaminationCategory(_ value: String?) -> Bool {
         guard let raw = trimmedNonEmpty(value) else { return true }
         let normalized = raw.lowercased()
@@ -103,6 +109,10 @@ enum MedicalPreSubmitValidationRules {
 
     static func validNumberMessage() -> String {
         L10n.text("medical.upload.presubmit.error.valid_number")
+    }
+
+    static func doseValueDecimalMessage() -> String {
+        L10n.text("medical.upload.presubmit.error.dose_value_decimal")
     }
 
     static func validEnumMessage(fieldLabel: String) -> String {

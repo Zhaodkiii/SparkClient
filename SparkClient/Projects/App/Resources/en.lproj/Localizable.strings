@@ -742,7 +742,9 @@
 "medical.upload.presubmit.field.drug_name" = "Drug name";
 "medical.upload.presubmit.field.start_date" = "Start date";
 "medical.upload.presubmit.field.dose_per_time" = "Dose per time";
+"medical.upload.presubmit.field.dose_value" = "Dose value";
 "medical.upload.presubmit.field.frequency_type" = "Frequency";
+"medical.upload.presubmit.error.dose_value_decimal" = "Dose value must be a number, such as 1, 0.5, or 20. Put units in dose unit or dose description.";
 "medical.upload.presubmit.field.medicine_name" = "Medicine name";
 "medical.upload.presubmit.field.expire_date" = "Expiry date";
 "medical.upload.presubmit.field.total_quantity" = "Quantity";
@@ -2253,6 +2255,9 @@
 "medical.upload.result.prescription.medication_count" = "%d medications";
 "medical.upload.result.prescription.edit_batch" = "Edit batch";
 "medical.upload.result.prescription.empty_medications" = "No medication items";
+"medical.upload.result.prescription.empty_batches" = "No prescription recognized. Add manually or re-run recognition.";
+"medical.upload.result.prescription.index_format" = "Prescription %1$d / %2$d";
+"medical.upload.presubmit.field.prescription" = "Prescription";
 
 "medical.upload.result.medication.section.title" = "Medication list";
 "medical.upload.result.medication.section.subtitle" = "Supports single and batch local editing";

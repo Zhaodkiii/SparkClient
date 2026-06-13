@@ -451,22 +451,21 @@ enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
             }
             return StructuredHealthCardsBlob(medicineBoxes: rows)
 
-        case .prescription(let draft):
-            guard let json = encode(draft) else { return .empty }
-            let title = nonEmptyTrimmed(draft.institutionName) ?? fallbackName("common.prescription")
-            let sub = nonEmptyTrimmed(draft.diagnosis)
-            return StructuredHealthCardsBlob(
-                prescriptions: [
-                    PrescriptionChatCardPayload(
-                        draftJson: json,
-                        isSaved: false,
-                        memberId: memberId,
-                        ossFileId: ossFileId,
-                        title: title,
-                        subtitle: sub
-                    )
-                ]
-            )
+        case .prescription(let drafts):
+            let rows = drafts.compactMap { draft -> PrescriptionChatCardPayload? in
+                guard let json = encode(draft) else { return nil }
+                let title = nonEmptyTrimmed(draft.institutionName) ?? fallbackName("common.prescription")
+                let sub = nonEmptyTrimmed(draft.diagnosis)
+                return PrescriptionChatCardPayload(
+                    draftJson: json,
+                    isSaved: false,
+                    memberId: memberId,
+                    ossFileId: ossFileId,
+                    title: title,
+                    subtitle: sub
+                )
+            }
+            return StructuredHealthCardsBlob(prescriptions: rows)
 
         case .medicalReport(let drafts):
             let rows = drafts.map { d in

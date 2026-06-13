@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MedicationPlanDetailPage: View {
+    let mode: MedicationPlanDetailMode
     let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
     let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     let memberID: Int?
@@ -15,16 +16,22 @@ struct MedicationPlanDetailPage: View {
     var onMedicineBoxDeleted: ((Int) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
+    var onLocalDraftSaved: ((MedicationPlanRecognitionDraft) -> Void)?
+    var onLocalDraftDeleted: (() -> Void)?
+    var onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)?
+    var onLocalDraftMedicineBoxDeleted: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var currentPlan: SparkMedicalSyncAPI.RemoteMedicationPlan
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
+    @State private var sourcePlanDraft: MedicationPlanRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var alertMessage: String?
 
     init(
+        mode: MedicationPlanDetailMode = .server,
         plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         records: [SparkMedicalSyncAPI.RemoteMedicationRecord],
@@ -34,13 +41,19 @@ struct MedicationPlanDetailPage: View {
         workflowAPI: SparkMedicalWorkflowAPI,
         fileTransferService: FileTransferService,
         notificationClient: any NotificationClient,
+        sourcePlanDraft: MedicationPlanRecognitionDraft? = nil,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void,
         onDeleted: @escaping (Int) -> Void,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onMedicineBoxDeleted: ((Int) -> Void)? = nil,
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil,
-        onMedicalCaseDeleted: ((Int) -> Void)? = nil
+        onMedicalCaseDeleted: ((Int) -> Void)? = nil,
+        onLocalDraftSaved: ((MedicationPlanRecognitionDraft) -> Void)? = nil,
+        onLocalDraftDeleted: (() -> Void)? = nil,
+        onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)? = nil,
+        onLocalDraftMedicineBoxDeleted: (() -> Void)? = nil
     ) {
+        self.mode = mode
         self.plan = plan
         self.records = records
         self.memberID = memberID
@@ -55,8 +68,13 @@ struct MedicationPlanDetailPage: View {
         self.onMedicineBoxDeleted = onMedicineBoxDeleted
         self.onMedicalCaseUpdated = onMedicalCaseUpdated
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
+        self.onLocalDraftSaved = onLocalDraftSaved
+        self.onLocalDraftDeleted = onLocalDraftDeleted
+        self.onLocalDraftMedicineBoxSaved = onLocalDraftMedicineBoxSaved
+        self.onLocalDraftMedicineBoxDeleted = onLocalDraftMedicineBoxDeleted
         _currentPlan = State(initialValue: plan)
         _medicineBoxes = State(initialValue: medicineBoxes)
+        _sourcePlanDraft = State(initialValue: sourcePlanDraft)
     }
 
     private var sortedRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] {
@@ -76,14 +94,22 @@ struct MedicationPlanDetailPage: View {
                 Section(L10n.text("home.medical.medication_plan.section.linked_box")) {
                     MainNavigationLink {
                         MedicineBoxDetailPage(
+                            mode: mode == .localDraft ? .localDraft : .server,
                             box: medicineBox,
                             entryMemberID: memberID,
                             typeOptions: MedicineBoxTypeCatalog.options(in: medicineBoxes),
                             specOptionBoxes: medicineBoxes,
                             workflowAPI: workflowAPI,
                             fileTransferService: fileTransferService,
+                            sourceBoxDraft: sourcePlanDraft?.medicineBox,
                             onSaved: handleMedicineBoxSaved,
-                            onDeleted: handleMedicineBoxDeleted
+                            onDeleted: handleMedicineBoxDeleted,
+                            onLocalDraftSaved: { updated in
+                                applyLocalDraftMedicineBoxSaved(updated)
+                            },
+                            onLocalDraftDeleted: {
+                                applyLocalDraftMedicineBoxDeleted()
+                            }
                         )
                     } label: {
                         HStack(spacing: 12) {
@@ -134,28 +160,30 @@ struct MedicationPlanDetailPage: View {
                     )
                 }
                 
-                MedicalResourceMedicalCaseLinkSection(
-                    memberID: currentPlan.member,
-                    medicalCaseID: currentPlan.medicalCase,
-                    resourceKind: .medicationPlans,
-                    resourceID: currentPlan.id,
-                    patchField: .medicalCase,
-                    workflowAPI: workflowAPI,
-                    fileTransferService: fileTransferService,
-                    completeData: completeData,
-                    memberContextStore: memberContextStore,
-                    notificationClient: notificationClient,
-                    linkedTitle: L10n.text("home.medical.list.medications.linked_case.title"),
-                    linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle"),
-                    unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title"),
-                    unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle"),
-                    onResourceUpdated: { (updated: SparkMedicalSyncAPI.RemoteMedicationPlan) in
-                        currentPlan = updated
-                        onSaved(updated)
-                    },
-                    onMedicalCaseUpdated: onMedicalCaseUpdated,
-                    onMedicalCaseDeleted: onMedicalCaseDeleted
-                )
+                if mode == .server {
+                    MedicalResourceMedicalCaseLinkSection(
+                        memberID: currentPlan.member,
+                        medicalCaseID: currentPlan.medicalCase,
+                        resourceKind: .medicationPlans,
+                        resourceID: currentPlan.id,
+                        patchField: .medicalCase,
+                        workflowAPI: workflowAPI,
+                        fileTransferService: fileTransferService,
+                        completeData: completeData,
+                        memberContextStore: memberContextStore,
+                        notificationClient: notificationClient,
+                        linkedTitle: L10n.text("home.medical.list.medications.linked_case.title"),
+                        linkedSubtitle: L10n.text("home.medical.list.medications.linked_case.subtitle"),
+                        unlinkedTitle: L10n.text("home.medical.list.medications.unlinked_case.title"),
+                        unlinkedSubtitle: L10n.text("home.medical.list.medications.unlinked_case.subtitle"),
+                        onResourceUpdated: { (updated: SparkMedicalSyncAPI.RemoteMedicationPlan) in
+                            currentPlan = updated
+                            onSaved(updated)
+                        },
+                        onMedicalCaseUpdated: onMedicalCaseUpdated,
+                        onMedicalCaseDeleted: onMedicalCaseDeleted
+                    )
+                }
             }
             
             if let attachments = currentPlan.attachments, attachments.isEmpty == false {
@@ -168,6 +196,7 @@ struct MedicationPlanDetailPage: View {
                 }
             }
 
+            if mode == .server {
             Section(L10n.text("home.medical.medication_plan.section.records")) {
                 if sortedRecords.isEmpty {
                     Text(L10n.text("home.medical.medication_plan.no_records"))
@@ -211,6 +240,7 @@ struct MedicationPlanDetailPage: View {
                     }
                 }
             }
+            }
         }
         .navigationTitle(currentPlan.drugName.nilIfBlank ?? L10n.text("home.medical.medication_plan.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -236,7 +266,23 @@ struct MedicationPlanDetailPage: View {
             }
         }
         .sheet(isPresented: $showingEditSheet) {
-            if let memberID {
+            if mode == .localDraft, let memberID {
+                MedicationPlanFormView(
+                    mode: .localEdit(
+                        existing: MedicationPlanDraft(recognition: currentSourcePlanDraft()),
+                        onSubmit: { updatedDraft in
+                            applyLocalDraftPlan(updatedDraft.recognitionDraft(preserving: currentSourcePlanDraft()))
+                            showingEditSheet = false
+                        }
+                    ),
+                    memberID: memberID,
+                    medicineBoxes: medicineBoxes,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    notificationClient: notificationClient,
+                    onMedicineBoxSaved: handleMedicineBoxSaved
+                )
+            } else if let memberID {
                 MedicationPlanFormView(
                     mode: .serverEdit(existing: currentPlan),
                     memberID: memberID,
@@ -296,6 +342,13 @@ struct MedicationPlanDetailPage: View {
     @MainActor
     private func deleteCurrentPlan() async {
         guard isDeleting == false else { return }
+
+        if mode == .localDraft {
+            onLocalDraftDeleted?()
+            dismiss()
+            return
+        }
+
         isDeleting = true
         defer { isDeleting = false }
 
@@ -306,6 +359,107 @@ struct MedicationPlanDetailPage: View {
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+
+    private func currentSourcePlanDraft() -> MedicationPlanRecognitionDraft {
+        if let sourcePlanDraft {
+            return sourcePlanDraft
+        }
+        let box = medicineBox
+        return PrescriptionRecognitionDraftMapper.medicationPlanDraft(
+            from: currentPlan,
+            box: box,
+            preserving: nil
+        )
+    }
+
+    private func applyLocalDraftPlan(_ updatedDraft: MedicationPlanRecognitionDraft) {
+        sourcePlanDraft = updatedDraft
+        guard let memberID else { return }
+
+        let boxID: Int?
+        if PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(updatedDraft) {
+            boxID = nil
+            if let oldBoxID = currentPlan.medicineBox {
+                medicineBoxes.removeAll { $0.id == oldBoxID }
+            }
+        } else {
+            boxID = currentPlan.medicineBox
+        }
+
+        currentPlan = PrescriptionRecognitionDraftMapper.remoteMedicationPlan(
+            from: updatedDraft,
+            preserving: currentPlan,
+            medicineBoxID: boxID
+        )
+
+        if let boxID, !PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(updatedDraft) {
+            let box = updatedDraft.remoteMedicineBox(memberID: memberID, id: boxID)
+            if let index = medicineBoxes.firstIndex(where: { $0.id == box.id }) {
+                medicineBoxes[index] = box
+            } else {
+                medicineBoxes.insert(box, at: 0)
+            }
+        }
+        onLocalDraftSaved?(updatedDraft)
+    }
+
+    private func applyLocalDraftMedicineBoxSaved(_ updatedBox: MedicineBoxRecognitionDraft) {
+        guard mode == .localDraft, let memberID else {
+            onLocalDraftMedicineBoxSaved?(updatedBox)
+            return
+        }
+
+        let boxID = currentPlan.medicineBox
+            ?? updatedBox.remoteMedicineBox(memberID: memberID, id: currentPlan.id * -100 - 1).id
+        let remoteBox = updatedBox.remoteMedicineBox(memberID: memberID, id: boxID)
+        if let index = medicineBoxes.firstIndex(where: { $0.id == remoteBox.id }) {
+            medicineBoxes[index] = remoteBox
+        } else {
+            medicineBoxes.insert(remoteBox, at: 0)
+        }
+
+        let updatedDraft = PrescriptionRecognitionDraftMapper.applyMedicineBox(
+            remoteBox,
+            to: currentSourcePlanDraft(),
+            preservingAttachmentIDs: currentSourcePlanDraft().attachmentFileIds
+        )
+        sourcePlanDraft = updatedDraft
+        currentPlan = PrescriptionRecognitionDraftMapper.remoteMedicationPlan(
+            from: updatedDraft,
+            preserving: currentPlan,
+            medicineBoxID: boxID
+        )
+        onLocalDraftMedicineBoxSaved?(updatedBox)
+        onLocalDraftSaved?(updatedDraft)
+    }
+
+    private func applyLocalDraftMedicineBoxDeleted() {
+        guard mode == .localDraft else { return }
+
+        if let oldBoxID = currentPlan.medicineBox {
+            medicineBoxes.removeAll { $0.id == oldBoxID }
+        }
+
+        let clearedDraft = PrescriptionRecognitionDraftMapper.medicationPlanDraftClearedMedicineBox(
+            from: currentSourcePlanDraft()
+        )
+        sourcePlanDraft = clearedDraft
+
+        if let memberID {
+            currentPlan = PrescriptionRecognitionDraftMapper.remoteMedicationPlan(
+                from: clearedDraft,
+                preserving: currentPlan,
+                medicineBoxID: nil
+            )
+        } else {
+            var next = currentPlan
+            next.medicineBox = nil
+            currentPlan = next
+        }
+
+        onLocalDraftMedicineBoxDeleted?()
+        onLocalDraftSaved?(clearedDraft)
     }
 }
 

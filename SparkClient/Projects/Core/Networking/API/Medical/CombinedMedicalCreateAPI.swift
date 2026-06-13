@@ -128,6 +128,7 @@ struct ExaminationReportCreateRequest: Encodable, Sendable {
 
 /// 组合创建处方请求（与 `Prescription` 字段对齐，内含处方下的 `MedicationPlan` 行）
 struct PrescriptionCreateRequest: Encodable, Sendable {
+    let medicalCase: Int?
     let prescriberName: String?
     let institutionName: String?
     let prescribedAt: String?

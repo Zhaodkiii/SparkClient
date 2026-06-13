@@ -13,8 +13,25 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
             return validateHealthExamReport(draft)
         case .medicalReport(let drafts):
             return validateMedicalReports(drafts)
-        case .prescription(let draft):
-            return validatePrescription(draft, prescriptionIndex: 0)
+        case .prescription(let drafts):
+            var issues: [MedicalPreSubmitValidationIssue] = []
+            if drafts.isEmpty {
+                issues.append(issue(
+                    resourceType: .prescription,
+                    fieldPath: "prescriptions",
+                    fieldKey: "prescriptions",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.prescription"),
+                    message: L10n.text("medical.upload.result.prescription.empty_batches"),
+                    sectionTitle: L10n.text("medical.upload.presubmit.section.prescription")
+                ))
+            }
+            for (prescriptionIndex, prescription) in drafts.enumerated() {
+                issues.append(contentsOf: validatePrescription(
+                    prescription,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+            return issues
         case .medicationPlan(let drafts):
             return validateMedicationPlans(drafts, prescriptionIndex: nil)
         case .medicineBoxes(let drafts):
@@ -376,6 +393,19 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
                     message: MedicalPreSubmitValidationRules.validEnumMessage(
                         fieldLabel: L10n.text("medical.upload.presubmit.field.frequency_type")
                     ),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            }
+
+            if MedicalPreSubmitValidationRules.isValidDecimalString(plan.doseValue) == false {
+                issues.append(issue(
+                    resourceType: .medicationPlan,
+                    fieldPath: "\(pathPrefix).dose_value",
+                    fieldKey: "\(pathPrefix).dose_value",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.dose_value"),
+                    message: MedicalPreSubmitValidationRules.doseValueDecimalMessage(),
                     sectionTitle: section,
                     cardIndex: cardIndex,
                     prescriptionIndex: prescriptionIndex

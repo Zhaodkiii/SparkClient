@@ -11,7 +11,9 @@
 | `MEDICAL-AI-OCR-000003` | 提交前本地预校验与字段高亮纠错 | 已实现 | 客户端按服务端规则预校验、对应模块提示、字段高亮、用户修复后重新提交 |
 | `MEDICAL-AI-OCR-000004` | 折叠模块内预校验错误自动展开并定位 | 已实现 | 提交失败后展开错误所在折叠模块、再滚动到对应卡片或字段 |
 | `MEDICAL-AI-OCR-000005` | 缺少识别场景模型时引导配置模型密钥 | 已实现 | missingModelForScenario 弹窗提示、取消/前往设置、Sheet 打开模型密钥页面 |
-| `MEDICAL-AI-OCR-000006` | 处方识别支持多笔处方全流程 | 设计中 | AI 返回 `[PrescriptionRecognitionDraft]`、结果页切换成员、多处方页面展示、预校验、附件关联、逐笔保存提交 |
+| `MEDICAL-AI-OCR-000006` | 处方数组识别与用药资料草稿详情预览 | 新需求/待实现 | 处方数组抽取、结果页成员切换、处方/用药计划/药箱详情页本地草稿预览模式、编辑删除回调 |
+| `MEDICAL-AI-OCR-000007` | 处方提交前 dose_value 数值预校验修复 | 修复需求/待实现 | combined-create 前拦截 dose_value 非数字、字段高亮、定位到对应处方药品 |
+| `MEDICAL-AI-OCR-000008` | 草稿模式删除关联药箱未清理用药计划草稿 | 修复需求/待实现 | 用药计划详情进入药箱详情后删除药箱，清理本页草稿、父级草稿与最终保存 payload |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -2079,359 +2081,1623 @@ catch error
 4. 避免 alert 和现有 `errorMessage` alert 同时弹出。
 5. 文案需要与 `APIKeysSettingsView` 的持久化配置行为保持一致，避免提示成临时内存配置。
 
-## 工单 `MEDICAL-AI-OCR-000006`：处方识别支持多笔处方全流程
+## 工单 `MEDICAL-AI-OCR-000006`：处方数组识别与用药资料草稿详情预览
 
 ### 工单状态
 
-设计中。
+新需求/待实现。
 
 ## 1. 背景与问题
 
-当前独立处方识别链路整体仍以单笔处方为主：
+### 1.1 业务背景
 
-1. `MedicalDocumentTypedResult.prescription` 关联值是 `PrescriptionRecognitionDraft`。
-2. `DefaultTypedMedicalDocumentExtractor` 的处方抽取按单对象解码。
-3. `PrescriptionRecognitionResultContentView` 内部状态是单个 `batch`，页面虽然复用了 `PrescriptionBatchListSectionView(batches:)`，但实际只传入 `[batch]`。
-4. `DefaultTypedMedicalDocumentSaver.savePrescriptionWithPlans` 一次只保存一笔处方。
+处方识别不是天然“一张图片只对应一张处方”。真实场景中可能出现：
 
-真实处方照片、PDF 或多页资料里，经常会出现同一次上传包含多张处方单、多名医生处方、门诊处方与续方混在一起的情况。如果仍强制识别成单笔，会导致：
+1. 一次上传多张处方图片。
+2. 一张图片内包含多张处方或多组医嘱。
+3. 处方和用药计划混排，例如上方是处方抬头，下方是多条药品及服用说明。
+4. 用户需要在保存前进入处方、用药计划、药箱详情页预览和编辑识别结果。
 
-1. AI 把多张处方合并到一张处方内，诊断、开方日期、医生、处方号互相污染。
-2. 多个处方下的药品被塞进同一个药品列表，保存后无法还原真实业务归属。
-3. 用户在结果页只能编辑一个处方头信息，无法分别修正每笔处方。
-4. 保存提交只能生成一条处方记录，后续用药计划、附件、问报告引用都会失真。
-
-本工单要求处方识别从 AI 抽取、页面展示、用户编辑、预校验、附件关联到保存提交全流程支持多笔处方，核心数据形态为：
+当前处方抽取链路仍按单个 `PrescriptionRecognitionDraft` 处理：
 
 ```swift
-[PrescriptionRecognitionDraft]
+case .prescription:
+    let final = try await extractStructured(
+        prompt: prompt,
+        scenario: .prescriptionExtraction,
+        kindLabel: "prescription",
+        as: PrescriptionRecognitionDraft.self,
+        preferredModelName: preferredModelName,
+        cancellationToken: cancellationToken
+    )
 ```
 
-## 2. 设计目标
-
-### 核心目标
-
-独立处方识别结果应允许一次上传识别出 0 到 N 笔处方，结果页支持像体检报告结果页一样切换保存归属成员；每笔处方都有自己的处方头信息、药品列表、附件关联、预校验结果和保存结果。
-
-### 第一期目标
-
-1. 处方抽取 Prompt 明确要求返回 JSON 数组。
-2. 处方抽取解码目标改为 `[PrescriptionRecognitionDraft]`。
-3. `MedicalDocumentTypedResult.prescription` 改为承载 `[PrescriptionRecognitionDraft]`。
-4. 结果页状态从单个 `batch` 改为 `batches: [PrescriptionRecognitionDraft]`。
-5. 页面复用现有 `PrescriptionBatchListSectionView` 展示多笔处方。
-6. 结果页支持切换成员，交互方式参考体检报告结果页。
-7. 每笔处方支持编辑处方头信息、编辑药品、管理处方附件、管理药品附件。
-8. 点击提交前对所有处方和药品执行本地预校验。
-9. 校验失败时复用 000003/000004 的字段高亮、折叠展开、滚动定位能力。
-10. 保存提交时按处方逐笔调用现有保存接口，并记录所有保存成功的处方 ID。
-
-### 非目标
-
-1. 不新增服务端批量保存接口，第一期客户端串行或受控并发逐笔保存。
-2. 不改变病例文档内 `CaseRecognitionDraft.prescriptions` 的已有数组结构。
-3. 不把多笔处方强行合并成一个处方。
-4. 不新增独立的多处方编辑页面，优先复用现有详情/编辑组件。
-5. 不改变药品字段、用药计划字段和服务端 payload 字段语义。
-
-## 3. 数据模型调整
-
-### 3.1 Typed Result
-
-目标结构：
-
-```swift
-enum MedicalDocumentTypedResult: Sendable, Equatable {
-    case caseDocument(CaseRecognitionDraft)
-    case healthExamReport(HealthExamRecognitionDraft)
-    case medicalReport([MedicalReportRecognitionDraft])
-    case prescription([PrescriptionRecognitionDraft])
-    case medicationPlan([MedicationPlanRecognitionDraft])
-    case medicineBoxes([MedicineBoxRecognitionDraft])
-}
-```
-
-### 3.2 兼容策略
-
-为降低改动风险，需要提供兼容入口：
-
-1. 新识别结果统一写入 `.prescription([PrescriptionRecognitionDraft])`。
-2. 如果历史调试数据、预览数据或对话结构化卡片仍传入单个 `PrescriptionRecognitionDraft`，在边界层包装成数组。
-3. 解码 AI 输出时优先按数组解码；如确实存在旧模型返回单对象，可在第一期保留 fallback：单对象解码成功后包装成单元素数组，并在 normalized JSON 中转成数组格式。
-4. UI 和保存层只消费数组，不在页面内继续维护“单笔处方特例”。
-
-### 3.3 空结果
-
-如果 AI 判断没有处方：
-
-```json
-[]
-```
-
-客户端展示空态：提示未识别到处方，可返回重新上传或手动补充，不自动创建空处方提交。
-
-## 4. AI 抽取要求
-
-### Prompt 要求
-
-处方抽取场景需要明确：
-
-1. 返回 JSON array only。
-2. 每个数组元素是一笔独立处方。
-3. 如果同一份资料中出现多张处方、多个处方号、多个开方日期或多个医生，应拆成多笔。
-4. 每笔处方内只包含属于该处方的药品列表。
-5. 不确定归属的药品可以放入最可能的处方，并在 `extra` 中标记低置信度说明。
-6. 无法识别处方时返回 `[]`，不要返回空对象。
-
-### 解码目标
-
-```swift
-let final = try await extractStructured(
-    prompt: prompt,
-    scenario: .prescriptionExtraction,
-    kindLabel: "prescription",
-    as: [PrescriptionRecognitionDraft].self,
-    preferredModelName: preferredModelName,
-    cancellationToken: cancellationToken
-)
-```
-
-解码后统一执行：
-
-1. `normalizedPrescriptionDraft(_:)` 对数组逐项处理。
-2. 去除完全空白的处方草稿。
-3. 保留含有有效药品但处方头为空的草稿，让用户在页面修正。
-4. `extractedJSON` 标准化为数组 JSON，方便调试和后续重试反馈。
-
-## 5. 结果页 UI 设计
-
-### 页面状态
-
-从：
+结果页也以单个 `batch` 管理：
 
 ```swift
 @State private var batch: PrescriptionRecognitionDraft
 ```
 
-调整为：
+这会带来几个问题：
+
+1. AI 识别到多张处方时，只能落到一个处方对象，信息容易被合并或丢失。
+2. 结果页无法天然表达“第 1 张处方 / 第 2 张处方 / 第 N 张处方”。
+3. 进入处方详情页时，目前用负数 ID 临时构造远端模型，并传入空保存/删除回调，只能展示，不能形成完整草稿编辑闭环。
+4. 用药计划详情页、药箱详情页进入后仍默认走服务端编辑/删除流程，不适合识别结果保存前的本地草稿。
+5. 识别结果页缺少处方场景下的成员切换能力，和体检报告结果页体验不一致。
+
+### 1.2 当前相关代码位置
+
+| 文件 | 当前情况 | 主要问题 |
+| --- | --- | --- |
+| `DefaultTypedMedicalDocumentExtractor.swift:344-359` | 处方按 `PrescriptionRecognitionDraft.self` 解码 | 不支持多处方数组 |
+| `Prompts.strings:333-437` | 处方 Prompt 要求输出恰好一个 JSON 对象 | 需要改为 JSON array |
+| `PrescriptionRecognitionResultContentView.swift` | `@State private var batch` 单处方状态 | 页面状态无法承载多处方 |
+| `PrescriptionResultSections.swift:350-386` | 用负数 ID 构造详情页预览数据 | 缺少正式草稿 Mode 与回调更新 |
+| `MedicationPrescriptionDetailPage.swift` | 默认服务端详情/编辑/删除 | 需要支持本地草稿预览模式 |
+| `MedicationPlanDetailPage.swift` | 默认服务端详情/编辑/删除 | 需要支持本地草稿预览模式 |
+| `MedicineBoxDetailPage.swift` | 默认服务端详情/编辑/删除 | 需要支持本地草稿预览模式 |
+
+## 2. 设计目标
+
+### 2.1 核心目标
+
+将处方识别从“单个处方草稿”升级为“处方草稿数组”，并让识别结果页中的处方、用药计划、药箱详情页都支持本地草稿预览模式。用户在保存到服务端前，可以像查看正式详情一样查看、编辑、删除识别出来的数据；所有修改只作用于识别结果页本地草稿，最终点击保存时再统一提交服务端。
+
+### 2.2 第一期目标
+
+1. 处方抽取结果改为 `[PrescriptionRecognitionDraft]`。
+2. 处方 Prompt 明确要求输出 JSON array。
+3. 识别全流程、类型结果、结果页展示、预校验、保存入参都适配处方数组。
+4. 处方结果页支持切换成员，交互参考体检报告结果页。
+5. 处方详情页支持 `Mode`，默认正常服务端模式；识别结果页进入时使用本地草稿预览模式。
+6. 用药计划详情页支持 `Mode`，默认正常服务端模式；识别结果页进入时使用本地草稿预览模式。
+7. 药箱详情页支持 `Mode`，默认正常服务端模式；识别结果页进入时使用本地草稿预览模式。
+8. 草稿模式下编辑、删除都不调用服务端，只通过回调更新识别结果页的 `[PrescriptionRecognitionDraft]`。
+9. 草稿模式下进入关联用药计划、关联药箱详情页时，继续沿用草稿模式。
+10. 结果页内所有本地编辑后，保存提交使用最新草稿值。
+
+### 2.3 非目标
+
+1. 不改变正式详情页已保存数据的服务端编辑能力。
+2. 不在详情页中直接提交识别结果。
+3. 不为草稿数据新增本地数据库持久化。
+4. 不要求服务端保存接口支持“局部草稿更新”。
+5. 不在本工单重做全部用药模块 UI。
+
+## 3. 数据模型详设
+
+### 3.1 `MedicalDocumentTypedExtractionResult` 改造
+
+当前处方分支如果是：
+
+```swift
+case prescription(PrescriptionRecognitionDraft)
+```
+
+需要改为：
+
+```swift
+case prescription([PrescriptionRecognitionDraft])
+```
+
+如果为了降低外部调用迁移成本，也可以新增语义更清晰的 case：
+
+```swift
+case prescriptions([PrescriptionRecognitionDraft])
+```
+
+推荐使用第一种：保持业务类型名不变，只改变承载值。原因是上传文档类型仍然是 `.prescription`，只是识别结果从单个改为多个。
+
+### 3.2 处方数组归一化
+
+处方抽取成功后需要统一归一化：
+
+```swift
+private static func normalizedPrescriptionDrafts(
+    _ drafts: [PrescriptionRecognitionDraft]
+) -> [PrescriptionRecognitionDraft]
+```
+
+归一化规则：
+
+1. 空数组允许返回，但结果页展示空态并提示用户可手动补充。
+2. 每个处方内 `medicationPlans` 为 `nil` 时归一化为 `[]`。
+3. 每个处方保持独立的 `medicalCase`、`prescriberName`、`institutionName`、`prescribedAt`、`diagnosis`。
+4. 每个处方内药品 `sortOrder` 如果缺失，按处方内顺序补齐。
+5. 不跨处方合并药品，避免把不同处方的用药计划混到一起。
+
+### 3.3 本地草稿详情 Mode
+
+三个详情页都需要引入明确 Mode，区分“已保存远端数据”和“识别结果本地草稿”。
+
+推荐定义：
+
+```swift
+enum MedicalResourceDetailMode: Equatable, Sendable {
+    case server
+    case localDraft
+}
+```
+
+也可以为每个页面定义更强类型的 Mode：
+
+```swift
+enum MedicationPrescriptionDetailMode: Equatable, Sendable {
+    case server
+    case localDraft
+}
+
+enum MedicationPlanDetailMode: Equatable, Sendable {
+    case server
+    case localDraft
+}
+
+enum MedicineBoxDetailMode: Equatable, Sendable {
+    case server
+    case localDraft
+}
+```
+
+推荐第一期使用各页面独立 Mode，避免一开始抽象过大。后续如果详情页草稿模式扩展到更多医疗资源，再归纳为公共 `MedicalResourceDetailMode`。
+
+### 3.4 草稿回调模型
+
+识别结果页需要知道更新的是哪一张处方、哪一个药品计划、哪一个药箱。建议以索引路径回传，不依赖临时负数 ID 作为唯一业务依据。
+
+```swift
+struct PrescriptionDraftIndexPath: Equatable, Sendable {
+    let prescriptionIndex: Int
+}
+
+struct MedicationDraftIndexPath: Equatable, Sendable {
+    let prescriptionIndex: Int
+    let medicationIndex: Int
+}
+```
+
+回调建议：
+
+```swift
+onPrescriptionDraftUpdated: (Int, PrescriptionRecognitionDraft) -> Void
+onPrescriptionDraftDeleted: (Int) -> Void
+onMedicationPlanDraftUpdated: (Int, Int, MedicationPlanRecognitionDraft) -> Void
+onMedicationPlanDraftDeleted: (Int, Int) -> Void
+onMedicineBoxDraftUpdated: (Int, Int, MedicineBoxRecognitionDraft) -> Void
+onMedicineBoxDraftDeleted: (Int, Int) -> Void
+```
+
+说明：
+
+1. 第一位 `Int` 是处方索引。
+2. 第二位 `Int` 是处方内药品/计划索引。
+3. 负数 ID 仍可用于 SwiftUI `NavigationLink` 和远端模型展示适配，但不能作为草稿状态更新的唯一依据。
+
+## 4. 处方数组识别流程详设
+
+### 4.1 Extractor 解码改造
+
+`DefaultTypedMedicalDocumentExtractor.swift:344-359` 处方分支改为：
+
+```swift
+case .prescription:
+    let final = try await extractStructured(
+        prompt: prompt,
+        scenario: .prescriptionExtraction,
+        kindLabel: "prescription",
+        as: [PrescriptionRecognitionDraft].self,
+        preferredModelName: preferredModelName,
+        cancellationToken: cancellationToken
+    )
+    guard let drafts = final.decoded else {
+        throw Self.decodingFailedError(from: final, kindLabel: "prescription")
+    }
+    let normalized = Self.normalizedPrescriptionDrafts(drafts)
+    return (
+        .prescription(normalized),
+        Self.normalizedExtractedJSON(for: .prescription(normalized), fallback: final.normalizedJSON)
+    )
+```
+
+兼容策略：
+
+1. 如果担心部分模型仍输出单对象，可在第一期引入兼容解码：先尝试 `[PrescriptionRecognitionDraft]`，失败且 JSON 是 object 时再尝试单对象并包装成数组。
+2. 兼容解码只能作为过渡，Prompt 仍必须明确要求输出 array。
+3. 解码失败自动重试时，需要提示“处方结果必须是 JSON array，即使只有一张处方也输出 `[{}]`”。
+
+### 4.2 Prompt 改造
+
+`Prompts.strings:333-437` 中处方抽取 Prompt 当前写法：
+
+```text
+严格按照我指定的 JSON 结构输出恰好一个 JSON 对象
+```
+
+需要改为：
+
+```text
+严格按照我指定的 JSON 结构输出一个 JSON 数组。数组中每个元素是一张处方对象。即使只识别到一张处方，也必须输出包含一个对象的数组。
+```
+
+输出结构从：
+
+```json
+{
+  "prescriberName": "",
+  "medicationPlans": []
+}
+```
+
+改为：
+
+```json
+[
+  {
+    "prescriberName": "",
+    "institutionName": "",
+    "prescribedAt": "",
+    "diagnosis": "",
+    "prescriptionNo": "",
+    "status": "",
+    "extra": {},
+    "medicationPlans": []
+  }
+]
+```
+
+Prompt 需要补充多处方规则：
+
+1. 多张处方不要合并为一个对象。
+2. 每张处方独立保留医生、机构、日期、诊断、处方号。
+3. 无法判断某药品属于哪张处方时，放到最接近的处方对象内，并在 `extra` 中记录低置信度原因。
+4. 只有一张处方也必须输出数组。
+5. 没有识别到处方时输出 `[]`。
+
+### 4.3 `normalizedExtractedJSON` 改造
+
+处方保存前可能依赖 `extractedJSON` 或 `typedResult`。改造后需要保证：
+
+1. `typedResult` 中是 `[PrescriptionRecognitionDraft]`。
+2. `normalizedExtractedJSON` 中保存的也是数组 JSON。
+3. 调试日志输出 preview 时避免过长，只展示前若干字符。
+
+## 5. 结果页状态与 UI 详设
+
+### 5.1 `PrescriptionRecognitionResultContentView` 状态改造
+
+当前：
+
+```swift
+@State private var batch: PrescriptionRecognitionDraft
+```
+
+改为：
 
 ```swift
 @State private var batches: [PrescriptionRecognitionDraft]
-@State private var selectedMemberID: Int?
+@State private var selectedMemberID: Int
 ```
 
-`selectedMemberID` 初始值使用 `output.envelope.memberID`，用户在结果页切换成员后同步更新。
+初始化规则：
 
-### 页面结构
+1. 如果 `output.typedResult` 是 `.prescription(let drafts)`，使用 `drafts`。
+2. 如果数组为空，展示空处方结果态。
+3. `selectedMemberID` 初始值来自 `output.envelope.memberID`。
+4. 切换成员后，更新结果页本地成员 ID，并保证后续详情页草稿模型转换使用新成员 ID。
 
-1. 顶部继续展示成员确认区域，并支持切换成员。
-2. 处方内容区展示多笔处方列表。
-3. 每笔处方卡片显示序号，例如“处方 1/3”。
-4. 卡片摘要展示机构、医生、开方日期、诊断、处方号。
-5. 每笔处方下展示该处方的药品列表。
-6. 每笔处方支持进入处方详情编辑。
-7. 每个药品支持进入药品详情编辑。
-8. 未关联附件区域继续展示未匹配到处方或药品的源文件。
+### 5.2 成员切换
 
-现有 `PrescriptionBatchListSectionView` 已接收：
+处方结果页支持切换成员，交互参考体检报告结果页。
 
-```swift
-let batches: [PrescriptionRecognitionDraft]
+需求：
+
+1. 成员确认区域展示当前成员头像/名称/关系。
+2. 点击切换成员后打开成员选择 UI。
+3. 切换成功后更新当前识别结果归属成员。
+4. 切换成员后，处方详情、用药计划详情、药箱详情中的本地草稿远端适配模型都使用新 `memberID`。
+5. 切换成员不清空处方识别结果。
+6. 切换成员后重新执行提交前预校验，因为部分规则可能依赖成员归属或资源关联。
+
+建议状态同步：
+
+```text
+用户切换成员
+  -> PrescriptionRecognitionResultContentView.selectedMemberID 更新
+  -> output envelope 的提交上下文使用 selectedMemberID
+  -> detailNavigationContext.memberID 使用 selectedMemberID
+  -> save 时把 selectedMemberID 作为最终 memberID
 ```
 
-因此页面层应优先复用它，不再新建一套多处方列表组件。
+如果当前 `MedicalDocumentTypedExtractionOutput.envelope.memberID` 是不可变值，结果页不要直接修改 envelope；由保存方法显式接收 `memberIDOverride` 或由 ViewModel 提供 `updateSelectedMemberID`。
 
-### 成员切换
+### 5.3 处方列表展示
 
-处方结果页成员切换需要参考体检报告结果页：
+`PrescriptionBatchListSectionView` 不再传 `[batch]`，直接传 `batches`。
+
+UI 需要展示：
+
+1. 处方序号：`处方 1 / N`。
+2. 医院/机构名称。
+3. 开方医生。
+4. 开方日期。
+5. 诊断。
+6. 药品数量。
+7. 附件关联状态。
+8. 校验错误角标。
+
+当 `batches.count > 1` 时，页面必须让用户清晰知道正在编辑第几张处方，避免把第二张处方误改到第一张。
+
+### 5.4 空态
+
+AI 返回 `[]` 时：
+
+1. 展示“未识别到处方信息”。
+2. 保留源文件附件区域。
+3. 提供“手动新增处方草稿”入口。
+4. 保存按钮置灰或提示必须至少有一张处方。
+
+手动新增可以第一期延后，但文档要求预留状态，不要让空数组页面崩溃。
+
+## 6. 处方详情页草稿预览模式
+
+### 6.1 页面入口
+
+识别结果页点击处方卡片进入：
 
 ```swift
-HealthExamMemberSectionView(
-    memberContextStore: memberContextStore,
-    selectedMemberID: selectedMemberID,
-    draft: draft,
-    onSelectMember: mode.isEditable ? { memberID in
-        selectedMemberID = memberID
-        viewModel?.updateResultMemberID(memberID)
-    } : nil
+MedicationPrescriptionDetailPage(
+    mode: .localDraft,
+    prescription: draft.remotePrescription(memberID: selectedMemberID, id: temporaryPrescriptionID),
+    plans: draft.medicationPlans.remoteMedicationPlans(...),
+    medicineBoxes: draft.medicationPlans.remoteMedicineBoxes(...),
+    recordsByPlanID: [:],
+    memberID: selectedMemberID,
+    ...
+    onLocalDraftPrescriptionSaved: { updatedDraft in ... },
+    onLocalDraftPrescriptionDeleted: { ... },
+    onLocalDraftMedicationPlanSaved: { medicationIndex, updatedDraft in ... },
+    onLocalDraftMedicationPlanDeleted: { medicationIndex in ... }
 )
 ```
 
-处方页对应要求：
-
-1. `PrescriptionRecognitionResultContentView` 持有 `selectedMemberID`。
-2. 成员确认区域改造为可切换形态，复用 `MemberProfileBindingMenu`。
-3. 切换成员后调用 `viewModel.updateResultMemberID(memberID)`，保证 `typedOutput.envelope.memberID` 和页面状态一致。
-4. `detailNavigationContext`、处方详情预览、药品详情预览使用当前 `selectedMemberID`。
-5. 保存提交使用当前 `selectedMemberID`，不能继续使用初始 `output.envelope.memberID`。
-6. 如果当前没有可选成员或用户清空成员，提交按钮应禁用或预校验提示“请选择成员”。
-
-建议新增或改造：
+默认正式场景仍然：
 
 ```swift
-struct PrescriptionMemberConfirmSectionView: View {
-    @ObservedObject var memberContextStore: MemberContextStore
-    let selectedMemberID: Int?
-    var onSelectMember: ((Int?) -> Void)?
-}
+mode: .server
 ```
 
-展示样式、菜单触发区域、未选择文案与 `HealthExamMemberSectionView` 保持一致，避免不同报告结果页交互割裂。
+为了兼容现有调用，`mode` 参数默认值为 `.server`。
 
-### 编辑回写
+### 6.2 草稿模式行为
 
-处方编辑回写需要带 `batchIndex`：
+| 操作 | 服务端模式 | 草稿模式 |
+| --- | --- | --- |
+| 展示 | 展示远端数据 | 展示草稿适配数据 |
+| 编辑处方 | 打开服务端编辑页，保存调用接口 | 打开本地编辑页，保存回调更新草稿 |
+| 删除处方 | 调用服务端删除接口 | 本地删除当前处方草稿并返回结果页 |
+| 解绑用药计划 | 调用服务端更新 | 本地从处方草稿中移除关联 |
+| 进入用药计划详情 | 服务端模式 | 草稿模式 |
+| 进入药箱详情 | 服务端模式 | 草稿模式 |
+
+### 6.3 编辑处方
+
+处方详情页草稿模式点击“编辑”：
+
+1. 不使用 `MedicationPrescriptionEditPage` 的服务端保存流程，除非它已经支持 `localEdit`。
+2. 推荐为编辑页增加 `Mode.localEdit`：
 
 ```swift
-case batch(index: Int, draft: PrescriptionRecognitionDraft)
-case medication(batchIndex: Int, itemIndex: Int, draft: MedicationPlanRecognitionDraft)
+MedicationPrescriptionEditPage(
+    mode: .localEdit,
+    prescription: currentPrescription,
+    plans: currentPlans,
+    ...
+    onLocalSaved: { updatedPrescription, updatedPlans in
+        currentPrescription = updatedPrescription
+        currentPlans = updatedPlans
+        onPrescriptionDraftUpdated(updatedDraft)
+    }
+)
 ```
 
-回写规则：
+3. 如果短期成本较高，可以先在结果页继续使用现有本地编辑器，详情页编辑按钮回调给结果页打开本地编辑器。但最终体验建议在详情页内完成编辑闭环。
 
-1. 编辑处方头：替换 `batches[batchIndex]`。
-2. 编辑药品：替换 `batches[batchIndex].medicationPlans[itemIndex]`。
-3. 删除药品后，如果该处方没有任何有效信息，页面可保留空处方让用户继续编辑，不自动删除。
-4. 删除处方需要二次确认，第一期可不做删除能力，只支持编辑修正。
+### 6.4 删除处方
 
-## 6. 附件关联
-
-多处方后附件关联不能再基于单个 `batch`。
-
-### 关联规则
-
-1. 处方级附件：写入对应 `batches[batchIndex].attachmentFileIds`。
-2. 药品级附件：写入对应 `batches[batchIndex].medicationPlans[itemIndex].attachmentFileIds`。
-3. `unlinkedAttachments` 需要聚合所有处方和药品已关联的附件 ID 后再求差集。
-4. 附件管理 sheet 的 target 需要包含 `batchIndex`。
-
-建议结构：
-
-```swift
-enum PrescriptionAttachmentTarget: Identifiable {
-    case batch(index: Int)
-    case medication(batchIndex: Int, itemIndex: Int)
-}
-```
-
-## 7. 预校验与定位
-
-多处方必须复用 000003/000004 的校验和定位能力。
-
-### 校验范围
-
-提交前遍历所有处方：
+草稿模式删除处方：
 
 ```text
-prescriptions[n].prescribed_at
-prescriptions[n].medication_plans[m].drug_name
-prescriptions[n].medication_plans[m].start_date
-prescriptions[n].medication_plans[m].frequency_type
+点击删除
+  -> 弹出确认
+  -> 从结果页 batches 删除对应 index
+  -> dismiss 当前详情页
+  -> 结果页列表刷新
 ```
 
-### 定位要求
+注意：
 
-1. `MedicalPreSubmitValidationIssue` 必须携带处方 index 和药品 index。
-2. 滚动 ID 必须包含 `batchIndex` 和 `itemIndex`。
-3. 多笔处方下第 2 笔第 1 个药品错误时，不能滚动到第 1 笔第 1 个药品。
-4. 错误处方卡片折叠时，点击提交需要自动展开该处方区域并滚动到错误字段。
-5. 顶部错误摘要点击某条错误，也应定位到对应处方/药品。
+1. 不调用 `workflowAPI.delete`。
+2. 删除后如果数组为空，结果页展示空态。
+3. 删除后预校验错误列表需要重新计算。
 
-000004 已对多处方定位 ID 做了要求，本工单需要在独立处方结果页真正接入数组状态后验证。
+## 7. 用药计划详情页草稿预览模式
 
-## 8. 保存提交编排
+### 7.1 页面入口
 
-### 保存策略
-
-第一期不新增批量接口，客户端逐笔保存：
-
-```text
-for draft in batches:
-    savePrescriptionWithPlans(selectedMemberID, draft, envelope, now)
-```
-
-保存前必须确认 `selectedMemberID` 有值，并已同步到 `viewModel.updateResultMemberID(selectedMemberID)`。
-
-建议串行保存，原因：
-
-1. 用户一次识别的处方数量通常不大。
-2. 串行更容易处理部分成功、失败提示和日志定位。
-3. 不需要服务端保证批量事务。
-
-### 部分成功处理
-
-保存过程中可能出现第 1 笔成功、第 2 笔失败：
-
-1. 保存成功的处方 ID 需要记录到回执里。
-2. 失败时提示“已保存 n 笔，m 笔失败”，保留页面草稿，允许用户修正后重新提交。
-3. 已成功保存的处方再次提交前需要有保护策略，避免重复创建。第一期建议保存成功后禁用整页再次提交，失败场景再按具体保存结果设计重试。
-
-### 回执设计
-
-当前 `MedicalDocumentSaveReceipt` 只有单个 `recordID` 时，需要扩展或新增多记录回执能力：
+处方结果页或处方详情页进入某条用药计划时：
 
 ```swift
-struct MedicalDocumentSaveReceipt {
-    let recordID: Int
-    let savedRecordIDs: [Int]
-    let savedAt: Date
-    let isSuccess: Bool
+MedicationPlanDetailPage(
+    mode: .localDraft,
+    plan: draft.remoteMedicationPlan(...),
+    medicineBoxes: [draft.remoteMedicineBox(...)],
+    records: [],
+    memberID: selectedMemberID,
+    ...
+    onLocalDraftSaved: { updatedPlanDraft in ... },
+    onLocalDraftDeleted: { ... },
+    onLocalDraftMedicineBoxSaved: { updatedBoxDraft in ... },
+    onLocalDraftMedicineBoxDeleted: { ... }
+)
+```
+
+默认正式入口仍是 `.server`。
+
+### 7.2 草稿模式行为
+
+| 操作 | 服务端模式 | 草稿模式 |
+| --- | --- | --- |
+| 编辑计划 | 调用服务端编辑保存 | 本地编辑 `MedicationPlanRecognitionDraft` |
+| 删除计划 | 调用服务端删除 | 从对应处方的 `medicationPlans` 删除 |
+| 关联药箱点击 | 进入服务端药箱详情 | 进入草稿药箱详情 |
+| 病历绑定模块 | 可服务端绑定/解绑 | 第一期开只读或隐藏，避免误调用服务端 |
+| 服药记录 | 展示真实记录 | 草稿模式无记录，展示空态或隐藏 |
+
+### 7.3 嵌套进入时的草稿回传编排
+
+草稿模式可能有两种入口：
+
+1. 结果页直接点击某个药品，进入 `MedicationPlanDetailPage`。
+2. 结果页先进入 `MedicationPrescriptionDetailPage`，再从处方详情页点击某个关联用药计划，进入 `MedicationPlanDetailPage`。
+
+第二种是本工单重点场景。数据回传不能只停留在 `MedicationPlanDetailPage` 内部，也不能只更新 `MedicationPrescriptionDetailPage.currentPlans`，必须最终回写到结果页的：
+
+```swift
+batches[prescriptionIndex].medicationPlans?[medicationIndex]
+```
+
+推荐回调链路：
+
+```text
+MedicationPlanDetailPage(localDraft)
+  -> onLocalDraftSaved(updatedMedicationDraft)
+  -> MedicationPrescriptionDetailPage 更新 currentPlans / medicineBoxesByID
+  -> MedicationPrescriptionDetailPage 调用 onLocalDraftMedicationPlanSaved(medicationIndex, updatedMedicationDraft)
+  -> PrescriptionResultSections 回调 onUpdateMedication(prescriptionIndex, medicationIndex, updatedMedicationDraft)
+  -> PrescriptionRecognitionResultContentView 更新 batches[prescriptionIndex].medicationPlans[medicationIndex]
+  -> 结果页卡片、预校验、保存 payload 使用最新值
+```
+
+删除回调链路：
+
+```text
+MedicationPlanDetailPage(localDraft)
+  -> onLocalDraftDeleted()
+  -> MedicationPrescriptionDetailPage 从 currentPlans 删除对应 plan，并同步 medicineBoxesByID
+  -> MedicationPrescriptionDetailPage 调用 onLocalDraftMedicationPlanDeleted(medicationIndex)
+  -> PrescriptionResultSections 回调 onDeleteMedication(prescriptionIndex, medicationIndex)
+  -> PrescriptionRecognitionResultContentView 删除 batches[prescriptionIndex].medicationPlans[medicationIndex]
+  -> 结果页刷新药品数量、错误列表和保存 payload
+```
+
+关键要求：
+
+1. `MedicationPrescriptionDetailPage` 进入用药计划详情时必须携带 `prescriptionIndex` 和 `medicationIndex`，不能只靠负数 `plan.id` 反查。
+2. `MedicationPlanDetailPage` 草稿模式保存后，先更新自身 `currentPlan`，再触发外部回调。
+3. `MedicationPrescriptionDetailPage` 收到保存回调后，要同步更新本页局部状态，避免用户返回处方详情时仍看到旧数据。
+4. `PrescriptionRecognitionResultContentView` 收到最终回调后，要更新 `batches`，这是最终提交数据源。
+5. 删除计划后，需要同时清理对应药箱草稿；如果该药箱只属于这条计划，应从 `medicineBoxesByID` 移除。
+6. 删除计划后不要自动删除处方草稿；处方可以保留为空处方，由预校验提示用户补充或删除。
+7. 回调过程中任何 index 越界都应安全忽略并记录 Debug 日志，不要崩溃。
+
+建议 `MedicationPrescriptionDetailPage` 新增草稿回调参数：
+
+```swift
+let onLocalDraftMedicationPlanSaved: ((Int, MedicationPlanRecognitionDraft) -> Void)?
+let onLocalDraftMedicationPlanDeleted: ((Int) -> Void)?
+let onLocalDraftMedicineBoxSaved: ((Int, MedicineBoxRecognitionDraft) -> Void)?
+let onLocalDraftMedicineBoxDeleted: ((Int) -> Void)?
+```
+
+其中 `Int` 是当前处方内的 `medicationIndex`。
+
+建议 `MedicationPlanDetailPage` 新增草稿回调参数：
+
+```swift
+let onLocalDraftSaved: ((MedicationPlanRecognitionDraft) -> Void)?
+let onLocalDraftDeleted: (() -> Void)?
+let onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)?
+let onLocalDraftMedicineBoxDeleted: (() -> Void)?
+```
+
+`MedicationPlanDetailPage` 不需要知道自己属于第几张处方，index path 由上层 `MedicationPrescriptionDetailPage` 捕获并闭包绑定。
+
+### 7.4 编辑计划
+
+用药计划详情页草稿模式点击编辑：
+
+1. 使用本地编辑模式，不调用 `workflowAPI`。
+2. 编辑保存后把 `RemoteMedicationPlan` 适配回 `MedicationPlanRecognitionDraft`，或直接让编辑页操作 draft 模型。
+3. 更新路径是 `batches[prescriptionIndex].medicationPlans[medicationIndex]`。
+4. 同步更新关联的 `medicineBox` 草稿字段，避免详情页看到的药品信息和药箱信息不一致。
+5. 如果入口来自处方详情页，需要同时更新 `MedicationPrescriptionDetailPage.currentPlans`，否则用户从用药计划详情返回处方详情时会看到旧计划。
+6. 保存回调最终必须回到 `PrescriptionRecognitionResultContentView.batches`，否则点击结果页保存时仍会提交旧数据。
+
+编辑保存伪代码：
+
+```swift
+private func handleLocalDraftPlanSaved(
+    medicationIndex: Int,
+    updatedDraft: MedicationPlanRecognitionDraft
+) {
+    guard currentPlans.indices.contains(medicationIndex) else { return }
+
+    let updatedPlan = updatedDraft.remoteMedicationPlan(
+        memberID: memberID,
+        id: currentPlans[medicationIndex].id,
+        prescriptionID: currentPrescription?.id,
+        medicineBoxID: currentPlans[medicationIndex].medicineBox,
+        medicalCaseID: currentPrescription?.medicalCase
+    )
+
+    currentPlans[medicationIndex] = updatedPlan
+
+    if let updatedBox = updatedDraft.medicineBox?.remoteMedicineBox(...) {
+        medicineBoxesByID[updatedBox.id] = updatedBox
+    }
+
+    onLocalDraftMedicationPlanSaved?(medicationIndex, updatedDraft)
 }
 ```
 
-如果不想立刻改公共回执结构，处方保存层可以先用 `recordID = firstSavedID`，并在 `extra`/新增展示模型里保存全部 ID；但长期建议公共回执支持多 ID，因为医疗报告、药箱、多处方都存在多记录保存场景。
+### 7.5 删除计划
 
-## 9. 涉及文件
+草稿模式删除计划：
 
-| 文件 | 改动 |
-| --- | --- |
-| `MedicalDocumentTypedModels.swift` | `MedicalDocumentTypedResult.prescription` 从单个 draft 改为 `[PrescriptionRecognitionDraft]` |
-| `DefaultTypedMedicalDocumentExtractor.swift` | 处方抽取按数组解码，单对象 fallback 包装为数组，normalized JSON 输出数组 |
-| `MedicalDocumentUploadViewModel.swift` | 更新 typed result 更新、保存前预校验、调试预览和错误处理中的处方数组分支 |
-| `PrescriptionRecognitionResultContentView.swift` | 页面状态改为 `batches`，增加 `selectedMemberID`，切换成员后同步 `updateResultMemberID`，提交前写回 `.prescription(batches)` |
-| `PrescriptionResultSections.swift` | 复核多处方展示、编辑、附件、定位 ID，改造成员确认区支持 `MemberProfileBindingMenu` |
-| `PrescriptionRecognitionResultSupport.swift` | 编辑器状态增加 `batchIndex` |
-| `MedicalPreSubmitValidator.swift` | 独立处方页按 `[PrescriptionRecognitionDraft]` 校验 |
-| `MedicalPreSubmitValidationIssue.swift` | 确认 issue 字段路径、scrollTargetID 支持 `prescriptions[n]` |
-| `DefaultTypedMedicalDocumentSaver.swift` | 新增或调整多处方保存编排，逐笔调用现有保存方法 |
-| `MedicalDocumentSaveReceipt` 相关文件 | 如需要，支持多记录 ID 回执展示 |
-| `PrescriptionRecognitionResultView` Preview | 预览数据改为多笔处方，覆盖 2 笔处方、多药品场景 |
+```text
+点击删除
+  -> 确认
+  -> MedicationPlanDetailPage 调用 onLocalDraftDeleted
+  -> MedicationPrescriptionDetailPage 删除 currentPlans[medicationIndex]
+  -> MedicationPrescriptionDetailPage 调用 onLocalDraftMedicationPlanDeleted(medicationIndex)
+  -> 删除 batches[prescriptionIndex].medicationPlans[medicationIndex]
+  -> dismiss
+  -> 结果页刷新处方药品数量
+```
 
-## 10. 兼容影响
+删除后该处方没有药品时，处方仍可保留，但提交前预校验应提示处方至少需要一条有效药品，除非服务端允许空处方。
 
-### 对病例识别的影响
+删除处理伪代码：
 
-病例识别内 `CaseRecognitionDraft.prescriptions` 已经是数组，不需要改变语义。但如果共用处方卡片、编辑弹窗或校验逻辑，需要确保独立处方页和病例页都传入正确的 `batchIndex`。
+```swift
+private func handleLocalDraftPlanDeleted(medicationIndex: Int) {
+    guard currentPlans.indices.contains(medicationIndex) else { return }
 
-### 对对话结构化卡片的影响
+    let removedPlan = currentPlans.remove(at: medicationIndex)
+    if let boxID = removedPlan.medicineBox {
+        medicineBoxesByID.removeValue(forKey: boxID)
+    }
 
-对话内保存处方卡片如果当前仍是单个 `PrescriptionRecognitionDraft`，第一期不强制改为多卡片。但进入识别结果页时需要在边界层包装为单元素数组，避免编译期和运行期断裂。
+    onLocalDraftMedicationPlanDeleted?(medicationIndex)
+}
+```
 
-### 对已保存数据的影响
+结果页最终处理：
 
-本工单不涉及 CoreData 迁移或服务端历史数据迁移。因为识别结果页是临时草稿态，保存后仍落到既有处方和用药计划资源。
+```swift
+private func deleteMedicationDraft(
+    prescriptionIndex: Int,
+    medicationIndex: Int
+) {
+    guard batches.indices.contains(prescriptionIndex) else { return }
+    guard var plans = batches[prescriptionIndex].medicationPlans,
+          plans.indices.contains(medicationIndex)
+    else { return }
 
-## 11. 验收标准
+    plans.remove(at: medicationIndex)
+    batches[prescriptionIndex].medicationPlans = plans
+    refreshPreSubmitValidation()
+}
+```
 
-1. AI 返回两个处方对象时，结果页展示两张处方卡片。
-2. 结果页顶部成员区域可切换成员，交互与体检报告结果页一致。
-3. 切换成员后，详情预览和保存提交均使用新成员 ID。
-4. 每张处方卡片展示自己的机构、医生、日期、诊断、处方号和药品列表。
-5. 编辑第 2 笔处方头信息后，不影响第 1 笔处方。
-6. 编辑第 2 笔第 1 个药品后，不影响其他处方药品。
-7. 附件可分别关联到处方级和药品级，未关联附件区域显示正确。
-8. 第 2 笔处方存在校验错误时，提交后自动展开并滚动到第 2 笔对应字段。
-9. 保存提交后，服务端在当前选中成员下生成多条处方记录及对应用药计划。
-10. 保存成功回执能展示或至少记录所有保存成功的处方 ID。
-11. AI 返回单对象旧格式时，客户端可兼容包装成单笔数组展示。
-12. AI 返回 `[]` 时，页面展示空态，不允许提交空处方。
+注意：
 
-## 12. 风险与注意事项
+1. 删除后 SwiftUI `NavigationLink` 返回时，列表 index 会变化，后续点击必须使用最新 index。
+2. 删除后如果存在校验错误指向被删除的 `prescriptions[n].medicationPlans[m]`，需要清理或重算。
+3. 如果当前处方详情页还停留在旧的 plan 列表，需要删除后立即刷新 `currentPlans`，不要等结果页刷新。
+4. 如果删除的是最后一个计划，处方详情页药品区展示空态，不自动关闭处方详情页。
 
-1. 不要只改 UI 为数组，Extractor 和 Saver 仍然单笔，否则会形成“看起来支持多笔，实际只保存第一笔”的假支持。
-2. 不要把多笔处方合并成一个 `PrescriptionRecognitionDraft`，这会破坏处方号、开方日期和药品归属。
-3. 滚动定位 ID 必须包含处方 index，避免多处方下定位错位。
-4. 成员切换后保存不能继续读取旧的 `output.envelope.memberID`，否则会保存到错误成员。
-5. 切换成员后详情预览也要使用新成员 ID，否则页面看到的是新成员但详情里还是旧成员。
-6. 保存逐笔执行时要明确部分成功策略，避免重复提交造成重复处方。
-7. Prompt 改为数组后，需要继续保留 000001/000002 的解码失败反馈和自动重试能力。
+## 8. 药箱详情页草稿预览模式
+
+### 8.1 页面入口
+
+用药计划详情页草稿模式下点击关联药箱，必须继续草稿模式：
+
+```swift
+MedicineBoxDetailPage(
+    mode: .localDraft,
+    box: draft.remoteMedicineBox(...),
+    entryMemberID: selectedMemberID,
+    ...
+    onLocalDraftSaved: { updatedBoxDraft in ... },
+    onLocalDraftDeleted: { ... }
+)
+```
+
+默认正式入口仍是 `.server`。
+
+### 8.2 草稿模式行为
+
+| 操作 | 服务端模式 | 草稿模式 |
+| --- | --- | --- |
+| 编辑药箱 | `MedicineBoxFormView(mode: .serverEdit)` | `MedicineBoxFormView(mode: .localEdit)` |
+| 删除药箱 | 调用服务端删除 | 本地清空或删除对应药品的药箱字段 |
+| 归属成员 | 服务端字段 | 使用结果页当前成员 |
+| 附件 | 服务端附件 | 使用识别源文件或本地附件快照 |
+
+### 8.3 编辑药箱
+
+药箱详情页草稿模式点击编辑：
+
+1. `MedicineBoxFormView` 增加 `localEdit` 模式。
+2. 本地编辑保存后回调更新 `MedicationPlanRecognitionDraft.medicineBox`。
+3. 如果药箱字段和用药计划字段有重叠，例如 `medicineName`、`brandName`、`dosageForm`、`strength`，需要明确同步策略。
+
+推荐同步策略：
+
+1. 药箱是药品基础信息主来源。
+2. 编辑药箱基础字段后，同步更新用药计划中的药品展示字段。
+3. 用药计划中的剂量、频次、提醒时间不受药箱编辑影响。
+
+### 8.4 删除药箱
+
+草稿模式删除药箱有两种设计：
+
+方案 A：删除整个药品计划。
+
+方案 B：只清空药箱信息，保留用药计划。
+
+推荐第一期使用方案 B：
+
+1. 删除药箱只清空 `MedicationPlanRecognitionDraft.medicineBox`。
+2. 保留 `medicineName`、`dosePerTime`、`frequencyText` 等计划字段。
+3. 提交前预校验根据服务端要求判断是否必须补齐药箱信息。
+
+这样用户不会因为误删药箱而丢掉完整用药计划。
+
+## 9. 草稿与远端模型转换
+
+### 9.1 转换方向
+
+现有结果页已有类似转换：
+
+```swift
+draft.remotePrescription(memberID:id:)
+draft.remoteMedicationPlan(memberID:id:prescriptionID:medicineBoxID:medicalCaseID:)
+draft.remoteMedicineBox(memberID:id:)
+```
+
+000006 需要补齐反向转换：
+
+```swift
+PrescriptionRecognitionDraft.updated(from remote: RemotePrescription, plans: [RemoteMedicationPlan], boxes: [RemoteMedicineBox])
+MedicationPlanRecognitionDraft.updated(from plan: RemoteMedicationPlan, box: RemoteMedicineBox?)
+MedicineBoxRecognitionDraft.updated(from box: RemoteMedicineBox)
+```
+
+也可以使用专门 Mapper：
+
+```swift
+enum PrescriptionRecognitionDraftMapper {
+    static func makeRemotePrescription(...)
+    static func makeRemoteMedicationPlan(...)
+    static func makeRemoteMedicineBox(...)
+    static func updateDraft(...)
+}
+```
+
+推荐使用 Mapper，避免把大量转换逻辑散落在 SwiftUI View 内。
+
+### 9.2 临时 ID 规则
+
+草稿模式可以继续使用负数 ID 适配现有详情页：
+
+```text
+prescriptionID = -20_000 - prescriptionIndex
+medicineBoxID = -30_000 - prescriptionIndex * 100 - medicationIndex
+planID        = -40_000 - prescriptionIndex * 100 - medicationIndex
+```
+
+规则要求：
+
+1. ID 只用于页面展示、NavigationLink identity、远端模型适配。
+2. 草稿更新必须优先使用 index path。
+3. 保存到服务端前不能把负数 ID 当真实 ID 上送。
+4. 保存成功后服务端返回真实 ID，由保存回执展示。
+
+## 10. 提交保存流程
+
+### 10.1 保存入参
+
+处方保存时使用最新：
+
+```swift
+batches: [PrescriptionRecognitionDraft]
+memberID: selectedMemberID
+sourceFiles: output.envelope.sourceFiles
+```
+
+服务端已支持多处方一次性提交，客户端不要按处方一条一条循环调用保存接口。
+
+后端目标接口：
+
+```text
+POST /api/v1/medical/combined-create/
+```
+
+后端当前契约要点：
+
+1. 请求体使用 `prescriptions: []` 承载多张处方。
+2. 每个处方对象内使用 `medication_plans: []` 承载该处方下的用药计划。
+3. 服务端在同一个 `transaction.atomic` 中处理成员、病例、处方、药箱、用药计划与附件绑定。
+4. 返回值包含 `prescription_ids`、`medicine_box_ids`、`medication_plan_ids`。
+5. 客户端提交前必须一次性组装完整 payload，不要对 `batches` 做逐条网络提交。
+
+保存流程：
+
+```text
+点击保存
+  -> 本地预校验 [PrescriptionRecognitionDraft]
+  -> 如果有错误：高亮、展开、滚动
+  -> 如果通过：组装 combined-create payload
+  -> 一次请求提交 prescriptions 数组
+  -> 服务端事务内批量创建处方、药箱、用药计划与附件绑定
+  -> 返回保存回执
+```
+
+请求结构示意：
+
+```json
+{
+  "member": {
+    "id": 335
+  },
+  "medical_case": {
+    "title": "处方识别",
+    "diagnosis_summary": "..."
+  },
+  "prescriptions": [
+    {
+      "institution_name": "医院名称",
+      "prescriber_name": "医生姓名",
+      "prescribed_at": "2026-06-13",
+      "diagnosis": "诊断",
+      "prescription_no": "处方号",
+      "source_file_ids": [1, 2],
+      "medication_plans": [
+        {
+          "drug_name": "药品名称",
+          "dose_per_time": "1片",
+          "dose_value": "1",
+          "dose_unit": "片",
+          "frequency_type": "daily",
+          "frequency_text": "每日三次",
+          "reminder_times": [
+            {
+              "time": "08:00",
+              "dose": 1
+            }
+          ],
+          "start_date": "2026-06-13",
+          "instructions": "餐后口服",
+          "medicine_box": {
+            "medicine_name": "药品名称",
+            "dosage_form": "片剂",
+            "dose_unit": "片"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+客户端适配要求：
+
+1. `DefaultTypedMedicalDocumentSaver` 或对应保存用例需要新增/调整“处方数组保存”分支，直接调用 combined-create。
+2. `batches` 中每张处方转换为 `prescriptions[]` 的一个元素。
+3. 处方级附件写入对应处方元素的 `source_file_ids`。
+4. 药品级附件按服务端当前契约映射到对应 `medication_plans[]` 或保持当前已支持字段，不能丢失。
+5. 返回的 `prescription_ids` 顺序默认按请求 `prescriptions[]` 创建顺序对应；如服务端未来返回更细的映射，客户端优先使用显式映射。
+6. 任意一张处方校验失败时，服务端事务整体失败；客户端应保留草稿并展示错误，不要尝试自动拆分重提。
+
+### 10.2 预校验适配
+
+`MEDICAL-AI-OCR-000003` 和 `000004` 的预校验与滚动定位需要支持处方数组。
+
+issue path 示例：
+
+```text
+prescriptions[0].institutionName
+prescriptions[0].medicationPlans[1].medicineName
+prescriptions[1].medicationPlans[0].dosePerTime
+```
+
+滚动目标 ID 示例：
+
+```swift
+"prescription.0"
+"prescription.0.medication.1"
+"prescription.1.medication.0.field.medicineName"
+```
+
+要求：
+
+1. 多处方下不能定位到错误处方。
+2. 折叠状态下先展开对应处方，再滚动到字段。
+3. 编辑/删除草稿后，需要清理已不存在 index 的错误。
+
+### 10.3 保存后回执
+
+保存成功后回执需要展示多处方结果：
+
+1. 保存成功处方数量。
+2. 保存成功用药计划数量。
+3. 保存成功药箱数量。
+4. 每张处方的真实 ID。
+5. 本次保存使用服务端事务批量提交，失败时按整体失败处理，保留草稿供用户修复后重新一次性提交。
+
+第一期不设计“部分成功/部分失败”的客户端分支；如果服务端返回字段级错误，映射到 000003/000004 的本地错误展示与定位能力。
+
+## 11. 导航与页面挂载
+
+### 11.1 处方结果页到处方详情
+
+`PrescriptionResultSections.swift:350-386` 当前构造详情页的位置，需要增加：
+
+1. `mode: .localDraft`
+2. `prescriptionIndex`
+3. 本地保存/删除回调
+4. 选中成员 ID
+
+伪代码：
+
+```swift
+private func prescriptionDetailDestination(
+    index: Int,
+    batch: PrescriptionRecognitionDraft,
+    context: MedicalDocumentResultDetailNavigationContext
+) -> some View {
+    MedicationPrescriptionDetailPage(
+        mode: .localDraft,
+        prescription: mapper.remotePrescription(...),
+        plans: mapper.remotePlans(...),
+        medicineBoxes: mapper.remoteBoxes(...),
+        ...
+        onLocalDraftPrescriptionSaved: { updated in
+            onUpdateBatch?(index, updated)
+        },
+        onLocalDraftPrescriptionDeleted: {
+            onDeleteBatch?(index)
+        },
+        onLocalDraftMedicationPlanSaved: { medicationIndex, updated in
+            onUpdateMedication?(index, medicationIndex, updated)
+        },
+        onLocalDraftMedicationPlanDeleted: { medicationIndex in
+            onDeleteMedication?(index, medicationIndex)
+        }
+    )
+}
+```
+
+### 11.2 处方结果页到单条药品详情
+
+`medicationDetailDestination` 也需要传草稿模式：
+
+```swift
+MedicationPlanDetailPage(
+    mode: .localDraft,
+    ...
+)
+```
+
+并且编辑/删除回调最终落回：
+
+```swift
+batches[batchIndex].medicationPlans?[itemIndex] = updatedDraft
+```
+
+### 11.3 用药计划详情到药箱详情
+
+`MedicationPlanDetailPage` 内部点击关联药箱时：
+
+```swift
+MedicineBoxDetailPage(
+    mode: mode == .localDraft ? .localDraft : .server,
+    ...
+)
+```
+
+不要在草稿模式下进入服务端药箱详情，否则用户编辑会误触发接口。
+
+## 12. 页面 UI 细节
+
+### 12.1 结果页处方数组
+
+处方卡片建议：
+
+```text
+处方 1/3                  校验异常 2
+上海市xx医院 · 张医生
+2026-06-13 · 感冒/咳嗽
+药品 4 项
+
+[查看详情] [编辑] [管理附件]
+```
+
+多处方列表要求：
+
+1. 每张卡片标题带序号。
+2. 药品列表也带局部序号。
+3. 错误态在对应处方卡片上展示角标。
+4. 点击处方卡片进入处方详情草稿预览。
+5. 点击单个药品进入用药计划详情草稿预览。
+
+### 12.2 草稿详情页提示
+
+详情页草稿模式需要有轻量提示，避免用户误以为已经保存：
+
+```text
+识别结果预览，修改仅保存到当前草稿，点击结果页保存后才会写入医疗档案。
+```
+
+位置建议：
+
+1. 详情页顶部 Section。
+2. 使用系统浅色提示样式，不做强干扰。
+3. 正式服务端模式不展示。
+
+### 12.3 草稿模式禁用项
+
+草稿模式下建议隐藏或只读：
+
+1. 病历绑定/解绑服务端操作。
+2. 服药记录服务端数据。
+3. 已保存附件的服务端管理入口。
+4. 任何会直接调用 `workflowAPI` 的按钮。
+
+## 13. 涉及文件与改动内容
+
+| 文件 | 改动内容 | 影响 |
+| --- | --- | --- |
+| `DefaultTypedMedicalDocumentExtractor.swift` | 处方分支解码改为 `[PrescriptionRecognitionDraft]`；归一化数组；可选兼容单对象包装 | AI 抽取核心 |
+| `Prompts.strings` | 处方抽取 Prompt 改为输出 JSON array；补充多处方规则 | 模型输出约束 |
+| `MedicalDocumentTypedExtractionOutput` / typed result 定义 | `.prescription` 承载值改为数组 | 全流程数据结构 |
+| `PrescriptionRecognitionResultContentView.swift` | `batch` 改为 `batches`；支持成员切换；保存使用最新数组 | 结果页状态 |
+| `PrescriptionResultSections.swift` | 多处方展示；详情页传 `mode: .localDraft`；补齐本地更新/删除回调 | 结果页 UI 与导航 |
+| `MedicationPrescriptionDetailPage.swift` | 增加 `Mode`；草稿模式编辑/删除只走本地回调；关联计划继续草稿模式 | 处方详情 |
+| `MedicationPlanDetailPage.swift` | 增加 `Mode`；草稿模式编辑/删除只走本地回调；关联药箱继续草稿模式 | 用药计划详情 |
+| `MedicineBoxDetailPage.swift` | 增加 `Mode`；草稿模式编辑/删除只走本地回调 | 药箱详情 |
+| `MedicationPrescriptionEditPage.swift` | 可选：增加 `localEdit` 模式 | 处方本地编辑 |
+| `MedicineBoxFormView.swift` | 增加 `localEdit` 模式 | 药箱本地编辑 |
+| 新增 `PrescriptionRecognitionDraftMapper.swift` | 负责 draft 与 remote 模型互转、临时 ID 生成 | 降低 View 复杂度 |
+| `DefaultTypedMedicalDocumentSaver.swift` / 保存用例 | 处方数组保存走 `/api/v1/medical/combined-create/` 一次提交，不做处方级循环请求 | 保存编排 |
+| `SparkMedicalWorkflowAPI` / 医疗接口层 | 补齐 combined-create 批量保存 payload 和响应模型，接收 `prescription_ids`、`medicine_box_ids`、`medication_plan_ids` | 客户端网络契约 |
+| `SparkService/medical/views.py` | 复用现有 `combined-create` 的 `prescriptions` 数组能力；不需要新增逐条接口 | 服务端契约 |
+| `MedicalPreSubmitValidation` 相关文件 | 支持处方数组 issue path 和滚动目标 | 预校验 |
+| `Localizable.strings` | 增加草稿预览提示、处方数组空态、成员切换文案 | 本地化 |
+
+## 14. 验收标准
+
+### 14.1 处方数组识别
+
+1. AI 只识别到一张处方时，结果为 `[PrescriptionRecognitionDraft]`，页面展示 1 张处方。
+2. AI 识别到多张处方时，页面展示多张处方卡片。
+3. AI 返回 `[]` 时页面不崩溃，展示空态。
+4. `extractedJSON` 保存为数组 JSON。
+5. 解码失败自动重试时，能提示模型必须输出数组。
+
+### 14.2 成员切换
+
+1. 处方结果页可切换成员。
+2. 切换成员后，处方详情、用药计划详情、药箱详情展示的新 memberID 一致。
+3. 切换成员后保存，资源归属为新成员。
+4. 切换成员不丢失已编辑草稿。
+
+### 14.3 处方详情草稿模式
+
+1. 识别结果页进入处方详情时为草稿模式。
+2. 草稿模式下编辑处方不调用服务端。
+3. 草稿模式下删除处方不调用服务端，并能从结果页移除。
+4. 编辑后返回结果页，处方卡片内容同步更新。
+5. 正式医疗档案入口进入处方详情仍是服务端模式。
+
+### 14.4 用药计划详情草稿模式
+
+1. 识别结果页进入单条药品/用药计划详情时为草稿模式。
+2. 草稿模式下编辑计划不调用服务端。
+3. 草稿模式下删除计划不调用服务端，并能从对应处方移除。
+4. 编辑后结果页药品卡片同步更新。
+5. 草稿模式下点击关联药箱，进入药箱草稿详情。
+
+### 14.5 药箱详情草稿模式
+
+1. 草稿模式下药箱编辑不调用服务端。
+2. 编辑药箱后，同步更新对应用药计划中的药品基础信息。
+3. 删除药箱时不丢失整条用药计划。
+4. 正式药箱列表入口进入仍是服务端模式。
+
+### 14.6 预校验与保存
+
+1. 多处方下提交前预校验能定位到正确处方和药品。
+2. 折叠处方存在错误时，点击保存能展开对应处方并滚动到错误字段。
+3. 编辑/删除草稿后，错误列表同步刷新。
+4. 保存提交使用编辑后的最新数组。
+5. 保存成功回执能表达多处方保存结果。
+
+## 15. 风险与注意事项
+
+1. 不要用负数临时 ID 反向推断业务位置，草稿更新必须使用 index path。
+2. 不要在草稿模式下误调用 `workflowAPI`，这是本工单最重要的边界。
+3. 不要把处方数组强行合并成一个处方，否则会破坏真实医疗语义。
+4. `PrescriptionRecognitionResultContentView` 不要继续堆大量转换逻辑，建议抽到 Mapper。
+5. 详情页 Mode 先做页面内独立枚举即可，不要为了“统一”提前抽象出庞大的医疗资源编辑框架。
+6. Prompt 改成数组后，所有测试样例都要同步更新，否则会误判解码失败。
+7. 处方数组保存必须走服务端 `combined-create` 批量事务接口；不要在客户端按处方循环提交，否则会造成部分成功、重复创建和附件归属不一致。
+8. 草稿模式的本地编辑必须和最终保存模型一致，避免用户看到的内容和实际提交内容不一致。
+
+## 16. 建议实现顺序
+
+1. 先改数据结构：`.prescription([PrescriptionRecognitionDraft])`。
+2. 再改 Extractor：处方按数组解码、归一化、输出数组 JSON。
+3. 再改 Prompt：要求输出数组。
+4. 改结果页：`batch` -> `batches`，先完成多处方展示和保存。
+5. 增加成员切换：复用体检报告结果页交互。
+6. 增加 Mapper：集中处理 draft/remote 转换和临时 ID。
+7. 给处方详情页增加 `mode` 和草稿编辑/删除回调。
+8. 给用药计划详情页增加 `mode` 和草稿编辑/删除回调。
+9. 给药箱详情页增加 `mode` 和草稿编辑/删除回调。
+10. 接入 `/api/v1/medical/combined-create/`，把 `batches` 一次性组装为 `prescriptions` 数组提交。
+11. 补齐预校验 path、滚动定位和保存回执。
+
+这个顺序可以避免一开始就同时改抽取、UI、详情页和保存流程，降低回归风险。
+
+## 工单 `MEDICAL-AI-OCR-000007`：处方提交前 dose_value 数值预校验修复
+
+### 工单状态
+
+修复需求/待实现。
+
+## 1. 问题背景
+
+处方识别结果页点击提交后，客户端已经进入 `/api/v1/medical/combined-create/` 保存流程，但本地预校验没有拦住 `dose_value` 非数字问题，导致服务端返回 400。
+
+典型服务端错误：
+
+```text
+POST /api/v1/medical/combined-create/ status=400
+body={"code": -1, "msg": {"dose_value": ["A valid number is required."]}, "data": null}
+```
+
+典型请求片段：
+
+```json
+{
+  "drug_name": "阿托伐他汀钙片",
+  "dose_per_time": "1片",
+  "dose_value": "20mg",
+  "dose_unit": "片"
+}
+```
+
+```json
+{
+  "drug_name": "硫酸氨氯吡格雷片",
+  "dose_per_time": "3片",
+  "dose_value": "225mg",
+  "dose_unit": "片"
+}
+```
+
+服务端 `dose_value` 字段要求是纯数值。`20mg`、`225mg` 这类“数值 + 单位”的字符串不符合服务端存储规则，应在客户端提交前被本地预校验拦截。
+
+## 2. 修复目标
+
+1. 处方数组提交前必须校验每条 `medicationPlans[n].doseValue`。
+2. `doseValue` 非空时必须是服务端可接受的数字字符串。
+3. 发现 `20mg`、`225mg`、`1片`、`半片`、`1滴` 这类非纯数字值时，不发起 `/api/v1/medical/combined-create/`。
+4. 在结果页顶部展示本地预校验错误摘要。
+5. 高亮对应处方下的对应药品卡片。
+6. 如果卡片在折叠模块内，复用 000004：先展开，再滚动定位。
+7. 提示用户去编辑对应药品，把 `doseValue` 改为纯数字，单位放到 `doseUnit` 或 `dosePerTime`。
+
+## 3. 校验规则
+
+### 3.1 字段范围
+
+需要覆盖：
+
+```text
+MedicalDocumentTypedResult.prescription([PrescriptionRecognitionDraft])
+  -> prescriptions[n].medicationPlans[m].doseValue
+
+MedicalDocumentTypedResult.medicationPlan([MedicationPlanRecognitionDraft])
+  -> medicationPlans[m].doseValue
+
+CaseRecognitionDraft.prescriptions[n].medicationPlans[m].doseValue
+```
+
+本工单重点修复处方结果页，但公共预校验器应尽量复用同一条规则，避免病例内处方和独立用药计划再次漏掉。
+
+### 3.2 合法值
+
+合法：
+
+```text
+1
+1.5
+0.5
+20
+225
+```
+
+非法：
+
+```text
+20mg
+225mg
+1片
+1滴
+半片
+一片
+每日一次
+```
+
+建议解析规则：
+
+```swift
+private static func isValidDecimalString(_ value: String) -> Bool {
+    let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard text.isEmpty == false else { return true }
+    return Decimal(string: text, locale: Locale(identifier: "en_US_POSIX")) != nil
+}
+```
+
+注意：
+
+1. 空值不阻断，由服务端或业务规则决定是否允许。
+2. 只要包含单位、中文、英文字母，就应阻断。
+3. 不在本工单内自动把 `20mg` 拆成 `doseValue=20`、`doseUnit=mg`，避免误改医疗语义。
+
+## 4. 错误提示与定位
+
+### 4.1 issue 字段路径
+
+处方数组：
+
+```text
+prescriptions[1].medicationPlans[0].doseValue
+```
+
+滚动目标：
+
+```text
+preSubmitValidation.card.medicationPlan.1.0
+```
+
+用药计划独立页：
+
+```text
+medicationPlans[0].doseValue
+```
+
+病例内处方：
+
+```text
+case.prescriptions[1].medicationPlans[0].doseValue
+```
+
+### 4.2 用户提示文案
+
+建议中文：
+
+```text
+单次剂量数值必须是纯数字，例如 1、0.5、20；单位请填写到剂量单位或单次剂量描述中。
+```
+
+建议英文：
+
+```text
+Dose value must be a number, such as 1, 0.5, or 20. Put units in dose unit or dose description.
+```
+
+### 4.3 UI 表现
+
+1. 顶部 `MedicalPreSubmitValidationSummaryBanner` 展示错误。
+2. 对应药品卡片高亮。
+3. 卡片内展示内联错误。
+4. 点击错误摘要时滚动到对应药品卡片。
+5. 不调用服务端保存接口。
+
+## 5. 涉及文件
+
+| 文件 | 改动内容 | 影响 |
+| --- | --- | --- |
+| `MedicalPreSubmitValidator.swift` | 增加 `doseValue` 纯数字校验；覆盖处方数组、病例处方、独立用药计划 | 保存前拦截 |
+| `MedicalPreSubmitValidationIssue.swift` | 如当前 fieldKey/scrollTargetID 不够精确，补充 `dose_value` / `doseValue` 定位 | 字段高亮 |
+| `PrescriptionResultSections.swift` | 确认药品卡片能展示 `doseValue` 错误 inline issue | UI 展示 |
+| `MedicationRecognitionResultContentView.swift` | 确认独立用药计划结果页也能展示该错误 | UI 展示 |
+| `Localizable.strings` | 增加 dose value 数字校验文案 | 本地化 |
+
+## 6. 验收标准
+
+1. 处方识别结果中 `doseValue = "20mg"` 时，点击提交不会请求 `/api/v1/medical/combined-create/`。
+2. 顶部显示本地预校验错误。
+3. 错误定位到对应处方、对应药品卡片。
+4. 用户编辑为 `doseValue = "20"` 后，再次提交可以继续进入保存流程。
+5. `dosePerTime = "1片"`、`doseUnit = "片"` 不因本规则报错；只校验 `doseValue`。
+6. 多处方场景下，第 2 张处方第 1 个药品错误时，不定位到第 1 张处方。
+7. 服务端不再收到明显可由客户端判断的 `dose_value` 非数字请求。
+
+## 7. 风险与注意事项
+
+1. 不要自动改写医疗剂量，尤其不要把 `225mg` 自动拆分成 `225` 和 `mg`，因为该值可能表达规格而不是单次剂量。
+2. 不要把 `dosePerTime` 按纯数字校验，它本来就可以是 `1片`、`1滴`、`半片`。
+3. 校验规则应放在公共预校验器中，不要只在 UI 层临时判断。
+4. 服务端仍然保留最终校验，本工单只是补齐客户端可提前发现的规则缺口。
+
+## 工单 `MEDICAL-AI-OCR-000008`：草稿模式删除关联药箱未清理用药计划草稿
+
+### 工单状态
+
+修复需求/待实现。
+
+## 1. 问题背景
+
+`MEDICAL-AI-OCR-000006` 已为处方识别结果页增加草稿模式详情链路：
+
+```text
+处方识别结果页
+  -> 处方详情页 localDraft
+  -> 用药计划详情页 localDraft
+  -> 关联药箱详情页 localDraft
+```
+
+当前发现一个实际问题：
+
+```text
+草稿模式进入服药计划详情页面
+  -> 点击关联药箱进入药箱详情页面
+  -> 右上角删除药箱
+  -> 返回服药计划详情页面
+  -> 页面仍然显示旧药箱
+  -> 最终草稿内 medicineBox 没有被真正清除
+```
+
+该问题会导致用户以为已经删除药箱，但结果页草稿和最终保存 payload 仍可能携带旧的 `medicineBox`，保存后仍创建药箱或仍把用药计划关联到药箱。
+
+## 2. 当前代码定位
+
+### 2.1 药箱详情页删除只抛事件
+
+`MedicineBoxDetailPage.deleteCurrentBox()` 草稿模式下当前逻辑：
+
+```swift
+if mode == .localDraft {
+    onLocalDraftDeleted?()
+    dismiss()
+    return
+}
+```
+
+位置：
+
+```text
+SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicineBox/MedicineBoxDetailPage.swift:199-207
+```
+
+这个页面自身只负责触发 `onLocalDraftDeleted`，不直接知道上层用药计划草稿结构，这个方向是合理的。
+
+### 2.2 用药计划详情页只继续向外抛，没有更新自身草稿
+
+`MedicationPlanDetailPage` 进入关联药箱详情时当前逻辑：
+
+```swift
+MedicineBoxDetailPage(
+    mode: mode == .localDraft ? .localDraft : .server,
+    ...
+    onLocalDraftDeleted: {
+        onLocalDraftMedicineBoxDeleted?()
+    }
+)
+```
+
+位置：
+
+```text
+SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanDetailPage.swift:95-112
+```
+
+问题在这里：`MedicationPlanDetailPage` 收到药箱删除事件后，只把事件继续抛给父级，没有同步更新本页的：
+
+1. `sourcePlanDraft`
+2. `currentPlan.medicineBox`
+3. `medicineBoxes`
+4. 页面 `medicineBox` 计算属性依赖的数据源
+
+所以返回用药计划详情页时，本页仍然能从旧 `currentPlan.medicineBox` + `medicineBoxes` 里解析出旧药箱。
+
+### 2.3 父级可能更新了最终草稿，但当前页面仍显示旧状态
+
+处方详情页已有类似处理：
+
+```swift
+handleLocalDraftMedicineBoxDeleted(medicationIndex:)
+```
+
+但如果 `MedicationPlanDetailPage` 自己没有先清理本地状态，用户从药箱详情 dismiss 回到用药计划详情页时，当前页面仍显示旧药箱。父级更新不能自动反向刷新已经在导航栈里的子页面本地 `@State`。
+
+## 3. 根因分析
+
+根因不是服务端问题，也不是药箱详情页删除按钮没有触发，而是草稿模式下缺少“本页状态先行更新”。
+
+当前删除链路是：
+
+```text
+MedicineBoxDetailPage
+  -> onLocalDraftDeleted
+  -> MedicationPlanDetailPage 直接 onLocalDraftMedicineBoxDeleted
+  -> 父级更新结果页草稿
+```
+
+缺少：
+
+```text
+MedicationPlanDetailPage 清理自己的 sourcePlanDraft / currentPlan / medicineBoxes
+```
+
+这会造成两个层面的不一致：
+
+1. UI 层：返回用药计划详情页仍能看到旧药箱。
+2. 数据层：如果后续在用药计划详情页继续编辑并保存，可能基于旧 `sourcePlanDraft` 再次把药箱写回。
+
+## 4. 修复目标
+
+### 核心目标
+
+草稿模式下，从用药计划详情页进入关联药箱详情页并删除药箱后，必须同时清理：
+
+1. `MedicationPlanDetailPage` 当前页本地状态。
+2. 父级 `MedicationPrescriptionDetailPage` 当前处方草稿状态。
+3. 结果页 `PrescriptionRecognitionResultContentView.batches` 中对应的 `MedicationPlanRecognitionDraft.medicineBox`。
+4. 最终保存到 `/api/v1/medical/combined-create/` 的 payload 中对应药品的 `medicine_box`。
+
+同时需要保留一个重要交互原则：
+
+1. 草稿模式下，用药计划详情页仍然需要展示“关联药品/关联药箱”模块。
+2. 只要当前草稿 `medicineBox != nil`，就展示关联药品入口，用户可以点击进入药品/药箱详情。
+3. 用户在药品/药箱详情里点击删除后，只清除该用药计划草稿中的关联药品，即 `medicineBox = nil`、`currentPlan.medicineBox = nil`。
+4. 删除关联药品不等于删除用药计划；用药计划的药品名称、剂量、频次、提醒时间仍然保留。
+
+### 非目标
+
+1. 不删除整条用药计划。
+2. 不调用服务端删除药箱接口。
+3. 不关闭用药计划详情页。
+4. 不自动删除处方草稿。
+
+## 5. 修复方案
+
+### 5.1 在 `MedicationPlanDetailPage` 增加本地删除处理方法
+
+新增方法：
+
+```swift
+private func applyLocalDraftMedicineBoxDeleted() {
+    let oldBoxID = currentPlan.medicineBox
+
+    if let oldBoxID {
+        medicineBoxes.removeAll { $0.id == oldBoxID }
+    }
+
+    var draft = currentSourcePlanDraft()
+    draft = MedicationPlanRecognitionDraft(
+        medicineName: draft.medicineName,
+        medicineType: draft.medicineType,
+        totalQuantity: draft.totalQuantity,
+        expireDate: draft.expireDate,
+        medicineBox: nil,
+        brandName: draft.brandName,
+        dosageForm: draft.dosageForm,
+        strength: draft.strength,
+        dosePerTime: draft.dosePerTime,
+        doseValue: draft.doseValue,
+        doseUnit: draft.doseUnit,
+        frequencyType: draft.frequencyType,
+        everyNDays: draft.everyNDays,
+        weeklyWeekdays: draft.weeklyWeekdays,
+        frequencyText: draft.frequencyText,
+        startDate: draft.startDate,
+        endDate: draft.endDate,
+        instructions: draft.instructions,
+        reminderEnabled: draft.reminderEnabled,
+        reminderTimes: draft.reminderTimes,
+        status: draft.status,
+        sortOrder: draft.sortOrder,
+        extra: draft.extra,
+        attachmentFileIds: draft.attachmentFileIds
+    )
+
+    sourcePlanDraft = draft
+    currentPlan = SparkMedicalSyncAPI.RemoteMedicationPlan(
+        id: currentPlan.id,
+        member: currentPlan.member,
+        medicalCase: currentPlan.medicalCase,
+        medicineBox: nil,
+        prescription: currentPlan.prescription,
+        drugName: currentPlan.drugName,
+        dosePerTime: currentPlan.dosePerTime,
+        doseValue: currentPlan.doseValue,
+        doseUnit: currentPlan.doseUnit,
+        frequencyType: currentPlan.frequencyType,
+        everyNDays: currentPlan.everyNDays,
+        weeklyWeekdays: currentPlan.weeklyWeekdays,
+        frequencyText: currentPlan.frequencyText,
+        startDate: currentPlan.startDate,
+        endDate: currentPlan.endDate,
+        instructions: currentPlan.instructions,
+        reminderEnabled: currentPlan.reminderEnabled,
+        reminderTimes: currentPlan.reminderTimes,
+        status: currentPlan.status,
+        extra: currentPlan.extra,
+        attachments: currentPlan.attachments,
+        updatedAt: currentPlan.updatedAt
+    )
+
+    onLocalDraftMedicineBoxDeleted?()
+}
+```
+
+删除后的显示规则：
+
+1. `medicineBox == nil` 时，关联药品模块不再展示旧药品卡片。
+2. 如果业务希望用户能重新补充关联药品，可以显示空态入口，例如“暂无关联药品”或“添加关联药品”；第一期至少不能继续显示旧药品。
+3. 用药计划基础信息区继续展示 `drugName` / `medicineName`、剂量、频次、说明等字段。
+
+如果 `RemoteMedicationPlan` 初始化字段较多，建议不要手写散落构造，而是补一个 Mapper：
+
+```swift
+PrescriptionRecognitionDraftMapper.remoteMedicationPlan(
+    from: draft,
+    preserving: currentPlan,
+    medicineBoxID: nil
+)
+```
+
+这样可以避免未来模型字段新增时漏同步。
+
+### 5.2 药箱删除回调改为先更新本页，再通知父级
+
+当前：
+
+```swift
+onLocalDraftDeleted: {
+    onLocalDraftMedicineBoxDeleted?()
+}
+```
+
+改为：
+
+```swift
+onLocalDraftDeleted: {
+    applyLocalDraftMedicineBoxDeleted()
+}
+```
+
+删除后状态链路应变为：
+
+```text
+MedicineBoxDetailPage.deleteCurrentBox
+  -> MedicationPlanDetailPage.applyLocalDraftMedicineBoxDeleted
+      -> sourcePlanDraft.medicineBox = nil
+      -> currentPlan.medicineBox = nil
+      -> medicineBoxes 移除旧 box
+      -> onLocalDraftMedicineBoxDeleted
+  -> MedicationPrescriptionDetailPage.handleLocalDraftMedicineBoxDeleted
+      -> 当前处方草稿对应 medicationPlans[index].medicineBox = nil
+      -> onLocalDraftMedicationPlanSaved / onLocalDraftMedicineBoxDeleted
+  -> PrescriptionRecognitionResultContentView.updateMedicationDraft
+      -> batches[prescriptionIndex].medicationPlans[medicationIndex].medicineBox = nil
+```
+
+UI 刷新要求：
+
+1. 删除前：服药计划详情页显示关联药品卡片。
+2. 删除后：返回服药计划详情页，关联药品卡片立即消失或变为空态。
+3. 再次进入该服药计划详情页，不应通过旧的 `sourcePlanDraft` 或 `currentPlan.medicineBox` 恢复出旧药品。
+
+### 5.3 `applyLocalDraftPlan` 需要支持清空 medicineBox
+
+当前 `MedicationPlanDetailPage.applyLocalDraftPlan(_:)` 中：
+
+```swift
+let boxID = currentPlan.medicineBox
+let updatedPlan = updatedDraft.remoteMedicationPlan(
+    ...
+    medicineBoxID: boxID,
+    ...
+)
+```
+
+如果 `updatedDraft.medicineBox == nil`，但 `currentPlan.medicineBox` 仍有旧 ID，这里会把旧 `medicineBoxID` 再写回 `currentPlan`。
+
+修复要求：
+
+```swift
+let boxID = updatedDraft.medicineBox == nil ? nil : currentPlan.medicineBox
+```
+
+或者更清晰：
+
+```swift
+let boxID: Int?
+if updatedDraft.medicineBox == nil {
+    boxID = nil
+} else {
+    boxID = currentPlan.medicineBox
+        ?? PrescriptionRecognitionDraftMapper.temporaryMedicineBoxID(...)
+}
+```
+
+这样编辑/删除药箱后，`currentPlan.medicineBox` 不会被旧值污染。
+
+### 5.4 父级处方详情页避免重复回调
+
+`MedicationPrescriptionDetailPage.handleLocalDraftMedicineBoxDeleted` 当前会构造 `medicineBox: nil` 的 plan，并调用 `handleLocalDraftPlanSaved`。这可以保持“药箱删除本质上也是计划草稿更新”。
+
+但需要注意：
+
+1. 不要同时让 `MedicationPlanDetailPage` 和 `MedicationPrescriptionDetailPage` 各自重复调用结果页两次。
+2. 推荐统一约定：药箱删除最终以 `onLocalDraftMedicationPlanSaved(medicationIndex, updatedPlanDraftWithNilBox)` 作为结果页更新主通道。
+3. `onLocalDraftMedicineBoxDeleted` 只用于父级本地清理 `medicineBoxesByID` 或日志，不再额外更新结果页同一条 plan。
+
+## 6. 涉及文件
+
+| 文件 | 改动内容 | 影响 |
+| --- | --- | --- |
+| `MedicationPlanDetailPage.swift` | 草稿模式保留关联药品展示；新增 `applyLocalDraftMedicineBoxDeleted`；药箱详情删除回调先清理本页状态；`applyLocalDraftPlan` 支持 `medicineBoxID=nil` | 修复当前页返回后仍显示旧药箱 |
+| `MedicationPrescriptionDetailPage.swift` | 复核 `handleLocalDraftMedicineBoxDeleted`，确保父级草稿与结果页回调只更新一次 | 避免重复回调和状态抖动 |
+| `PrescriptionResultSections.swift` | 复核从用药计划详情直接进入药箱详情的回调，确保 `onUpdateMedicationDraft` 收到 `medicineBox=nil` 的 draft | 结果页草稿最终一致 |
+| `PrescriptionRecognitionResultContentView.swift` | 复核 `updateMedicationDraft` 后同步 `viewModel.updateTypedResult(.prescription(batches))` | 保存 payload 一致 |
+| `PrescriptionRecognitionDraftMapper.swift` | 可选：增加保留原 `RemoteMedicationPlan` 但清空/替换 `medicineBoxID` 的转换方法 | 降低手写模型构造风险 |
+
+## 7. 验收标准
+
+1. 草稿模式进入“服药计划详情页 -> 关联药箱详情页”，点击右上角删除药箱后，不调用服务端删除接口。
+2. 删除前，草稿模式用药计划详情页需要显示关联药品/药箱入口。
+3. 返回服药计划详情页后，关联药品/药箱模块不再显示旧药箱；如有空态入口，只能展示空态。
+4. 返回处方详情页后，对应用药计划行不再显示旧药箱信息。
+5. 返回处方识别结果页后，对应药品草稿的 `medicineBox == nil`。
+6. 点击提交时，`/api/v1/medical/combined-create/` payload 中该药品不再携带旧 `medicine_box`。
+7. 删除药箱不删除整条用药计划，药品名称、剂量、频次、提醒时间仍保留。
+8. 删除后再次进入该用药计划详情页，不会因为旧 `currentPlan.medicineBox` 或旧 `sourcePlanDraft` 重新显示药箱。
+9. 如果用户删除药箱后继续编辑用药计划，保存编辑不会把旧药箱恢复回来。
+
+## 8. 风险与注意事项
+
+1. 不能只在 `MedicationPrescriptionDetailPage` 处理，因为用户删除后首先返回的是 `MedicationPlanDetailPage`，这个页面自己的 `@State` 必须同步更新。
+2. 不能只删除 `medicineBoxes` 数组，必须同时清空 `currentPlan.medicineBox` 和 `sourcePlanDraft.medicineBox`。
+3. 不要把“删除药箱”解释为“删除用药计划”，两者是不同业务动作。
+4. 草稿模式下所有操作都不能调用 `workflowAPI.delete(kind: .medicineBoxes, ...)`。
+5. 尽量通过 Mapper 构造更新后的 `RemoteMedicationPlan`，避免手写初始化遗漏字段。
+6. 不要因为是草稿模式就隐藏关联药品入口；有 `medicineBox` 时必须可见，删除后才清空关联。

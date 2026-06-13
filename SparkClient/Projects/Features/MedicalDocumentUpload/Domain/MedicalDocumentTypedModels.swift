@@ -381,7 +381,7 @@ enum MedicalDocumentTypedResult: Sendable, Equatable {
     case caseDocument(CaseRecognitionDraft)
     case healthExamReport(HealthExamRecognitionDraft)
     case medicalReport([MedicalReportRecognitionDraft])
-    case prescription(PrescriptionRecognitionDraft)
+    case prescription([PrescriptionRecognitionDraft])
     case medicationPlan([MedicationPlanRecognitionDraft])
     case medicineBoxes([MedicineBoxRecognitionDraft])
 }

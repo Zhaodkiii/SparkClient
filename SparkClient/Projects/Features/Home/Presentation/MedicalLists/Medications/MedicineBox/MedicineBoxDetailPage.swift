@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MedicineBoxDetailPage: View {
+    let mode: MedicineBoxDetailMode
     let box: SparkMedicalSyncAPI.RemoteMedicineBox
     let entryMemberID: Int?
     let memberOptions: [Member]
@@ -11,15 +12,19 @@ struct MedicineBoxDetailPage: View {
     let fileTransferService: FileTransferService
     let onSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onDeleted: (Int) -> Void
+    var onLocalDraftSaved: ((MedicineBoxRecognitionDraft) -> Void)?
+    var onLocalDraftDeleted: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var currentBox: SparkMedicalSyncAPI.RemoteMedicineBox
+    @State private var sourceBoxDraft: MedicineBoxRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
     @State private var alertMessage: String?
     @State private var isDeleting = false
 
     init(
+        mode: MedicineBoxDetailMode = .server,
         box: SparkMedicalSyncAPI.RemoteMedicineBox,
         entryMemberID: Int? = nil,
         memberOptions: [Member] = [],
@@ -28,9 +33,13 @@ struct MedicineBoxDetailPage: View {
         specOptionBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
         workflowAPI: SparkMedicalWorkflowAPI,
         fileTransferService: FileTransferService,
+        sourceBoxDraft: MedicineBoxRecognitionDraft? = nil,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
-        onDeleted: @escaping (Int) -> Void
+        onDeleted: @escaping (Int) -> Void,
+        onLocalDraftSaved: ((MedicineBoxRecognitionDraft) -> Void)? = nil,
+        onLocalDraftDeleted: (() -> Void)? = nil
     ) {
+        self.mode = mode
         self.box = box
         self.entryMemberID = entryMemberID
         self.memberOptions = memberOptions
@@ -41,7 +50,10 @@ struct MedicineBoxDetailPage: View {
         self.fileTransferService = fileTransferService
         self.onSaved = onSaved
         self.onDeleted = onDeleted
+        self.onLocalDraftSaved = onLocalDraftSaved
+        self.onLocalDraftDeleted = onLocalDraftDeleted
         _currentBox = State(initialValue: box)
+        _sourceBoxDraft = State(initialValue: sourceBoxDraft)
     }
 
     private var resolvedEntryMemberID: Int {
@@ -126,22 +138,42 @@ struct MedicineBoxDetailPage: View {
             }
         }
         .sheet(isPresented: $showingEditSheet) {
-            MedicineBoxFormView(
-                mode: .serverEdit(existing: currentBox),
-                entryMemberID: resolvedEntryMemberID,
-                defaultBindingMemberID: currentBox.member,
-                memberOptions: memberOptions,
-                allowsHouseholdPublic: allowsHouseholdPublic,
-                workflowAPI: workflowAPI,
-                fileTransferService: fileTransferService,
-                typeOptions: typeOptions,
-                specOptionBoxes: specOptionBoxes,
-                onServerSaved: { saved in
-                    currentBox = saved
-                    onSaved(saved)
-                    showingEditSheet = false
-                }
-            )
+            if mode == .localDraft {
+                MedicineBoxFormView(
+                    mode: .localEdit(
+                        existing: MedicineBoxDraft(recognition: currentSourceBoxDraft()),
+                        onSubmit: { draft in
+                            applyLocalDraftBox(draft.recognitionDraft())
+                            showingEditSheet = false
+                        }
+                    ),
+                    entryMemberID: resolvedEntryMemberID,
+                    defaultBindingMemberID: currentBox.member,
+                    memberOptions: memberOptions,
+                    allowsHouseholdPublic: allowsHouseholdPublic,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    typeOptions: typeOptions,
+                    specOptionBoxes: specOptionBoxes
+                )
+            } else {
+                MedicineBoxFormView(
+                    mode: .serverEdit(existing: currentBox),
+                    entryMemberID: resolvedEntryMemberID,
+                    defaultBindingMemberID: currentBox.member,
+                    memberOptions: memberOptions,
+                    allowsHouseholdPublic: allowsHouseholdPublic,
+                    workflowAPI: workflowAPI,
+                    fileTransferService: fileTransferService,
+                    typeOptions: typeOptions,
+                    specOptionBoxes: specOptionBoxes,
+                    onServerSaved: { saved in
+                        currentBox = saved
+                        onSaved(saved)
+                        showingEditSheet = false
+                    }
+                )
+            }
         }
         .alert(L10n.text("home.medical.medicine_box.delete.confirm_title"), isPresented: $showingDeleteConfirm) {
             Button(L10n.text("common.cancel"), role: .cancel) {}
@@ -167,6 +199,13 @@ struct MedicineBoxDetailPage: View {
     @MainActor
     private func deleteCurrentBox() async {
         guard isDeleting == false else { return }
+
+        if mode == .localDraft {
+            onLocalDraftDeleted?()
+            dismiss()
+            return
+        }
+
         isDeleting = true
         defer { isDeleting = false }
 
@@ -177,5 +216,16 @@ struct MedicineBoxDetailPage: View {
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+
+    private func currentSourceBoxDraft() -> MedicineBoxRecognitionDraft {
+        sourceBoxDraft ?? PrescriptionRecognitionDraftMapper.medicineBoxDraft(from: currentBox)
+    }
+
+    private func applyLocalDraftBox(_ updated: MedicineBoxRecognitionDraft) {
+        sourceBoxDraft = updated
+        guard let memberID = entryMemberID ?? currentBox.member else { return }
+        currentBox = updated.remoteMedicineBox(memberID: memberID, id: currentBox.id)
+        onLocalDraftSaved?(updated)
     }
 }
