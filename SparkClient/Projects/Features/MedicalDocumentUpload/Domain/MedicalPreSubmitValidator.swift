@@ -486,11 +486,19 @@ struct MedicalPreSubmitValidator: MedicalPreSubmitValidating, Sendable {
                 ))
             }
 
-            if MedicalPreSubmitValidationRules.requiresCompleteDateIfPresent(plan.endDate) == false
-                || MedicalPreSubmitValidationRules.isEndDateOnOrAfterStartDate(
-                    startDate: plan.startDate,
-                    endDate: plan.endDate
-                ) == false {
+            if MedicalPreSubmitValidationRules.requiresCompleteDateIfPresent(plan.endDate) == false {
+                issues.append(dateIssue(
+                    fieldPath: "\(pathPrefix).end_date",
+                    fieldKey: "\(pathPrefix).end_date",
+                    fieldLabel: L10n.text("medical.upload.presubmit.field.end_date"),
+                    sectionTitle: section,
+                    cardIndex: cardIndex,
+                    prescriptionIndex: prescriptionIndex
+                ))
+            } else if MedicalPreSubmitValidationRules.isEndDateOnOrAfterStartDate(
+                startDate: plan.startDate,
+                endDate: plan.endDate
+            ) == false {
                 issues.append(issue(
                     resourceType: .medicationPlan,
                     fieldPath: "\(pathPrefix).end_date",

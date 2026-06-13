@@ -126,6 +126,56 @@ final class PrescriptionPreSubmitValidationTests: XCTestCase {
         XCTAssertEqual(issues.first?.fieldKey, "prescriptions[0].status")
     }
 
+    func testIsCompleteDateAcceptsYYYYMMDD() {
+        XCTAssertTrue(MedicalPreSubmitValidationRules.isCompleteDate("2026-04-20"))
+        XCTAssertTrue(MedicalPreSubmitValidationRules.requiresCompleteDateIfPresent("2026-04-20"))
+    }
+
+    func testEndDateComparisonAcceptsSameYYYYMMDD() {
+        XCTAssertTrue(
+            MedicalPreSubmitValidationRules.isEndDateOnOrAfterStartDate(
+                startDate: "2026-04-20",
+                endDate: "2026-04-20"
+            )
+        )
+    }
+
+    func testReminderTimesAcceptsTextDoseFromDecodedJSON() throws {
+        let json = """
+        [{"time":"08:00","dose":"1滴"}]
+        """
+        let data = Data(json.utf8)
+        let times = try JSONDecoder().decode([ReminderTime].self, from: data)
+        XCTAssertTrue(MedicalPreSubmitValidationRules.isValidReminderTimes(times))
+    }
+
+    func testPrescriptionSubmitAllowsReminderTimesWithTextDose() throws {
+        let json = """
+        [{"time":"08:00","dose":"1滴"}]
+        """
+        let data = Data(json.utf8)
+        let times = try JSONDecoder().decode([ReminderTime].self, from: data)
+        let plan = MedicationPlanRecognitionDraft(
+            medicineName: "测试药品",
+            doseValue: "1",
+            frequencyType: "daily",
+            startDate: "2026-04-20",
+            endDate: "2026-04-20",
+            reminderTimes: times
+        )
+        let draft = PrescriptionRecognitionDraft(
+            institutionName: "测试医院",
+            prescribedAt: "2026-04-20",
+            status: "active",
+            medicationPlans: [plan]
+        )
+        let issues = validator.validate(output: makeOutput(.prescription([draft]))).blockingIssues
+        XCTAssertFalse(issues.contains { $0.fieldKey.hasSuffix(".reminder_times") })
+        XCTAssertFalse(issues.contains { $0.fieldKey.hasSuffix(".end_date") })
+        XCTAssertFalse(issues.contains { $0.fieldKey.hasSuffix(".start_date") })
+        XCTAssertFalse(issues.contains { $0.fieldKey.contains("prescribed_at") })
+    }
+
     private func makeOutput(_ typedResult: MedicalDocumentTypedResult) -> MedicalDocumentTypedExtractionOutput {
         MedicalDocumentTypedExtractionOutput(
             envelope: MedicalDocumentRecognitionEnvelope(

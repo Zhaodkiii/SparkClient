@@ -19,40 +19,7 @@ enum MedicalPreSubmitValidationRules {
         if raw.range(of: #"^\d{4}-\d{2}$"#, options: .regularExpression) != nil { return false }
         if raw.range(of: #"^\d{4}$"#, options: .regularExpression) != nil { return false }
 
-        if raw.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
-            return true
-        }
-
-        if PreSubmitISO8601.medicalWithFractionalSeconds.date(from: raw) != nil
-            || PreSubmitISO8601.medicalBasic.date(from: raw) != nil {
-            return true
-        }
-
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-
-        let supportedFormats = [
-            "yyyy-MM-dd HH:mm:ss",
-            "yyyy/MM/dd HH:mm:ss",
-            "yyyy.MM.dd HH:mm:ss",
-            "yyyy-MM-dd HH:mm",
-            "yyyy/MM/dd HH:mm",
-            "yyyy.MM.dd HH:mm",
-            "yyyy-MM-dd",
-            "yyyy/MM/dd",
-            "yyyy.MM.dd"
-        ]
-
-        for format in supportedFormats {
-            formatter.dateFormat = format
-            if formatter.date(from: raw) != nil {
-                return true
-            }
-        }
-
-        return false
+        return parseComparableDateOnly(raw) != nil
     }
 
     static func requiresCompleteDateIfPresent(_ value: String?) -> Bool {
@@ -120,16 +87,15 @@ enum MedicalPreSubmitValidationRules {
 
     static func isEndDateOnOrAfterStartDate(startDate: String?, endDate: String?) -> Bool {
         guard let end = trimmedNonEmpty(endDate) else { return true }
-        guard let start = trimmedNonEmpty(startDate) else { return isStrictDateOnly(end) }
-        guard let startDate = parseStrictDateOnly(start), let endDate = parseStrictDateOnly(end) else {
-            return false
-        }
-        return endDate >= startDate
+        guard let endParsed = parseComparableDateOnly(end) else { return false }
+        guard let start = trimmedNonEmpty(startDate) else { return true }
+        guard let startParsed = parseComparableDateOnly(start) else { return false }
+        return endParsed >= startParsed
     }
 
     static func isStrictDateOnly(_ value: String?) -> Bool {
         guard let raw = trimmedNonEmpty(value) else { return true }
-        return parseStrictDateOnly(raw) != nil
+        return parseComparableDateOnly(raw) != nil
     }
 
     static func isHighRiskDoseValue(doseValue: String?, doseUnit: String?) -> Bool {
@@ -156,11 +122,6 @@ enum MedicalPreSubmitValidationRules {
             let trimmed = entry.time.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return false }
             if trimmed.range(of: #"^\d{2}:\d{2}$"#, options: .regularExpression) == nil { return false }
-            if let doseText = entry.doseText?.trimmingCharacters(in: .whitespacesAndNewlines),
-               doseText.isEmpty == false,
-               entry.dose == nil {
-                return false
-            }
         }
         return true
     }
@@ -197,16 +158,57 @@ enum MedicalPreSubmitValidationRules {
         L10n.text("medical.upload.presubmit.error.reminder_times")
     }
 
-    private static func parseStrictDateOnly(_ raw: String) -> Date? {
-        guard raw.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else {
-            return nil
+    /// 解析可比较的日历日期（UTC 零点），与 `isCompleteDate` 使用同一套格式。
+    private static func parseComparableDateOnly(_ raw: String) -> Date? {
+        if raw.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+            return parseDateOnlyWithFormat(raw, format: "yyyy-MM-dd")
         }
+
+        if let isoDate = PreSubmitISO8601.medicalWithFractionalSeconds.date(from: raw)
+            ?? PreSubmitISO8601.medicalBasic.date(from: raw) {
+            return calendarDateStart(from: isoDate)
+        }
+
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
+
+        let supportedFormats = [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy.MM.dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy/MM/dd HH:mm",
+            "yyyy.MM.dd HH:mm",
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+            "yyyy.MM.dd"
+        ]
+
+        for format in supportedFormats {
+            formatter.dateFormat = format
+            if let parsed = formatter.date(from: raw) {
+                return calendarDateStart(from: parsed)
+            }
+        }
+
+        return nil
+    }
+
+    private static func parseDateOnlyWithFormat(_ raw: String, format: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = format
         return formatter.date(from: raw)
+    }
+
+    private static func calendarDateStart(from date: Date) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.startOfDay(for: date)
     }
 
     static func requiredFieldMessage(fieldLabel: String) -> String {
