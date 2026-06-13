@@ -17,6 +17,7 @@ enum MedicineBoxDetailMode: Equatable, Sendable {
 
 enum PrescriptionRecognitionDraftMapper {
     static let medicineBoxUnlinkedExtraKey = "medicine_box_unlinked"
+    static let confirmedMedicineBoxIDExtraKey = "confirmed_medicine_box_id"
 
     static func isMedicineBoxUnlinked(_ draft: MedicationPlanRecognitionDraft) -> Bool {
         draft.extra?[medicineBoxUnlinkedExtraKey] == "true"
@@ -217,6 +218,170 @@ extension Array where Element == PrescriptionRecognitionDraft {
         reduce(into: Set<UUID>()) { result, batch in
             result.formUnion(batch.associatedAttachmentFileIDs)
         }
+    }
+
+    func resolvingMedicineBoxCandidates(
+        confirmations: [MedicationCandidateKey: MedicineBoxCandidateConfirmation]
+    ) -> [PrescriptionRecognitionDraft] {
+        enumerated().map { prescriptionIndex, batch in
+            var updatedBatch = batch
+            updatedBatch.medicationPlans = (batch.medicationPlans ?? []).enumerated().map { medicationIndex, plan in
+                let key = MedicationCandidateKey(
+                    prescriptionIndex: prescriptionIndex,
+                    medicationIndex: medicationIndex
+                )
+                return plan.applyingMedicineBoxCandidateConfirmation(confirmations[key] ?? .default)
+            }
+            return updatedBatch
+        }
+    }
+}
+
+extension MedicationPlanRecognitionDraft {
+    func applyingMedicineBoxCandidateConfirmation(
+        _ confirmation: MedicineBoxCandidateConfirmation
+    ) -> MedicationPlanRecognitionDraft {
+        if PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(self) {
+            return self
+        }
+
+        var extra = extra ?? [:]
+        extra.removeValue(forKey: PrescriptionRecognitionDraftMapper.confirmedMedicineBoxIDExtraKey)
+
+        guard confirmation.isConfirmed else {
+            return PrescriptionRecognitionDraftMapper.medicationPlanDraftClearedMedicineBox(from: self)
+                .strippingConfirmedMedicineBoxID()
+        }
+
+        switch confirmation.action {
+        case .bindExisting(let medicineBoxID):
+            let stripped = PrescriptionRecognitionDraftMapper.medicationPlanDraftClearedMedicineBox(from: self)
+            var bindExtra = stripped.extra ?? [:]
+            bindExtra.removeValue(forKey: PrescriptionRecognitionDraftMapper.medicineBoxUnlinkedExtraKey)
+            bindExtra[PrescriptionRecognitionDraftMapper.confirmedMedicineBoxIDExtraKey] = "\(medicineBoxID)"
+            return MedicationPlanRecognitionDraft(
+                medicineName: stripped.medicineName,
+                medicineType: stripped.medicineType,
+                totalQuantity: stripped.totalQuantity,
+                expireDate: stripped.expireDate,
+                medicineBox: nil,
+                brandName: stripped.brandName,
+                dosageForm: stripped.dosageForm,
+                strength: stripped.strength,
+                dosePerTime: stripped.dosePerTime,
+                doseValue: stripped.doseValue,
+                doseUnit: stripped.doseUnit,
+                frequencyType: stripped.frequencyType,
+                everyNDays: stripped.everyNDays,
+                weeklyWeekdays: stripped.weeklyWeekdays,
+                frequencyText: stripped.frequencyText,
+                startDate: stripped.startDate,
+                endDate: stripped.endDate,
+                instructions: stripped.instructions,
+                reminderEnabled: stripped.reminderEnabled,
+                reminderTimes: stripped.reminderTimes,
+                status: stripped.status,
+                sortOrder: stripped.sortOrder,
+                extra: bindExtra,
+                attachmentFileIds: stripped.attachmentFileIds
+            )
+        case .createNew:
+            var createExtra = extra
+            createExtra.removeValue(forKey: PrescriptionRecognitionDraftMapper.medicineBoxUnlinkedExtraKey)
+            var resolved = self
+            if let edited = confirmation.editedCandidate {
+                resolved = resolved.updatingMedicineBoxCandidate(edited)
+            }
+            return MedicationPlanRecognitionDraft(
+                medicineName: resolved.medicineName,
+                medicineType: resolved.medicineType,
+                totalQuantity: resolved.totalQuantity,
+                expireDate: resolved.expireDate,
+                medicineBox: resolved.medicineBox,
+                brandName: resolved.brandName,
+                dosageForm: resolved.dosageForm,
+                strength: resolved.strength,
+                dosePerTime: resolved.dosePerTime,
+                doseValue: resolved.doseValue,
+                doseUnit: resolved.doseUnit,
+                frequencyType: resolved.frequencyType,
+                everyNDays: resolved.everyNDays,
+                weeklyWeekdays: resolved.weeklyWeekdays,
+                frequencyText: resolved.frequencyText,
+                startDate: resolved.startDate,
+                endDate: resolved.endDate,
+                instructions: resolved.instructions,
+                reminderEnabled: resolved.reminderEnabled,
+                reminderTimes: resolved.reminderTimes,
+                status: resolved.status,
+                sortOrder: resolved.sortOrder,
+                extra: createExtra,
+                attachmentFileIds: resolved.attachmentFileIds
+            )
+        case .none:
+            return PrescriptionRecognitionDraftMapper.medicationPlanDraftClearedMedicineBox(from: self)
+                .strippingConfirmedMedicineBoxID()
+        }
+    }
+
+    func updatingMedicineBoxCandidate(_ candidate: MedicineBoxRecognitionDraft) -> MedicationPlanRecognitionDraft {
+        MedicationPlanRecognitionDraft(
+            medicineName: candidate.medicineName?.nilIfBlank ?? medicineName,
+            medicineType: candidate.medicineType ?? medicineType,
+            totalQuantity: candidate.totalQuantity ?? totalQuantity,
+            expireDate: candidate.expireDate ?? expireDate,
+            medicineBox: candidate,
+            brandName: candidate.brandName ?? brandName,
+            dosageForm: candidate.dosageForm ?? dosageForm,
+            strength: candidate.strength ?? strength,
+            dosePerTime: dosePerTime,
+            doseValue: doseValue,
+            doseUnit: candidate.doseUnit ?? doseUnit,
+            frequencyType: frequencyType,
+            everyNDays: everyNDays,
+            weeklyWeekdays: weeklyWeekdays,
+            frequencyText: frequencyText,
+            startDate: startDate,
+            endDate: endDate,
+            instructions: instructions,
+            reminderEnabled: reminderEnabled,
+            reminderTimes: reminderTimes,
+            status: status,
+            sortOrder: sortOrder,
+            extra: extra,
+            attachmentFileIds: attachmentFileIds
+        )
+    }
+
+    fileprivate func strippingConfirmedMedicineBoxID() -> MedicationPlanRecognitionDraft {
+        var cleanedExtra = extra ?? [:]
+        cleanedExtra.removeValue(forKey: PrescriptionRecognitionDraftMapper.confirmedMedicineBoxIDExtraKey)
+        return MedicationPlanRecognitionDraft(
+            medicineName: medicineName,
+            medicineType: medicineType,
+            totalQuantity: totalQuantity,
+            expireDate: expireDate,
+            medicineBox: medicineBox,
+            brandName: brandName,
+            dosageForm: dosageForm,
+            strength: strength,
+            dosePerTime: dosePerTime,
+            doseValue: doseValue,
+            doseUnit: doseUnit,
+            frequencyType: frequencyType,
+            everyNDays: everyNDays,
+            weeklyWeekdays: weeklyWeekdays,
+            frequencyText: frequencyText,
+            startDate: startDate,
+            endDate: endDate,
+            instructions: instructions,
+            reminderEnabled: reminderEnabled,
+            reminderTimes: reminderTimes,
+            status: status,
+            sortOrder: sortOrder,
+            extra: cleanedExtra,
+            attachmentFileIds: attachmentFileIds
+        )
     }
 }
 

@@ -173,37 +173,64 @@ struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
 
 /// 与 ``MedicineBox`` + ``MedicationPlan`` 字段对齐；流式 JSON 解码依赖 `JSONDecoder.keyDecodingStrategy == .convertFromSnakeCase`。
 /// 注意：数值字段使用 String? 以兼容 OCR 脏数据，后续通过扩展方法转换为实际数值。
+/// 药品识别草稿结构体
 struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
-    /// 药箱字段：用于同步创建/关联 MedicineBox。
+    // MARK: - 药箱关联字段（用于同步创建/绑定药箱MedicineBox）
+    /// 药品通用名称
     let medicineName: String?
+    /// 药品类型（处方药/非处方药/保健品等）
     let medicineType: String?
+    /// 药品总数量
+    /// FlexibleOptionalString：兼容数字/空字符串/null多种JSON格式解析
     @FlexibleOptionalString var totalQuantity: String?
+    /// 药品有效期截止日期（文本格式）
     let expireDate: String?
+    /// 从属药箱识别草稿模型
     let medicineBox: MedicineBoxRecognitionDraft?
 
+    /// 药品品牌名
     let brandName: String?
+    /// 剂型：片剂、胶囊、颗粒、注射液等
     let dosageForm: String?
+    /// 药品规格含量，例：500mg/片
     let strength: String?
+    /// 剂量单位：片、粒、ml、g等
     let doseUnit: String?
 
-    /// 服药计划字段：用于创建 MedicationPlan。
+    // MARK: - 服药计划字段（用于最终生成正式MedicationPlan服药方案）
+    /// 单次服用剂量描述文案
     let dosePerTime: String?
-    @FlexibleOptionalString var doseValue: String?          // OCR 原始字符串，如 "1", "0.5", "1g"
+    /// OCR原始剂量数值字符串，示例："1"、"0.5"、"1g"
+    @FlexibleOptionalString var doseValue: String?
+    /// 服用频次类型：按天、按周、间隔N天等枚举标识
     let frequencyType: String?
+    /// 间隔N天服用，频次为间隔模式时生效
     @FlexibleOptionalString var everyNDays: String?
+    /// 每周指定星期服用，数组存储星期数字(1~7)
     let weeklyWeekdays: [Int]?
+    /// 服用频次可读展示文本，例：每日1次、每周二四服用
     let frequencyText: String?
+    /// 服药计划开始日期（字符串格式）
     let startDate: String?
+    /// 服药计划结束日期（字符串格式，为空代表长期服用）
     let endDate: String?
+    /// 额外用药叮嘱、医嘱说明
     let instructions: String?
+    /// 是否开启服药提醒
     let reminderEnabled: Bool?
+    /// 多组提醒时间列表，自定义编码兼容空数组/null解析
     @OptionalCodableReminderTimesList var reminderTimes: [ReminderTime]?
+    /// 计划状态：待启用、正常、已停用、已结束等
     let status: String?
-    /// 批次内排序；流式 JSON 常为字符串
+    /// 同批次多条药品排序序号
+    /// 流式JSON数据源常会以字符串格式返回数字，做柔性解析适配
     @FlexibleOptionalString var sortOrder: String?
+    /// 扩展自定义键值对，预留额外识别信息存储
     let extra: [String: String]?
+    /// 附件文件ID数组，解码为空时默认赋值空数组，不会为nil
     @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 
+    // MARK: - 构造方法：全字段可选初始化
     init(
         medicineName: String? = nil,
         medicineType: String? = nil,
@@ -232,6 +259,7 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
     ) {
         self.medicineName = medicineName
         self.medicineType = medicineType
+        // 柔性字符串包装器赋值
         self._totalQuantity = FlexibleOptionalString(wrappedValue: totalQuantity)
         self.expireDate = expireDate
         self.medicineBox = medicineBox
@@ -249,10 +277,12 @@ struct MedicationPlanRecognitionDraft: Sendable, Equatable, Codable {
         self.endDate = endDate
         self.instructions = instructions
         self.reminderEnabled = reminderEnabled
+        // 提醒时间自定义编码包装器赋值
         self._reminderTimes = OptionalCodableReminderTimesList(wrappedValue: reminderTimes)
         self.status = status
         self._sortOrder = FlexibleOptionalString(wrappedValue: sortOrder)
         self.extra = extra
+        // UUID数组默认空值包装器赋值
         self._attachmentFileIds = DefaultEmptyUUIDArray(wrappedValue: attachmentFileIds)
     }
 }

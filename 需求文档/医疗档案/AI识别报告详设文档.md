@@ -14,6 +14,8 @@
 | `MEDICAL-AI-OCR-000006` | 处方数组识别与用药资料草稿详情预览 | 新需求/待实现 | 处方数组抽取、结果页成员切换、处方/用药计划/药箱详情页本地草稿预览模式、编辑删除回调 |
 | `MEDICAL-AI-OCR-000007` | 处方提交前 dose_value 数值预校验修复 | 修复需求/待实现 | combined-create 前拦截 dose_value 非数字、字段高亮、定位到对应处方药品 |
 | `MEDICAL-AI-OCR-000008` | 草稿模式删除关联药箱未清理用药计划草稿 | 修复需求/待实现 | 用药计划详情进入药箱详情后删除药箱，清理本页草稿、父级草稿与最终保存 payload |
+| `MEDICAL-AI-OCR-000009` | 处方识别药箱候选确认与批量保存 | 已实现 | 识别概览、加载家庭药箱、药品候选匹配、确认后由处方批量保存绑定已有药品或新建药箱、未确认剥离 medicineBox |
+| `MEDICAL-AI-OCR-000010` | 处方识别保存前检查点与服务端字段补全 | 修复需求/待实现 | 补全处方/用药计划枚举、日期、频次、剂量、提醒时间、药箱表达等保存前检查点；服务端新增处方类型/支付状态字段承接 AI 识别信息 |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -3701,3 +3703,1149 @@ if updatedDraft.medicineBox == nil {
 4. 草稿模式下所有操作都不能调用 `workflowAPI.delete(kind: .medicineBoxes, ...)`。
 5. 尽量通过 Mapper 构造更新后的 `RemoteMedicationPlan`，避免手写初始化遗漏字段。
 6. 不要因为是草稿模式就隐藏关联药品入口；有 `medicineBox` 时必须可见，删除后才清空关联。
+
+## 工单 `MEDICAL-AI-OCR-000009`：处方识别药箱候选确认与批量保存
+
+### 工单状态
+
+已实现。
+
+## 1. 背景与问题
+
+处方识别结果中的每条 `MedicationPlanRecognitionDraft` 可能包含：
+
+```swift
+let medicineBox: MedicineBoxRecognitionDraft?
+```
+
+这个 `medicineBox` 表示 AI 从处方、包装、说明或 OCR 中识别出的“可加入家庭药箱的药品候选”。但它不应该默认保存到药箱，因为：
+
+1. AI 识别可能不准确，药品名、规格、数量、有效期可能需要用户确认。
+2. 家庭药箱里可能已经有同名药品，应优先绑定已有药品，而不是新建重复药品；是否修改库存需要用户单独确认。
+3. 同名药品可能有多个规格，不允许静默选择第一条。
+4. 用户可能只想保存处方和用药计划，不想加入药箱。
+5. 当前 `PrescriptionBatchWorkflowSaveView` / combined 保存如果 payload 中带 `medicineBox`，可能默认创建药箱；本工单要求未确认的候选不能默认创建。
+
+因此处方识别结果页需要新增“药箱候选确认”机制：先加载当前成员家庭药箱，和 `batches[].medicationPlans[].medicineBox` 做匹配，展示候选状态；只有用户明确勾选确认后，提交时才允许该用药计划绑定已有药品或通过处方批量保存流程新建药箱药品。
+
+## 2. 设计目标
+
+### 核心目标
+
+在 `PrescriptionRecognitionResultContentView` 里，根据当前 `selectedMemberID` 加载家庭药箱列表，和识别结果中的药箱候选进行匹配，展示识别概览和每条药品的药箱候选卡。提交时：
+
+1. 用户未确认的候选：从处方保存 payload 中剥离 `medicineBox`，不绑定已有药品、不更新库存、不新建药箱。
+2. 用户确认且匹配已有药品：提交处方批量保存 payload 时剥离 `medicineBox`，但携带“绑定已有药品”的目标 ID；由 `PrescriptionBatchWorkflowSaveView` 保存用药计划时绑定该药品。是否修改库存由用户勾选时单独确认，选择“是”后打开 `MedicineBoxFormView` 服务端编辑页，由用户基于服务端当前药品数据自行修改并保存。
+3. 用户确认且无已有药品：提交处方批量保存 payload 时不剥离 `medicineBox`；直接使用 `PrescriptionBatchWorkflowSaveView` 内已有的药箱创建能力创建药箱药品，不再由客户端额外调用新建药箱接口。
+4. 同名命中多条：必须用户选择目标药品后才能勾选确认，不允许静默选择第一条。
+
+### 非目标
+
+1. 不让 AI 自动决定是否加入药箱。
+2. 不默认把所有 `medicineBox` 上送给处方批量保存接口；只有用户确认“新建药箱药品”时才保留。
+3. 不在本工单内做复杂药品相似度模型，只做可解释的本地匹配规则。
+4. 不自动合并不同规格药品。
+
+## 3. UI 设计
+
+### 3.1 识别概览区
+
+处方识别结果页在成员确认区下方、处方列表上方增加“识别概览”。
+
+示例：
+
+```text
+┌ 识别概览 ─────────────────────────────────┐
+│ 处方 2 张 · 药品 5 个 · 药箱候选 3 个         │
+│ 待确认：3 个                               │
+│ 已匹配已有药品：2 个                         │
+│ 可新建药箱药品：1 个                         │
+└──────────────────────────────────────────┘
+```
+
+统计口径：
+
+| 字段 | 口径 |
+| --- | --- |
+| 处方 N 张 | `batches.count` |
+| 药品 N 个 | 所有 `batches[].medicationPlans` 总数 |
+| 药箱候选 N 个 | `medicationPlan.medicineBox != nil` 的数量 |
+| 待确认 N 个 | 有候选但用户未勾选确认的数量；多候选未选择目标也计入待确认 |
+| 已匹配已有药品 N 个 | 候选匹配到唯一已有药品，或用户已从多条中选择目标 |
+| 可新建药箱药品 N 个 | 候选没有匹配到已有药品 |
+
+UI 要求：
+
+1. 概览区只展示统计，不替代每个药品卡里的确认操作。
+2. 家庭药箱加载中时，概览显示加载态或“正在匹配家庭药箱”。
+3. 家庭药箱加载失败时，不阻断处方保存，但候选卡显示“药箱匹配失败，可重试”。
+
+### 3.2 无药箱候选的药品卡
+
+```text
+┌ 药品 1/3 ───────────────────────────────┐
+│ 头孢克肟片                               │
+│ 100mg · 每日 2 次 · 饭后                   │
+│ 2026-06-12 至 2026-06-18                 │
+│ [编辑药品] [附件]                         │
+└──────────────────────────────────────────┘
+```
+
+说明：
+
+1. 没有 `medicineBox` 候选时，不展示药箱候选卡。
+2. 仍然允许编辑药品和附件。
+
+### 3.3 有候选且唯一匹配已有药品
+
+```text
+┌ 药品 2/3 ───────────────────────────────┐
+│ 阿莫西林胶囊                             │
+│ 0.5g · 每日 3 次 · 7 天                   │
+│ [编辑药品] [附件]                         │
+│                                          │
+│ ┌ 药箱候选 ────────────────────────────┐ │
+│ │ 识别到可加入药箱的药品                  │ │
+│ │ 阿莫西林胶囊                            │ │
+│ │ 规格：0.25g x 24 粒                     │ │
+│ │ 有效期：2027-05-01                      │ │
+│ │                                        │ │
+│ │ 匹配结果：已有药品                       │ │
+│ │ 当前库存：12 粒                          │ │
+│ │ 提交时：绑定该已有药品                     │ │
+│ │                                        │ │
+│ │ [ ] 添加到药箱，提交时绑定该药品           │ │
+│ │ [编辑候选]                              │ │
+│ └──────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+行为：
+
+1. 默认不勾选。
+2. 用户勾选后，先弹窗询问“是否需要更新该药品的库存信息”。
+3. 用户选择“是”：使用 sheet 打开 `MedicineBoxFormView` 药箱服务端编辑页面，加载匹配到的已有药品，用户自行确认是否修改库存、单位、有效期等信息，并在表单内直接提交到服务器。
+4. 用户选择“否”：正常完成勾选确认，不打开 `MedicineBoxFormView`。
+5. 无论是否打开编辑页，提交处方时该用药计划都绑定选中的已有药品。
+6. 提交处方保存 payload 时，该条用药计划下的 `medicineBox` 必须剥离，避免服务端重复创建药箱。
+7. payload 需要携带目标已有药品 ID，字段统一使用 Swift `medicineBoxID` / JSON `medicine_box_id`。
+8. 客户端不使用本次识别草稿里的库存数量、库存单位自动更新已有药品；已有药品库存以服务端药箱编辑页中的数据为准，由用户自行修改并提交。
+
+### 3.4 有候选且无已有药品
+
+```text
+┌ 药品 3/3 ───────────────────────────────┐
+│ 布洛芬缓释胶囊                           │
+│ 必要时 · 疼痛或发热                       │
+│ [编辑药品] [附件]                         │
+│                                          │
+│ ┌ 药箱候选 ────────────────────────────┐ │
+│ │ 识别到可加入药箱的药品                  │ │
+│ │ 布洛芬缓释胶囊                          │ │
+│ │ 规格：0.3g x 10 粒                      │ │
+│ │ 有效期：未识别                           │ │
+│ │                                        │ │
+│ │ 匹配结果：无已有药品                     │ │
+│ │ 提交后：新建药箱药品                     │ │
+│ │                                        │ │
+│ │ [ ] 添加到药箱，提交后新建                │ │
+│ │ [编辑候选]                              │ │
+│ └──────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+行为：
+
+1. 默认不勾选。
+2. 用户勾选后，提交时保留 `medicineBox`，由 `PrescriptionBatchWorkflowSaveView` 内部创建药箱药品。
+3. 如果用户未勾选，提交时剥离该条 `medicineBox`，不新建药箱。
+
+### 3.5 同名命中多条
+
+```text
+┌ 药箱候选 ───────────────────────────────┐
+│ 阿莫西林胶囊                              │
+│ 匹配结果：找到 2 个同名已有药品              │
+│ 请选择要绑定的药品                         │
+│                                          │
+│ ( ) 阿莫西林胶囊 · 0.25g x 24 粒 · 库存 12  │
+│ ( ) 阿莫西林胶囊 · 0.5g x 12 粒 · 库存 6    │
+│                                          │
+│ [ ] 添加到药箱，提交时绑定所选药品           │
+└──────────────────────────────────────────┘
+```
+
+规则：
+
+1. 多条同名时，未选择目标药品不能确认添加。
+2. 不允许静默选择第一条。
+3. 用户选择目标药品后，勾选才可用。
+4. 用户勾选后同样弹窗询问是否打开 `MedicineBoxFormView` 更新该药品库存信息。
+5. 用户也可以不勾选，表示不加入药箱。
+
+## 4. 数据加载设计
+
+### 4.1 进入结果页加载家庭药箱
+
+`PrescriptionRecognitionResultContentView` 进入后，根据当前 `selectedMemberID` 调用：
+
+```swift
+MedicalQueryAPI.listFamilyMedicineCabinet(memberID:)
+```
+
+接口位置：
+
+```text
+SparkClient/Projects/Core/Networking/API/Medical/MedicalQueryAPI.swift:125-132
+```
+
+后端接口：
+
+```text
+GET /api/v1/medical/medicine-cabinet/summary/?member_id={selectedMemberID}
+```
+
+### 4.2 切换成员后重新加载
+
+当用户切换 `selectedMemberID`：
+
+```text
+selectedMemberID changed
+  -> 清空旧家庭药箱列表
+  -> 清空或重置旧匹配结果
+  -> 调用 listFamilyMedicineCabinet(newMemberID)
+  -> 重新匹配 batches 内所有 medicineBox 候选
+```
+
+要求：
+
+1. 旧成员的匹配结果不能沿用到新成员。
+2. 用户在旧成员下勾选的药箱确认状态，切换成员后默认失效，需要重新确认。
+3. 如果切回旧成员，第一期不要求恢复之前勾选状态，避免状态复杂。
+
+### 4.3 加载状态
+
+建议状态：
+
+```swift
+@State private var familyMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = []
+@State private var isLoadingFamilyMedicineBoxes = false
+@State private var familyMedicineBoxLoadError: String?
+@State private var medicineCandidateMatches: [MedicationCandidateKey: MedicineBoxCandidateMatch] = [:]
+@State private var medicineCandidateConfirmations: [MedicationCandidateKey: MedicineBoxCandidateConfirmation] = [:]
+```
+
+`MedicationCandidateKey`：
+
+```swift
+struct MedicationCandidateKey: Hashable, Sendable {
+    let prescriptionIndex: Int
+    let medicationIndex: Int
+}
+```
+
+## 5. 匹配规则设计
+
+### 5.1 候选来源
+
+候选来源：
+
+```swift
+batches[prescriptionIndex]
+    .medicationPlans?[medicationIndex]
+    .medicineBox
+```
+
+匹配字段第一期只使用药品名称：
+
+1. 优先使用 `medicineBox.medicineName`。
+2. `medicineBox.medicineName` 为空时，兜底使用 `medicationPlan.medicineName`。
+3. 不使用 `brandName`、`strength`、`dosageForm`、`doseUnit` 参与匹配。
+4. 不做药品别名匹配，例如“阿莫西林胶囊”和“阿莫西林”第一期不视为同一药品。
+
+### 5.2 标准化规则
+
+第一期建议只做轻量标准化：
+
+1. 去掉前后空格。
+2. 英文大小写不敏感。
+3. 中文全角/半角符号标准化。
+4. 去掉常见空白符。
+5. 规格、剂型、单位只用于卡片展示，不参与匹配。
+
+### 5.3 匹配结果枚举
+
+```swift
+enum MedicineBoxCandidateMatch: Equatable, Sendable {
+    case noCandidate
+    case noExisting(candidate: MedicineBoxRecognitionDraft)
+    case uniqueExisting(candidate: MedicineBoxRecognitionDraft, target: SparkMedicalSyncAPI.RemoteMedicineBox)
+    case multipleExisting(candidate: MedicineBoxRecognitionDraft, targets: [SparkMedicalSyncAPI.RemoteMedicineBox])
+    case loadFailed(candidate: MedicineBoxRecognitionDraft, message: String)
+}
+```
+
+### 5.4 匹配优先级
+
+建议第一期规则：
+
+1. 药品名称完全一致，且只命中一条家庭药箱药品：唯一匹配已有药品。
+2. 药品名称完全一致，命中多条家庭药箱药品：多候选，必须用户选择目标后才能勾选绑定。
+3. 药品名称不一致：无已有药品，可由用户确认后新建药箱药品。
+4. 同名但规格不同仍然按同名候选处理，不因为规格不同自动判定为无已有药品。
+5. 药品别名、品牌名、规格、剂型、单位第一期不参与匹配，避免误合并。
+
+## 6. 用户确认状态
+
+### 6.1 确认模型
+
+```swift
+enum MedicineBoxCandidateAction: Equatable, Sendable {
+    case none
+    case bindExisting(medicineBoxID: Int)
+    case createNew
+}
+
+struct MedicineBoxCandidateConfirmation: Equatable, Sendable {
+    var isConfirmed: Bool
+    var action: MedicineBoxCandidateAction
+    var editedCandidate: MedicineBoxRecognitionDraft?
+}
+```
+
+默认：
+
+```swift
+isConfirmed = false
+action = .none
+```
+
+### 6.2 勾选规则
+
+| 匹配结果 | 勾选是否可用 | 勾选后动作 |
+| --- | --- | --- |
+| 无候选 | 不展示 | 无 |
+| 唯一已有药品 | 可用 | `.bindExisting(medicineBoxID)` |
+| 无已有药品 | 可用 | `.createNew` |
+| 同名多条 | 选择目标前不可用 | 选择后 `.bindExisting(medicineBoxID)` |
+| 加载失败 | 不可用或允许仅保存处方 | 不执行药箱动作 |
+
+### 6.3 编辑候选
+
+“编辑候选”用于修改将要加入药箱的候选信息，例如：
+
+1. 药品名称。
+2. 规格。
+3. 总数量。
+4. 单位。
+5. 有效期。
+6. 备注。
+
+编辑后需要重新匹配家庭药箱：
+
+```text
+编辑候选保存
+  -> 更新 editedCandidate
+  -> 用 editedCandidate 重新匹配 familyMedicineBoxes
+  -> 重置 confirmation，要求用户重新勾选
+```
+
+避免用户在修改药品名/规格后沿用旧的匹配确认。
+
+### 6.4 已有药品绑定字段
+
+匹配已有药品并经用户确认后，需要在最终保存 payload 中表达“该用药计划绑定已有药箱药品”。字段名定为 Swift `medicineBoxID` / JSON `medicine_box_id`。
+
+```swift
+medicineBoxID: Int?
+```
+
+语义：
+
+1. `medicineBoxID != nil`：用药计划绑定已有药品；提交时剥离 `medicineBox`。
+2. `medicineBoxID == nil && medicineBox != nil`：用户确认新建药箱药品；提交时保留 `medicineBox`。
+3. `medicineBoxID == nil && medicineBox == nil`：不处理药箱，只保存用药计划。
+
+该字段只表达用户确认后的绑定结果，不能由匹配算法静默写入；多条同名时必须由用户选择目标后才写入。
+
+命名原因：
+
+1. 服务端 `MedicationPlan` 模型已有 `medicine_box` 外键，数据库和接口语义天然对应 `medicine_box_id`。
+2. 现有查询、回执和过滤已使用 `medicine_box_id`，继续沿用可以减少特殊分支。
+3. `medicine_box` 保留给“新建药箱药品”的嵌套对象；`medicine_box_id` 表达“绑定已有药箱药品”，两者互斥且清晰。
+4. 不使用 `existing_medicine_box_id`，避免和模型字段产生重复概念。
+
+## 7. 提交流程设计
+
+### 7.1 提交时只决定是否剥离 medicineBox
+
+本工单最新流程：点击提交时，客户端不再额外调用“更新库存”或“新建药箱”接口，而是只根据用户确认状态决定每条用药计划在处方批量保存 payload 中如何表达药箱关系。
+
+保存前生成一个“按确认状态处理药箱候选后的处方数组”：
+
+```swift
+let prescriptionDraftsForSave = batches.resolvingMedicineBoxCandidates(
+    confirmations: medicineCandidateConfirmations
+)
+```
+
+处理规则：
+
+| 状态 | medicineBox | 已有药品 ID | 结果 |
+| --- | --- | --- | --- |
+| 无候选 | 无 | 无 | 正常保存用药计划 |
+| 有候选但未勾选 | 剥离 | 无 | 只保存处方和用药计划，不处理药箱 |
+| 勾选 + 匹配已有药品 | 剥离 | 携带 `medicineBoxID` | 用药计划绑定已有药品；库存是否修改由用户在 `MedicineBoxFormView` 中单独处理 |
+| 勾选 + 无已有药品 | 保留 | 无 | `PrescriptionBatchWorkflowSaveView` 内部创建药箱药品 |
+| 同名多条但未选择目标 | 剥离或阻止勾选 | 无 | 不允许静默绑定第一条 |
+
+说明：
+
+1. 客户端提交流程内不单独调用 `SparkMedicalWorkflowAPI` 更新库存。
+2. 客户端提交流程内不单独调用药箱创建接口。
+3. 匹配已有药品时，处方提交只负责绑定已有药品 ID；不从识别草稿推断或生成任何库存变更。
+4. 新建药箱药品继续使用 `PrescriptionBatchWorkflowSaveView` 当前对 `medicineBox` 的创建能力。
+5. 绑定已有药品、新建药箱药品都由 `PrescriptionBatchWorkflowSaveView` 在一次批量保存事务内处理，客户端不拆分调用。
+
+### 7.2 用户未确认
+
+```text
+用户未勾选
+  -> 保存处方 payload 剥离 medicineBox
+  -> 不绑定已有药品
+  -> 不更新库存
+  -> 不新建药箱
+```
+
+### 7.3 用户确认，匹配已有药品
+
+```text
+用户勾选 + 已选择 medicineBoxID
+  -> 弹窗询问是否需要更新该药品库存信息
+  -> 如果选择是：sheet 打开 MedicineBoxFormView 服务端编辑页，用户直接保存药箱修改
+  -> 如果选择否：仅保留绑定确认状态
+  -> 保存处方 payload 剥离 medicineBox
+  -> 用药计划 payload 携带 medicineBoxID
+  -> PrescriptionBatchWorkflowSaveView 保存用药计划时绑定已有药品
+```
+
+要求：
+
+1. 使用已有药品 ID。
+2. 该条用药计划下的 `medicineBox` 必须剥离，避免重复创建药箱。
+3. 如果当前 `PrescriptionBatchWorkflowSaveView` 不支持“用药计划绑定已有药品”，需要扩展请求模型，例如给 `MedicationPlanRecognitionDraft` / payload 增加关联药品字段：
+
+```swift
+medicineBoxID: Int?
+```
+
+4. 处方批量保存只负责绑定已有药品，不负责根据识别草稿自动修改库存。
+5. 用户是否修改库存、单位、有效期等信息，完全交给 `MedicineBoxFormView` 服务端编辑页处理；不使用本次识别草稿中的 `totalQuantity`、`doseUnit` 等字段自动覆盖已有药品。
+6. 进入 `MedicineBoxFormView` 后，保存动作直接更新服务器上的药箱药品；该动作与后续处方批量保存解耦。
+7. 如果用户打开编辑页后取消或保存失败，仍保留“绑定已有药品”的勾选状态，但不改变服务端药箱库存。
+
+### 7.4 用户确认，无已有药品
+
+```text
+用户勾选 + createNew
+  -> 保存处方 payload 不剥离 medicineBox
+  -> PrescriptionBatchWorkflowSaveView 内部使用 medicineBox 创建药箱药品
+```
+
+新建要求：
+
+1. member 使用当前 `selectedMemberID`。
+2. 数据使用用户确认后的候选。
+3. 不额外调用药箱创建接口。
+4. 如果用户未勾选，仍然剥离 `medicineBox`，不创建药箱。
+5. 附件归属沿用现有保存规则，不为新建药箱额外增加附件处理流程。
+
+### 7.5 操作顺序
+
+推荐顺序：
+
+```text
+勾选已有药品候选
+  -> 弹窗询问是否更新该药品库存信息
+  -> 是：打开 MedicineBoxFormView，用户按服务端当前数据编辑并保存
+  -> 否：只确认绑定
+
+点击提交
+  -> 本地预校验处方/用药计划
+  -> 校验药箱候选确认状态
+  -> 根据确认状态生成处方批量保存 payload
+       - 未确认：剥离 medicineBox
+       - 确认已有药品：剥离 medicineBox + 携带已有药品 ID
+       - 确认新建药箱：保留 medicineBox
+  -> 调用 PrescriptionBatchWorkflowSaveView / 处方批量保存接口
+  -> 展示保存回执
+```
+
+提交流程内不再拆成“先保存处方、再单独处理药箱动作”。药箱相关动作统一由处方批量保存接口根据 payload 一次处理。
+
+### 7.6 失败处理
+
+因为药箱处理并入处方批量保存流程，第一期按一次提交结果处理，且必须在 `PrescriptionBatchWorkflowSaveView` 内使用同一个事务：
+
+1. 保存成功：展示处方、用药计划、绑定已有药品、新建药箱等回执。
+2. 保存失败：整体失败并回滚，保留草稿，展示错误，允许用户修复后再次提交。
+3. 不设计“绑定药箱失败但处方成功”的部分成功态。
+4. 客户端提交流程内不单独调用绑定已有药品或新建药箱接口，因此不存在客户端侧药箱动作重试。
+
+## 8. 接口设计
+
+### 8.1 查询家庭药箱
+
+使用：
+
+```swift
+MedicalQueryAPI.listFamilyMedicineCabinet(memberID:)
+```
+
+### 8.2 处方批量保存接口扩展
+
+用户确认药箱候选后，统一通过处方批量保存接口处理：
+
+```text
+POST /api/v1/medical/workflows/prescriptions/batch-save/
+```
+
+服务端位置：
+
+```text
+SparkService/medical/urls.py:86-87
+PrescriptionBatchWorkflowSaveView
+```
+
+接口需要支持两类药箱表达：
+
+1. **绑定已有药品**：用药计划 payload 携带已有药品 ID，字段为 `medicine_box_id`。
+2. **新建药箱药品**：用药计划 payload 携带 `medicine_box` 对象，沿用当前 `PrescriptionBatchWorkflowSaveView` 内部创建药箱能力。
+
+如果现有接口不支持“用药计划绑定已有药品”，需要补充服务端和客户端请求字段。
+
+事务要求：
+
+1. 处方、用药计划、绑定已有药品、新建药箱必须在 `PrescriptionBatchWorkflowSaveView` 内一个事务完成。
+2. 任一环节失败，服务端整体回滚并返回失败。
+3. 客户端不在提交流程内单独调用“绑定已有药品”或“新建药箱”接口。
+
+### 8.3 已有药品库存编辑交互
+
+已有药品的库存、单位、有效期等信息不通过本次识别草稿自动计算和更新，而是由用户进入药箱服务端编辑页自行确认。
+
+要求：
+
+1. 不由客户端在提交流程中单独调用库存更新接口。
+2. 用户勾选匹配已有药品后，弹窗询问是否需要更新该药品库存信息。
+3. 选择“是”时，sheet 打开 `MedicineBoxFormView`，传入匹配到的服务端药箱药品，使用服务端编辑模式。
+4. 用户在 `MedicineBoxFormView` 内看到服务端当前库存、单位、有效期等字段，自行判断是否更新。
+5. `MedicineBoxFormView` 的保存直接调用现有药箱编辑接口更新服务器；处方批量保存不再负责已有药品库存变更。
+6. 选择“否”时，不打开编辑页，只保留绑定已有药品的确认状态。
+7. 本次识别草稿中的候选数量、单位只作为展示参考，不作为已有药品库存更新来源。
+
+### 8.4 新建药箱药品
+
+用户确认“添加到药箱，提交后新建”时：
+
+1. 客户端保留该条用药计划下的 `medicineBox`。
+2. 不额外调用药箱创建接口。
+3. `PrescriptionBatchWorkflowSaveView` 按现有逻辑创建药箱药品，并绑定用药计划。
+4. 创建成功后可把新药箱 ID 展示在回执中。
+5. 新建药箱默认归属当前 `selectedMemberID`。
+
+### 8.5 附件归属
+
+药品附件归属沿用现有保存规则，不因本工单额外改造：
+
+1. 不新增附件绑定规则。
+2. 不为新建药箱或绑定已有药品单独增加附件处理流程。
+3. 处方、用药计划、药箱之间的附件关联以现有服务端保存逻辑为准。
+
+## 9. 涉及文件
+
+| 文件 | 改动内容 | 影响 |
+| --- | --- | --- |
+| `PrescriptionRecognitionResultContentView.swift` | 加载家庭药箱；维护候选匹配和确认状态；切换成员重新加载和匹配；勾选已有药品时弹窗询问是否打开药箱编辑页；提交时按确认状态决定剥离/保留 medicineBox 和绑定已有药品 ID | 核心状态与流程 |
+| `PrescriptionResultSections.swift` | 增加识别概览区和药箱候选卡；每条药品显示候选匹配、勾选、目标选择、编辑候选；勾选动作回调到结果页触发库存编辑询问 | UI 展示 |
+| `MedicineBoxFormView.swift` | 复用服务端编辑模式，用于用户确认是否修改已有药品库存、单位、有效期等信息 | 已有药品编辑 |
+| `MedicalQueryAPI.swift` | 复用 `listFamilyMedicineCabinet(memberID:)` | 家庭药箱加载 |
+| `SparkMedicalWorkflowAPI.swift` | 补齐处方批量保存 payload 中 `medicine_box_id` / 保留 `medicineBox` 新建药箱的请求字段 | 保存接口 |
+| `DefaultTypedMedicalDocumentSaver.swift` | 处方保存前按确认状态剥离或保留 `medicineBox`；已有药品场景携带 `medicineBoxID` | 保存编排 |
+| `PrescriptionRecognitionDraftMapper.swift` | 增加按确认状态生成保存草稿、剥离 medicineBox、注入 `medicineBoxID` 的辅助方法 | 降低 View 复杂度 |
+| `SparkService/medical/views.py` | `PrescriptionBatchWorkflowSaveView` 支持绑定已有药品；保留 medicineBox 时创建新药箱 | 服务端保存能力 |
+| `Localizable.strings` | 增加识别概览、药箱候选、匹配结果、确认勾选、错误提示文案 | 本地化 |
+
+## 10. 验收标准
+
+1. 进入处方识别结果页后，根据 `selectedMemberID` 调用一次家庭药箱接口。
+2. 切换成员后，重新调用家庭药箱接口并重新匹配候选。
+3. 识别概览区统计处方数、药品数、药箱候选数、待确认数、已匹配数、可新建数。
+4. 无 `medicineBox` 候选的药品不展示药箱候选卡。
+5. 有候选且唯一匹配已有药品时，展示当前库存和提交时绑定已有药品说明。
+6. 有候选且无已有药品时，展示提交后新建药箱药品说明。
+7. 同名命中多条时，必须选择目标药品后才能勾选确认。
+8. 同名命中多条但未选择目标、未勾选时，允许提交处方，默认不绑定药箱、不新建药箱。
+9. 未勾选确认时，提交不会绑定已有药品，不会更新库存，不会新建药箱，处方保存 payload 不带该条 `medicineBox`。
+10. 勾选确认且匹配已有药品时，弹窗询问是否需要更新该药品库存信息。
+11. 用户选择“是”时，sheet 打开 `MedicineBoxFormView` 服务端编辑页；用户提交后直接更新服务器药箱数据。
+12. 用户选择“否”时，不打开 `MedicineBoxFormView`，只确认提交时绑定已有药品。
+13. 勾选确认且匹配已有药品时，处方保存 payload 不带该条 `medicineBox`，但携带目标已有药品 ID；保存后用药计划绑定该药品。
+14. 已有药品库存、单位不使用识别草稿自动更新，必须以服务端药箱编辑页为准。
+15. 勾选确认且无已有药品时，处方保存 payload 保留该条 `medicineBox`，由 `PrescriptionBatchWorkflowSaveView` 创建新药箱药品，并绑定当前成员。
+16. 批量保存中处方、用药计划、绑定已有药品、新建药箱必须同事务完成；失败时整体回滚。
+17. 编辑候选后重新匹配，旧确认状态失效。
+18. 切换成员后清空所有勾选状态，并基于新成员家庭药箱重新匹配。
+19. 家庭药箱加载失败时，仍可保存处方，但不能执行药箱确认动作。
+20. 保存成功回执展示处方数、用药计划数、绑定已有药品数、新建药箱数。
+
+## 11. 已确认规则汇总
+
+1. 已有药品绑定字段名：Swift 使用 `medicineBoxID`，JSON payload 使用 `medicine_box_id`。
+2. `medicine_box` 保留给新建药箱药品的嵌套对象；`medicine_box_id` 表达绑定已有药箱药品。
+3. 服务端事务：处方、用药计划、绑定已有药品、新建药箱必须在 `PrescriptionBatchWorkflowSaveView` 内一个事务完成。
+4. 提交流程内不单独调用绑定或新建药箱接口。
+5. 附件归属沿用现有规则，不额外改造。
+6. 匹配规则只按名称匹配，不考虑规格、剂型、单位、别名。
+7. 公共药品允许客户端打开编辑页，是否允许更新由服务端现有规则控制。
+8. 切换成员后清空所有勾选状态。
+9. 不需要“忽略该药箱候选”按钮。
+10. 新建药箱绑定当前 `selectedMemberID`。
+11. 多候选未选择目标且未勾选时，允许提交处方，默认不绑定药箱、不新建药箱。
+12. 待确认统计包含所有有候选但未勾选的药品，多候选未选择目标也计入。
+13. 保存回执需要展示处方数、用药计划数、绑定已有药品数、新建药箱数。
+
+## 12. 风险与注意事项
+
+1. 不能让未确认的 `medicineBox` 进入处方保存 payload，否则会绕过用户确认。
+2. 同名多条不能静默选择第一条，这是高风险医疗数据合并错误。
+3. 匹配规则必须可解释，第一期宁可少匹配，也不要误匹配。
+4. 切换成员必须重新加载和重新匹配，避免把 A 成员药箱库存更新到 B 成员。
+5. 已确认新建药箱时必须保留 `medicineBox`，否则 `PrescriptionBatchWorkflowSaveView` 无法创建新药箱。
+6. 已确认绑定已有药品时必须剥离 `medicineBox`，否则可能同时绑定旧药品又新建药箱。
+7. 已有药品库存、单位、有效期等信息必须以服务端药箱编辑页为准，不能用本次识别草稿自动覆盖。
+8. 打开 `MedicineBoxFormView` 编辑已有药品和后续处方批量保存是两个动作，UI 需要避免让用户误以为“勾选即自动增加库存”。
+9. 处方批量保存必须保持事务一致性，不能出现处方保存成功但药箱绑定或新建失败的半成功状态。
+
+## 工单 `MEDICAL-AI-OCR-000010`：处方识别保存前检查点与服务端字段补全
+
+### 工单状态
+
+修复需求/待实现。
+
+## 1. 问题背景
+
+处方识别结果页提交时，已经进入处方批量保存接口：
+
+```text
+POST /api/v1/medical/workflows/prescriptions/batch-save/
+```
+
+但客户端保存前检查点没有拦住处方状态枚举错误，导致服务端返回 400。
+
+典型请求片段：
+
+```json
+{
+  "institution_name": "东部战区总医院",
+  "prescribed_at": "2025-06-27",
+  "status": "普通"
+}
+```
+
+新的失败样例中，客户端把支付状态写入了处方生命周期 `status`：
+
+```json
+{
+  "institution_name": "东部战区总医院",
+  "prescribed_at": "2025-06-27",
+  "status": "paid"
+}
+```
+
+典型服务端错误：
+
+```json
+{
+  "code": -1,
+  "msg": {
+    "status": ["\"普通\" is not a valid choice."]
+  },
+  "data": null
+}
+```
+
+服务端处方状态只允许：
+
+```text
+active
+completed
+cancelled
+```
+
+AI 识别把处方类型、处方属性或支付状态误填到了 `status`，客户端没有在提交前归一化或预校验，服务端也没有独立字段承接这些信息，导致可预知错误进入网络层。
+
+000007 已补 `dose_value` 数值校验，但实际保存链路还需要更完整的处方检查点，覆盖服务端模型和序列化器的主要约束。
+
+## 2. 修复目标
+
+新增“处方识别保存前检查点”机制，在真正发起处方批量保存请求之前，对处方数组和内部用药计划执行完整检查。
+
+目标：
+
+1. 保存前拦截处方 `status` 非法值，例如 `普通`。
+2. 保存前拦截用药计划 `status` 非法值。
+3. 保存前拦截 `frequencyType` 与 `everyNDays / weeklyWeekdays` 不匹配。
+4. 保存前拦截日期格式错误和结束日期早于开始日期。
+5. 保存前拦截 `doseValue` 非数字，复用 000007。
+6. 保存前识别明显异常但服务端未必会拦截的高风险剂量，提示用户确认。
+7. 保存前检查 `medicineBoxID` 与 `medicineBox` 二选一表达，避免同一条药品同时绑定已有药箱又新建药箱。
+8. 保存前检查 `reminderTimes` 结构，避免时间格式或对象结构错误。
+9. 检查失败时不发网络请求，展示本地预校验错误并定位。
+10. 对可安全归一化的字段，在抽取后或保存 payload 生成前统一归一化，不把 AI 原始脏值直传服务端。
+11. 服务端新增处方扩展字段，承接 AI 识别出的处方类型、支付状态等信息，不再把这些信息塞入 `Prescription.status`。
+12. 客户端 payload 明确区分生命周期状态、处方类型、支付状态。
+13. 客户端处方状态选择项与服务端保持完全一致，只保留 `active`、`completed`、`cancelled`，取消其他所有状态选项。
+
+## 3. 检查点分层
+
+### 3.1 抽取后归一化检查点
+
+位置：
+
+```text
+DefaultTypedMedicalDocumentExtractor
+  -> normalizedPrescriptionDrafts
+  -> normalizedMedicationPlanDrafts
+```
+
+职责：
+
+1. 把空 `medicationPlans` 归一化为 `[]`。
+2. 补齐 `sortOrder`。
+3. 处方 `status` 非法时，不保留 AI 原始值。
+4. 用药计划 `status` 非法时，默认归一化为 `active`。
+5. `frequencyType` 空值归一化为 `daily`。
+6. 明显属于处方类型、处方类别的文本，例如 `普通`、`门诊`、`急诊`，不要写入 `status`，优先写入新增处方类型字段，并在 `extra` 中保留原文。
+7. 明显属于支付状态的文本，例如 `paid`、`已支付`、`未支付`，不要写入 `status`，优先写入新增支付状态字段。
+
+推荐规则：
+
+```text
+prescription.status in active/completed/cancelled -> 保留
+prescription.status 为空 -> active
+prescription.status 为 普通/门诊/急诊/医保/自费 -> status=active，写入 prescriptionType / prescriptionTypeText，并把原文写入 extra
+prescription.status 为 paid/已支付/未支付/待支付 -> status=active，写入 paymentStatus，并把原文写入 extra
+prescription.status 其他非法值 -> 清空或 active，并生成 debug 诊断
+```
+
+说明：
+
+1. 抽取后归一化用于减少明显 AI 脏值。
+2. 归一化不能吞掉高风险字段，仍需要保存前预校验兜底。
+
+### 3.2 结果页提交前预校验检查点
+
+位置：
+
+```text
+MedicalDocumentUploadViewModel.saveResult()
+  -> MedicalPreSubmitValidator.validate(...)
+```
+
+职责：
+
+1. 校验用户当前编辑后的草稿。
+2. 发现阻断错误时写入 `preSubmitValidationIssues`。
+3. 结果页顶部展示错误摘要。
+4. 处方/药品卡片高亮。
+5. 点击错误后展开并滚动到对应位置。
+6. 校验失败不进入 Saver。
+
+这是用户可感知的主要检查点。
+
+### 3.3 网络前 payload preflight 检查点
+
+位置：
+
+```text
+DefaultTypedMedicalDocumentSaver
+  -> buildPrescriptionBatchSavePayload / buildPrescriptionCreateRequests
+  -> preflightValidatePrescriptionPayload
+  -> API request
+```
+
+职责：
+
+1. 检查最终 JSON payload 是否仍包含服务端不接受的值。
+2. 避免 ViewModel 或 UI 漏同步导致旧脏数据进入网络层。
+3. 作为最后一道本地保护：失败时抛出本地错误，不发请求。
+
+要求：
+
+1. preflight 失败错误要能转换为 `MedicalPreSubmitValidationIssue` 或至少映射成用户可理解错误。
+2. 不能只 `assert` 或只打日志。
+3. 不允许“明知服务端会 400 还继续请求”。
+
+## 4. 需要补全的规则
+
+### 4.1 处方状态 `prescription.status`
+
+服务端合法值：
+
+```text
+active
+completed
+cancelled
+```
+
+非法示例：
+
+```text
+普通
+门诊
+急诊
+有效
+已开具
+paid
+已支付
+未支付
+```
+
+处理策略：
+
+1. 抽取后归一化：`普通/门诊/急诊` 不作为 status，默认 `active`，原文写入处方类型字段和 `extra.prescriptionTypeText`。
+2. 抽取后归一化：`paid/已支付/未支付/待支付` 不作为 status，默认 `active`，写入支付状态字段和 `extra.paymentStatusText`。
+3. 提交前预校验：如果仍然不是合法值，阻断提交。
+4. UI 提示：`处方状态不合法，请选择生效中、已完成或已取消。`
+
+客户端状态选项：
+
+| 保存值 | 展示文案 | 含义 |
+| --- | --- | --- |
+| `active` | 生效中 | 当前处方仍有效或默认保存状态 |
+| `completed` | 已完成 | 处方相关用药或处理已完成 |
+| `cancelled` | 已取消 | 处方被取消或不再执行 |
+
+客户端必须取消的状态选项：
+
+```text
+普通
+门诊
+急诊
+有效
+已开具
+paid
+已支付
+未支付
+待支付
+```
+
+说明：
+
+1. `普通/门诊/急诊` 属于处方类型，只能进入 `prescriptionType` / `prescription_type`。
+2. `paid/已支付/未支付/待支付` 属于支付状态，只能进入 `paymentStatus` / `payment_status`。
+3. 结果页、详情页草稿模式、编辑页、保存前校验、payload 生成都必须使用同一组状态定义，不能各自维护一套状态列表。
+
+字段路径：
+
+```text
+prescriptions[n].status
+```
+
+### 4.1.1 服务端新增处方字段
+
+当前 `Prescription.status` 是处方生命周期状态，只适合表达：
+
+```text
+active
+completed
+cancelled
+```
+
+AI 识别出的 `普通`、`门诊`、`急诊`、`paid` 等不是生命周期状态。服务端需要新增字段承接这些信息，避免客户端只能塞到 `extra` 或误塞到 `status`。
+
+建议服务端模型新增：
+
+```python
+class Prescription(MedicalBaseModel):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "生效中"
+        COMPLETED = "completed", "已完成"
+        CANCELLED = "cancelled", "已取消"
+
+    class PaymentStatus(models.TextChoices):
+        UNKNOWN = "unknown", "未知"
+        UNPAID = "unpaid", "未支付"
+        PAID = "paid", "已支付"
+        REFUNDED = "refunded", "已退费"
+
+    prescription_type = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="处方类型/类别，如普通、门诊、急诊、医保、自费等原始展示文本",
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.UNKNOWN,
+        db_index=True,
+        db_comment="处方支付状态",
+    )
+```
+
+字段设计说明：
+
+1. `status` 继续只表示处方生命周期。
+2. `prescription_type` 使用普通字符串，不强行枚举，避免各医院票据类型差异导致频繁迁移。
+3. `payment_status` 使用低风险枚举，`paid` 应成为合法支付状态。
+4. 原始 AI 文本仍建议保留到 `extra.rawStatusText` 或 `extra.prescriptionTypeText`，便于排查。
+
+后端改动范围：
+
+| 文件 | 改动 |
+| --- | --- |
+| `SparkService/medical/models.py` | `Prescription` 新增 `prescription_type`、`payment_status` 字段 |
+| `SparkService/medical/serializers.py` | `PrescriptionSerializer` 暴露新字段；校验 `payment_status` choices |
+| `SparkService/medical/views.py` | `PrescriptionBatchWorkflowSaveView` 和 `CombinedMedicalCreateView` 从 payload 读取并保存新字段 |
+| `SparkService/medical/migrations/*` | 新增数据库迁移 |
+| `SparkService/medical/tests.py` | 增加 batch-save / combined-create 保存 `prescription_type`、`payment_status` 的测试 |
+
+客户端字段映射：
+
+| AI/草稿值 | 保存 payload |
+| --- | --- |
+| `普通` | `status=active`, `prescription_type="普通"` |
+| `门诊` | `status=active`, `prescription_type="门诊"` |
+| `急诊` | `status=active`, `prescription_type="急诊"` |
+| `paid` | `status=active`, `payment_status="paid"` |
+| `已支付` | `status=active`, `payment_status="paid"` |
+| `未支付` | `status=active`, `payment_status="unpaid"` |
+| `已退费` | `status=active`, `payment_status="refunded"` |
+
+客户端模型改动：
+
+```swift
+struct PrescriptionRecognitionDraft {
+    var status: String?
+    var prescriptionType: String?
+    var paymentStatus: String?
+    ...
+}
+```
+
+保存 payload 需要支持 snake_case：
+
+```json
+{
+  "status": "active",
+  "prescription_type": "普通",
+  "payment_status": "paid"
+}
+```
+
+注意：项目已使用统一 snake_case 编解码策略，不要为这些字段手写 `CodingKeys`，除非所在模型当前不是走统一编码。
+
+### 4.2 用药计划状态 `medicationPlans.status`
+
+服务端合法值：
+
+```text
+active
+paused
+completed
+cancelled
+```
+
+处理策略：
+
+1. 空值默认 `active`。
+2. 中文 `执行中/生效/有效` 可归一化为 `active`。
+3. 其他非法值提交前阻断。
+
+字段路径：
+
+```text
+prescriptions[n].medicationPlans[m].status
+```
+
+### 4.3 频次类型与联动字段
+
+服务端合法 `frequency_type`：
+
+```text
+daily
+every_n_days
+weekly
+```
+
+规则：
+
+1. `frequencyType = daily`：`everyNDays` 可为空，`weeklyWeekdays` 可为空。
+2. `frequencyType = every_n_days`：`everyNDays` 必填，且 `1...365`。
+3. `frequencyType = weekly`：`weeklyWeekdays` 必须非空，且每项是 `1...7` 的整数。
+4. 非法 `frequencyType` 提交前阻断，不直接发服务端。
+
+字段路径：
+
+```text
+prescriptions[n].medicationPlans[m].frequencyType
+prescriptions[n].medicationPlans[m].everyNDays
+prescriptions[n].medicationPlans[m].weeklyWeekdays
+```
+
+### 4.4 日期字段
+
+需要检查：
+
+```text
+prescriptions[n].prescribedAt
+prescriptions[n].medicationPlans[m].startDate
+prescriptions[n].medicationPlans[m].endDate
+prescriptions[n].medicationPlans[m].medicineBox.expireDate
+```
+
+规则：
+
+1. 日期必须是 `yyyy-MM-dd`。
+2. `endDate >= startDate`。
+3. 空 `prescribedAt` 可允许。
+4. `startDate` 如果服务端必填，客户端保存 payload 生成前必须有默认值或阻断。
+
+### 4.5 剂量数值与异常剂量
+
+复用 000007：
+
+1. `doseValue` 非空时必须是纯数字。
+2. `dosePerTime` 可保留 `1片`、`1滴`、`半片` 等文本。
+
+新增高风险提示：
+
+1. `doseUnit = 片/粒/袋/滴` 且 `doseValue > 20` 时，标记为高风险，需要用户确认。
+2. 如日志中的 `doseValue = 93`、`dosePerTime = 93片`，服务端可能能保存，但业务上明显异常，应进入“风险确认”或阻断提交。
+3. 第一阶段建议作为阻断错误：提示用户编辑确认；后续可做“确认无误后继续”。
+
+字段路径：
+
+```text
+prescriptions[n].medicationPlans[m].doseValue
+prescriptions[n].medicationPlans[m].dosePerTime
+```
+
+### 4.6 提醒时间 `reminderTimes`
+
+规则：
+
+1. 必须是对象数组。
+2. 每项必须包含 `time`。
+3. `time` 必须是 `HH:mm`。
+4. `dose` 如果存在，必须是数字。
+5. 空数组允许。
+
+字段路径：
+
+```text
+prescriptions[n].medicationPlans[m].reminderTimes
+```
+
+### 4.7 药箱表达 `medicineBoxID` / `medicineBox`
+
+规则：
+
+1. 绑定已有药品：只传 `medicineBoxID`，不传 `medicineBox`。
+2. 新建药箱：只传 `medicineBox`，不传 `medicineBoxID`。
+3. 未确认药箱候选：两者都不传。
+4. 同一条药品不能同时传 `medicineBoxID` 和 `medicineBox`。
+5. `medicineBoxID` 必须来自当前成员或家庭药箱可访问范围。
+
+字段路径：
+
+```text
+prescriptions[n].medicationPlans[m].medicineBoxID
+prescriptions[n].medicationPlans[m].medicineBox
+```
+
+## 5. UI 与用户交互
+
+### 5.1 错误摘要
+
+顶部错误摘要需要支持处方检查点错误：
+
+```text
+第 1 张处方：处方状态“普通”不合法
+第 1 张处方第 2 个药品：单次剂量 93片 疑似异常，请编辑确认
+```
+
+### 5.2 卡片高亮
+
+1. 处方级错误高亮处方卡片。
+2. 药品级错误高亮药品卡片。
+3. 药箱候选错误高亮候选确认区域。
+4. 点击错误摘要滚动到具体卡片。
+
+### 5.3 自动修复与人工修复
+
+可以自动修复：
+
+1. `status = 普通/门诊/急诊` -> `active`，原文放入 `extra`。
+2. 空 `frequencyType` -> `daily`。
+3. 空 `medicationPlan.status` -> `active`。
+
+必须人工确认：
+
+1. `doseValue = 93` 且 `doseUnit = 片`。
+2. `endDate < startDate`。
+3. `weekly` 但没有星期。
+4. 同一条药品同时带 `medicineBoxID` 和 `medicineBox`。
+
+## 6. 涉及文件
+
+| 文件 | 改动内容 | 影响 |
+| --- | --- | --- |
+| `DefaultTypedMedicalDocumentExtractor.swift` | 抽取后归一化处方/用药状态、频次默认值，保留原始异常文本到 extra | 降低 AI 脏值进入结果页 |
+| `MedicalPreSubmitValidator.swift` | 增加处方保存前检查点规则：status、frequency、date、dose、reminderTimes、medicineBox 表达 | 保存前阻断 |
+| `DefaultTypedMedicalDocumentSaver.swift` | 增加 payload preflight，最终发请求前再次检查服务端不可接受字段 | 网络前兜底 |
+| `MedicalDocumentTypedModels.swift` | `PrescriptionRecognitionDraft` 增加 `prescriptionType`、`paymentStatus` | 草稿承接新字段 |
+| `SparkMedicalWorkflowAPI.swift` / 批量保存 payload | 增加 `prescriptionType`、`paymentStatus` 并编码为 `prescription_type`、`payment_status` | 客户端请求 |
+| `PrescriptionRecognitionResultContentView.swift` | 展示检查点错误、同步编辑后重新校验 | UI 状态 |
+| `PrescriptionResultSections.swift` | 处方卡、药品卡、药箱候选区域展示检查点错误；处方状态选择项只保留 `active/completed/cancelled` | UI 定位 |
+| `MedicationPrescriptionDetailPage.swift` / 处方编辑入口 | 草稿预览和本地编辑时复用同一组处方状态选项，取消其他状态 | 编辑一致性 |
+| `Localizable.strings` | 增加处方状态、频次、日期、提醒、异常剂量、药箱表达错误文案 | 本地化 |
+| `SparkService/medical/models.py` | `Prescription` 增加 `prescription_type`、`payment_status` | 服务端存储 |
+| `SparkService/medical/serializers.py` | `PrescriptionSerializer` 暴露并校验新字段 | 服务端 API |
+| `SparkService/medical/views.py` | batch-save / combined-create 保存新字段 | 服务端保存流程 |
+| `SparkService/medical/migrations/*` | 新增字段迁移 | 数据库 |
+
+## 7. 验收标准
+
+1. 处方 `status = "普通"` 时，点击提交不会请求 `/api/v1/medical/workflows/prescriptions/batch-save/`。
+2. 处方 `status = "普通"` 可在抽取后归一化为 `active`，且原文保留到 `extra.prescriptionTypeText`。
+3. 处方 `status = "paid"` 可在抽取后归一化为 `active`，并保存为 `payment_status = "paid"`。
+4. 服务端 `Prescription` 能持久化 `prescription_type` 和 `payment_status`。
+5. batch-save 接口能接收并保存 `prescription_type`、`payment_status`。
+6. combined-create 接口能接收并保存 `prescription_type`、`payment_status`。
+7. 如果保存前仍存在非法 status，顶部展示本地预校验错误，并高亮对应处方卡片。
+8. 客户端处方状态选择器只展示 `active`、`completed`、`cancelled` 对应文案，不再展示 `普通/门诊/急诊/paid/已支付/未支付` 等选项。
+9. 草稿详情、编辑页、结果页卡片内展示的处方状态文案来自同一份状态定义。
+10. 用药计划非法 status 不发请求。
+11. `frequencyType = every_n_days` 但 `everyNDays` 为空时不发请求。
+12. `frequencyType = weekly` 但 `weeklyWeekdays` 为空或含非法值时不发请求。
+13. `endDate < startDate` 时不发请求。
+14. `reminderTimes = [{"time": ""}]` 或 `time = "8点"` 时不发请求。
+15. 同一条药品同时带 `medicineBoxID` 和 `medicineBox` 时不发请求。
+16. `doseValue = "20mg"` 继续由 000007 拦截。
+17. `doseValue = "93"` 且 `doseUnit = "片"` 时提示高风险剂量，需要用户编辑确认或阻断。
+18. 所有检查点通过后，才允许进入处方批量保存接口。
+19. 服务端不再收到可由客户端检查点提前发现的 `status invalid choice` 请求。
+
+## 8. 风险与注意事项
+
+1. 检查点不能替代服务端校验，服务端仍是最终边界。
+2. 自动归一化必须保留原始文本到 `extra`，避免丢失 OCR 事实。
+3. 高风险剂量第一期建议阻断，后续如要支持“确认无误继续”，必须有明确确认状态写入草稿。
+4. payload preflight 不能只打日志，必须阻断网络请求。
+5. 检查点规则需要和服务端模型/Serializer 同步维护，新增服务端约束时要补客户端规则。
+6. 新增服务端字段后，客户端不能继续把 `paid`、`普通` 发送到 `status`，否则新增字段没有真正解决问题。
+7. `prescription_type` 不建议做严格枚举，避免医院差异导致识别结果频繁被服务端拒绝。
+8. 客户端不要为了展示方便再增加本地专用状态枚举；处方生命周期状态必须以服务端 `Prescription.Status` 为唯一来源。

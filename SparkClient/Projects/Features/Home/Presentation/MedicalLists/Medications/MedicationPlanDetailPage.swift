@@ -73,7 +73,9 @@ struct MedicationPlanDetailPage: View {
         self.onLocalDraftMedicineBoxSaved = onLocalDraftMedicineBoxSaved
         self.onLocalDraftMedicineBoxDeleted = onLocalDraftMedicineBoxDeleted
         _currentPlan = State(initialValue: plan)
-        _medicineBoxes = State(initialValue: medicineBoxes)
+        _medicineBoxes = State(
+            initialValue: completeData?.familyMedicineBoxes ?? medicineBoxes
+        )
         _sourcePlanDraft = State(initialValue: sourcePlanDraft)
     }
 
@@ -81,10 +83,35 @@ struct MedicationPlanDetailPage: View {
         records.sorted { $0.scheduledAt < $1.scheduledAt }
     }
 
-    private var medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox? {
-        currentPlan.medicineBox.flatMap { id in
-            medicineBoxes.first(where: { $0.id == id })
+    private enum LinkedMedicineBoxAvailability {
+        case none
+        case available(SparkMedicalSyncAPI.RemoteMedicineBox)
+        case pendingLoad
+        case unavailable
+    }
+
+    private var linkedMedicineBoxAvailability: LinkedMedicineBoxAvailability {
+        guard let boxID = currentPlan.medicineBox else { return .none }
+        if let completeData {
+            guard completeData.familyMedicineBoxes != nil else {
+                return .pendingLoad
+            }
+            if let box = medicineBoxes.first(where: { $0.id == boxID }) {
+                return .available(box)
+            }
+            return .unavailable
         }
+        if let box = medicineBoxes.first(where: { $0.id == boxID }) {
+            return .available(box)
+        }
+        return .unavailable
+    }
+
+    private var medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox? {
+        if case .available(let box) = linkedMedicineBoxAvailability {
+            return box
+        }
+        return nil
     }
 
     var body: some View {
@@ -134,7 +161,12 @@ struct MedicationPlanDetailPage: View {
                     .buttonStyle(.plain)
                 }
              
-            }else if currentPlan.medicineBox != nil {
+            } else if case .pendingLoad = linkedMedicineBoxAvailability {
+                MedicationPlanDetailInfoRow(
+                    title: L10n.text("home.medical.medication_plan.section.linked_box"),
+                    value: L10n.text("home.medical.medication_plan.box_pending_load")
+                )
+            } else if case .unavailable = linkedMedicineBoxAvailability {
                 MedicationPlanDetailInfoRow(
                     title: L10n.text("home.medical.medication_plan.section.linked_box"),
                     value: L10n.text("home.medical.medication_plan.box_unavailable")
@@ -322,6 +354,10 @@ struct MedicationPlanDetailPage: View {
         }
         .onChange(of: plan) { newValue in
             currentPlan = newValue
+        }
+        .onChange(of: completeData?.familyMedicineBoxes) { newValue in
+            guard let newValue else { return }
+            medicineBoxes = newValue
         }
     }
 

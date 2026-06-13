@@ -256,8 +256,14 @@ private extension DefaultTypedMedicalDocumentSaver {
         var extra = draft.extra ?? [:]
         extra.removeValue(forKey: PrescriptionRecognitionDraftMapper.medicineBoxUnlinkedExtraKey)
 
+        let confirmedMedicineBoxID = extra[PrescriptionRecognitionDraftMapper.confirmedMedicineBoxIDExtraKey]
+            .flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        extra.removeValue(forKey: PrescriptionRecognitionDraftMapper.confirmedMedicineBoxIDExtraKey)
+
         let medicineBoxPayload: SparkMedicalWorkflowAPI.MedicineBoxPayload?
-        if PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(draft) {
+        if let confirmedMedicineBoxID {
+            medicineBoxPayload = nil
+        } else if PrescriptionRecognitionDraftMapper.isMedicineBoxUnlinked(draft) {
             medicineBoxPayload = nil
         } else if let boxDraft = draft.medicineBox {
             medicineBoxPayload = SparkMedicalWorkflowAPI.MedicineBoxPayload(
@@ -270,13 +276,15 @@ private extension DefaultTypedMedicalDocumentSaver {
                 totalQuantity: (boxDraft.totalQuantity ?? draft.totalQuantity).parsedAsTotalQuantity(),
                 expireDate: boxDraft.expireDate?.nilIfBlank ?? draft.expireDate?.nilIfBlank,
                 notes: boxDraft.notes?.nilIfBlank ?? "",
-                extra: mergeTypedUploadExtra(boxDraft.extra)
+                extra: mergeTypedUploadExtra(boxDraft.extra),
+                fileIds: envelope.map { fileIds(from: boxDraft.attachmentFileIds, envelope: $0) } ?? []
             )
         } else {
             medicineBoxPayload = nil
         }
 
         return SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload(
+            medicineBoxID: confirmedMedicineBoxID,
             medicineBox: medicineBoxPayload,
             drugName: medicineName,
             dosePerTime: dosePerTime,

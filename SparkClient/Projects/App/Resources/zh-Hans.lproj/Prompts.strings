@@ -398,6 +398,7 @@ OCR文本：
     6    medicationPlans 每条必须含 medicineName（必填），键名与「服药计划抽取」模板（ai.prompt.medication.extraction.template）中单条元素白名单一致，禁止另增未定义键。
     7    medicationPlans 为药品明细数组，该笔处方无有效药品则整段省略。
     8    禁止输出 medicalCase：关联病历 ID 由 App 在提交保存时绑定，OCR 抽取阶段不得包含该键。
+    9    需要补充 药品信息 medicineBox。
 
 【多处方拆分规则】
 

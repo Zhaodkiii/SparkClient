@@ -267,7 +267,7 @@ struct MedicalDocumentResultInfoLine: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .center, spacing: 4) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -339,6 +339,9 @@ extension PrescriptionRecognitionDraft {
         var ids = Set(attachmentFileIds)
         for plan in medicationPlans ?? [] {
             ids.formUnion(plan.attachmentFileIds)
+            if let box = plan.medicineBox {
+                ids.formUnion(box.attachmentFileIds)
+            }
         }
         return ids
     }

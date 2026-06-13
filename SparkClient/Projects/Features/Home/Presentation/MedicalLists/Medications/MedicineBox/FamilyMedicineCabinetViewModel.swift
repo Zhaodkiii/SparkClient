@@ -28,6 +28,7 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
         entryMemberID: Int,
         mode: MedicineBoxMode = .family,
         initialMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = [],
+        initialFamilyMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]? = nil,
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger
     ) {
@@ -35,15 +36,35 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
         self.mode = mode
         self.medicalQueryAPI = medicalQueryAPI
         self.logger = logger
-        // 个人模式：优先用首页缓存立即展示，避免进入页面空白等待网络
-        if mode == .personal {
+        switch mode {
+        case .personal:
+            // 个人模式：优先用首页缓存立即展示，避免进入页面空白等待网络
             self.allBoxes = Self.sortedByUpdatedAt(initialMedicineBoxes)
+        case .family:
+            // 家庭模式：优先用首页 familyMedicineBoxes 缓存立即展示
+            if let cached = initialFamilyMedicineBoxes, cached.isEmpty == false {
+                self.allBoxes = Self.sortedByUpdatedAt(cached)
+                logger.info(
+                    "家庭药箱缓存命中 entryMemberID=\(entryMemberID) count=\(cached.count)",
+                    module: .home
+                )
+            }
         }
+    }
+
+    /// 家庭模式进入页面时是否需要请求接口（缓存为 nil 或空数组）
+    static func shouldLoadFamilyMedicineOnAppear(cachedBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]?) -> Bool {
+        cachedBoxes?.isEmpty != false
     }
 
     /// 回写首页缓存用的药箱列表（与 MedicineBoxListPage.sortedBoxes 语义一致）
     var boxesForHomeCacheSync: [SparkMedicalSyncAPI.RemoteMedicineBox] {
         Self.sortedByUpdatedAt(allBoxes)
+    }
+
+    /// 回写首页 familyMedicineBoxes 缓存用的列表
+    var boxesForFamilyHomeCacheSync: [SparkMedicalSyncAPI.RemoteMedicineBox] {
+        boxesForHomeCacheSync
     }
 
     nonisolated static func sortedByUpdatedAt(_ boxes: [SparkMedicalSyncAPI.RemoteMedicineBox]) -> [SparkMedicalSyncAPI.RemoteMedicineBox] {
@@ -105,6 +126,7 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
     @discardableResult
     func load() async -> Bool {
         guard isLoading == false else { return false }
+        let requestMemberID = entryMemberID
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -112,9 +134,17 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
         do {
             switch mode {
             case .family:
+                if allBoxes.isEmpty {
+                    logger.info(
+                        "家庭药箱缓存未加载，页面内请求 entryMemberID=\(requestMemberID)",
+                        module: .home
+                    )
+                }
                 // 家庭模式：按入口成员汇总创建者名下全部成员药品与公共药品
-                allBoxes = try await medicalQueryAPI.listFamilyMedicineCabinet(memberID: entryMemberID)
-                logger.info("家庭药箱加载完成 entryMemberID=\(entryMemberID) count=\(allBoxes.count)", module: .home)
+                let boxes = try await medicalQueryAPI.listFamilyMedicineCabinet(memberID: requestMemberID)
+                guard requestMemberID == entryMemberID else { return false }
+                allBoxes = boxes
+                logger.info("家庭药箱加载完成 entryMemberID=\(requestMemberID) count=\(allBoxes.count)", module: .home)
             case .personal:
                 // 个人模式：后台刷新成员药箱；失败时保留首页缓存 allBoxes 不清空
                 allBoxes = Self.sortedByUpdatedAt(

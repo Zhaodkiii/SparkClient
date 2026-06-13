@@ -219,6 +219,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     struct MedicationPlanBundleItemPayload: Encodable, Sendable {
+        let medicineBoxID: Int?
         let medicineBox: MedicineBoxPayload?
         let drugName: String
         let dosePerTime: String
@@ -237,6 +238,48 @@ struct SparkMedicalWorkflowAPI {
         let extra: [String: String]
         let fileIds: [Int]
 
+        enum CodingKeys: String, CodingKey {
+            case medicineBoxID = "medicine_box_id"
+            case medicineBox = "medicine_box"
+            case drugName = "drug_name"
+            case dosePerTime = "dose_per_time"
+            case doseValue = "dose_value"
+            case doseUnit = "dose_unit"
+            case frequencyType = "frequency_type"
+            case everyNDays = "every_n_days"
+            case weeklyWeekdays = "weekly_weekdays"
+            case frequencyText = "frequency_text"
+            case reminderTimes = "reminder_times"
+            case startDate = "start_date"
+            case endDate = "end_date"
+            case instructions
+            case reminderEnabled = "reminder_enabled"
+            case status
+            case extra
+            case fileIds = "file_ids"
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(medicineBoxID, forKey: .medicineBoxID)
+            try container.encodeIfPresent(medicineBox, forKey: .medicineBox)
+            try container.encode(drugName, forKey: .drugName)
+            try container.encode(dosePerTime, forKey: .dosePerTime)
+            try container.encodeIfPresent(doseValue, forKey: .doseValue)
+            try container.encode(doseUnit, forKey: .doseUnit)
+            try container.encode(frequencyType, forKey: .frequencyType)
+            try container.encodeIfPresent(everyNDays, forKey: .everyNDays)
+            try container.encode(weeklyWeekdays, forKey: .weeklyWeekdays)
+            try container.encode(frequencyText, forKey: .frequencyText)
+            try container.encode(reminderTimes, forKey: .reminderTimes)
+            try container.encode(startDate, forKey: .startDate)
+            try container.encodeIfPresent(endDate, forKey: .endDate)
+            try container.encode(instructions, forKey: .instructions)
+            try container.encode(reminderEnabled, forKey: .reminderEnabled)
+            try container.encode(status, forKey: .status)
+            try container.encode(extra, forKey: .extra)
+            try container.encode(fileIds, forKey: .fileIds)
+        }
     }
 
     /// 药箱创建/更新请求体（与 ``MedicineBoxSerializer`` 对齐；编码使用 ``JSONEncoder.medicalAPI`` → snake_case）。
@@ -268,6 +311,7 @@ struct SparkMedicalWorkflowAPI {
         let expireDate: String?
         let notes: String
         let extra: [String: String]
+        let fileIds: [Int]
     }
 
     /// 通用「仅返回 id」的响应解码结构。

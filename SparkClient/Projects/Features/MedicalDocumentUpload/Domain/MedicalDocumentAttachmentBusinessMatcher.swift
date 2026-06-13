@@ -159,6 +159,19 @@ enum MedicalDocumentAttachmentBusinessMatcher {
                         return true
                     }
                 }
+
+                // 匹配用药计划内嵌药箱
+                for batchIndex in prescriptions.indices {
+                    guard var prescription = draft.prescriptions?[batchIndex] else { continue }
+                    if bindFirstMatchingMedicineBoxInPrescription(
+                        ocrText: ocrText,
+                        fileID: fileID,
+                        prescription: &prescription
+                    ) {
+                        draft.prescriptions?[batchIndex] = prescription
+                        return true
+                    }
+                }
             }
         }
 
@@ -203,6 +216,18 @@ enum MedicalDocumentAttachmentBusinessMatcher {
                 let plans = prescriptions[batchIndex].medicationPlans ?? []
                 for planIndex in plans.indices where matchText(ocrText, with: plans[planIndex]) {
                     draft.prescriptions?[safe: batchIndex]?.medicationPlans?[safe: planIndex]?.appendAttachmentFileID(fileID)
+                    return true
+                }
+            }
+
+            for batchIndex in prescriptions.indices {
+                guard var prescription = draft.prescriptions?[batchIndex] else { continue }
+                if bindFirstMatchingMedicineBoxInPrescription(
+                    ocrText: ocrText,
+                    fileID: fileID,
+                    prescription: &prescription
+                ) {
+                    draft.prescriptions?[batchIndex] = prescription
                     return true
                 }
             }
@@ -391,6 +416,33 @@ enum MedicalDocumentAttachmentBusinessMatcher {
         guard var plans = prescription.medicationPlans else { return false }
         for index in plans.indices where matchText(ocrText, with: plans[index]) {
             plans[index].appendAttachmentFileID(fileID)
+            prescription.medicationPlans = plans
+            return true
+        }
+
+        // 匹配嵌套药箱
+        if bindFirstMatchingMedicineBoxInPrescription(
+            ocrText: ocrText,
+            fileID: fileID,
+            prescription: &prescription
+        ) {
+            return true
+        }
+        return false
+    }
+
+    /// 绑定处方内第一个匹配的药箱候选
+    private static func bindFirstMatchingMedicineBoxInPrescription(
+        ocrText: String,
+        fileID: UUID,
+        prescription: inout PrescriptionRecognitionDraft
+    ) -> Bool {
+        guard var plans = prescription.medicationPlans else { return false }
+        for index in plans.indices {
+            guard let box = plans[index].medicineBox, matchText(ocrText, with: box) else { continue }
+            var updatedBox = box
+            updatedBox.appendAttachmentFileID(fileID)
+            plans[index] = plans[index].updatingMedicineBoxCandidate(updatedBox)
             prescription.medicationPlans = plans
             return true
         }

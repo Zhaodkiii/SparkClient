@@ -117,11 +117,21 @@ final class HomeViewModel: ObservableObject {
         }
         isLoadingMedical = false
 
+        var medical = medicalResult.medical
+        // 保留按需加载的家庭药箱缓存；服务端 complete-data 不返回 familyMedicineBoxes。
+        if var completeData = medical.completeData,
+           let previousComplete = dashboard?.medical.completeData,
+           previousComplete.memberId == completeData.memberId,
+           let familyBoxes = previousComplete.familyMedicineBoxes {
+            completeData.familyMedicineBoxes = familyBoxes
+            medical.completeData = completeData
+        }
+
         let loaded = HomeDashboard(
             session: session,
             members: medicalResult.members,
             selectedMemberID: medicalResult.selectedMemberID,
-            medical: medicalResult.medical
+            medical: medical
         )
         dashboard = loaded
         selectedMemberID = loaded.selectedMember?.id

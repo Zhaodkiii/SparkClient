@@ -445,6 +445,10 @@ enum SparkMedicalSyncAPI {
         /// 药盒列表
         var medicineBoxes: [RemoteMedicineBox]?
         
+        /// 家庭药箱汇总列表；首页首次加载/切换成员不主动返回。
+        /// 只有进入家庭药箱模块后按 entryMemberID 加载成功，再写入首页完整成员数据缓存。
+        var familyMedicineBoxes: [RemoteMedicineBox]?
+        
         /// 处方列表
         var prescriptions: [RemotePrescription]?
         

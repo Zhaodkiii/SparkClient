@@ -305,6 +305,12 @@ struct HomeView: View {
                         FamilyMedicineCabinetPage(
                             entryMemberID: entryMemberID,
                             mode: .family,
+                            memberCompleteData: viewModel.dashboard?.medical.completeData,
+                            onMemberCompleteDataChanged: { updated in
+                                viewModel.updateMedicalCompleteData { completeData in
+                                    completeData.familyMedicineBoxes = updated.familyMedicineBoxes
+                                }
+                            },
                             dependencies: dependencies
                         )
                     } label: {

@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// 家庭/个人药箱统一页面（工单 MEDICINE-CABINET-000005 / 000006）
+/// 家庭/个人药箱统一页面（工单 MEDICINE-CABINET-000005 / 000006 / 000007）
 /// 通过 `mode` 区分家庭汇总与个人成员药箱，UI 与交互共用，仅人员筛选按模式显隐
 struct FamilyMedicineCabinetPage: View {
     let entryMemberID: Int
     let mode: MedicineBoxMode
     let dependencies: HomeFeatureDependencies
+    /// 家庭模式首页完整成员数据缓存；用于读取/回写 `familyMedicineBoxes`
+    let memberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    /// 家庭模式药箱变更时回写首页完整成员数据缓存
+    let onMemberCompleteDataChanged: ((SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void)?
     /// 个人模式首页缓存药箱数据，进入页面时立即展示
     let initialMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     /// 个人模式下药箱变更时回写上层缓存（如用药执行中心 completeData）
@@ -18,13 +22,17 @@ struct FamilyMedicineCabinetPage: View {
     init(
         entryMemberID: Int,
         mode: MedicineBoxMode = .family,
+        memberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
+        onMemberCompleteDataChanged: ((SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void)? = nil,
         initialMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = [],
         dependencies: HomeFeatureDependencies,
         onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
     ) {
         self.entryMemberID = entryMemberID
         self.mode = mode
-        // 家庭模式不使用首页成员药箱缓存
+        self.memberCompleteData = mode == .family ? memberCompleteData : nil
+        self.onMemberCompleteDataChanged = mode == .family ? onMemberCompleteDataChanged : nil
+        // 家庭模式使用 familyMedicineBoxes 缓存；个人模式使用成员个人药箱缓存
         self.initialMedicineBoxes = mode == .personal ? initialMedicineBoxes : []
         self.dependencies = dependencies
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
@@ -33,6 +41,7 @@ struct FamilyMedicineCabinetPage: View {
                 entryMemberID: entryMemberID,
                 mode: mode,
                 initialMedicineBoxes: mode == .personal ? initialMedicineBoxes : [],
+                initialFamilyMedicineBoxes: mode == .family ? memberCompleteData?.familyMedicineBoxes : nil,
                 medicalQueryAPI: dependencies.medicalQueryAPI,
                 logger: dependencies.logger
             )
@@ -65,11 +74,13 @@ struct FamilyMedicineCabinetPage: View {
         }
     }
 
-    /// 个人模式已有首页缓存时，进入页面不自动拉取网络
+    /// 家庭模式：familyMedicineBoxes 为空时页面内加载；个人模式：无首页缓存时加载
     private var shouldAutoLoadOnAppear: Bool {
         switch mode {
         case .family:
-            return true
+            return FamilyMedicineCabinetViewModel.shouldLoadFamilyMedicineOnAppear(
+                cachedBoxes: memberCompleteData?.familyMedicineBoxes
+            )
         case .personal:
             return initialMedicineBoxes.isEmpty
         }
@@ -206,11 +217,13 @@ struct FamilyMedicineCabinetPage: View {
     private func handleBoxSaved(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
         viewModel.upsert(box)
         notifyParentIfPersonal()
+        notifyParentCompleteDataIfFamily()
     }
 
     private func handleBoxDeleted(id: Int) {
         viewModel.remove(id: id)
         notifyParentIfPersonal()
+        notifyParentCompleteDataIfFamily()
     }
 
     /// 个人模式：将当前药箱列表按 updatedAt 倒序回写首页缓存
@@ -219,12 +232,25 @@ struct FamilyMedicineCabinetPage: View {
         onMedicineBoxesChanged?(viewModel.boxesForHomeCacheSync)
     }
 
+    /// 家庭模式：将当前药箱列表回写首页完整成员数据中的 familyMedicineBoxes 缓存
+    private func notifyParentCompleteDataIfFamily() {
+        guard mode == .family else { return }
+        guard var completeData = memberCompleteData else { return }
+        completeData.familyMedicineBoxes = viewModel.boxesForFamilyHomeCacheSync
+        onMemberCompleteDataChanged?(completeData)
+        dependencies.logger.info(
+            "家庭药箱回写首页完整成员数据缓存 entryMemberID=\(entryMemberID) count=\(completeData.familyMedicineBoxes?.count ?? 0)",
+            module: .home
+        )
+    }
+
     @MainActor
     private func reloadAndNotifyParent() async {
         let succeeded = await viewModel.load()
         // 刷新失败时保留首页缓存数据，不回写
         if succeeded {
             notifyParentIfPersonal()
+            notifyParentCompleteDataIfFamily()
         }
     }
 }
