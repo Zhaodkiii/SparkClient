@@ -17,7 +17,6 @@ struct AppCoordinatorView: View {
     var body: some View {
         ZStack {
             sessionContent
-
             if networkMonitor.hasEvaluatedPath == false {
                 AppLaunchScreenView()
             } else if networkMonitor.isSatisfied == false {

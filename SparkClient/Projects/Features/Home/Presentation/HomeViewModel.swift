@@ -12,11 +12,8 @@ final class HomeViewModel: ObservableObject {
     @Published private(set) var isLoadingMedical = false
     @Published private(set) var errorMessage: String?
     @Published var selectedMemberID: Int?
-    @Published var memberDetailID: Int?
-    @Published var shareMember: Member?
-    @Published var addMemberSheet: AddMemberSheet?
+    @Published var activeSheet: HomeSheet?
     @Published private(set) var pendingInviteCount: Int = 0
-    @Published var showPendingInvites = false
     @Published var highlightInviteID: Int?
     @Published private(set) var pendingInvites: [SparkMedicalMemberAPI.PendingInviteItem] = []
 
@@ -167,8 +164,7 @@ final class HomeViewModel: ObservableObject {
     }
 
     func openInviteAccept(_ item: SparkMedicalMemberAPI.PendingInviteItem) {
-        showPendingInvites = false
-        addMemberSheet = .acceptInvite(inviteID: item.inviteId, preview: item)
+        activeSheet = .addMember(.acceptInvite(inviteID: item.inviteId, preview: item))
     }
 
     func rejectPendingInvite(_ item: SparkMedicalMemberAPI.PendingInviteItem) async {
@@ -181,7 +177,7 @@ final class HomeViewModel: ObservableObject {
     }
 
     func consumePendingShareTicketIfNeeded() {
-        guard addMemberSheet == nil else { return }
+        guard activeSheet == nil else { return }
         guard case .signedIn(let session) = sessionStore.state else { return }
         guard let ticket = PendingMemberShareTicketStore.consume(forAccountID: session.accountID) else { return }
         openAddMemberForShareBinding(ticket: ticket)
@@ -193,7 +189,7 @@ final class HomeViewModel: ObservableObject {
         Task {
             await fetchPendingInvitesIfNeeded()
             highlightInviteID = inviteID
-            showPendingInvites = true
+            activeSheet = .pendingInvites
         }
     }
 
@@ -217,7 +213,7 @@ final class HomeViewModel: ObservableObject {
             Task {
                 await fetchPendingInvitesIfNeeded()
                 highlightInviteID = inviteID
-                showPendingInvites = true
+                activeSheet = .pendingInvites
             }
         }
     }
@@ -229,7 +225,7 @@ final class HomeViewModel: ObservableObject {
 
     /// 附近设备 / 深链收到票据后，打开新增成员页并由页内解析、进入绑定模式。
     func openAddMemberForShareBinding(ticket: String) {
-        addMemberSheet = .create(pendingShareTicket: ticket)
+        activeSheet = .addMember(.create(pendingShareTicket: ticket))
     }
 
     private static func parseShareTicket(from raw: String) -> String? {

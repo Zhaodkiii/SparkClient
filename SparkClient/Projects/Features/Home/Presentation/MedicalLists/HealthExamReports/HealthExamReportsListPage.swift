@@ -15,7 +15,6 @@ struct HealthExamReportsListPage: View {
 
     @State private var query = ""
     @State private var selectedFilter: HealthExamFilter = .all
-    @State private var showingUploadSheet = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -108,28 +107,11 @@ struct HealthExamReportsListPage: View {
         .navigationTitle(L10n.text("home.medical.list.health_exam_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Button {
-                showingUploadSheet = true
-            } label: {
-                Label(L10n.text("home.medical.list.health_exam.action.camera_add_report", fallback: "拍摄添加体检报告"), systemImage: "camera.fill")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Color(uiColor: .systemTeal), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(memberID == nil)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-        }
-        .sheet(isPresented: $showingUploadSheet) {
-            MedicalAttachmentUploadListSheet(documentType: .healthExamReport) { files in
-                startHealthExamReportRecognition(files: files)
-            }
+            MedicalListBottomActionBar(
+                documentType: .healthExamReport,
+                isEnabled: memberID != nil,
+                onUploadConfirmed: { files in startHealthExamReportRecognition(files: files) }
+            )
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {

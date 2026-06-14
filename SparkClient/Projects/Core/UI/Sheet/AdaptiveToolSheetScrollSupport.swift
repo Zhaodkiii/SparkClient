@@ -54,7 +54,6 @@ struct AdaptiveToolSheetScrollView<Content: View>: View {
                 .padding(.bottom, bottomContentPadding)
                 .readAdaptiveSheetHeight()
         }
-//        .background(Color(uiColor: .systemGroupedBackground))
     }
 }
 

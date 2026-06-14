@@ -17,7 +17,6 @@ struct FamilyMedicineCabinetPage: View {
 
     @StateObject private var viewModel: FamilyMedicineCabinetViewModel
     @State private var sheetDestination: MedicineBoxSheetDestination?
-    @State private var showingUploadSheet = false
 
     init(
         entryMemberID: Int,
@@ -156,9 +155,12 @@ struct FamilyMedicineCabinetPage: View {
             Task { await reloadAndNotifyParent() }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            MedicineBoxBottomCameraButton {
-                showingUploadSheet = true
-            }
+            MedicalListBottomActionBar(
+                documentType: .medicineBox,
+                onUploadConfirmed: { files in
+                    dependencies.medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicineBox)
+                }
+            )
         }
         .sheet(item: $sheetDestination) { destination in
             MedicineBoxFormView(
@@ -176,11 +178,6 @@ struct FamilyMedicineCabinetPage: View {
                     sheetDestination = nil
                 }
             )
-        }
-        .sheet(isPresented: $showingUploadSheet) {
-            MedicalAttachmentUploadListSheet(documentType: .medicineBox) { files in
-                dependencies.medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicineBox)
-            }
         }
         .alert(
             L10n.text("common.load_failed"),

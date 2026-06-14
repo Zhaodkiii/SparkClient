@@ -19,7 +19,6 @@ struct ExaminationReportsListPage: View {
     @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
     @State private var isPresentingAddExamSheet = false
-    @State private var showingUploadSheet = false
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -121,7 +120,11 @@ struct ExaminationReportsListPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if memberID > 0 {
-                bottomActionBar
+                MedicalListBottomActionBar(
+                    documentType: .examinationReport,
+                    onManualAdd: { isPresentingAddExamSheet = true },
+                    onUploadConfirmed: { files in startExaminationReportRecognition(files: files) }
+                )
             }
         }
         .sheet(isPresented: $isPresentingAddExamSheet) {
@@ -140,11 +143,6 @@ struct ExaminationReportsListPage: View {
                 })
             }
         }
-        .sheet(isPresented: $showingUploadSheet) {
-            MedicalAttachmentUploadListSheet(documentType: .examinationReport) { files in
-                startExaminationReportRecognition(files: files)
-            }
-        }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(
@@ -152,60 +150,6 @@ struct ExaminationReportsListPage: View {
                     aiSettingsViewModel: aiSettingsViewModel
                 )
             }
-        }
-    }
-
-    private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .background(Color(uiColor: .separator).opacity(0.2))
-
-            VStack(spacing: 12) {
-                GeometryReader { proxy in
-                    HStack(spacing: 12) {
-                        Button {
-                            isPresentingAddExamSheet = true
-                        } label: {
-                            Label(L10n.text("home.medical.list.examination.action.manual_add", fallback: "手动添加"), systemImage: "plus")
-                                .font(.headline)
-                                .foregroundStyle(Color(uiColor: .systemBlue))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(
-                                    Color(uiColor: .systemBlue).opacity(0.1),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color(uiColor: .systemBlue).opacity(0.22), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: max(112, proxy.size.width * 0.34))
-
-                        Button {
-                            showingUploadSheet = true
-                        } label: {
-                            Label(L10n.text("home.medical.list.examination.action.camera_add_report", fallback: "拍摄添加报告"), systemImage: "camera.fill")
-                                .font(.headline)
-                                .foregroundStyle(Color.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(
-                                    Color(uiColor: .systemBlue),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .frame(height: 52)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
         }
     }
 

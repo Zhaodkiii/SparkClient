@@ -11,8 +11,7 @@ struct HomeView: View {
 
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
-    @State private var showTaskCenter = false
-    @State private var showCustomCamera = false
+    @State private var activeFullScreenCover: HomeFullScreenCover?
     @State private var addMemberNearbyTransport = NearbyShareTransport()
 
     var body: some View {
@@ -26,7 +25,7 @@ struct HomeView: View {
                 // 当前版本 展示 注释 任务功能
 //                headerCard             //任务
                 medicalInfoSection          // 医疗
-//                nutritionInfoSection   // 营养
+                nutritionInfoSection   // 营养
 //                customCameraSection    // 相机
 
             }
@@ -45,9 +44,54 @@ struct HomeView: View {
                 .padding(.vertical, 8)
                 .background(.regularMaterial)
         }
-        .sheet(item: $viewModel.addMemberSheet) { sheet in
+        .sheet(item: $viewModel.activeSheet) { sheet in
+            homeSheetContent(sheet)
+        }
+        .fullScreenCover(item: $activeFullScreenCover) { cover in
+            homeFullScreenCoverContent(cover)
+        }
+        .task {
+            guard !hasLoaded else { return }
+            hasLoaded = true
+            viewModel.consumePendingShareTicketIfNeeded()
+            viewModel.consumePendingInviteIfNeeded()
+            await viewModel.loadInitialIfNeeded(syncRemote: true)
+        }
+        .onReceive(dependencies.routeStore.$routeStacks) { _ in
+            // Triggered when AppRouteStore updates (including .memberInvite signal from push/deeplink tap).
+            if let stack = dependencies.routeStore.routeStacks[.home],
+               let last = stack.last, case .memberInvite(let id) = last {
+                viewModel.handleRoute(.memberInvite(inviteID: id))
+                // Clear so next same inviteID still triggers; replaceStack was already done.
+                dependencies.routeStore.replaceStack([], for: .home)
+            }
+        }
+        .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
+            if isPresented {
+                activeFullScreenCover = .medicalDocumentUpload
+            } else if activeFullScreenCover == .medicalDocumentUpload {
+                activeFullScreenCover = nil
+            }
+        }
+        .onChange(of: activeFullScreenCover) { cover in
+            if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
+                medicalDocumentUploadViewModel.dismissUploadPage()
+            }
+        }
+        .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
+            Task {
+                await viewModel.refresh()
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
+    }
+
+    @ViewBuilder
+    private func homeSheetContent(_ sheet: HomeSheet) -> some View {
+        switch sheet {
+        case .addMember(let addMemberSheet):
             CompatibleNavigationContainer {
-                switch sheet {
+                switch addMemberSheet {
                 case .create(let pendingTicket):
                     AddFamilyMemberView(
                         mode: .create,
@@ -79,8 +123,8 @@ struct HomeView: View {
                     )
                 }
             }
-        }
-        .sheet(isPresented: $viewModel.showPendingInvites) {
+
+        case .pendingInvites:
             PendingMemberInvitesView(
                 items: viewModel.pendingInvites,
                 highlightInviteID: viewModel.highlightInviteID,
@@ -94,74 +138,40 @@ struct HomeView: View {
                     await viewModel.fetchPendingInvitesIfNeeded()
                 }
             )
-        }
-        .sheet(isPresented: memberDetailPresented) {
-            if let memberID = viewModel.memberDetailID {
-                CompatibleNavigationContainer {
-                    MemberDetailView(
-                        memberID: memberID,
-                        bindingUseCase: dependencies.manageMemberBindingUseCase,
-                        memberContextStore: viewModel.memberContextStoreForBinding,
-                        memberAPI: dependencies.medicalMemberAPI,
-                        shareUseCase: dependencies.shareMemberUseCase,
-                        onShare: {
-                            if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                                viewModel.memberDetailID = nil
-                                viewModel.shareMember = member
-                            }
-                        },
-                        onEdit: {
-                            if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                                viewModel.memberDetailID = nil
-                                viewModel.addMemberSheet = .edit(member)
-                            }
-                        },
-                        onDeleted: {
-                            viewModel.memberDetailID = nil
-                            Task { await viewModel.refresh() }
+
+        case .memberDetail(let memberID):
+            CompatibleNavigationContainer {
+                MemberDetailView(
+                    memberID: memberID,
+                    bindingUseCase: dependencies.manageMemberBindingUseCase,
+                    memberContextStore: viewModel.memberContextStoreForBinding,
+                    memberAPI: dependencies.medicalMemberAPI,
+                    shareUseCase: dependencies.shareMemberUseCase,
+                    onShare: {
+                        if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
+                            viewModel.activeSheet = .share(member)
                         }
-                    )
-                }
+                    },
+                    onEdit: {
+                        if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
+                            viewModel.activeSheet = .addMember(.edit(member))
+                        }
+                    },
+                    onDeleted: {
+                        viewModel.activeSheet = nil
+                        Task { await viewModel.refresh() }
+                    }
+                )
             }
-        }
-        .sheet(item: $viewModel.shareMember) { member in
+
+        case .share(let member):
             ShareSheet(
                 member: member,
                 shareUseCase: dependencies.shareMemberUseCase,
                 inviteUseCase: dependencies.memberInviteUseCase
             )
-        }
 
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            viewModel.consumePendingShareTicketIfNeeded()
-            viewModel.consumePendingInviteIfNeeded()
-            await viewModel.loadInitialIfNeeded(syncRemote: true)
-        }
-        .onReceive(dependencies.routeStore.$routeStacks) { _ in
-            // Triggered when AppRouteStore updates (including .memberInvite signal from push/deeplink tap).
-            if let stack = dependencies.routeStore.routeStacks[.home],
-               let last = stack.last, case .memberInvite(let id) = last {
-                viewModel.handleRoute(.memberInvite(inviteID: id))
-                // Clear so next same inviteID still triggers; replaceStack was already done.
-                dependencies.routeStore.replaceStack([], for: .home)
-            }
-        }
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: dependencies.aiSettingsViewModel
-                )
-            }
-        }
-        .fullScreenCover(isPresented: $showCustomCamera) {
-            CustomCameraHomeView {
-                showCustomCamera = false
-            }
-        }
-        .sheet(isPresented: $showTaskCenter) {
+        case .taskCenter:
             CompatibleNavigationContainer {
                 TaskCenterViewController(
                     memberID: viewModel.selectedMemberID,
@@ -169,19 +179,31 @@ struct HomeView: View {
                 )
             }
         }
-        .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
-            Task {
-                await viewModel.refresh()
+    }
+
+    @ViewBuilder
+    private func homeFullScreenCoverContent(_ cover: HomeFullScreenCover) -> some View {
+        switch cover {
+        case .medicalDocumentUpload:
+            CompatibleNavigationContainer {
+                MedicalDocumentUploadHostView(
+                    viewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: dependencies.aiSettingsViewModel
+                )
+            }
+
+        case .customCamera:
+            CustomCameraHomeView {
+                activeFullScreenCover = nil
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
     }
 
     private var memberSelectorBar: some View {
         HStack(spacing: 8) {
             if viewModel.pendingInviteCount > 0 {
                 Button {
-                    viewModel.showPendingInvites = true
+                    viewModel.activeSheet = .pendingInvites
                     triggerHaptic(style: .light)
                 } label: {
                     ZStack(alignment: .topTrailing) {
@@ -217,18 +239,18 @@ struct HomeView: View {
                             triggerHaptic(style: .light)
                         },
                         onViewDetail: {
-                            viewModel.memberDetailID = member.id
+                            viewModel.activeSheet = .memberDetail(memberID: member.id)
                             triggerHaptic(style: .light)
                         },
                         onShare: {
-                            viewModel.shareMember = member
+                            viewModel.activeSheet = .share(member)
                             triggerHaptic(style: .light)
                         }
                     )
                 }
 
                 Button {
-                    viewModel.addMemberSheet = .create()
+                    viewModel.activeSheet = .addMember(.create())
                     triggerHaptic(style: .medium)
                 } label: {
                     Image(systemName: "plus")
@@ -259,7 +281,7 @@ struct HomeView: View {
                     .font(.title.weight(.bold))
                 Spacer()
                 Button {
-                    showTaskCenter = true
+                    viewModel.activeSheet = .taskCenter
                     triggerHaptic(style: .light)
                 } label: {
                     Label(
@@ -398,7 +420,7 @@ struct HomeView: View {
 
     private var customCameraSection: some View {
         HomeCustomCameraEntrySection {
-            showCustomCamera = true
+            activeFullScreenCover = .customCamera
         }
     }
 
@@ -481,17 +503,6 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color(uiColor: .separator), lineWidth: 1)
         }
-    }
-
-    private var memberDetailPresented: Binding<Bool> {
-        Binding(
-            get: { viewModel.memberDetailID != nil },
-            set: { isPresented in
-                if !isPresented {
-                    viewModel.memberDetailID = nil
-                }
-            }
-        )
     }
 
     private func memberBadgeText(for member: Member) -> String {

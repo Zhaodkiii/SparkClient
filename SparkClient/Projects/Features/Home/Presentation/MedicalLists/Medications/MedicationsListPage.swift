@@ -70,7 +70,6 @@ struct MedicationsListPage: View {
     @State private var medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
     @State private var todayMedicationRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     @State private var sheetDestination: MedicationPlanSheetDestination?
-    @State private var showingUploadSheet = false
 
     private let logModule = LogModule.home
 
@@ -179,9 +178,6 @@ struct MedicationsListPage: View {
             .sheet(item: $sheetDestination) { destination in
                 medicationPlanSheetContent(for: destination)
             }
-            .sheet(isPresented: $showingUploadSheet) {
-                medicationUploadSheet
-            }
             .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
                 uploadHostView
             }
@@ -203,7 +199,12 @@ struct MedicationsListPage: View {
     private var contentChrome: some View {
         contentRoot
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomActionBar
+                MedicalListBottomActionBar(
+                    documentType: .medicationPlan,
+                    isEnabled: memberID != nil,
+                    onManualAdd: { sheetDestination = .create },
+                    onUploadConfirmed: { files in startMedicationPlanRecognition(files: files) }
+                )
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
@@ -276,12 +277,6 @@ struct MedicationsListPage: View {
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private var medicationUploadSheet: some View {
-        MedicalAttachmentUploadListSheet(documentType: .medicationPlan) { files in
-            startMedicationPlanRecognition(files: files)
         }
     }
 
@@ -475,62 +470,6 @@ struct MedicationsListPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 24)
-    }
-
-    private var bottomActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .background(Color(uiColor: .separator).opacity(0.2))
-
-            VStack(spacing: 12) {
-                GeometryReader { proxy in
-                    HStack(spacing: 12) {
-                        Button {
-                            sheetDestination = .create
-                        } label: {
-                            Label(L10n.text("home.medical.list.medications.action.manual_add", fallback: "手动添加"), systemImage: "plus")
-                                .font(.headline)
-                                .foregroundStyle(Color(uiColor: .systemPurple))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(
-                                    Color(uiColor: .systemPurple).opacity(0.1),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color(uiColor: .systemPurple).opacity(0.22), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(memberID == nil)
-                        .frame(width: max(112, proxy.size.width * 0.34))
-
-                        Button {
-                            showingUploadSheet = true
-                        } label: {
-                            Label(L10n.text("home.medical.list.medications.action.camera_add_plan", fallback: "拍摄添加计划"), systemImage: "camera.fill")
-                                .font(.headline)
-                                .foregroundStyle(Color.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(
-                                    Color(uiColor: .systemPurple),
-                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(memberID == nil)
-                    }
-                }
-                .frame(height: 52)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-        }
     }
 
     private func upsertMedicationPlan(_ plan: SparkMedicalSyncAPI.RemoteMedicationPlan) {

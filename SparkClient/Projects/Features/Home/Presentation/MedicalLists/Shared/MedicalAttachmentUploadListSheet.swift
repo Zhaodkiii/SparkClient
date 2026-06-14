@@ -149,6 +149,167 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
             return .systemCamera
         }
     }
+
+    /// 列表页底部是否展示「手动添加」按钮。
+    var showsListManualAddButton: Bool {
+        switch self {
+        case .medicineBox, .healthExamReport:
+            return false
+        case .medicationPlan, .examinationReport, .caseDocument:
+            return true
+        }
+    }
+
+    /// 列表页底部按钮主题色。
+    var listActionTintColor: Color {
+        switch self {
+        case .medicationPlan, .medicineBox:
+            return Color(uiColor: .systemPurple)
+        case .healthExamReport:
+            return Color(uiColor: .systemTeal)
+        case .examinationReport, .caseDocument:
+            return Color(uiColor: .systemBlue)
+        }
+    }
+
+    /// 列表页底部「手动添加」按钮文案；不支持手动添加时为 `nil`。
+    var listManualAddActionTitle: String? {
+        switch self {
+        case .examinationReport:
+            return L10n.text("home.medical.list.examination.action.manual_add", fallback: "手动添加")
+        case .caseDocument:
+            return L10n.text("home.medical.list.medical_cases.action.manual_add", fallback: "手动添加")
+        case .medicationPlan:
+            return L10n.text("home.medical.list.medications.action.manual_add", fallback: "手动添加")
+        case .medicineBox, .healthExamReport:
+            return nil
+        }
+    }
+
+    /// 列表页底部「拍摄添加」按钮文案。
+    var listCameraAddActionTitle: String {
+        switch self {
+        case .medicineBox:
+            return L10n.text("home.medical.medicine_box.camera_add", fallback: "拍照添加药品")
+        case .medicationPlan:
+            return L10n.text("home.medical.list.medications.action.camera_add_plan", fallback: "拍摄添加计划")
+        case .examinationReport:
+            return L10n.text("home.medical.list.examination.action.camera_add_report", fallback: "拍摄添加报告")
+        case .healthExamReport:
+            return L10n.text("home.medical.list.health_exam.action.camera_add_report", fallback: "拍摄添加体检报告")
+        case .caseDocument:
+            return L10n.text("home.medical.list.medical_cases.action.camera_add_case", fallback: "拍摄添加病历")
+        }
+    }
+
+    /// Sheet 打开后默认自动弹出的上传入口。
+    var sheetAutoPresentation: MedicalAttachmentUploadAutoPresentation {
+        switch self {
+        case .healthExamReport:
+            return .fileImporter
+        case .caseDocument:
+            return .photoLibrary
+        case .medicineBox, .medicationPlan, .examinationReport:
+            return .camera
+        }
+    }
+}
+
+/// Sheet 打开后默认自动弹出的上传方式。
+enum MedicalAttachmentUploadAutoPresentation {
+    case camera
+    case photoLibrary
+    case fileImporter
+}
+
+/// 医疗列表页统一底部操作栏：按 `documentType` 展示手动添加 / 拍摄添加，并内置上传 Sheet。
+struct MedicalListBottomActionBar: View {
+    let documentType: MedicalAttachmentUploadDocumentType
+    var isEnabled: Bool = true
+    var onManualAdd: (() -> Void)?
+    let onUploadConfirmed: ([MedicalUploadLocalFile]) -> Void
+
+    @State private var showingUploadSheet = false
+
+    private var tintColor: Color { documentType.listActionTintColor }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if documentType.showsListManualAddButton {
+                Divider()
+                    .background(Color(uiColor: .separator).opacity(0.2))
+            }
+
+            VStack(spacing: 12) {
+                if documentType.showsListManualAddButton {
+                    dualActionButtons
+                } else {
+                    cameraOnlyButton
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
+        .sheet(isPresented: $showingUploadSheet) {
+            MedicalAttachmentUploadListSheet(documentType: documentType, onConfirm: onUploadConfirmed)
+        }
+    }
+
+    private var dualActionButtons: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 12) {
+                Button {
+                    onManualAdd?()
+                } label: {
+                    Label(documentType.listManualAddActionTitle ?? "", systemImage: "plus")
+                        .font(.headline)
+                        .foregroundStyle(tintColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(
+                            tintColor.opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(tintColor.opacity(0.22), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(isEnabled == false)
+                .frame(width: max(112, proxy.size.width * 0.34))
+
+                cameraButton(fullWidth: false)
+            }
+        }
+        .frame(height: 52)
+    }
+
+    private var cameraOnlyButton: some View {
+        cameraButton(fullWidth: true)
+    }
+
+    private func cameraButton(fullWidth: Bool) -> some View {
+        Button {
+            showingUploadSheet = true
+        } label: {
+            Label(documentType.listCameraAddActionTitle, systemImage: "camera.fill")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity, maxHeight: fullWidth ? nil : .infinity)
+                .padding(.vertical, fullWidth ? 15 : 0)
+                .background(
+                    tintColor,
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isEnabled == false)
+    }
 }
 
 enum MedicalAttachmentUploadCameraCover: Identifiable {
@@ -219,6 +380,11 @@ struct MedicalAttachmentUploadListSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    presentDefaultUploadEntry()
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
             }
@@ -473,6 +639,17 @@ struct MedicalAttachmentUploadListSheet: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
+    }
+
+    private func presentDefaultUploadEntry() {
+        switch documentType.sheetAutoPresentation {
+        case .camera:
+            presentCamera()
+        case .photoLibrary:
+            presentPhotoLibrary()
+        case .fileImporter:
+            presentFileImporter()
+        }
     }
 
     private func presentPhotoLibrary() {

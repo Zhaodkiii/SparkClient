@@ -31,6 +31,10 @@ enum PrescriptionRecognitionDraftMapper {
         -30_000 - prescriptionIndex * 100 - medicationIndex
     }
 
+    static func temporaryMedicineBoxRecognitionID(index: Int) -> Int {
+        -50_000 - index
+    }
+
     static func temporaryPlanID(prescriptionIndex: Int, medicationIndex: Int) -> Int {
         -40_000 - prescriptionIndex * 100 - medicationIndex
     }
