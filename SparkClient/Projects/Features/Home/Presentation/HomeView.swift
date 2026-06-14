@@ -7,12 +7,14 @@ struct HomeView: View {
     let dependencies: HomeFeatureDependencies
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     let session: UserSession
 
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
     @State private var activeFullScreenCover: HomeFullScreenCover?
     @State private var addMemberNearbyTransport = NearbyShareTransport()
+    @State private var showExternalImportErrorAlert = false
 
     var body: some View {
         homeContent
@@ -50,12 +52,40 @@ struct HomeView: View {
         .fullScreenCover(item: $activeFullScreenCover) { cover in
             homeFullScreenCoverContent(cover)
         }
+        .onAppear {
+            consumePendingExternalMedicalDocumentIfNeeded()
+        }
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
             viewModel.consumePendingShareTicketIfNeeded()
             viewModel.consumePendingInviteIfNeeded()
+            consumePendingExternalMedicalDocumentIfNeeded()
             await viewModel.loadInitialIfNeeded(syncRemote: true)
+        }
+        .task(id: externalMedicalDocumentImportCoordinator.pendingDocument?.id) {
+            consumePendingExternalMedicalDocumentIfNeeded()
+        }
+        .onChange(of: externalMedicalDocumentImportCoordinator.pendingDocument?.id) { _ in
+            consumePendingExternalMedicalDocumentIfNeeded()
+        }
+        .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
+            if isPresented {
+                activeFullScreenCover = .medicalDocumentUpload
+            } else if activeFullScreenCover == .medicalDocumentUpload {
+                activeFullScreenCover = nil
+                consumePendingExternalMedicalDocumentIfNeeded()
+            }
+        }
+        .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
+            showExternalImportErrorAlert = message != nil
+        }
+        .alert("无法导入文档", isPresented: $showExternalImportErrorAlert) {
+            Button("好", role: .cancel) {
+                externalMedicalDocumentImportCoordinator.clearError()
+            }
+        } message: {
+            Text(externalMedicalDocumentImportCoordinator.errorMessage ?? "")
         }
         .onReceive(dependencies.routeStore.$routeStacks) { _ in
             // Triggered when AppRouteStore updates (including .memberInvite signal from push/deeplink tap).
@@ -64,13 +94,6 @@ struct HomeView: View {
                 viewModel.handleRoute(.memberInvite(inviteID: id))
                 // Clear so next same inviteID still triggers; replaceStack was already done.
                 dependencies.routeStore.replaceStack([], for: .home)
-            }
-        }
-        .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
-            if isPresented {
-                activeFullScreenCover = .medicalDocumentUpload
-            } else if activeFullScreenCover == .medicalDocumentUpload {
-                activeFullScreenCover = nil
             }
         }
         .onChange(of: activeFullScreenCover) { cover in
@@ -178,6 +201,40 @@ struct HomeView: View {
                     taskManager: dependencies.taskManager
                 )
             }
+        }
+    }
+
+    private func consumePendingExternalMedicalDocumentIfNeeded() {
+        guard externalMedicalDocumentImportCoordinator.pendingDocument != nil else { return }
+
+        if medicalDocumentUploadViewModel.isUploadPresented,
+           medicalDocumentUploadViewModel.stage != .picking {
+            return
+        }
+
+        guard let pending = externalMedicalDocumentImportCoordinator.consumePendingDocument() else { return }
+
+        dependencies.routeStore.route(to: .home, replaceStack: false)
+        medicalDocumentUploadViewModel.prepareForExternalImport(files: [pending.localFile])
+        presentMedicalDocumentUploadCover(documentID: pending.id)
+    }
+
+    private func presentMedicalDocumentUploadCover(documentID: UUID) {
+        activeFullScreenCover = .medicalDocumentUpload
+        dependencies.logger.info(
+            "外部 PDF 已进入医疗文档上传页 documentID=\(documentID)",
+            module: .medical
+        )
+
+        Task { @MainActor in
+            await Task.yield()
+            if activeFullScreenCover != .medicalDocumentUpload {
+                activeFullScreenCover = .medicalDocumentUpload
+            }
+            dependencies.logger.info(
+                "外部 PDF 上传弹层已置位 cover=medicalDocumentUpload documentID=\(documentID)",
+                module: .medical
+            )
         }
     }
 
@@ -644,6 +701,7 @@ private struct MemberSelectorChip: View {
             dependencies: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
+            externalMedicalDocumentImportCoordinator: AppContainer.preview.externalMedicalDocumentImportCoordinator,
             session: UserSession(
                 accountID: 1,
                 email: "preview@spark.com",
@@ -662,6 +720,7 @@ private struct MemberSelectorChip: View {
             dependencies: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
+            externalMedicalDocumentImportCoordinator: AppContainer.preview.externalMedicalDocumentImportCoordinator,
             session: UserSession(
                 accountID: 1,
                 email: "preview@spark.com",

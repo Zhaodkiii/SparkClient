@@ -57,6 +57,8 @@ final class AppContainer {
     let appBootstrapper: AppBootstrapper
     /// 设备信息上送聚合协调器（APP-STARTUP-000007）。
     let deviceRegistrationCoordinator: DeviceRegistrationCoordinator
+    /// 外部 PDF 打开导入协调器（MEDICAL-IMPORT-000001）。
+    let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
 
     // MARK: - 通知（应用内队列、指标、收件箱、远程推送适配）
     //
@@ -244,6 +246,9 @@ final class AppContainer {
             logger: logger,
             clearSessionScopedViewModels: { [weak self] in
                 self?.resetSessionScopedViewModels()
+            },
+            clearExternalMedicalImport: { [weak self] in
+                self?.clearExternalMedicalDocumentImport()
             }
         )
     }()
@@ -305,6 +310,7 @@ final class AppContainer {
             notificationDeliveryCoordinator: notificationDeliveryCoordinator,
             routeCoordinator: routeCoordinator,
             versionUpdateCoordinator: versionUpdateCoordinator,
+            externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
             coordinator: AppCoordinatorDependencies(
                 facades: featureFacades,
                 lifecycle: lifecycle,
@@ -457,6 +463,7 @@ final class AppContainer {
         self.routeStore = notification.routeStore
         self.routeCoordinator = notification.routeCoordinator
         self.deviceRegistrationCoordinator = notification.deviceRegistrationCoordinator
+        self.externalMedicalDocumentImportCoordinator = ExternalMedicalDocumentImportCoordinator(logger: logger)
         self.medicalSyncService = notification.medicalSyncService
         self.appBootstrapper = appBootstrapper
         self.notificationStore = notification.notificationStore
@@ -688,6 +695,11 @@ final class AppContainer {
         logger.info("账号级 ViewModel 与主 Tab 依赖缓存已清理", module: .general)
     }
 
+    func clearExternalMedicalDocumentImport() {
+        externalMedicalDocumentImportCoordinator.clearAll()
+        logger.info("外部医疗 PDF 导入 pending 已清理", module: .medical)
+    }
+
     /// 主 Tab 依赖包：同一账号会话期间只创建一次。
     ///
     /// 这里是防止网络抖动、前后台切换、SwiftUI body 重算导致首页/聊天/设置缓存重建的关键边界。
@@ -745,7 +757,8 @@ final class AppContainer {
             aiSettingsViewModel: aiSettingsViewModel,
             versionUpdateCoordinator: versionUpdateCoordinator,
             memberContextStore: memberContextStore,
-            pushAdapter: pushAdapter
+            pushAdapter: pushAdapter,
+            externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
         return created

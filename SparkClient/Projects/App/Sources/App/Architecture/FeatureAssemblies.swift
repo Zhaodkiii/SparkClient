@@ -177,6 +177,7 @@ struct MainTabDependencies {
     let versionUpdateCoordinator: AppVersionUpdateCoordinator
     let memberContextStore: MemberContextStore
     let pushAdapter: PushAdapter
+    let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
 }
 
 struct MainTabFeatureDependencies {
@@ -199,6 +200,7 @@ struct AppContentDependencies {
     let notificationDeliveryCoordinator: NotificationDeliveryCoordinator
     let routeCoordinator: RouteCoordinator
     let versionUpdateCoordinator: AppVersionUpdateCoordinator
+    let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     let coordinator: AppCoordinatorDependencies
 }
 

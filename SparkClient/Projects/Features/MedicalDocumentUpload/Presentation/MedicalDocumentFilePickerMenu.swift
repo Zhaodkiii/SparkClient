@@ -75,7 +75,9 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                 logger.warning("文件选择器取消或失败。", module: .medical)
                 return
             }
-            let files = urls.compactMap(copyToTempFile)
+            let files = urls.compactMap { url in
+                MedicalUploadLocalFileImportSupport.copyToTempFile(from: url, logger: logger)
+            }
             if files.isEmpty == false {
                 logger.info("文档导入成功，数量=\(files.count)", module: .medical)
                 onFilesSelected(files)
@@ -112,33 +114,6 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
         } else {
             logger.warning("设备不支持相机。", module: .medical)
             showCameraUnavailableAlert = true
-        }
-    }
-
-    private func copyToTempFile(url: URL) -> MedicalUploadLocalFile? {
-        // iOS 文件沙箱拷贝：将外部 URL 复制到 app 临时目录，后续 OCR/预览统一使用本地可访问路径。
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer {
-            if scoped {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        let ext = url.pathExtension.isEmpty ? "pdf" : url.pathExtension
-        let target = FileManager.default.temporaryDirectory
-            .appendingPathComponent("medical_upload_\(UUID().uuidString).\(ext)")
-        do {
-            if FileManager.default.fileExists(atPath: target.path) {
-                try FileManager.default.removeItem(at: target)
-            }
-            try FileManager.default.copyItem(at: url, to: target)
-            return MedicalUploadLocalFile(
-                url: target,
-                displayName: url.lastPathComponent,
-                mimeType: UTType(filenameExtension: ext)?.preferredMIMEType
-            )
-        } catch {
-            logger.error("复制文件到临时目录失败：\(error.localizedDescription)", module: .medical)
-            return nil
         }
     }
 

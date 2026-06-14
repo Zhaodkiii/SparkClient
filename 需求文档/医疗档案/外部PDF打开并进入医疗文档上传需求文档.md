@@ -69,7 +69,7 @@ MainTabCoordinatorView(
 A：首页通过 `HomeFullScreenCover.medicalDocumentUpload` 展示医疗文档上传页。
 
 ```text
-SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift:183-193
+SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift:220-228
 ```
 
 现有代码会展示：
@@ -109,6 +109,95 @@ SparkClient/SparkClient/Projects/Features/MedicalDocumentUpload/Presentation/Med
 ```
 
 外部 PDF 打开也应遵循同一原则：不要长期依赖第三方沙盒 URL，应先复制到 App 可访问的临时目录或导入目录，再交给上传流程。
+
+### Q：当前代码里哪些部分已经实现？
+
+A：当前代码已经补了部分 `MEDICAL-IMPORT-000001` 能力：
+
+1. `SparkClient/SparkClient/Info.plist` 已声明 `CFBundleDocumentTypes` 和 `LSSupportsOpeningDocumentsInPlace=false`。
+2. `ContentView.onOpenURL` 已尝试调用 `externalMedicalDocumentImportCoordinator.tryReceive(url)`。
+3. `SparkApplicationDelegate.application(_:open:options:)` 已尝试处理外部 URL。
+4. `ExternalMedicalDocumentImportCoordinator` 已存在，能校验 PDF、复制临时文件并保存 `pendingDocument`。
+5. `MainTabCoordinatorView` 已把 `externalMedicalDocumentImportCoordinator` 传入 `HomeView`。
+6. `HomeView` 已监听 `pendingDocument?.id`，并在消费后调用 `medicalDocumentUploadViewModel.prepareForExternalImport(files:)`。
+7. `MedicalDocumentUploadViewModel.prepareForExternalImport(files:)` 已实现 reset、注入文件、打开上传页。
+
+### Q：冷启动外部 PDF 无法打开 `MedicalDocumentUploadHostView` 的问题点在哪里？
+
+A：当前实现有两个关键缺口，导致冷启动场景仍可能到不了上传页。
+
+第一个缺口是：**冷启动文档 URL 的入口没有覆盖完整 Scene 启动路径。**
+
+当前入口主要是：
+
+```text
+SparkClient/SparkClient/Projects/App/Sources/ContentView.swift:14-19
+SparkClient/SparkClient/Projects/App/Sources/App/SparkApplicationDelegate.swift:26-35
+```
+
+但冷启动由系统“打开 PDF”拉起 App 时，URL 可能通过 launch options / scene connection options 进入，而不是等 `ContentView.onOpenURL` 已挂载后再投递。当前 `SparkApplicationDelegate.application(_:didFinishLaunchingWithOptions:)` 只初始化依赖，没有读取 `launchOptions[.url]`，也没有明确处理 `UIScene.ConnectionOptions.urlContexts`。如果冷启动 URL 在 SwiftUI 根视图建立前被系统投递，`pendingDocument` 不会生成，后续首页没有可消费任务。
+
+第二个缺口是：**首页消费 pending 后没有直接驱动 fullScreenCover 的实际绑定值。**
+
+当前首页弹层绑定为：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift:52-53
+```
+
+```swift
+.fullScreenCover(item: $activeFullScreenCover) { cover in
+    homeFullScreenCoverContent(cover)
+}
+```
+
+真正能进入上传页的分支是：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift:220-228
+```
+
+但外部 PDF 消费逻辑只执行：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift:201-217
+```
+
+核心代码为：
+
+```swift
+dependencies.routeStore.route(to: .home, replaceStack: false)
+medicalDocumentUploadViewModel.prepareForExternalImport(files: [pending.localFile])
+```
+
+`prepareForExternalImport(files:)` 只会把 `medicalDocumentUploadViewModel.isUploadPresented` 改为 `true`，而 `fullScreenCover` 绑定的不是这个值，而是 `activeFullScreenCover`。当前代码依赖：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift:66-73
+```
+
+```swift
+.onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
+    if isPresented {
+        activeFullScreenCover = .medicalDocumentUpload
+    }
+    ...
+}
+```
+
+冷启动首次进入首页时，`consumePendingExternalMedicalDocumentIfNeeded()` 在 `.task` 中立即执行；如果这次状态变化没有被 `onChange` 捕获，`activeFullScreenCover` 仍然是 `nil`，所以 `HomeView.swift:224-228` 的 `MedicalDocumentUploadHostView` 不会被构建。
+
+### Q：当前实现还缺哪些工单要求？
+
+A：对照 `MEDICAL-IMPORT-000001`，当前仍未完整实现以下要求：
+
+1. 未明确处理冷启动 launch options / scene connection options 中携带的 PDF URL。
+2. 未在 App 启动日志中区分“冷启动收到 URL”“onOpenURL 收到 URL”“application open 收到 URL”，排查链路困难。
+3. 首页消费 pending 后未直接设置 `activeFullScreenCover = .medicalDocumentUpload`，弹层展示依赖间接 `onChange`。
+4. `consumePendingExternalMedicalDocumentIfNeeded()` 没有在 `prepareForExternalImport(files:)` 后立即校验 `activeFullScreenCover` 是否被置位。
+5. 当前错误提示挂在 `HomeView`，如果非 PDF/复制失败发生在登录页、启动页或 onboarding 阶段，错误需要等首页出现才可能展示。
+6. Info.plist 只声明了 `com.adobe.pdf`，建议补充 `public.pdf`，提高系统文件类型匹配稳定性。
+7. 没有冷启动手工验收日志模板，无法判断失败发生在 URL 接收、文件复制、pending 消费还是 fullScreenCover 展示阶段。
 
 ### 3. 需求目标
 
@@ -151,6 +240,7 @@ A：新增一个 App 级外部文档导入协调器，负责接收、暂存、�
   -> routeStore 切到 .home
   -> medicalDocumentUploadViewModel.setSelectedFiles([localFile])
   -> medicalDocumentUploadViewModel.presentUploadPage()
+  -> HomeView.activeFullScreenCover = .medicalDocumentUpload
   -> HomeView 展示 MedicalDocumentUploadHostView
 ```
 
@@ -194,9 +284,20 @@ routeStore.route(to: .home, replaceStack: false)
 medicalDocumentUploadViewModel.reset()
 medicalDocumentUploadViewModel.setSelectedFiles([externalPDF])
 medicalDocumentUploadViewModel.presentUploadPage()
+activeFullScreenCover = .medicalDocumentUpload
 ```
 
 页面打开后保持在 `.picking` 阶段，让用户确认文件和文档类型后手动开始识别。
+
+当前代码应优先修正为：
+
+```swift
+dependencies.routeStore.route(to: .home, replaceStack: false)
+medicalDocumentUploadViewModel.prepareForExternalImport(files: [pending.localFile])
+activeFullScreenCover = .medicalDocumentUpload
+```
+
+原因是 `HomeView` 的上传弹层实际绑定 `activeFullScreenCover`，不能只依赖 `medicalDocumentUploadViewModel.isUploadPresented` 的 `onChange` 间接触发。
 
 如后续产品要求“导入后自动开始识别”，可改为复用现有：
 
@@ -228,17 +329,18 @@ A：收到外部 PDF 后先完成本地复制和暂存。启动流程仍按现�
 
 | 文件 | 变更说明 |
 | --- | --- |
-| `SparkClient/SparkClient/Projects/App/Sources/App/SparkApplicationDelegate.swift` | 接收外部 URL / document open 事件，并转发给导入协调器。 |
+| `SparkClient/SparkClient/Projects/App/Sources/App/SparkApplicationDelegate.swift` | 接收外部 URL / document open 事件，并转发给导入协调器；必须补充冷启动 `launchOptions[.url]` 或 Scene connection options 的处理。 |
+| `SparkClient/SparkClient/Projects/App/Sources/ContentView.swift` | 保留 `.onOpenURL` 作为前台/已建 Scene 的 URL 入口，并补充日志标记来源。 |
 | `SparkClient/SparkClient/Projects/App/Sources/App/AppEnvironment.swift` | 如当前依赖容器适合放置 App 级服务，在此接入外部文档导入协调器。 |
 | `SparkClient/SparkClient/Projects/App/Sources/App/AppContainer.swift` | 创建并注入外部文档导入协调器实例，确保冷启动和主界面消费的是同一个对象。 |
 | `SparkClient/SparkClient/Projects/App/Sources/App/AppCoordinatorView.swift` | 在 `.signedIn` 且账号准备完成后，把协调器传入 `MainTabCoordinatorView` 或触发主界面消费。 |
-| `SparkClient/SparkClient/Projects/App/Sources/App/MainTabCoordinatorView.swift` | 监听待导入 PDF，切换到首页并驱动上传 VM 展示上传页。 |
+| `SparkClient/SparkClient/Projects/App/Sources/App/MainTabCoordinatorView.swift` | 监听待导入 PDF，切换到首页并驱动上传 VM 展示上传页；如消费逻辑留在 `HomeView`，主 Tab 需保证首页已实例化并可展示。 |
 
 ### 首页与上传页
 
 | 文件 | 变更说明 |
 | --- | --- |
-| `SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift` | 复用现有 `HomeFullScreenCover.medicalDocumentUpload`，确保外部导入也走同一上传弹层。 |
+| `SparkClient/SparkClient/Projects/Features/Home/Presentation/HomeView.swift` | 复用现有 `HomeFullScreenCover.medicalDocumentUpload`；消费 pending 后必须直接设置 `activeFullScreenCover = .medicalDocumentUpload`，确保 `MedicalDocumentUploadHostView` 被构建。 |
 | `SparkClient/SparkClient/Projects/Features/MedicalDocumentUpload/Presentation/MedicalDocumentUploadViewModel.swift` | 必要时新增 `prepareForExternalImport(files:)`，封装 reset、setSelectedFiles、presentUploadPage。 |
 | `SparkClient/SparkClient/Projects/Features/MedicalDocumentUpload/Domain/MedicalDocumentUploadModels.swift` | 复用 `MedicalUploadLocalFile`，不新增上传文件模型。 |
 | `SparkClient/SparkClient/Projects/Features/MedicalDocumentUpload/Presentation/MedicalDocumentFilePickerMenu.swift` | 可抽取现有 PDF 复制逻辑为公共 helper，避免外部导入和文件选择器各自实现。 |
@@ -247,7 +349,7 @@ A：收到外部 PDF 后先完成本地复制和暂存。启动流程仍按现�
 
 | 文件 | 变更说明 |
 | --- | --- |
-| `SparkClient/SparkClient/Projects/App/Resources/Info.plist` 或对应 Tuist 配置 | 注册 PDF 文档类型，声明 SparkClient 可作为 PDF 打开目标。 |
+| `SparkClient/SparkClient/Info.plist` | 注册 PDF 文档类型，声明 SparkClient 可作为 PDF 打开目标；建议 `LSItemContentTypes` 同时包含 `public.pdf` 与 `com.adobe.pdf`。 |
 
 ### 7. 数据结构建议
 
@@ -321,6 +423,7 @@ A：
 5. 未登录状态下打开外部 PDF，登录完成并进入首页后才弹出上传页。
 6. 用户关闭上传页后，不会因为同一个 pending PDF 再次自动弹出。
 7. 导入非 PDF 文件时不打开上传页，并展示错误提示。
+8. 冷启动导入时日志能看到 URL 接收来源、文件复制、pending 消费、`activeFullScreenCover` 置位和 `MedicalDocumentUploadHostView` 展示链路。
 
 ### 回归验收
 
@@ -334,10 +437,11 @@ A：
 至少需要覆盖以下日志：
 
 ```text
-收到外部 PDF 打开请求 url=...
+收到外部 PDF 打开请求 source=launchOptions/onOpenURL/applicationOpen/sceneOpen url=...
 外部 PDF 已复制到本地 path=...
 外部 PDF 等待主界面消费 documentID=...
 外部 PDF 已进入医疗文档上传页 documentID=...
+外部 PDF 上传弹层已置位 cover=medicalDocumentUpload documentID=...
 外部文档导入失败 reason=...
 ```
 
@@ -352,8 +456,9 @@ A：
 ### 11. 推荐实施顺序
 
 1. 注册 PDF 文档打开能力，确认系统能把外部 PDF URL 传入 SparkClient。
-2. 新增外部文档导入协调器，实现 PDF 校验、复制、pending 暂存与消费。
-3. 将协调器接入 App 容器和 URL 回调入口。
-4. 在已登录且主 Tab 可用后消费 pending PDF，切到首页并打开上传页。
-5. 抽取或复用 `MedicalDocumentFilePickerMenu` 的文件复制逻辑，统一生成 `MedicalUploadLocalFile`。
-6. 补充日志、错误提示与手工验收用例。
+2. 补齐冷启动 URL 捕获：处理 launch options / scene connection options，确保 App 未运行时也能生成 pending。
+3. 新增或完善外部文档导入协调器，实现 PDF 校验、复制、pending 暂存与消费。
+4. 将协调器接入 App 容器和 URL 回调入口，并确保所有入口使用同一个 coordinator 实例。
+5. 在已登录且主 Tab 可用后消费 pending PDF，切到首页、注入上传 VM，并直接设置首页 fullScreenCover 的 `activeFullScreenCover`。
+6. 抽取或复用 `MedicalDocumentFilePickerMenu` 的文件复制逻辑，统一生成 `MedicalUploadLocalFile`。
+7. 补充日志、错误提示与手工验收用例。

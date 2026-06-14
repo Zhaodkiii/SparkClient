@@ -304,6 +304,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SparkClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look健康";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于发现附近设备并面对面分享成员绑定。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
@@ -317,7 +318,6 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音输入实时转写为文本。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -359,6 +359,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SparkClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look健康";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于发现附近设备并面对面分享成员绑定。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
@@ -372,7 +373,6 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音输入实时转写为文本。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -476,6 +476,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SparkClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Look健康";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "用于发现附近设备并面对面分享成员绑定。";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于在聊天中拍摄照片并生成发送前预览。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "用于读取步数、体重、睡眠和心率，展示健康基础信息。";
@@ -489,7 +490,6 @@
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音输入实时转写为文本。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

@@ -78,7 +78,8 @@ struct AppCoordinatorView: View {
                         accountManagementViewModel: mainTab.accountManagementViewModel,
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,
                         versionUpdateCoordinator: mainTab.versionUpdateCoordinator,
-                        pushAdapter: mainTab.pushAdapter
+                        pushAdapter: mainTab.pushAdapter,
+                        externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator
                     )
                     .environmentObject(mainTab.memberContextStore)
                     .id(session.accountID)

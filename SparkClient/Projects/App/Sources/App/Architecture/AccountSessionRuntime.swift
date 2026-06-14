@@ -20,6 +20,7 @@ final class AccountSessionRuntime {
     private let aiConfigCenter: AIConfigCenter
     private let logger: Logger
     private let clearSessionScopedViewModels: () -> Void
+    private let clearExternalMedicalImport: () -> Void
     private let chatSyncSupervisorForResume: ChatSyncSupervisor?
     private var mode: Mode?
     private(set) var isAccountSwitchInProgress = false
@@ -36,6 +37,7 @@ final class AccountSessionRuntime {
         aiConfigCenter: AIConfigCenter,
         logger: Logger,
         clearSessionScopedViewModels: @escaping () -> Void,
+        clearExternalMedicalImport: @escaping () -> Void,
         chatSyncSupervisorForResume: ChatSyncSupervisor? = nil
     ) {
         self.routeCoordinator = routeCoordinator
@@ -49,6 +51,7 @@ final class AccountSessionRuntime {
         self.aiConfigCenter = aiConfigCenter
         self.logger = logger
         self.clearSessionScopedViewModels = clearSessionScopedViewModels
+        self.clearExternalMedicalImport = clearExternalMedicalImport
     }
 
     /// 同设备账号切换登录前：暂停旧账号实时同步，避免 B1 登录过程中 A1 仍发账号级请求。
@@ -89,6 +92,11 @@ final class AccountSessionRuntime {
             return
         }
 
+        let previousAccountID: Int64? = {
+            if case .account(let id) = mode { return id }
+            return nil
+        }()
+
         logger.info("账号运行时：开始切换到账号 accountID=\(accountID)", module: .auth)
         await chatSyncSupervisor.stopRealtimeSync()
         await storageRegistry.prepareForAccountSwitch(to: accountID)
@@ -99,6 +107,9 @@ final class AccountSessionRuntime {
         memberContextStore.activateAccountAndReset(accountID)
         routeCoordinator.resetRouteGraphForAccountRuntime(reason: "accountSwitch(\(accountID))")
         clearSessionScopedViewModels()
+        if let previousAccountID, previousAccountID != accountID {
+            clearExternalMedicalImport()
+        }
         mode = .account(accountID)
         logger.info("账号运行时：账号切换完成 accountID=\(accountID)", module: .auth)
     }
@@ -119,6 +130,7 @@ final class AccountSessionRuntime {
         memberContextStore.resetInMemoryContext()
         routeCoordinator.resetRouteGraphForAccountRuntime(reason: "signOut")
         clearSessionScopedViewModels()
+        clearExternalMedicalImport()
         mode = .guest
     }
 

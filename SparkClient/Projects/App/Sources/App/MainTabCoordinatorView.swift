@@ -18,6 +18,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     let pushAdapter: PushAdapter
+    @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
@@ -26,6 +27,7 @@ struct MainTabCoordinatorView: View {
                     dependencies: homeDependencies,
                     viewModel: homeViewModel,
                     medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                    externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
                     session: session
                 )
             } destination: { route in

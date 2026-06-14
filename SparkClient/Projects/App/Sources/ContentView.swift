@@ -12,6 +12,9 @@ struct ContentView: View {
             await dependencies.notificationDeliveryCoordinator.refreshDashboard()
         }
         .onOpenURL { url in
+            if dependencies.externalMedicalDocumentImportCoordinator.tryReceive(url, source: .onOpenURL) {
+                return
+            }
             dependencies.routeCoordinator.handleDeepLink(url)
         }
     }

@@ -720,6 +720,13 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         startRecognitionTask()
     }
 
+    /// 外部 PDF 导入：重置状态、注入文件并打开上传页，保持在 `.picking` 阶段。
+    func prepareForExternalImport(files: [MedicalUploadLocalFile]) {
+        reset()
+        setSelectedFiles(files)
+        presentUploadPage()
+    }
+
     func presentUploadPage() {
         isUploadPresented = true
     }
