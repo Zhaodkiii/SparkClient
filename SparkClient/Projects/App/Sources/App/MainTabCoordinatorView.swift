@@ -123,6 +123,20 @@ struct MainTabCoordinatorView: View {
             }
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
+        case .homeMedicalList(let listRoute, let medicationFocus):
+            HomeMedicalRouteSupport.medicalListView(
+                route: listRoute,
+                medicationFocus: medicationFocus,
+                homeViewModel: homeViewModel,
+                dependencies: homeDependencies,
+                session: session
+            )
+        case .homeFamilyMedicineCabinet(let memberID):
+            HomeMedicalRouteSupport.familyMedicineCabinetView(
+                memberID: memberID,
+                homeViewModel: homeViewModel,
+                dependencies: homeDependencies
+            )
         case .home, .knowledge, .chatList, .settings:
             EmptyView()
         }

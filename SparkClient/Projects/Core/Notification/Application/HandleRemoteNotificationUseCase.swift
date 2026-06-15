@@ -83,8 +83,21 @@ struct HandleRemoteNotificationUseCase {
     func execute(
         payload: RemoteNotificationPayload,
         entryPoint: RemoteNotificationEntryPoint,
-        notificationRequestID: String? = nil
+        notificationRequestID: String? = nil,
+        rawUserInfo: [AnyHashable: Any]? = nil
     ) {
+        if let rawUserInfo,
+           let medicationPayload = MedicationReminderPayloadParser.parse(userInfo: rawUserInfo) {
+            handleMedicationReminder(
+                payload: medicationPayload,
+                entryPoint: entryPoint,
+                notificationRequestID: notificationRequestID,
+                bannerTitle: payload.title,
+                bannerBody: payload.body
+            )
+            return
+        }
+
         if payload.type == "ai_trial_application_result" {
             NotificationCenter.default.post(name: .aiTrialApplicationResultReceived, object: nil)
             let tapPayload = payload
@@ -199,6 +212,67 @@ struct HandleRemoteNotificationUseCase {
                     receivedAt: Date(),
                     source: source,
                     actionIdentifier: actionIdentifier,
+                    notificationRequestID: notificationRequestID
+                )
+            )
+        )
+    }
+
+    private func handleMedicationReminder(
+        payload: MedicationReminderLaunchPayload,
+        entryPoint: RemoteNotificationEntryPoint,
+        notificationRequestID: String?,
+        bannerTitle: String?,
+        bannerBody: String
+    ) {
+        switch entryPoint {
+        case .foreground:
+            let tapPayload = payload
+            let intentCoordinator = launchIntentCoordinator
+            notificationClient.publish(
+                NotificationIntent(
+                    title: bannerTitle ?? "用药提醒",
+                    message: bannerBody,
+                    level: .info,
+                    presentation: .banner,
+                    dedupeKey: payload.notificationID,
+                    source: "medication_reminder",
+                    onTap: { [weak intentCoordinator] in
+                        intentCoordinator?.receive(
+                            .medicationReminder(
+                                MedicationReminderLaunchIntent(
+                                    id: UUID(),
+                                    payload: tapPayload,
+                                    receivedAt: Date(),
+                                    source: .inAppNotificationBannerTap,
+                                    notificationRequestID: nil
+                                )
+                            )
+                        )
+                    }
+                )
+            )
+        case .interaction:
+            receiveMedicationReminderIntent(
+                payload: payload,
+                source: .localNotificationInteraction,
+                notificationRequestID: notificationRequestID
+            )
+        }
+    }
+
+    private func receiveMedicationReminderIntent(
+        payload: MedicationReminderLaunchPayload,
+        source: LaunchIntentSource,
+        notificationRequestID: String?
+    ) {
+        launchIntentCoordinator.receive(
+            .medicationReminder(
+                MedicationReminderLaunchIntent(
+                    id: UUID(),
+                    payload: payload,
+                    receivedAt: Date(),
+                    source: source,
                     notificationRequestID: notificationRequestID
                 )
             )

@@ -46,6 +46,8 @@ struct HomeFeatureDependencies {
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let routeStore: AppRouteStore
+    let sessionStore: AppSessionStore
+    let medicationReminderSyncCoordinator: MedicationReminderSyncCoordinator
     let nutritionDependencies: NutritionFeatureDependencies
     let launchIntentCoordinator: LaunchIntentCoordinator
     let homeLaunchIntentConsumer: HomeLaunchIntentConsumer
@@ -115,6 +117,7 @@ extension HomeFeatureDependencies {
             routeStore: routeStore,
             uploadViewModel: uploadViewModel,
             homeViewModel: homeViewModel,
+            sessionStore: container.sessionStore,
             logger: container.logger
         )
         return HomeFeatureDependencies(
@@ -132,6 +135,8 @@ extension HomeFeatureDependencies {
             medicalDocumentUploadViewModel: uploadViewModel,
             aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: 1),
             routeStore: routeStore,
+            sessionStore: container.sessionStore,
+            medicationReminderSyncCoordinator: container.medicationReminderSyncCoordinator,
             nutritionDependencies: makeNutritionDependencies(
                 backend: container.backend,
                 memberContextStore: container.memberContextStore,

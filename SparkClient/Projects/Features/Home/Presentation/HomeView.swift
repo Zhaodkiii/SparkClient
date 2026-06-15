@@ -109,6 +109,9 @@ struct HomeView: View {
         .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
             showExternalImportErrorAlert = message != nil
         }
+        .onReceive(NotificationCenter.default.publisher(for: .medicationReminderPreferencesChanged)) { _ in
+            triggerMedicationReminderRebuildIfSignedIn(reason: "preferences_changed")
+        }
         .alert("无法导入文档", isPresented: $showExternalImportErrorAlert) {
             Button("好", role: .cancel) {
                 externalMedicalDocumentImportCoordinator.clearError()
@@ -135,6 +138,16 @@ struct HomeView: View {
 
     private func requestLaunchIntentDrain(reason: String) {
         launchIntentConsumer.requestDrain(reason: reason) { activeFullScreenCover = $0 }
+    }
+
+    private func triggerMedicationReminderRebuildIfSignedIn(reason: String) {
+        dependencies.medicationReminderSyncCoordinator.activate(accountID: session.accountID)
+        dependencies.medicationReminderSyncCoordinator.requestRebuild(
+            accountID: session.accountID,
+            members: viewModel.dashboard?.members ?? dependencies.memberContextStore.context.members,
+            reason: reason,
+            immediate: true
+        )
     }
 
     @ViewBuilder
@@ -374,18 +387,9 @@ struct HomeView: View {
                     .font(.headline)
                 Spacer()
                 if let entryMemberID = viewModel.selectedMemberID {
-                    MainNavigationLink {
-                        FamilyMedicineCabinetPage(
-                            entryMemberID: entryMemberID,
-                            mode: .family,
-                            memberCompleteData: viewModel.dashboard?.medical.completeData,
-                            onMemberCompleteDataChanged: { updated in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.familyMedicineBoxes = updated.familyMedicineBoxes
-                                }
-                            },
-                            dependencies: dependencies
-                        )
+                    Button {
+                        dependencies.routeStore.route(to: .homeFamilyMedicineCabinet(memberID: entryMemberID))
+                        triggerHaptic(style: .light)
                     } label: {
                         Label(
                             L10n.text("home.medical.family_cabinet.title"),
@@ -393,11 +397,7 @@ struct HomeView: View {
                         )
                         .font(.footnote.weight(.semibold))
                     }
-                    .simultaneousGesture(
-                        TapGesture().onEnded {
-                            triggerHaptic(style: .light)
-                        }
-                    )
+                    .buttonStyle(.plain)
                 }
 //                if viewModel.dashboard?.selectedMember != nil {
 //                    Text(viewModel.dashboard?.selectedMember?.name ?? "")
@@ -409,52 +409,14 @@ struct HomeView: View {
             let cards = viewModel.dashboard?.medical.cards ?? []
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(cards, id: \.id) { card in
-                    MainNavigationLink {
-                        HomeMedicalListView(
-                            route: medicalRoute(for: card.id),
-                            completeData: viewModel.dashboard?.medical.completeData,
-                            dependencies: dependencies,
-                            onMedicalCasesUpdated: { cases in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.medicalCases = cases
-                                }
-                            },
-                            onHealthExamReportsUpdated: { reports in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.healthExamReports = reports
-                                }
-                            },
-                            onExaminationReportsUpdated: { reports in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.examinationReports = reports
-                                }
-                            },
-                            onMedicationPlansUpdated: { plans in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.medicationPlans = plans
-                                }
-                            },
-                            onPrescriptionsUpdated: { prescriptions in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.prescriptions = prescriptions
-                                }
-                            },
-                            onMedicineBoxesUpdated: { boxes in
-                                viewModel.updateMedicalCompleteData { completeData in
-                                    completeData.medicineBoxes = boxes
-                                }
-                            }
-                        )
+                    Button {
+                        viewModel.logMedicalListNavigation(kind: card.id)
+                        dependencies.routeStore.route(to: .homeMedicalList(card.id.homeMedicalListRoute, nil))
+                        triggerHaptic(style: .light)
                     } label: {
                         medicalCard(card)
                     }
                     .buttonStyle(.plain)
-                    .simultaneousGesture(
-                        TapGesture().onEnded {
-                            viewModel.logMedicalListNavigation(kind: card.id)
-                            triggerHaptic(style: .light)
-                        }
-                    )
                 }
             }
 
@@ -585,19 +547,6 @@ struct HomeView: View {
             return L10n.text("home.medical.card.medical_reports.subtitle")
         case .medicationPlans:
             return L10n.text("home.medical.card.medication_plans.subtitle", fallback: "执行中的规则")
-        }
-    }
-
-    private func medicalRoute(for kind: HomeDashboard.MedicalCard.Kind) -> HomeMedicalListRoute {
-        switch kind {
-        case .medicalCases:
-            return .medicalCases
-        case .healthExamReports:
-            return .healthExamReports
-        case .medicalReports:
-            return .examinationReports
-        case .medicationPlans:
-            return .medicationPlans
         }
     }
 

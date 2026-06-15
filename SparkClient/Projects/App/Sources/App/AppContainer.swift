@@ -85,6 +85,8 @@ final class AppContainer {
     let handleRemoteNotificationUseCase: HandleRemoteNotificationUseCase
     /// 系统推送 token/回调 与用例层的适配。
     let pushAdapter: PushAdapter
+    /// 用药本地提醒同步协调器（MEDICATION-EXECUTION-000002）。
+    let medicationReminderSyncCoordinator: MedicationReminderSyncCoordinator
 
     // MARK: - 数据仓库
     //
@@ -483,6 +485,13 @@ final class AppContainer {
         self.notificationClient = notification.notificationClient
         self.handleRemoteNotificationUseCase = notification.handleRemoteNotificationUseCase
         self.pushAdapter = notification.pushAdapter
+        self.medicationReminderSyncCoordinator = MedicationReminderSyncCoordinator(
+            notificationManager: MedicationReminderNotificationManager(logger: logger),
+            permissionCoordinator: MedicationReminderPermissionCoordinator(logger: logger),
+            preferencesStore: MedicationReminderPreferencesStore.shared,
+            medicalQueryAPI: backend.medicalQuery,
+            logger: logger
+        )
 
         // MARK: 会话 Store 与跨界面共享 ViewModel
         // 注意：`sessionStore` 使用刚赋值的 `restoreSessionUseCase`，`chatListViewModel` 依赖 `sessionStore`，顺序不可颠倒。
@@ -707,6 +716,12 @@ final class AppContainer {
         externalMedicalDocumentImportCoordinator.clearAll()
         launchIntentCoordinator.discardAll(reason: "account_changed")
         launchIntentCoordinator.updateReadiness { $0 = LaunchIntentReadiness() }
+        Task {
+            if case .signedIn(let session) = sessionStore.state {
+                await medicationReminderSyncCoordinator.clearAllForAccount(session.accountID)
+            }
+            medicationReminderSyncCoordinator.deactivate()
+        }
         logger.info("外部医疗 PDF 导入与冷启动 intent 已清理", module: .medical)
     }
 
@@ -730,6 +745,7 @@ final class AppContainer {
             routeStore: routeStore,
             uploadViewModel: medicalDocumentUploadViewModel,
             homeViewModel: homeViewModel,
+            sessionStore: sessionStore,
             logger: logger
         )
         let created = MainTabDependencies(
@@ -750,6 +766,8 @@ final class AppContainer {
                 medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
                 routeStore: routeStore,
+                sessionStore: sessionStore,
+                medicationReminderSyncCoordinator: medicationReminderSyncCoordinator,
                 nutritionDependencies: HomeFeatureDependencies.makeNutritionDependencies(
                     backend: backend,
                     memberContextStore: memberContextStore,
@@ -870,6 +888,10 @@ final class AppContainer {
     /// 清理本地会话与 token，并切回登录态。
     func forceSignOutAfterServerAuthInvalidation(invalidationMessage: String = "") async {
         logger.warning("检测到服务端明确鉴权失效，准备强制回到登录页。", module: .auth)
+        if case .signedIn(let session) = sessionStore.state {
+            await medicationReminderSyncCoordinator.clearAllForAccount(session.accountID)
+            medicationReminderSyncCoordinator.deactivate()
+        }
         do {
             try await signOutUseCase.execute()
         } catch {

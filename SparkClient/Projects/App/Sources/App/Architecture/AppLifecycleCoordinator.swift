@@ -98,6 +98,13 @@ final class AppLifecycleCoordinator: ObservableObject {
         guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else { return }
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
+        if case .signedIn(let session) = sessionStore.state {
+            container.medicationReminderSyncCoordinator.rebuildIfStale(
+                accountID: session.accountID,
+                members: container.memberContextStore.context.members,
+                reason: "foreground_resume"
+            )
+        }
     }
 
     func handleServerAuthInvalidationIfNeeded(invalidationMessage: String = "") async {
@@ -233,6 +240,13 @@ final class AppLifecycleCoordinator: ObservableObject {
         signedInPreparationRegistry.markPrepared(accountID: session.accountID)
         preparedAccountID = session.accountID
         logger.info("会话流程：账号运行时准备完成 accountID=\(session.accountID)", module: .auth)
+        container.medicationReminderSyncCoordinator.activate(accountID: session.accountID)
+        container.medicationReminderSyncCoordinator.requestRebuild(
+            accountID: session.accountID,
+            members: container.memberContextStore.context.members,
+            reason: "signed_in_bootstrap",
+            immediate: true
+        )
     }
 
     // MARK: - 设备登记（单一入口）

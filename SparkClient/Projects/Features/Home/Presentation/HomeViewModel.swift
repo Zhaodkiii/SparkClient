@@ -239,6 +239,53 @@ final class HomeViewModel: ObservableObject {
         Task { await load(syncRemote: false) }
     }
 
+    func switchMemberAndLoad(_ memberID: Int) async {
+        selectedMemberID = memberID
+        memberContextStore.select(memberID: memberID)
+        await load(syncRemote: true)
+    }
+
+    func memberLookupResult(for memberID: Int) -> MedicationReminderMemberLookupResult {
+        let members = dashboard?.members ?? memberContextStore.context.members
+        if members.contains(where: { $0.id == memberID }) {
+            return .available
+        }
+        if isLoadingMedical || dashboard == nil {
+            return .loading
+        }
+        return .unavailable
+    }
+
+    func waitForMemberAvailability(_ memberID: Int, timeoutSeconds: TimeInterval = 12) async -> MedicationReminderMemberLookupResult {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while Date() < deadline {
+            switch memberLookupResult(for: memberID) {
+            case .available, .unavailable:
+                return memberLookupResult(for: memberID)
+            case .loading:
+                if dashboard == nil {
+                    await loadInitialIfNeeded(syncRemote: true)
+                } else if isLoadingMedical == false {
+                    await load(syncRemote: true)
+                }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+        }
+        return memberLookupResult(for: memberID)
+    }
+
+    func memberExists(_ memberID: Int) -> Bool {
+        memberLookupResult(for: memberID) == .available
+    }
+
+    func notifyMedicationReminderUnavailable(_ message: String) {
+        notificationClient.warning(
+            message,
+            title: L10n.text("medication_reminder.title"),
+            source: "medication_reminder"
+        )
+    }
+
     /// 记录首页医疗卡片跳转行为，便于后续分析用户使用路径。
     func logMedicalListNavigation(kind: HomeDashboard.MedicalCard.Kind) {
         logger.info(

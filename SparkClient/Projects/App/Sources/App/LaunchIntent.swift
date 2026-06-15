@@ -13,6 +13,8 @@ enum LaunchIntentSource: String, Sendable {
     case onOpenURL
     /// 用户点击远程推送通知触发
     case remoteNotificationInteraction
+    /// 用户点击本地通知触发
+    case localNotificationInteraction
     /// 应用内横幅通知点击触发
     case inAppNotificationBannerTap
 }
@@ -49,6 +51,15 @@ struct MemberInvitePushLaunchIntent: Equatable, Sendable, Identifiable {
     let notificationRequestID: String?
 }
 
+/// 用药提醒本地通知唤起意图模型
+struct MedicationReminderLaunchIntent: Equatable, Sendable, Identifiable {
+    let id: UUID
+    let payload: MedicationReminderLaunchPayload
+    let receivedAt: Date
+    let source: LaunchIntentSource
+    let notificationRequestID: String?
+}
+
 /// 通用页面路由跳转唤起意图模型
 /// 统一承载App内部路由跳转指令
 struct AppRouteLaunchIntent: Equatable, Sendable, Identifiable {
@@ -69,6 +80,8 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
     case medicalDocumentUpload(ExternalMedicalDocumentUploadIntent)
     /// 推送成员邀请跳转意图
     case memberInviteFromPush(MemberInvitePushLaunchIntent)
+    /// 用药提醒本地通知跳转意图
+    case medicationReminder(MedicationReminderLaunchIntent)
     /// 通用路由跳转意图
     case appRoute(AppRouteLaunchIntent)
 
@@ -79,19 +92,23 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
             return intent.id
         case .memberInviteFromPush(let intent):
             return intent.id
+        case .medicationReminder(let intent):
+            return intent.id
         case .appRoute(let intent):
             return intent.id
         }
     }
 
     /// 意图消费优先级：数值越小优先级越高
-    /// 0：邀请推送(最高) > 1：文档上传 > 3：普通路由(最低)
+    /// 0：邀请推送(最高) > 1：文档上传 > 2：用药提醒 > 3：普通路由(最低)
     var priority: Int {
         switch self {
         case .memberInviteFromPush:
             return 0
         case .medicalDocumentUpload:
             return 1
+        case .medicationReminder:
+            return 2
         case .appRoute:
             return 3
         }
@@ -112,6 +129,11 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
     var appRouteSignature: String? {
         guard case .appRoute(let intent) = self else { return nil }
         return String(describing: intent.route)
+    }
+
+    var medicationReminderNotificationID: String? {
+        guard case .medicationReminder(let intent) = self else { return nil }
+        return intent.payload.notificationID
     }
 }
 

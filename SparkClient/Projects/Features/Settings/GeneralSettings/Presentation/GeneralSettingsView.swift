@@ -4,15 +4,37 @@ struct GeneralSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     @ObservedObject private var preferencesStore = HomeNutritionEntryPreferencesStore.shared
+    @ObservedObject private var medicationPreferencesStore = MedicationReminderPreferencesStore.shared
 
     var body: some View {
         List {
             versionSection
             homeNutritionEntrySection
+            medicalSection
             MedicalExtractionRetrySettingsSection()
             cacheSection
         }
         .navigationTitle(L10n.text("settings.general.title"))
+    }
+
+    private var medicalSection: some View {
+        Section {
+            Toggle(
+                L10n.text("settings.general.medical.show_drug_name_in_notification"),
+                isOn: $medicationPreferencesStore.showsDrugNameInNotification
+            )
+        } header: {
+            Text(L10n.text("settings.general.medical.section"))
+        } footer: {
+            Text(L10n.text("settings.general.medical.show_drug_name_in_notification.footer"))
+        }
+        .onChange(of: medicationPreferencesStore.showsDrugNameInNotification) { _ in
+            postMedicationPreferencesChanged()
+        }
+    }
+
+    private func postMedicationPreferencesChanged() {
+        NotificationCenter.default.post(name: .medicationReminderPreferencesChanged, object: nil)
     }
 
     private var homeNutritionEntrySection: some View {

@@ -15,7 +15,7 @@ protocol LaunchIntentHandling: AnyObject {
 @MainActor
 final class LaunchIntentCoordinator: ObservableObject {
     /// 兼容只读：队列头部（优先级最高）意图
-    var pendingIntent: LaunchIntent? { sortedQueue().first?.intent }
+//    var pendingIntent: LaunchIntent? { sortedQueue().first?.intent }
     @Published private(set) var queueCount = 0
     @Published private(set) var queueRevision = 0
     @Published private(set) var readiness = LaunchIntentReadiness()
@@ -247,6 +247,11 @@ final class LaunchIntentCoordinator: ObservableObject {
             return .updateExisting(index: index)
         }
 
+        if let notificationID = incoming.medicationReminderNotificationID,
+           let index = queue.firstIndex(where: { $0.intent.medicationReminderNotificationID == notificationID }) {
+            return .updateExisting(index: index)
+        }
+
         return .keepBoth
     }
 
@@ -346,6 +351,8 @@ private extension LaunchIntent {
             return "medicalDocumentUpload"
         case .memberInviteFromPush:
             return "memberInviteFromPush"
+        case .medicationReminder:
+            return "medicationReminder"
         case .appRoute:
             return "appRoute"
         }
@@ -356,6 +363,8 @@ private extension LaunchIntent {
         case .medicalDocumentUpload(let intent):
             return intent.source.rawValue
         case .memberInviteFromPush(let intent):
+            return intent.source.rawValue
+        case .medicationReminder(let intent):
             return intent.source.rawValue
         case .appRoute(let intent):
             return intent.source.rawValue

@@ -13,12 +13,40 @@ struct HomeMedicalListView: View {
     let route: HomeMedicalListRoute
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let dependencies: HomeFeatureDependencies
+    let initialFocus: MedicationExecutionInitialFocus?
+    let onDismiss: (() -> Void)?
     let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     let onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?
     let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
     let onMedicationPlansUpdated: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
     let onPrescriptionsUpdated: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+
+    init(
+        route: HomeMedicalListRoute,
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        dependencies: HomeFeatureDependencies,
+        initialFocus: MedicationExecutionInitialFocus? = nil,
+        onDismiss: (() -> Void)? = nil,
+        onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?,
+        onHealthExamReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)?,
+        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?,
+        onMedicationPlansUpdated: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?,
+        onPrescriptionsUpdated: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?,
+        onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+    ) {
+        self.route = route
+        self.completeData = completeData
+        self.dependencies = dependencies
+        self.initialFocus = initialFocus
+        self.onDismiss = onDismiss
+        self.onMedicalCasesUpdated = onMedicalCasesUpdated
+        self.onHealthExamReportsUpdated = onHealthExamReportsUpdated
+        self.onExaminationReportsUpdated = onExaminationReportsUpdated
+        self.onMedicationPlansUpdated = onMedicationPlansUpdated
+        self.onPrescriptionsUpdated = onPrescriptionsUpdated
+        self.onMedicineBoxesUpdated = onMedicineBoxesUpdated
+    }
 
     var body: some View {
         switch route {
@@ -78,25 +106,14 @@ struct HomeMedicalListView: View {
                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
                 aiSettingsViewModel: dependencies.aiSettingsViewModel,
                 homeDependencies: dependencies,
+                initialFocus: initialFocus,
                 onMedicationPlansChanged: onMedicationPlansUpdated,
                 onPrescriptionsChanged: onPrescriptionsUpdated,
                 onMedicineBoxesChanged: onMedicineBoxesUpdated
             )
-            
-//            MedicationsListPage(
-//                completeData: completeData,
-//                workflowAPI: dependencies.medicalWorkflowAPI,
-//                medicalQueryAPI: dependencies.medicalQueryAPI,
-//                fileTransferService: dependencies.fileTransferService,
-//                memberContextStore: dependencies.memberContextStore,
-//                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
-//                aiSettingsViewModel: dependencies.aiSettingsViewModel,
-//                notificationClient: dependencies.notificationClient,
-//                logger: dependencies.logger,
-//                onMedicationPlansChanged: onMedicationPlansUpdated,
-//                onPrescriptionsChanged: onPrescriptionsUpdated,
-//                onMedicineBoxesChanged: onMedicineBoxesUpdated
-//            )
+            .onDisappear {
+                onDismiss?()
+            }
         }
     }
 }

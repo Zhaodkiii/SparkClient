@@ -10,10 +10,14 @@ enum AppRoute: Hashable, Sendable {
     case chatThread(UUID)
     case settings
     case aiSettings
+    /// 首页医疗卡片对应的列表/执行中心页。
+    case homeMedicalList(HomeMedicalListRoute, MedicationExecutionInitialFocus?)
+    /// 首页家庭药箱入口。
+    case homeFamilyMedicineCabinet(memberID: Int)
 
     var rootTab: AppRouteStore.RootTab {
         switch self {
-        case .home:
+        case .home, .homeMedicalList, .homeFamilyMedicineCabinet:
             return .home
         case .knowledge:
             return .knowledge
@@ -21,6 +25,15 @@ enum AppRoute: Hashable, Sendable {
             return .chat
         case .settings, .aiSettings:
             return .settings
+        }
+    }
+
+    var isRootDestination: Bool {
+        switch self {
+        case .home, .knowledge, .chatList, .settings:
+            return true
+        case .chatThread, .aiSettings, .homeMedicalList, .homeFamilyMedicineCabinet:
+            return false
         }
     }
 }
@@ -50,7 +63,7 @@ final class AppRouteStore: ObservableObject {
     func route(to route: AppRoute, replaceStack: Bool = false) {
         let tab = route.rootTab
         selectedTab = tab
-        if route == .home || route == .knowledge || route == .chatList || route == .settings {
+        if route.isRootDestination {
             routeStacks[tab] = replaceStack ? [] : routeStacks[tab, default: []]
             return
         }

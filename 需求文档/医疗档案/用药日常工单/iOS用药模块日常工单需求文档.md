@@ -8,6 +8,7 @@
 | --- | --- | --- | --- |
 | `MEDICATION-EXECUTION-000001` | 用药执行中心多日进度圆环与记录窗口优化 | 需求设计中 | 参考 iOS 健康“用药”效果，检查并补齐 `MedicationExecutionCenter` 未完整实现部分；重点优化顶部日期进度圆环 View，使其展示选中日前后多天用药进度，并按“当前选中日前后 4 天”加载记录数据 |
 | `MEDICATION-EXECUTION-000002` | 用药本地通知闭环详细设计 | 需求设计中 | 基于 `用药通知需求讨论文档.md` 已确认结论，首版只做客户端本地通知：计划变更同步通知、离线提醒、点击通知走冷启动目标页面公共调度、切换成员并打开用药记录 Sheet、打卡后清理当前剂次通知、通用设置医疗隐私开关 |
+| `MEDICATION-EXECUTION-000003` | 用药通知查看与管理页 | 需求设计中 | 在服药计划列表右上角增加“已有通知”入口，查看本机已注册/已送达用药本地通知，支持补齐通知、取消单条、清除全部；参考 HealthClient 通知管理页，但落地需符合 SparkClient 的本地通知、LaunchIntent、L10n 与 Home 依赖架构 |
 
 ## 工单 `MEDICATION-EXECUTION-000001`：用药执行中心多日进度圆环与记录窗口优化
 
@@ -1593,3 +1594,500 @@ SparkService：无改动
 1. 验证首版本地通知验收标准。
 2. 验证 000001 多日记录窗口与通知点击打开 Sheet 不冲突。
 3. 验证无网络、无权限、账号切换、目标成员切换、计划失效等异常路径。
+
+---
+
+## 工单 `MEDICATION-EXECUTION-000003`：用药通知查看与管理页
+
+### 工单状态
+
+需求设计中。
+
+### 需求依据
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationsListPage.swift:278-279
+/Users/hua/Downloads/Reference/包/Health/HealthClient/HealthClient/Presentation/Views/Notification/NotificationManagementView.swift
+MEDICATION-EXECUTION-000002：用药本地通知闭环详细设计
+```
+
+## 1. 背景
+
+`MEDICATION-EXECUTION-000002` 已经设计了本地用药通知闭环：
+
+```text
+用药计划 -> 编译未来 7 天提醒 -> 注册本地通知 -> 点击通知 -> 进入执行中心 -> 打开 logSheet -> 打卡后清理通知
+```
+
+但用户仍缺少一个可视化入口查看“当前本机到底注册了哪些用药提醒”。没有管理页会带来以下问题：
+
+1. 用户不知道当前是否已经成功注册提醒。
+2. 调试时无法判断通知是否漏注册、重复注册或已过期。
+3. 用户无法手动补齐通知。
+4. 用户无法取消某条不想要的本地提醒。
+5. 用户无法清除全部本机用药提醒。
+6. 000002 的通知调度逻辑缺少可观测入口。
+
+因此需要在服药计划列表右上角增加“已有通知”入口，打开 SparkClient 自己的用药通知管理页。
+
+## 2. 目标
+
+### 2.1 核心目标
+
+1. 在 `MedicationsListPage` 右上角 toolbar 增加“已有通知”入口。
+2. 点击后进入用药通知管理页。
+3. 页面展示本机当前账号的用药本地通知。
+4. 支持统计：待发送、已送达。
+5. 支持按成员、提醒时间、药品/计划聚合展示。
+6. 支持手动补齐通知。
+7. 支持取消单条待发送通知。
+8. 支持清除当前账号全部用药通知。
+9. 支持下拉或按钮刷新。
+10. 与 000002 的 `MedicationReminderNotificationManager` / `MedicationReminderSyncCoordinator` 保持同一套数据来源和清理规则。
+
+### 2.2 非目标
+
+1. 不新增服务端接口。
+2. 不展示服务端 APNs 记录。
+3. 不展示其他类型通知，例如成员邀请、AI 试用审核、聊天消息。
+4. 不做跨设备通知管理。
+5. 不做已送达通知的“重新提醒”动作。
+6. 不在通知管理页编辑用药计划本身。
+7. 不改变 000002 的本地通知注册规则。
+
+## 3. 入口设计
+
+### 3.1 挂载位置
+
+文件：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationsListPage.swift
+```
+
+当前 toolbar 位置已经预留：
+
+```swift
+.toolbar {
+    // 增加 已有通知查看
+}
+```
+
+建议新增：
+
+```swift
+ToolbarItem(placement: .navigationBarTrailing) {
+    NavigationLink {
+        MedicationReminderManagementPage(...)
+    } label: {
+        Label(
+            L10n.text("medication_reminder.management.title", fallback: "已有通知"),
+            systemImage: "bell.badge"
+        )
+    }
+}
+```
+
+### 3.2 入口展示规则
+
+| 场景 | 展示 |
+| --- | --- |
+| 已登录且有 memberID | 展示“已有通知”入口 |
+| 无 memberID | 入口可展示但 disabled，或隐藏 |
+| 系统通知未授权 | 入口仍展示，用于查看空态/权限提示 |
+| 用药计划为空 | 入口仍展示，可展示空态和补齐按钮 |
+
+建议首版：
+
+```text
+入口始终展示；
+无当前成员/无账号时页面展示空态；
+```
+
+原因是通知管理页是账号级本地通知管理，不只服务当前成员。
+
+## 4. 页面形态设计
+
+### 4.1 页面名称
+
+建议新增页面：
+
+```text
+MedicationReminderManagementPage.swift
+```
+
+建议路径：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderManagementPage.swift
+```
+
+### 4.2 页面结构
+
+参考 HealthClient 的 `NotificationManagementView`，但视觉和依赖要符合 SparkClient 当前架构：
+
+```text
+NavigationStack / NavigationLink push
+  -> 顶部统计区
+  -> 权限/隐私提示区（按状态展示）
+  -> 通知分组列表
+  -> 空态 / 加载态 / 错误态
+  -> 右上角操作：补齐通知、清除全部
+```
+
+### 4.3 顶部统计区
+
+展示：
+
+| 指标 | 含义 |
+| --- | --- |
+| 待发送 | `UNUserNotificationCenter.pendingNotificationRequests()` 中属于当前账号的用药通知数量 |
+| 已送达 | `UNUserNotificationCenter.deliveredNotifications()` 中属于当前账号的用药通知数量 |
+| 最近补齐 | 可选，展示最近一次重建时间；首版可不做 |
+
+### 4.4 列表展示
+
+建议按“成员 + 时间”聚合，而不是只按药品聚合。
+
+原因：
+
+1. 000002 推荐同一成员同一分钟聚合一条通知。
+2. 一条通知可能包含多个药品。
+3. 用户最关心“几点会提醒谁吃药”，其次才是药品明细。
+
+建议卡片结构：
+
+```text
+08:00 今天
+妈妈 · 3 项用药
+待发送
+阿莫西林、布洛芬、维生素D
+```
+
+如果通知 payload 中没有药品名，只展示：
+
+```text
+妈妈 · 3 项用药
+```
+
+展开后展示每个 item：
+
+```text
+阿莫西林 · doseSequence 1
+布洛芬 · doseSequence 1
+```
+
+### 4.5 状态样式
+
+| 状态 | 图标 | 颜色 | 操作 |
+| --- | --- | --- | --- |
+| 待发送 | `clock.fill` | blue | 可取消 |
+| 已送达 | `checkmark.circle.fill` | green | 不支持取消，可清除 delivered |
+| 已过期 | `exclamationmark.triangle.fill` | orange | 可清理 |
+| 无法解析 | `questionmark.circle` | secondary | 可清理 |
+
+说明：
+
+1. Pending 通知使用 `trigger.nextTriggerDate()` 判断具体触发时间。
+2. Delivered 通知使用系统 delivered notification 的 date 或 request 内容展示。
+3. 无法解析的通知说明 payload 不完整或旧版本遗留。
+
+## 5. 数据来源设计
+
+### 5.1 查询范围
+
+只读取本机通知中心：
+
+```swift
+UNUserNotificationCenter.current().pendingNotificationRequests()
+UNUserNotificationCenter.current().deliveredNotifications()
+```
+
+过滤规则：
+
+```text
+identifier hasPrefix MedicationReminderNotification.identifierPrefix(accountID)
+OR userInfo["type"] == "medication_reminder" AND userInfo["account_id"] == currentAccountID
+```
+
+首选 identifier 前缀，userInfo 作为兜底。
+
+### 5.2 页面 ViewModel
+
+建议新增：
+
+```text
+MedicationReminderManagementViewModel.swift
+```
+
+职责：
+
+| 职责 | 说明 |
+| --- | --- |
+| 加载 pending 通知 | 读取待发送本地通知 |
+| 加载 delivered 通知 | 读取已送达通知 |
+| 解析 payload | 复用 `MedicationReminderPayloadParser` |
+| 聚合分组 | 按成员、时间、notificationID 组成展示模型 |
+| 取消单条 | 调用 `MedicationReminderNotificationManager.removeNotification(id:)` |
+| 清除全部 | 调用 `removeAllMedicationNotifications(forAccountID:)` |
+| 补齐通知 | 调用 `MedicationReminderSyncCoordinator.rebuildAfterPlanChanged(...)` 或等价方法 |
+| 权限状态 | 读取 `MedicationReminderPermissionCoordinator.currentStatus()` |
+
+### 5.3 展示模型
+
+建议定义：
+
+```swift
+struct MedicationReminderDisplayGroup: Identifiable, Equatable {
+    let id: String
+    let notificationID: String
+    let memberID: Int
+    let memberName: String
+    let scheduledAt: Date?
+    let status: MedicationReminderDisplayStatus
+    let items: [MedicationReminderDisplayItem]
+    let rawBody: String
+}
+
+enum MedicationReminderDisplayStatus: Equatable {
+    case pending
+    case delivered
+    case expired
+    case invalid
+}
+
+struct MedicationReminderDisplayItem: Identifiable, Equatable {
+    let id: String
+    let planID: Int
+    let doseSequence: Int
+    let drugName: String?
+}
+```
+
+注意：
+
+1. Pending 通知和 delivered 通知可能同 ID 同时存在，展示时要去重或分状态展示。
+2. 已送达通知如果已被打卡清理，可能已经不存在。
+3. 如果 payload 无法解析，也要能展示“无法解析通知”，避免管理页崩溃。
+
+## 6. 操作设计
+
+### 6.1 补齐通知
+
+按钮：
+
+```text
+补齐通知
+```
+
+行为：
+
+```text
+点击补齐通知
+  -> 检查系统通知权限
+  -> 如果未决定，走 000002 权限说明弹窗
+  -> 如果拒绝，提示去设置开启
+  -> 如果允许，调用 MedicationReminderSyncCoordinator 重建当前账号未来 7 天通知
+  -> 重新加载管理页列表
+  -> Toast：通知已补齐
+```
+
+说明：
+
+1. 补齐通知不是“追加”，而是按 000002 规则清理旧通知后重建。
+2. 不应生成超过 48 条。
+3. 补齐后列表应立即刷新。
+
+### 6.2 取消单条
+
+待发送通知支持取消。
+
+行为：
+
+```text
+点击取消
+  -> removeNotification(id)
+  -> 刷新列表
+  -> Toast：已取消该提醒
+```
+
+注意：
+
+1. 如果该通知是聚合通知，取消会取消这个时间点所有聚合剂次提醒。
+2. 页面需要在确认文案中提示：“这会取消该时间点的用药提醒”。
+3. 取消单条只是本地取消，不修改用药计划的 `reminderEnabled`。
+4. 下次“补齐通知”或前台自动重建后，可能再次生成该提醒。
+
+因此如果用户希望长期不提醒，应引导去编辑用药计划关闭提醒。
+
+### 6.3 清除全部
+
+按钮：
+
+```text
+清除全部
+```
+
+行为：
+
+```text
+点击清除全部
+  -> 弹确认框
+  -> removeAllMedicationNotifications(forAccountID)
+  -> 刷新列表
+  -> Toast：已清除全部用药提醒
+```
+
+确认文案：
+
+```text
+确定要清除本机已注册的全部用药提醒吗？
+这不会关闭用药计划中的提醒开关；下次补齐通知或自动重建后，提醒可能再次出现。
+```
+
+## 7. 与 000002 的关系
+
+本工单不重新实现通知调度，只做查看和管理。
+
+必须复用：
+
+```text
+MedicationReminderNotificationManager
+MedicationReminderSyncCoordinator
+MedicationReminderPayloadParser
+MedicationReminderNotification.identifierPrefix(accountID:)
+MedicationReminderPermissionCoordinator
+MedicationReminderPreferencesStore
+```
+
+不能新增第二套：
+
+1. notification identifier 规则。
+2. userInfo 解析规则。
+3. pending/delivered 过滤规则。
+4. 权限请求逻辑。
+5. 补齐通知逻辑。
+
+## 8. UI 细节
+
+### 8.1 空态
+
+无通知时展示：
+
+```text
+图标：bell.slash
+标题：暂无用药提醒
+说明：开启用药提醒后，将在这里显示本机未来提醒。
+按钮：补齐通知
+```
+
+### 8.2 权限提示
+
+如果系统通知权限未开启：
+
+```text
+系统通知未开启，可能错过用药提醒。
+```
+
+操作：
+
+```text
+去设置
+```
+
+### 8.3 隐私提示
+
+如果“通知中显示药品名称”开启：
+
+```text
+当前通知可能在锁屏显示药品名称。
+```
+
+如果关闭：
+
+```text
+通知默认不显示药品名称。
+```
+
+该提示不必占用太大空间，可放在列表页顶部小提示里。
+
+### 8.4 Toolbar
+
+右上角建议：
+
+```text
+补齐通知
+清除全部
+```
+
+如果空间紧张，使用 `Menu`：
+
+```swift
+Menu {
+    Button("补齐通知") { ... }
+    Button("清除全部", role: .destructive) { ... }
+} label: {
+    Image(systemName: "ellipsis.circle")
+}
+```
+
+## 9. 影响文件
+
+### 9.1 主要改动文件
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationsListPage.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderNotificationManager.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderSyncCoordinator.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderModels.swift
+SparkClient/SparkClient/Projects/App/Resources/zh-Hans.lproj/Localizable.strings
+SparkClient/SparkClient/Projects/App/Resources/en.lproj/Localizable.strings
+```
+
+### 9.2 建议新增文件
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderManagementPage.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderManagementViewModel.swift
+```
+
+## 10. 验收标准
+
+1. `MedicationsListPage` 右上角展示“已有通知”入口。
+2. 点击入口进入用药通知管理页。
+3. 页面能展示当前账号 pending 用药通知。
+4. 页面能展示当前账号 delivered 用药通知。
+5. 非当前账号通知不展示。
+6. 非用药通知不展示。
+7. 待发送数量和已送达数量统计正确。
+8. 同一分钟聚合通知能展示多项用药。
+9. 点击“补齐通知”后，未来 7 天通知按 000002 规则重建。
+10. 点击“取消”后，该条 pending 通知消失。
+11. 点击“清除全部”后，当前账号用药通知全部清理。
+12. 清除全部不修改用药计划 `reminderEnabled`。
+13. 通知权限未开启时，页面展示权限提示。
+14. 无通知时展示空态，不崩溃。
+15. payload 无法解析的旧通知能展示为不可识别项或被安全忽略，不崩溃。
+
+## 11. 测试建议
+
+### 11.1 手工测试
+
+| 场景 | 预期 |
+| --- | --- |
+| 有 3 条 pending 用药通知 | 页面显示待发送 3 |
+| 有 delivered 通知 | 页面显示已送达数量 |
+| 当前账号切换 | 只显示当前账号通知 |
+| 点击补齐通知 | 刷新后 pending 列表更新 |
+| 取消单条 pending | 该条从列表移除 |
+| 清除全部 | 当前账号用药通知全部清空 |
+| 通知权限关闭 | 展示权限提示 |
+| 无用药通知 | 展示空态 |
+
+### 11.2 回归测试
+
+1. 管理页取消通知后，不影响用药计划本身。
+2. 管理页清除全部后，重新进入 App 或点击补齐可按规则重建。
+3. 点击通知仍能走 000002 的冷启动目标页面公共调度。
+4. 打卡后当前剂次通知仍会被清理。
+5. 设置“通知中显示药品名称”后，补齐通知生成的新文案符合设置。

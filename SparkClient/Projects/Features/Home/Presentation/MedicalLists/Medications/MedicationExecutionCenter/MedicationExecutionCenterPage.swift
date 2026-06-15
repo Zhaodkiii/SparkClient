@@ -18,6 +18,7 @@ struct MedicationExecutionCenterPage: View {
     let aiSettingsViewModel: AISettingsViewModel?
     /// 个人药箱入口所需的完整 Home 依赖（含成员上下文与上传 ViewModel）
     let homeDependencies: HomeFeatureDependencies?
+    let initialFocus: MedicationExecutionInitialFocus?
     let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
     let onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
@@ -31,6 +32,7 @@ struct MedicationExecutionCenterPage: View {
     @State private var isSaving = false
     @State private var logSheet: MedicationExecutionLogSheetContext?
     @State private var dateStripScrollID: String?
+    @State private var didApplyInitialFocus = false
     private let calendar = Calendar.current
     private let logModule = LogModule.home
 
@@ -49,6 +51,7 @@ struct MedicationExecutionCenterPage: View {
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel? = nil,
         aiSettingsViewModel: AISettingsViewModel? = nil,
         homeDependencies: HomeFeatureDependencies? = nil,
+        initialFocus: MedicationExecutionInitialFocus? = nil,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
         onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)? = nil,
         onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
@@ -67,6 +70,7 @@ struct MedicationExecutionCenterPage: View {
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
         self.aiSettingsViewModel = aiSettingsViewModel
         self.homeDependencies = homeDependencies
+        self.initialFocus = initialFocus
         self.onMedicationPlansChanged = onMedicationPlansChanged
         self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
@@ -165,10 +169,17 @@ struct MedicationExecutionCenterPage: View {
             )
         }
         .task {
+            if let initialFocus {
+                selectedDate = initialFocus.scheduledAt
+            }
             await loadRecordWindow(centeredAt: selectedDayStart, preferInitialRecords: true)
+            await applyInitialFocusIfNeeded()
         }
         .onChange(of: selectedDayStart) { newValue in
-            Task { await loadRecordWindow(centeredAt: newValue, preferInitialRecords: false) }
+            Task {
+                await loadRecordWindow(centeredAt: newValue, preferInitialRecords: false)
+                await applyInitialFocusIfNeeded()
+            }
         }
     }
 
@@ -571,6 +582,7 @@ struct MedicationExecutionCenterPage: View {
                 guard let status = selections[dose.id] else { continue }
                 let saved = try await saveDose(dose, status: status)
                 upsertRecord(saved)
+                await notifyDoseCompleted(dose: dose, saved: saved)
             }
             logSheet = nil
             MedicationExecutionSupport.impact(style: .medium)
@@ -625,6 +637,67 @@ struct MedicationExecutionCenterPage: View {
 
     private func upsertRecord(_ record: SparkMedicalSyncAPI.RemoteMedicationRecord) {
         MedicationExecutionRecordCache.upsertRecord(record, calendar: calendar, into: &recordsByDayID)
+    }
+
+    @MainActor
+    private func applyInitialFocusIfNeeded() async {
+        guard didApplyInitialFocus == false else { return }
+        guard let initialFocus, initialFocus.shouldOpenLogSheet else { return }
+        guard loadingWindowID == nil else { return }
+
+        let targetDoses = scheduledDoses.filter { dose in
+            initialFocus.items.contains {
+                $0.planID == dose.plan.id && $0.doseSequence == dose.doseSequence
+            }
+        }
+
+        guard targetDoses.isEmpty == false else {
+            if initialFocus.items.isEmpty == false {
+                notificationClient.warning(
+                    L10n.text("medication_reminder.route.invalid"),
+                    title: L10n.text("medication_reminder.title"),
+                    source: "medication_reminder"
+                )
+            }
+            didApplyInitialFocus = true
+            return
+        }
+
+        let pending = targetDoses.filter { $0.isCompleted == false }
+        if pending.isEmpty {
+            notificationClient.info(
+                L10n.text("medication_reminder.route.already_completed"),
+                title: L10n.text("medication_reminder.title"),
+                source: "medication_reminder"
+            )
+            didApplyInitialFocus = true
+            return
+        }
+
+        let timeText = MedicationExecutionPlanner.timeText(for: initialFocus.scheduledAt)
+        logSheet = MedicationExecutionLogSheetContext(
+            title: "记录于 \(timeText)",
+            date: selectedDayStart,
+            doses: pending
+        )
+        didApplyInitialFocus = true
+    }
+
+    private func notifyDoseCompleted(
+        dose: MedicationExecutionDose,
+        saved: SparkMedicalSyncAPI.RemoteMedicationRecord
+    ) async {
+        guard let homeDependencies,
+              case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
+        let members = homeDependencies.memberContextStore.context.members
+        await homeDependencies.medicationReminderSyncCoordinator.handleDoseCompleted(
+            accountID: session.accountID,
+            memberID: saved.member,
+            planID: saved.plan,
+            scheduledAt: saved.scheduledAt,
+            doseSequence: saved.doseSequence,
+            members: members
+        )
     }
 }
 

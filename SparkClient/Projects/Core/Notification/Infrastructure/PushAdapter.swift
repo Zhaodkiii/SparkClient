@@ -116,7 +116,7 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
             fallbackTitle: content.title,
             fallbackBody: content.body
         )
-        handleRemoteNotificationUseCase.execute(payload: payload, entryPoint: .foreground)
+        handleRemoteNotificationUseCase.execute(payload: payload, entryPoint: .foreground, rawUserInfo: content.userInfo)
 
         // 前台统一走应用内通知系统，避免系统 banner 与应用内提示重复。
         completionHandler([])
@@ -136,7 +136,8 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
         handleRemoteNotificationUseCase.execute(
             payload: payload,
             entryPoint: .interaction(actionIdentifier: response.actionIdentifier),
-            notificationRequestID: response.notification.request.identifier
+            notificationRequestID: response.notification.request.identifier,
+            rawUserInfo: content.userInfo
         )
         completionHandler()
     }
