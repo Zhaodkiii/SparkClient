@@ -193,6 +193,15 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+    func openPendingInvitesFromPush(inviteID: Int) async {
+        logger.info("PendingInvites.openFromPush inviteID=\(inviteID)", module: logModule)
+        await fetchPendingInvitesIfNeeded()
+        let found = pendingInvites.contains { $0.inviteId == inviteID }
+        logger.info("PendingInvites.highlight inviteID=\(inviteID) found=\(found)", module: logModule)
+        highlightInviteID = inviteID
+        activeSheet = .pendingInvites
+    }
+
     func openInviteByID(_ inviteID: Int) async {
         // Fast path: item already in pending list cache.
         if let item = pendingInvites.first(where: { $0.inviteId == inviteID }) {
@@ -205,16 +214,6 @@ final class HomeViewModel: ObservableObject {
             openInviteAccept(item)
         } catch {
             logger.warning("openInviteByID fetch failed inviteID=\(inviteID): \(error)", module: logModule)
-        }
-    }
-
-    func handleRoute(_ route: AppRoute) {
-        if case .memberInvite(let inviteID) = route {
-            Task {
-                await fetchPendingInvitesIfNeeded()
-                highlightInviteID = inviteID
-                activeSheet = .pendingInvites
-            }
         }
     }
 

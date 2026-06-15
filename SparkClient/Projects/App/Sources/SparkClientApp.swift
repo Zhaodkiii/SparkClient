@@ -18,9 +18,6 @@ struct SparkClientApp: App {
         WindowGroup {
             ContentView(dependencies: container.contentDependencies)
                 .environment(\.managedObjectContext, container.coreDataStack.viewContext)
-                .onOpenURL { url in
-                    _ = container.externalMedicalDocumentImportCoordinator.tryReceive(url, source: .onOpenURL)
-                }
                 .task {
                     appDelegate.pushAdapter = container.pushAdapter
                     container.pushAdapter.installAsNotificationCenterDelegate()

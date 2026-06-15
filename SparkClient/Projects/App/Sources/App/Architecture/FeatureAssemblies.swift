@@ -47,6 +47,8 @@ struct HomeFeatureDependencies {
     let aiSettingsViewModel: AISettingsViewModel
     let routeStore: AppRouteStore
     let nutritionDependencies: NutritionFeatureDependencies
+    let launchIntentCoordinator: LaunchIntentCoordinator
+    let homeLaunchIntentConsumer: HomeLaunchIntentConsumer
 }
 
 struct KnowledgeFeatureDependencies {
@@ -105,6 +107,16 @@ extension HomeFeatureDependencies {
     @MainActor
     static var preview: HomeFeatureDependencies {
         let container = AppContainer.preview
+        let routeStore = AppRouteStore()
+        let uploadViewModel = container.makeMedicalDocumentUploadViewModel()
+        let homeViewModel = container.makeHomeViewModel()
+        let homeLaunchIntentConsumer = HomeLaunchIntentConsumer(
+            coordinator: container.launchIntentCoordinator,
+            routeStore: routeStore,
+            uploadViewModel: uploadViewModel,
+            homeViewModel: homeViewModel,
+            logger: container.logger
+        )
         return HomeFeatureDependencies(
             medicalWorkflowAPI: container.backend.medicalWorkflow,
             medicalQueryAPI: container.backend.medicalQuery,
@@ -117,9 +129,9 @@ extension HomeFeatureDependencies {
             logger: container.logger,
             memberContextStore: container.memberContextStore,
             notificationClient: container.notificationClient,
-            medicalDocumentUploadViewModel: container.makeMedicalDocumentUploadViewModel(),
+            medicalDocumentUploadViewModel: uploadViewModel,
             aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: 1),
-            routeStore: AppRouteStore(),
+            routeStore: routeStore,
             nutritionDependencies: makeNutritionDependencies(
                 backend: container.backend,
                 memberContextStore: container.memberContextStore,
@@ -127,7 +139,9 @@ extension HomeFeatureDependencies {
                 configCenter: container.aiConfigCenter,
                 notificationStore: container.notificationStore,
                 logger: container.logger
-            )
+            ),
+            launchIntentCoordinator: container.launchIntentCoordinator,
+            homeLaunchIntentConsumer: homeLaunchIntentConsumer
         )
     }
 }
@@ -178,6 +192,7 @@ struct MainTabDependencies {
     let memberContextStore: MemberContextStore
     let pushAdapter: PushAdapter
     let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
+    let launchIntentCoordinator: LaunchIntentCoordinator
 }
 
 struct MainTabFeatureDependencies {

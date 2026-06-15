@@ -59,6 +59,8 @@ final class AppContainer {
     let deviceRegistrationCoordinator: DeviceRegistrationCoordinator
     /// 外部 PDF 打开导入协调器（MEDICAL-IMPORT-000001）。
     let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
+    /// 冷启动目标页面公共调度器（APP-COLD-ROUTE-000001）。
+    let launchIntentCoordinator: LaunchIntentCoordinator
 
     // MARK: - 通知（应用内队列、指标、收件箱、远程推送适配）
     //
@@ -363,10 +365,12 @@ final class AppContainer {
             ocrOrchestrator: medical.ocrOrchestrator,
             logger: logger
         )
+        let launchIntentCoordinator = LaunchIntentCoordinator(logger: logger)
         let notification = NotificationAssembly.makeCore(
             backend: backend,
             selectedMemberIDPersistence: auth.selectedMemberIDPersistence,
             medicalSyncPreferenceRepository: medical.medicalSyncPreferenceRepository,
+            launchIntentCoordinator: launchIntentCoordinator,
             logger: logger
         )
         let chat = ChatAssembly.makeCore(
@@ -463,7 +467,11 @@ final class AppContainer {
         self.routeStore = notification.routeStore
         self.routeCoordinator = notification.routeCoordinator
         self.deviceRegistrationCoordinator = notification.deviceRegistrationCoordinator
-        self.externalMedicalDocumentImportCoordinator = ExternalMedicalDocumentImportCoordinator(logger: logger)
+        self.launchIntentCoordinator = launchIntentCoordinator
+        self.externalMedicalDocumentImportCoordinator = ExternalMedicalDocumentImportCoordinator(
+            logger: logger,
+            launchIntentCoordinator: launchIntentCoordinator
+        )
         self.medicalSyncService = notification.medicalSyncService
         self.appBootstrapper = appBootstrapper
         self.notificationStore = notification.notificationStore
@@ -697,7 +705,9 @@ final class AppContainer {
 
     func clearExternalMedicalDocumentImport() {
         externalMedicalDocumentImportCoordinator.clearAll()
-        logger.info("外部医疗 PDF 导入 pending 已清理", module: .medical)
+        launchIntentCoordinator.discardAll(reason: "account_changed")
+        launchIntentCoordinator.updateReadiness { $0 = LaunchIntentReadiness() }
+        logger.info("外部医疗 PDF 导入与冷启动 intent 已清理", module: .medical)
     }
 
     /// 主 Tab 依赖包：同一账号会话期间只创建一次。
@@ -713,6 +723,15 @@ final class AppContainer {
 
         logger.info("主 Tab 依赖首次初始化 accountID=\(ownerAccountID)", module: .general)
         let aiSettingsViewModel = makeAISettingsViewModel(ownerAccountID: ownerAccountID)
+        let homeViewModel = makeHomeViewModel()
+        let medicalDocumentUploadViewModel = makeMedicalDocumentUploadViewModel()
+        let homeLaunchIntentConsumer = HomeLaunchIntentConsumer(
+            coordinator: launchIntentCoordinator,
+            routeStore: routeStore,
+            uploadViewModel: medicalDocumentUploadViewModel,
+            homeViewModel: homeViewModel,
+            logger: logger
+        )
         let created = MainTabDependencies(
             scope: .accountScoped,
             routeStore: routeStore,
@@ -728,7 +747,7 @@ final class AppContainer {
                 logger: logger,
                 memberContextStore: memberContextStore,
                 notificationClient: notificationClient,
-                medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel(),
+                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
                 routeStore: routeStore,
                 nutritionDependencies: HomeFeatureDependencies.makeNutritionDependencies(
@@ -738,7 +757,9 @@ final class AppContainer {
                     configCenter: aiConfigCenter,
                     notificationStore: notificationStore,
                     logger: logger
-                )
+                ),
+                launchIntentCoordinator: launchIntentCoordinator,
+                homeLaunchIntentConsumer: homeLaunchIntentConsumer
             ),
             knowledgeDependencies: KnowledgeFeatureDependencies(
                 makeEditorViewModel: { [self] documentID in
@@ -746,8 +767,8 @@ final class AppContainer {
                 }
             ),
             taskManager: taskManager,
-            homeViewModel: makeHomeViewModel(),
-            medicalDocumentUploadViewModel: makeMedicalDocumentUploadViewModel(),
+            homeViewModel: homeViewModel,
+            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
             knowledgeViewModel: makeKnowledgeLibraryViewModel(),
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
@@ -758,7 +779,8 @@ final class AppContainer {
             versionUpdateCoordinator: versionUpdateCoordinator,
             memberContextStore: memberContextStore,
             pushAdapter: pushAdapter,
-            externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator
+            externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+            launchIntentCoordinator: launchIntentCoordinator
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
         return created

@@ -7,28 +7,34 @@ enum ExternalMedicalDocumentImportSource: String, Sendable {
     case sceneConnection
     case applicationOpen
     case onOpenURL
+
+    var launchIntentSource: LaunchIntentSource {
+        switch self {
+        case .launchOptions:
+            return .launchOptions
+        case .sceneConnection:
+            return .sceneConnection
+        case .applicationOpen:
+            return .applicationOpen
+        case .onOpenURL:
+            return .onOpenURL
+        }
+    }
 }
 
-struct PendingExternalMedicalDocument: Identifiable, Equatable, Sendable {
-    let id: UUID
-    let localFile: MedicalUploadLocalFile
-    let receivedAt: Date
-    let sourceDescription: String?
-}
-
-/// App 级外部医疗 PDF 导入协调器：接收、暂存、复制，待主界面就绪后消费。
+/// 外部医疗 PDF 接收与转换：校验、复制后投递公共 LaunchIntent。
 @MainActor
 final class ExternalMedicalDocumentImportCoordinator: ObservableObject {
-    @Published private(set) var pendingDocument: PendingExternalMedicalDocument?
     @Published var errorMessage: String?
 
     private let logger: Logger
+    private let launchIntentCoordinator: LaunchIntentCoordinator
 
-    init(logger: Logger) {
+    init(logger: Logger, launchIntentCoordinator: LaunchIntentCoordinator) {
         self.logger = logger
+        self.launchIntentCoordinator = launchIntentCoordinator
     }
 
-    /// 若 URL 属于外部文档导入请求则处理并返回 `true`，否则返回 `false` 交由深链路由。
     @discardableResult
     func tryReceive(_ url: URL, source: ExternalMedicalDocumentImportSource) -> Bool {
         guard Self.shouldHandleAsExternalDocument(url) else { return false }
@@ -53,20 +59,20 @@ final class ExternalMedicalDocumentImportCoordinator: ObservableObject {
         sourceDescription: String? = nil
     ) {
         logger.info(
-            "收到外部 PDF 打开请求 source=\(source.rawValue) url=\(url.absoluteString)",
+            "ExternalDocument.copy.start source=\(source.rawValue) url=\(url.absoluteString)",
             module: .medical
         )
         errorMessage = nil
 
         let localFile = MedicalUploadLocalFileImportSupport.withSecurityScopedAccess(to: url) { () -> MedicalUploadLocalFile? in
             guard MedicalUploadLocalFileImportSupport.isPDF(url: url, alreadyAccessingSecurityScope: true) else {
-                logger.warning("外部文档导入失败 reason=unsupported_type url=\(url.absoluteString)", module: .medical)
+                logger.warning("ExternalDocument.copy.failed reason=unsupported_type url=\(url.absoluteString)", module: .medical)
                 errorMessage = "仅支持导入 PDF 文档"
                 return nil
             }
 
             guard MedicalUploadLocalFileImportSupport.canReadFile(url: url, alreadyAccessingSecurityScope: true) else {
-                logger.warning("外部文档导入失败 reason=file_not_found url=\(url.absoluteString)", module: .medical)
+                logger.warning("ExternalDocument.copy.failed reason=file_not_found url=\(url.absoluteString)", module: .medical)
                 errorMessage = "无法读取该文档，请重新选择文件"
                 return nil
             }
@@ -77,7 +83,7 @@ final class ExternalMedicalDocumentImportCoordinator: ObservableObject {
                 logger: logger,
                 alreadyAccessingSecurityScope: true
             ) else {
-                logger.error("外部文档导入失败 reason=copy_failed url=\(url.absoluteString)", module: .medical)
+                logger.error("ExternalDocument.copy.failed reason=copy_failed url=\(url.absoluteString)", module: .medical)
                 errorMessage = "文档导入失败，请稍后重试"
                 return nil
             }
@@ -87,21 +93,18 @@ final class ExternalMedicalDocumentImportCoordinator: ObservableObject {
 
         guard let localFile else { return }
 
-        logger.info("外部 PDF 已复制到本地 path=\(localFile.url.path)", module: .medical)
-        let document = PendingExternalMedicalDocument(
-            id: UUID(),
-            localFile: localFile,
-            receivedAt: Date(),
-            sourceDescription: sourceDescription ?? "\(source.rawValue):\(url.absoluteString)"
+        logger.info("ExternalDocument.copy.success localPath=\(localFile.url.path)", module: .medical)
+        launchIntentCoordinator.receive(
+            .medicalDocumentUpload(
+                ExternalMedicalDocumentUploadIntent(
+                    id: UUID(),
+                    files: [localFile],
+                    receivedAt: Date(),
+                    source: source.launchIntentSource,
+                    originalURLDescription: sourceDescription ?? "\(source.rawValue):\(url.absoluteString)"
+                )
+            )
         )
-        pendingDocument = document
-        logger.info("外部 PDF 等待主界面消费 documentID=\(document.id)", module: .medical)
-    }
-
-    func consumePendingDocument() -> PendingExternalMedicalDocument? {
-        guard let document = pendingDocument else { return nil }
-        pendingDocument = nil
-        return document
     }
 
     func clearError() {
@@ -109,7 +112,6 @@ final class ExternalMedicalDocumentImportCoordinator: ObservableObject {
     }
 
     func clearAll() {
-        pendingDocument = nil
         errorMessage = nil
     }
 

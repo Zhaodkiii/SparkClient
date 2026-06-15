@@ -8,7 +8,12 @@ struct HomeView: View {
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
+    @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     let session: UserSession
+
+    private var launchIntentConsumer: HomeLaunchIntentConsumer {
+        dependencies.homeLaunchIntentConsumer
+    }
 
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
@@ -53,28 +58,36 @@ struct HomeView: View {
             homeFullScreenCoverContent(cover)
         }
         .onAppear {
-            consumePendingExternalMedicalDocumentIfNeeded()
+            launchIntentConsumer.setHomeHostReady(true)
+            Task { await consumeLaunchIntentIfReady() }
+        }
+        .onDisappear {
+            launchIntentConsumer.setHomeHostReady(false)
         }
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
             viewModel.consumePendingShareTicketIfNeeded()
             viewModel.consumePendingInviteIfNeeded()
-            consumePendingExternalMedicalDocumentIfNeeded()
             await viewModel.loadInitialIfNeeded(syncRemote: true)
+            await consumeLaunchIntentIfReady()
         }
-        .task(id: externalMedicalDocumentImportCoordinator.pendingDocument?.id) {
-            consumePendingExternalMedicalDocumentIfNeeded()
+        .task(id: launchIntentCoordinator.pendingIntent?.id) {
+            await consumeLaunchIntentIfReady()
         }
-        .onChange(of: externalMedicalDocumentImportCoordinator.pendingDocument?.id) { _ in
-            consumePendingExternalMedicalDocumentIfNeeded()
+        .onChange(of: launchIntentCoordinator.pendingIntent?.id) { _ in
+            Task { await consumeLaunchIntentIfReady() }
+        }
+        .onChange(of: launchIntentCoordinator.readiness.canConsume) { canConsume in
+            guard canConsume else { return }
+            Task { await consumeLaunchIntentIfReady() }
         }
         .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
             if isPresented {
                 activeFullScreenCover = .medicalDocumentUpload
             } else if activeFullScreenCover == .medicalDocumentUpload {
                 activeFullScreenCover = nil
-                consumePendingExternalMedicalDocumentIfNeeded()
+                Task { await consumeLaunchIntentIfReady() }
             }
         }
         .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
@@ -86,15 +99,6 @@ struct HomeView: View {
             }
         } message: {
             Text(externalMedicalDocumentImportCoordinator.errorMessage ?? "")
-        }
-        .onReceive(dependencies.routeStore.$routeStacks) { _ in
-            // Triggered when AppRouteStore updates (including .memberInvite signal from push/deeplink tap).
-            if let stack = dependencies.routeStore.routeStacks[.home],
-               let last = stack.last, case .memberInvite(let id) = last {
-                viewModel.handleRoute(.memberInvite(inviteID: id))
-                // Clear so next same inviteID still triggers; replaceStack was already done.
-                dependencies.routeStore.replaceStack([], for: .home)
-            }
         }
         .onChange(of: activeFullScreenCover) { cover in
             if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
@@ -204,38 +208,8 @@ struct HomeView: View {
         }
     }
 
-    private func consumePendingExternalMedicalDocumentIfNeeded() {
-        guard externalMedicalDocumentImportCoordinator.pendingDocument != nil else { return }
-
-        if medicalDocumentUploadViewModel.isUploadPresented,
-           medicalDocumentUploadViewModel.stage != .picking {
-            return
-        }
-
-        guard let pending = externalMedicalDocumentImportCoordinator.consumePendingDocument() else { return }
-
-        dependencies.routeStore.route(to: .home, replaceStack: false)
-        medicalDocumentUploadViewModel.prepareForExternalImport(files: [pending.localFile])
-        presentMedicalDocumentUploadCover(documentID: pending.id)
-    }
-
-    private func presentMedicalDocumentUploadCover(documentID: UUID) {
-        activeFullScreenCover = .medicalDocumentUpload
-        dependencies.logger.info(
-            "外部 PDF 已进入医疗文档上传页 documentID=\(documentID)",
-            module: .medical
-        )
-
-        Task { @MainActor in
-            await Task.yield()
-            if activeFullScreenCover != .medicalDocumentUpload {
-                activeFullScreenCover = .medicalDocumentUpload
-            }
-            dependencies.logger.info(
-                "外部 PDF 上传弹层已置位 cover=medicalDocumentUpload documentID=\(documentID)",
-                module: .medical
-            )
-        }
+    private func consumeLaunchIntentIfReady() async {
+        await launchIntentConsumer.consumeIfReady { activeFullScreenCover = $0 }
     }
 
     @ViewBuilder
@@ -702,6 +676,7 @@ private struct MemberSelectorChip: View {
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             externalMedicalDocumentImportCoordinator: AppContainer.preview.externalMedicalDocumentImportCoordinator,
+            launchIntentCoordinator: AppContainer.preview.launchIntentCoordinator,
             session: UserSession(
                 accountID: 1,
                 email: "preview@spark.com",
@@ -721,6 +696,7 @@ private struct MemberSelectorChip: View {
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
             externalMedicalDocumentImportCoordinator: AppContainer.preview.externalMedicalDocumentImportCoordinator,
+            launchIntentCoordinator: AppContainer.preview.launchIntentCoordinator,
             session: UserSession(
                 accountID: 1,
                 email: "preview@spark.com",

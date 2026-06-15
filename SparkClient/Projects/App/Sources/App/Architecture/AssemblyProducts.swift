@@ -357,6 +357,7 @@ extension NotificationAssembly {
         backend: Backend,
         selectedMemberIDPersistence: any SelectedMemberIDPersisting,
         medicalSyncPreferenceRepository: DefaultMedicalSyncPreferenceRepository,
+        launchIntentCoordinator: LaunchIntentCoordinator,
         logger: Logger
     ) -> NotificationAssemblyProduct {
         logger.info("NotificationAssembly 装配通知/Push/路由核心", module: .push)
@@ -391,6 +392,7 @@ extension NotificationAssembly {
         )
         let handleRemoteNotificationUseCase = HandleRemoteNotificationUseCase(
             routeCoordinator: routeCoordinator,
+            launchIntentCoordinator: launchIntentCoordinator,
             notificationClient: notificationClient
         )
         let registerDeviceUseCase = RegisterDeviceUseCase(backend: backend, logger: logger)

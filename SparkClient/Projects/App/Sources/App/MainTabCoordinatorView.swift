@@ -19,6 +19,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     let pushAdapter: PushAdapter
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
+    @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
@@ -28,6 +29,7 @@ struct MainTabCoordinatorView: View {
                     viewModel: homeViewModel,
                     medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                     externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+                    launchIntentCoordinator: launchIntentCoordinator,
                     session: session
                 )
             } destination: { route in
@@ -83,6 +85,12 @@ struct MainTabCoordinatorView: View {
             }
             .tag(AppRouteStore.RootTab.settings)
         }
+        .onAppear {
+            launchIntentCoordinator.updateReadiness { $0.mainTabReady = true }
+        }
+        .onDisappear {
+            launchIntentCoordinator.updateReadiness { $0.mainTabReady = false }
+        }
     }
 
     private func routePath(_ tab: AppRouteStore.RootTab) -> Binding<[AppRoute]> {
@@ -115,7 +123,7 @@ struct MainTabCoordinatorView: View {
             }
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
-        case .home, .knowledge, .chatList, .settings, .memberInvite:
+        case .home, .knowledge, .chatList, .settings:
             EmptyView()
         }
     }

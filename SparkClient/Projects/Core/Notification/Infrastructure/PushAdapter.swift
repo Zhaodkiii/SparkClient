@@ -135,7 +135,8 @@ final class PushAdapter: NSObject, UNUserNotificationCenterDelegate {
         )
         handleRemoteNotificationUseCase.execute(
             payload: payload,
-            entryPoint: .interaction(actionIdentifier: response.actionIdentifier)
+            entryPoint: .interaction(actionIdentifier: response.actionIdentifier),
+            notificationRequestID: response.notification.request.identifier
         )
         completionHandler()
     }
