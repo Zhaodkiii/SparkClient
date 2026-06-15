@@ -59,7 +59,8 @@ struct HomeView: View {
         }
         .onAppear {
             launchIntentConsumer.setHomeHostReady(true)
-            Task { await consumeLaunchIntentIfReady() }
+            syncLaunchIntentHostState()
+            requestLaunchIntentDrain(reason: "home_appear")
         }
         .onDisappear {
             launchIntentConsumer.setHomeHostReady(false)
@@ -70,25 +71,40 @@ struct HomeView: View {
             viewModel.consumePendingShareTicketIfNeeded()
             viewModel.consumePendingInviteIfNeeded()
             await viewModel.loadInitialIfNeeded(syncRemote: true)
-            await consumeLaunchIntentIfReady()
+            requestLaunchIntentDrain(reason: "home_initial_load")
         }
-        .task(id: launchIntentCoordinator.pendingIntent?.id) {
-            await consumeLaunchIntentIfReady()
-        }
-        .onChange(of: launchIntentCoordinator.pendingIntent?.id) { _ in
-            Task { await consumeLaunchIntentIfReady() }
+        .task(id: launchIntentCoordinator.queueRevision) {
+            requestLaunchIntentDrain(reason: "queue_revision")
         }
         .onChange(of: launchIntentCoordinator.readiness.canConsume) { canConsume in
             guard canConsume else { return }
-            Task { await consumeLaunchIntentIfReady() }
+            requestLaunchIntentDrain(reason: "readiness_ready")
+        }
+        .onChange(of: viewModel.activeSheet?.id) { _ in
+            syncLaunchIntentHostState()
+            requestLaunchIntentDrain(reason: "home_sheet_changed")
+        }
+        .onChange(of: activeFullScreenCover) { cover in
+            if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
+                medicalDocumentUploadViewModel.dismissUploadPage()
+            }
+            syncLaunchIntentHostState()
+            if cover == nil {
+                requestLaunchIntentDrain(reason: "cover_dismissed")
+            }
         }
         .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
             if isPresented {
                 activeFullScreenCover = .medicalDocumentUpload
             } else if activeFullScreenCover == .medicalDocumentUpload {
                 activeFullScreenCover = nil
-                Task { await consumeLaunchIntentIfReady() }
             }
+            syncLaunchIntentHostState()
+            requestLaunchIntentDrain(reason: "upload_presented_changed")
+        }
+        .onChange(of: medicalDocumentUploadViewModel.stage) { _ in
+            syncLaunchIntentHostState()
+            requestLaunchIntentDrain(reason: "upload_stage_changed")
         }
         .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
             showExternalImportErrorAlert = message != nil
@@ -100,17 +116,25 @@ struct HomeView: View {
         } message: {
             Text(externalMedicalDocumentImportCoordinator.errorMessage ?? "")
         }
-        .onChange(of: activeFullScreenCover) { cover in
-            if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
-                medicalDocumentUploadViewModel.dismissUploadPage()
-            }
-        }
         .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
             Task {
                 await viewModel.refresh()
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
+    }
+
+    private func syncLaunchIntentHostState() {
+        launchIntentConsumer.syncHostState(
+            activeSheet: viewModel.activeSheet,
+            activeFullScreenCover: activeFullScreenCover,
+            isUploadPresented: medicalDocumentUploadViewModel.isUploadPresented,
+            uploadStage: medicalDocumentUploadViewModel.stage
+        )
+    }
+
+    private func requestLaunchIntentDrain(reason: String) {
+        launchIntentConsumer.requestDrain(reason: reason) { activeFullScreenCover = $0 }
     }
 
     @ViewBuilder
@@ -206,10 +230,6 @@ struct HomeView: View {
                 )
             }
         }
-    }
-
-    private func consumeLaunchIntentIfReady() async {
-        await launchIntentConsumer.consumeIfReady { activeFullScreenCover = $0 }
     }
 
     @ViewBuilder

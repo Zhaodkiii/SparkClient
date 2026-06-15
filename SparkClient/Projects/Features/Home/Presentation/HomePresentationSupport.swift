@@ -38,3 +38,33 @@ enum HomeFullScreenCover: Identifiable {
         }
     }
 }
+
+extension HomeSheetKind {
+    init?(sheet: HomeSheet?) {
+        guard let sheet else { return nil }
+        switch sheet {
+        case .addMember:
+            self = .addMember
+        case .pendingInvites:
+            self = .pendingInvites
+        case .memberDetail:
+            self = .memberDetail
+        case .share:
+            self = .share
+        case .taskCenter:
+            self = .taskCenter
+        }
+    }
+}
+
+extension HomeFullScreenCoverKind {
+    init?(cover: HomeFullScreenCover?) {
+        guard let cover else { return nil }
+        switch cover {
+        case .medicalDocumentUpload:
+            self = .medicalDocumentUpload
+        case .customCamera:
+            self = .customCamera
+        }
+    }
+}

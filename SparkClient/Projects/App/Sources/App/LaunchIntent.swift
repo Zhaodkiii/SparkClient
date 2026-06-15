@@ -96,6 +96,23 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
             return 3
         }
     }
+
+    var memberInviteID: Int? {
+        if case .memberInviteFromPush(let intent) = self {
+            return intent.inviteID
+        }
+        return nil
+    }
+
+    var medicalUploadFileSignature: String? {
+        guard case .medicalDocumentUpload(let intent) = self else { return nil }
+        return intent.files.map(\.url.path).sorted().joined(separator: "|")
+    }
+
+    var appRouteSignature: String? {
+        guard case .appRoute(let intent) = self else { return nil }
+        return String(describing: intent.route)
+    }
 }
 
 /// 唤起意图消费结果状态枚举
@@ -104,10 +121,99 @@ enum LaunchIntentConsumeResult: Equatable, Sendable {
     case consumed
     /// 未满足消费前置条件，暂缓处理
     case notReady
-    /// 可恢复失败：稍后可重试消费，附带失败原因描述
-    case failedRecoverable(String)
-    /// 不可恢复致命失败：丢弃本次意图，附带失败原因描述
-    case failedTerminal(String)
+    /// 可恢复失败：稍后可重试消费
+    case failedRecoverable(LaunchIntentBlockedReason)
+    /// 不可恢复致命失败：丢弃本次意图
+    case failedTerminal(LaunchIntentBlockedReason)
+}
+
+/// 意图被阻塞的原因分类
+enum LaunchIntentBlockedReason: String, Sendable {
+    case signedOut
+    case accountNotPrepared
+    case onboardingBlocking
+    case mainTabNotReady
+    case homeHostNotReady
+    case homeSheetBusy
+    case fullScreenCoverBusy
+    case uploadProcessing
+    case unsupportedInPhase
+}
+
+/// 首页 Sheet 轻量类型（App 层 host state 用）
+enum HomeSheetKind: String, Sendable {
+    case addMember
+    case pendingInvites
+    case memberDetail
+    case share
+    case taskCenter
+}
+
+/// 首页全屏 Cover 轻量类型
+enum HomeFullScreenCoverKind: String, Sendable {
+    case medicalDocumentUpload
+    case customCamera
+}
+
+/// 首页宿主展示状态，由 HomeView 上报给调度器
+struct LaunchIntentHostState: Equatable, Sendable {
+    var activeSheetKind: HomeSheetKind?
+    var activeFullScreenCoverKind: HomeFullScreenCoverKind?
+    var isUploadProcessing = false
+
+    var canPresentSheet: Bool {
+        activeSheetKind == nil
+    }
+
+    var canPresentMemberInvite: Bool {
+        activeSheetKind == nil || activeSheetKind == .pendingInvites
+    }
+
+    var canPresentMedicalUpload: Bool {
+        isUploadProcessing == false
+            && (activeFullScreenCoverKind == nil || activeFullScreenCoverKind == .medicalDocumentUpload)
+    }
+}
+
+/// handler 对单条 intent 的可消费性判断
+struct LaunchIntentAvailability: Equatable, Sendable {
+    let canConsume: Bool
+    let blockedReason: LaunchIntentBlockedReason?
+
+    static let available = LaunchIntentAvailability(canConsume: true, blockedReason: nil)
+
+    static func blocked(_ reason: LaunchIntentBlockedReason) -> LaunchIntentAvailability {
+        LaunchIntentAvailability(canConsume: false, blockedReason: reason)
+    }
+}
+
+/// 队列中的单条唤起意图
+struct QueuedLaunchIntent: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let intent: LaunchIntent
+    let enqueuedAt: Date
+    let sequence: Int64
+    var attemptCount: Int
+    var lastBlockedReason: LaunchIntentBlockedReason?
+    var lastTriedAt: Date?
+
+    init(intent: LaunchIntent, sequence: Int64, enqueuedAt: Date = Date()) {
+        self.id = intent.id
+        self.intent = intent
+        self.enqueuedAt = enqueuedAt
+        self.sequence = sequence
+        self.attemptCount = 0
+        self.lastBlockedReason = nil
+        self.lastTriedAt = nil
+    }
+}
+
+/// 入队合并策略
+enum LaunchIntentCoalescingAction: Sendable {
+    case keepBoth
+    case replaceExisting
+    case dropIncoming
+    case updateExisting(index: Int)
 }
 
 /// 意图消费就绪状态校验模型

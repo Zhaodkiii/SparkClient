@@ -7,6 +7,7 @@
 | 工单号 | 工单名 | 状态 | 范围 |
 | --- | --- | --- | --- |
 | `MEDICATION-EXECUTION-000001` | 用药执行中心多日进度圆环与记录窗口优化 | 需求设计中 | 参考 iOS 健康“用药”效果，检查并补齐 `MedicationExecutionCenter` 未完整实现部分；重点优化顶部日期进度圆环 View，使其展示选中日前后多天用药进度，并按“当前选中日前后 4 天”加载记录数据 |
+| `MEDICATION-EXECUTION-000002` | 用药本地通知闭环详细设计 | 需求设计中 | 基于 `用药通知需求讨论文档.md` 已确认结论，首版只做客户端本地通知：计划变更同步通知、离线提醒、点击通知走冷启动目标页面公共调度、切换成员并打开用药记录 Sheet、打卡后清理当前剂次通知、通用设置医疗隐私开关 |
 
 ## 工单 `MEDICATION-EXECUTION-000001`：用药执行中心多日进度圆环与记录窗口优化
 
@@ -600,3 +601,995 @@ status == "taken" || status == "skipped"
 2. 验证快速滑动和请求失败场景。
 3. 对照参考图片检查 UI 一致性。
 
+---
+
+## 工单 `MEDICATION-EXECUTION-000002`：用药本地通知闭环详细设计
+
+### 工单状态
+
+需求设计中。
+
+### 需求依据
+
+```text
+SparkClient/需求文档/医疗档案/用药日常工单/用药通知需求讨论文档.md
+SparkClient/需求文档/启动/冷启动目标页面公共调度需求文档.md
+```
+
+本工单将“用药通知需求讨论文档”中已经确认的首版方向整理为可实施的详细设计：
+
+```text
+只做客户端本地通知闭环；
+不新增服务端调度；
+不做家属代提醒；
+不做跨设备统一去重；
+不做长期未来所有通知一次性注册。
+```
+
+## 1. 背景
+
+当前用药计划已经具备提醒相关字段：
+
+```swift
+struct RemoteMedicationPlan: Codable, Sendable, Equatable {
+    var id: Int
+    var member: Int
+    var medicineBox: Int?
+    var drugName: String
+    var dosePerTime: String
+    var doseValue: Double?
+    var doseUnit: String
+    var frequencyType: String
+    var everyNDays: Int?
+    var weeklyWeekdays: [Int]
+    var frequencyText: String
+    @CodableReminderTimesList var reminderTimes: [ReminderTime]
+    var startDate: Date
+    var endDate: Date?
+    var instructions: String
+    var reminderEnabled: Bool
+    var status: String
+    var updatedAt: Date
+}
+```
+
+当前用药执行中心也具备记录用药能力：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationExecutionCenter/MedicationExecutionCenterPage.swift
+```
+
+其中已经存在：
+
+```swift
+@State private var logSheet: MedicationExecutionLogSheetContext?
+```
+
+以及：
+
+```swift
+.sheet(item: $logSheet) { context in
+    MedicationExecutionLogSheet(...)
+}
+```
+
+因此首版用药通知不需要新增服务端调度，也不需要新增“记录用药页面”。核心是：
+
+```text
+用药计划 -> 客户端编译未来提醒 -> 注册本地通知 -> 到点触发 -> 点击通知 -> 切换成员 -> 进入执行中心 -> 打开 logSheet -> 保存记录 -> 清理当前剂次通知
+```
+
+## 2. 已确认目标
+
+### 2.1 核心目标
+
+1. 创建、编辑、删除、停用用药计划后，本机通知立即同步。
+2. 用药提醒能在无网情况下触发。
+3. 点击通知走冷启动目标页面公共调度组件。
+4. Home 先切换到通知 `member_id` 对应成员。
+5. 等目标成员首页数据加载完成后，再进入用药执行中心。
+6. 用药执行中心切换到 `scheduled_at` 对应日期。
+7. 定位 `plan_id + dose_sequence` 对应剂次。
+8. 直接设置 `logSheet`，打开 `MedicationExecutionLogSheet`。
+9. 服药打卡后，当前剂次提醒不再重复出现。
+10. 在系统通用设置 `GeneralSettingsView` 内新增“医疗”模块，提供“通知中显示药品名称”开关。
+
+### 2.2 非目标
+
+1. 不新增 SparkService 接口。
+2. 不新增服务端通知调度表。
+3. 不接入服务端 APNs 兜底。
+4. 不做家属代提醒。
+5. 不做多设备主设备策略。
+6. 不做跨设备统一去重。
+7. 不做 Apple Watch 独立交互。
+8. 不做通知 Action，例如“已服用 / 跳过 / 稍后提醒”。
+9. 不自动判断漏服并生成记录。
+10. 不做 AI 自动调整提醒时间。
+
+## 3. 当前项目可复用能力
+
+| 能力 | 文件 | 复用方式 |
+| --- | --- | --- |
+| 用药计划模型 | `SparkClient/SparkClient/Projects/Core/Networking/API/Medical/MedicalSyncAPI.swift` | 直接使用 `RemoteMedicationPlan` 的频次、时间、开始结束日期、提醒开关 |
+| 用药记录模型 | `SparkClient/SparkClient/Projects/Core/Networking/API/Medical/MedicalSyncAPI.swift` | 用于判断目标剂次是否已完成 |
+| 记录用药 Sheet | `MedicationExecutionCenterPage.swift` / `MedicationExecutionLogSheet.swift` | 通知点击定位后直接打开 |
+| 剂次计算 | `MedicationExecutionPlanner.swift` | 复用计划展开和剂次计算规则，避免通知和页面算法不一致 |
+| 系统通知委托 | `PushAdapter.swift` | 复用 `UNUserNotificationCenterDelegate` 前台/点击回调能力 |
+| 应用内通知 | `NotificationClient` / `NotificationHostView` | 前台收到本地用药通知时展示应用内 banner |
+| 冷启动目标调度 | `LaunchIntent.swift` / `LaunchIntentCoordinator.swift` / `HomeLaunchIntentConsumer.swift` | 通知点击后延迟到 Home 就绪再消费 |
+| 通用设置页 | `GeneralSettingsView.swift` | 增加医疗模块和药品名称隐私开关 |
+
+## 4. 总体架构设计
+
+### 4.1 模块划分
+
+建议新增目录：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/
+```
+
+建议新增文件：
+
+```text
+MedicationReminderModels.swift
+MedicationReminderScheduleCompiler.swift
+MedicationReminderNotificationManager.swift
+MedicationReminderPermissionCoordinator.swift
+MedicationReminderSyncCoordinator.swift
+MedicationReminderRouteIntent.swift
+MedicationReminderPreferencesStore.swift
+```
+
+模块职责：
+
+| 模块 | 职责 |
+| --- | --- |
+| `MedicationReminderModels` | 定义本地提醒事件、通知 payload、聚合分组、调度结果 |
+| `MedicationReminderScheduleCompiler` | 把用药计划编译为未来 7 天的提醒事件 |
+| `MedicationReminderNotificationManager` | 注册、取消、重建 `UNNotificationRequest` |
+| `MedicationReminderPermissionCoordinator` | 处理通知权限检查、系统设置跳转、权限状态 |
+| `MedicationReminderSyncCoordinator` | 响应计划变更、打卡、账号切换、时区变化，统一重建通知 |
+| `MedicationReminderRouteIntent` | 定义通知点击后进入用药执行中心所需的 LaunchIntent 数据 |
+| `MedicationReminderPreferencesStore` | 保存“用药通知总开关”“通知中显示药品名称”等本地偏好 |
+
+### 4.2 职责边界
+
+页面不直接调用 `UNUserNotificationCenter.add`。
+
+正确边界：
+
+```text
+MedicationsListPage / MedicationExecutionCenterPage
+  -> 发出“计划已保存 / 记录已保存 / 计划已删除”的事件
+  -> MedicationReminderSyncCoordinator
+  -> MedicationReminderScheduleCompiler
+  -> MedicationReminderNotificationManager
+  -> UNUserNotificationCenter
+```
+
+不推荐：
+
+```text
+页面 View
+  -> 直接拼 notification identifier
+  -> 直接 add/remove 通知
+```
+
+原因：
+
+1. 用药提醒触发点很多，分散在页面里容易漏。
+2. identifier 规则必须统一。
+3. 账号切换、时区变化、权限恢复等不是单个页面能处理的。
+4. 后续如果增加诊断页或服务端登记，需要统一 coordinator。
+
+## 5. 数据模型设计
+
+### 5.1 本地提醒事件
+
+建议定义：
+
+```swift
+struct MedicationReminderEvent: Identifiable, Equatable, Sendable {
+    let id: String
+    let accountID: Int64
+    let memberID: Int
+    let scheduledAt: Date
+    let timeText: String
+    let items: [MedicationReminderItem]
+    let title: String
+    let body: String
+}
+
+struct MedicationReminderItem: Equatable, Sendable {
+    let planID: Int
+    let doseSequence: Int
+    let drugName: String
+    let plannedDose: String
+}
+```
+
+说明：
+
+1. `MedicationReminderEvent` 是最终注册通知的粒度。
+2. 首版建议按“同一账号 + 同一成员 + 同一分钟”聚合。
+3. `items` 内保留多个计划剂次，用于点击后在 Sheet 内展示多条。
+4. `body` 由当前隐私设置决定是否显示药品名称。
+
+### 5.2 通知 userInfo
+
+建议本地通知 `userInfo`：
+
+```json
+{
+  "type": "medication_reminder",
+  "route": "medication_execution",
+  "account_id": 265,
+  "member_id": 100,
+  "scheduled_at": "2026-06-15T08:00:00+08:00",
+  "notification_id": "medication_265_100_20260615_0800_abcd",
+  "items": [
+    { "plan_id": 12, "dose_sequence": 1 },
+    { "plan_id": 15, "dose_sequence": 1 }
+  ]
+}
+```
+
+约束：
+
+1. `account_id` 必填，用于账号隔离。
+2. `member_id` 必填，用于 Home 先切换成员。
+3. `scheduled_at` 必填，用于用药执行中心切换日期。
+4. `items` 必填，用于定位计划和剂次。
+5. 通知 payload 不放诊断、病情、医院、医生等敏感信息。
+
+### 5.3 通知 identifier
+
+聚合通知建议：
+
+```text
+medication_{accountID}_{memberID}_{yyyyMMdd_HHmm}_{groupHash}
+```
+
+其中：
+
+1. `accountID`：防止账号串通知。
+2. `memberID`：便于按成员清理。
+3. `yyyyMMdd_HHmm`：提醒时间。
+4. `groupHash`：由 `planID + doseSequence` 排序后生成短 hash。
+
+如果首版不做聚合，也可以使用：
+
+```text
+medication_{accountID}_{memberID}_{planID}_{yyyyMMdd_HHmm}_{doseSequence}
+```
+
+但推荐聚合，原因：
+
+1. 减少 iOS pending notification 数量。
+2. 避免同一分钟多条通知打扰。
+3. 点击后自然打开同一时间组的记录 Sheet。
+
+## 6. 调度算法设计
+
+### 6.1 注册窗口
+
+首版采用滚动窗口，不一次性注册长期用药全部通知。
+
+| 项 | 建议 |
+| --- | --- |
+| 默认窗口 | 未来 7 天 |
+| 最大窗口 | 不超过未来 14 天 |
+| 单次注册上限 | 建议 48 条 |
+| 超过上限策略 | 按 `scheduledAt` 从近到远保留，远期截断并记录 Debug 日志 |
+| 重建触发 | 冷启动、前台恢复、计划保存、计划删除/停用、打卡、账号切换、时区变化、设置变更 |
+
+### 6.2 编译输入
+
+`MedicationReminderScheduleCompiler` 输入：
+
+```swift
+struct MedicationReminderCompileInput {
+    let accountID: Int64
+    let memberID: Int
+    let plans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
+    let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
+    let medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
+    let now: Date
+    let windowDays: Int
+    let calendar: Calendar
+    let showsDrugNameInNotification: Bool
+}
+```
+
+说明：
+
+1. `plans` 来自当前成员首页数据。
+2. `records` 至少要包含未来窗口内已存在的服药记录；如果当前只缓存今日记录，调度时可先按现有数据判断，不为已完成剂次重复注册。
+3. `medicineBoxes` 用于后续文案或图片扩展，首版可不用。
+4. `showsDrugNameInNotification` 来自通用设置医疗模块。
+
+### 6.3 编译流程
+
+```text
+输入 plans / records / now
+  -> 过滤无效计划
+     - reminderEnabled = false
+     - status != active
+     - reminderTimes 为空
+     - endDate 早于今天
+  -> 对未来 7 天逐日展开
+  -> 根据 frequencyType 判断当天是否应提醒
+  -> 根据 reminderTimes 生成剂次
+  -> 过滤 scheduledAt <= now 的过去剂次
+  -> 过滤 records 中已 taken / skipped 的剂次
+  -> 按 accountID + memberID + scheduledAt minute 聚合
+  -> 生成 MedicationReminderEvent
+  -> 按 scheduledAt 升序排序
+  -> 截断到上限 48 条
+```
+
+### 6.4 频次规则
+
+| 频次 | 规则 |
+| --- | --- |
+| `daily` | 从 `startDate` 到 `endDate`，每天按 `reminderTimes` 生成 |
+| `every_n_days` | 以 `startDate` 为锚点，`daysBetween(startDate, day) % everyNDays == 0` 时生成 |
+| `weekly` | 当天 weekday 命中 `weeklyWeekdays` 时生成；约定 1=周一...7=周日 |
+
+注意：
+
+1. `endDate` 按包含结束日处理。
+2. 日期判断使用本地 `Calendar.current`，与用药执行中心保持一致。
+3. `ReminderTime.time` 按 `HH:mm` 解析。
+4. 同一天多个提醒时间按时间升序。
+5. `doseSequence` 与 `MedicationExecutionPlanner.scheduledDoses` 保持一致，避免通知定位不到 Sheet 剂次。
+
+### 6.5 已完成剂次过滤
+
+判断某个剂次是否已完成：
+
+```text
+同 planID
+AND 同 scheduledAt 所在分钟
+AND 同 doseSequence
+AND record.status in ["taken", "skipped"]
+```
+
+说明：
+
+1. `taken` 和 `skipped` 都表示该剂次已处理。
+2. 已处理剂次不再注册通知。
+3. 保存记录成功后，需要移除当前剂次对应 pending / delivered 通知。
+
+## 7. 本地通知注册设计
+
+### 7.1 注册流程
+
+```text
+MedicationReminderSyncCoordinator.rebuild(...)
+  -> NotificationPermissionCoordinator 检查系统通知权限
+  -> 如果未授权：不注册，返回状态
+  -> NotificationManager 查询当前 pending medication 通知
+  -> 移除当前账号旧的 medication_reminder 通知
+  -> Compiler 编译未来 7 天事件
+  -> 为每个 event 构建 UNNotificationRequest
+  -> center.add(request)
+  -> 记录成功/失败日志
+```
+
+### 7.2 通知 trigger
+
+使用：
+
+```swift
+UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+```
+
+首版不使用 `repeats = true`，原因：
+
+1. 每条通知必须携带 `plan_id / dose_sequence / scheduled_at`，重复通知不适合携带动态剂次。
+2. 计划可能编辑、停用、删除。
+3. 已打卡后需要取消当前剂次。
+4. 滚动窗口更容易控制 iOS pending 上限。
+
+### 7.3 通知内容
+
+默认：
+
+```text
+title：用药提醒
+body：妈妈有一项用药需要记录
+```
+
+本人：
+
+```text
+title：用药提醒
+body：你有一项用药需要记录
+```
+
+同一分钟多项：
+
+```text
+title：用药提醒
+body：妈妈有 3 项用药需要记录
+```
+
+如果通用设置开启“通知中显示药品名称”：
+
+```text
+title：用药提醒
+body：妈妈该记录 阿莫西林 的用药了
+```
+
+多项药品且开启药名：
+
+```text
+title：用药提醒
+body：妈妈有 3 项用药需要记录
+```
+
+多项场景不建议拼接全部药名，避免锁屏泄露过多信息。
+
+### 7.4 不展示的内容
+
+通知默认不展示：
+
+1. 诊断名称。
+2. 病情描述。
+3. 医院名称。
+4. 医生信息。
+5. 详细剂量和用法。
+6. 病例、处方、检查报告标题。
+
+原因：
+
+1. 通知可能出现在锁屏、通知中心、手表、车机。
+2. 用药信息属于敏感健康数据。
+3. 首版优先保护隐私，药名显示必须由用户主动开启。
+
+## 8. 通知触发时机设计
+
+### 8.1 创建/编辑/删除/停用计划
+
+| 操作 | 通知处理 |
+| --- | --- |
+| 新增计划成功 | 重建当前账号未来 7 天用药通知 |
+| 编辑计划成功 | 取消旧通知，按最新计划重建 |
+| 删除计划成功 | 移除该计划相关 pending / delivered 通知，并重建窗口 |
+| 停用计划成功 | 移除该计划相关通知，并重建窗口 |
+| 开启 `reminderEnabled` | 重建窗口 |
+| 关闭 `reminderEnabled` | 移除该计划通知，并重建窗口 |
+
+建议直接重建当前账号未来窗口，而不是做过细的局部 patch。原因：
+
+1. 用药计划数量通常可控。
+2. 全量重建能降低遗漏旧通知的概率。
+3. 统一路径便于调试。
+
+### 8.2 用药打卡
+
+保存 `taken` 或 `skipped` 成功后：
+
+```text
+服务端保存记录成功
+  -> 更新 MedicationExecutionCenterPage 本地 recordsByDayID
+  -> 通知 MedicationReminderSyncCoordinator
+  -> 移除当前剂次 pending / delivered 通知
+  -> 可选：轻量重建未来窗口
+```
+
+当前剂次通知定位：
+
+```text
+accountID + memberID + planID + scheduledAt + doseSequence
+```
+
+如果是聚合通知：
+
+1. 当前剂次完成后，如果聚合通知内还有其他未完成剂次，可重建该时间点通知。
+2. 如果该时间点所有剂次都已完成，则清理该聚合通知。
+
+### 8.3 App 生命周期
+
+| 时机 | 处理 |
+| --- | --- |
+| 冷启动已登录会话准备完成 | 重建当前账号未来 7 天通知 |
+| App 进入前台 | 如果距离上次重建超过阈值，轻量重建 |
+| 账号切换 | 清理旧账号通知，再为新账号重建 |
+| 退出登录 | 清理当前账号所有用药通知 |
+| 系统时区变化 | 清理并重建未来窗口 |
+| “通知中显示药品名称”设置变更 | 重建未来窗口，让 pending 通知文案即时生效 |
+
+建议防抖：
+
+```text
+同一账号 30 秒内多次触发 rebuild，只执行最后一次。
+```
+
+## 9. 通知点击路由详细设计
+
+### 9.1 路由原则
+
+点击通知后不直接从通知回调里操作 `MedicationExecutionCenterPage`。
+
+必须走冷启动目标页面公共调度：
+
+```text
+SparkClient/需求文档/启动/冷启动目标页面公共调度需求文档.md
+```
+
+原因：
+
+1. App 可能还没初始化完成。
+2. 用户可能未登录或刚登录。
+3. Home 可能还没有挂载。
+4. 需要先切换成员并等待首页数据完成。
+5. 目标 Sheet 只有在执行中心页面挂载后才能打开。
+
+### 9.2 标准流程
+
+```text
+点击用药提醒通知
+  -> App 启动或前台激活
+  -> PushAdapter / UNUserNotificationCenterDelegate 收到 notification response
+  -> 解析 userInfo 为 medication_reminder intent
+  -> LaunchIntentCoordinator 入队
+  -> 等待登录态、账号运行时、Home 宿主就绪
+  -> HomeLaunchIntentConsumer 消费 intent
+  -> Home 先切换到 member_id 对应成员
+  -> 等待该成员首页数据加载完成
+  -> 打开 Home / 用药执行中心
+  -> MedicationExecutionCenterPage 切换到 scheduled_at 日期
+  -> 加载目标日期记录窗口
+  -> 定位 plan_id + dose_sequence 对应剂次
+  -> 设置 logSheet，打开 MedicationExecutionLogSheet
+```
+
+### 9.3 LaunchIntent 建议
+
+建议新增或扩展：
+
+```swift
+enum LaunchIntentTarget: Codable, Equatable, Sendable {
+    case medicationReminder(MedicationReminderLaunchPayload)
+}
+
+struct MedicationReminderLaunchPayload: Codable, Equatable, Sendable {
+    let accountID: Int64
+    let memberID: Int
+    let scheduledAt: Date
+    let notificationID: String
+    let items: [MedicationReminderLaunchItem]
+}
+
+struct MedicationReminderLaunchItem: Codable, Equatable, Sendable {
+    let planID: Int
+    let doseSequence: Int
+}
+```
+
+要求：
+
+1. `accountID` 与当前会话不一致时，不消费该 intent。
+2. `memberID` 无权限时，回到 Home 并提示。
+3. `items` 为空时，丢弃 intent 并记录日志。
+4. 同一个 `notificationID` 要去重消费。
+
+### 9.4 Home 消费逻辑
+
+Home 消费 intent 的顺序必须是：
+
+```text
+switchMember(memberID)
+  -> loadCompleteData(memberID)
+  -> wait until completeData loaded
+  -> openMedicationExecutionCenter(payload)
+```
+
+不能：
+
+```text
+openMedicationExecutionCenter()
+  -> 再切成员
+```
+
+原因：
+
+1. `MedicationExecutionCenterPage` 入参包括 `medicationPlans`、`medicineBoxes`、`initialRecords`。
+2. 这些数据必须来自通知目标成员。
+3. 如果先打开页面，会拿到当前 Home 已选成员旧数据，导致定位不到计划或打开错误成员的记录 Sheet。
+
+### 9.5 执行中心定位逻辑
+
+`MedicationExecutionCenterPage` 需要支持外部定位参数：
+
+```swift
+struct MedicationExecutionInitialFocus: Equatable, Sendable {
+    let scheduledAt: Date
+    let items: [MedicationReminderLaunchItem]
+    let shouldOpenLogSheet: Bool
+}
+```
+
+页面进入后：
+
+```text
+selectedDate = scheduledAt 对应日期
+loadRecordWindow(centeredAt: selectedDate)
+scheduledDoses = MedicationExecutionPlanner.scheduledDoses(...)
+targetDoses = scheduledDoses.filter(planID + doseSequence 命中 items)
+if targetDoses 未完成:
+    logSheet = MedicationExecutionLogSheetContext(...)
+else:
+    展示已完成提示，不打开 Sheet
+```
+
+注意：
+
+1. 需要等目标日期记录加载完成后再定位。
+2. 定位只信任页面根据最新计划和记录计算出的 `scheduledDoses`，不直接信任通知 payload。
+3. 如果目标剂次已经完成，不打开记录 Sheet。
+4. 如果计划不存在或停用，展示“该用药提醒已失效”。
+
+## 10. 设置与开关详细设计
+
+### 10.1 系统通用设置医疗模块
+
+在：
+
+```text
+SparkClient/SparkClient/Projects/Features/Settings/GeneralSettings/Presentation/GeneralSettingsView.swift
+```
+
+新增 `medicalSection`：
+
+```text
+List {
+    versionSection
+    homeNutritionEntrySection
+    medicalSection
+    MedicalExtractionRetrySettingsSection()
+    cacheSection
+}
+```
+
+首版设置项：
+
+| 设置项 | 默认值 | 作用 |
+| --- | --- | --- |
+| 通知中显示药品名称 | 关闭 | 控制本地用药通知文案是否允许显示药品名称 |
+
+建议文案：
+
+```text
+Section：医疗
+Toggle：通知中显示药品名称
+Footer：开启后，用药提醒可能会在锁屏、通知中心、手表或车机中显示药品名称。
+```
+
+### 10.2 偏好存储
+
+建议新增：
+
+```swift
+@MainActor
+final class MedicationReminderPreferencesStore: ObservableObject {
+    @Published var showsDrugNameInNotification: Bool
+    @Published var medicationNotificationsEnabled: Bool
+}
+```
+
+存储原则：
+
+1. 默认 `showsDrugNameInNotification = false`。
+2. 默认 `medicationNotificationsEnabled = true`，但最终能否提醒还受系统通知权限控制。
+3. 偏好建议按账号隔离，避免多人共用设备时串设置。
+4. `showsDrugNameInNotification` 变更后触发通知窗口重建。
+
+### 10.3 开关判断
+
+最终是否注册通知：
+
+```text
+系统通知已授权
+AND 用药通知总开关开启
+AND plan.reminderEnabled = true
+AND plan.status = active
+AND 当前账号/成员仍可访问
+AND 计划在未来窗口内存在待提醒剂次
+```
+
+如果系统通知未授权：
+
+1. 用药计划仍可保存。
+2. 页面提示“系统通知未开启，可能错过用药提醒”。
+3. 不注册本地通知。
+4. 用户开启系统权限后，前台恢复时重建通知。
+
+## 11. 权限设计
+
+### 11.1 请求时机
+
+不在 App 启动时主动弹系统通知权限。
+
+推荐时机：
+
+1. 用户首次保存 `reminderEnabled = true` 的用药计划。
+2. 用户在用药通知设置中主动开启提醒。
+3. 用户点击“开启系统通知”引导。
+
+### 11.2 权限状态
+
+| 状态 | 行为 |
+| --- | --- |
+| `.notDetermined` | 先展示应用内说明，再请求系统权限 |
+| `.authorized` / `.provisional` | 允许注册本地通知 |
+| `.denied` | 不注册通知，引导去系统设置 |
+| `.ephemeral` | 按可提醒处理，但记录 Debug 状态 |
+
+### 11.3 应用内说明
+
+建议文案：
+
+```text
+开启用药提醒
+我们会在你设置的用药时间提醒你记录服药情况。
+```
+
+按钮：
+
+```text
+继续
+暂不开启
+```
+
+用户点击“继续”后再调用系统权限请求。
+
+## 12. 前台提醒设计
+
+### 12.1 前台策略
+
+本地通知在 App 前台到达时：
+
+| 当前页面 | 行为 |
+| --- | --- |
+| 正在用药执行中心 | 不弹系统 banner，刷新页面并可轻提示 |
+| 不在用药页面 | 展示应用内 banner |
+| 后台/锁屏 | 走系统通知展示 |
+
+### 12.2 前台应用内 banner
+
+复用 `NotificationClient`：
+
+```text
+title = 用药提醒
+message = 你/成员有一项用药需要记录
+onTap = 提交 medicationReminder LaunchIntent
+```
+
+注意：
+
+1. 前台不要同时展示系统 banner 和应用内 banner。
+2. 同一个 `notificationID` 只展示一次。
+3. 前台点击应用内 banner 也必须走同一套 LaunchIntent 消费流程。
+
+## 13. 清理策略
+
+### 13.1 按计划清理
+
+删除、停用、关闭提醒时，清理：
+
+```text
+pending notification requests
+delivered notifications
+```
+
+清理范围：
+
+```text
+accountID + memberID + planID
+```
+
+如果是聚合通知，不能只按单计划删除；应重建未来窗口，让聚合通知重新计算。
+
+### 13.2 按账号清理
+
+退出登录或账号切换：
+
+```text
+remove all medication_reminder notifications where account_id == currentAccountID
+```
+
+原因：
+
+1. 本地通知是设备级资源。
+2. 不清理会导致上一个账号的用药提醒遗留。
+3. 点击遗留通知可能进入错误账号或泄露隐私。
+
+### 13.3 打卡后清理
+
+打卡成功后：
+
+1. 移除当前剂次所在聚合通知。
+2. 重新编译该时间点是否仍有未完成剂次。
+3. 如果仍有未完成剂次，重新注册聚合通知。
+4. 如果全部完成，不再注册。
+
+## 14. 错误处理与降级
+
+| 场景 | 处理 |
+| --- | --- |
+| 系统通知权限拒绝 | 计划保存成功，但不注册通知；页面提示去设置开启 |
+| 编译无未来剂次 | 不注册通知，不报错 |
+| pending 数量超过上限 | 保留最近 48 条，截断远期，记录 Debug 日志 |
+| `UNUserNotificationCenter.add` 失败 | 记录失败原因；普通用户不弹技术错误 |
+| 点击通知但账号不一致 | 不进入详情，可 Toast “该提醒属于其他账号” |
+| 点击通知但成员无权限 | 回 Home，Toast “当前成员不可访问” |
+| 点击通知但计划已删除/停用 | 回用药执行中心或 Home，Toast “该用药提醒已失效” |
+| 点击通知时无网络 | 使用本地缓存；无缓存则提示稍后重试 |
+| 已打卡后点击旧通知 | 不打开 Sheet，展示已完成状态 |
+
+## 15. 影响文件
+
+### 15.1 主要改动文件
+
+```text
+SparkClient/SparkClient/Projects/Core/Notification/Infrastructure/PushAdapter.swift
+SparkClient/SparkClient/Projects/App/Sources/App/LaunchIntent.swift
+SparkClient/SparkClient/Projects/App/Sources/App/LaunchIntentCoordinator.swift
+SparkClient/SparkClient/Projects/App/Sources/App/HomeLaunchIntentConsumer.swift
+SparkClient/SparkClient/Projects/App/Sources/App/MainTabCoordinatorView.swift
+SparkClient/SparkClient/Projects/Features/Settings/GeneralSettings/Presentation/GeneralSettingsView.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationsListPage.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationExecutionCenter/MedicationExecutionCenterPage.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationExecutionCenter/MedicationExecutionModels.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationExecutionCenter/MedicationExecutionPlanner.swift
+```
+
+### 15.2 建议新增文件
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderModels.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderScheduleCompiler.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderNotificationManager.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderPermissionCoordinator.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderSyncCoordinator.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderPreferencesStore.swift
+```
+
+### 15.3 服务端影响
+
+```text
+SparkService：无改动
+```
+
+本工单不新增服务端调度、不新增 APNs、不修改服务端模型。
+
+## 16. 验收标准
+
+### 16.1 通知注册验收
+
+1. 保存开启提醒的用药计划后，本机能在指定时间收到通知。
+2. 关闭提醒后，该计划未来通知全部取消。
+3. 编辑提醒时间后，旧时间不再提醒，新时间正常提醒。
+4. 删除或停用计划后，不再收到该计划通知。
+5. App 无网时，本地通知仍能触发。
+6. 用药通知只注册未来 7 天窗口，不一次性注册长期全部通知。
+7. 超过本地上限时，按时间从近到远保留，不崩溃。
+
+### 16.2 点击通知验收
+
+1. 点击通知走冷启动目标页面公共调度组件。
+2. 冷启动、后台、前台激活三种路径行为一致。
+3. Home 先切换到通知 `member_id` 对应成员。
+4. 目标成员首页数据加载完成后，才进入用药执行中心。
+5. 用药执行中心定位到 `scheduled_at` 对应日期。
+6. 定位到 `plan_id + dose_sequence` 对应剂次后直接打开 `MedicationExecutionLogSheet`。
+7. 目标剂次已完成时，不打开 Sheet，展示已完成状态。
+8. 计划已删除、停用或成员无权限时，展示不可用提示且不崩溃。
+
+### 16.3 打卡后清理验收
+
+1. 完成或跳过某次用药后，该剂次通知不再重复出现。
+2. 同一时间聚合通知中仍有其他未完成剂次时，通知可被重新计算。
+3. 全部剂次完成后，该时间点通知被清理。
+4. 通知中心已展示的旧通知能被移除。
+
+### 16.4 设置验收
+
+1. `GeneralSettingsView` 增加“医疗”Section。
+2. “通知中显示药品名称”默认关闭。
+3. 默认关闭时，通知不显示药品名称。
+4. 开启后，未来生成的单项用药通知可以显示药品名称。
+5. 设置变更后，未来提醒窗口重建，pending 通知文案更新。
+
+### 16.5 隔离与安全验收
+
+1. 退出登录后，本账号用药通知被清理。
+2. 切换账号后，不展示上一个账号的用药通知。
+3. 点击其他账号遗留通知时，不进入当前账号医疗页面。
+4. 通知 payload 不包含诊断、病情、医院、医生等敏感信息。
+
+## 17. 测试建议
+
+### 17.1 编译器单元测试
+
+| 场景 | 预期 |
+| --- | --- |
+| 每日一次 | 未来 7 天生成 7 个提醒事件或聚合事件 |
+| 每日多次 | 同一天多个时间点顺序正确 |
+| 每几天 | 以 `startDate` 为锚点计算 |
+| 每周指定日 | 只在指定 weekday 生成 |
+| 有结束日期 | 结束日期之后不生成 |
+| `reminderEnabled = false` | 不生成 |
+| `status != active` | 不生成 |
+| 已 taken / skipped | 对应剂次不生成 |
+| 同一分钟多条计划 | 聚合为一条事件 |
+| 超过 48 条 | 只保留最近 48 条 |
+
+### 17.2 通知管理测试
+
+1. 重建通知前会清理旧通知。
+2. 同一输入多次重建不会产生重复 pending。
+3. 删除计划后相关通知被清理。
+4. 账号切换后旧账号通知被清理。
+5. 权限拒绝时不注册通知。
+
+### 17.3 路由手工测试
+
+| 场景 | 预期 |
+| --- | --- |
+| App 未启动点击通知 | 进入 Home，切成员，加载数据，打开用药记录 Sheet |
+| App 后台点击通知 | 同上 |
+| App 前台点击应用内 banner | 同上 |
+| 当前 Home 已是其他成员 | 先切到通知成员，再进入执行中心 |
+| 目标成员无权限 | 提示不可访问 |
+| 目标计划已删除 | 提示提醒已失效 |
+| 目标剂次已打卡 | 不打开 Sheet，展示已完成 |
+
+## 18. 实施拆分建议
+
+### 第一步：模型与编译器
+
+1. 新增 `MedicationReminderModels`。
+2. 新增 `MedicationReminderScheduleCompiler`。
+3. 复用或对齐 `MedicationExecutionPlanner` 的剂次计算规则。
+4. 补充频次、聚合、已完成过滤单元测试。
+
+### 第二步：通知注册与清理
+
+1. 新增 `MedicationReminderNotificationManager`。
+2. 支持按账号、成员、计划、notificationID 清理。
+3. 支持注册未来 7 天聚合通知。
+4. 支持 pending 上限截断。
+
+### 第三步：计划/记录变更触发
+
+1. 新增 `MedicationReminderSyncCoordinator`。
+2. 在计划保存、编辑、删除、停用后触发重建。
+3. 在服药记录保存成功后清理当前剂次并重建窗口。
+4. 在账号切换、退出登录、前台恢复、时区变化时触发。
+
+### 第四步：通知点击路由
+
+1. 扩展 `LaunchIntent` 支持 `medicationReminder`。
+2. `PushAdapter` / 通知回调识别本地 `medication_reminder`。
+3. `HomeLaunchIntentConsumer` 先切成员并等待首页数据。
+4. 打开 `MedicationExecutionCenterPage` 并传入 `MedicationExecutionInitialFocus`。
+5. 执行中心定位剂次后打开 `logSheet`。
+
+### 第五步：设置与权限
+
+1. `GeneralSettingsView` 增加医疗 Section。
+2. 新增“通知中显示药品名称”开关。
+3. 新增权限说明弹窗和系统权限请求触发。
+4. 设置变更后重建未来窗口。
+
+### 第六步：回归验证
+
+1. 验证首版本地通知验收标准。
+2. 验证 000001 多日记录窗口与通知点击打开 Sheet 不冲突。
+3. 验证无网络、无权限、账号切换、目标成员切换、计划失效等异常路径。
