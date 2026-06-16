@@ -48,6 +48,7 @@ struct HomeFeatureDependencies {
     let routeStore: AppRouteStore
     let sessionStore: AppSessionStore
     let medicationReminderSyncCoordinator: MedicationReminderSyncCoordinator
+    let medicationReminderOwnershipCoordinator: MedicationReminderOwnershipCoordinator
     let nutritionDependencies: NutritionFeatureDependencies
     let launchIntentCoordinator: LaunchIntentCoordinator
     let homeLaunchIntentConsumer: HomeLaunchIntentConsumer
@@ -120,6 +121,13 @@ extension HomeFeatureDependencies {
             sessionStore: container.sessionStore,
             logger: container.logger
         )
+        let ownershipCoordinator = MedicationReminderOwnershipCoordinator(
+            medicalQueryAPI: container.backend.medicalQuery,
+            syncCoordinator: container.medicationReminderSyncCoordinator,
+            consentStore: MedicationReminderConsentStore.shared,
+            notificationClient: container.notificationClient,
+            logger: container.logger
+        )
         return HomeFeatureDependencies(
             medicalWorkflowAPI: container.backend.medicalWorkflow,
             medicalQueryAPI: container.backend.medicalQuery,
@@ -137,6 +145,7 @@ extension HomeFeatureDependencies {
             routeStore: routeStore,
             sessionStore: container.sessionStore,
             medicationReminderSyncCoordinator: container.medicationReminderSyncCoordinator,
+            medicationReminderOwnershipCoordinator: ownershipCoordinator,
             nutritionDependencies: makeNutritionDependencies(
                 backend: container.backend,
                 memberContextStore: container.memberContextStore,

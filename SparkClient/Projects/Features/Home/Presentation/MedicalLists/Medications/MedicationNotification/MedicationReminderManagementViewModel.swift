@@ -17,7 +17,6 @@ final class MedicationReminderManagementViewModel: ObservableObject {
     private let accountID: Int64
     private let syncCoordinator: MedicationReminderSyncCoordinator
     private let preferencesStore: MedicationReminderPreferencesStore
-    private let medicalQueryAPI: SparkMedicalQueryAPI
     private let memberContextStore: MemberContextStore
     private let notificationClient: any NotificationClient
     private let logger: Logger
@@ -34,7 +33,6 @@ final class MedicationReminderManagementViewModel: ObservableObject {
         accountID: Int64,
         syncCoordinator: MedicationReminderSyncCoordinator,
         preferencesStore: MedicationReminderPreferencesStore,
-        medicalQueryAPI: SparkMedicalQueryAPI,
         memberContextStore: MemberContextStore,
         notificationClient: any NotificationClient,
         logger: Logger
@@ -42,7 +40,6 @@ final class MedicationReminderManagementViewModel: ObservableObject {
         self.accountID = accountID
         self.syncCoordinator = syncCoordinator
         self.preferencesStore = preferencesStore
-        self.medicalQueryAPI = medicalQueryAPI
         self.memberContextStore = memberContextStore
         self.notificationClient = notificationClient
         self.logger = logger
@@ -161,21 +158,7 @@ final class MedicationReminderManagementViewModel: ObservableObject {
     }
 
     private func loadPlanDrugNames() async -> [Int: String] {
-        var names: [Int: String] = [:]
-        for member in members {
-            do {
-                let plans = try await medicalQueryAPI.listMedicationPlans(memberID: member.id)
-                for plan in plans {
-                    names[plan.id] = plan.drugName
-                }
-            } catch {
-                logger.warning(
-                    "用药通知管理页加载计划失败 memberID=\(member.id) error=\(error.localizedDescription)",
-                    module: .push
-                )
-            }
-        }
-        return names
+        await syncCoordinator.planDrugNamesForManagementDisplay()
     }
 
     private func buildDisplayGroup(

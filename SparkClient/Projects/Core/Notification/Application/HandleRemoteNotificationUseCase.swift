@@ -126,6 +126,16 @@ struct HandleRemoteNotificationUseCase {
             return
         }
 
+        if payload.type == "health_resource_changed", let rawUserInfo {
+            handleHealthResourceChanged(
+                userInfo: rawUserInfo,
+                entryPoint: entryPoint,
+                notificationRequestID: notificationRequestID,
+                payload: payload
+            )
+            return
+        }
+
         if payload.type == "member_invite", let inviteID = payload.inviteID {
             switch entryPoint {
             case .foreground:
@@ -271,6 +281,86 @@ struct HandleRemoteNotificationUseCase {
                 MedicationReminderLaunchIntent(
                     id: UUID(),
                     payload: payload,
+                    receivedAt: Date(),
+                    source: source,
+                    notificationRequestID: notificationRequestID
+                )
+            )
+        )
+    }
+
+    private func handleHealthResourceChanged(
+        userInfo: [AnyHashable: Any],
+        entryPoint: RemoteNotificationEntryPoint,
+        notificationRequestID: String?,
+        payload: RemoteNotificationPayload
+    ) {
+        let memberID = (userInfo["member_id"] as? String).flatMap(Int.init)
+            ?? (userInfo["member_id"] as? Int)
+        guard let memberID else { return }
+
+        let resourceType = userInfo["resource_type"] as? String ?? "medication_plan"
+        let resourceID = (userInfo["resource_id"] as? String).flatMap(Int.init)
+            ?? (userInfo["resource_id"] as? Int)
+        let action = userInfo["action"] as? String ?? "updated"
+
+        switch entryPoint {
+        case .foreground:
+            let intentCoordinator = launchIntentCoordinator
+            notificationClient.publish(
+                NotificationIntent(
+                    title: payload.title ?? L10n.text("notification.health_resource_changed.medication_plan.title"),
+                    message: payload.body,
+                    level: .info,
+                    presentation: .banner,
+                    dedupeKey: "health_resource_changed_\(memberID)_\(resourceID ?? 0)",
+                    source: payload.source,
+                    onTap: { [intentCoordinator] in
+                        intentCoordinator.receive(
+                            .healthResourceChanged(
+                                HealthResourceChangedLaunchIntent(
+                                    id: UUID(),
+                                    memberID: memberID,
+                                    resourceType: resourceType,
+                                    resourceID: resourceID,
+                                    action: action,
+                                    receivedAt: Date(),
+                                    source: .inAppNotificationBannerTap,
+                                    notificationRequestID: nil
+                                )
+                            )
+                        )
+                    }
+                )
+            )
+        case .interaction:
+            receiveHealthResourceChangedIntent(
+                memberID: memberID,
+                resourceType: resourceType,
+                resourceID: resourceID,
+                action: action,
+                source: .remoteNotificationInteraction,
+                notificationRequestID: notificationRequestID
+            )
+        }
+    }
+
+    private func receiveHealthResourceChangedIntent(
+        memberID: Int,
+        resourceType: String,
+        resourceID: Int?,
+        action: String,
+        source: LaunchIntentSource,
+        notificationRequestID: String?
+    ) {
+        launchIntentCoordinator.receive(
+            .healthResourceChanged(
+                HealthResourceChangedLaunchIntent(
+                    id: UUID(),
+                    memberID: memberID,
+                    resourceType: resourceType,
+                    resourceID: resourceID,
+                    action: action,
                     receivedAt: Date(),
                     source: source,
                     notificationRequestID: notificationRequestID

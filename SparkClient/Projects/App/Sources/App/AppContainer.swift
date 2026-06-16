@@ -489,6 +489,7 @@ final class AppContainer {
             notificationManager: MedicationReminderNotificationManager(logger: logger),
             permissionCoordinator: MedicationReminderPermissionCoordinator(logger: logger),
             preferencesStore: MedicationReminderPreferencesStore.shared,
+            consentStore: MedicationReminderConsentStore.shared,
             medicalQueryAPI: backend.medicalQuery,
             logger: logger
         )
@@ -748,6 +749,13 @@ final class AppContainer {
             sessionStore: sessionStore,
             logger: logger
         )
+        let medicationReminderOwnershipCoordinator = MedicationReminderOwnershipCoordinator(
+            medicalQueryAPI: backend.medicalQuery,
+            syncCoordinator: medicationReminderSyncCoordinator,
+            consentStore: MedicationReminderConsentStore.shared,
+            notificationClient: notificationClient,
+            logger: logger
+        )
         let created = MainTabDependencies(
             scope: .accountScoped,
             routeStore: routeStore,
@@ -768,6 +776,7 @@ final class AppContainer {
                 routeStore: routeStore,
                 sessionStore: sessionStore,
                 medicationReminderSyncCoordinator: medicationReminderSyncCoordinator,
+                medicationReminderOwnershipCoordinator: medicationReminderOwnershipCoordinator,
                 nutritionDependencies: HomeFeatureDependencies.makeNutritionDependencies(
                     backend: backend,
                     memberContextStore: memberContextStore,

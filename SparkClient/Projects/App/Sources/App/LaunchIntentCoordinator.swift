@@ -353,6 +353,8 @@ private extension LaunchIntent {
             return "memberInviteFromPush"
         case .medicationReminder:
             return "medicationReminder"
+        case .healthResourceChanged:
+            return "healthResourceChanged"
         case .appRoute:
             return "appRoute"
         }
@@ -365,6 +367,8 @@ private extension LaunchIntent {
         case .memberInviteFromPush(let intent):
             return intent.source.rawValue
         case .medicationReminder(let intent):
+            return intent.source.rawValue
+        case .healthResourceChanged(let intent):
             return intent.source.rawValue
         case .appRoute(let intent):
             return intent.source.rawValue

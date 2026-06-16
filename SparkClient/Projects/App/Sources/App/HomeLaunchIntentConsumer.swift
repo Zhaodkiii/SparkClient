@@ -79,6 +79,15 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
             }
             return .available
 
+        case .healthResourceChanged:
+            if hostState.activeSheetKind != nil {
+                return .blocked(.homeSheetBusy)
+            }
+            if hostState.activeFullScreenCoverKind != nil && hostState.canPresentMedicalUpload == false {
+                return .blocked(.fullScreenCoverBusy)
+            }
+            return .available
+
         case .appRoute:
             return .blocked(.unsupportedInPhase)
         }
@@ -112,6 +121,9 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
 
         case .medicationReminder(let reminderIntent):
             return await consumeMedicationReminder(reminderIntent)
+
+        case .healthResourceChanged(let resourceIntent):
+            return await consumeHealthResourceChanged(resourceIntent)
 
         case .appRoute:
             return .failedTerminal(.unsupportedInPhase)
@@ -187,6 +199,34 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
             shouldOpenLogSheet: true
         )
         routeStore.route(to: .homeMedicalList(.medicationPlans, focus))
+        return .consumed
+    }
+
+    /// 资源变更 APNs 是协同告知，不是到点用药提醒，进入用药列表而非执行中心 Sheet。
+    private func consumeHealthResourceChanged(_ intent: HealthResourceChangedLaunchIntent) async -> LaunchIntentConsumeResult {
+        switch await homeViewModel.waitForMemberAvailability(intent.memberID) {
+        case .loading:
+            return .notReady
+        case .unavailable:
+            homeViewModel.notifyHealthResourceChangedRouteMissing()
+            return .failedTerminal(.unsupportedInPhase)
+        case .available:
+            break
+        }
+
+        logger.info(
+            "HealthResourceChanged.interaction memberID=\(intent.memberID) resourceType=\(intent.resourceType) resourceID=\(intent.resourceID ?? -1)",
+            module: .push
+        )
+
+        await homeViewModel.switchMemberAndLoad(intent.memberID)
+
+        guard homeViewModel.dashboard?.medical.completeData != nil else {
+            return .notReady
+        }
+
+        routeStore.route(to: .homeMedicalList(.medicationPlans, nil))
+        homeViewModel.notifyHealthResourceChangedRouteMissing()
         return .consumed
     }
 }

@@ -473,4 +473,46 @@ enum SparkMedicalSyncAPI {
         /// 随访记录列表
         var followUps: [RemoteFollowUp]?
     }
+
+    /// 开启提醒用药计划聚合响应（本地通知补全专用）。
+    struct RemoteMedicationReminderEnabledPlansResponse: Codable, Sendable, Equatable {
+        var windowStartDate: String
+        var windowEndDate: String
+        var members: [RemoteMedicationReminderMemberGroup]
+    }
+
+    struct RemoteMedicationReminderMemberGroup: Codable, Sendable, Equatable {
+        var member: RemoteMedicationReminderMemberSummary
+        var selfOwners: [RemoteMedicationReminderSelfOwner]
+        var plans: [RemoteMedicationPlan]
+        var records: [RemoteMedicationRecord]
+    }
+
+    struct RemoteMedicationReminderMemberSummary: Codable, Sendable, Equatable {
+        var id: Int
+        var name: String
+        var relationship: String
+        var isSelfMember: Bool
+        var bindingRole: String?
+        var canShare: Bool
+        var canWrite: Bool
+    }
+
+    struct RemoteMedicationReminderSelfOwner: Codable, Sendable, Equatable {
+        var userId: Int64
+        var displayName: String
+        var hasApns: Bool
+        var notificationsEnabled: Bool
+    }
+
+    struct RemoteMemberNotificationOwnership: Codable, Sendable, Equatable {
+        var memberId: Int
+        var memberName: String
+        var currentUserRelationship: String
+        var isCurrentUserSelfMember: Bool
+        var canShare: Bool
+        var canWrite: Bool
+        var hasOtherSelfOwner: Bool
+        var selfOwners: [RemoteMedicationReminderSelfOwner]
+    }
 }

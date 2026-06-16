@@ -4,6 +4,7 @@ struct RemoteInviteFormView: View {
     let memberID: Int
     let inviteUseCase: MemberInviteUseCase
     var selectedPermission: MemberSharePermission = .edit
+    var onInviteSent: (() -> Void)? = nil
 
     @State private var contact = ""
     @State private var phoneModel = PhoneNumberInputModel()
@@ -181,6 +182,7 @@ struct RemoteInviteFormView: View {
                     displayMessage: response.displayMessage ?? L10n.text("home.members.invite.sent"),
                     channel: ch
                 )
+                onInviteSent?()
             }
         } catch {
             let message = String(describing: error)
@@ -188,6 +190,7 @@ struct RemoteInviteFormView: View {
                 sendState = .failed
             } else if message.contains("already_bound") {
                 sendState = .sent(displayMessage: L10n.text("home.members.bind.already_bound"), channel: "")
+                onInviteSent?()
             } else if message.contains("user_not_found") {
                 sendState = .partialSuccess(L10n.text("home.members.invite.user_not_found"))
             } else {

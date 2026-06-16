@@ -60,6 +60,18 @@ struct MedicationReminderLaunchIntent: Equatable, Sendable, Identifiable {
     let notificationRequestID: String?
 }
 
+/// 健康资源变更 APNs 唤起意图（如用药计划被他人维护）。
+struct HealthResourceChangedLaunchIntent: Equatable, Sendable, Identifiable {
+    let id: UUID
+    let memberID: Int
+    let resourceType: String
+    let resourceID: Int?
+    let action: String
+    let receivedAt: Date
+    let source: LaunchIntentSource
+    let notificationRequestID: String?
+}
+
 /// 通用页面路由跳转唤起意图模型
 /// 统一承载App内部路由跳转指令
 struct AppRouteLaunchIntent: Equatable, Sendable, Identifiable {
@@ -82,6 +94,8 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
     case memberInviteFromPush(MemberInvitePushLaunchIntent)
     /// 用药提醒本地通知跳转意图
     case medicationReminder(MedicationReminderLaunchIntent)
+    /// 健康资源变更 APNs 跳转意图
+    case healthResourceChanged(HealthResourceChangedLaunchIntent)
     /// 通用路由跳转意图
     case appRoute(AppRouteLaunchIntent)
 
@@ -93,6 +107,8 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
         case .memberInviteFromPush(let intent):
             return intent.id
         case .medicationReminder(let intent):
+            return intent.id
+        case .healthResourceChanged(let intent):
             return intent.id
         case .appRoute(let intent):
             return intent.id
@@ -108,6 +124,8 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
         case .medicalDocumentUpload:
             return 1
         case .medicationReminder:
+            return 2
+        case .healthResourceChanged:
             return 2
         case .appRoute:
             return 3

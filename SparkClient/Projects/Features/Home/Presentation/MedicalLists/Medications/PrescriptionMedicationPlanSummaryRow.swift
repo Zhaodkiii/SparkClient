@@ -12,6 +12,7 @@ struct PrescriptionMedicationPlanSummaryRow: View {
         let memberContextStore: MemberContextStore
         let workflowAPI: SparkMedicalWorkflowAPI
         let notificationClient: any NotificationClient
+        var homeDependencies: HomeFeatureDependencies?
         let onPlanSaved: (SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void
         let onPlanDeleted: (Int) -> Void
         let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
@@ -70,6 +71,7 @@ struct PrescriptionMedicationPlanSummaryRow: View {
                         workflowAPI: nav.workflowAPI,
                         fileTransferService: fileTransferService,
                         notificationClient: nav.notificationClient,
+                        homeDependencies: nav.homeDependencies,
                         sourcePlanDraft: nav.sourcePlanDraft,
                         onSaved: nav.onPlanSaved,
                         onDeleted: nav.onPlanDeleted,

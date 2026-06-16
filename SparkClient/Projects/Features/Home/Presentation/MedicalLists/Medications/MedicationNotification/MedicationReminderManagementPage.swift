@@ -19,7 +19,6 @@ struct MedicationReminderManagementPage: View {
                 accountID: accountID,
                 syncCoordinator: homeDependencies.medicationReminderSyncCoordinator,
                 preferencesStore: MedicationReminderPreferencesStore.shared,
-                medicalQueryAPI: homeDependencies.medicalQueryAPI,
                 memberContextStore: homeDependencies.memberContextStore,
                 notificationClient: homeDependencies.notificationClient,
                 logger: homeDependencies.logger

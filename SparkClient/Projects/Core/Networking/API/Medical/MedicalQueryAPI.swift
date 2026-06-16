@@ -295,6 +295,39 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         )
     }
 
+    /// 聚合拉取当前账号可访问成员的开启提醒用药计划与窗口内记录（本地通知补全专用）。
+    func listMedicationReminderEnabledPlans(
+        windowStartDate: Date? = nil,
+        windowEndDate: Date? = nil,
+        includeRecords: Bool = true
+    ) async throws -> SparkMedicalSyncAPI.RemoteMedicationReminderEnabledPlansResponse {
+        var query: [URLQueryItem] = []
+        if let windowStartDate {
+            query.append(URLQueryItem(name: "window_start_date", value: MedicalDateCoding.encodeDateOnly(windowStartDate)))
+        }
+        if let windowEndDate {
+            query.append(URLQueryItem(name: "window_end_date", value: MedicalDateCoding.encodeDateOnly(windowEndDate)))
+        }
+        query.append(URLQueryItem(name: "include_records", value: includeRecords ? "true" : "false"))
+        return try await request(
+            path: "/api/v1/medical/medication-reminders/enabled-plans/",
+            query: query,
+            responseType: SparkMedicalSyncAPI.RemoteMedicationReminderEnabledPlansResponse.self,
+            etagTTL: 60
+        )
+    }
+
+    /// 查询成员通知归属：是否存在其他本人绑定用户及其 APNs 能力。
+    func fetchMemberNotificationOwnership(
+        memberID: Int
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberNotificationOwnership {
+        try await request(
+            path: "/api/v1/medical/members/\(memberID)/notification-ownership/",
+            responseType: SparkMedicalSyncAPI.RemoteMemberNotificationOwnership.self,
+            etagTTL: 60
+        )
+    }
+
     private func memberQuery(_ memberID: Int?) -> [URLQueryItem] {
         memberID.map { [URLQueryItem(name: "member_id", value: "\($0)")] } ?? []
     }

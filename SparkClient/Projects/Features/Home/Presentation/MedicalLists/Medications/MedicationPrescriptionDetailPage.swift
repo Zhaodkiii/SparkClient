@@ -12,6 +12,7 @@ struct MedicationPrescriptionDetailPage: View {
     let workflowAPI: SparkMedicalWorkflowAPI
     let fileTransferService: FileTransferService
     let notificationClient: any NotificationClient
+    var homeDependencies: HomeFeatureDependencies?
 
     let onPrescriptionSaved: (SparkMedicalSyncAPI.RemotePrescription) -> Void
     let onPrescriptionDeleted: (Int) -> Void
@@ -52,6 +53,7 @@ struct MedicationPrescriptionDetailPage: View {
         workflowAPI: SparkMedicalWorkflowAPI,
         fileTransferService: FileTransferService,
         notificationClient: any NotificationClient,
+        homeDependencies: HomeFeatureDependencies? = nil,
         prescriptionIndex: Int = 0,
         sourceBatchDraft: PrescriptionRecognitionDraft? = nil,
         onPrescriptionSaved: @escaping (SparkMedicalSyncAPI.RemotePrescription) -> Void,
@@ -80,6 +82,7 @@ struct MedicationPrescriptionDetailPage: View {
         self.workflowAPI = workflowAPI
         self.fileTransferService = fileTransferService
         self.notificationClient = notificationClient
+        self.homeDependencies = homeDependencies
         self.onPrescriptionSaved = onPrescriptionSaved
         self.onPrescriptionDeleted = onPrescriptionDeleted
         self.onPlanSaved = onPlanSaved
@@ -377,6 +380,7 @@ struct MedicationPrescriptionDetailPage: View {
                                 memberContextStore: memberContextStore,
                                 workflowAPI: workflowAPI,
                                 notificationClient: notificationClient,
+                                homeDependencies: homeDependencies,
                                 onPlanSaved: { updated in
                                     if let idx = currentPlans.firstIndex(where: { $0.id == updated.id }) {
                                         currentPlans[idx] = updated

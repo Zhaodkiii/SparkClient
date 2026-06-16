@@ -90,8 +90,6 @@ struct MedicationsListPage: View {
     @State private var todayMedicationRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     /// 弹窗路由目标（新增/编辑服药计划表单）
     @State private var sheetDestination: MedicationPlanSheetDestination?
-    /// 是否展示服药通知权限申请弹窗
-    @State private var showMedicationReminderPermissionExplanation = false
 
     /// 日志模块标记：首页模块
     private let logModule = LogModule.home
@@ -233,12 +231,6 @@ struct MedicationsListPage: View {
             .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
                 uploadHostView
             }
-            // 服药通知权限申请弹窗组件
-            .medicationReminderPermissionExplanation(
-                isPresented: $showMedicationReminderPermissionExplanation,
-                onContinue: { confirmMedicationReminderPermissionRequest() },
-                onSkip: { skipMedicationReminderPermissionRequest() }
-            )
     }
 
     /// 页面生命周期监听容器（出现、数据变更回调）
@@ -359,7 +351,7 @@ struct MedicationsListPage: View {
                 fileTransferService: fileTransferService,
                 notificationClient: notificationClient,
                 onMedicineBoxSaved: upsertMedicineBox,
-                onServerSaved: upsertMedicationPlan
+                onServerSaved: upsertMedicationPlanWithoutReminderPrompts
             )
         } else {
             // 未选择成员提示文案
@@ -485,9 +477,10 @@ struct MedicationsListPage: View {
                                     workflowAPI: workflowAPI,
                                     fileTransferService: fileTransferService,
                                     notificationClient: notificationClient,
+                                    homeDependencies: homeDependencies,
                                     onPrescriptionSaved: upsertPrescription,
                                     onPrescriptionDeleted: removePrescription,
-                                    onPlanSaved: upsertMedicationPlan,
+                                    onPlanSaved: upsertMedicationPlanWithoutReminderPrompts,
                                     onPlanDeleted: removeMedicationPlan
                                 )
                             } label: {
@@ -547,7 +540,8 @@ struct MedicationsListPage: View {
             workflowAPI: workflowAPI,
             fileTransferService: fileTransferService,
             notificationClient: notificationClient,
-            onSaved: upsertMedicationPlan,
+            homeDependencies: homeDependencies,
+            onSaved: upsertMedicationPlanWithoutReminderPrompts,
             onDeleted: removeMedicationPlan,
             onMedicineBoxSaved: upsertMedicineBox,
             onMedicineBoxDeleted: removeMedicineBoxFromList
@@ -575,15 +569,15 @@ struct MedicationsListPage: View {
     }
 
     // MARK: - 本地数据增删改方法（更新State并回调外部）
-    /// 新增/编辑服药计划，更新本地列表并触发外部回调
-    private func upsertMedicationPlan(_ plan: SparkMedicalSyncAPI.RemoteMedicationPlan) {
+    /// 新增/编辑服药计划，更新本地列表并触发外部回调（列表页不展示提醒协同弹窗）
+    private func upsertMedicationPlanWithoutReminderPrompts(_ plan: SparkMedicalSyncAPI.RemoteMedicationPlan) {
         if let index = medicationPlans.firstIndex(where: { $0.id == plan.id }) {
             medicationPlans[index] = plan
         } else {
             medicationPlans.insert(plan, at: 0)
         }
         onMedicationPlansChanged?(medicationPlans)
-        notifyMedicationPlanChanged(plan)
+        syncMedicationReminderAfterPlanChange()
         sheetDestination = nil
     }
 
@@ -591,57 +585,16 @@ struct MedicationsListPage: View {
     private func removeMedicationPlan(id: Int) {
         medicationPlans.removeAll { $0.id == id }
         onMedicationPlansChanged?(medicationPlans)
-        notifyMedicationPlanChanged(nil)
+        syncMedicationReminderAfterPlanChange()
     }
 
-    /// 服药计划变更后同步刷新本地通知提醒
-    private func notifyMedicationPlanChanged(_ plan: SparkMedicalSyncAPI.RemoteMedicationPlan?) {
+    /// 列表页仅静默重建本地通知，协同引导弹窗在计划详情页处理
+    private func syncMedicationReminderAfterPlanChange() {
         guard let homeDependencies else { return }
         guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
-
-        let members = memberContextStore.context.members
         let coordinator = homeDependencies.medicationReminderSyncCoordinator
         coordinator.activate(accountID: session.accountID)
-
-        // 当前计划未开启提醒，直接重建提醒数据
-        guard plan?.reminderEnabled == true else {
-            coordinator.rebuildAfterPlanChanged(accountID: session.accountID, members: members)
-            return
-        }
-
-        Task {
-            let status = await coordinator.permissionCoordinatorAccess.currentStatus()
-            // 未申请通知权限，弹出权限引导弹窗
-            if status == .notDetermined {
-                showMedicationReminderPermissionExplanation = true
-                return
-            }
-            coordinator.rebuildAfterPlanChanged(accountID: session.accountID, members: members)
-        }
-    }
-
-    /// 用户确认申请系统通知权限
-    private func confirmMedicationReminderPermissionRequest() {
-        guard let homeDependencies else { return }
-        guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
-        Task {
-            await homeDependencies.medicationReminderSyncCoordinator.requestSystemPermissionAndRebuild(
-                accountID: session.accountID,
-                members: memberContextStore.context.members
-            )
-        }
-    }
-
-    /// 用户跳过权限申请，直接生成提醒
-    private func skipMedicationReminderPermissionRequest() {
-        guard let homeDependencies else { return }
-        guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
-        notificationClient.info(
-            L10n.text("medication_reminder.permission.skipped_toast"),
-            title: L10n.text("medication_reminder.title"),
-            source: "medication_reminder"
-        )
-        homeDependencies.medicationReminderSyncCoordinator.rebuildAfterPlanChanged(
+        coordinator.rebuildAfterPlanChanged(
             accountID: session.accountID,
             members: memberContextStore.context.members
         )

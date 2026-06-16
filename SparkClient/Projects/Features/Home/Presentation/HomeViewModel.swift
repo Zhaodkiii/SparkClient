@@ -286,6 +286,14 @@ final class HomeViewModel: ObservableObject {
         )
     }
 
+    func notifyHealthResourceChangedRouteMissing() {
+        notificationClient.info(
+            L10n.text("notification.health_resource_changed.route_missing.toast"),
+            title: L10n.text("notification.health_resource_changed.medication_plan.title"),
+            source: "push"
+        )
+    }
+
     /// 记录首页医疗卡片跳转行为，便于后续分析用户使用路径。
     func logMedicalListNavigation(kind: HomeDashboard.MedicalCard.Kind) {
         logger.info(

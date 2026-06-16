@@ -1,7 +1,9 @@
 import Foundation
 
 struct MedicationReminderMemberSnapshot: Sendable {
-    let member: Member
+    let memberID: Int
+    let memberDisplayName: String
+    let isSelfMember: Bool
     let plans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
     let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
 }
@@ -11,6 +13,7 @@ final class MedicationReminderSyncCoordinator {
     private let notificationManager: MedicationReminderNotificationManager
     private let permissionCoordinator: MedicationReminderPermissionCoordinator
     private let preferencesStore: MedicationReminderPreferencesStore
+    private let consentStore: MedicationReminderConsentStore
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let logger: Logger
 
@@ -18,6 +21,7 @@ final class MedicationReminderSyncCoordinator {
     private var lastRebuildAt: Date?
     private var lastKnownTimeZone = TimeZone.current.identifier
     private var isRebuilding = false
+    private var cachedPlanDrugNames: [Int: String] = [:]
 
     var permissionCoordinatorAccess: MedicationReminderPermissionCoordinator {
         permissionCoordinator
@@ -31,12 +35,14 @@ final class MedicationReminderSyncCoordinator {
         notificationManager: MedicationReminderNotificationManager,
         permissionCoordinator: MedicationReminderPermissionCoordinator,
         preferencesStore: MedicationReminderPreferencesStore,
+        consentStore: MedicationReminderConsentStore = .shared,
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger
     ) {
         self.notificationManager = notificationManager
         self.permissionCoordinator = permissionCoordinator
         self.preferencesStore = preferencesStore
+        self.consentStore = consentStore
         self.medicalQueryAPI = medicalQueryAPI
         self.logger = logger
     }
@@ -47,7 +53,20 @@ final class MedicationReminderSyncCoordinator {
 
     func deactivate() {
         rebuildTask?.cancel()
+        cachedPlanDrugNames = [:]
         preferencesStore.deactivate()
+    }
+
+    /// 通知管理页展示药品名：优先复用最近一次 enabled-plans 结果，避免按成员 N+1 拉计划。
+    func planDrugNamesForManagementDisplay() async -> [Int: String] {
+        if cachedPlanDrugNames.isEmpty == false {
+            return cachedPlanDrugNames
+        }
+        guard let response = await fetchEnabledPlansResponse(includeRecords: false) else {
+            return [:]
+        }
+        cachedPlanDrugNames = Self.planDrugNames(from: response)
+        return cachedPlanDrugNames
     }
 
     func clearAllForAccount(_ accountID: Int64) async {
@@ -110,7 +129,6 @@ final class MedicationReminderSyncCoordinator {
         requestRebuild(accountID: accountID, members: members, reason: "dose_completed", immediate: true)
     }
 
-    /// 计划变更后重建通知，不主动弹出系统权限对话框。
     func rebuildAfterPlanChanged(
         accountID: Int64,
         members: [Member]
@@ -118,7 +136,6 @@ final class MedicationReminderSyncCoordinator {
         requestRebuild(accountID: accountID, members: members, reason: "plan_changed", immediate: true)
     }
 
-    /// 用户看完应用内说明并点击「继续」后，再请求系统权限并重建。
     func requestSystemPermissionAndRebuild(
         accountID: Int64,
         members: [Member]
@@ -127,7 +144,6 @@ final class MedicationReminderSyncCoordinator {
         await rebuildNow(accountID: accountID, members: members, reason: "permission_granted")
     }
 
-    /// 管理页手动补齐：同步等待重建完成后再刷新列表。
     func rebuildNow(
         accountID: Int64,
         members: [Member],
@@ -150,7 +166,11 @@ final class MedicationReminderSyncCoordinator {
             return
         }
 
-        let snapshots = await loadSnapshots(accountID: accountID, members: members)
+        guard let snapshots = await loadSnapshots(accountID: accountID) else {
+            logger.info("用药提醒重建跳过：enabled-plans 失败，保留现有通知 reason=\(reason)", module: .push)
+            return
+        }
+
         let now = Date()
         let calendar = Calendar.current
         var allEvents: [MedicationReminderEvent] = []
@@ -158,9 +178,9 @@ final class MedicationReminderSyncCoordinator {
         for snapshot in snapshots {
             let input = MedicationReminderCompileInput(
                 accountID: accountID,
-                memberID: snapshot.member.id,
-                memberDisplayName: snapshot.member.name,
-                isSelfMember: snapshot.member.relationship == "self",
+                memberID: snapshot.memberID,
+                memberDisplayName: snapshot.memberDisplayName,
+                isSelfMember: snapshot.isSelfMember,
                 plans: snapshot.plans,
                 records: snapshot.records,
                 now: now,
@@ -170,7 +190,7 @@ final class MedicationReminderSyncCoordinator {
             )
             let result = MedicationReminderScheduleCompiler.compile(input)
             if result.truncatedCount > 0 {
-                logger.warning("用药提醒编译截断 truncated=\(result.truncatedCount) memberID=\(snapshot.member.id)", module: .push)
+                logger.warning("用药提醒编译截断 truncated=\(result.truncatedCount) memberID=\(snapshot.memberID)", module: .push)
             }
             allEvents.append(contentsOf: result.events)
         }
@@ -187,28 +207,77 @@ final class MedicationReminderSyncCoordinator {
         logger.info("用药提醒重建完成 reason=\(reason) count=\(allEvents.count)", module: .push)
     }
 
-    private func loadSnapshots(accountID: Int64, members: [Member]) async -> [MedicationReminderMemberSnapshot] {
-        var snapshots: [MedicationReminderMemberSnapshot] = []
+    /// 补全通知使用服务端聚合接口，避免按成员 N+1；非本人成员必须通过本地 consent 才参与本机通知。
+    private func loadSnapshots(accountID: Int64) async -> [MedicationReminderMemberSnapshot]? {
+        guard let response = await fetchEnabledPlansResponse(includeRecords: true) else {
+            return nil
+        }
+
+        cachedPlanDrugNames = Self.planDrugNames(from: response)
+        let included = response.members.filter { shouldScheduleLocalReminder(accountID: accountID, group: $0) }
+        let skippedCount = response.members.count - included.count
+        logger.info(
+            "enabled-plans 拉取成功 members=\(response.members.count) included=\(included.count) skipped=\(skippedCount)",
+            module: .push
+        )
+        return included.map { group in
+            MedicationReminderMemberSnapshot(
+                memberID: group.member.id,
+                memberDisplayName: group.member.name,
+                isSelfMember: group.member.isSelfMember,
+                plans: group.plans,
+                records: group.records
+            )
+        }
+    }
+
+    private func fetchEnabledPlansResponse(
+        includeRecords: Bool
+    ) async -> SparkMedicalSyncAPI.RemoteMedicationReminderEnabledPlansResponse? {
         let calendar = Calendar.current
         let now = Date()
         let windowStart = calendar.startOfDay(for: now)
-        let windowEnd = calendar.date(byAdding: .day, value: MedicationReminderNotification.defaultWindowDays, to: now) ?? now
+        let windowEnd = calendar.date(
+            byAdding: .day,
+            value: MedicationReminderNotification.defaultWindowDays,
+            to: windowStart
+        ) ?? now
 
-        for member in members {
-            do {
-                let plans = try await medicalQueryAPI.listMedicationPlans(memberID: member.id)
-                let records = try await medicalQueryAPI.listMedicationRecords(
-                    memberID: member.id,
-                    scheduledRange: MedicationRecordScheduledRange(
-                        scheduledFrom: windowStart,
-                        scheduledToExclusive: windowEnd.addingTimeInterval(86_400)
-                    )
-                )
-                snapshots.append(MedicationReminderMemberSnapshot(member: member, plans: plans, records: records))
-            } catch {
-                logger.warning("用药提醒加载成员数据失败 memberID=\(member.id) error=\(error.localizedDescription)", module: .push)
+        do {
+            return try await medicalQueryAPI.listMedicationReminderEnabledPlans(
+                windowStartDate: windowStart,
+                windowEndDate: windowEnd,
+                includeRecords: includeRecords
+            )
+        } catch {
+            logger.warning(
+                "enabled-plans 拉取失败 error=\(error.localizedDescription)",
+                module: .push
+            )
+            return nil
+        }
+    }
+
+    private static func planDrugNames(
+        from response: SparkMedicalSyncAPI.RemoteMedicationReminderEnabledPlansResponse
+    ) -> [Int: String] {
+        var names: [Int: String] = [:]
+        for group in response.members {
+            for plan in group.plans {
+                names[plan.id] = plan.drugName
             }
         }
-        return snapshots
+        return names
+    }
+
+    /// 本人默认补全；非本人只看本地 consent；是否存在其他本人绑定不直接决定补全。
+    private func shouldScheduleLocalReminder(
+        accountID: Int64,
+        group: SparkMedicalSyncAPI.RemoteMedicationReminderMemberGroup
+    ) -> Bool {
+        if group.member.isSelfMember {
+            return true
+        }
+        return consentStore.allowsLocalReminder(accountID: accountID, memberID: group.member.id)
     }
 }
