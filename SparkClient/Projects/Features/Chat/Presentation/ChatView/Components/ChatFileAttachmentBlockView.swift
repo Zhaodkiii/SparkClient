@@ -1,14 +1,15 @@
 import SwiftUI
 
 struct ChatFileAttachmentBlockView: View {
-    @Binding var unifiedFilePreview: FilePreviewInput?
-
     let attachments: [ChatAttachment]
     let role: ChatMessageRole
     let fileTransferService: FileTransferService
 
     @State private var localFiles: [UUID: URL] = [:]
     @State private var downloadingIDs: Set<UUID> = []
+    @State private var showUnifiedFilePreview = false
+    @State private var previewInputs: [FilePreviewInput] = []
+    @State private var previewIndex: Int = 0
 
     var body: some View {
         VStack(spacing: 8) {
@@ -16,6 +17,11 @@ struct ChatFileAttachmentBlockView: View {
                 attachmentCard(attachment)
             }
         }
+        .unifiedFilePreview(
+            isPresented: $showUnifiedFilePreview,
+            inputs: previewInputs,
+            startIndex: previewIndex
+        )
     }
 
     private func attachmentCard(_ attachment: ChatAttachment) -> some View {
@@ -102,35 +108,75 @@ struct ChatFileAttachmentBlockView: View {
 
     @MainActor
     private func handleTap(for attachment: ChatAttachment) async {
-        if let local = localFiles[attachment.id] {
-            openPreview(localURL: local, for: attachment)
-            return
+        guard let tappedIndex = attachments.firstIndex(where: { $0.id == attachment.id }) else { return }
+        let inputs = await buildPreviewInputs()
+        await MainActor.run {
+            guard inputs.isEmpty == false else { return }
+            previewInputs = inputs
+            previewIndex = min(max(0, tappedIndex), inputs.count - 1)
+            showUnifiedFilePreview = true
         }
-        guard let managedFile = attachment.managedFileRecordForDownload() else { return }
+    }
+
+    @MainActor
+    private func buildPreviewInputs() async -> [FilePreviewInput] {
+        var result: [FilePreviewInput] = []
+        result.reserveCapacity(attachments.count)
+        for attachment in attachments {
+            if let input = await previewInput(for: attachment) {
+                result.append(input)
+            }
+        }
+        return result
+    }
+
+    @MainActor
+    private func previewInput(for attachment: ChatAttachment) async -> FilePreviewInput? {
+        if let local = localFiles[attachment.id] {
+            return FilePreviewInput(
+                id: attachment.id,
+                fileURL: local,
+                displayName: displayName(for: attachment),
+                mimeType: FileUtilities.mimeType(forName: displayName(for: attachment))
+            )
+        }
+        guard let managedFile = attachment.managedFileRecordForDownload() else { return Self.previewUnavailableInput(for: attachment) }
 
         downloadingIDs.insert(attachment.id)
         defer { downloadingIDs.remove(attachment.id) }
 
         if let cached = await fileTransferService.cachedURL(file: managedFile) {
             localFiles[attachment.id] = cached
-            openPreview(localURL: cached, for: attachment)
-            return
+            return FilePreviewInput(
+                id: attachment.id,
+                fileURL: cached,
+                displayName: displayName(for: attachment),
+                mimeType: FileUtilities.mimeType(forName: displayName(for: attachment))
+            )
         }
 
         do {
             let local = try await fileTransferService.download(file: managedFile)
             localFiles[attachment.id] = local
-            openPreview(localURL: local, for: attachment)
+            return FilePreviewInput(
+                id: attachment.id,
+                fileURL: local,
+                displayName: displayName(for: attachment),
+                mimeType: FileUtilities.mimeType(forName: displayName(for: attachment))
+            )
         } catch {
+            return Self.previewUnavailableInput(for: attachment)
         }
     }
 
-    @MainActor
-    private func openPreview(localURL: URL, for attachment: ChatAttachment) {
-        unifiedFilePreview = FilePreviewInput(
-            fileURL: localURL,
-            displayName: displayName(for: attachment),
-            mimeType: FileUtilities.mimeType(forName: displayName(for: attachment))
+    private static func previewUnavailableInput(for attachment: ChatAttachment) -> FilePreviewInput {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chat-preview-missing-\(attachment.id.uuidString)")
+        return FilePreviewInput(
+            id: attachment.id,
+            fileURL: url,
+            displayName: "Preview unavailable",
+            mimeType: nil
         )
     }
 

@@ -42,7 +42,17 @@ struct MedicalCaseAttachmentPill: View {
                     .controlSize(.small)
             }
         }
-        .unifiedFilePreview(selection: $previewInput)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { previewInput != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        previewInput = nil
+                    }
+                }
+            ),
+            inputs: previewInput.map { [$0] } ?? []
+        )
     }
 
     @MainActor

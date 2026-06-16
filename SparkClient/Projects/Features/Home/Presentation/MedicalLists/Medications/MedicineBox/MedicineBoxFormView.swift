@@ -28,6 +28,7 @@ struct MedicineBoxFormView: View {
     @State private var showSpecificationSheet = false
     @State private var pendingAttachmentFiles: [MedicalUploadLocalFile] = []
     @State private var localAttachmentPreview: FilePreviewInput?
+    @State private var localAttachmentPreviewIndex: Int = 0
 
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
@@ -115,7 +116,18 @@ struct MedicineBoxFormView: View {
         .interactiveDismissDisabled(isSubmitting)
 //        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(uiColor: .systemBackground)))
         .background(Color(uiColor: .systemBackground))
-        .unifiedFilePreview(selection: $localAttachmentPreview)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { localAttachmentPreview != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        localAttachmentPreview = nil
+                    }
+                }
+            ),
+            files: pendingAttachmentFiles,
+            startIndex: localAttachmentPreviewIndex
+        )
 
 
         .alert(L10n.text("home.medical.medicine_box.save_failed"), isPresented: Binding(
@@ -272,7 +284,12 @@ struct MedicineBoxFormView: View {
                             ForEach(pendingAttachmentFiles) { file in
                                 MedicalDocumentFilePreviewSquareCard(
                                     item: file.previewInput,
-                                    onPreview: { localAttachmentPreview = file.previewInput },
+                                    onPreview: {
+                                        localAttachmentPreview = file.previewInput
+                                        if let index = pendingAttachmentFiles.firstIndex(where: { $0.id == file.id }) {
+                                            localAttachmentPreviewIndex = index
+                                        }
+                                    },
                                     onDelete: { pendingAttachmentFiles.removeAll { $0.id == file.id } }
                                 )
                             }

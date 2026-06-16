@@ -33,7 +33,7 @@ struct HomeView: View {
 //                headerCard             //任务
                 medicalInfoSection          // 医疗
                 nutritionInfoSection   // 营养
-                customCameraSection    // 相机
+//                customCameraSection    // 相机
 
             }
             .padding(.horizontal, 16)

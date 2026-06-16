@@ -35,8 +35,7 @@ extension ChatMessageBlock {
                     from: imageGalleryMessage(attachments, base: context.message)
                 ),
                 fileTransferService: context.fileTransferService,
-                style: context.message.role == .user ? .user : .assistant,
-                unifiedFilePreview: context.unifiedFilePreview
+                style: context.message.role == .user ? .user : .assistant
             )
             
             // 3. 深度思考块（AI思考过程）
@@ -142,7 +141,6 @@ extension ChatMessageBlock {
             // 17. 文件附件块
         case .fileAttachments(let attachments):
             ChatFileAttachmentBlockView(
-                unifiedFilePreview: context.unifiedFilePreview,
                 attachments: attachments,
                 role: context.message.role,
                 fileTransferService: context.fileTransferService

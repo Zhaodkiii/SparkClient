@@ -341,6 +341,7 @@ struct MedicalAttachmentUploadListSheet: View {
     @State private var showingFileImporter = false
     @State private var showCameraUnavailableAlert = false
     @State private var filePreviewSelection: FilePreviewInput?
+    @State private var filePreviewIndex: Int = 0
     @State private var fileLimitMessage: String?
     @State private var pendingConfirmedFiles: [MedicalUploadLocalFile]?
     @State private var hasScheduledDeferredConfirm = false
@@ -489,7 +490,18 @@ struct MedicalAttachmentUploadListSheet: View {
         } message: {
             Text(fileLimitMessage ?? "")
         }
-        .unifiedFilePreview(selection: $filePreviewSelection)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { filePreviewSelection != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        filePreviewSelection = nil
+                    }
+                }
+            ),
+            inputs: localFiles.map(\.previewInput),
+            startIndex: filePreviewIndex
+        )
         .onDisappear {
             triggerDeferredConfirmIfNeeded()
         }
@@ -581,7 +593,12 @@ struct MedicalAttachmentUploadListSheet: View {
                 ForEach(localFiles) { file in
                     MedicalDocumentFilePreviewSquareCard(
                         item: file.previewInput,
-                        onPreview: { filePreviewSelection = file.previewInput },
+                        onPreview: {
+                            filePreviewSelection = file.previewInput
+                            if let index = localFiles.firstIndex(where: { $0.id == file.id }) {
+                                filePreviewIndex = index
+                            }
+                        },
                         onDelete: { localFiles.removeAll { $0.id == file.id } }
                     )
                 }

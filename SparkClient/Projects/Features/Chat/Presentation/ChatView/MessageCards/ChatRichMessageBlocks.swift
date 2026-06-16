@@ -334,23 +334,13 @@ struct ChatImageGalleryBlockView: View {
     let images: [ChatImagePayload]
     let fileTransferService: FileTransferService
     var style: ChatImageGalleryStyle = .user
-    var unifiedFilePreview: Binding<FilePreviewInput?>?
     @State private var downloadingImageIDs: Set<UUID> = []
     @State private var downloadedImageFiles: [UUID: URL] = [:]
     @State private var autoTriggeredImageIDs: Set<UUID> = []
     @State private var failedImageIDs: Set<UUID> = []
-
-    init(
-        images: [ChatImagePayload],
-        fileTransferService: FileTransferService,
-        style: ChatImageGalleryStyle = .user,
-        unifiedFilePreview: Binding<FilePreviewInput?>? = nil
-    ) {
-        self.images = images
-        self.fileTransferService = fileTransferService
-        self.style = style
-        self.unifiedFilePreview = unifiedFilePreview
-    }
+    @State private var showUnifiedFilePreview = false
+    @State private var previewInputs: [FilePreviewInput] = []
+    @State private var previewStartIndex: Int = 0
 
     private var galleryWidth: CGFloat {
         let count = Double(images.count)
@@ -368,6 +358,11 @@ struct ChatImageGalleryBlockView: View {
         }
         .frame(width: galleryWidth, height: style.thumbSide)
         .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+        .unifiedFilePreview(
+            isPresented: $showUnifiedFilePreview,
+            inputs: previewInputs,
+            startIndex: previewStartIndex
+        )
         /// 画廊块进入可视区时按需拉取（对齐医疗附件网格 `onAppear` 懒加载，非列表级批量下载）。
         .onAppear {
             ChatAttachmentImageDiagnostics.debug("gallery.onAppear imageCount=\(images.count)")
@@ -564,54 +559,68 @@ struct ChatImageGalleryBlockView: View {
     }
 
     /// 统一预览入口：本地图片写入临时 JPEG；远程先下载再交给 `UnifiedFilePreview` / Quick Look。
+    @MainActor
     private func openPreview(for payload: ChatImagePayload) async {
-        guard let binding = unifiedFilePreview else { return }
+        guard let index = images.firstIndex(where: { $0.id == payload.id }) else { return }
 
-        if let local = downloadedImageFiles[payload.id] {
-            await MainActor.run {
-                binding.wrappedValue = FilePreviewInput(
-                    fileURL: local,
-                    displayName: local.lastPathComponent,
-                    mimeType: nil
-                )
+        let inputs = await buildPreviewInputs()
+        await MainActor.run {
+            guard inputs.isEmpty == false else { return }
+            previewInputs = inputs
+            previewStartIndex = min(max(0, index), inputs.count - 1)
+            showUnifiedFilePreview = true
+        }
+    }
+
+    @MainActor
+    private func buildPreviewInputs() async -> [FilePreviewInput] {
+        var result: [FilePreviewInput] = []
+        result.reserveCapacity(images.count)
+        for payload in images {
+            if let input = await previewInput(for: payload) {
+                result.append(input)
             }
-            return
+        }
+        return result
+    }
+
+    @MainActor
+    private func previewInput(for payload: ChatImagePayload) async -> FilePreviewInput? {
+        if let local = downloadedImageFiles[payload.id] {
+            return FilePreviewInput(
+                id: payload.id,
+                fileURL: local,
+                displayName: local.lastPathComponent,
+                mimeType: nil
+            )
         }
 
         if let image = payload.image,
            let tmp = Self.writeTempJPEG(image) {
-            await MainActor.run {
-                binding.wrappedValue = FilePreviewInput(
-                    fileURL: tmp,
-                    displayName: "chat-image.jpg",
-                    mimeType: "image/jpeg"
-                )
-            }
-            return
+            return FilePreviewInput(
+                id: payload.id,
+                fileURL: tmp,
+                displayName: "chat-image.jpg",
+                mimeType: "image/jpeg"
+            )
         }
 
         if payload.url != nil {
             do {
                 let localURL = try await ensureLocalFile(for: payload, reason: "gallery.preview")
-                await MainActor.run {
-                    let name = payload.url?.lastPathComponent.removingPercentEncoding ?? "image"
-                    binding.wrappedValue = FilePreviewInput(
-                        fileURL: localURL,
-                        displayName: name,
-                        mimeType: FileUtilities.mimeType(forName: name)
-                    )
-                }
+                let name = payload.url?.lastPathComponent.removingPercentEncoding ?? "image"
+                return FilePreviewInput(
+                    id: payload.id,
+                    fileURL: localURL,
+                    displayName: name,
+                    mimeType: FileUtilities.mimeType(forName: name)
+                )
             } catch {
-                await MainActor.run {
-                    binding.wrappedValue = Self.previewUnavailableInput()
-                }
+                return Self.previewUnavailableInput()
             }
-            return
         }
 
-        await MainActor.run {
-            binding.wrappedValue = Self.previewUnavailableInput()
-        }
+        return Self.previewUnavailableInput()
     }
 
     @MainActor

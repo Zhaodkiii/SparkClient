@@ -304,7 +304,7 @@ struct MedicationPlanDetailPage: View {
         }
         .sheet(isPresented: $showingEditSheet, onDismiss: runDeferredPostSaveHandlingIfNeeded) {
             if mode == .localDraft, let memberID {
-                MedicationPlanFormView(
+                MedicationPlanStepperView(
                     mode: .localEdit(
                         existing: MedicationPlanDraft(recognition: currentSourcePlanDraft()),
                         onSubmit: { updatedDraft in
@@ -317,10 +317,13 @@ struct MedicationPlanDetailPage: View {
                     workflowAPI: workflowAPI,
                     fileTransferService: fileTransferService,
                     notificationClient: notificationClient,
-                    onMedicineBoxSaved: handleMedicineBoxSaved
+                    onMedicineBoxSaved: handleMedicineBoxSaved,
+                    homeDependencies: homeDependencies,
+                    memberContextStore: memberContextStore,
+                    reminderPostSaveController: reminderPostSaveController
                 )
             } else if let memberID {
-                MedicationPlanFormView(
+                MedicationPlanStepperView(
                     mode: .serverEdit(existing: currentPlan),
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,
@@ -333,7 +336,10 @@ struct MedicationPlanDetailPage: View {
                         onSaved(saved)
                         deferredPostSavePlan = saved
                         showingEditSheet = false
-                    }
+                    },
+                    homeDependencies: homeDependencies,
+                    memberContextStore: memberContextStore,
+                    reminderPostSaveController: reminderPostSaveController
                 )
             } else {
                 Text(L10n.text("home.medical.medicine_box.select_member_first"))

@@ -58,7 +58,7 @@ struct MedicalCaseTimelineEditDestination: View {
                 workflowAPI: workflowAPI,
                 onDeleted: { onRecordRemoved(eventID) }
             ) {
-                MedicationPlanFormView(
+                MedicationPlanStepperView(
                     mode: .serverEdit(existing: plan),
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,

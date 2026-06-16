@@ -6,6 +6,7 @@ struct CaseMatchedAttachmentsGridView: View {
     var onManage: (() -> Void)? = nil
 
     @State private var selectedPreview: FilePreviewInput?
+    @State private var previewIndex: Int = 0
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
 
@@ -46,9 +47,10 @@ struct CaseMatchedAttachmentsGridView: View {
 //                }
             } else {
                 LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(attachments) { item in
+                    ForEach(Array(attachments.enumerated()), id: \.element.id) { index, item in
                         Button {
                             selectedPreview = item.previewInput
+                            previewIndex = index
                         } label: {
                             gridCard(item)
                         }
@@ -57,7 +59,18 @@ struct CaseMatchedAttachmentsGridView: View {
                 }
             }
         }
-        .unifiedFilePreview(selection: $selectedPreview)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { selectedPreview != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        selectedPreview = nil
+                    }
+                }
+            ),
+            inputs: attachments.map(\.previewInput),
+            startIndex: previewIndex
+        )
 
     }
 

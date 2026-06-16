@@ -74,13 +74,11 @@ struct MedicalDocumentUploadPickingView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPreviewSheet) {
-            if viewModel.selectedFiles.indices.contains(previewIndex) {
-                UnifiedFilePreview(input: viewModel.selectedFiles[previewIndex].previewInput) {
-                    showPreviewSheet = false
-                }
-            }
-        }
+        .unifiedFilePreview(
+            isPresented: $showPreviewSheet,
+            files: viewModel.selectedFiles,
+            startIndex: previewIndex
+        )
     }
 
     // MARK: - 当前成员

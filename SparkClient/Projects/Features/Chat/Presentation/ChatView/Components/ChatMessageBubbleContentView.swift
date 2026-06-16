@@ -5,8 +5,6 @@ import UIKit
 /// - 纯渲染组件，不直接持有全局状态；
 /// - 通过入参和回调与上层协作。
 struct ChatMessageBubbleContentView: View {
-    @State private var unifiedFilePreview: FilePreviewInput?
-
     let message: ChatMessage
     let metadata: ChatMessageMetadata
     let isLastAssistantMessage: Bool
@@ -62,7 +60,6 @@ struct ChatMessageBubbleContentView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(message.role == .user ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
         )
-        .unifiedFilePreview(selection: $unifiedFilePreview)
     }
 
     private var renderContext: ChatRenderContext {
@@ -76,7 +73,6 @@ struct ChatMessageBubbleContentView: View {
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             savingNutritionCardIDs: savingNutritionCardIDs,
             memberContextStore: memberContextStore,
-            unifiedFilePreview: $unifiedFilePreview,
             errorCardBodyText: errorCardBodyText,
             onRetry: onRetry,
             onSaveKnowledgeCard: onSaveKnowledgeCard,

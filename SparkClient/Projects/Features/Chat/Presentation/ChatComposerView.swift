@@ -16,7 +16,8 @@ struct ChatComposerView: View {
 
     @State private var inputHeight: CGFloat = 24
     @State private var showFileImporter = false
-    @State private var unifiedFilePreview: FilePreviewInput?
+    @State private var showUnifiedFilePreview = false
+    @State private var unifiedFilePreviewStartIndex = 0
 
     private var composerDraft: ChatComposerDraft {
         stateStore.composerDraft(for: threadID)
@@ -105,7 +106,11 @@ struct ChatComposerView: View {
                 }
             }
         }
-        .unifiedFilePreview(selection: $unifiedFilePreview)
+        .unifiedFilePreview(
+            isPresented: $showUnifiedFilePreview,
+            inputs: composerDraft.attachments.map(\.previewInput),
+            startIndex: unifiedFilePreviewStartIndex
+        )
     }
 
     private var signalComposerContent: some View {
@@ -217,8 +222,9 @@ struct ChatComposerView: View {
                         isSelected: composerDraft.previewSelection == attachment.id,
                         onTap: {
                             stateStore.setPreviewSelection(attachment.id, for: threadID)
-                            if let input = Self.makeComposerPreviewInput(attachment) {
-                                unifiedFilePreview = input
+                            if let index = composerDraft.attachments.firstIndex(where: { $0.id == attachment.id }) {
+                                unifiedFilePreviewStartIndex = index
+                                showUnifiedFilePreview = true
                             }
                         },
                         onRemove: {
@@ -270,27 +276,6 @@ struct ChatComposerView: View {
             get: { composerDraft.isShowingCamera },
             set: { stateStore.setCameraPresented($0, for: threadID) }
         )
-    }
-
-    private static func makeComposerPreviewInput(_ attachment: ChatComposerAttachmentPreview) -> FilePreviewInput? {
-        let ext = (attachment.displayName as NSString).pathExtension
-        let suffix = ext.isEmpty ? (attachment.isImage ? "jpg" : "bin") : ext
-        let fileName = attachment.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "chat-attachment.\(suffix)"
-            : attachment.displayName
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("chat-composer-\(attachment.id.uuidString).\(suffix)")
-        do {
-            try attachment.data.write(to: tmp, options: [.atomic])
-            return FilePreviewInput(
-                fileURL: tmp,
-                displayName: fileName,
-                mimeType: attachment.mimeType,
-                utTypeIdentifier: attachment.utTypeIdentifier
-            )
-        } catch {
-            return nil
-        }
     }
 
 }

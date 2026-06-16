@@ -63,6 +63,34 @@ struct ChatComposerAttachmentPreview: Identifiable, Equatable, Sendable {
         }
         return nil
     }
+
+    var previewInput: FilePreviewInput {
+        let ext = (displayName as NSString).pathExtension
+        let suffix = ext.isEmpty ? (isImage ? "jpg" : "bin") : ext
+        let fileName = displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "chat-attachment.\(suffix)"
+            : displayName
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("chat-composer-\(id.uuidString).\(suffix)")
+        do {
+            try data.write(to: tmp, options: [.atomic])
+            return FilePreviewInput(
+                id: id,
+                fileURL: tmp,
+                displayName: fileName,
+                mimeType: mimeType,
+                utTypeIdentifier: utTypeIdentifier
+            )
+        } catch {
+            return FilePreviewInput(
+                id: id,
+                fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("chat-attachment-missing-\(id.uuidString)"),
+                displayName: fileName,
+                mimeType: mimeType,
+                utTypeIdentifier: utTypeIdentifier
+            )
+        }
+    }
 }
 
 enum ChatComposerAttachmentPhase: String, Equatable, Sendable {

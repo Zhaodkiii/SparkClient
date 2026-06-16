@@ -17,7 +17,6 @@ struct ChatRenderContext {
     
     // MARK: - 全局依赖
     let memberContextStore: MemberContextStore             // 成员上下文数据仓库
-    let unifiedFilePreview: Binding<FilePreviewInput?>     // 统一文件预览（双向绑定）
     
     // MARK: - 展示文本
     let errorCardBodyText: String                          // 错误卡片默认提示文本
@@ -61,7 +60,6 @@ extension ChatRenderContext {
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             savingNutritionCardIDs: savingNutritionCardIDs,
             memberContextStore: memberContextStore,
-            unifiedFilePreview: unifiedFilePreview,
             errorCardBodyText: errorCardBodyText,
             onRetry: onRetry,
             onSaveKnowledgeCard: onSaveKnowledgeCard,

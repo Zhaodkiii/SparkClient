@@ -4,22 +4,44 @@ import SwiftUI
 /// 为 SwiftUI View 扩展统一文件预览弹窗功能
 extension View {
     
-    /// 统一文件预览的便捷弹窗方法（封装 sheet 弹窗）
+    /// 统一文件预览的数组版便捷弹窗方法（封装 sheet 弹窗）
     /// - Parameters:
-    ///   - selection: 绑定的文件预览数据源（为 nil 时关闭弹窗，有值时弹出）
+    ///   - isPresented: 控制弹窗显示/隐藏的绑定
+    ///   - inputs: 预览文件数组
+    ///   - startIndex: 列表中的起始预览位置，默认从第一张开始
     ///   - onDismiss: 弹窗关闭时的可选回调
     /// - Returns: 包装后的 View
     func unifiedFilePreview(
-        selection: Binding<FilePreviewInput?>,
+        isPresented: Binding<Bool>,
+        inputs: [FilePreviewInput],
+        startIndex: Int = 0,
         onDismiss: (() -> Void)? = nil
     ) -> some View {
-        // 系统弹窗：根据绑定的文件数据自动显示/隐藏
-        sheet(item: selection, onDismiss: onDismiss) { input in
-            // 展示统一文件预览页面
-            UnifiedFilePreview(input: input) {
-                // 关闭回调：清空绑定数据，自动收起弹窗
-                selection.wrappedValue = nil
+        sheet(isPresented: isPresented, onDismiss: onDismiss) {
+            UnifiedFilePreview(inputs: inputs, startIndex: startIndex) {
+                isPresented.wrappedValue = false
             }
         }
+    }
+
+    /// 统一文件预览的本地文件数组版便捷弹窗方法。
+    /// - Parameters:
+    ///   - isPresented: 控制弹窗显示/隐藏的绑定
+    ///   - files: 本地待预览文件数组
+    ///   - startIndex: 列表中的起始预览位置，默认从第一张开始
+    ///   - onDismiss: 弹窗关闭时的可选回调
+    /// - Returns: 包装后的 View
+    func unifiedFilePreview(
+        isPresented: Binding<Bool>,
+        files: [MedicalUploadLocalFile],
+        startIndex: Int = 0,
+        onDismiss: (() -> Void)? = nil
+    ) -> some View {
+        unifiedFilePreview(
+            isPresented: isPresented,
+            inputs: files.map(\.previewInput),
+            startIndex: startIndex,
+            onDismiss: onDismiss
+        )
     }
 }

@@ -358,6 +358,7 @@ struct HealthExamAttachmentsSectionView: View {
     let source: HealthExamResultAttachmentSource
 
     @State private var selectedPreview: FilePreviewInput?
+    @State private var previewIndex: Int = 0
 
     var body: some View {
         MedicalDocumentResultSectionCard(
@@ -379,9 +380,10 @@ struct HealthExamAttachmentsSectionView: View {
                 switch source {
                 case .local(let attachments):
                     VStack(spacing: 8) {
-                        ForEach(attachments) { item in
+                        ForEach(Array(attachments.enumerated()), id: \.element.id) { index, item in
                             Button {
                                 selectedPreview = item.previewInput
+                                previewIndex = index
                             } label: {
                                 row(item)
                             }
@@ -396,7 +398,25 @@ struct HealthExamAttachmentsSectionView: View {
                 }
             }
         }
-        .unifiedFilePreview(selection: $selectedPreview)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { selectedPreview != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        selectedPreview = nil
+                    }
+                }
+            ),
+            inputs: {
+                switch source {
+                case .local(let attachments):
+                    return attachments.map(\.previewInput)
+                case .remote:
+                    return []
+                }
+            }(),
+            startIndex: previewIndex
+        )
     }
 
     private func row(_ item: MedicalDocumentLocalAttachmentItem) -> some View {

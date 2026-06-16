@@ -4,13 +4,23 @@ import UIKit
 /// Reusable file preview container for feature screens.
 /// It handles preview routing only and does not perform upload/download business logic.
 struct UnifiedFilePreview: View {
-    let input: FilePreviewInput
+    let inputs: [FilePreviewInput]
+    let startIndex: Int
     var onClose: (() -> Void)?
+
+    init(
+        inputs: [FilePreviewInput],
+        startIndex: Int = 0,
+        onClose: (() -> Void)? = nil
+    ) {
+        self.inputs = inputs
+        self.startIndex = startIndex
+        self.onClose = onClose
+    }
 
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
             content
-                .navigationTitle(input.resolvedDisplayName)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -24,20 +34,29 @@ struct UnifiedFilePreview: View {
 
     @ViewBuilder
     private var content: some View {
-        if input.isLocalFileAvailable == false {
+        if let currentInput, currentInput.isLocalFileAvailable == false {
             fallbackView(
                 systemImage: "exclamationmark.triangle",
                 title: "Preview unavailable",
                 message: "The selected file is missing or cannot be accessed."
             )
-        } else if input.isImage {
-//            imagePreview(for: input.fileURL)
-            QuickLookPreviewBridge(inputs: [input], startIndex: 0, onDismiss: onClose)
+        } else if currentInput != nil {
+            QuickLookPreviewBridge(inputs: inputs, startIndex: startIndex, onDismiss: onClose)
                 .ignoresSafeArea()
         } else {
-            QuickLookPreviewBridge(inputs: [input], startIndex: 0, onDismiss: onClose)
-                .ignoresSafeArea()
+            fallbackView(
+                systemImage: "doc",
+                title: "Preview unavailable",
+                message: "No file was provided for preview."
+            )
         }
+    }
+
+    private var currentInput: FilePreviewInput? {
+        if inputs.indices.contains(startIndex) {
+            return inputs[startIndex]
+        }
+        return inputs.first
     }
 
     @ViewBuilder

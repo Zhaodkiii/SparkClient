@@ -343,7 +343,7 @@ struct MedicationsListPage: View {
     @ViewBuilder
     private func medicationPlanSheetContent(for destination: MedicationPlanSheetDestination) -> some View {
         if let memberID {
-            MedicationPlanFormView(
+            MedicationPlanStepperView(
                 mode: destination.formMode,
                 memberID: memberID,
                 medicineBoxes: medicineBoxes,
@@ -351,7 +351,9 @@ struct MedicationsListPage: View {
                 fileTransferService: fileTransferService,
                 notificationClient: notificationClient,
                 onMedicineBoxSaved: upsertMedicineBox,
-                onServerSaved: upsertMedicationPlanWithoutReminderPrompts
+                onServerSaved: upsertMedicationPlanWithoutReminderPrompts,
+                homeDependencies: homeDependencies,
+                memberContextStore: memberContextStore
             )
         } else {
             // 未选择成员提示文案
@@ -746,7 +748,7 @@ private enum MedicationPlanSheetDestination: Identifiable {
         }
     }
 
-    var formMode: MedicationPlanFormView.Mode {
+    var formMode: MedicationPlanStepperView.Mode {
         switch self {
         case .create:
             return .create

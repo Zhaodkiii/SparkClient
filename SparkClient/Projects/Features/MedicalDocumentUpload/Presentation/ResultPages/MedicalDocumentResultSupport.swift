@@ -396,6 +396,7 @@ struct MedicalDocumentUnlinkedAttachmentsSectionView: View {
     var tintColor: Color = Color(uiColor: .systemTeal)
 
     @State private var selectedPreview: FilePreviewInput?
+    @State private var previewIndex: Int = 0
 
     var body: some View {
         if attachments.isEmpty {
@@ -413,9 +414,10 @@ struct MedicalDocumentUnlinkedAttachmentsSectionView: View {
                 )
             ) {
                 VStack(spacing: 8) {
-                    ForEach(attachments) { item in
+                    ForEach(Array(attachments.enumerated()), id: \.element.id) { index, item in
                         Button {
                             selectedPreview = item.previewInput
+                            previewIndex = index
                         } label: {
                             row(item)
                         }
@@ -423,7 +425,18 @@ struct MedicalDocumentUnlinkedAttachmentsSectionView: View {
                     }
                 }
             }
-            .unifiedFilePreview(selection: $selectedPreview)
+            .unifiedFilePreview(
+                isPresented: Binding(
+                    get: { selectedPreview != nil },
+                    set: { isPresented in
+                        if isPresented == false {
+                            selectedPreview = nil
+                        }
+                    }
+                ),
+                inputs: attachments.map(\.previewInput),
+                startIndex: previewIndex
+            )
         }
     }
 
@@ -472,6 +485,7 @@ struct MedicalDocumentAttachmentAssociationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedIDSet: Set<UUID>
     @State private var selectedPreview: FilePreviewInput?
+    @State private var previewIndex: Int = 0
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
 
@@ -499,8 +513,13 @@ struct MedicalDocumentAttachmentAssociationSheet: View {
                         .padding(16)
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(localAttachments) { item in
+                        ForEach(Array(localAttachments.enumerated()), id: \.element.id) { index, item in
                             attachmentCard(item)
+                                .onAppear {
+                                    if selectedIDSet.contains(item.id) && previewIndex == 0 {
+                                        previewIndex = index
+                                    }
+                                }
                         }
                     }
                     .padding(16)
@@ -525,7 +544,18 @@ struct MedicalDocumentAttachmentAssociationSheet: View {
             }
         }
         .navigationViewStyle(.stack)
-        .unifiedFilePreview(selection: $selectedPreview)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { selectedPreview != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        selectedPreview = nil
+                    }
+                }
+            ),
+            inputs: localAttachments.map(\.previewInput),
+            startIndex: previewIndex
+        )
     }
 
     private func attachmentCard(_ item: MedicalDocumentLocalAttachmentItem) -> some View {
@@ -556,6 +586,9 @@ struct MedicalDocumentAttachmentAssociationSheet: View {
 
                 Button {
                     selectedPreview = item.previewInput
+                    if let index = localAttachments.firstIndex(where: { $0.id == item.id }) {
+                        previewIndex = index
+                    }
                 } label: {
                     Image(systemName: "eye")
                         .font(.caption)

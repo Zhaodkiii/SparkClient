@@ -62,7 +62,17 @@ struct MedicalAttachmentListView: View {
                 .disabled(downloadingIDs.contains(attachment.id))
             }
         }
-        .unifiedFilePreview(selection: $previewInput)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { previewInput != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        previewInput = nil
+                    }
+                }
+            ),
+            inputs: previewInput.map { [$0] } ?? []
+        )
     }
 
     private func attachmentRow(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile) -> some View {
@@ -224,7 +234,7 @@ struct MedicalAttachmentGridPreview: View {
     let fileTransferService: FileTransferService
     var logger: Logger = ConsoleLogger()
 
-    @State private var previewInput: FilePreviewInput?
+    @State private var selectedAttachmentID: Int?
     @State private var downloadingIDs: Set<Int> = []
     /// 缓存已下载完成的文件本地URL，用于网格展示缩略图
     @State private var cachedFileURLs: [Int: URL] = [:]
@@ -246,13 +256,50 @@ struct MedicalAttachmentGridPreview: View {
                     .disabled(downloadingIDs.contains(attachment.id))
             }
         }
-        .unifiedFilePreview(selection: $previewInput)
+        .unifiedFilePreview(
+            isPresented: Binding(
+                get: { selectedAttachmentID != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        selectedAttachmentID = nil
+                    }
+                }
+            ),
+            inputs: previewInputs,
+            startIndex: selectedPreviewIndex
+        )
         /// 页面出现时 自动下载所有附件
         .onAppear {
             Task {
                 await downloadAllAttachmentsAutomatically()
             }
         }
+    }
+}
+
+private extension MedicalAttachmentGridPreview {
+    var previewInputs: [FilePreviewInput] {
+        attachments.compactMap { attachment in
+            guard let localURL = cachedFileURLs[attachment.id] else { return nil }
+            return FilePreviewInput(
+                fileURL: localURL,
+                displayName: attachment.displayName,
+                mimeType: attachment.mimeType
+            )
+        }
+    }
+
+    var selectedPreviewIndex: Int {
+        guard let selectedAttachmentID else { return 0 }
+        var index = 0
+        for attachment in attachments {
+            guard cachedFileURLs[attachment.id] != nil else { continue }
+            if attachment.id == selectedAttachmentID {
+                return index
+            }
+            index += 1
+        }
+        return 0
     }
 }
 
@@ -384,24 +431,16 @@ extension MedicalAttachmentGridPreview {
     @MainActor
     private func openAttachment(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile) async {
         // 如果已经下载 → 直接打开
-        if let localURL = cachedFileURLs[attachment.id] {
-            previewInput = FilePreviewInput(
-                fileURL: localURL,
-                displayName: attachment.displayName,
-                mimeType: attachment.mimeType
-            )
+        if cachedFileURLs[attachment.id] != nil {
+            selectedAttachmentID = attachment.id
             return
         }
 
         // 未下载 → 先下载再打开
         await downloadSingleAttachmentIfNeeded(attachment)
 
-        if let localURL = cachedFileURLs[attachment.id] {
-            previewInput = FilePreviewInput(
-                fileURL: localURL,
-                displayName: attachment.displayName,
-                mimeType: attachment.mimeType
-            )
+        if cachedFileURLs[attachment.id] != nil {
+            selectedAttachmentID = attachment.id
         }
     }
 }
