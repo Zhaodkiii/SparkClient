@@ -27,7 +27,7 @@ final class ChatAskReportSheetViewModel: ObservableObject {
     let memberID: Int
     let maxPreviewCount: Int
 
-    private let fetchCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
+    private let memberCompleteDataFetcher: any MemberCompleteDataFetching
     private let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     private var syncedPendingKeysOrdered: [String] = []
 
@@ -36,12 +36,12 @@ final class ChatAskReportSheetViewModel: ObservableObject {
         pendingRefs: [HealthResourceRef],
         maxPreviewCount: Int = HealthResourceSendValidator.maxRefs,
         initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
-        fetchCompleteData: @escaping (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
+        memberCompleteDataFetcher: any MemberCompleteDataFetching
     ) {
         self.memberID = memberID
         self.maxPreviewCount = maxPreviewCount
         self.initialCompleteData = initialCompleteData?.memberId == memberID ? initialCompleteData : nil
-        self.fetchCompleteData = fetchCompleteData
+        self.memberCompleteDataFetcher = memberCompleteDataFetcher
         let keys = Self.orderedSelectionKeys(from: pendingRefs)
         orderedSelectionKeys = keys
         syncedPendingKeysOrdered = keys
@@ -142,7 +142,7 @@ final class ChatAskReportSheetViewModel: ObservableObject {
     private func refreshRemote() async {
         loadState = .loading
         do {
-            let data = try await fetchCompleteData(memberID)
+            let data = try await memberCompleteDataFetcher.fetchMemberCompleteData(memberID: memberID)
             applyCompleteData(data)
             loadState = .loaded
         } catch {

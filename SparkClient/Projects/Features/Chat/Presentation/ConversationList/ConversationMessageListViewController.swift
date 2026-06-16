@@ -56,9 +56,8 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     var actionState: ChatMessageActionState?
     
     // MARK: - 回调
-    var onLoadMore: (() -> Void)? // 上拉加载更多
-    var onRefresh: (() async -> Void)? // 下拉刷新
-    var onCaptureOpenFiles: (() -> Void)? // 打开文件回调
+    var onCommand: ((ConversationListCommand) -> Void)?
+    weak var refreshHandler: (any ConversationMessageListRefreshHandling)? // 下拉刷新
 
     // MARK: - 刷新控件
     private var refreshControl: UIRefreshControl?
@@ -144,12 +143,12 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
 
     // MARK: - 下拉刷新
     @objc private func handleRefresh() {
-        guard let onRefresh else {
+        guard let refreshHandler else {
             refreshControl?.endRefreshing()
             return
         }
         Task {
-            await onRefresh()
+            await refreshHandler.refreshMessageList()
             await MainActor.run {
                 self.refreshControl?.endRefreshing()
             }
@@ -370,7 +369,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         // 滑到“加载更多”行 → 触发加载
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
         if item == ConversationListLayoutConstants.loadMoreRowUUID {
-            onLoadMore?()
+            onCommand?(.loadMore)
         }
     }
 
@@ -456,7 +455,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     taskManager: taskManager,
                     logger: logger,
                     onCaptureOpenFiles: { [weak self] in
-                        self?.onCaptureOpenFiles?()
+                        self?.onCommand?(.captureOpenFiles)
                     }
                 )
             } else {

@@ -3,7 +3,7 @@ import SwiftUI
 struct SmallTaskEditorView: View {
     let task: SmallTask?
     let nextID: Int
-    var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling()
     var promptTemplates: [PromptRepo] = []
     let onSave: (SmallTask) -> Void
 
@@ -20,7 +20,7 @@ struct SmallTaskEditorView: View {
     init(
         task: SmallTask?,
         nextID: Int,
-        promptTooling: AISettingsPromptTooling = .unavailable,
+        promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling(),
         promptTemplates: [PromptRepo] = [],
         onSave: @escaping (SmallTask) -> Void
     ) {
@@ -109,7 +109,7 @@ struct SmallTaskEditorView: View {
                 text: $prompt,
                 isPresented: $showTextInputDrawer,
                 onTranslate: {
-                    try await promptTooling.translate(prompt)
+                    try await promptTooling.translate(text: prompt)
                 },
                 onOCRImage: { image in
                     try await promptTooling.ocrImage(image)

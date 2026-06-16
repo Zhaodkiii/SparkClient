@@ -11,7 +11,7 @@ struct ChatHealthResourcePreviewSheet: View {
         memberContextStore: MemberContextStore,
         medicalQueryAPI: SparkMedicalQueryAPI,
         initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
-        fetchCompleteData: ((Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData)? = nil,
+        memberCompleteDataFetcher: (any MemberCompleteDataFetching)? = nil,
         fileTransferService: FileTransferService? = nil
     ) {
         self.fileTransferService = fileTransferService
@@ -21,7 +21,7 @@ struct ChatHealthResourcePreviewSheet: View {
                 medicalQueryAPI: medicalQueryAPI,
                 memberContextStore: memberContextStore,
                 cachedCompleteData: initialCompleteData,
-                fetchCompleteData: fetchCompleteData
+                memberCompleteDataFetcher: memberCompleteDataFetcher
             )
         )
     }

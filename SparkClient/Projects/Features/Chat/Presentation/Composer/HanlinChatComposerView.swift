@@ -11,7 +11,7 @@ struct HanlinChatComposerView: View {
     let modelRows: [AIScenarioRemoteModelRow]
     let smallTasks: [SmallTask]
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    let fetchMemberCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
+    let memberCompleteDataFetcher: any MemberCompleteDataFetching
     let medicalQueryAPI: SparkMedicalQueryAPI
     let fileTransferService: FileTransferService
     let onSend: () -> Void
@@ -56,7 +56,7 @@ struct HanlinChatComposerView: View {
                 boundMemberID: boundMemberID,
                 medicalQueryAPI: medicalQueryAPI,
                 initialCompleteData: initialCompleteData,
-                fetchMemberCompleteData: fetchMemberCompleteData,
+                memberCompleteDataFetcher: memberCompleteDataFetcher,
                 fileTransferService: fileTransferService,
                 onSend: onSend,
                 onCancel: onCancel,

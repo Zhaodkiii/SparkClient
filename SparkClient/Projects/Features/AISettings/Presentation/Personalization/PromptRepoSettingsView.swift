@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PromptRepoSettingsView: View {
     @Binding var promptRepo: [PromptRepo]
-    var onPersist: () async -> Void = {}
+    var onPersistRequested: () -> Void = {}
 
     @State private var searchText = ""
     @State private var editingTitleID: UUID?
@@ -255,9 +255,7 @@ struct PromptRepoSettingsView: View {
     }
 
     private func persistPromptRepo() {
-        Task {
-            await onPersist()
-        }
+        onPersistRequested()
     }
 
     private func prompt(for id: UUID) -> PromptRepo? {

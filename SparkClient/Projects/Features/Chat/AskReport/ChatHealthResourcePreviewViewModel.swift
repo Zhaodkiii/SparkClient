@@ -17,20 +17,20 @@ final class ChatHealthResourcePreviewViewModel: ObservableObject {
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let memberContextStore: MemberContextStore
     private let cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    private let fetchCompleteData: ((Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData)?
+    private let memberCompleteDataFetcher: (any MemberCompleteDataFetching)?
 
     init(
         ref: HealthResourceRef,
         medicalQueryAPI: SparkMedicalQueryAPI,
         memberContextStore: MemberContextStore,
         cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
-        fetchCompleteData: ((Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData)? = nil
+        memberCompleteDataFetcher: (any MemberCompleteDataFetching)? = nil
     ) {
         self.ref = ref
         self.medicalQueryAPI = medicalQueryAPI
         self.memberContextStore = memberContextStore
         self.cachedCompleteData = cachedCompleteData?.memberId == ref.memberID ? cachedCompleteData : nil
-        self.fetchCompleteData = fetchCompleteData
+        self.memberCompleteDataFetcher = memberCompleteDataFetcher
     }
 
     var memberDisplayName: String? {
@@ -50,7 +50,7 @@ final class ChatHealthResourcePreviewViewModel: ObservableObject {
             medicalQueryAPI: medicalQueryAPI,
             memberName: memberDisplayName,
             cachedCompleteData: cachedCompleteData,
-            fetchCompleteData: fetchCompleteData
+            memberCompleteDataFetcher: memberCompleteDataFetcher
         ) {
             loadState = .loaded(content)
             expandedDetailGroupIDs = Set(content.detailGroups.map(\.id))

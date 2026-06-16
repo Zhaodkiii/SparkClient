@@ -6,7 +6,7 @@ struct ModelsSettingsAgentSheet: View {
     var editingAgent: AllModels?
     var scenarioBindings: [AIScenarioModelBinding] = []
     var smallTasks: [SmallTask] = []
-    var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling()
     var promptTemplates: [PromptRepo] = []
     let onCreate: (String, String, String, String, [String], [String], [String], [AIScenarioModelBinding]) -> Void
     let onUpdate: ((UUID, String, String, String, String, [String], [String], [String], [AIScenarioModelBinding]) -> Void)?
@@ -185,10 +185,10 @@ struct ModelsSettingsAgentSheet: View {
                 text: $systemPrompt,
                 isPresented: $showTextInputDrawer,
                 onAutoFill: {
-                    try await promptTooling.autoFillAgentPrompt(displayName, selectedBaseModelName)
+                    try await promptTooling.autoFillAgentPrompt(displayName: displayName, baseModelName: selectedBaseModelName)
                 },
                 onTranslate: {
-                    try await promptTooling.translate(systemPrompt)
+                    try await promptTooling.translate(text: systemPrompt)
                 },
                 onOCRImage: { image in
                     try await promptTooling.ocrImage(image)
@@ -201,7 +201,7 @@ struct ModelsSettingsAgentSheet: View {
                 text: $systemPrompt,
                 isPresented: $showVoiceInput,
                 onPolish: {
-                    try await promptTooling.autoFillAgentPrompt(displayName, selectedBaseModelName)
+                    try await promptTooling.autoFillAgentPrompt(displayName: displayName, baseModelName: selectedBaseModelName)
                 }
             )
                 .sparkInputPresentationChromeIfAvailable()
@@ -243,7 +243,7 @@ struct ModelsSettingsAgentSheet: View {
         autoFillInProgress = true
         Task {
             do {
-                let raw = try await promptTooling.autoFillAgentPrompt(displayName, selectedBaseModelName)
+                let raw = try await promptTooling.autoFillAgentPrompt(displayName: displayName, baseModelName: selectedBaseModelName)
                 let result = raw.trimmingCharacters(in: .whitespacesAndNewlines)
                 if result.isEmpty == false {
                     systemPrompt = result

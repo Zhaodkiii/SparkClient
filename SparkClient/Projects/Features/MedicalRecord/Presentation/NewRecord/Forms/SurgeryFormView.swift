@@ -11,8 +11,8 @@ struct SurgeryFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (SurgeryRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (SurgeryRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
 
     @State private var procedureName = ""
     @State private var procedureCode = ""
@@ -29,7 +29,7 @@ struct SurgeryFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: (@MainActor (SurgeryRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (SurgeryRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -132,7 +132,7 @@ struct SurgeryFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     formLog.info("SurgeryFormView: create save succeeded", module: formLogModule)
                     dismiss()
                 } catch {
@@ -150,7 +150,7 @@ struct SurgeryFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     formLog.info("SurgeryFormView: server save succeeded", module: formLogModule)
                     dismiss()
                 } catch {

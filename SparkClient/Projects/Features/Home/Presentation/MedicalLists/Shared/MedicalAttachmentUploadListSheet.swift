@@ -342,6 +342,8 @@ struct MedicalAttachmentUploadListSheet: View {
     @State private var showCameraUnavailableAlert = false
     @State private var filePreviewSelection: FilePreviewInput?
     @State private var fileLimitMessage: String?
+    @State private var pendingConfirmedFiles: [MedicalUploadLocalFile]?
+    @State private var hasScheduledDeferredConfirm = false
 
     private let logger: Logger = ConsoleLogger()
 
@@ -488,6 +490,9 @@ struct MedicalAttachmentUploadListSheet: View {
             Text(fileLimitMessage ?? "")
         }
         .unifiedFilePreview(selection: $filePreviewSelection)
+        .onDisappear {
+            triggerDeferredConfirmIfNeeded()
+        }
     }
 
     private var header: some View {
@@ -597,7 +602,8 @@ struct MedicalAttachmentUploadListSheet: View {
             Spacer()
 
             Button {
-                onConfirm(localFiles)
+                pendingConfirmedFiles = localFiles
+                hasScheduledDeferredConfirm = false
                 dismiss()
             } label: {
                 Label(L10n.text("medical.upload.medicine_box.sheet.start_recognition"), systemImage: "wand.and.stars")
@@ -747,6 +753,21 @@ struct MedicalAttachmentUploadListSheet: View {
             format: L10n.text("medical.upload.medicine_box.sheet.file_limit_message"),
             maxFileCount
         )
+    }
+
+    private func triggerDeferredConfirmIfNeeded() {
+        guard hasScheduledDeferredConfirm == false,
+              let files = pendingConfirmedFiles,
+              files.isEmpty == false else {
+            return
+        }
+
+        hasScheduledDeferredConfirm = true
+        pendingConfirmedFiles = nil
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            onConfirm(files)
+        }
     }
 }
 

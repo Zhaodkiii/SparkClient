@@ -560,7 +560,7 @@ private struct ExaminationReportDetailHostPage: View {
                 CompatibleNavigationContainer(legacyStackStyle: true) {
                     ExamReportFormView(
                         mode: .serverEdit(existing: existingDraft),
-                        onServerSubmit: { draft in
+                        onServerSubmit: MainActorThrowingAction { draft in
                             let mergedReport = report.applyingRecognitionDraft(draft)
                             try await mutationService.updateReport(report: mergedReport)
                         }

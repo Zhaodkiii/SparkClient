@@ -13,7 +13,7 @@ enum ChatHealthResourcePreviewLoader {
         medicalQueryAPI: SparkMedicalQueryAPI,
         memberName: String?,
         cachedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
-        fetchCompleteData: ((Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData)?
+        memberCompleteDataFetcher: (any MemberCompleteDataFetching)?
     ) async -> ChatHealthResourcePreviewContent? {
         guard let type = ref.typedResource else { return nil }
         let localCache = cachedCompleteData?.memberId == ref.memberID ? cachedCompleteData : nil
@@ -34,7 +34,7 @@ enum ChatHealthResourcePreviewLoader {
 
         if let refreshedCache = await refreshCompleteData(
             memberID: ref.memberID,
-            fetchCompleteData: fetchCompleteData
+            memberCompleteDataFetcher: memberCompleteDataFetcher
         ),
            let content = await loadFromCompleteData(ref: ref, type: type, memberName: memberName, data: refreshedCache),
            content.hasClinicalBody {
@@ -315,10 +315,10 @@ enum ChatHealthResourcePreviewLoader {
 
     private static func refreshCompleteData(
         memberID: Int,
-        fetchCompleteData: ((Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData)?
+        memberCompleteDataFetcher: (any MemberCompleteDataFetching)?
     ) async -> SparkMedicalSyncAPI.RemoteMemberCompleteData? {
-        guard let fetchCompleteData else { return nil }
-        return try? await fetchCompleteData(memberID)
+        guard let memberCompleteDataFetcher else { return nil }
+        return try? await memberCompleteDataFetcher.fetchMemberCompleteData(memberID: memberID)
     }
 
     // MARK: - Builders

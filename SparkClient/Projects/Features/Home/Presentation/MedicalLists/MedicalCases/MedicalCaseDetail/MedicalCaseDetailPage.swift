@@ -284,23 +284,23 @@ struct MedicalCaseDetailPage: View {
         let medicalCaseID = currentItem.id
         switch kind {
         case .symptom:
-            SymptomFormView(mode: .create, onCreateSubmit: { draft in
+            SymptomFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
                 try await service.submitSymptomCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
             })
         case .examination:
-            ExamReportFormView(mode: .create, onCreateSubmit: { draft in
+            ExamReportFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
                 try await service.submitMedicalReportCreate(memberID: memberID, draft: draft, medicalCaseID: medicalCaseID)
             })
         case .visit:
-            VisitFormView(mode: .create, onCreateSubmit: { draft in
+            VisitFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
                 try await service.submitVisitCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
             })
         case .followUp:
-            FollowUpFormView(mode: .create, onCreateSubmit: { draft in
+            FollowUpFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
                 try await service.submitFollowUpCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
             })
         case .surgery:
-            SurgeryFormView(mode: .create, onCreateSubmit: { draft in
+            SurgeryFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
                 try await service.submitSurgeryCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
             })
         }

@@ -3,7 +3,7 @@ import SwiftUI
 struct ChatThreadSettingsSheet: View {
     let modelOptions: [AIScenarioRemoteModelRow]
     let currentModelSupportsMultimodal: Bool
-    let onUpdate: @Sendable (ChatThreadGenerationSettings) async -> Void
+    let onUpdateRequested: @Sendable (ChatThreadGenerationSettings) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var settings: ChatThreadGenerationSettings
@@ -12,11 +12,11 @@ struct ChatThreadSettingsSheet: View {
         modelOptions: [AIScenarioRemoteModelRow],
         initialSettings: ChatThreadGenerationSettings,
         currentModelSupportsMultimodal: Bool,
-        onUpdate: @escaping @Sendable (ChatThreadGenerationSettings) async -> Void
+        onUpdateRequested: @escaping @Sendable (ChatThreadGenerationSettings) -> Void
     ) {
         self.modelOptions = modelOptions
         self.currentModelSupportsMultimodal = currentModelSupportsMultimodal
-        self.onUpdate = onUpdate
+        self.onUpdateRequested = onUpdateRequested
         _settings = State(initialValue: initialSettings)
     }
 
@@ -81,10 +81,7 @@ struct ChatThreadSettingsSheet: View {
             }
         }
         .onChange(of: settings) { value in
-            let snapshot = value
-            Task { @MainActor in
-                await onUpdate(snapshot)
-            }
+            onUpdateRequested(value)
         }
     }
 

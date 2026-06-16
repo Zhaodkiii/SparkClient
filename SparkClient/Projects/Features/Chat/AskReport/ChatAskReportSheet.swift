@@ -16,7 +16,7 @@ struct ChatAskReportSheet: View {
         boundMemberID: Int,
         pendingRefs: [HealthResourceRef],
         initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
-        fetchCompleteData: @escaping (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData,
+        memberCompleteDataFetcher: any MemberCompleteDataFetching,
         onAppendToPreview: @escaping ([HealthResourceRef]) -> Void,
         onSetMemberBinding: @escaping (Int?) -> Void,
         onMaxRefsReached: @escaping () -> Void
@@ -32,7 +32,7 @@ struct ChatAskReportSheet: View {
                 memberID: boundMemberID,
                 pendingRefs: pendingRefs,
                 initialCompleteData: initialCompleteData,
-                fetchCompleteData: fetchCompleteData
+                memberCompleteDataFetcher: memberCompleteDataFetcher
             )
         )
     }

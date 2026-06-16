@@ -11,7 +11,7 @@ struct HanlinChatInputView: View {
     let boundMemberID: Int?
     let medicalQueryAPI: SparkMedicalQueryAPI
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    let fetchMemberCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
+    let memberCompleteDataFetcher: any MemberCompleteDataFetching
     let fileTransferService: FileTransferService
     let onSend: () -> Void
     let onCancel: () -> Void
@@ -119,7 +119,7 @@ struct HanlinChatInputView: View {
                     memberContextStore: memberContextStore,
                     medicalQueryAPI: medicalQueryAPI,
                     initialCompleteData: initialCompleteData,
-                    fetchCompleteData: fetchMemberCompleteData,
+                    memberCompleteDataFetcher: memberCompleteDataFetcher,
                     fileTransferService: fileTransferService
                 )
             }

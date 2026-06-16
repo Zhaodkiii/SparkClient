@@ -1821,6 +1821,8 @@ final class ChatDetailViewModel: ObservableObject {
     }
 }
 
+extension ChatDetailViewModel: MemberCompleteDataFetching {}
+
 extension ChatMessage {
     fileprivate func replacingBlock(_ block: ChatMessageBlock) -> ChatMessage? {
         guard let index = blocks.firstIndex(where: { $0.id == block.id }) else { return nil }

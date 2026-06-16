@@ -11,8 +11,8 @@ struct VisitFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (VisitRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (VisitRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<VisitRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<VisitRecognitionDraft>?
 
     @State private var visitType = ""
     @State private var visitedAt = ""
@@ -26,7 +26,7 @@ struct VisitFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: (@MainActor (VisitRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (VisitRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<VisitRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<VisitRecognitionDraft>? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -123,7 +123,7 @@ struct VisitFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     formLog.info("VisitFormView: create save succeeded", module: formLogModule)
                     dismiss()
                 } catch {
@@ -141,7 +141,7 @@ struct VisitFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     formLog.info("VisitFormView: server save succeeded", module: formLogModule)
                     dismiss()
                 } catch {

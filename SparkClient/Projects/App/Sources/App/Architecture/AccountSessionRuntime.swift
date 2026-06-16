@@ -140,3 +140,13 @@ final class AccountSessionRuntime {
         await activateGuest()
     }
 }
+
+extension AccountSessionRuntime: LoginAccountSwitchHandling {
+    func beginLoginAccountSwitch(suspendedAccountID: Int64?) async {
+        await beginAccountSwitch(suspendedAccountID: suspendedAccountID)
+    }
+
+    func endLoginAccountSwitch(commit: Bool, currentSignedInAccountID: Int64?) async {
+        await endAccountSwitch(commit: commit, currentSignedInAccountID: currentSignedInAccountID)
+    }
+}

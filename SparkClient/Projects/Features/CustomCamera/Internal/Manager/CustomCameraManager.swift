@@ -66,6 +66,7 @@ extension CustomCameraManager {
         if captureSession.isRunning, photoOutput.parent != nil {
             resumePreviewUI()
         }
+        updatePreviewLayout(in: view)
     }
 }
 
@@ -124,8 +125,10 @@ private extension CustomCameraManager {
 
         cameraLayer.session = captureSession as? AVCaptureSession
         cameraLayer.videoGravity = .resizeAspectFill
-        cameraLayer.isHidden = true
+        cameraLayer.isHidden = !usesLegacyPreviewLayer
         cameraView.layer.addSublayer(cameraLayer)
+        cameraMetalView.isHidden = usesLegacyPreviewLayer
+        updatePreviewLayout(in: cameraView)
         cameraView.alpha = 1
 
         SparkLogger.log(
@@ -140,8 +143,9 @@ private extension CustomCameraManager {
 
         cameraLayer.session = captureSession as? AVCaptureSession
         cameraLayer.videoGravity = .resizeAspectFill
-        cameraLayer.isHidden = true
+        cameraLayer.isHidden = !usesLegacyPreviewLayer
         cameraView.layer.addSublayer(cameraLayer)
+        updatePreviewLayout(in: cameraView)
     }
     func setupDeviceInputs() throws(CustomCameraError) {
         try captureSession.add(input: getCameraInput())
@@ -249,6 +253,38 @@ private extension CustomCameraManager {
         device.setLightMode(attributes.lightMode)
         device.hdrMode = attributes.hdrMode
         device.unlockForConfiguration()
+    }
+}
+
+extension CustomCameraManager {
+    func updatePreviewLayout(in view: UIView? = nil) {
+        let targetView = view ?? cameraView
+        guard let targetView else { return }
+
+        let bounds = targetView.bounds
+        guard bounds.isEmpty == false else { return }
+
+        cameraLayer.frame = bounds
+        if cameraLayer.superlayer !== targetView.layer {
+            cameraLayer.removeFromSuperlayer()
+            targetView.layer.insertSublayer(cameraLayer, at: 0)
+        }
+
+        if usesLegacyPreviewLayer {
+            cameraLayer.isHidden = false
+            cameraMetalView.isHidden = true
+        } else {
+            cameraLayer.isHidden = true
+            cameraMetalView.isHidden = false
+        }
+    }
+
+    private var usesLegacyPreviewLayer: Bool {
+        if #available(iOS 16.0, *) {
+            return false
+        } else {
+            return true
+        }
     }
 }
 

@@ -11,8 +11,8 @@ struct FollowUpFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>?
 
     @State private var plannedAt = ""
     @State private var completedAt = ""
@@ -26,7 +26,7 @@ struct FollowUpFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (FollowUpRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -119,7 +119,7 @@ struct FollowUpFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     formLog.info("FollowUpFormView: create save succeeded", module: formLogModule)
                     dismiss()
                 } catch {
@@ -137,7 +137,7 @@ struct FollowUpFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     formLog.info("FollowUpFormView: server save succeeded", module: formLogModule)
                     dismiss()
                 } catch {

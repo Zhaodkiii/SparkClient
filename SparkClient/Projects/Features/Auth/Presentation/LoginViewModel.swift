@@ -4,6 +4,14 @@ import CryptoKit
 import Foundation
 import Security
 
+/// 登录流程中的账号切换协调：用协议注入替代 async closure，避免 iOS 16 回部署时
+/// `nonisolated(nonsending)` 元数据在 ObservableObject 反射阶段崩溃。
+@MainActor
+protocol LoginAccountSwitchHandling: AnyObject {
+    func beginLoginAccountSwitch(suspendedAccountID: Int64?) async
+    func endLoginAccountSwitch(commit: Bool, currentSignedInAccountID: Int64?) async
+}
+
 @MainActor
 /// 登录场景状态管理：串联输入校验、用例调用与会话状态更新。
 final class LoginViewModel: ObservableObject {
@@ -14,8 +22,7 @@ final class LoginViewModel: ObservableObject {
     private let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     private let sessionStore: AppSessionStore
     private let notificationClient: any NotificationClient
-    private let onBeginAccountSwitch: () async -> Void
-    private let onEndAccountSwitch: (_ commit: Bool) async -> Void
+    private let accountSwitchHandler: (any LoginAccountSwitchHandling)?
     private let logger: Logger = ConsoleLogger()
     private var currentNonce: String?
 
@@ -27,26 +34,32 @@ final class LoginViewModel: ObservableObject {
         signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase,
         sessionStore: AppSessionStore,
         notificationClient: any NotificationClient,
-        onBeginAccountSwitch: @escaping () async -> Void = {},
-        onEndAccountSwitch: @escaping (_ commit: Bool) async -> Void = { _ in }
+        accountSwitchHandler: (any LoginAccountSwitchHandling)? = nil
     ) {
         self.signInWithAppleUseCase = signInWithAppleUseCase
         self.requestPhoneOTPUseCase = requestPhoneOTPUseCase
         self.signInWithPhoneOTPUseCase = signInWithPhoneOTPUseCase
         self.sessionStore = sessionStore
         self.notificationClient = notificationClient
-        self.onBeginAccountSwitch = onBeginAccountSwitch
-        self.onEndAccountSwitch = onEndAccountSwitch
+        self.accountSwitchHandler = accountSwitchHandler
     }
 
     private func prepareAccountSwitchIfNeeded() async {
-        if case .signedIn = sessionStore.state {
-            await onBeginAccountSwitch()
-        }
+        guard case .signedIn(let session) = sessionStore.state else { return }
+        await accountSwitchHandler?.beginLoginAccountSwitch(suspendedAccountID: session.accountID)
     }
 
     private func finishAccountSwitch(commit: Bool) async {
-        await onEndAccountSwitch(commit)
+        let currentAccountID: Int64? = {
+            if case .signedIn(let session) = sessionStore.state {
+                return session.accountID
+            }
+            return nil
+        }()
+        await accountSwitchHandler?.endLoginAccountSwitch(
+            commit: commit,
+            currentSignedInAccountID: currentAccountID
+        )
     }
 
     func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {

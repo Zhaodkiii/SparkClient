@@ -79,7 +79,7 @@ struct MedicalCaseTimelineEditDestination: View {
             ) {
                 ExamReportFormView(
                     mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.examinationDraft(from: report)),
-                    onServerSubmit: { draft in
+                    onServerSubmit: MainActorThrowingAction { draft in
                         try await ExaminationReportServerMutationService(resources: workflowAPI)
                             .updateReport(report: report, draft: draft)
                     }
@@ -95,7 +95,7 @@ struct MedicalCaseTimelineEditDestination: View {
             ) {
                 SymptomFormView(
                     mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.symptomDraft(from: remote)),
-                    onServerSubmit: { draft in
+                    onServerSubmit: MainActorThrowingAction { draft in
                         try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
                             .submitSymptomUpdate(memberID: memberID, existing: remote, draft: draft)
                     }
@@ -111,7 +111,7 @@ struct MedicalCaseTimelineEditDestination: View {
             ) {
                 VisitFormView(
                     mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.visitDraft(from: remote)),
-                    onServerSubmit: { draft in
+                    onServerSubmit: MainActorThrowingAction { draft in
                         try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
                             .submitVisitUpdate(memberID: memberID, existing: remote, draft: draft)
                     }
@@ -127,7 +127,7 @@ struct MedicalCaseTimelineEditDestination: View {
             ) {
                 SurgeryFormView(
                     mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.surgeryDraft(from: remote)),
-                    onServerSubmit: { draft in
+                    onServerSubmit: MainActorThrowingAction { draft in
                         try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
                             .submitSurgeryUpdate(memberID: memberID, existing: remote, draft: draft)
                     }
@@ -143,7 +143,7 @@ struct MedicalCaseTimelineEditDestination: View {
             ) {
                 FollowUpFormView(
                     mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.followUpDraft(from: remote)),
-                    onServerSubmit: { draft in
+                    onServerSubmit: MainActorThrowingAction { draft in
                         try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
                             .submitFollowUpUpdate(memberID: memberID, existing: remote, draft: draft)
                     }

@@ -129,7 +129,7 @@ struct ExaminationReportsListPage: View {
         }
         .sheet(isPresented: $isPresentingAddExamSheet) {
             CompatibleNavigationContainer(legacyStackStyle: true) {
-                ExamReportFormView(mode: .create, onCreateSubmit: { draft in
+                ExamReportFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
                     let service = MedicalRecordFormSubmissionService(workflowAPI: medicalResourceAPI)
                     let newID = try await service.submitMedicalReportCreate(memberID: memberID, draft: draft, medicalCaseID: nil)
                     let summary = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.summaryAfterCreate(
@@ -173,7 +173,9 @@ struct ExaminationReportsListPage: View {
                             notificationClient: notificationClient,
                             isLoading: { viewModel.isLoading(reportID: $0) },
                             onLoadDetails: { reportID in
-                                await viewModel.loadDetailsIfNeeded(for: reportID)
+                                Task {
+                                    await viewModel.loadDetailsIfNeeded(for: reportID)
+                                }
                             },
                             onDeleted: { deletedID in
                                 viewModel.removeReport(reportID: deletedID)
@@ -343,7 +345,7 @@ private struct ExaminationReportCategorySection: View {
     @ObservedObject var memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
     let isLoading: (Int) -> Bool
-    let onLoadDetails: (Int) async -> Void
+    let onLoadDetails: (Int) -> Void
     let onDeleted: (Int) -> Void
     let onMedicalCaseLinked: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
     let onMedicalCaseUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
@@ -398,7 +400,7 @@ private struct ExaminationReportCategorySection: View {
                         }
                     )
                     .task {
-                        await onLoadDetails(report.id)
+                        onLoadDetails(report.id)
                     }
                 }
             }

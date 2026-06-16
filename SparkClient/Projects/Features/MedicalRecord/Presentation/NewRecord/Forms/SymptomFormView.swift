@@ -11,8 +11,8 @@ struct SymptomFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (SymptomRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (SymptomRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<SymptomRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<SymptomRecognitionDraft>?
 
     @State private var name = ""
     @State private var code = ""
@@ -28,7 +28,7 @@ struct SymptomFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: (@MainActor (SymptomRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (SymptomRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<SymptomRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<SymptomRecognitionDraft>? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -129,7 +129,7 @@ struct SymptomFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     formLog.info("SymptomFormView: create save succeeded", module: formLogModule)
                     dismiss()
                 } catch {
@@ -147,7 +147,7 @@ struct SymptomFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     formLog.info("SymptomFormView: server save succeeded", module: formLogModule)
                     dismiss()
                 } catch {

@@ -33,7 +33,7 @@ struct HomeView: View {
 //                headerCard             //任务
                 medicalInfoSection          // 医疗
                 nutritionInfoSection   // 营养
-//                customCameraSection    // 相机
+                customCameraSection    // 相机
 
             }
             .padding(.horizontal, 16)
@@ -195,10 +195,10 @@ struct HomeView: View {
                 onAccept: { item in
                     viewModel.openInviteAccept(item)
                 },
-                onReject: { item in
+                onReject: MainActorAsyncAction { item in
                     await viewModel.rejectPendingInvite(item)
                 },
-                onAppearRefresh: {
+                onAppearRefresh: MainActorAsyncVoidAction {
                     await viewModel.fetchPendingInvitesIfNeeded()
                 }
             )

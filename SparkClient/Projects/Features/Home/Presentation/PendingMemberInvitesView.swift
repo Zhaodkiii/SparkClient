@@ -6,8 +6,8 @@ struct PendingMemberInvitesView: View {
     let items: [SparkMedicalMemberAPI.PendingInviteItem]
     var highlightInviteID: Int?
     let onAccept: (SparkMedicalMemberAPI.PendingInviteItem) -> Void
-    let onReject: (SparkMedicalMemberAPI.PendingInviteItem) async -> Void
-    let onAppearRefresh: (() async -> Void)?
+    let onReject: MainActorAsyncAction<SparkMedicalMemberAPI.PendingInviteItem>
+    let onAppearRefresh: MainActorAsyncVoidAction?
 
     var body: some View {
         NavigationView {
@@ -25,7 +25,7 @@ struct PendingMemberInvitesView: View {
                 }
                 .onAppear {
                     Task {
-                        await onAppearRefresh?()
+                        await onAppearRefresh?.call()
                         scrollToHighlight(proxy: proxy)
                     }
                 }
@@ -75,7 +75,7 @@ struct PendingMemberInvitesView: View {
 
                 Button(L10n.text("home.members.invite.reject"), role: .destructive) {
                     Task {
-                        await onReject(item)
+                        await onReject.call(item)
                     }
                 }
                 .buttonStyle(.bordered)

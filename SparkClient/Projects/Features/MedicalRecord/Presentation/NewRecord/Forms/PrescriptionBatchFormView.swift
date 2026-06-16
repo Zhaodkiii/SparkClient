@@ -11,8 +11,8 @@ struct PrescriptionBatchFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>?
 
     @State private var prescriberName = ""
     @State private var institutionName = ""
@@ -26,7 +26,7 @@ struct PrescriptionBatchFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: ((PrescriptionRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -121,7 +121,7 @@ struct PrescriptionBatchFormView: View {
             isSaving = true
             Task {
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     await MainActor.run {
                         formLog.info("PrescriptionBatchFormView: create save succeeded", module: formLogModule)
                         dismiss()
@@ -143,7 +143,7 @@ struct PrescriptionBatchFormView: View {
             isSaving = true
             Task {
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     await MainActor.run {
                         formLog.info("PrescriptionBatchFormView: server save succeeded", module: formLogModule)
                         dismiss()

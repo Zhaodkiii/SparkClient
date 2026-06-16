@@ -20,8 +20,8 @@ struct MedicationMultiCreateView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>?
 
     @State private var prescriberName = ""
     @State private var institutionName = ""
@@ -38,7 +38,7 @@ struct MedicationMultiCreateView: View {
     /// 创建模式为 `nil`；编辑模式保留病例关联，避免保存时丢失 `medical_case`。
     private let seedMedicalCase: Int?
 
-    init(mode: Mode, createMedicalCaseID: Int? = nil, onCreateSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)? = nil, onServerSubmit: (@MainActor (PrescriptionRecognitionDraft) async throws -> Void)? = nil) {
+    init(mode: Mode, createMedicalCaseID: Int? = nil, onCreateSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>? = nil) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
         self.onServerSubmit = onServerSubmit
@@ -187,7 +187,7 @@ struct MedicationMultiCreateView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     formLog.info("MedicationMultiCreateView: create save succeeded", module: formLogModule)
                     dismiss()
                 } catch {
@@ -205,7 +205,7 @@ struct MedicationMultiCreateView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     formLog.info("MedicationMultiCreateView: server save succeeded", module: formLogModule)
                     dismiss()
                 } catch {

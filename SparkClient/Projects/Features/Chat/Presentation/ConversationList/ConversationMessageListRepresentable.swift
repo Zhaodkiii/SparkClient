@@ -1,4 +1,34 @@
+import Combine
 import SwiftUI
+
+/// 下拉刷新：用协议注入替代 async closure，避免 iOS 16 回部署时 View 字段元数据崩溃。
+@MainActor
+protocol ConversationMessageListRefreshHandling: AnyObject {
+    func refreshMessageList() async
+}
+
+@MainActor
+final class ConversationMessageListRefreshCoordinator: ObservableObject, ConversationMessageListRefreshHandling {
+    let threadID: UUID
+    private weak var detailViewModel: ChatDetailViewModel?
+    @Published private(set) var layoutNonce: UInt64 = 0
+
+    init(threadID: UUID, detailViewModel: ChatDetailViewModel) {
+        self.threadID = threadID
+        self.detailViewModel = detailViewModel
+    }
+
+    func refreshMessageList() async {
+        await detailViewModel?.loadMessagesIfNeeded(for: threadID)
+        layoutNonce += 1
+    }
+}
+
+/// 会话消息列表 UI 命令（同步事件，避免 Representable 累积函数类型字段）。
+enum ConversationListCommand: Equatable {
+    case loadMore
+    case captureOpenFiles
+}
 
 /// SwiftUI 桥接 UIKit 会话消息列表（增量 diff + 底部锚定）。
 struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
@@ -10,7 +40,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     @ObservedObject var memberContextStore: MemberContextStore
     let taskManager: TaskManager
     let logger: Logger
-    let actionState: ChatMessageActionState
+    let actionStateHandle: ChatMessageActionStateHandle
 
     var visibleMessages: [ChatMessage]
     var hasMoreMessages: Bool
@@ -18,9 +48,8 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     var lockBottomViewport: Bool
     var scrollToBottomRequestGeneration: UInt64
 
-    var onLoadMore: () -> Void
-    var onRefresh: () async -> Void
-    var onCaptureOpenFiles: () -> Void
+    let onCommand: (ConversationListCommand) -> Void
+    let refreshHandler: any ConversationMessageListRefreshHandling
     /// 递增时下一帧列表按 ``ConversationListApplyPayload/forceFullListRediff`` 全量重 diff（如下拉刷新）。
     var conversationListLayoutNonce: UInt64
 
@@ -38,8 +67,8 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
         let vc = ConversationMessageListViewController()
         context.coordinator.lastThreadID = threadID
         wire(vc: vc)
-        vc.onLoadMore = onLoadMore
-        vc.onRefresh = onRefresh
+        vc.onCommand = onCommand
+        vc.refreshHandler = refreshHandler
         return vc
     }
 
@@ -50,6 +79,8 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
             uiViewController.resetForNewThread()
         }
         wire(vc: uiViewController)
+        uiViewController.onCommand = onCommand
+        uiViewController.refreshHandler = refreshHandler
         let forceRediff: Bool = {
             if let prev = context.coordinator.appliedLayoutNonce {
                 return prev != conversationListLayoutNonce
@@ -76,7 +107,6 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
         vc.memberContextStore = memberContextStore
         vc.taskManager = taskManager
         vc.logger = logger
-        vc.actionState = actionState
-        vc.onCaptureOpenFiles = onCaptureOpenFiles
+        vc.actionState = actionStateHandle.state
     }
 }

@@ -17,16 +17,22 @@ import SwiftUI
 
 struct CameraBridgeView: UIViewRepresentable {
     let cameraManager: CustomCameraManager
-    let inputView: UIView = .init()
+    let inputView: CameraBridgeContainerView = .init()
 }
 extension CameraBridgeView {
     func makeUIView(context: Context) -> some UIView {
+        inputView.onLayoutSubviews = { [cameraManager] view in
+            cameraManager.updatePreviewLayout(in: view)
+        }
         cameraManager.initialize(in: inputView)
+        cameraManager.updatePreviewLayout(in: inputView)
         setupTapGesture(context)
         setupPinchGesture(context)
         return inputView
     }
-    func updateUIView(_ uiView: UIViewType, context: Context) {}
+    func updateUIView(_ uiView: UIViewType, context: Context) {
+        cameraManager.updatePreviewLayout(in: uiView)
+    }
     func makeCoordinator() -> Coordinator { .init(self) }
 }
 private extension CameraBridgeView {
@@ -43,6 +49,15 @@ private extension CameraBridgeView {
 // MARK: Equatable
 extension CameraBridgeView: Equatable {
     nonisolated static func ==(lhs: Self, rhs: Self) -> Bool { true }
+}
+
+final class CameraBridgeContainerView: UIView {
+    var onLayoutSubviews: ((UIView) -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayoutSubviews?(self)
+    }
 }
 
 

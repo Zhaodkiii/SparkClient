@@ -14,7 +14,7 @@ struct ModelScenarioBindingsEditorView: View {
     var defaultToolScenarios: [String] = []
     var defaultRelatedTaskCodes: [String] = []
     var smallTasks: [SmallTask] = []
-    var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling()
     var promptTemplates: [PromptRepo] = []
     var onPersist: ((ModelScenarioBindingPersistenceChange) -> Void)?
 
@@ -185,7 +185,7 @@ private struct ModelScenarioBindingAddView: View {
     let existingBinding: AIScenarioModelBinding?
     /// 可关联的子任务列表
     var smallTasks: [SmallTask]
-    var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling()
     var promptTemplates: [PromptRepo] = []
     /// 取消操作回调
     let onCancel: () -> Void
@@ -205,7 +205,7 @@ private struct ModelScenarioBindingAddView: View {
         makeBinding: @escaping (AIScenario) -> AIScenarioModelBinding,
         existingBinding: AIScenarioModelBinding?,
         smallTasks: [SmallTask],
-        promptTooling: AISettingsPromptTooling = .unavailable,
+        promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling(),
         promptTemplates: [PromptRepo] = [],
         onCancel: @escaping () -> Void,
         onSave: @escaping (AIScenarioModelBinding) -> Void
@@ -322,7 +322,7 @@ private struct ModelScenarioBindingForm: View {
     @Binding var binding: AIScenarioModelBinding
     /// 可关联的小型任务列表
     var smallTasks: [SmallTask]
-    var promptTooling: AISettingsPromptTooling = .unavailable
+    var promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling()
     var promptTemplates: [PromptRepo] = []
     /// 场景选择器（外部传入，新增模式显示，编辑模式隐藏）
     var scenarioPicker: AnyView = AnyView(EmptyView())
@@ -435,7 +435,7 @@ private struct ModelScenarioBindingForm: View {
                 text: $binding.systemProvision,
                 isPresented: $showTextInputDrawer,
                 onTranslate: {
-                    try await promptTooling.translate(binding.systemProvision)
+                    try await promptTooling.translate(text: binding.systemProvision)
                 },
                 onOCRImage: { image in
                     try await promptTooling.ocrImage(image)

@@ -2,18 +2,6 @@ import Combine
 import Foundation
 import UIKit
 
-struct AISettingsPromptTooling {
-    let autoFillAgentPrompt: (_ displayName: String, _ baseModelName: String) async throws -> String
-    let translate: (_ text: String) async throws -> String
-    let ocrImage: (_ image: UIImage) async throws -> String
-
-    static let unavailable = AISettingsPromptTooling(
-        autoFillAgentPrompt: { _, _ in "" },
-        translate: { text in text },
-        ocrImage: { _ in "" }
-    )
-}
-
 struct AISettingsMemoryTooling {
     let loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase
     let saveMemoryUseCase: SaveMemoryUseCase
@@ -64,7 +52,7 @@ final class AISettingsViewModel: ObservableObject {
     /// Push（通知权限申请、APNs token 注册）
     private let pushAdapter: PushAdapter?
     /// 提示词工具
-    let promptTooling: AISettingsPromptTooling
+    let promptTooling: any AISettingsPromptToolingProviding
     /// 记忆档案工具
     private let memoryTooling: AISettingsMemoryTooling?
     /// 本地模型服务
@@ -125,7 +113,7 @@ final class AISettingsViewModel: ObservableObject {
         aiConfigAPI: SparkAIConfigAPI? = nil,
         aiConfigCenter: AIConfigCenter? = nil,
         pushAdapter: PushAdapter? = nil,
-        promptTooling: AISettingsPromptTooling = .unavailable,
+        promptTooling: any AISettingsPromptToolingProviding = UnavailableAISettingsPromptTooling(),
         memoryTooling: AISettingsMemoryTooling? = nil
     ) {
         self.loadUseCase = loadUseCase

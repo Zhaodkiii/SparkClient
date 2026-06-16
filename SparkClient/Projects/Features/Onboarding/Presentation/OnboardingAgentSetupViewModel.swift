@@ -30,7 +30,7 @@ final class OnboardingAgentSetupViewModel: ObservableObject {
         aiSettingsViewModel.effectiveSmallTasks
     }
 
-    var promptTooling: AISettingsPromptTooling {
+    var promptTooling: any AISettingsPromptToolingProviding {
         aiSettingsViewModel.promptTooling
     }
 

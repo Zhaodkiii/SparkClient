@@ -58,8 +58,8 @@ struct ExamReportFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)?
-    let onServerSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)?
+    let onCreateSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>?
+    let onServerSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>?
 
     @State private var pageType: ExaminationReportCategory
     @State private var category: String
@@ -83,8 +83,8 @@ struct ExamReportFormView: View {
 
     init(
         mode: Mode,
-        onCreateSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)? = nil,
-        onServerSubmit: (@MainActor (MedicalReportRecognitionDraft) async throws -> Void)? = nil
+        onCreateSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>? = nil,
+        onServerSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>? = nil
     ) {
         self.mode = mode
         self.onCreateSubmit = onCreateSubmit
@@ -473,7 +473,7 @@ struct ExamReportFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit(draft)
+                    try await onCreateSubmit.call(draft)
                     formLog.info("ExamReportFormView: create save succeeded", module: formLogModule)
                     dismiss()
                 } catch {
@@ -491,7 +491,7 @@ struct ExamReportFormView: View {
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit(draft)
+                    try await onServerSubmit.call(draft)
                     formLog.info("ExamReportFormView: server save succeeded", module: formLogModule)
                     dismiss()
                 } catch {

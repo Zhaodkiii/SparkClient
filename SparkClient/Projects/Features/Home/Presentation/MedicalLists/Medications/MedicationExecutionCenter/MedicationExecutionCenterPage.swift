@@ -204,6 +204,7 @@ struct MedicationExecutionCenterPage: View {
                     onPrescriptionsChanged: onPrescriptionsChanged,
                     onMedicineBoxesChanged: onMedicineBoxesChanged
                 )
+
             } label: {
                 Label(
                     L10n.text("home.medical.list.medications.title", fallback: "服药计划"),

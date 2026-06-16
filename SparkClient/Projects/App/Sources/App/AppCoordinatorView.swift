@@ -46,10 +46,7 @@ struct AppCoordinatorView: View {
                 }
 
         case .signedOut:
-            AuthCoordinatorView(viewModel: facades.auth.makeLoginViewModel())
-                .task {
-                    await lifecycle.handleSignedOutTask()
-                }
+            SignedOutAuthCoordinatorView(facades: facades, lifecycle: lifecycle)
 
         case .signedIn(let session):
             if lifecycle.preparedAccountID == session.accountID {
@@ -112,5 +109,32 @@ struct AppCoordinatorView: View {
                 AppLaunchScreenView()
             }
         }
+    }
+}
+
+/// 登录页容器：缓存 LoginViewModel 生命周期，避免在 AppCoordinatorView.body 中重复创建。
+private struct SignedOutAuthCoordinatorView: View {
+    let facades: AppFeatureFacades
+    let lifecycle: AppLifecycleCoordinator
+
+    @StateObject private var viewModel: LoginViewModel
+
+    init(facades: AppFeatureFacades, lifecycle: AppLifecycleCoordinator) {
+        self.facades = facades
+        self.lifecycle = lifecycle
+        _viewModel = StateObject(wrappedValue: facades.auth.makeLoginViewModel())
+    }
+    
+    var body: some View {
+        CompatibleNavigationContainer {
+            LoginView(viewModel: viewModel)
+        }
+        .task {
+            await lifecycle.handleSignedOutTask()
+        }
+        //        AuthCoordinatorView(viewModel: viewModel)
+        //            .task {
+        //                await lifecycle.handleSignedOutTask()
+        //            }
     }
 }

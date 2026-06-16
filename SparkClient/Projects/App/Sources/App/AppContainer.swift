@@ -594,33 +594,13 @@ final class AppContainer {
 
     /// 登录页：Apple 登录用例 + 会话 Store。
     func makeLoginViewModel() -> LoginViewModel {
-        let runtime = accountSessionRuntime
-        return LoginViewModel(
+        LoginViewModel(
             signInWithAppleUseCase: signInWithAppleUseCase,
             requestPhoneOTPUseCase: requestPhoneOTPUseCase,
             signInWithPhoneOTPUseCase: signInWithPhoneOTPUseCase,
             sessionStore: sessionStore,
             notificationClient: notificationClient,
-            onBeginAccountSwitch: { [weak self] in
-                let suspendedID: Int64? = {
-                    guard let self else { return nil }
-                    if case .signedIn(let session) = self.sessionStore.state {
-                        return session.accountID
-                    }
-                    return nil
-                }()
-                await runtime.beginAccountSwitch(suspendedAccountID: suspendedID)
-            },
-            onEndAccountSwitch: { [weak self] commit in
-                let currentID: Int64? = {
-                    guard let self else { return nil }
-                    if case .signedIn(let session) = self.sessionStore.state {
-                        return session.accountID
-                    }
-                    return nil
-                }()
-                await runtime.endAccountSwitch(commit: commit, currentSignedInAccountID: currentID)
-            }
+            accountSwitchHandler: accountSessionRuntime
         )
     }
 
@@ -831,16 +811,10 @@ final class AppContainer {
             aiConfigAPI: backend.aiConfig,
             aiConfigCenter: aiConfigCenter,
             pushAdapter: pushAdapter,
-            promptTooling: AISettingsPromptTooling(
-                autoFillAgentPrompt: { displayName, baseModelName in
-                    try await autoFillAgentPromptUseCase.execute(displayName: displayName, baseModelName: baseModelName)
-                },
-                translate: { text in
-                    try await translateKnowledgeTextUseCase.execute(text: text)
-                },
-                ocrImage: { image in
-                    try await ocrKnowledgeImageUseCase.execute(image: image)
-                }
+            promptTooling: DefaultAISettingsPromptTooling(
+                autoFillAgentPromptUseCase: autoFillAgentPromptUseCase,
+                translateKnowledgeTextUseCase: translateKnowledgeTextUseCase,
+                ocrKnowledgeImageUseCase: ocrKnowledgeImageUseCase
             ),
             memoryTooling: AISettingsMemoryTooling(
                 loadMemoryArchiveUseCase: loadMemoryArchiveUseCase,

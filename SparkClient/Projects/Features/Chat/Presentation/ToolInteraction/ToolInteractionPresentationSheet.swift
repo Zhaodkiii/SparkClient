@@ -9,7 +9,7 @@ struct ToolInteractionPresentationSheet: View {
     let toolPreviewRenderContext: ChatRenderContext?
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    let fetchMemberCompleteData: (Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData
+    let memberCompleteDataFetcher: any MemberCompleteDataFetching
     let onClearToolPreviewRenderContext: () -> Void
     let onSaveSystemMessage: (SystemMessageSettingsPrompt, String) -> Void
     let onAskReportAppend: (UUID, [HealthResourceRef]) -> Void
@@ -74,7 +74,7 @@ struct ToolInteractionPresentationSheet: View {
                 boundMemberID: prompt.memberID,
                 pendingRefs: stateStore.composerDraft(for: prompt.threadID).pendingHealthResourceRefs,
                 initialCompleteData: initialCompleteData,
-                fetchCompleteData: fetchMemberCompleteData,
+                memberCompleteDataFetcher: memberCompleteDataFetcher,
                 onAppendToPreview: { refs in
                     onAskReportAppend(active.id, refs)
                 },

@@ -21,9 +21,8 @@ struct ChatView: View {
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     
     @State private var hasLoaded = false
-    @State private var conversationListLayoutNonce: UInt64 = 0
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
-    private let actionState = ChatMessageActionState()
+    private let actionStateHandle = ChatMessageActionStateHandle(ChatMessageActionState())
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showCaptureFileImporter = false
     @State private var showClearChatConfirmation = false
@@ -112,9 +111,7 @@ struct ChatView: View {
                 modelRows: detailViewModel.chatScenarioModels,
                 smallTasks: composerAssociatedSmallTasks,
                 initialCompleteData: homeViewModel.dashboard?.medical.completeData,
-                fetchMemberCompleteData: { memberID in
-                    try await detailViewModel.fetchMemberCompleteData(memberID: memberID)
-                },
+                memberCompleteDataFetcher: detailViewModel,
                 medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
                 fileTransferService: detailViewModel.attachmentFileTransferService,
                 onSend: {
@@ -378,9 +375,7 @@ struct ChatView: View {
                     toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
                     aiSettingsViewModel: aiSettingsViewModel,
                     initialCompleteData: homeViewModel.dashboard?.medical.completeData,
-                    fetchMemberCompleteData: { memberID in
-                        try await detailViewModel.fetchMemberCompleteData(memberID: memberID)
-                    },
+                    memberCompleteDataFetcher: detailViewModel,
                     onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() },
                     onSaveSystemMessage: { prompt, value in
                         Task {
@@ -418,7 +413,7 @@ struct ChatView: View {
     }
     
     private var messageList: some View {
-        ConversationMessageListRepresentable(
+        ChatConversationMessageListContainer(
             threadID: threadID,
             stateStore: stateStore,
             detailViewModel: detailViewModel,
@@ -427,41 +422,14 @@ struct ChatView: View {
             memberContextStore: homeViewModel.memberContextStoreForBinding,
             taskManager: taskManager,
             logger: logger,
-            actionState: actionState,
+            actionStateHandle: actionStateHandle,
             visibleMessages: visibleMessages,
             hasMoreMessages: hasMoreMessages,
             isLoadingMoreMessages: isLoadingMoreMessages,
             lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
             scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
-            onLoadMore: {
-                Task { await detailViewModel.loadMoreMessages(for: threadID) }
-            },
-            onRefresh: {
-                await detailViewModel.loadMessagesIfNeeded(for: threadID)
-                await MainActor.run {
-                    conversationListLayoutNonce += 1
-                }
-            },
-            onCaptureOpenFiles: {
-                showCaptureFileImporter = true
-            },
-            conversationListLayoutNonce: conversationListLayoutNonce
+            showCaptureFileImporter: $showCaptureFileImporter
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .chatScrollDismissesKeyboardInteractively()
-        .fileImporter(
-            isPresented: $showCaptureFileImporter,
-            allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],
-            allowsMultipleSelection: true
-        ) { result in
-            guard case .success(let urls) = result else { return }
-            Task {
-                let attachments = await ChatComposerAttachmentImporter.importFiles(urls: urls)
-                await MainActor.run {
-                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
-                }
-            }
-        }
     }
     
     private var cardActionSnapshotStorageKey: String {
@@ -832,4 +800,109 @@ struct ChatView: View {
         return try? JSONSerialization.jsonObject(with: data)
     }
     
+}
+
+/// 消息列表容器：缓存 refresh coordinator，避免 Representable 存储 async closure。
+private struct ChatConversationMessageListContainer: View {
+    let threadID: UUID
+    @ObservedObject var stateStore: ChatStateStore
+    @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var uiStateStore: ChatMessageUIStateStore
+    @ObservedObject var speechHelper: ChatSpeechHelper
+    @ObservedObject var memberContextStore: MemberContextStore
+    let taskManager: TaskManager
+    let logger: Logger
+    let actionStateHandle: ChatMessageActionStateHandle
+    let visibleMessages: [ChatMessage]
+    let hasMoreMessages: Bool
+    let isLoadingMoreMessages: Bool
+    let lockBottomViewport: Bool
+    let scrollToBottomRequestGeneration: UInt64
+    @Binding var showCaptureFileImporter: Bool
+
+    @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
+
+    init(
+        threadID: UUID,
+        stateStore: ChatStateStore,
+        detailViewModel: ChatDetailViewModel,
+        uiStateStore: ChatMessageUIStateStore,
+        speechHelper: ChatSpeechHelper,
+        memberContextStore: MemberContextStore,
+        taskManager: TaskManager,
+        logger: Logger,
+        actionStateHandle: ChatMessageActionStateHandle,
+        visibleMessages: [ChatMessage],
+        hasMoreMessages: Bool,
+        isLoadingMoreMessages: Bool,
+        lockBottomViewport: Bool,
+        scrollToBottomRequestGeneration: UInt64,
+        showCaptureFileImporter: Binding<Bool>
+    ) {
+        self.threadID = threadID
+        self.stateStore = stateStore
+        self.detailViewModel = detailViewModel
+        self.uiStateStore = uiStateStore
+        self.speechHelper = speechHelper
+        self.memberContextStore = memberContextStore
+        self.taskManager = taskManager
+        self.logger = logger
+        self.actionStateHandle = actionStateHandle
+        self.visibleMessages = visibleMessages
+        self.hasMoreMessages = hasMoreMessages
+        self.isLoadingMoreMessages = isLoadingMoreMessages
+        self.lockBottomViewport = lockBottomViewport
+        self.scrollToBottomRequestGeneration = scrollToBottomRequestGeneration
+        _showCaptureFileImporter = showCaptureFileImporter
+        _refreshCoordinator = StateObject(
+            wrappedValue: ConversationMessageListRefreshCoordinator(
+                threadID: threadID,
+                detailViewModel: detailViewModel
+            )
+        )
+    }
+
+    var body: some View {
+        ConversationMessageListRepresentable(
+            threadID: threadID,
+            stateStore: stateStore,
+            detailViewModel: detailViewModel,
+            uiStateStore: uiStateStore,
+            speechHelper: speechHelper,
+            memberContextStore: memberContextStore,
+            taskManager: taskManager,
+            logger: logger,
+            actionStateHandle: actionStateHandle,
+            visibleMessages: visibleMessages,
+            hasMoreMessages: hasMoreMessages,
+            isLoadingMoreMessages: isLoadingMoreMessages,
+            lockBottomViewport: lockBottomViewport,
+            scrollToBottomRequestGeneration: scrollToBottomRequestGeneration,
+            onCommand: { command in
+                switch command {
+                case .loadMore:
+                    Task { await detailViewModel.loadMoreMessages(for: threadID) }
+                case .captureOpenFiles:
+                    showCaptureFileImporter = true
+                }
+            },
+            refreshHandler: refreshCoordinator,
+            conversationListLayoutNonce: refreshCoordinator.layoutNonce
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .chatScrollDismissesKeyboardInteractively()
+        .fileImporter(
+            isPresented: $showCaptureFileImporter,
+            allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result else { return }
+            Task {
+                let attachments = await ChatComposerAttachmentImporter.importFiles(urls: urls)
+                await MainActor.run {
+                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
+                }
+            }
+        }
+    }
 }
