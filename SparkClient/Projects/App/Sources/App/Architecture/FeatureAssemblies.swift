@@ -124,7 +124,6 @@ extension HomeFeatureDependencies {
         let ownershipCoordinator = MedicationReminderOwnershipCoordinator(
             medicalQueryAPI: container.backend.medicalQuery,
             syncCoordinator: container.medicationReminderSyncCoordinator,
-            consentStore: MedicationReminderConsentStore.shared,
             notificationClient: container.notificationClient,
             logger: container.logger
         )

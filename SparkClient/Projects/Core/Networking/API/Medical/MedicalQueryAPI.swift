@@ -328,6 +328,44 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         )
     }
 
+    func fetchMedicationReminderLocalAuthorization(
+        planID: Int
+    ) async throws -> SparkMedicalSyncAPI.RemoteMedicationReminderLocalAuthorization {
+        try await request(
+            path: "/api/v1/medical/medication-reminders/local-authorizations/\(planID)/",
+            responseType: SparkMedicalSyncAPI.RemoteMedicationReminderLocalAuthorization.self,
+            etagTTL: 60
+        )
+    }
+
+    func upsertMedicationReminderLocalAuthorization(
+        planID: Int,
+        enabled: Bool,
+        source: String
+    ) async throws -> SparkMedicalSyncAPI.RemoteMedicationReminderLocalAuthorization {
+        struct Payload: Encodable {
+            let enabled: Bool
+            let source: String
+        }
+        return try await write(
+            method: .put,
+            path: "/api/v1/medical/medication-reminders/local-authorizations/\(planID)/",
+            body: Payload(enabled: enabled, source: source),
+            responseType: SparkMedicalSyncAPI.RemoteMedicationReminderLocalAuthorization.self,
+            serialKey: "medical.query.medication_reminder_local_authorization.\(planID)"
+        )
+    }
+
+    func disableMedicationReminderLocalAuthorization(planID: Int) async throws {
+        _ = try await writeOptional(
+            method: .delete,
+            path: "/api/v1/medical/medication-reminders/local-authorizations/\(planID)/",
+            body: nil as EmptyPayload?,
+            responseType: SparkMedicalSyncAPI.RemoteMedicationReminderLocalAuthorization.self,
+            serialKey: "medical.query.medication_reminder_local_authorization.\(planID)"
+        )
+    }
+
     private func memberQuery(_ memberID: Int?) -> [URLQueryItem] {
         memberID.map { [URLQueryItem(name: "member_id", value: "\($0)")] } ?? []
     }
@@ -368,4 +406,50 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         let response = try await configuration.execute(operation)
         return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
     }
+
+    private func write<T: Decodable, B: Encodable>(
+        method: SparkHTTPMethod,
+        path: String,
+        body: B,
+        responseType: T.Type,
+        serialKey: String
+    ) async throws -> T {
+        try await writeOptional(
+            method: method,
+            path: path,
+            body: body,
+            responseType: responseType,
+            serialKey: serialKey
+        )
+    }
+
+    private func writeOptional<T: Decodable, B: Encodable>(
+        method: SparkHTTPMethod,
+        path: String,
+        body: B?,
+        responseType: T.Type,
+        serialKey: String
+    ) async throws -> T {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Medical.Query.\(method.rawValue).\(path)",
+            apiName: "MedicalQueryAPI",
+            request: SparkNetworkRequest(
+                method: method,
+                path: path,
+                body: body.map { .json(AnyEncodable($0)) } ?? .none,
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: serialKey,
+                    retryConfig: .default,
+                    isIdempotent: method != .post,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
+    }
+
+    private struct EmptyPayload: Encodable {}
 }

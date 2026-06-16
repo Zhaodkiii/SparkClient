@@ -483,6 +483,7 @@ enum SparkMedicalSyncAPI {
 
     struct RemoteMedicationReminderMemberGroup: Codable, Sendable, Equatable {
         var member: RemoteMedicationReminderMemberSummary
+        var source: String
         var selfOwners: [RemoteMedicationReminderSelfOwner]
         var plans: [RemoteMedicationPlan]
         var records: [RemoteMedicationRecord]
@@ -514,5 +515,17 @@ enum SparkMedicalSyncAPI {
         var canWrite: Bool
         var hasOtherSelfOwner: Bool
         var selfOwners: [RemoteMedicationReminderSelfOwner]
+    }
+
+    struct RemoteMedicationReminderLocalAuthorization: Codable, Sendable, Equatable {
+        var id: Int?
+        var userId: Int64
+        var memberId: Int
+        var medicationPlanId: Int
+        var enabled: Bool
+        var exists: Bool
+        var isSelfMember: Bool
+        var source: String
+        var updatedAt: Date?
     }
 }

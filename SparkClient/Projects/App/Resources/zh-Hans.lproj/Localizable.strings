@@ -1149,8 +1149,8 @@
 "medication.reminder.owner_apns_unavailable.title" = "成员本人暂未开启通知";
 "medication.reminder.owner_apns_unavailable.message" = "该成员已绑定为其他用户本人，但对方可能无法收到系统通知。用药计划已保存。";
 "medication.reminder.sync_degraded.toast" = "用药计划已保存，提醒状态稍后同步。";
-"medication.reminder.local_consent.saved.toast" = "已在本机开启该成员的用药提醒。";
-"medication.reminder.local_consent.skipped.toast" = "用药计划已保存，未创建本机提醒。";
+"medication.reminder.local_authorization.saved.toast" = "已在本机开启这个用药计划的提醒。";
+"medication.reminder.local_authorization.skipped.toast" = "用药计划已保存，未创建本机提醒。";
 "notification.health_resource_changed.medication_plan.title" = "用药计划已更新";
 "notification.health_resource_changed.medication_plan.body" = "有人维护了你的用药计划，打开应用查看详情。";
 "notification.health_resource_changed.route_missing.toast" = "用药计划可能已变更。";

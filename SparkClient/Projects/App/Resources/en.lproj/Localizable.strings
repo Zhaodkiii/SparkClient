@@ -1149,8 +1149,8 @@
 "medication.reminder.owner_apns_unavailable.title" = "Self member notifications unavailable";
 "medication.reminder.owner_apns_unavailable.message" = "This member is linked as another user's self profile, but they may not receive system notifications. The medication plan was saved.";
 "medication.reminder.sync_degraded.toast" = "Medication plan saved. Reminder status will sync shortly.";
-"medication.reminder.local_consent.saved.toast" = "Medication reminders enabled on this device for this member.";
-"medication.reminder.local_consent.skipped.toast" = "Medication plan saved without local reminders.";
+"medication.reminder.local_authorization.saved.toast" = "Medication reminders enabled on this device for this medication plan.";
+"medication.reminder.local_authorization.skipped.toast" = "Medication plan saved without local reminders.";
 "notification.health_resource_changed.medication_plan.title" = "Medication plan updated";
 "notification.health_resource_changed.medication_plan.body" = "Someone updated your medication plan. Open the app to review.";
 "notification.health_resource_changed.route_missing.toast" = "The medication plan may have changed.";

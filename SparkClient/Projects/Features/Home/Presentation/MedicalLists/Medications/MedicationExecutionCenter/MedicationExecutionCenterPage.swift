@@ -114,7 +114,7 @@ struct MedicationExecutionCenterPage: View {
     private var asNeededPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
         medicationPlans
             .filter { MedicationExecutionPlanner.isPlanActive($0, on: selectedDayStart, calendar: calendar) }
-            .filter { $0.reminderTimes.isEmpty }
+//            .filter { $0.reminderTimes.isEmpty }
             .sorted { $0.drugName < $1.drugName }
     }
 

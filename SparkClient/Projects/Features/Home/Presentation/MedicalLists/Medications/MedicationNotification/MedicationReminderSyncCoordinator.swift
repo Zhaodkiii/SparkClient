@@ -13,7 +13,6 @@ final class MedicationReminderSyncCoordinator {
     private let notificationManager: MedicationReminderNotificationManager
     private let permissionCoordinator: MedicationReminderPermissionCoordinator
     private let preferencesStore: MedicationReminderPreferencesStore
-    private let consentStore: MedicationReminderConsentStore
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let logger: Logger
 
@@ -35,14 +34,12 @@ final class MedicationReminderSyncCoordinator {
         notificationManager: MedicationReminderNotificationManager,
         permissionCoordinator: MedicationReminderPermissionCoordinator,
         preferencesStore: MedicationReminderPreferencesStore,
-        consentStore: MedicationReminderConsentStore = .shared,
         medicalQueryAPI: SparkMedicalQueryAPI,
         logger: Logger
     ) {
         self.notificationManager = notificationManager
         self.permissionCoordinator = permissionCoordinator
         self.preferencesStore = preferencesStore
-        self.consentStore = consentStore
         self.medicalQueryAPI = medicalQueryAPI
         self.logger = logger
     }
@@ -207,20 +204,18 @@ final class MedicationReminderSyncCoordinator {
         logger.info("用药提醒重建完成 reason=\(reason) count=\(allEvents.count)", module: .push)
     }
 
-    /// 补全通知使用服务端聚合接口，避免按成员 N+1；非本人成员必须通过本地 consent 才参与本机通知。
+    /// 补全通知直接使用服务端聚合结果；服务端已完成本人/已授权非本人计划过滤。
     private func loadSnapshots(accountID: Int64) async -> [MedicationReminderMemberSnapshot]? {
         guard let response = await fetchEnabledPlansResponse(includeRecords: true) else {
             return nil
         }
 
         cachedPlanDrugNames = Self.planDrugNames(from: response)
-        let included = response.members.filter { shouldScheduleLocalReminder(accountID: accountID, group: $0) }
-        let skippedCount = response.members.count - included.count
         logger.info(
-            "enabled-plans 拉取成功 members=\(response.members.count) included=\(included.count) skipped=\(skippedCount)",
+            "enabled-plans 拉取成功 accountID=\(accountID) members=\(response.members.count)",
             module: .push
         )
-        return included.map { group in
+        return response.members.map { group in
             MedicationReminderMemberSnapshot(
                 memberID: group.member.id,
                 memberDisplayName: group.member.name,
@@ -268,16 +263,5 @@ final class MedicationReminderSyncCoordinator {
             }
         }
         return names
-    }
-
-    /// 本人默认补全；非本人只看本地 consent；是否存在其他本人绑定不直接决定补全。
-    private func shouldScheduleLocalReminder(
-        accountID: Int64,
-        group: SparkMedicalSyncAPI.RemoteMedicationReminderMemberGroup
-    ) -> Bool {
-        if group.member.isSelfMember {
-            return true
-        }
-        return consentStore.allowsLocalReminder(accountID: accountID, memberID: group.member.id)
     }
 }

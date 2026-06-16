@@ -4,15 +4,23 @@ import SwiftUI
 struct NonSelfReminderPrompt: Identifiable {
     let id = UUID()
     let memberID: Int
+    let planID: Int
     let memberName: String
+}
+
+struct MedicationReminderShareCandidate: Identifiable {
+    let member: Member
+    let planID: Int
+
+    var id: Int { member.id }
 }
 
 /// 用药计划保存后的提醒协同 UI（分享、本机代提醒确认、已通知成员本人等），挂载在计划详情页。
 @MainActor
 final class MedicationReminderPostSaveController: ObservableObject {
     /// 分享前先询问用户，确认后再打开 ShareSheet
-    @Published var shareConfirmMember: Member?
-    @Published var pendingShareMember: Member?
+    @Published var shareConfirmCandidate: MedicationReminderShareCandidate?
+    @Published var pendingShareCandidate: MedicationReminderShareCandidate?
     @Published var pendingNonSelfReminderPrompt: NonSelfReminderPrompt?
     @Published var showOwnerNotifiedAlert = false
     @Published var ownerNotifiedApnsAvailable = false
@@ -36,12 +44,13 @@ final class MedicationReminderPostSaveController: ObservableObject {
     ) {
         guard let memberID else { return }
         guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
+        guard let plan else { return }
 
         let members = memberContextStore.context.members
         let coordinator = homeDependencies.medicationReminderSyncCoordinator
         coordinator.activate(accountID: session.accountID)
 
-        guard plan?.reminderEnabled == true else {
+        guard plan.reminderEnabled == true else {
             coordinator.rebuildAfterPlanChanged(accountID: session.accountID, members: members)
             return
         }
@@ -50,25 +59,26 @@ final class MedicationReminderPostSaveController: ObservableObject {
             let action = await homeDependencies.medicationReminderOwnershipCoordinator.resolvePostSaveAction(
                 accountID: session.accountID,
                 memberID: memberID,
+                planID: plan.id,
                 reminderEnabled: true
             )
             switch action {
             case .none:
                 coordinator.rebuildAfterPlanChanged(accountID: session.accountID, members: members)
-            case .requestLocalNotificationForSelf:
+            case .requestLocalNotificationForSelf(_), .requestLocalNotificationForAuthorizedPlan(_):
                 let status = await coordinator.permissionCoordinatorAccess.currentStatus()
                 if status == .notDetermined {
                     showMedicationReminderPermissionExplanation = true
                 } else {
                     coordinator.rebuildAfterPlanChanged(accountID: session.accountID, members: members)
                 }
-            case .openShare(let shareMemberID):
+            case .openShare(let shareMemberID, let planID):
                 if let member = members.first(where: { $0.id == shareMemberID }) {
-                    shareConfirmMember = member
+                    shareConfirmCandidate = MedicationReminderShareCandidate(member: member, planID: planID)
                 }
-            case .showLocalReminderConfirm(let promptMemberID, let memberName):
-                pendingNonSelfReminderPrompt = NonSelfReminderPrompt(memberID: promptMemberID, memberName: memberName)
-            case .showOwnerNotified(let apnsAvailable):
+            case .showLocalReminderConfirm(let promptMemberID, let planID, let memberName):
+                pendingNonSelfReminderPrompt = NonSelfReminderPrompt(memberID: promptMemberID, planID: planID, memberName: memberName)
+            case .showOwnerNotified(_, let apnsAvailable):
                 ownerNotifiedApnsAvailable = apnsAvailable
                 showOwnerNotifiedAlert = true
             }
@@ -76,20 +86,21 @@ final class MedicationReminderPostSaveController: ObservableObject {
     }
 
     func confirmShare() {
-        guard let member = shareConfirmMember else { return }
-        shareConfirmMember = nil
+        guard let candidate = shareConfirmCandidate else { return }
+        shareConfirmCandidate = nil
         afterPresentationGap {
-            self.pendingShareMember = member
+            self.pendingShareCandidate = candidate
         }
     }
 
     func declineShare() {
-        guard let member = shareConfirmMember else { return }
-        shareConfirmMember = nil
+        guard let candidate = shareConfirmCandidate else { return }
+        shareConfirmCandidate = nil
         afterPresentationGap {
             self.pendingNonSelfReminderPrompt = NonSelfReminderPrompt(
-                memberID: member.id,
-                memberName: member.name
+                memberID: candidate.member.id,
+                planID: candidate.planID,
+                memberName: candidate.member.name
             )
         }
     }
@@ -105,6 +116,7 @@ final class MedicationReminderPostSaveController: ObservableObject {
             await homeDependencies.medicationReminderOwnershipCoordinator.acceptLocalReminderForNonSelfMember(
                 accountID: session.accountID,
                 memberID: prompt.memberID,
+                planID: prompt.planID,
                 members: memberContextStore.context.members
             )
         }
@@ -116,7 +128,8 @@ final class MedicationReminderPostSaveController: ObservableObject {
         pendingNonSelfReminderPrompt = nil
         homeDependencies.medicationReminderOwnershipCoordinator.declineLocalReminderForNonSelfMember(
             accountID: session.accountID,
-            memberID: prompt.memberID
+            memberID: prompt.memberID,
+            planID: prompt.planID
         )
     }
 
@@ -178,8 +191,8 @@ private struct MedicationReminderPostSaveHandlingModifier: ViewModifier {
             .alert(
                 L10n.text("medication.reminder.share_confirm.title"),
                 isPresented: Binding(
-                    get: { controller.shareConfirmMember != nil },
-                    set: { if $0 == false { controller.shareConfirmMember = nil } }
+                    get: { controller.shareConfirmCandidate != nil },
+                    set: { if $0 == false { controller.shareConfirmCandidate = nil } }
                 )
             ) {
                 Button(L10n.text("medication.reminder.share_confirm.decline"), role: .cancel) {
@@ -191,9 +204,9 @@ private struct MedicationReminderPostSaveHandlingModifier: ViewModifier {
             } message: {
                 Text(L10n.text("medication.reminder.share_confirm.message"))
             }
-            .sheet(item: $controller.pendingShareMember) { member in
+            .sheet(item: $controller.pendingShareCandidate) { candidate in
                 ShareSheet(
-                    member: member,
+                    member: candidate.member,
                     shareUseCase: homeDependencies.shareMemberUseCase,
                     inviteUseCase: homeDependencies.memberInviteUseCase
                 )

@@ -489,7 +489,6 @@ final class AppContainer {
             notificationManager: MedicationReminderNotificationManager(logger: logger),
             permissionCoordinator: MedicationReminderPermissionCoordinator(logger: logger),
             preferencesStore: MedicationReminderPreferencesStore.shared,
-            consentStore: MedicationReminderConsentStore.shared,
             medicalQueryAPI: backend.medicalQuery,
             logger: logger
         )
@@ -732,7 +731,6 @@ final class AppContainer {
         let medicationReminderOwnershipCoordinator = MedicationReminderOwnershipCoordinator(
             medicalQueryAPI: backend.medicalQuery,
             syncCoordinator: medicationReminderSyncCoordinator,
-            consentStore: MedicationReminderConsentStore.shared,
             notificationClient: notificationClient,
             logger: logger
         )
