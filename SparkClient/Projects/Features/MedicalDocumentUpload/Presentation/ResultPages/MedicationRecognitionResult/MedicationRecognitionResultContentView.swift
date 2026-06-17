@@ -235,7 +235,7 @@ struct MedicationRecognitionResultContentView: View {
         // 编辑单个用药计划
         case .item(let index, let item):
             if let detailNavigationContext {
-                MedicationPlanStepperView(
+                MedicationPlanFormView(
                     mode: .localEdit(existing: MedicationPlanDraft(recognition: item), onSubmit: { updatedDraft in
                         guard medicationPlans.indices.contains(index) else { return }
                         medicationPlans[index] = updatedDraft.recognitionDraft(preserving: item)

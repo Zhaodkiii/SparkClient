@@ -21,7 +21,6 @@ struct MedicationPlanStepperView: View {
     let onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)?
     let homeDependencies: HomeFeatureDependencies?
     let memberContextStore: MemberContextStore?
-    let reminderPostSaveController: MedicationReminderPostSaveController?
 
     @State private var draft: MedicationPlanDraft
     @State private var boxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
@@ -36,7 +35,13 @@ struct MedicationPlanStepperView: View {
     @State private var showFrequencySheet = false
     @State private var showShareSheet = false
     @State private var pendingShareMember: Member?
+    @State private var localReminderEnabled = false
+    @State private var originalLocalReminderEnabled = false
+    @State private var didLoadLocalReminderAuthorization = false
     @State private var lastAutoSuggestedDosePerTime: String?
+    @State private var isLoadingLocalReminderAuthorization = false
+    private let formLog: Logger = ConsoleLogger()
+    private let formLogModule: LogModule = .medical
 
     init(
         mode: Mode,
@@ -48,8 +53,7 @@ struct MedicationPlanStepperView: View {
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)? = nil,
         homeDependencies: HomeFeatureDependencies? = nil,
-        memberContextStore: MemberContextStore? = nil,
-        reminderPostSaveController: MedicationReminderPostSaveController? = nil
+        memberContextStore: MemberContextStore? = nil
     ) {
         self.mode = mode
         self.memberID = memberID
@@ -60,17 +64,21 @@ struct MedicationPlanStepperView: View {
         self.onServerSaved = onServerSaved
         self.homeDependencies = homeDependencies
         self.memberContextStore = memberContextStore
-        self.reminderPostSaveController = reminderPostSaveController
         _boxes = State(initialValue: medicineBoxes)
 
         switch mode {
         case .create:
-            _draft = State(initialValue: MedicationPlanDraft())
+            var draft = MedicationPlanDraft()
+            draft.doseUnit = ""
+            _draft = State(initialValue: draft)
         case .serverEdit(let existing):
             _draft = State(initialValue: MedicationPlanDraft(existing: existing))
         case .localEdit(let existing, _):
             _draft = State(initialValue: existing)
         }
+
+        _localReminderEnabled = State(initialValue: false)
+        _originalLocalReminderEnabled = State(initialValue: false)
     }
 
     private var selectedMedicineBox: SparkMedicalSyncAPI.RemoteMedicineBox? {
@@ -86,12 +94,22 @@ struct MedicationPlanStepperView: View {
         selectedMember?.relationship == "self"
     }
 
+    private var shouldShowCollaborationSection: Bool {
+        switch mode {
+        case .localEdit:
+            return false
+        case .create, .serverEdit:
+            guard let selectedMember else { return false }
+            return selectedMember.relationship != "self"
+        }
+    }
+
     private var canGoNextFromName: Bool {
         draft.drugName.nilIfBlank != nil
     }
 
     private var canGoNextFromSpecification: Bool {
-        draft.dosePerTime.nilIfBlank != nil
+        draft.doseValue.nilIfBlank != nil && draft.doseUnit.nilIfBlank != nil
     }
 
     private var canGoNextFromSchedule: Bool {
@@ -102,7 +120,13 @@ struct MedicationPlanStepperView: View {
     }
 
     private var canSubmit: Bool {
-        canGoNextFromName && canGoNextFromSpecification && canGoNextFromSchedule && isSubmitting == false
+        canGoNextFromName && canGoNextFromSchedule && isSubmitting == false
+    }
+
+    private var allowsInteractiveDismiss: Bool {
+        isSpecificationPresented == false
+        && isSchedulePresented == false
+        && isReviewPresented == false
     }
 
     private var navigationTitle: String {
@@ -118,6 +142,7 @@ struct MedicationPlanStepperView: View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
             nameStep
         }
+        .interactiveDismissDisabled(allowsInteractiveDismiss == false)
         .onAppear {
             syncDosePerTimeWithDoseFields()
         }
@@ -127,20 +152,11 @@ struct MedicationPlanStepperView: View {
         .onChange(of: draft.doseUnit) { _ in
             syncDosePerTimeWithDoseFields()
         }
+        .onAppear {
+            loadLocalReminderAuthorizationIfNeeded()
+        }
         .sheet(isPresented: $showMedicineBoxPicker) {
-            if #available(iOS 16.0, *) {
-                CompatibleNavigationContainer {
-                    MedicationPlanMedicineBoxPickerPage(
-                        memberID: memberID,
-                        medicineBoxes: boxes,
-                        selectedMedicineBoxID: draft.medicineBoxID,
-                        workflowAPI: workflowAPI,
-                        fileTransferService: fileTransferService,
-                        onMedicineBoxSaved: handleMedicineBoxSaved,
-                        onSelect: applyMedicineBoxSelection
-                    )
-                }
-            } else {
+            CompatibleNavigationContainer {
                 MedicationPlanMedicineBoxPickerPage(
                     memberID: memberID,
                     medicineBoxes: boxes,
@@ -200,9 +216,9 @@ struct MedicationPlanStepperView: View {
                     subtitle: L10n.text("medication_plan.stepper.name.subtitle", fallback: "先确定药品名称，也可以直接关联药箱里的已有药品")
                 )
 
-                SparkFormCard(title: L10n.text("medication_plan.stepper.name.card", fallback: "药品信息"), titleSystemImage: "pills.fill") {
+                MedicationPlanStepperCard(title: L10n.text("medication_plan.stepper.name.card", fallback: "药品信息"),subtitle: L10n.text("medication_plan.stepper.name.subtitle", fallback: "先确定药品名称，也可以直接关联药箱里的已有药品"), systemImage: "pills.fill") {
                     VStack(spacing: 14) {
-                        SparkFormTextRow(
+                        MedicationPlanStepperTextField(
                             title: L10n.text("medication_plan.form.field.drug_name", fallback: "药品名称"),
                             text: $draft.drugName,
                             placeholder: L10n.text("medication_plan.form.drug_name_placeholder", fallback: "如 阿莫西林胶囊"),
@@ -210,7 +226,7 @@ struct MedicationPlanStepperView: View {
                             keyboardVisible: $sheetKeyboardVisible
                         )
 
-                        SparkFormSheetPickerRow(
+                        MedicationPlanStepperPickerRow(
                             title: L10n.text("medication_plan.stepper.linked_medicine", fallback: "关联药品"),
                             displayValue: selectedMedicineBoxTitle,
                             placeholder: L10n.text("medication_plan.stepper.select_linked_medicine", fallback: "选择药箱药品"),
@@ -252,14 +268,12 @@ struct MedicationPlanStepperView: View {
                 }
             }
         }
-        .sparkFormBottomBar(
+        .medicationPlanStepperBottomBar(
             canSubmit: canGoNextFromName,
-            cancelTitle: nil,
-            saveTitle: L10n.text("common.next"),
-            saveSystemImage: "arrow.right",
+            primaryTitle: L10n.text("common.next"),
+            primarySystemImage: nil,
             keyboardVisible: $sheetKeyboardVisible,
-            onCancel: {},
-            onSave: {
+            onPrimary: {
                 guard canGoNextFromName else { return }
                 isSpecificationPresented = true
             }
@@ -276,16 +290,16 @@ struct MedicationPlanStepperView: View {
                     subtitle: L10n.text("medication_plan.stepper.spec.subtitle", fallback: "这一步可以跳过，后面还可以再补充")
                 )
 
-                SparkFormCard(title: L10n.text("medication_plan.stepper.spec.card", fallback: "规格与单位"), titleSystemImage: "square.and.pencil") {
+                MedicationPlanStepperCard(title: L10n.text("medication_plan.stepper.spec.card", fallback: "规格与单位"), subtitle: L10n.text("medication_plan.stepper.spec.subtitle", fallback: "这一步可以跳过，后面还可以再补充"), systemImage: "square.and.pencil") {
                     VStack(spacing: 14) {
                         MedicationPlanDoseValueStepperRow(
                             text: $draft.doseValue,
                             keyboardVisible: $sheetKeyboardVisible,
-                            controlStyle: .custom,
+                            controlStyle: .systemStepper,
                             title: L10n.text("medication_plan.form.dose_value", fallback: "规格数值")
                         )
 
-                        SparkFormSheetPickerRow(
+                        MedicationPlanStepperPickerRow(
                             title: L10n.text("medication_plan.form.single_dose_unit_sheet_title", fallback: "规格单位"),
                             displayValue: draft.doseUnit.nilIfBlank ?? L10n.text("medication_plan.stepper.unit_placeholder", fallback: "选择单位"),
                             placeholder: L10n.text("medication_plan.stepper.unit_placeholder", fallback: "选择单位"),
@@ -332,19 +346,21 @@ struct MedicationPlanStepperView: View {
                 }
             }
         }
-        .sparkFormBottomBar(
-            canSubmit: true,
-            cancelTitle: L10n.text("common.back", fallback: "返回"),
-            saveTitle: L10n.text("common.next"),
-            saveSystemImage: "arrow.right",
+        .medicationPlanStepperBottomBar(
+            canSubmit: canGoNextFromSpecification,
+            backTitle: L10n.text("common.skip", fallback: "跳过"),
+            primaryTitle: L10n.text("common.next"),
+            primarySystemImage: nil,
             keyboardVisible: $sheetKeyboardVisible,
-            onCancel: {
-                isSpecificationPresented = false
+            onBack: {
+                skipSpecificationStep()
             },
-            onSave: {
+            onPrimary: {
+                guard canGoNextFromSpecification else { return }
                 isSchedulePresented = true
             }
         )
+
     }
 
     private var scheduleStep: some View {
@@ -357,9 +373,9 @@ struct MedicationPlanStepperView: View {
                     subtitle: L10n.text("medication_plan.stepper.schedule.subtitle", fallback: "设置频次、时间和疗程")
                 )
 
-                SparkFormCard(title: L10n.text("medication_plan.form.section.rules", fallback: "用药规则"), titleSystemImage: "calendar.badge.clock") {
+                MedicationPlanStepperCard(title: L10n.text("medication_plan.form.section.rules", fallback: "用药规则"), subtitle: L10n.text("medication_plan.stepper.schedule.subtitle", fallback: "设置频次、时间和疗程"), systemImage: "calendar.badge.clock") {
                     VStack(spacing: 14) {
-                        SparkFormSheetPickerRow(
+                        MedicationPlanStepperPickerRow(
                             title: L10n.text("medication_plan.form.field.frequency", fallback: "服药频次"),
                             displayValue: draft.reminderFrequencyPickerDisplay,
                             placeholder: L10n.text("medication_plan.form.frequency_placeholder", fallback: "请选择提醒频率"),
@@ -372,7 +388,7 @@ struct MedicationPlanStepperView: View {
                         if #available(iOS 16.0, *) {
                             MedicationReminderTimesSection(draft: $draft, notificationClient: notificationClient)
                         } else {
-                            SparkFormTextRow(
+                            MedicationPlanStepperTextField(
                                 title: L10n.text("medication_plan.form.field.reminder_times", fallback: "提醒时间"),
                                 text: $draft.reminderTimesText,
                                 placeholder: L10n.text("medication_plan.form.reminder_times_placeholder", fallback: "如 08:00, 12:00, 20:00"),
@@ -386,40 +402,41 @@ struct MedicationPlanStepperView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-
-                        SparkFormTextAreaRow(
-                            title: L10n.text("medical_record.forms.field.instructions", fallback: "用药说明"),
-                            text: $draft.instructions,
-                            minHeight: 80,
-                            maxHeight: 160,
-                            placeholder: L10n.text("medication_plan.form.instructions_placeholder", fallback: "饭前/饭后、禁忌或医嘱备注"),
-                            keyboardVisible: $sheetKeyboardVisible
-                        )
                     }
+                    
+
                 }
-
-                SparkFormCard(title: L10n.text("medication_plan.stepper.course.card", fallback: "疗程"), titleSystemImage: "calendar") {
+                MedicationPlanStepperCard(title: L10n.text("medication_plan.stepper.course.card", fallback: "疗程"), systemImage: "calendar"){
                     VStack(spacing: 12) {
-                        DatePicker(
-                            L10n.text("medication_plan.form.field.start_date", fallback: "开始日期"),
-                            selection: $draft.startDate,
-                            displayedComponents: .date
-                        )
-                        .font(.subheadline.weight(.medium))
-
-                        Toggle(L10n.text("medication_plan.form.field.set_end_date", fallback: "设置结束日期"), isOn: $draft.hasEndDate)
-                            .font(.subheadline.weight(.medium))
-
-                        if draft.hasEndDate {
                             DatePicker(
-                                L10n.text("medication_plan.form.field.end_date", fallback: "结束日期"),
-                                selection: $draft.endDate,
-                                in: draft.startDate...,
+                                L10n.text("medication_plan.form.field.start_date", fallback: "开始日期"),
+                                selection: $draft.startDate,
                                 displayedComponents: .date
                             )
                             .font(.subheadline.weight(.medium))
+
+                            Toggle(L10n.text("medication_plan.form.field.set_end_date", fallback: "设置结束日期"), isOn: $draft.hasEndDate)
+                                .font(.subheadline.weight(.medium))
+
+                            if draft.hasEndDate {
+                                DatePicker(
+                                    L10n.text("medication_plan.form.field.end_date", fallback: "结束日期"),
+                                    selection: $draft.endDate,
+                                    in: draft.startDate...,
+                                    displayedComponents: .date
+                                )
+                                .font(.subheadline.weight(.medium))
+                            }
                         }
-                    }
+                    
+
+                    MedicationPlanStepperTextArea(
+                        title: L10n.text("medical_record.forms.field.instructions", fallback: "用药说明"),
+                        text: $draft.instructions,
+                        placeholder: L10n.text("medication_plan.form.instructions_placeholder", fallback: "饭前/饭后、禁忌或医嘱备注"),
+                        keyboardVisible: $sheetKeyboardVisible,
+                        minHeight: 120
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -447,16 +464,16 @@ struct MedicationPlanStepperView: View {
                 }
             }
         }
-        .sparkFormBottomBar(
+        .medicationPlanStepperBottomBar(
             canSubmit: canGoNextFromSchedule,
-            cancelTitle: L10n.text("common.back", fallback: "返回"),
-            saveTitle: L10n.text("common.next"),
-            saveSystemImage: "arrow.right",
+            backTitle: L10n.text("common.skip", fallback: "跳过"),
+            primaryTitle: L10n.text("common.next"),
+            primarySystemImage: nil,
             keyboardVisible: $sheetKeyboardVisible,
-            onCancel: {
-                isSchedulePresented = false
+            onBack: {
+                isReviewPresented = true
             },
-            onSave: {
+            onPrimary: {
                 guard canGoNextFromSchedule else { return }
                 isReviewPresented = true
             }
@@ -473,7 +490,7 @@ struct MedicationPlanStepperView: View {
                     subtitle: L10n.text("medication_plan.stepper.review.subtitle", fallback: "最后确认一下，再完成保存")
                 )
 
-                SparkFormCard(title: L10n.text("medication_plan.stepper.review.card", fallback: "信息摘要"), titleSystemImage: "doc.text.magnifyingglass") {
+                MedicationPlanStepperCard(title: L10n.text("medication_plan.stepper.review.card", fallback: "信息摘要"),subtitle: L10n.text("medication_plan.stepper.review.subtitle", fallback: "最后确认一下，再完成保存"), systemImage: "doc.text.magnifyingglass") {
                     VStack(alignment: .leading, spacing: 12) {
                         summaryRow(title: L10n.text("medication_plan.form.field.drug_name", fallback: "药品名称"), value: draft.drugName.nilIfBlank ?? L10n.text("common.unknown", fallback: "未知"))
                         summaryRow(title: L10n.text("medication_plan.form.field.frequency", fallback: "服药频次"), value: draft.reminderFrequencyPickerDisplay)
@@ -499,31 +516,36 @@ struct MedicationPlanStepperView: View {
                     }
                 }
 
-                SparkFormCard(title: L10n.text("medication_plan.stepper.review.reminder", fallback: "用药提醒"), titleSystemImage: "bell.badge.fill") {
-                    Toggle(L10n.text("medication_plan.form.field.reminder_enabled", fallback: "开启提醒"), isOn: $draft.reminderEnabled)
-                        .font(.subheadline.weight(.medium))
-                }
-
-                if shouldShowCollaborationSection {
-                    SparkFormCard(title: L10n.text("medication_plan.stepper.review.collaboration", fallback: "非本人提醒协同"), titleSystemImage: "person.2.fill") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Button {
-                                openShareSheet()
-                            } label: {
-                                Label(L10n.text("medication_plan.stepper.review.share_member", fallback: "邀请他人通知用药"), systemImage: "square.and.arrow.up")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                MedicationPlanStepperCard(title: L10n.text("medication_plan.stepper.review.reminder", fallback: "用药提醒"), systemImage: "bell.badge.fill") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Toggle(L10n.text("medication_plan.form.field.reminder_enabled", fallback: "开启提醒"), isOn: $draft.reminderEnabled)
+                            .font(.subheadline.weight(.medium))
+                        
+                        if shouldShowCollaborationSection  && draft.reminderEnabled {
+                            VStack(alignment: .leading, spacing: 16) {
+                                
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Button {
+                                        openShareSheet()
+                                    } label: {
+                                        Label(L10n.text("medication_plan.stepper.review.share_member", fallback: "邀请他人通知用药"), systemImage: "square.and.arrow.up")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .font(.headline)
+                                            .foregroundStyle(.primary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(homeDependencies == nil || selectedMember == nil)
+                                    
+                                    Toggle(L10n.text("medication_plan.stepper.review.local_reminder", fallback: "本机提醒开关"), isOn: $localReminderEnabled)
+                                        .font(.subheadline.weight(.medium))
+                                        .disabled(homeDependencies == nil || isLoadingLocalReminderAuthorization)
+                                    
+                                    if isLoadingLocalReminderAuthorization {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .disabled(homeDependencies == nil || selectedMember == nil)
-
-                            Button {
-                                enableLocalReminderForThisDevice()
-                            } label: {
-                                Label(L10n.text("medication_plan.stepper.review.enable_local", fallback: "在本机开启通知"), systemImage: "bell.badge")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(homeDependencies == nil)
                         }
                     }
                 }
@@ -544,16 +566,12 @@ struct MedicationPlanStepperView: View {
                 }
             }
         }
-        .sparkFormBottomBar(
+        .medicationPlanStepperBottomBar(
             canSubmit: canSubmit,
-            cancelTitle: L10n.text("common.back", fallback: "返回"),
-            saveTitle: L10n.text("common.done"),
-            saveSystemImage: "checkmark.circle.fill",
+            primaryTitle: L10n.text("common.done"),
+            primarySystemImage: nil,
             keyboardVisible: $sheetKeyboardVisible,
-            onCancel: {
-                isReviewPresented = false
-            },
-            onSave: {
+            onPrimary: {
                 submitDraft()
             }
         )
@@ -564,20 +582,20 @@ struct MedicationPlanStepperView: View {
             HStack {
                 Spacer(minLength: 0)
                 Image(systemName: systemImage)
-                    .font(.system(size: 40, weight: .semibold))
+                    .font(.largeTitle.weight(.semibold))
                     .foregroundStyle(Color(accentColor))
                     .frame(width: 120, height: 120)
                     .background(Color(accentColor).opacity(0.12), in: Circle())
                 Spacer(minLength: 0)
             }
-
-            Text(title)
-                .font(.title2.weight(.bold))
-                .foregroundStyle(.primary)
-
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+//
+//            Text(title)
+//                .font(.title2.weight(.bold))
+//                .foregroundStyle(.primary)
+//
+//            Text(subtitle)
+//                .font(.subheadline)
+//                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -595,26 +613,72 @@ struct MedicationPlanStepperView: View {
         }
     }
 
-    private var shouldShowCollaborationSection: Bool {
-        guard let member = selectedMember else { return false }
-        return member.relationship != "self"
-    }
-
     private func openShareSheet() {
         guard let member = selectedMember, homeDependencies != nil else { return }
         pendingShareMember = member
         showShareSheet = true
     }
 
-    private func enableLocalReminderForThisDevice() {
-        draft.reminderEnabled = true
+    private func loadLocalReminderAuthorizationIfNeeded() {
+        guard case .serverEdit(let existing) = mode else { return }
+        guard shouldShowCollaborationSection else { return }
+        guard didLoadLocalReminderAuthorization == false else { return }
         guard let homeDependencies else { return }
-        guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
+        didLoadLocalReminderAuthorization = true
+        isLoadingLocalReminderAuthorization = true
+        let planID = existing.id
+        Task { @MainActor in
+            defer { isLoadingLocalReminderAuthorization = false }
+            do {
+                let authorization = try await homeDependencies.medicalQueryAPI.fetchMedicationReminderLocalAuthorization(planID: planID)
+                localReminderEnabled = authorization.enabled
+                originalLocalReminderEnabled = authorization.enabled
+                formLog.info(
+                    "MedicationPlanStepperView: loaded local reminder authorization planID=\(planID) enabled=\(authorization.enabled) mode=\(modeLogLabel)",
+                    module: formLogModule
+                )
+            } catch {
+                localReminderEnabled = false
+                originalLocalReminderEnabled = false
+                formLog.warning(
+                    "MedicationPlanStepperView: failed to load local reminder authorization planID=\(planID) error=\(error.localizedDescription) mode=\(modeLogLabel)",
+                    module: formLogModule
+                )
+            }
+        }
+    }
+
+    private func syncLocalReminderAuthorizationAfterSaveIfNeeded(savedPlan: SparkMedicalSyncAPI.RemoteMedicationPlan) {
+        guard shouldShowCollaborationSection else { return }
+        guard let homeDependencies else { return }
+        guard localReminderEnabled != originalLocalReminderEnabled else { return }
+        let enabled = localReminderEnabled
+        let planID = savedPlan.id
+        formLog.info(
+            "MedicationPlanStepperView: schedule local reminder authorization sync planID=\(planID) enabled=\(enabled) mode=\(modeLogLabel)",
+            module: formLogModule
+        )
         Task {
-            await homeDependencies.medicationReminderSyncCoordinator.requestSystemPermissionAndRebuild(
-                accountID: session.accountID,
-                members: memberContextStore?.context.members ?? []
-            )
+            do {
+                if enabled {
+                    _ = try await homeDependencies.medicalQueryAPI.upsertMedicationReminderLocalAuthorization(
+                        planID: planID,
+                        enabled: true,
+                        source: "medication_plan_stepper_review"
+                    )
+                } else {
+                    try await homeDependencies.medicalQueryAPI.disableMedicationReminderLocalAuthorization(planID: planID)
+                }
+                formLog.info(
+                    "MedicationPlanStepperView: local reminder authorization sync succeeded planID=\(planID) enabled=\(enabled) mode=\(modeLogLabel)",
+                    module: formLogModule
+                )
+            } catch {
+                formLog.warning(
+                    "MedicationPlanStepperView: local reminder authorization sync failed planID=\(planID) enabled=\(enabled) error=\(error.localizedDescription) mode=\(modeLogLabel)",
+                    module: formLogModule
+                )
+            }
         }
     }
 
@@ -635,6 +699,14 @@ struct MedicationPlanStepperView: View {
             draft.dosePerTime = suggested
         }
         lastAutoSuggestedDosePerTime = suggested
+    }
+
+    private func skipSpecificationStep() {
+        draft.doseValue = ""
+        draft.doseUnit = ""
+        draft.dosePerTime = ""
+        lastAutoSuggestedDosePerTime = ""
+        isSchedulePresented = true
     }
 
     private var selectedMedicineBoxTitle: String {
@@ -658,6 +730,17 @@ struct MedicationPlanStepperView: View {
             boxes.insert(box, at: 0)
         }
         onMedicineBoxSaved(box)
+    }
+
+    private var modeLogLabel: String {
+        switch mode {
+        case .create:
+            return "create"
+        case .serverEdit:
+            return "serverEdit"
+        case .localEdit:
+            return "localEdit"
+        }
     }
 
     private func applyMedicineBoxSelection(_ box: SparkMedicalSyncAPI.RemoteMedicineBox?) {
@@ -709,15 +792,7 @@ struct MedicationPlanStepperView: View {
                 return
             }
             onServerSaved?(saved)
-            if let reminderPostSaveController, let homeDependencies, let memberContextStore {
-                reminderPostSaveController.handlePlanChanged(
-                    saved,
-                    homeDependencies: homeDependencies,
-                    memberContextStore: memberContextStore,
-                    memberID: memberID,
-                    notificationClient: notificationClient
-                )
-            }
+            syncLocalReminderAuthorizationAfterSaveIfNeeded(savedPlan: saved)
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
@@ -726,9 +801,28 @@ struct MedicationPlanStepperView: View {
 
     private func validateDraft() -> Bool {
         guard canSubmit else {
-            alertMessage = draft.validationMessage
+            alertMessage = stepperValidationMessage
             return false
         }
         return true
+    }
+
+    private var stepperValidationMessage: String {
+        if draft.drugName.nilIfBlank == nil {
+            return L10n.text("medication_plan.form.validation.drug_name_required", fallback: "请填写药品名称")
+        }
+        if draft.isReminderFrequencyComplete == false {
+            return L10n.text("medication_plan.form.validation.frequency_incomplete", fallback: "请完整选择服药频次（每几天需选天数，每周需至少选一天）")
+        }
+        if draft.resolvedFrequencyText.nilIfBlank == nil {
+            return L10n.text("medication_plan.form.validation.frequency_text_required", fallback: "请填写或生成服药频次说明")
+        }
+        if let reminderTimesError = draft.reminderTimesError {
+            return reminderTimesError
+        }
+        if draft.hasEndDate && draft.endDate < draft.startDate {
+            return L10n.text("medication_plan.form.validation.end_date_before_start", fallback: "结束日期不能早于开始日期")
+        }
+        return L10n.text("medication_plan.form.validation.incomplete", fallback: "请完善服药计划信息")
     }
 }

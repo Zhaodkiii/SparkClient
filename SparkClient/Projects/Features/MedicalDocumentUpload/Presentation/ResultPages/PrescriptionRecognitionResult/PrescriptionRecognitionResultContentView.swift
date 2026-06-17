@@ -762,7 +762,7 @@ struct PrescriptionRecognitionResultContentView: View {
         case .medication(let batchIndex, let index, let med):
             if let detailNavigationContext {
                 // 编辑单条用药计划，临时药盒仅用于表单展示当前识别出的药盒信息。
-                MedicationPlanStepperView(
+                MedicationPlanFormView(
                     mode: .localEdit(existing: MedicationPlanDraft(recognition: med), onSubmit: { updatedDraft in
                         let updated = updatedDraft.recognitionDraft(preserving: med)
                         updateMedicationDraft(prescriptionIndex: batchIndex, medicationIndex: index, draft: updated)

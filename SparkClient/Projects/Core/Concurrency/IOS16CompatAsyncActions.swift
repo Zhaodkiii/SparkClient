@@ -23,6 +23,8 @@ final class MainActorAsyncAction<Input> {
         self.perform = perform
     }
 
+    deinit {}
+
     func call(_ input: Input) async {
         await perform(input)
     }
@@ -35,6 +37,8 @@ final class MainActorThrowingAction<Input> {
     init(perform: @escaping (Input) async throws -> Void) {
         self.perform = perform
     }
+
+    deinit {}
 
     func call(_ input: Input) async throws {
         try await perform(input)
@@ -61,6 +65,8 @@ final class MainActorThrowingReturningAction<Input, Output> {
     init(perform: @escaping (Input) async throws -> Output) {
         self.perform = perform
     }
+
+    deinit {}
 
     func call(_ input: Input) async throws -> Output {
         try await perform(input)

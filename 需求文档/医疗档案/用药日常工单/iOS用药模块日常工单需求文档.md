@@ -11,6 +11,8 @@
 | `MEDICATION-EXECUTION-000003` | 用药通知查看与管理页 | 需求设计中 | 在服药计划列表右上角增加“已有通知”入口，查看本机已注册/已送达用药本地通知，支持补齐通知、取消单条、清除全部；参考 HealthClient 通知管理页，但落地需符合 SparkClient 的本地通知、LaunchIntent、L10n 与 Home 依赖架构 |
 | `MEDICATION-EXECUTION-000004` | 共享成员用药通知协同详细设计 | 需求设计中 | 基于 `MEDICATION-NOTIFICATION-000002`，落地非本人成员用药提醒归属判断、成员分享优先流程、服务端开启提醒计划汇总接口、计划级他人本机提醒授权登记、公共健康资源变更 APNs 告知、客户端清理本地 consent 并统一走服务端授权 |
 | `MEDICATION-EXECUTION-000005` | 用药通知计划级服务端授权收敛改造 | 需求设计中 | 在 `000004` 基础上进一步收敛为“只认服务端计划级授权”方案：授权粒度精确到 `medication_plan_id`，客户端删除 `MedicationReminderConsentStore` 业务依赖，授权状态挂到 `RemoteMedicationPlan` 当前用户视角字段中，通过现有用药计划保存/查询链路维护，不再新增独立授权查询接口 |
+| `MEDICATION-EXECUTION-000006` | 用药计划编辑页提醒开关与旧协同流程收敛讨论 | 需求讨论中 | 围绕 `MedicationPlanStepperView` 的确认页协同提醒模块改造成开关：新增/编辑默认关闭，服务端编辑回填历史授权状态，本地编辑不展示；保存成功后按计划 ID 异步同步授权/取消授权；同时清理旧的分享、本机提醒协同后置处理流程 |
+| `MEDICATION-EXECUTION-000007` | 用药计划编辑页提醒开关与授权同步详细设计 | 需求详细设计中 | 基于 `000006` 的确认结论，输出可落地的客户端/服务端详细设计：确认页保留邀请他人通知并引入本机提醒开关、服务端编辑默认回填历史授权、保存成功后按计划 ID 异步同步授权、清理旧 post-save 流程、定义接口入参、返回字段、日志与验收标准 |
 
 ## 工单 `MEDICATION-EXECUTION-000001`：用药执行中心多日进度圆环与记录窗口优化
 
@@ -3321,3 +3323,398 @@ rebuild(accountID)
 6. 客户端改造 `MedicationReminderSyncCoordinator`，去掉本地 consent 二次过滤。
 7. 客户端移除 `AppContainer`、`FeatureAssemblies` 中对 `MedicationReminderConsentStore` 的依赖。
 8. 回归 `000002` 与 `000003`，确认通知编排与通知管理页不回退。
+
+---
+
+## 工单 `MEDICATION-EXECUTION-000006`：用药计划编辑页提醒开关与旧协同流程收敛讨论
+
+### 工单状态
+
+需求讨论中。
+
+### 需求来源
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:584-610
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:698-709
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:810-819
+SparkService/medical/views.py:1233-1329
+```
+
+本工单要讨论的是：在用药计划新增 / 编辑流程里，如何把“非本人提醒协同”从一段固定模块改造成一个更清晰的提醒开关，并把旧的分享 / 本机提醒后置处理流程拆掉，避免编辑页同时承担两套提醒逻辑。
+
+### 1. 当前问题
+
+当前 `MedicationPlanStepperView` 的确认页里，存在一块“非本人提醒协同”区域，里面同时包含：
+
+1. 邀请他人通知用药。
+2. 在本机开启通知。
+
+这段逻辑的问题是：
+
+1. 对新建计划、普通编辑、服务端编辑、本地草稿编辑来说，行为并不统一。
+2. “是否开启提醒”与“是否触发协同 / 分享 / 授权”混在同一块 UI 里，用户感知不清晰。
+3. 当前保存后又有一段额外的后置处理链路，容易和计划保存主流程重复。
+4. 本地编辑场景不需要展示这块能力，但当前旧实现并没有清楚拆分。
+5. 旧的保存后处理如果继续保留，后续很容易出现重复弹窗、重复同步、重复授权。
+
+### 2. 讨论目标
+
+1. 确认确认页中的协同区域保留“邀请他人通知”，同时把“在本机开启通知”改为“本机提醒开关”。
+2. 确认新建 / 普通编辑时默认关闭。
+3. 确认服务端编辑时，如果该计划此前已经开启过通知，则默认回填为开启。
+4. 确认本地编辑不展示这块模块。
+5. 确认保存成功后，再按计划 ID 异步调用授权接口，失败不阻塞主保存。
+6. 确认没有开启提醒时，不调用授权接口。
+7. 确认旧的协同分享与 post-save 流程可以清理，不再保留双路径。
+
+### 3. 建议口径
+
+#### 3.1 确认页 UI
+
+建议保留原来的“非本人提醒协同”卡片结构，其中：
+
+1. 保留“邀请他人通知”入口。
+2. 将“在本机开启通知”文案改为“本机提醒开关”。
+
+```text
+邀请他人通知
+本机提醒开关
+```
+
+展示规则：
+
+| 场景 | 是否展示 | 默认值 |
+| --- | --- | --- |
+| 新增 | 展示 | 关闭 |
+| 服务端编辑 | 展示 | 读取该计划当前是否已开启过通知，若已开启则默认开启 |
+| 本地编辑 | 不展示 | 无 |
+
+#### 3.2 保存后的授权同步
+
+保存成功后，按“保存结果里的计划 ID”异步调用服务端授权操作：
+
+1. 开关从关闭变开启：调用新增 / 授权接口。
+2. 开关从开启变关闭：调用取消 / 删除接口。
+3. 开关没有变化：不调用授权接口。
+4. 保存失败：不调用授权接口。
+5. 授权接口失败：只记录日志，不影响主保存结果，也不做额外 UI 干预。
+
+#### 3.3 服务端编辑时的默认值回填
+
+服务端编辑进入编辑页时，建议先按计划 ID 查询当前授权状态，再决定开关默认值。这样可以避免用户误以为开启状态丢失。
+
+### 4. 需要清理的旧流程
+
+本工单明确要求清理以下旧逻辑：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:698-709
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:810-819
+```
+
+讨论点：
+
+1. 这两段是否属于同一条旧后置流程。
+2. 是否可以完全删掉，不再保留兼容分支。
+3. 删除后，计划保存主流程是否已经足够覆盖新增 / 编辑 / 授权同步。
+
+### 5. 待确认问题
+
+1. 这里的“是否开启过该用药通知”，是否严格按“当前计划 ID 的计划级授权”判断？
+2. 服务端编辑时，若历史上有授权但当前计划已被停用或改成不提醒，默认值是否仍然按授权记录回填？
+3. 本地编辑不展示模块后，如果用户希望补开通知，是不是应该等本地草稿转成正式计划后再统一处理？
+4. 开关从关到开时，是否还需要触发一次通知重建，还是只在保存成功后让现有主流程完成即可？
+5. 如果服务端授权接口成功但本次计划保存失败，是否需要回滚授权？当前倾向是不回滚，但这点需要确认。
+
+### 6. 影响范围
+
+#### 客户端
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanForm/MedicationPlanFormView.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/*
+SparkClient/SparkClient/Projects/Core/Networking/API/Medical/MedicalSyncAPI.swift
+```
+
+#### 服务端
+
+```text
+SparkService/medical/views.py
+SparkService/medical/services/*
+SparkService/medical/serializers.py
+SparkService/medical/models.py
+```
+
+### 7. 建议验收口径
+
+1. 新增 / 编辑页面的提醒开关行为一致。
+2. 服务端编辑可回填历史授权开关。
+3. 本地编辑不展示该模块。
+4. 保存成功后，授权同步是异步的，不阻塞主流程。
+5. 开关关闭时不调用授权操作。
+6. 旧的分享 / 本机提醒后置流程已清理，不再进入双路径。
+7. 相关日志能清楚区分“计划保存成功”和“授权同步成功 / 失败”。
+
+---
+
+## 工单 `MEDICATION-EXECUTION-000007`：用药计划编辑页提醒开关与授权同步详细设计
+
+### 工单状态
+
+需求详细设计中。
+
+### 需求来源
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:584-610
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:599-607
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:698-709
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift:810-819
+SparkService/medical/views.py:1233-1329
+SparkService/medical/services/medication_reminder_authorization_service.py
+SparkClient/SparkClient/Projects/Core/Networking/API/Medical/MedicalSyncAPI.swift
+```
+
+### 1. 设计目标
+
+本工单只解决一件事：
+
+```text
+在用药计划新增 / 编辑流程中，把“本机提醒”作为一个明确、可回填、可异步同步的计划级开关；同时保留“邀请他人通知”，并清理旧的 post-save 协同流程。
+```
+
+拆解为 5 个落地目标：
+
+1. 确认页保留“邀请他人通知”，并把“在本机开启通知”改成“本机提醒开关”。
+2. 新增 / 普通编辑默认关闭本机提醒开关。
+3. 服务端编辑时，若该计划已有开启过的授权状态，则默认回填开启。
+4. 本地编辑不展示该模块。
+5. 保存成功后，按计划 ID 异步调用授权同步接口，失败不阻塞主保存。
+
+### 2. 设计原则
+
+1. 计划保存主流程优先，授权同步是附属动作。
+2. 计划级授权必须以 `medication_plan_id` 为唯一粒度。
+3. UI 只表达用户意图，不承担授权判定和保存编排。
+4. 成功保存后再异步同步，不在编辑页内做多段后置处理。
+5. 授权失败只记录日志，不回退主保存结果。
+
+### 3. 页面交互设计
+
+#### 3.1 确认页区域
+
+文件：
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift
+```
+
+确认页的“非本人提醒协同”卡片保持，内部两个动作并存：
+
+```text
+邀请他人通知
+本机提醒开关
+```
+
+其中：
+
+1. “邀请他人通知”保留原语义，沿用现有 ShareSheet 流程。
+2. “在本机开启通知”统一改名为“本机提醒开关”。
+3. 本地编辑模式不展示该卡片。
+
+#### 3.2 默认值规则
+
+| 场景 | 是否展示 | 默认值来源 |
+| --- | --- | --- |
+| 新增 | 展示 | 关闭 |
+| 服务端编辑 | 展示 | 当前计划的计划级授权状态 |
+| 本地编辑 | 不展示 | 无 |
+
+服务端编辑的默认值回填规则：
+
+1. 进入编辑页时先按计划 ID 查询授权状态。
+2. 如果当前用户对该计划已有授权记录，则开关默认开启。
+3. 如果没有授权记录，则默认关闭。
+4. 回填失败时，按关闭处理，并记录日志。
+
+### 4. 数据与状态设计
+
+#### 4.1 客户端状态
+
+建议在 `MedicationPlanStepperView` 中保留一个独立状态：
+
+```swift
+@State private var reminderEnabledOverride: Bool?
+```
+
+用于：
+
+1. 服务端编辑进入时回填初始值。
+2. 确保 `MedicationPlanFormView` 初始化时草稿值和当前授权状态一致。
+
+#### 4.2 计划级授权状态
+
+授权状态不是计划公共字段，而是当前用户对当前计划的关系字段。
+
+建议在客户端只消费以下返回字段：
+
+```text
+localReminderAuthorizationEnabled
+localReminderAuthorizationSource
+localReminderAuthorizationUpdatedAt
+```
+
+语义：
+
+1. `localReminderAuthorizationEnabled` 代表当前用户是否允许该计划在本机创建提醒。
+2. `localReminderAuthorizationSource` 用于日志和排查。
+3. `localReminderAuthorizationUpdatedAt` 用于展示和排障，不作为业务判断主依据。
+
+### 5. 保存流程设计
+
+#### 5.1 主保存流程
+
+保存流程保持不变：
+
+```text
+填写计划
+  -> 点击完成
+  -> 校验草稿
+  -> 保存到服务端
+  -> 返回保存成功的 RemoteMedicationPlan
+```
+
+#### 5.2 授权同步流程
+
+保存成功后，按保存返回的 `plan.id` 异步同步本机提醒授权。
+
+推荐流程：
+
+```text
+保存成功
+  -> 比较保存前后“本机提醒开关”是否变化
+  -> 若无变化，结束
+  -> 若变为开启，调用授权新增/启用接口
+  -> 若变为关闭，调用授权取消/禁用接口
+  -> 授权同步失败仅打日志
+```
+
+#### 5.3 异步要求
+
+授权同步必须异步执行，原因：
+
+1. 避免编辑保存完成后被授权流程拖慢。
+2. 避免授权接口失败阻塞计划主保存。
+3. 避免保存弹窗 / Sheet 关闭延迟。
+
+### 6. 服务端接口设计
+
+#### 6.1 现有保存接口
+
+沿用现有用药计划保存接口，不新增独立“授权保存”页面。
+
+保存接口需要支持携带：
+
+```text
+local_reminder_authorization_for_current_user
+```
+
+建议语义：
+
+| 值 | 含义 |
+| --- | --- |
+| `nil` | 本次不改授权 |
+| `true` | 为当前用户登记该计划的本机提醒资格 |
+| `false` | 取消当前用户对该计划的本机提醒资格 |
+
+#### 6.2 计划返回字段
+
+用药计划 DTO 返回时，补充当前用户视角授权状态：
+
+```text
+localReminderAuthorizationEnabled
+localReminderAuthorizationSource
+localReminderAuthorizationUpdatedAt
+```
+
+客户端编辑页只读这些字段，不再自己推导 consent。
+
+### 7. 旧流程清理范围
+
+本工单要求清理两类旧逻辑：
+
+1. 确认页中老的“本机开启通知”按钮式流程。
+2. 保存后额外 post-save 处理链路里的重复协同逻辑。
+
+需要重点排查并清理的区域：
+
+```text
+MedicationPlanStepperView.swift:698-709
+MedicationPlanStepperView.swift:810-819
+```
+
+清理目标：
+
+1. 不再由编辑页同时承担“保存 + 协同弹窗 + 授权同步 + 分享流”四件事。
+2. 不再保留一套旧后置处理作为兼容分支。
+3. 授权同步只保留一条异步路径。
+
+### 8. 日志设计
+
+建议至少记录以下日志点：
+
+1. 打开服务端编辑页时，开始查询本机提醒授权状态。
+2. 查询授权状态成功 / 失败。
+3. 计划保存成功，记录保存后的 plan ID。
+4. 授权同步开始 / 成功 / 失败。
+5. 关闭开关但无需同步时，记录跳过原因。
+
+日志字段建议包含：
+
+```text
+accountID
+memberID
+planID
+reminderEnabled
+authorizationEnabled
+source
+```
+
+### 9. 文件影响范围
+
+#### 客户端
+
+```text
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanStepper/MedicationPlanStepperView.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationPlanForm/MedicationPlanFormView.swift
+SparkClient/SparkClient/Projects/Core/Networking/API/Medical/MedicalSyncAPI.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderSyncCoordinator.swift
+SparkClient/SparkClient/Projects/Features/Home/Presentation/MedicalLists/Medications/MedicationNotification/MedicationReminderOwnershipCoordinator.swift
+SparkClient/SparkClient/Projects/App/Sources/App/AppContainer.swift
+SparkClient/SparkClient/Projects/App/Sources/App/FeatureAssemblies.swift
+```
+
+#### 服务端
+
+```text
+SparkService/medical/views.py
+SparkService/medical/models.py
+SparkService/medical/serializers.py
+SparkService/medical/services/medication_reminder_authorization_service.py
+SparkService/medical/services/medication_reminder_service.py
+```
+
+### 10. 验收标准
+
+1. 确认页保留“邀请他人通知”。
+2. 确认页“在本机开启通知”文案改为“本机提醒开关”。
+3. 新增 / 普通编辑默认关闭。
+4. 服务端编辑能回填已开启授权。
+5. 本地编辑不展示模块。
+6. 计划保存成功后，授权同步异步执行。
+7. 开关无变化时不调用授权接口。
+8. 授权接口失败不影响主保存。
+9. 旧的 post-save 处理链路可清理完毕。
+10. 客户端不再依赖本地 consent 作为判定源。

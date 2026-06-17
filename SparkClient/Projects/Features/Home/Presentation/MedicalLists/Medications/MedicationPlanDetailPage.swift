@@ -30,8 +30,6 @@ struct MedicationPlanDetailPage: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var alertMessage: String?
-    @State private var deferredPostSavePlan: SparkMedicalSyncAPI.RemoteMedicationPlan?
-    @StateObject private var reminderPostSaveController = MedicationReminderPostSaveController()
 
     init(
         mode: MedicationPlanDetailMode = .server,
@@ -302,7 +300,7 @@ struct MedicationPlanDetailPage: View {
                 .disabled(isDeleting)
             }
         }
-        .sheet(isPresented: $showingEditSheet, onDismiss: runDeferredPostSaveHandlingIfNeeded) {
+        .sheet(isPresented: $showingEditSheet) {
             if mode == .localDraft, let memberID {
                 MedicationPlanStepperView(
                     mode: .localEdit(
@@ -319,11 +317,10 @@ struct MedicationPlanDetailPage: View {
                     notificationClient: notificationClient,
                     onMedicineBoxSaved: handleMedicineBoxSaved,
                     homeDependencies: homeDependencies,
-                    memberContextStore: memberContextStore,
-                    reminderPostSaveController: reminderPostSaveController
+                    memberContextStore: memberContextStore
                 )
             } else if let memberID {
-                MedicationPlanStepperView(
+                MedicationPlanFormView(
                     mode: .serverEdit(existing: currentPlan),
                     memberID: memberID,
                     medicineBoxes: medicineBoxes,
@@ -334,12 +331,8 @@ struct MedicationPlanDetailPage: View {
                     onServerSaved: { saved in
                         currentPlan = saved
                         onSaved(saved)
-                        deferredPostSavePlan = saved
                         showingEditSheet = false
-                    },
-                    homeDependencies: homeDependencies,
-                    memberContextStore: memberContextStore,
-                    reminderPostSaveController: reminderPostSaveController
+                    }
                 )
             } else {
                 Text(L10n.text("home.medical.medicine_box.select_member_first"))
@@ -370,28 +363,6 @@ struct MedicationPlanDetailPage: View {
         .onChange(of: completeData?.familyMedicineBoxes) { newValue in
             guard let newValue else { return }
             medicineBoxes = newValue
-        }
-        .medicationReminderPostSaveHandling(
-            controller: reminderPostSaveController,
-            homeDependencies: homeDependencies,
-            memberContextStore: memberContextStore,
-            notificationClient: notificationClient
-        )
-    }
-
-    private func runDeferredPostSaveHandlingIfNeeded() {
-        guard let saved = deferredPostSavePlan else { return }
-        deferredPostSavePlan = nil
-        guard let homeDependencies else { return }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            reminderPostSaveController.handlePlanChanged(
-                saved,
-                homeDependencies: homeDependencies,
-                memberContextStore: memberContextStore,
-                memberID: memberID,
-                notificationClient: notificationClient
-            )
         }
     }
 

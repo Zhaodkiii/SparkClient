@@ -141,7 +141,7 @@ struct MedicationPlanDraft {
             drugName: drugName.trimmed,
             dosePerTime: dosePerTime.trimmed,
             doseValue: doseValueValue,
-            doseUnit: doseUnit.nilIfBlank ?? "片",
+            doseUnit: doseUnit.nilIfBlank ?? "",
             frequencyType: reminderFrequencyType.rawValue,
             everyNDays: reminderFrequencyType == .everyNDays ? everyNDays : nil,
             weeklyWeekdays: weeklyPayload,

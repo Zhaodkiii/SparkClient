@@ -575,7 +575,7 @@ struct CaseRecognitionResultContentView: View {
         // 5. 编辑处方中的单个药品
         case .medicationItem(let batchIndex, let itemIndex, let medDraft):
             if let detailNavigationContext {
-                MedicationPlanStepperView(
+                MedicationPlanFormView(
                     mode: .localEdit(existing: MedicationPlanDraft(recognition: medDraft), onSubmit: { updatedDraft in
                         let updated = updatedDraft.recognitionDraft(preserving: medDraft)
                         var batches = draft.prescriptions ?? []

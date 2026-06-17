@@ -344,7 +344,7 @@ struct MedicationsListPage: View {
     private func medicationPlanSheetContent(for destination: MedicationPlanSheetDestination) -> some View {
         if let memberID {
             MedicationPlanStepperView(
-                mode: destination.formMode,
+                mode: destination.planMode,
                 memberID: memberID,
                 medicineBoxes: medicineBoxes,
                 workflowAPI: workflowAPI,
@@ -748,7 +748,16 @@ private enum MedicationPlanSheetDestination: Identifiable {
         }
     }
 
-    var formMode: MedicationPlanStepperView.Mode {
+    var formMode: MedicationPlanFormView.Mode {
+        switch self {
+        case .create:
+            return .create
+        case .serverEdit(let plan):
+            return .serverEdit(existing: plan)
+        }
+    }
+    
+    var planMode: MedicationPlanStepperView.Mode {
         switch self {
         case .create:
             return .create

@@ -13,7 +13,7 @@ struct MedicationPlanDoseValueStepperRow: View {
     var keyboardVisible: Binding<Bool>?
     var controlStyle: ControlStyle = .systemStepper
     var title: String = L10n.text("medication_plan.form.dose_value", fallback: "剂量数值")
-    var minValue: Double = 1
+    var minValue: Double = 0
     var maxValue: Double = 9999
     var step: Double = 1
 
@@ -37,6 +37,7 @@ struct MedicationPlanDoseValueStepperRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+
     }
 
     private var systemStepper: some View {
@@ -183,6 +184,9 @@ private struct MedicationPlanDoseValueCustomStepperControls: View {
         .padding(.horizontal, 12)
         .frame(minHeight: 36)
         .frame(maxWidth: .infinity)
+        .sparkKeyboardDoneToolbar {
+                    SparkKeyboardDismiss.endEditing()
+                }
         .background(
             Color(uiColor: .secondarySystemBackground),
             in: RoundedRectangle(cornerRadius: 12, style: .continuous)
