@@ -6,7 +6,7 @@ struct AppLaunchScreenView: View {
         Color(.systemBackground)
             .ignoresSafeArea()
             .overlay {
-                Image("appstore123")
+                Image("0260618")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 200, height: 200)

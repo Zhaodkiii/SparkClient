@@ -1,11 +1,25 @@
 import Foundation
 
+// MARK: - 营养模块 Use Case 层
+//
+// 本文件封装营养功能的应用层业务编排，职责包括：
+// 1. 调用 NutritionRepository 完成网络 I/O
+// 2. 通过 NutritionViewDataMapper / NutritionDraftBuilder 等将 Remote 模型转为 View 层可用的 ViewData
+// 3. 统一记录结构化日志（耗时、条数、关键 ID）
+// 4. 协调 HealthKit 与服务端的双向同步（仅本人成员）
+//
+// 各 UseCase 按功能域拆分，均为无状态 struct + Sendable，便于在 SwiftUI / Actor 间传递。
+
+// MARK: - 营养看板
+
+/// 营养首页看板：加载某日某成员的摄入汇总、目标进度、各餐次卡片
 struct NutritionDashboardUseCase: Sendable {
     let repository: NutritionRepository
     let logger: Logger
 
     private let logModule = LogModule.nutrition
 
+    /// 拉取远程看板并映射为首页展示数据
     func loadDashboard(memberID: Int, date: Date) async throws -> NutritionDashboardViewData {
         let startedAt = Date()
         logger.info(
@@ -22,18 +36,23 @@ struct NutritionDashboardUseCase: Sendable {
         return viewData
     }
 
+    /// 在看板基础上生成「营养详情」页所需的更细粒度汇总（宏量进度、来源拆分等）
     func loadDashboardDetail(memberID: Int, date: Date) async throws -> NutritionSummaryDetailViewData {
         let dashboard = try await loadDashboard(memberID: memberID, date: date)
         return NutritionViewDataMapper.summaryDetail(from: dashboard)
     }
 }
 
+// MARK: - 用餐记录
+
+/// 用餐记录的查询、创建、更新、删除及批量编辑（改份量、删食物、复制到其他餐次）
 struct NutritionMealRecordUseCase: Sendable {
     let repository: NutritionRepository
     let logger: Logger
 
     private let logModule = LogModule.nutrition
 
+    /// 原始 API 响应：某日用餐记录列表（可选按餐次筛选）
     func fetchMealRecordPage(
         memberID: Int,
         date: Date,
@@ -46,6 +65,7 @@ struct NutritionMealRecordUseCase: Sendable {
         return try await repository.listMealRecords(memberID: memberID, date: date, mealType: mealType)
     }
 
+    /// 按餐次分组后的列表 ViewData，供首页或历史列表展示
     func loadMealRecords(memberID: Int, date: Date) async throws -> [NutritionMealGroupViewData] {
         let startedAt = Date()
         let response = try await fetchMealRecordPage(memberID: memberID, date: date)
@@ -58,6 +78,7 @@ struct NutritionMealRecordUseCase: Sendable {
         return groups
     }
 
+    /// 某一餐次（如午餐）的详情页：食物列表、营养小计、进度条等
     func loadMealDetail(
         memberID: Int,
         date: Date,
@@ -86,6 +107,7 @@ struct NutritionMealRecordUseCase: Sendable {
         return viewData
     }
 
+    /// 使用完整请求体创建用餐记录（识别确认、手动录入等统一入口）
     func createMealRecord(_ request: SparkNutritionAPI.CreateMealRecordRequest) async throws -> SparkNutritionAPI.RemoteMealRecord {
         logger.info(
             "创建饮食记录 memberID=\(request.memberId) mealType=\(request.mealType)",
@@ -94,6 +116,7 @@ struct NutritionMealRecordUseCase: Sendable {
         return try await repository.createMealRecord(request)
     }
 
+    /// 从 UI 选中的食物条目构建请求并创建记录（简化调用方）
     func createMealRecord(
         memberID: Int,
         mealType: NutritionMealType,
@@ -109,6 +132,7 @@ struct NutritionMealRecordUseCase: Sendable {
         return try await createMealRecord(request)
     }
 
+    /// 部分或全量更新已有用餐记录
     func updateMealRecord(
         recordID: Int,
         request: SparkNutritionAPI.UpdateMealRecordRequest
@@ -122,6 +146,7 @@ struct NutritionMealRecordUseCase: Sendable {
         try await repository.deleteMealRecord(recordID: recordID)
     }
 
+    /// 修改单条 mealFood 的份量：effectiveRatio = 预设份量枚举 × 用户输入数量
     func updateMealFoodServing(
         record: SparkNutritionAPI.RemoteMealRecord,
         mealFoodID: Int,
@@ -141,6 +166,7 @@ struct NutritionMealRecordUseCase: Sendable {
         )
     }
 
+    /// 批量删除选中的 mealFood：若某条记录下食物删光则整记录删除，否则 PATCH 剩余列表
     func deleteMealFoods(
         mealFoodIDs: Set<Int>,
         records: [SparkNutritionAPI.RemoteMealRecord]
@@ -163,6 +189,7 @@ struct NutritionMealRecordUseCase: Sendable {
         }
     }
 
+    /// 将编辑页选中的食物复制到目标日期/餐次，生成一条新的手动录入记录
     func copyMealFoods(
         items: [NutritionMealFoodEditItemViewData],
         memberID: Int,
@@ -195,6 +222,7 @@ struct NutritionMealRecordUseCase: Sendable {
         return try await createMealRecord(request)
     }
 
+    /// 按日期区间加载历史，并按自然日聚合为 NutritionHistoryDayViewData
     func loadHistory(
         memberID: Int,
         dateFrom: Date,
@@ -220,12 +248,16 @@ struct NutritionMealRecordUseCase: Sendable {
     }
 }
 
+// MARK: - 食物搜索与自定义
+
+/// 食物/食谱搜索、收藏、用户自建食物与食谱
 struct NutritionSearchUseCase: Sendable {
     let repository: NutritionRepository
     let logger: Logger
 
     private let logModule = LogModule.nutrition
 
+    /// 按筛选条件搜索，结果映射为列表 Cell 所需的 ViewData
     func search(
         memberID: Int,
         filters: NutritionFoodSearchFilterState
@@ -247,6 +279,7 @@ struct NutritionSearchUseCase: Sendable {
         return items
     }
 
+    /// 空关键词 + type=food，用于首页推荐/常用食物列表
     func loadRecommendedFoods(memberID: Int) async throws -> [NutritionFoodSearchResultViewData] {
         let filters = NutritionFoodSearchFilterState(
             mode: .text,
@@ -258,6 +291,7 @@ struct NutritionSearchUseCase: Sendable {
         return try await search(memberID: memberID, filters: filters)
     }
 
+    /// 切换收藏状态：`isFavorite == true` 表示当前已收藏，执行取消；否则添加
     func toggleFavorite(
         targetType: String,
         targetID: Int,
@@ -276,6 +310,7 @@ struct NutritionSearchUseCase: Sendable {
         return try await repository.createFoodItem(request)
     }
 
+    /// 使用完整请求体创建用户食谱（含组成食物与营养汇总）
     func createRecipe(_ request: SparkNutritionAPI.CreateNutritionRecipeRequest) async throws -> SparkNutritionAPI.RemoteRecipeCreateResponse {
         logger.info(
             "创建膳食 name=\(LogMessageSanitizer.singleLineSnippet(request.name)) foods=\(request.foods.count)",
@@ -289,6 +324,7 @@ struct NutritionSearchUseCase: Sendable {
         return response
     }
 
+    /// 从草稿食物列表快速创建食谱：名称为描述或食物名拼接
     func createRecipe(
         from foods: [NutritionRecipeDraftFood],
         description: String
@@ -315,6 +351,7 @@ struct NutritionSearchUseCase: Sendable {
         return try await createRecipe(request)
     }
 
+    /// 将 RemoteNutritionSearchResult 转为 UI 列表项（统一食物/食谱的标题、副标题、营养网格）
     private func mapSearchResult(
         _ result: SparkNutritionAPI.RemoteNutritionSearchResult,
         mode: NutritionFoodSearchMode
@@ -368,6 +405,11 @@ struct NutritionSearchUseCase: Sendable {
     }
 }
 
+// MARK: - Apple Health 双向同步
+
+/// 协调 HealthKit 与服务端：读外部数据上报、写本 App 数据并回传 UUID
+///
+/// 安全策略：仅 `member.relationship` 表示本人时才读写 HealthKit，家庭成员数据不同步。
 struct NutritionHealthKitSyncUseCase: Sendable {
     let repository: NutritionRepository
     let healthKitStore: NutritionHealthKitStore
@@ -375,11 +417,13 @@ struct NutritionHealthKitSyncUseCase: Sendable {
 
     private let logModule = LogModule.nutrition
 
-    /// 本人成员进入首页时读取 Apple 健康外部营养摄入与能量消耗并上报服务端。
+    /// 本人成员进入首页时，读取 Apple 健康中的**第三方**营养摄入与能量消耗并上报服务端。
+    ///
+    /// 失败仅打 warning，不向上抛错，避免阻塞首页加载。
     func syncTodayIfNeeded(member: Member, date: Date) async {
-        guard member.isPrimary else {
+        guard member.isSelfMember else {
             logger.debug(
-                "跳过 HealthKit 同步：非本人成员 memberID=\(member.id)",
+                "跳过 HealthKit 同步：非本人成员 memberID=\(member.id) relationship=\(member.relationship)",
                 module: logModule
             )
             return
@@ -394,28 +438,28 @@ struct NutritionHealthKitSyncUseCase: Sendable {
         do {
             let intakeSamples = try await healthKitStore.fetchExternalIntakeSamples(on: date)
             if intakeSamples.isEmpty == false {
-                _ = try await repository.importAppleHealthIntakes(
+                let response = try await repository.importAppleHealthIntakes(
                     SparkNutritionAPI.AppleHealthIntakeImportRequest(
                         memberId: member.id,
                         samples: intakeSamples
                     )
                 )
                 logger.info(
-                    "HealthKit 外部营养摄入上报成功 count=\(intakeSamples.count) memberID=\(member.id)",
+                    "HealthKit 外部营养摄入上报成功 samples=\(intakeSamples.count) imported=\(response.imported.count) duplicates=\(response.duplicates.count) memberID=\(member.id)",
                     module: logModule
                 )
             }
 
             let burnSamples = try await healthKitStore.fetchEnergyBurnSamples(on: date)
             if burnSamples.isEmpty == false {
-                _ = try await repository.importAppleHealthEnergyBurns(
+                let response = try await repository.importAppleHealthEnergyBurns(
                     SparkNutritionAPI.AppleHealthEnergyBurnImportRequest(
                         memberId: member.id,
                         samples: burnSamples
                     )
                 )
                 logger.info(
-                    "HealthKit 能量消耗上报成功 count=\(burnSamples.count) memberID=\(member.id)",
+                    "HealthKit 能量消耗上报成功 samples=\(burnSamples.count) imported=\(response.imported.count) duplicates=\(response.duplicates.count) memberID=\(member.id)",
                     module: logModule
                 )
             }
@@ -432,11 +476,13 @@ struct NutritionHealthKitSyncUseCase: Sendable {
         }
     }
 
-    /// 服务端保存成功后写入 Apple 健康并按 intake 回写 HealthKit sample UUID。
+    /// 用餐记录服务端保存成功后，将营养素写入 Apple 健康，并按 intake 粒度回写 HealthKit sample UUID。
+    ///
+    /// 已有关联 `appleHealthId` 的 intake 由 HealthKitStore 内部跳过，保证幂等。
     func writeMealRecordIfNeeded(member: Member, record: SparkNutritionAPI.RemoteMealRecord) async {
-        guard member.isPrimary else {
+        guard member.isSelfMember else {
             logger.debug(
-                "跳过 HealthKit 写入：非本人成员 memberID=\(member.id)",
+                "跳过 HealthKit 写入：非本人成员 memberID=\(member.id) relationship=\(member.relationship)",
                 module: logModule
             )
             return
@@ -472,13 +518,14 @@ struct NutritionHealthKitSyncUseCase: Sendable {
         }
     }
 
+    /// 手动创建的能量消耗记录写入 HealthKit（仅 source=manual 且尚未关联 UUID 时）
     func writeEnergyBurnIfNeeded(
         member: Member,
         record: SparkNutritionAPI.RemoteEnergyBurnRecord
     ) async {
-        guard member.isPrimary else {
+        guard member.isSelfMember else {
             logger.debug(
-                "跳过 HealthKit 能量消耗写入：非本人成员 memberID=\(member.id)",
+                "跳过 HealthKit 能量消耗写入：非本人成员 memberID=\(member.id) relationship=\(member.relationship)",
                 module: logModule
             )
             return
@@ -516,6 +563,9 @@ struct NutritionHealthKitSyncUseCase: Sendable {
     }
 }
 
+// MARK: - 能量消耗 CRUD
+
+/// 本 App 内手动录入的能量消耗记录（与 HealthKit 导入的 burn 记录区分管理）
 struct NutritionEnergyBurnUseCase: Sendable {
     let repository: NutritionRepository
     let logger: Logger

@@ -83,6 +83,11 @@ struct Member: Identifiable, Codable, Equatable, Sendable {
     var effectiveBinding: MemberBindingInfo {
         binding ?? .restrictedFallback
     }
+
+    var isSelfMember: Bool {
+        let normalized = relationship.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "self" || normalized == "本人"
+    }
 }
 
 extension MemberBindingInfo {

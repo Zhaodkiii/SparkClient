@@ -17,8 +17,8 @@
                         <rect key="frame" x="0.0" y="0.0" width="440" height="956"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="knowledge_bag" translatesAutoresizingMaskIntoConstraints="NO" id="nVC-2q-Qn9">
-                                <rect key="frame" x="120" y="378" width="200" height="200"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" misplaced="YES" image="0260618" translatesAutoresizingMaskIntoConstraints="NO" id="nVC-2q-Qn9">
+                                <rect key="frame" x="20" y="267" width="400" height="423"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="nVC-2q-Qn9" secondAttribute="height" multiplier="1:1" id="aspect-ratio"/>
                                     <constraint firstAttribute="width" constant="200" id="width-constraint"/>
@@ -39,7 +39,7 @@
         </scene>
     </scenes>
     <resources>
-        <image name="knowledge_bag" width="341.33334350585938" height="341.33334350585938"/>
+        <image name="0260618" width="420.33334350585938" height="420.33334350585938"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

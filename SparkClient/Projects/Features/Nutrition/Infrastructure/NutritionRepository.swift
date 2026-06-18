@@ -91,11 +91,11 @@ struct NutritionRepository: Sendable {
         try await api.deleteEnergyBurnRecord(recordID: recordID)
     }
 
-    func importAppleHealthIntakes(_ request: SparkNutritionAPI.AppleHealthIntakeImportRequest) async throws -> [SparkNutritionAPI.RemoteAppleHealthIntakeImport] {
+    func importAppleHealthIntakes(_ request: SparkNutritionAPI.AppleHealthIntakeImportRequest) async throws -> SparkNutritionAPI.RemoteAppleHealthImportResponse {
         try await api.importAppleHealthIntakes(request)
     }
 
-    func importAppleHealthEnergyBurns(_ request: SparkNutritionAPI.AppleHealthEnergyBurnImportRequest) async throws -> [SparkNutritionAPI.RemoteEnergyBurnRecord] {
+    func importAppleHealthEnergyBurns(_ request: SparkNutritionAPI.AppleHealthEnergyBurnImportRequest) async throws -> SparkNutritionAPI.RemoteAppleHealthImportResponse {
         try await api.importAppleHealthEnergyBurns(request)
     }
 

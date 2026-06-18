@@ -1,6 +1,16 @@
 import Foundation
 
-/// 饮食营养 REST API，路径与 `SparkService/nutrition/urls.py` 一一对应。
+// MARK: - NutritionAPI 网络层
+//
+// 饮食营养模块的 REST API 客户端，路径与 `SparkService/nutrition/urls.py` 一一对应。
+// 职责：
+// - 封装 HTTP 方法、路径、Query 参数与请求/响应类型
+// - 通过 SparkBackendConfiguration 统一鉴权、重试、ETag 缓存与序列化
+// - 上层 NutritionRepository 调用本 struct，不直接拼 URL
+//
+// 响应体经 APIResponseDecoder.decodeWrappedData 解包（服务端统一 `{ data: ... }` 包装）。
+
+/// 饮食营养 REST API 客户端
 struct NutritionAPI: @unchecked Sendable {
     let configuration: SparkBackendConfiguration
 
@@ -8,10 +18,14 @@ struct NutritionAPI: @unchecked Sendable {
         self.configuration = configuration
     }
 
+    /// API 版本前缀，所有营养接口均在此路径下
     private static let basePath = "/api/v1/nutrition"
+    /// 与医疗模块共用的 JSON 解码策略（日期、蛇形命名等）
     private static let decoder = JSONDecoder.medicalAPI
+
     // MARK: - Health & defaults
 
+    /// 模块健康检查，用于探测服务端 nutrition 应用是否可用
     func healthCheck() async throws -> String {
         struct HealthPayload: Decodable, Sendable {
             var module: String
@@ -21,6 +35,7 @@ struct NutritionAPI: @unchecked Sendable {
         return payload.status
     }
 
+    /// 获取成员默认宏量营养素目标（未单独设置目标时的回退值）
     func fetchDefaults(memberID: Int) async throws -> SparkNutritionAPI.RemoteNutritionMacroTarget {
         struct DefaultsPayload: Decodable, Sendable {
             var goal: SparkNutritionAPI.RemoteNutritionMacroTarget
@@ -35,6 +50,7 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Dashboard
 
+    /// 营养首页看板：某日摄入汇总、目标、各餐次卡片、Apple Health 外部数据等
     func fetchDashboard(memberID: Int, date: Date) async throws -> SparkNutritionAPI.RemoteNutritionDashboard {
         try await get(
             path: "\(Self.basePath)/dashboard/",
@@ -46,6 +62,7 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Meal records
 
+    /// 查询某日用餐记录；可选 `mealType` 筛选单餐（早餐/午餐等）
     func listMealRecords(
         memberID: Int,
         date: Date,
@@ -63,6 +80,7 @@ struct NutritionAPI: @unchecked Sendable {
         )
     }
 
+    /// 历史用餐记录：同一 list 端点，用 date_from / date_to 区间查询
     func listMealRecordsHistory(
         memberID: Int,
         dateFrom: Date,
@@ -80,6 +98,7 @@ struct NutritionAPI: @unchecked Sendable {
         )
     }
 
+    /// 创建用餐记录（手动录入、AI 识别确认等）
     func createMealRecord(_ request: SparkNutritionAPI.CreateMealRecordRequest) async throws -> SparkNutritionAPI.RemoteMealRecord {
         try await post(
             path: "\(Self.basePath)/meal-records/",
@@ -89,6 +108,7 @@ struct NutritionAPI: @unchecked Sendable {
         )
     }
 
+    /// 部分或全量更新用餐记录
     func updateMealRecord(
         recordID: Int,
         request: SparkNutritionAPI.UpdateMealRecordRequest
@@ -111,6 +131,13 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Search & favorites
 
+    /// 食物/食谱搜索
+    /// - Parameters:
+    ///   - mode: 搜索模式，如 `text` / `barcode`
+    ///   - query: 关键词或条码
+    ///   - resultType: `food` / `recipe` / `all`
+    ///   - favoriteOnly: 仅收藏
+    ///   - createdByMeOnly: 仅当前用户创建
     func search(
         memberID: Int,
         mode: String,
@@ -148,6 +175,7 @@ struct NutritionAPI: @unchecked Sendable {
         )
     }
 
+    /// 取消收藏：DELETE 带 query target_type + target_id（无 path 参数）
     func removeFavorite(targetType: String, targetID: Int) async throws {
         _ = try await delete(
             path: "\(Self.basePath)/favorites/",
@@ -162,6 +190,7 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Custom food & recipe
 
+    /// 用户自建食物条目（含每份营养素）
     func createFoodItem(_ request: SparkNutritionAPI.CreateNutritionFoodItemRequest) async throws -> SparkNutritionAPI.RemoteFoodItem {
         try await post(
             path: "\(Self.basePath)/food-items/",
@@ -171,6 +200,7 @@ struct NutritionAPI: @unchecked Sendable {
         )
     }
 
+    /// 用户自建食谱；响应含服务端计算的营养汇总
     func createRecipe(_ request: SparkNutritionAPI.CreateNutritionRecipeRequest) async throws -> SparkNutritionAPI.RemoteRecipeCreateResponse {
         try await post(
             path: "\(Self.basePath)/recipes/",
@@ -182,6 +212,7 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Energy burn
 
+    /// 某日能量消耗列表（手动录入 + Apple Health 导入）
     func listEnergyBurnRecords(memberID: Int, date: Date) async throws -> [SparkNutritionAPI.RemoteEnergyBurnRecord] {
         struct ListPayload: Decodable, Sendable {
             var records: [SparkNutritionAPI.RemoteEnergyBurnRecord]
@@ -226,24 +257,28 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Apple Health imports
 
-    func importAppleHealthIntakes(_ request: SparkNutritionAPI.AppleHealthIntakeImportRequest) async throws -> [SparkNutritionAPI.RemoteAppleHealthIntakeImport] {
+    /// 批量上报 HealthKit 读取的第三方 App 饮食摄入（服务端按 apple_health_id 去重）
+    /// 对应 Django `import_apple_health_intakes`，仅本人成员可调用
+    func importAppleHealthIntakes(_ request: SparkNutritionAPI.AppleHealthIntakeImportRequest) async throws -> SparkNutritionAPI.RemoteAppleHealthImportResponse {
         try await post(
             path: "\(Self.basePath)/apple-health/intake-imports/",
             body: request,
             name: "AppleHealth.IntakeImport",
-            responseType: [SparkNutritionAPI.RemoteAppleHealthIntakeImport].self
+            responseType: SparkNutritionAPI.RemoteAppleHealthImportResponse.self
         )
     }
 
-    func importAppleHealthEnergyBurns(_ request: SparkNutritionAPI.AppleHealthEnergyBurnImportRequest) async throws -> [SparkNutritionAPI.RemoteEnergyBurnRecord] {
+    /// 批量上报 HealthKit 活动消耗与基础代谢样本
+    func importAppleHealthEnergyBurns(_ request: SparkNutritionAPI.AppleHealthEnergyBurnImportRequest) async throws -> SparkNutritionAPI.RemoteAppleHealthImportResponse {
         try await post(
             path: "\(Self.basePath)/apple-health/energy-burn-imports/",
             body: request,
             name: "AppleHealth.EnergyBurnImport",
-            responseType: [SparkNutritionAPI.RemoteEnergyBurnRecord].self
+            responseType: SparkNutritionAPI.RemoteAppleHealthImportResponse.self
         )
     }
 
+    /// 用餐营养素写入 HealthKit 后，将 HKSample UUID 回写到服务端 intake 记录
     func writeIntakeAppleHealthID(intakeID: Int, request: SparkNutritionAPI.AppleHealthIDUpdateRequest) async throws {
         _ = try await post(
             path: "\(Self.basePath)/intakes/\(intakeID)/apple-health-id/",
@@ -253,6 +288,7 @@ struct NutritionAPI: @unchecked Sendable {
         )
     }
 
+    /// 手动能量消耗写入 HealthKit 后，回写 apple_health_id 到 burn 记录
     func writeEnergyBurnAppleHealthID(recordID: Int, request: SparkNutritionAPI.AppleHealthIDUpdateRequest) async throws {
         _ = try await post(
             path: "\(Self.basePath)/energy-burn-records/\(recordID)/apple-health-id/",
@@ -264,6 +300,7 @@ struct NutritionAPI: @unchecked Sendable {
 
     // MARK: - Transport helpers
 
+    /// 按成员 + 自然日查询的通用 Query 参数（date 为 YYYY-MM-DD 本地日）
     private func memberDateQuery(memberID: Int, date: Date) -> [URLQueryItem] {
         [
             URLQueryItem(name: "member_id", value: "\(memberID)"),
@@ -271,6 +308,7 @@ struct NutritionAPI: @unchecked Sendable {
         ]
     }
 
+    /// GET 请求：启用 ETag 缓存与幂等重试，默认缓存 TTL 24 小时
     private func get<T: Decodable>(
         path: String,
         query: [URLQueryItem] = [],
@@ -300,6 +338,7 @@ struct NutritionAPI: @unchecked Sendable {
         return try APIResponseDecoder.decodeWrappedData(T.self, from: response, decoder: Self.decoder)
     }
 
+    /// POST 写操作：高优先级队列，不缓存，非幂等
     private func post<T: Encodable, R: Decodable>(
         path: String,
         body: T,
@@ -327,6 +366,7 @@ struct NutritionAPI: @unchecked Sendable {
         return try APIResponseDecoder.decodeWrappedData(R.self, from: response, decoder: Self.decoder)
     }
 
+    /// PATCH 部分更新：策略同 POST
     private func patch<T: Encodable, R: Decodable>(
         path: String,
         body: T,
@@ -354,6 +394,7 @@ struct NutritionAPI: @unchecked Sendable {
         return try APIResponseDecoder.decodeWrappedData(R.self, from: response, decoder: Self.decoder)
     }
 
+    /// DELETE：支持 query 参数（如取消收藏）；高优先级、非幂等
     private func delete<R: Decodable>(
         path: String,
         query: [URLQueryItem] = [],

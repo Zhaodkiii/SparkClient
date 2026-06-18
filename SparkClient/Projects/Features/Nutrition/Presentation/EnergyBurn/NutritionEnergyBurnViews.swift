@@ -307,7 +307,7 @@ final class NutritionEnergyBurnViewModel: ObservableObject {
     }
 
     var canSyncAppleHealth: Bool {
-        memberContextStore.context.members.first(where: { $0.id == memberID })?.isPrimary == true
+        memberContextStore.context.members.first(where: { $0.id == memberID })?.isSelfMember == true
     }
 
     func loadIfNeeded() async {
