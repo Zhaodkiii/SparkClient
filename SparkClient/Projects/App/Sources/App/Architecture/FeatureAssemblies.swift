@@ -35,6 +35,7 @@ struct HomeFeatureDependencies {
     let medicalWorkflowAPI: SparkMedicalWorkflowAPI
     let medicalQueryAPI: SparkMedicalQueryAPI
     let medicalMemberAPI: SparkMedicalMemberAPI
+    let memberModuleSetupUseCase: MemberModuleSetupUseCase
     let shareMemberUseCase: ShareMemberUseCase
     let memberInviteUseCase: MemberInviteUseCase
     let manageMemberBindingUseCase: ManageMemberBindingUseCase
@@ -99,6 +100,7 @@ extension HomeFeatureDependencies {
                 logger: logger
             ),
             energyBurnUseCase: NutritionEnergyBurnUseCase(repository: repository, logger: logger),
+            goalUseCase: NutritionGoalUseCase(repository: repository, logger: logger),
             recognitionPipeline: recognitionPipeline,
             configCenter: configCenter,
             memberContextStore: memberContextStore,
@@ -131,6 +133,10 @@ extension HomeFeatureDependencies {
             medicalWorkflowAPI: container.backend.medicalWorkflow,
             medicalQueryAPI: container.backend.medicalQuery,
             medicalMemberAPI: container.backend.medicalMembers,
+            memberModuleSetupUseCase: MemberModuleSetupUseCase(
+                medicalQueryAPI: container.backend.medicalQuery,
+                logger: container.logger
+            ),
             shareMemberUseCase: ShareMemberUseCase(memberAPI: container.backend.medicalMembers),
             memberInviteUseCase: MemberInviteUseCase(memberAPI: container.backend.medicalMembers),
             manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: container.backend.medicalMembers),

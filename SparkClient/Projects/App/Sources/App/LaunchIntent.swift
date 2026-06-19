@@ -185,6 +185,7 @@ enum HomeSheetKind: String, Sendable {
     case addMember
     case pendingInvites
     case memberDetail
+    case memberModuleSetup
     case share
     case taskCenter
 }

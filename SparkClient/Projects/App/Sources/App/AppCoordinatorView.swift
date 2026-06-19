@@ -55,7 +55,8 @@ struct AppCoordinatorView: View {
                     OnboardingFlowView(
                         viewModel: facades.onboarding.makeFlowViewModel(),
                         memberContextStore: mainTab.memberContextStore,
-                        aiSettingsViewModel: mainTab.aiSettingsViewModel
+                        aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                        homeDependencies: mainTab.homeDependencies
                     )
                     .id("onboarding-\(session.accountID)")
                     .onAppear {
@@ -126,9 +127,8 @@ private struct SignedOutAuthCoordinatorView: View {
     }
     
     var body: some View {
-        CompatibleNavigationContainer {
-            LoginView(viewModel: viewModel)
-        }
+    
+        LoginView(viewModel: viewModel)
         .task {
             await lifecycle.handleSignedOutTask()
         }

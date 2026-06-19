@@ -16,4 +16,6 @@ enum SparkMedicalResourceKind: String, Sendable, CaseIterable {
     case prescriptions = "prescriptions"
     case medicationPlans = "medication-plans"
     case medicationRecords = "medication-records"
+    case memberMedicalProfiles = "member-medical-profiles"
+    case memberModuleSettings = "member-module-settings"
 }

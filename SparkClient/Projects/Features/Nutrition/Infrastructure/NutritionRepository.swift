@@ -7,6 +7,30 @@ struct NutritionRepository: Sendable {
         try await api.fetchDashboard(memberID: memberID, date: date)
     }
 
+    func fetchDefaults(memberID: Int) async throws -> SparkNutritionAPI.RemoteNutritionMacroTarget {
+        try await api.fetchDefaults(memberID: memberID)
+    }
+
+    func fetchGoalState(memberID: Int) async throws -> SparkNutritionAPI.RemoteNutritionGoalState {
+        try await api.fetchGoalState(memberID: memberID)
+    }
+
+    func saveGoal(_ request: SparkNutritionAPI.RemoteNutritionGoalUpsertRequest) async throws -> SparkNutritionAPI.RemoteNutritionGoal {
+        try await api.saveGoal(request)
+    }
+
+    func calculateEnergyGoal(
+        _ request: SparkNutritionAPI.RemoteNutritionGoalCalculationRequest
+    ) async throws -> SparkNutritionAPI.RemoteNutritionEnergyCalculationResponse {
+        try await api.calculateEnergyGoal(request)
+    }
+
+    func calculateBodyMetrics(
+        _ request: SparkNutritionAPI.RemoteNutritionGoalCalculationRequest
+    ) async throws -> SparkNutritionAPI.RemoteNutritionBodyMetricsCalculationResponse {
+        try await api.calculateBodyMetrics(request)
+    }
+
     func listMealRecords(
         memberID: Int,
         date: Date,

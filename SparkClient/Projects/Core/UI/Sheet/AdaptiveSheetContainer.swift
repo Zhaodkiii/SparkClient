@@ -2,6 +2,13 @@ import SwiftUI
 
 /// Reusable sheet container for compact picker-style sheets on iOS 16+.
 @available(iOS 16.0, *)
+enum AdaptiveSheetToolbarPlacement: Equatable {
+    case top
+    case bottom
+    case hidden
+}
+
+@available(iOS 16.0, *)
 struct AdaptiveSheetContainer<Content: View>: View {
     let content: Content
     let cancelTitle: String
@@ -12,6 +19,7 @@ struct AdaptiveSheetContainer<Content: View>: View {
     let fixedHeight: CGFloat?
     let toolbarHeight: CGFloat
     let contentVerticalPadding: CGFloat
+    let toolbarPlacement: AdaptiveSheetToolbarPlacement
     let dismissOnConfirm: Bool
     let onCancel: () -> Void
     let onConfirm: (() -> Void)?
@@ -27,6 +35,7 @@ struct AdaptiveSheetContainer<Content: View>: View {
         fixedHeight: CGFloat? = nil,
         toolbarHeight: CGFloat = 68,
         contentVerticalPadding: CGFloat = 20,
+        toolbarPlacement: AdaptiveSheetToolbarPlacement = .top,
         dismissOnConfirm: Bool = true,
         onCancel: @escaping () -> Void = {},
         onConfirm: (() -> Void)? = nil,
@@ -40,6 +49,7 @@ struct AdaptiveSheetContainer<Content: View>: View {
         self.fixedHeight = fixedHeight
         self.toolbarHeight = toolbarHeight
         self.contentVerticalPadding = contentVerticalPadding
+        self.toolbarPlacement = toolbarPlacement
         self.dismissOnConfirm = dismissOnConfirm
         self.onCancel = onCancel
         self.onConfirm = onConfirm
@@ -48,31 +58,16 @@ struct AdaptiveSheetContainer<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button(cancelTitle) {
-                    onCancel()
-                    dismiss()
-                }
-                .foregroundColor(cancelColor)
-
-                Spacer()
-
-                if showConfirmButton, let onConfirm {
-                    Button(confirmTitle) {
-                        onConfirm()
-                        if dismissOnConfirm {
-                            dismiss()
-                        }
-                    }
-                    .foregroundColor(confirmColor)
-                    .fontWeight(.medium)
-                }
+            if toolbarPlacement == .top {
+                toolbar
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
 
             content
                 .padding(.vertical, contentVerticalPadding)
+
+            if toolbarPlacement == .bottom {
+                toolbar
+            }
         }
         .presentationDetents(
             fixedHeight != nil
@@ -80,6 +75,31 @@ struct AdaptiveSheetContainer<Content: View>: View {
                 : [.medium, .large]
         )
         .presentationDragIndicator(.visible)
+    }
+
+    private var toolbar: some View {
+        HStack {
+            Button(cancelTitle) {
+                onCancel()
+                dismiss()
+            }
+            .foregroundColor(cancelColor)
+
+            Spacer()
+
+            if showConfirmButton, let onConfirm {
+                Button(confirmTitle) {
+                    onConfirm()
+                    if dismissOnConfirm {
+                        dismiss()
+                    }
+                }
+                .foregroundColor(confirmColor)
+                .fontWeight(.medium)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 }
 

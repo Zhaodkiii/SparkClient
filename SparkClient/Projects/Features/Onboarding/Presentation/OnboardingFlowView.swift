@@ -5,16 +5,19 @@ struct OnboardingFlowView: View {
     @StateObject private var agentSetupViewModel: OnboardingAgentSetupViewModel
     @ObservedObject private var memberContextStore: MemberContextStore
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
+    private let homeDependencies: HomeFeatureDependencies?
 
     init(
         viewModel: OnboardingFlowViewModel,
         memberContextStore: MemberContextStore,
-        aiSettingsViewModel: AISettingsViewModel
+        aiSettingsViewModel: AISettingsViewModel,
+        homeDependencies: HomeFeatureDependencies? = nil
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _agentSetupViewModel = StateObject(wrappedValue: OnboardingAgentSetupViewModel(aiSettingsViewModel: aiSettingsViewModel))
         self.memberContextStore = memberContextStore
         self.aiSettingsViewModel = aiSettingsViewModel
+        self.homeDependencies = homeDependencies
     }
 
     var body: some View {
@@ -83,7 +86,10 @@ struct OnboardingFlowView: View {
                 }
             }
         case .profile:
-            OnboardingProfileStep(memberContextStore: memberContextStore)
+            OnboardingProfileStep(
+                memberContextStore: memberContextStore,
+                homeDependencies: homeDependencies
+            )
         case .agent:
             OnboardingAgentSetupStep(
                 viewModel: agentSetupViewModel,
@@ -148,6 +154,7 @@ private struct OnboardingWelcomeStep: View {
 
 private struct OnboardingProfileStep: View {
     @ObservedObject var memberContextStore: MemberContextStore
+    let homeDependencies: HomeFeatureDependencies?
     @State private var showCreateMember = false
 
     var body: some View {
@@ -212,7 +219,11 @@ private struct OnboardingProfileStep: View {
         }
         .sheet(isPresented: $showCreateMember) {
             CompatibleNavigationContainer(legacyStackStyle: true) {
-                AddFamilyMemberView(mode: .create, store: memberContextStore)
+                if let homeDependencies {
+                    MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
+                } else {
+                    AddFamilyMemberView(mode: .create, store: memberContextStore)
+                }
             }
         }
     }

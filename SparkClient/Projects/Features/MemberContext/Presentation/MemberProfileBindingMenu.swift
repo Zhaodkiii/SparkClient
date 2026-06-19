@@ -5,9 +5,26 @@ struct MemberProfileBindingMenu<Content: View>: View {
     let selectedMemberID: Int?
     /// When true, shows a menu item to clear the binding. Only used in chat composer input.
     var showsNoneOption: Bool = false
+    let homeDependencies: HomeFeatureDependencies?
     let onSelect: (Int?) -> Void
     @State private var showAddMemberSheet = false
     @ViewBuilder let label: () -> Content
+
+    init(
+        memberContextStore: MemberContextStore,
+        selectedMemberID: Int?,
+        showsNoneOption: Bool = false,
+        homeDependencies: HomeFeatureDependencies? = nil,
+        onSelect: @escaping (Int?) -> Void,
+        @ViewBuilder label: @escaping () -> Content
+    ) {
+        self.memberContextStore = memberContextStore
+        self.selectedMemberID = selectedMemberID
+        self.showsNoneOption = showsNoneOption
+        self.homeDependencies = homeDependencies
+        self.onSelect = onSelect
+        self.label = label
+    }
 
     private var members: [Member] {
         memberContextStore.context.members
@@ -58,7 +75,11 @@ struct MemberProfileBindingMenu<Content: View>: View {
         }
         .sheet(isPresented: $showAddMemberSheet) {
             CompatibleNavigationContainer {
-                AddFamilyMemberView(mode: .create, store: memberContextStore)
+                if let homeDependencies {
+                    MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
+                } else {
+                    AddFamilyMemberView(mode: .create, store: memberContextStore)
+                }
             }
         }
     }

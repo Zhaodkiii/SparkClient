@@ -12,6 +12,43 @@ import Foundation
 /// 营养 API 的远程数据模型容器（无 case 的 enum，仅作命名空间使用）
 enum SparkNutritionAPI {}
 
+@propertyWrapper
+struct FlexibleOptionalDouble: Codable, Sendable, Equatable {
+    var wrappedValue: Double?
+
+    init(wrappedValue: Double?) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            wrappedValue = nil
+        } else if let value = try? container.decode(Double.self) {
+            wrappedValue = value
+        } else if let text = try? container.decode(String.self) {
+            wrappedValue = Double(text)
+        } else {
+            wrappedValue = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let wrappedValue {
+            try container.encode(wrappedValue)
+        } else {
+            try container.encodeNil()
+        }
+    }
+}
+
+extension KeyedDecodingContainer {
+    func decode(_ type: FlexibleOptionalDouble.Type, forKey key: Key) throws -> FlexibleOptionalDouble {
+        try decodeIfPresent(type, forKey: key) ?? FlexibleOptionalDouble(wrappedValue: nil)
+    }
+}
+
 // MARK: - 响应模型（Remote*）
 
 extension SparkNutritionAPI {
@@ -34,6 +71,145 @@ extension SparkNutritionAPI {
         var proteinG: Double
         var carbohydrateG: Double
         var fatG: Double
+    }
+
+    /// 成员营养目标保存后的完整记录。
+    struct RemoteNutritionGoal: Codable, Sendable, Equatable, Identifiable {
+        var id: Int
+        var user: Int?
+        var memberId: Int
+        var goalType: String
+        @FlexibleOptionalDouble var heightCm: Double?
+        @FlexibleOptionalDouble var currentWeightKg: Double?
+        @FlexibleOptionalDouble var targetWeightKg: Double?
+        var biologicalSex: String?
+        var ageYears: Int?
+        var activityLevel: String?
+        @FlexibleOptionalDouble var weeklyWeightDeltaKg: Double?
+        @FlexibleOptionalDouble var bmrKcal: Double?
+        @FlexibleOptionalDouble var tdeeKcal: Double?
+        @FlexibleOptionalDouble var energyDeltaKcal: Double?
+        var calculationFormula: String?
+        var calculationVersion: String?
+        var calculationInputs: RemoteNutritionCalculationInputs?
+        var isEnergyTargetCustom: Bool?
+        @FlexibleOptionalDouble var weekendEnergyTargetKcal: Double?
+        var isWeekendEnergyEnabled: Bool?
+        var stepTarget: Int?
+        @FlexibleOptionalDouble var dailyEnergyTargetKcal: Double?
+        @FlexibleOptionalDouble var carbohydrateTargetG: Double?
+        @FlexibleOptionalDouble var proteinTargetG: Double?
+        @FlexibleOptionalDouble var fatTargetG: Double?
+        var mealDistribution: [String: Double]
+        var effectiveFrom: Date?
+        var isActive: Bool
+        var createdAt: Date?
+        var updatedAt: Date?
+    }
+
+    /// 成员营养目标保存请求。
+    struct RemoteNutritionGoalUpsertRequest: Codable, Sendable, Equatable {
+        var memberId: Int
+        var goalType: String
+        var heightCm: Double?
+        var currentWeightKg: Double?
+        var targetWeightKg: Double?
+        var biologicalSex: String?
+        var ageYears: Int?
+        var activityLevel: String?
+        var weeklyWeightDeltaKg: Double?
+        var bmrKcal: Double?
+        var tdeeKcal: Double?
+        var energyDeltaKcal: Double?
+        var calculationFormula: String?
+        var calculationVersion: String?
+        var calculationInputs: RemoteNutritionCalculationInputs?
+        var isEnergyTargetCustom: Bool
+        var weekendEnergyTargetKcal: Double?
+        var isWeekendEnergyEnabled: Bool
+        var stepTarget: Int?
+        var dailyEnergyTargetKcal: Double?
+        var carbohydrateTargetG: Double?
+        var proteinTargetG: Double?
+        var fatTargetG: Double?
+        var mealDistribution: [String: Double]
+        var effectiveFrom: String?
+        var isActive: Bool
+    }
+
+    struct RemoteNutritionGoalCalculationRequest: Codable, Sendable, Equatable {
+        var memberId: Int
+        var goalType: String
+        var activityLevel: String
+        var currentWeightKg: Double?
+        var heightCm: Double?
+        var biologicalSex: String?
+        var ageYears: Int?
+        var weeklyWeightDeltaKg: Double?
+        var targetWeightKg: Double?
+    }
+
+    struct RemoteNutritionCalculationInputs: Codable, Sendable, Equatable {
+        var activityFactor: Double?
+        var weeklyWeightEnergyKcalPerKg: Double?
+        var minSafeEnergyKcal: Double?
+        var riskFlags: [String]
+        var missingFields: [String]
+        var usedDefaultValues: Bool
+        var source: String?
+    }
+
+    struct RemoteNutritionEnergyCalculationResponse: Codable, Sendable, Equatable {
+        var suggestedEnergyKcal: Double?
+        var bmrKcal: Double?
+        var tdeeKcal: Double?
+        var energyDeltaKcal: Double?
+        var calculationFormula: String
+        var calculationVersion: String
+        var calculationInputs: RemoteNutritionCalculationInputs?
+        var reason: String
+    }
+
+    struct RemoteNutritionBMIResult: Codable, Sendable, Equatable {
+        var value: Double
+        var category: String
+        var categoryText: String
+    }
+
+    struct RemoteNutritionIdealWeightResult: Codable, Sendable, Equatable {
+        var minKg: Double?
+        var maxKg: Double?
+        var referenceKg: Double?
+        var method: String
+        var targetWeightStatus: String
+    }
+
+    struct RemoteNutritionBurnEstimateResult: Codable, Sendable, Equatable {
+        var bmrKcal: Double?
+        var tdeeKcal: Double?
+        var estimatedDailyActivityKcal: Double?
+        var appleHealthActiveEnergyKcal: Double?
+        var manualBurnedEnergyKcal: Double?
+        var source: String
+    }
+
+    struct RemoteNutritionBodyMetricsCalculationResponse: Codable, Sendable, Equatable {
+        var bmi: RemoteNutritionBMIResult?
+        var idealWeight: RemoteNutritionIdealWeightResult?
+        var calorieIntake: RemoteNutritionEnergyCalculationResponse?
+        var caloriesBurned: RemoteNutritionBurnEstimateResult?
+        var missingFields: [String]
+        var warnings: [String]
+        var calculationFormula: String?
+        var calculationVersion: String?
+        var calculationInputs: RemoteNutritionCalculationInputs?
+    }
+
+    /// 成员营养目标读取响应：目标记录 + 默认回退值。
+    struct RemoteNutritionGoalState: Codable, Sendable, Equatable {
+        var memberId: Int
+        var goal: RemoteNutritionGoal?
+        var defaults: RemoteNutritionMacroTarget
     }
 
     /// 能量消耗摘要（通常来自 Apple Health 导入的燃烧数据）

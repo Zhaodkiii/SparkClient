@@ -5,8 +5,7 @@ import UIKit
 struct LoginView: View {
     @ObservedObject var viewModel: LoginViewModel
 
-    @State private var goPhone = false
-    @State private var goGuest = false
+    @State private var path: [LoginRoute] = []
     @State private var showPhoneLogin = false
     @State private var tapCount = 0
     @State private var lastTapTime: Date?
@@ -14,65 +13,67 @@ struct LoginView: View {
     @State private var hasAgreedToLegal = false
     @State private var legalAgreementShakeTrigger = 0
     @State private var showsLegalValidationHighlight = false
+    @State private var showsInitialLegalPrompt = false
+    @AppStorage("auth.login.initial_legal_prompt_accepted") private var hasAcceptedInitialLegalPrompt = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                headerCluster
-                actionButtons
-                LoginLegalAgreementNote(
-                    hasAgreed: $hasAgreedToLegal,
-                    legalURL: $legalURL,
-                    shakeTrigger: legalAgreementShakeTrigger,
-                    showsValidationHighlight: showsLegalValidationHighlight
-                )
-//                safetyCard
-            }
-            .padding(24)
-            .background(
-                Group {
-                    NavigationLink(isActive: $goPhone) {
-                        PhoneLoginView(viewModel: viewModel)
-                            .navigationTitle("手机号登录")
-                    } label: {
-                        EmptyView()
-                    }
-                    .hidden()
-
-                    NavigationLink(isActive: $goGuest) {
-                        GuestChatView()
-                    } label: {
-                        EmptyView()
-                    }
-                    .hidden()
+        CompatibleRouteNavigationContainer(path: $path, legacyStackStyle: true) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    headerCluster
+                    actionButtons
+                    LoginLegalAgreementNote(
+                        hasAgreed: $hasAgreedToLegal,
+                        legalURL: $legalURL,
+                        shakeTrigger: legalAgreementShakeTrigger,
+                        showsValidationHighlight: showsLegalValidationHighlight
+                    )
+    //                safetyCard
                 }
-            )
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(L10n.text("auth.login.title"))
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                .padding(24)
             }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .disabled(viewModel.isLoading)
-        .overlay {
-            if viewModel.isLoading {
-                ProgressView()
-                    .scaleEffect(1.5)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(L10n.text("auth.login.title"))
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                }
             }
-        }
-        .sheet(item: Binding(
-            get: { legalURL.map(IdentifiableURL.init(url:)) },
-            set: { legalURL = $0?.url }
-        )) { item in
-            SafariWebViewSheet(url: item.url)
-        }
-        .onChange(of: hasAgreedToLegal) { agreed in
-            if agreed {
-                showsLegalValidationHighlight = false
+            .navigationBarTitleDisplayMode(.inline)
+            .disabled(viewModel.isLoading)
+            .overlay {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                }
+            }
+            .sheet(item: Binding(
+                get: { legalURL.map(IdentifiableURL.init(url:)) },
+                set: { legalURL = $0?.url }
+            )) { item in
+                SafariWebViewSheet(url: item.url)
+            }
+            .sheet(isPresented: $showsInitialLegalPrompt) {
+                initialLegalPromptSheet
+            }
+            .onChange(of: hasAgreedToLegal) { agreed in
+                if agreed {
+                    showsLegalValidationHighlight = false
+                }
+            }
+            .onAppear {
+                if hasAcceptedInitialLegalPrompt == false {
+                    showsInitialLegalPrompt = true
+                }
+            }
+        } destination: { route in
+            switch route {
+            case .phone:
+                PhoneLoginView(viewModel: viewModel)
+                    .navigationTitle("手机号登录")
+            case .guest:
+                GuestChatView()
             }
         }
     }
@@ -81,6 +82,55 @@ struct LoginView: View {
         legalAgreementShakeTrigger += 1
         showsLegalValidationHighlight = true
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    }
+
+    @ViewBuilder
+    private var initialLegalPromptSheet: some View {
+        if #available(iOS 16.0, *) {
+            LoginInitialLegalPromptSheet(
+                fixedHeight: UIScreen.main.bounds.height * 0.5,
+                onOpenTerms: {
+                    openInitialPromptLegalURL(AppEnvironment.current.termsOfServiceURL)
+                },
+                onOpenPrivacy: {
+                    openInitialPromptLegalURL(AppEnvironment.current.privacyPolicyURL)
+                },
+                onDecline: {
+                    showsInitialLegalPrompt = false
+                },
+                onAgree: {
+                    hasAcceptedInitialLegalPrompt = true
+                    hasAgreedToLegal = true
+                    showsLegalValidationHighlight = false
+                    showsInitialLegalPrompt = false
+                }
+            )
+        } else {
+            LoginInitialLegalPromptLegacyView(
+                onOpenTerms: {
+                    openInitialPromptLegalURL(AppEnvironment.current.termsOfServiceURL)
+                },
+                onOpenPrivacy: {
+                    openInitialPromptLegalURL(AppEnvironment.current.privacyPolicyURL)
+                },
+                onDecline: {
+                    showsInitialLegalPrompt = false
+                },
+                onAgree: {
+                    hasAcceptedInitialLegalPrompt = true
+                    hasAgreedToLegal = true
+                    showsLegalValidationHighlight = false
+                    showsInitialLegalPrompt = false
+                }
+            )
+        }
+    }
+
+    private func openInitialPromptLegalURL(_ url: URL) {
+        showsInitialLegalPrompt = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            legalURL = url
+        }
     }
 
     private var headerCluster: some View {
@@ -163,7 +213,7 @@ struct LoginView: View {
 
                 Button {
                     if hasAgreedToLegal {
-                        goPhone = true
+                        path.append(.phone)
                     } else {
                         requireLegalAgreementBeforeLogin()
                     }
@@ -186,7 +236,11 @@ struct LoginView: View {
             }
 
             Button {
-                goGuest = true
+                if hasAgreedToLegal {
+                    path.append(.guest)
+                } else {
+                    requireLegalAgreementBeforeLogin()
+                }
             } label: {
                 Text(L10n.text("auth.login.guest_mode"))
                     .font(.subheadline)
@@ -234,6 +288,177 @@ struct LoginView: View {
                 .stroke(Color(uiColor: .separator).opacity(0.5))
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+private enum LoginRoute: Hashable {
+    case phone
+    case guest
+}
+
+@available(iOS 16.0, *)
+private struct LoginInitialLegalPromptSheet: View {
+    let fixedHeight: CGFloat
+    let onOpenTerms: () -> Void
+    let onOpenPrivacy: () -> Void
+    let onDecline: () -> Void
+    let onAgree: () -> Void
+
+    var body: some View {
+        AdaptiveSheetContainer(
+            showConfirmButton: false,
+            fixedHeight: fixedHeight,
+            toolbarHeight: 0,
+            contentVerticalPadding: 0,
+            toolbarPlacement: .hidden,
+            onCancel: onDecline
+        ) {
+            LoginInitialLegalPromptContent(
+                onOpenTerms: onOpenTerms,
+                onOpenPrivacy: onOpenPrivacy,
+                onDecline: onDecline,
+                onAgree: onAgree
+            )
+        }
+    }
+}
+
+private struct LoginInitialLegalPromptLegacyView: View {
+    let onOpenTerms: () -> Void
+    let onOpenPrivacy: () -> Void
+    let onDecline: () -> Void
+    let onAgree: () -> Void
+
+    var body: some View {
+        LoginInitialLegalPromptContent(
+            onOpenTerms: onOpenTerms,
+            onOpenPrivacy: onOpenPrivacy,
+            onDecline: onDecline,
+            onAgree: onAgree
+        )
+    }
+}
+
+private struct LoginInitialLegalPromptContent: View {
+    let onOpenTerms: () -> Void
+    let onOpenPrivacy: () -> Void
+    let onDecline: () -> Void
+    let onAgree: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text(L10n.text("auth.login.initial_prompt.title"))
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                    legalIntro
+
+                    Text(L10n.text("auth.login.initial_prompt.medical_disclaimer"))
+                        .font(.body)
+                        .lineSpacing(6)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(permissionItems, id: \.self) { item in
+                            HStack(alignment: .top, spacing: 10) {
+                                Circle()
+                                    .fill(Color.secondary)
+                                    .frame(width: 9, height: 9)
+                                    .padding(.top, 8)
+
+                                Text(item)
+                                    .font(.body)
+                                    .lineSpacing(5)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
+                    Text(L10n.text("auth.login.initial_prompt.permission_note"))
+                        .font(.body)
+                        .lineSpacing(6)
+                        .foregroundStyle(.secondary)
+
+                    Text(L10n.text("auth.login.initial_prompt.security_commitment"))
+                        .font(.body.weight(.semibold))
+                        .lineSpacing(6)
+                        .foregroundStyle(.primary)
+                }
+                .padding(.horizontal, 26)
+                .padding(.top, 26)
+                .padding(.bottom, 18)
+            }
+
+            HStack(spacing: 18) {
+                Button(action: onDecline) {
+                    Text(L10n.text("auth.login.initial_prompt.decline"))
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onAgree) {
+                    Text(L10n.text("auth.login.initial_prompt.agree"))
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Color(uiColor: .systemBlue))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+            .background(Color(uiColor: .systemBackground))
+        }
+        .background(Color(uiColor: .systemBackground))
+    }
+
+    private var legalIntro: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.text("auth.login.initial_prompt.intro"))
+                .font(.body)
+                .lineSpacing(6)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 4) {
+                Button(action: onOpenTerms) {
+                    Text(L10n.text("auth.login.initial_prompt.terms_link"))
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+
+                Text(L10n.text("auth.login.initial_prompt.link_separator"))
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+
+                Button(action: onOpenPrivacy) {
+                    Text(L10n.text("auth.login.initial_prompt.privacy_link"))
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var permissionItems: [String] {
+        [
+            L10n.text("auth.login.initial_prompt.permission.device"),
+            L10n.text("auth.login.initial_prompt.permission.location"),
+            L10n.text("auth.login.initial_prompt.permission.photos"),
+            L10n.text("auth.login.initial_prompt.permission.microphone"),
+            L10n.text("auth.login.initial_prompt.permission.logs")
+        ]
     }
 }
 

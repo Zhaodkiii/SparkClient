@@ -1,46 +1,77 @@
 import Combine
 import Foundation
-
-/// 首页状态：协调「医疗摘要」（按成员、服务端快照）。
+/// 首页视图模型
+/// @MainActor 强制所有UI状态、业务逻辑运行在主线程
+/// 核心职责：统一管理首页大盘数据、成员切换、医疗摘要、待处理家属邀请、模块配置、数据加载与刷新
 @MainActor
 final class HomeViewModel: ObservableObject {
 
-    // MARK: Published state
-
+    // MARK: - 对外发布UI状态
+    /// 首页大盘汇总数据（含各成员医疗快照、用药提醒摘要）
     @Published private(set) var dashboard: HomeDashboard?
+    /// 首页大盘全局加载标记
     @Published private(set) var isLoading = false
+    /// 医疗摘要单独加载标记
     @Published private(set) var isLoadingMedical = false
+    /// 全局错误提示文案
     @Published private(set) var errorMessage: String?
+    /// 当前选中查看的家庭成员ID
     @Published var selectedMemberID: Int?
+    /// 当前弹出的首页浮窗路由
     @Published var activeSheet: HomeSheet?
+    /// 待处理家属邀请数量
     @Published private(set) var pendingInviteCount: Int = 0
+    /// 需要高亮提示的邀请ID，用于红点/弹窗引导
     @Published var highlightInviteID: Int?
+    /// 全部待处理家属邀请列表
     @Published private(set) var pendingInvites: [SparkMedicalMemberAPI.PendingInviteItem] = []
+    /// 当前选中成员已保存的健康功能模块配置
+    @Published private(set) var currentMemberModuleSettings: [SparkMedicalSyncAPI.RemoteMemberModuleSetting] = []
 
-    // MARK: Dependencies
-
+    // MARK: - 业务依赖注入
+    /// 成员分享业务用例
     let shareMemberUseCase: ShareMemberUseCase
+    /// 家属邀请业务用例
     let memberInviteUseCase: MemberInviteUseCase
+    /// 成员绑定/解绑管理用例
     let manageMemberBindingUseCase: ManageMemberBindingUseCase
 
+    /// 登录会话持久化仓库
     private let sessionStore: AppSessionStore
+    /// 加载首页医疗概览大盘数据用例
     private let loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase
+    /// 仅拉取家庭成员列表用例
+    private let loadMembersUseCase: LoadMembersUseCase
+    /// 家庭成员本地数据仓库
     private let memberContextStore: MemberContextStore
+    /// 系统通知推送客户端
     private let notificationClient: any NotificationClient
+    /// 日志打印工具
     private let logger: Logger
+    /// 成员健康模块配置读写用例
+    private let memberModuleSetupUseCase: MemberModuleSetupUseCase
 
+    // MARK: - 私有内部状态
+    /// 日志分类标识，统一归属首页模块日志
     private let logModule = LogModule.home
+    /// 标记首页首次初始化加载是否正在执行，防止并发重复请求
     private var isInitialLoadInFlight = false
+    /// Combine订阅信号存储集合，用于生命周期销毁时释放监听
     private var cancellables: Set<AnyCancellable> = []
 
+    // MARK: - 对外只读暴露仓库（供外部绑定使用）
     var memberContextStoreForBinding: MemberContextStore {
         memberContextStore
     }
 
+    // MARK: - 初始化
+    /// 注入全量业务依赖，注册数据变更监听信号
     init(
         sessionStore: AppSessionStore,
         loadHomeMedicalOverviewUseCase: LoadHomeMedicalOverviewUseCase,
+        loadMembersUseCase: LoadMembersUseCase,
         memberContextStore: MemberContextStore,
+        memberModuleSetupUseCase: MemberModuleSetupUseCase,
         shareMemberUseCase: ShareMemberUseCase,
         memberInviteUseCase: MemberInviteUseCase,
         manageMemberBindingUseCase: ManageMemberBindingUseCase,
@@ -49,21 +80,26 @@ final class HomeViewModel: ObservableObject {
     ) {
         self.sessionStore = sessionStore
         self.loadHomeMedicalOverviewUseCase = loadHomeMedicalOverviewUseCase
+        self.loadMembersUseCase = loadMembersUseCase
         self.memberContextStore = memberContextStore
+        self.memberModuleSetupUseCase = memberModuleSetupUseCase
         self.shareMemberUseCase = shareMemberUseCase
         self.memberInviteUseCase = memberInviteUseCase
         self.manageMemberBindingUseCase = manageMemberBindingUseCase
         self.notificationClient = notificationClient
         self.logger = logger
+
+        // 监听本地家庭成员数据变更，仅刷新成员列表，避免重复拉取医疗摘要等首页数据
         memberContextStore.membersDidChange
             .sink { [weak self] in
                 guard let self else { return }
                 Task {
-                    await self.load(syncRemote: true)
+                    await self.reloadMembers()
                 }
             }
             .store(in: &cancellables)
 
+        // 监听「邀请列表需要刷新」全局通知，重新加载待处理邀请
         NotificationCenter.default.publisher(for: .memberInvitePendingRefresh)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -85,10 +121,14 @@ final class HomeViewModel: ObservableObject {
         await fetchPendingInvitesIfNeeded()
     }
 
+    /// 加载首页大盘完整数据
+    /// - Parameter syncRemote: 是否强制从服务端拉取最新快照，false 优先使用本地缓存
     func load(syncRemote: Bool = true) async {
+        // 未登录状态直接终止加载
         guard case .signedIn(let session) = sessionStore.state else { return }
 
         isLoading = true
+        // 无论成功失败，最终结束加载状态
         defer { isLoading = false }
 
         let startedAt = Date()
@@ -97,15 +137,18 @@ final class HomeViewModel: ObservableObject {
             module: logModule
         )
 
+        // 标记医疗摘要分片加载中
         isLoadingMedical = true
         let medicalResult: HomeMedicalLoadResult
         do {
+            // 执行医疗概览查询，控制是否刷新远端快照
             medicalResult = try await loadHomeMedicalOverviewUseCase.execute(
                 session: session,
                 selectedMemberID: selectedMemberID,
                 refreshRemoteSnapshot: syncRemote
             )
         } catch {
+            // 医疗数据加载失败，清除加载标记并弹出错误提示
             isLoadingMedical = false
             errorMessage = nil
             notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "home.dashboard")
@@ -115,7 +158,7 @@ final class HomeViewModel: ObservableObject {
         isLoadingMedical = false
 
         var medical = medicalResult.medical
-        // 保留按需加载的家庭药箱缓存；服务端 complete-data 不返回 familyMedicineBoxes。
+        // 兼容逻辑：服务端完整快照接口不会返回家庭药箱列表，保留上一次内存缓存的药箱数据避免页面空白
         if var completeData = medical.completeData,
            let previousComplete = dashboard?.medical.completeData,
            previousComplete.memberId == completeData.memberId,
@@ -124,6 +167,7 @@ final class HomeViewModel: ObservableObject {
             medical.completeData = completeData
         }
 
+        // 组装首页大盘根模型并更新UI状态
         let loaded = HomeDashboard(
             session: session,
             members: medicalResult.members,
@@ -131,20 +175,60 @@ final class HomeViewModel: ObservableObject {
             medical: medical
         )
         dashboard = loaded
+        // 同步更新当前选中成员ID
         selectedMemberID = loaded.selectedMember?.id
+        // 同步更新全局成员上下文仓库
         memberContextStore.update(members: loaded.members, selectedMemberID: loaded.selectedMemberID)
         errorMessage = nil
+        // 加载当前选中成员的健康模块配置
+        await loadCurrentMemberModuleSettings()
 
+        // 统计首页加载总耗时并打印日志
         let cost = Date().timeIntervalSince(startedAt)
         logger.info(
             "首页加载完成 cost=\(String(format: "%.3f", cost))s syncRemote=\(syncRemote)",
             module: logModule
         )
+        // 刷新待处理家属邀请列表
         await fetchPendingInvitesIfNeeded()
     }
-
     func refresh() async {
         await load(syncRemote: true)
+    }
+
+    /// 仅刷新家庭成员列表，同步更新 dashboard 与成员上下文，不触发医疗摘要加载。
+    func reloadMembers() async {
+        guard case .signedIn(let session) = sessionStore.state else { return }
+
+        let startedAt = Date()
+        let members = await loadMembersUseCase.execute()
+        let resolvedSelectedID = resolveSelectedMemberID(in: members)
+
+        selectedMemberID = resolvedSelectedID
+        memberContextStore.update(members: members, selectedMemberID: resolvedSelectedID)
+
+        if let dashboard {
+            self.dashboard = HomeDashboard(
+                session: session,
+                members: members,
+                selectedMemberID: resolvedSelectedID,
+                medical: dashboard.medical
+            )
+        }
+
+        let cost = Date().timeIntervalSince(startedAt)
+        logger.info(
+            "成员列表刷新完成 count=\(members.count) selectedMemberID=\(resolvedSelectedID.map(String.init) ?? "nil") cost=\(String(format: "%.3f", cost))s",
+            module: logModule
+        )
+    }
+
+    private func resolveSelectedMemberID(in members: [Member]) -> Int? {
+        guard members.isEmpty == false else { return nil }
+        if let selectedMemberID, members.contains(where: { $0.id == selectedMemberID }) {
+            return selectedMemberID
+        }
+        return members.first?.id
     }
 
     func fetchPendingInvitesIfNeeded() async {
@@ -329,6 +413,58 @@ final class HomeViewModel: ObservableObject {
             memberContextStore.select(memberID: nil)
         }
         await load(syncRemote: true)
+    }
+
+    /// 是否展示医疗模块分区
+    var shouldShowMedicalSection: Bool {
+        isModuleEnabled(.medical)
+    }
+
+    /// 是否展示饮食健康模块分区
+    var shouldShowNutritionSection: Bool {
+        isModuleEnabled(.nutrition)
+    }
+
+    /// 当前成员未开通任何首页可见模块时，展示模块维护入口。
+    var shouldShowModuleMaintenanceSection: Bool {
+        selectedMemberID != nil && !shouldShowMedicalSection && !shouldShowNutritionSection
+    }
+
+    /// 判断指定健康模块是否启用展示。
+    /// 默认不开通：只有成员对应模块存在启用配置时，首页才展示对应分区。
+    /// - Parameter module: 待判断的功能模块枚举
+    /// - Returns: true 页面渲染该模块分区，false 隐藏
+    private func isModuleEnabled(_ module: MemberSetupModule) -> Bool {
+        // 过滤出当前成员对应模块的全部配置
+        let visibleSettings = currentMemberModuleSettings.filter { $0.moduleCode == module.rawValue }
+        // 存在配置，只要有一条标记为启用就展示
+        return visibleSettings.contains(where: \.isEnabled)
+    }
+
+    /// 加载当前选中成员的全部健康模块配置并排序更新UI状态
+    private func loadCurrentMemberModuleSettings() async {
+        // 未选中任何成员，清空模块配置列表直接返回
+        guard let memberID = selectedMemberID else {
+            currentMemberModuleSettings = []
+            return
+        }
+        do {
+            // 拉取该成员所有模块配置
+            let settings = try await memberModuleSetupUseCase.loadModuleSettings(memberID: memberID)
+            // 按展示序号升序排序后更新发布状态
+            currentMemberModuleSettings = settings.sorted { $0.displayOrder < $1.displayOrder }
+            logger.info(
+                "首页成员模块配置已刷新 memberID=\(memberID) count=\(currentMemberModuleSettings.count)",
+                module: logModule
+            )
+        } catch {
+            // 请求异常，清空配置并打印警告日志
+            currentMemberModuleSettings = []
+            logger.warning(
+                "首页成员模块配置加载失败 memberID=\(memberID) error=\(error.localizedDescription)",
+                module: logModule
+            )
+        }
     }
 
 #if DEBUG

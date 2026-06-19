@@ -20,7 +20,7 @@ struct ManageHomeMemberUseCase: Sendable {
         relationship: String,
         gender: String,
         birthDate: Date?
-    ) async throws {
+    ) async throws -> Member {
         let payload = SparkMedicalMemberAPI.UpsertMemberPayload(
             name: name,
             relationship: relationship,
@@ -33,7 +33,7 @@ struct ManageHomeMemberUseCase: Sendable {
             avatarUrl: "",
             isPrimary: false
         )
-        _ = try await memberAPI.createMember(payload)
+        return try await memberAPI.createMember(payload).domainModel
     }
 
     func update(

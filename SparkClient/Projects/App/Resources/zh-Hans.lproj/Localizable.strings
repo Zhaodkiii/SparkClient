@@ -1923,9 +1923,24 @@
 "auth.login.legal.checkbox_lead" = "我已阅读并同意";
 "auth.login.legal.conjunction" = "和";
 "auth.login.legal.terms" = "《服务条款》";
-"auth.login.legal.privacy" = "《隐私政策》";
-"auth.login.legal.toggle_accessibility" = "同意服务条款与隐私政策";
-"auth.login.legal.must_agree_hint" = "请先勾选同意服务条款与隐私政策后再登录";
+"auth.login.legal.privacy" = "《隐私协议》";
+"auth.login.legal.toggle_accessibility" = "同意服务条款与隐私协议";
+"auth.login.legal.must_agree_hint" = "请先勾选同意服务条款与隐私协议后再登录";
+"auth.login.initial_prompt.title" = "温馨提示";
+"auth.login.initial_prompt.intro" = "欢迎使用健康助手。在使用前，请认真阅读并理解以下协议：";
+"auth.login.initial_prompt.terms_link" = "服务条款";
+"auth.login.initial_prompt.privacy_link" = "隐私协议";
+"auth.login.initial_prompt.link_separator" = "、";
+"auth.login.initial_prompt.medical_disclaimer" = "本服务提供的信息仅供健康管理和记录参考，不作为诊断、治疗或用药的直接医疗处置依据，也不构成处方或电子处方。如有任何疑问或不适，请及时咨询专业医生。";
+"auth.login.initial_prompt.permission.device" = "常用设备信息：用于检查网络环境、保障账号与健康数据安全。";
+"auth.login.initial_prompt.permission.location" = "位置信息：用于提供与位置相关的页面展示和服务。";
+"auth.login.initial_prompt.permission.photos" = "相机 / 相册信息：用于上传、识别、下载和分享医疗文档、图片等内容。";
+"auth.login.initial_prompt.permission.microphone" = "麦克风信息：用于提供语音输入等功能。";
+"auth.login.initial_prompt.permission.logs" = "日志信息：用于行为统计、问题排查和服务安全维护。";
+"auth.login.initial_prompt.permission_note" = "请知悉，同意本提示并不会默认开启上述设备权限。我们会在你使用到相应功能时，再另行征得你的授权。";
+"auth.login.initial_prompt.security_commitment" = "我们承诺采取必要的安全措施保护你的个人信息和健康数据。";
+"auth.login.initial_prompt.decline" = "不同意";
+"auth.login.initial_prompt.agree" = "同意并继续";
 "auth.login.guest_mode" = "游客模式";
 
 "guest.chat.title" = "游客模式";

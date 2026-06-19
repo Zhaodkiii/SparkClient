@@ -109,6 +109,36 @@ YAZIO 这类计算器的优秀点不是做了四个独立公式页面，而是�
 -> 进入我的目标
 ```
 
+入口四：新建成员流程中的饮食健康模块。
+
+```text
+新建成员
+-> 姓名生日页
+-> 关系性别页
+-> 创建成员并获得 memberID
+-> 选择维护模块
+-> 开启饮食健康
+-> 去完善
+-> MemberNutritionSetupSheet
+-> 分步维护身体信息、目标设置、营养目标
+-> 保存 NutritionGoal
+-> 更新 MemberModuleSetting(module_code=nutrition)
+```
+
+关联文档：
+
+```text
+需求文档/成员管理/成员建档与模块维护需求讨论文档.md
+```
+
+说明：
+
+1. 进入饮食健康模块前，成员必须已经创建成功并获得 `memberID`。
+2. 饮食健康模块不等待成员建档最后统一提交。
+3. 饮食健康 sheet 点击完成后立即保存 `NutritionGoal`。
+4. 保存成功后更新 `MemberModuleSetting(module_code=nutrition)`。
+5. 最后完成成员建档流程时，只刷新首页和成员模块配置，不再重复提交饮食目标。
+
 ### 5.2 完整流程
 
 ```text
@@ -128,6 +158,34 @@ YAZIO 这类计算器的优秀点不是做了四个独立公式页面，而是�
 -> 客户端刷新 dashboard
 -> 总结、营养、餐次目标、AI 上下文使用新目标
 ```
+
+### 5.2.1 新建成员内的饮食健康分步流程
+
+新建成员中的饮食健康不是一页大表单，而是参考 `MedicationPlanStepperView` 的分步 sheet。
+
+```text
+MemberNutritionSetupSheet
+├─ Step 1 身体信息
+├─ Step 2 目标设置
+└─ Step 3 营养目标
+```
+
+步骤说明：
+
+| 步骤 | 页面 | 内容 | 是否可跳过 | 保存 |
+| --- | --- | --- | --- | --- |
+| Step 1 | `MemberNutritionBodyInfoStepView` | 身高、当前体重、目标体重、活跃水平 | 可跳过 | 写入目标草稿 |
+| Step 2 | `MemberNutritionGoalStepView` | 减重、保持体重、增重、打造肌肉、自定义 | 可跳过 | 写入目标草稿 |
+| Step 3 | `MemberNutritionMacroGoalStepView` | 卡路里目标、营养目标、餐次分布 | 可跳过 | 点击完成时保存 `NutritionGoal` |
+
+交互规则：
+
+1. 每一步只维护一组信息。
+2. 非必填步骤支持 `跳过`。
+3. 跳过后模块状态可以保持 `enabled_pending`。
+4. 只要用户保存了有效目标，模块状态更新为 `enabled_completed`。
+5. 如果用户关闭 sheet 且有未保存草稿，需要二次确认。
+6. 如果保存失败，只提示饮食健康模块保存失败，不重复创建成员。
 
 ### 5.3 缺失资料流程
 
@@ -861,7 +919,92 @@ nutrition/services/goal_calculation_service.py
 5. 低于安全阈值时返回 `riskFlags`。
 6. Apple 健康事实消耗和 TDEE 估算在 UI 中不混淆。
 
-## 十四、与既有工单关系
+## 十四、分阶段实施
+
+### 阶段一：目标计算基础能力
+
+目标：先让饮食目标计算本身可用。
+
+实现内容：
+
+1. 扩展 `NutritionGoal`，保存目标、BMI、BMR、TDEE、计算快照。
+2. 服务端提供目标计算接口。
+3. 客户端 `我的目标` 支持重新计算卡路里目标。
+4. 客户端支持缺失资料补充页。
+5. 保存目标后刷新饮食营养首页和看板。
+
+验收：
+
+1. 用户可以从 `我的目标` 完成重新计算和保存。
+2. 服务端返回 BMI、理想体重范围、BMR、TDEE、建议卡路里。
+3. `NutritionGoal` 保存最近一次计算快照。
+
+### 阶段二：新建成员饮食健康联动
+
+目标：把本工单接入成员建档流程。
+
+关联文档：
+
+```text
+需求文档/成员管理/成员建档与模块维护需求讨论文档.md
+```
+
+实现内容：
+
+1. 新建成员先完成姓名生日页、关系性别页。
+2. 关系性别页下一步立即创建成员，并获得 `memberID`。
+3. 进入模块选择页时已经持有 `memberID`。
+4. 模块选择页展示医疗模块和饮食健康。
+5. 用户点击饮食健康 `去完善`，sheet 打开 `MemberNutritionSetupSheet`。
+6. `MemberNutritionSetupSheet` 分身体信息、目标设置、营养目标三个步骤。
+7. 饮食健康 sheet 点击完成时立即保存 `NutritionGoal`。
+8. 保存成功后更新 `MemberModuleSetting(module_code=nutrition)`。
+9. 成员建档最后完成时不再重复提交饮食健康表单，只刷新首页配置。
+
+验收：
+
+1. 进入饮食健康 sheet 前已经有 `memberID`。
+2. 饮食健康模块保存失败不重复创建成员。
+3. 饮食健康保存成功后，成员首页可展示 `nutritionInfoSection`。
+4. `MemberModuleSetting(module_code=nutrition)` 状态正确。
+
+### 阶段三：医疗模块联动作为成员建档前置依赖
+
+目标：虽然本工单主线是饮食目标，但成员建档流程里医疗模块和饮食健康并列展示，因此需要明确前置依赖。
+
+关联数据：
+
+```text
+MemberModuleSetting
+MemberMedicalProfile
+```
+
+实现内容：
+
+1. 服务端在 `medical` app 内新增 `MemberModuleSetting`。
+2. 服务端在 `medical` app 内新增 `MemberMedicalProfile`。
+3. 医疗模块 sheet 完成时独立保存 `MemberMedicalProfile`。
+4. 医疗保存成功后更新 `MemberModuleSetting(module_code=medical)`。
+5. 饮食健康保存成功后更新 `MemberModuleSetting(module_code=nutrition)`。
+6. 首页模块排序由 `MemberModuleSetting.display_order` 控制。
+
+说明：
+
+1. 医疗模块正式业务数据仍走现有病历、用药计划、体检报告、症状、随访等表。
+2. `MemberMedicalProfile` 只保存成员建档阶段的医疗概览和关注项。
+3. 用药计划通过 `MedicationPlanStepperView` 创建，不保存在 `MemberMedicalProfile` 里。
+
+### 阶段四：后续增强
+
+后续可继续增强：
+
+1. 手动录入体检指标迁移为结构化指标记录表。
+2. `NutritionGoalCalculationLog` 启用完整计算审计。
+3. 根据成员模块配置优化首页模块排序和摘要卡片。
+4. 日常健康模块是否从代码预留变成可见模块。
+5. 成长发育、照护安全是否独立成模块。
+
+## 十五、与既有工单关系
 
 1. 基于 `NUTRITION-000004` 的默认目标能力扩展。
 2. 基于 `NUTRITION-000005` 看板目标值展示。
@@ -869,8 +1012,9 @@ nutrition/services/goal_calculation_service.py
 4. 基于 `NUTRITION-000009` 客户端 DTO/API/Repository/UseCase。
 5. 不替代 `NUTRITION-000010` 首页看板，只为其提供目标和解释数据。
 6. 后续 AI 对话扩展可由 `NUTRITION-000018` 读取本工单计算结果。
+7. 成员建档联动依赖《成员建档与模块维护需求讨论文档》中的 `MemberModuleSetting` 与 `MemberMedicalProfile` 设计。
 
-## 十五、开放问题
+## 十六、开放问题
 
 1. BMI 分类阈值是否使用中国成人标准还是 WHO 标准？
 2. 最低安全热量阈值是否按性别区分？

@@ -19,6 +19,7 @@ struct NutritionFeatureDependencies {
     let searchUseCase: NutritionSearchUseCase
     let healthKitSyncUseCase: NutritionHealthKitSyncUseCase
     let energyBurnUseCase: NutritionEnergyBurnUseCase
+    let goalUseCase: NutritionGoalUseCase
     let recognitionPipeline: any NutritionRecognitionPipeline
     let configCenter: AIConfigCenter
     let memberContextStore: MemberContextStore

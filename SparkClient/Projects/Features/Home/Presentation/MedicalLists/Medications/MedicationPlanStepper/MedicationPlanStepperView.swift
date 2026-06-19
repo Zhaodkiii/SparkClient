@@ -24,9 +24,7 @@ struct MedicationPlanStepperView: View {
 
     @State private var draft: MedicationPlanDraft
     @State private var boxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
-    @State private var isSpecificationPresented = false
-    @State private var isSchedulePresented = false
-    @State private var isReviewPresented = false
+    @State private var path: [MedicationPlanStepperRoute] = []
     @State private var isSubmitting = false
     @State private var alertMessage: String?
     @State private var sheetKeyboardVisible = false
@@ -124,9 +122,7 @@ struct MedicationPlanStepperView: View {
     }
 
     private var allowsInteractiveDismiss: Bool {
-        isSpecificationPresented == false
-        && isSchedulePresented == false
-        && isReviewPresented == false
+        path.isEmpty
     }
 
     private var navigationTitle: String {
@@ -139,8 +135,17 @@ struct MedicationPlanStepperView: View {
     }
 
     var body: some View {
-        CompatibleNavigationContainer(legacyStackStyle: true) {
+        CompatibleRouteNavigationContainer(path: $path, legacyStackStyle: true) {
             nameStep
+        } destination: { route in
+            switch route {
+            case .specification:
+                specificationStep
+            case .schedule:
+                scheduleStep
+            case .review:
+                reviewStep
+            }
         }
         .interactiveDismissDisabled(allowsInteractiveDismiss == false)
         .onAppear {
@@ -246,15 +251,6 @@ struct MedicationPlanStepperView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 120)
-            .background(
-                NavigationLink(
-                    destination: specificationStep,
-                    isActive: $isSpecificationPresented
-                ) {
-                    EmptyView()
-                }
-                .hidden()
-            )
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("medication_plan.stepper.name.nav_title", fallback: "药品名称"))
@@ -275,7 +271,7 @@ struct MedicationPlanStepperView: View {
             keyboardVisible: $sheetKeyboardVisible,
             onPrimary: {
                 guard canGoNextFromName else { return }
-                isSpecificationPresented = true
+                path.append(.specification)
             }
         )
     }
@@ -324,15 +320,6 @@ struct MedicationPlanStepperView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 120)
-            .background(
-                NavigationLink(
-                    destination: scheduleStep,
-                    isActive: $isSchedulePresented
-                ) {
-                    EmptyView()
-                }
-                .hidden()
-            )
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("medication_plan.stepper.spec.nav_title", fallback: "添加规格"))
@@ -357,7 +344,7 @@ struct MedicationPlanStepperView: View {
             },
             onPrimary: {
                 guard canGoNextFromSpecification else { return }
-                isSchedulePresented = true
+                path.append(.schedule)
             }
         )
 
@@ -442,15 +429,6 @@ struct MedicationPlanStepperView: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 120)
-            .background(
-                NavigationLink(
-                    destination: reviewStep,
-                    isActive: $isReviewPresented
-                ) {
-                    EmptyView()
-                }
-                .hidden()
-            )
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("medication_plan.stepper.schedule.nav_title", fallback: "用药时间"))
@@ -471,11 +449,11 @@ struct MedicationPlanStepperView: View {
             primarySystemImage: nil,
             keyboardVisible: $sheetKeyboardVisible,
             onBack: {
-                isReviewPresented = true
+                path.append(.review)
             },
             onPrimary: {
                 guard canGoNextFromSchedule else { return }
-                isReviewPresented = true
+                path.append(.review)
             }
         )
     }
@@ -706,7 +684,7 @@ struct MedicationPlanStepperView: View {
         draft.doseUnit = ""
         draft.dosePerTime = ""
         lastAutoSuggestedDosePerTime = ""
-        isSchedulePresented = true
+        path.append(.schedule)
     }
 
     private var selectedMedicineBoxTitle: String {
@@ -825,4 +803,10 @@ struct MedicationPlanStepperView: View {
         }
         return L10n.text("medication_plan.form.validation.incomplete", fallback: "请完善服药计划信息")
     }
+}
+
+private enum MedicationPlanStepperRoute: Hashable {
+    case specification
+    case schedule
+    case review
 }

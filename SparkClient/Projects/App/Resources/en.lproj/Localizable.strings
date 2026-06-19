@@ -1923,9 +1923,24 @@
 "auth.login.legal.checkbox_lead" = "I have read and agree to the";
 "auth.login.legal.conjunction" = "and";
 "auth.login.legal.terms" = "Terms of Service";
-"auth.login.legal.privacy" = "Privacy Policy";
-"auth.login.legal.toggle_accessibility" = "Agree to Terms of Service and Privacy Policy";
-"auth.login.legal.must_agree_hint" = "Please agree to the Terms of Service and Privacy Policy before signing in";
+"auth.login.legal.privacy" = "Privacy Notice";
+"auth.login.legal.toggle_accessibility" = "Agree to Terms of Service and Privacy Notice";
+"auth.login.legal.must_agree_hint" = "Please agree to the Terms of Service and Privacy Notice before signing in";
+"auth.login.initial_prompt.title" = "Notice";
+"auth.login.initial_prompt.intro" = "Welcome to Health Assistant. Before using the app, please read and understand:";
+"auth.login.initial_prompt.terms_link" = "Terms of Service";
+"auth.login.initial_prompt.privacy_link" = "Privacy Notice";
+"auth.login.initial_prompt.link_separator" = " and ";
+"auth.login.initial_prompt.medical_disclaimer" = "Information provided by this service is for health management and record-keeping reference only. It is not a basis for diagnosis, treatment, medication decisions, prescriptions, or electronic prescriptions. If you have questions or feel unwell, please consult a qualified medical professional promptly.";
+"auth.login.initial_prompt.permission.device" = "Device information: used to check network conditions and protect account and health data security.";
+"auth.login.initial_prompt.permission.location" = "Location information: used to provide location-related pages and services.";
+"auth.login.initial_prompt.permission.photos" = "Camera / photo library information: used to upload, recognize, download, and share medical documents and images.";
+"auth.login.initial_prompt.permission.microphone" = "Microphone information: used to provide voice input features.";
+"auth.login.initial_prompt.permission.logs" = "Log information: used for usage statistics, troubleshooting, and service security maintenance.";
+"auth.login.initial_prompt.permission_note" = "Your agreement to this notice does not automatically enable these permissions. We will request authorization separately when you use a related feature.";
+"auth.login.initial_prompt.security_commitment" = "We are committed to taking necessary security measures to protect your personal information and health data.";
+"auth.login.initial_prompt.decline" = "Decline";
+"auth.login.initial_prompt.agree" = "Agree and Continue";
 "auth.login.guest_mode" = "Guest Mode";
 
 "guest.chat.title" = "Guest Mode";

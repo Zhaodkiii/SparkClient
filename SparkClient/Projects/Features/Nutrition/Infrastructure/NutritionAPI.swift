@@ -48,6 +48,50 @@ struct NutritionAPI: @unchecked Sendable {
         return payload.goal
     }
 
+    /// 获取成员当前营养目标（含已有目标与默认回退值）。
+    func fetchGoalState(memberID: Int) async throws -> SparkNutritionAPI.RemoteNutritionGoalState {
+        try await get(
+            path: "\(Self.basePath)/goals/",
+            query: [URLQueryItem(name: "member_id", value: "\(memberID)")],
+            name: "Goals.State",
+            responseType: SparkNutritionAPI.RemoteNutritionGoalState.self
+        )
+    }
+
+    /// 保存成员营养目标。
+    func saveGoal(_ request: SparkNutritionAPI.RemoteNutritionGoalUpsertRequest) async throws -> SparkNutritionAPI.RemoteNutritionGoal {
+        try await post(
+            path: "\(Self.basePath)/goals/",
+            body: request,
+            name: "Goals.Upsert",
+            responseType: SparkNutritionAPI.RemoteNutritionGoal.self
+        )
+    }
+
+    /// 重新计算卡路里目标：返回 BMR/TDEE/建议摄入与缺失字段。
+    func calculateEnergyGoal(
+        _ request: SparkNutritionAPI.RemoteNutritionGoalCalculationRequest
+    ) async throws -> SparkNutritionAPI.RemoteNutritionEnergyCalculationResponse {
+        try await post(
+            path: "\(Self.basePath)/goals/calculate-energy/",
+            body: request,
+            name: "Goals.CalculateEnergy",
+            responseType: SparkNutritionAPI.RemoteNutritionEnergyCalculationResponse.self
+        )
+    }
+
+    /// 统一身体指标计算：BMI、理想体重范围、BMR/TDEE、建议摄入、消耗估算。
+    func calculateBodyMetrics(
+        _ request: SparkNutritionAPI.RemoteNutritionGoalCalculationRequest
+    ) async throws -> SparkNutritionAPI.RemoteNutritionBodyMetricsCalculationResponse {
+        try await post(
+            path: "\(Self.basePath)/goals/calculate-body-metrics/",
+            body: request,
+            name: "Goals.CalculateBodyMetrics",
+            responseType: SparkNutritionAPI.RemoteNutritionBodyMetricsCalculationResponse.self
+        )
+    }
+
     // MARK: - Dashboard
 
     /// 营养首页看板：某日摄入汇总、目标、各餐次卡片、Apple Health 外部数据等

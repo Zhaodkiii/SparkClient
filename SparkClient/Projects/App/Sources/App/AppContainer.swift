@@ -619,7 +619,12 @@ final class AppContainer {
         let created = HomeViewModel(
             sessionStore: sessionStore,
             loadHomeMedicalOverviewUseCase: loadHomeMedicalOverviewUseCase,
+            loadMembersUseCase: loadMembersUseCase,
             memberContextStore: memberContextStore,
+            memberModuleSetupUseCase: MemberModuleSetupUseCase(
+                medicalQueryAPI: backend.medicalQuery,
+                logger: logger
+            ),
             shareMemberUseCase: ShareMemberUseCase(memberAPI: backend.medicalMembers),
             memberInviteUseCase: MemberInviteUseCase(memberAPI: backend.medicalMembers),
             manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: backend.medicalMembers),
@@ -741,6 +746,10 @@ final class AppContainer {
                 medicalWorkflowAPI: backend.medicalWorkflow,
                 medicalQueryAPI: backend.medicalQuery,
                 medicalMemberAPI: backend.medicalMembers,
+                memberModuleSetupUseCase: MemberModuleSetupUseCase(
+                    medicalQueryAPI: backend.medicalQuery,
+                    logger: logger
+                ),
                 shareMemberUseCase: ShareMemberUseCase(memberAPI: backend.medicalMembers),
                 memberInviteUseCase: MemberInviteUseCase(memberAPI: backend.medicalMembers),
                 manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: backend.medicalMembers),

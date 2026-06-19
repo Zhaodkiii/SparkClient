@@ -5,6 +5,7 @@ enum HomeSheet: Identifiable {
     case addMember(AddMemberSheet)
     case pendingInvites
     case memberDetail(memberID: Int)
+    case memberModuleSetup(Member)
     case share(Member)
     case taskCenter
 
@@ -16,6 +17,8 @@ enum HomeSheet: Identifiable {
             return "pendingInvites"
         case .memberDetail(let memberID):
             return "memberDetail-\(memberID)"
+        case .memberModuleSetup(let member):
+            return "memberModuleSetup-\(member.id)"
         case .share(let member):
             return "share-\(member.id)"
         case .taskCenter:
@@ -49,6 +52,8 @@ extension HomeSheetKind {
             self = .pendingInvites
         case .memberDetail:
             self = .memberDetail
+        case .memberModuleSetup:
+            self = .memberModuleSetup
         case .share:
             self = .share
         case .taskCenter:

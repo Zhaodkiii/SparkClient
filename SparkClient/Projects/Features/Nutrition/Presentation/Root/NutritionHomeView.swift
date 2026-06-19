@@ -27,6 +27,22 @@ struct NutritionHomeView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 MainNavigationLink {
+                    NutritionGoalView(
+                        goalUseCase: dependencies.goalUseCase,
+                        memberID: resolvedMemberID,
+                        member: memberContextStore.context.selectedMember,
+                        onSaved: {
+                            Task { await viewModel.reload() }
+                        }
+                    )
+                } label: {
+                    Image(systemName: "target")
+                }
+                .disabled(resolvedMemberID == 0)
+                .accessibilityLabel(L10n.text("nutrition.goal.title", fallback: "我的目标"))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
                     NutritionHistoryView(
                         mealRecordUseCase: dependencies.mealRecordUseCase,
                         memberID: resolvedMemberID
@@ -170,6 +186,7 @@ extension NutritionFeatureDependencies {
                 logger: logger
             ),
             energyBurnUseCase: NutritionEnergyBurnUseCase(repository: repository, logger: logger),
+            goalUseCase: NutritionGoalUseCase(repository: repository, logger: logger),
             recognitionPipeline: DefaultNutritionRecognitionPipeline(
                 imageDescriber: imageDescriber,
                 intakeExtractor: intakeExtractor,

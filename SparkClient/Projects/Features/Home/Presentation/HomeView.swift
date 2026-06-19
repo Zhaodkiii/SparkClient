@@ -31,8 +31,15 @@ struct HomeView: View {
                 
                 // 当前版本 展示 注释 任务功能
 //                headerCard             //任务
-                medicalInfoSection          // 医疗
-                nutritionInfoSection   // 营养
+                if viewModel.shouldShowMedicalSection {
+                    medicalInfoSection
+                }
+                if viewModel.shouldShowNutritionSection {
+                    nutritionInfoSection
+                }
+                if viewModel.shouldShowModuleMaintenanceSection {
+                    moduleMaintenanceSection
+                }
 //                customCameraSection    // 相机
 
             }
@@ -169,7 +176,11 @@ struct HomeView: View {
                                 await viewModel.refresh()
                                 await viewModel.fetchPendingInvitesIfNeeded()
                             }
-                        }
+                        },
+                        onCreatedMemberCompleted: { member in
+                            viewModel.selectMember(member.id)
+                        },
+                        homeDependencies: dependencies
                     )
                 case .edit(let member):
                     AddFamilyMemberView(mode: .edit(member), store: viewModel.memberContextStoreForBinding)
@@ -208,6 +219,10 @@ struct HomeView: View {
                 MemberDetailView(
                     memberID: memberID,
                     bindingUseCase: dependencies.manageMemberBindingUseCase,
+                    moduleSetupUseCase: dependencies.memberModuleSetupUseCase,
+                    nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase,
+                    nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase,
+                    homeDependencies: dependencies,
                     memberContextStore: viewModel.memberContextStoreForBinding,
                     memberAPI: dependencies.medicalMemberAPI,
                     shareUseCase: dependencies.shareMemberUseCase,
@@ -227,6 +242,17 @@ struct HomeView: View {
                     }
                 )
             }
+
+        case .memberModuleSetup(let member):
+            MemberSetupFlowView(
+                mode: .maintain(member),
+                store: viewModel.memberContextStoreForBinding,
+                homeDependencies: dependencies,
+                onMemberCreated: { member in
+                    viewModel.selectMember(member.id)
+                    Task { await viewModel.refresh() }
+                }
+            )
 
         case .share(let member):
             ShareSheet(
@@ -429,6 +455,85 @@ struct HomeView: View {
             dependencies: dependencies.nutritionDependencies,
             memberID: viewModel.selectedMemberID
         )
+    }
+
+    private var moduleMaintenanceSection: some View {
+        Button {
+            guard let member = selectedMemberForModuleMaintenance else { return }
+            viewModel.activeSheet = .memberModuleSetup(member)
+            triggerHaptic(style: .medium)
+        } label: {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.title2.weight(.semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color(uiColor: .systemTeal))
+                        .frame(width: 44, height: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(uiColor: .systemTeal).opacity(0.12))
+                        )
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.text("home.modules.maintenance.title", fallback: "维护健康模块"))
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.primary)
+
+                        Text(L10n.text("home.modules.maintenance.subtitle", fallback: "当前成员还没有开通医疗或饮食模块，可以从这里维护模块并补充资料。"))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.forward.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 10) {
+                    maintenanceModulePill(systemImage: "cross.case.fill", title: L10n.text("member.module.medical.title", fallback: "医疗模块"))
+                    maintenanceModulePill(systemImage: "fork.knife.circle.fill", title: L10n.text("member.module.nutrition.title", fallback: "饮食健康"))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.regularMaterial)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedMemberForModuleMaintenance == nil)
+    }
+
+    private func maintenanceModulePill(systemImage: String, title: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
+    }
+
+    private var selectedMemberForModuleMaintenance: Member? {
+        if let selectedMember = viewModel.dashboard?.selectedMember {
+            return selectedMember
+        }
+        guard let selectedMemberID = viewModel.selectedMemberID else { return nil }
+        return dependencies.memberContextStore.context.members.first(where: { $0.id == selectedMemberID })
     }
 
     private var customCameraSection: some View {
@@ -744,7 +849,14 @@ extension HomeViewModel {
                 selectedMemberIDPersistence: previewPersistence,
                 logger: previewLogger
             ),
+            loadMembersUseCase: LoadMembersUseCase(
+                repository: DefaultMembersRepository(medicalQueryAPI: previewBackend.medicalQuery)
+            ),
             memberContextStore: memberContextStore,
+            memberModuleSetupUseCase: MemberModuleSetupUseCase(
+                medicalQueryAPI: previewBackend.medicalQuery,
+                logger: previewLogger
+            ),
             shareMemberUseCase: ShareMemberUseCase(memberAPI: previewBackend.medicalMembers),
             memberInviteUseCase: MemberInviteUseCase(memberAPI: previewBackend.medicalMembers),
             manageMemberBindingUseCase: ManageMemberBindingUseCase(memberAPI: previewBackend.medicalMembers),

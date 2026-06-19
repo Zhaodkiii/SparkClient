@@ -34,6 +34,8 @@ struct AddFamilyMemberView: View {
     let nearbyTransport: NearbyShareTransport?
     let initialPendingTicket: String?
     let onBindingAccepted: (() -> Void)?
+    let onCreatedMemberCompleted: ((Member) -> Void)?
+    let homeDependencies: HomeFeatureDependencies?
 
     @StateObject private var bindViewModel: AddFamilyMemberViewModel
 
@@ -52,7 +54,9 @@ struct AddFamilyMemberView: View {
         inviteUseCase: MemberInviteUseCase? = nil,
         nearbyTransport: NearbyShareTransport? = nil,
         initialPendingTicket: String? = nil,
-        onBindingAccepted: (() -> Void)? = nil
+        onBindingAccepted: (() -> Void)? = nil,
+        onCreatedMemberCompleted: ((Member) -> Void)? = nil,
+        homeDependencies: HomeFeatureDependencies? = nil
     ) {
         self.store = store
         self.shareUseCase = shareUseCase
@@ -60,6 +64,8 @@ struct AddFamilyMemberView: View {
         self.nearbyTransport = nearbyTransport
         self.initialPendingTicket = initialPendingTicket
         self.onBindingAccepted = onBindingAccepted
+        self.onCreatedMemberCompleted = onCreatedMemberCompleted
+        self.homeDependencies = homeDependencies
         _bindViewModel = StateObject(
             wrappedValue: AddFamilyMemberViewModel(
                 mode: mode,
@@ -113,6 +119,18 @@ struct AddFamilyMemberView: View {
     }
 
     var body: some View {
+        if case .create = bindViewModel.mode, let homeDependencies {
+            MemberSetupFlowView(
+                store: store,
+                homeDependencies: homeDependencies,
+                onAppearAction: MainActorAsyncVoidAction {
+                    await bindViewModel.consumeInitialPendingTicketIfNeeded()
+                },
+                onMemberCreated: { member in
+                    onCreatedMemberCompleted?(member)
+                }
+            )
+        } else {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 switch bindViewModel.mode {
@@ -215,6 +233,7 @@ struct AddFamilyMemberView: View {
             if let message = bindViewModel.shareAlertMessage {
                 Text(message)
             }
+        }
         }
     }
 
@@ -639,13 +658,13 @@ struct AddFamilyMemberView: View {
 
         switch bindViewModel.mode {
         case .create:
-            let didSave = await store.addMember(
+            let member = await store.addMember(
                 name: trimmedName,
                 relationship: relationshipCode,
                 gender: gender,
                 birthDate: birthDate
             )
-            guard didSave else { return }
+            guard member != nil else { return }
         case .edit(let member):
             let didSave = await store.updateMember(
                 member,

@@ -39,6 +39,72 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         try await resources.list([SparkMedicalSyncAPI.RemoteMember].self, kind: .members)
     }
 
+    /// 查询成员医疗维护档案。
+    func listMemberMedicalProfiles(memberID: Int) async throws -> [SparkMedicalSyncAPI.RemoteMemberMedicalProfile] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMemberMedicalProfile].self,
+            kind: .memberMedicalProfiles,
+            query: memberQuery(memberID)
+        )
+    }
+
+    /// 创建成员医疗维护档案。
+    func createMemberMedicalProfile(_ payload: SparkMedicalWorkflowAPI.MemberMedicalProfileSavePayload) async throws -> SparkMedicalSyncAPI.RemoteMemberMedicalProfile {
+        try await resources.create(
+            SparkMedicalSyncAPI.RemoteMemberMedicalProfile.self,
+            kind: .memberMedicalProfiles,
+            body: payload
+        )
+    }
+
+    /// 更新成员医疗维护档案。
+    func updateMemberMedicalProfile(
+        id: Int,
+        payload: SparkMedicalWorkflowAPI.MemberMedicalProfileSavePayload
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberMedicalProfile {
+        try await resources.update(
+            SparkMedicalSyncAPI.RemoteMemberMedicalProfile.self,
+            kind: .memberMedicalProfiles,
+            id: id,
+            body: payload
+        )
+    }
+
+    /// 查询成员模块配置。
+    func listMemberModuleSettings(memberID: Int, moduleCode: String? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMemberModuleSetting] {
+        var query = memberQuery(memberID)
+        if let moduleCode {
+            query.append(URLQueryItem(name: "module_code", value: moduleCode))
+        }
+        return try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMemberModuleSetting].self,
+            kind: .memberModuleSettings,
+            query: query
+        )
+    }
+
+    /// 创建成员模块配置。
+    func createMemberModuleSetting(_ payload: SparkMedicalWorkflowAPI.MemberModuleSettingSavePayload) async throws -> SparkMedicalSyncAPI.RemoteMemberModuleSetting {
+        try await resources.create(
+            SparkMedicalSyncAPI.RemoteMemberModuleSetting.self,
+            kind: .memberModuleSettings,
+            body: payload
+        )
+    }
+
+    /// 更新成员模块配置。
+    func updateMemberModuleSetting(
+        id: Int,
+        payload: SparkMedicalWorkflowAPI.MemberModuleSettingSavePayload
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberModuleSetting {
+        try await resources.update(
+            SparkMedicalSyncAPI.RemoteMemberModuleSetting.self,
+            kind: .memberModuleSettings,
+            id: id,
+            body: payload
+        )
+    }
+
     /// 查询病历主档（按成员可选过滤）。
     func listMedicalCases(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCase] {
         try await resources.list([SparkMedicalSyncAPI.RemoteMedicalCase].self, kind: .cases, query: memberQuery(memberID))
