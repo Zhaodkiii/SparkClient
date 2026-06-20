@@ -217,12 +217,25 @@ private struct OnboardingProfileStep: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showCreateMember) {
+        .fullScreenCover(isPresented: $showCreateMember) {
             CompatibleNavigationContainer(legacyStackStyle: true) {
-                if let homeDependencies {
-                    MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
-                } else {
-                    AddFamilyMemberView(mode: .create, store: memberContextStore)
+                Group {
+                    if let homeDependencies {
+                        MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
+                    } else {
+                        AddFamilyMemberView(mode: .create, store: memberContextStore)
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
+                // 右上角关闭按钮
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(action: {
+                            showCreateMember = false
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                    }
                 }
             }
         }

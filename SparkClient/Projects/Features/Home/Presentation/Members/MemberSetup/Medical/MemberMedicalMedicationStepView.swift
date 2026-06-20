@@ -5,19 +5,37 @@ struct MemberMedicalMedicationStepView: View {
     @Binding var medicationNotes: String
     @Binding var medicationPlanSummary: String
     let onAddMedicationPlan: () -> Void
+    /// 是否展示页面内的“长期用药”开关；病史引导页外层如果已经问过，可以关闭它避免重复提问。
+    let showsStatusToggle: Bool
     @State private var draftMedication: String = ""
+
+    init(
+        longTermMedications: Binding<[String]>,
+        medicationNotes: Binding<String>,
+        medicationPlanSummary: Binding<String>,
+        onAddMedicationPlan: @escaping () -> Void,
+        showsStatusToggle: Bool = true
+    ) {
+        _longTermMedications = longTermMedications
+        _medicationNotes = medicationNotes
+        _medicationPlanSummary = medicationPlanSummary
+        self.onAddMedicationPlan = onAddMedicationPlan
+        self.showsStatusToggle = showsStatusToggle
+    }
 
     var body: some View {
         MemberSetupSection(title: "用药") {
             VStack(alignment: .leading, spacing: 12) {
-                Toggle("有长期用药", isOn: Binding(
-                    get: { longTermMedications.isEmpty == false },
-                    set: { isOn in
-                        if isOn == false {
-                            longTermMedications.removeAll()
+                if showsStatusToggle {
+                    Toggle("有长期用药", isOn: Binding(
+                        get: { longTermMedications.isEmpty == false },
+                        set: { isOn in
+                            if isOn == false {
+                                longTermMedications.removeAll()
+                            }
                         }
-                    }
-                ))
+                    ))
+                }
 
                 HStack {
                     TextField("输入药名后添加", text: $draftMedication)

@@ -86,6 +86,33 @@ enum SparkMedicalSyncAPI {
         var updatedAt: Date?
     }
 
+    /// 成员关键健康指标记录。
+    struct RemoteMemberMedicalKeyIndicatorRecord: Codable, Sendable, Equatable, Identifiable {
+        var id: Int
+        var user: Int?
+        var member: Int
+        var source: String
+        var scenario: String
+        var recordedAt: Date?
+        var qaSessionId: String
+        var title: String
+        var summary: String
+        var extra: [String: String]?
+        var detailRows: [RemoteMedExamDetail]?
+        var createdAt: Date?
+        var updatedAt: Date?
+    }
+
+    /// 医疗引导状态聚合。
+    struct RemoteMedicalGuidanceState: Codable, Sendable, Equatable {
+        var member: RemoteMember
+        var medicalProfile: RemoteMemberMedicalProfile?
+        var latestKeyIndicatorRecord: RemoteMemberMedicalKeyIndicatorRecord?
+        var latestRiskAssessment: [String: String]?
+        var latestExamPlan: [String: String]?
+        var moduleSetting: RemoteMemberModuleSetting?
+    }
+
     /// 医疗案件/一次就诊聚合；`symptoms`、`visits` 等子表通过 `medical_case` 关联。
     struct RemoteMedicalCase: Codable, Sendable, Equatable {
         var id: Int

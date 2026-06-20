@@ -219,6 +219,35 @@ struct SparkMedicalWorkflowAPI {
         let extra: [String: String]
     }
 
+    struct MemberMedicalKeyIndicatorDetailSavePayload: Encodable, Sendable {
+        let category: String
+        let subCategory: String
+        let itemName: String
+        let itemCode: String
+        let resultValue: String
+        let unit: String
+        let referenceRange: String
+        let flag: String
+        let resultAt: Date?
+        let modality: String
+        let bodyPart: String
+        let diagnosis: String
+        let extra: [String: String]
+        let sortOrder: Int
+    }
+
+    struct MemberMedicalKeyIndicatorRecordSavePayload: Encodable, Sendable {
+        let member: Int
+        let source: String
+        let scenario: String
+        let recordedAt: Date?
+        let qaSessionId: String
+        let title: String
+        let summary: String
+        let extra: [String: String]
+        let details: [MemberMedicalKeyIndicatorDetailSavePayload]
+    }
+
     struct MedicationPlanBundleSavePayload: Encodable, Sendable {
         let member: Int
         let medicalCase: Int?

@@ -105,6 +105,53 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         )
     }
 
+    /// 查询成员关键健康指标记录。
+    func listMemberKeyIndicatorRecords(
+        memberID: Int? = nil,
+        dateFrom: Date? = nil,
+        dateTo: Date? = nil
+    ) async throws -> [SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord] {
+        var query = memberQuery(memberID)
+        if let dateFrom {
+            query.append(URLQueryItem(name: "date_from", value: MedicalDateCoding.encodeDateOnly(dateFrom)))
+        }
+        if let dateTo {
+            query.append(URLQueryItem(name: "date_to", value: MedicalDateCoding.encodeDateOnly(dateTo)))
+        }
+        return try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord].self,
+            kind: .memberKeyIndicators,
+            query: query
+        )
+    }
+
+    /// 创建成员关键健康指标记录。
+    func createMemberKeyIndicatorRecord(
+        _ payload: SparkMedicalWorkflowAPI.MemberMedicalKeyIndicatorRecordSavePayload
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord {
+        try await write(
+            method: .post,
+            path: "/api/v1/medical/member-key-indicators/",
+            body: payload,
+            responseType: SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord.self,
+            serialKey: "medical.query.member_key_indicators.create.\(payload.member)"
+        )
+    }
+
+    /// 更新成员关键健康指标记录。
+    func updateMemberKeyIndicatorRecord(
+        id: Int,
+        payload: SparkMedicalWorkflowAPI.MemberMedicalKeyIndicatorRecordSavePayload
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord {
+        try await write(
+            method: .put,
+            path: "/api/v1/medical/member-key-indicators/\(id)/",
+            body: payload,
+            responseType: SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord.self,
+            serialKey: "medical.query.member_key_indicators.update.\(id)"
+        )
+    }
+
     /// 查询病历主档（按成员可选过滤）。
     func listMedicalCases(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCase] {
         try await resources.list([SparkMedicalSyncAPI.RemoteMedicalCase].self, kind: .cases, query: memberQuery(memberID))
@@ -358,6 +405,16 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
             path: "/api/v1/medical/members/\(memberID)/complete-data/",
             responseType: SparkMedicalSyncAPI.RemoteMemberCompleteData.self,
             etagTTL: 86400
+        )
+    }
+
+    /// 医疗引导聚合状态：基础档案、最近关键指标、模块设置、AI 计划占位。
+    func loadMedicalGuidanceState(memberID: Int) async throws -> SparkMedicalSyncAPI.RemoteMedicalGuidanceState {
+        try await request(
+            path: "/api/v1/medical/member-guidance/",
+            query: [URLQueryItem(name: "member_id", value: "\(memberID)")],
+            responseType: SparkMedicalSyncAPI.RemoteMedicalGuidanceState.self,
+            etagTTL: 120
         )
     }
 
