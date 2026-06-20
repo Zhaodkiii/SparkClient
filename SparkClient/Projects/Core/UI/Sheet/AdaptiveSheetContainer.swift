@@ -1,14 +1,12 @@
 import SwiftUI
 
-/// Reusable sheet container for compact picker-style sheets on iOS 16+.
-@available(iOS 16.0, *)
+/// Reusable sheet container for compact picker-style sheets.
 enum AdaptiveSheetToolbarPlacement: Equatable {
     case top
     case bottom
     case hidden
 }
 
-@available(iOS 16.0, *)
 struct AdaptiveSheetContainer<Content: View>: View {
     let content: Content
     let cancelTitle: String
@@ -103,7 +101,6 @@ struct AdaptiveSheetContainer<Content: View>: View {
     }
 }
 
-@available(iOS 16.0, *)
 extension AdaptiveSheetContainer {
     static func fixed(
         height: CGFloat,

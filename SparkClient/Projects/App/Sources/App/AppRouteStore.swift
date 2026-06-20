@@ -55,7 +55,6 @@ final class AppRouteStore: ObservableObject {
         routeStacks[tab, default: []]
     }
 
-    @available(iOS 16.0, *)
     func navigationPath(for tab: RootTab) -> NavigationPath {
         NavigationPath(routes(for: tab))
     }

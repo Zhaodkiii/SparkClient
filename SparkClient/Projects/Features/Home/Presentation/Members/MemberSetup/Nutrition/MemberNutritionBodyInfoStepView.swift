@@ -21,16 +21,74 @@ struct MemberNutritionWeightStepView: View {
     @Binding var weightKg: Double
 
     var body: some View {
-        MemberNutritionMetricStepView(
-            title: "体重",
-            value: $weightKg,
-            unit: "kg",
-            imageName: "excersize",
-            tint: Color(red: 0.38, green: 0.24, blue: 0.68),
-            range: 30...150,
-            step: 1,
-            majorStride: 10
-        )
+        MemberNutritionWeightSliderStepView(weightKg: $weightKg)
+    }
+}
+
+private struct MemberNutritionWeightSliderStepView: View {
+    @Binding var weightKg: Double
+
+    private let tint = Color(red: 0.38, green: 0.24, blue: 0.68)
+
+    var body: some View {
+        VStack(spacing: 26) {
+            ZStack(alignment: .bottom) {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [tint.opacity(0.34), tint.opacity(0.08)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(height: 260)
+
+                Image("excersize")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 240)
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+
+            VStack(spacing: 12) {
+                Text("体重")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(displayValue)
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(tint)
+                        .animation(.easeInOut(duration: 0.2), value: weightKg)
+
+                    Text("kg")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(tint)
+                }
+            }
+
+            SparkCustomRulerSlider(
+                value: $weightKg,
+                range: 30...150,
+                step: 1,
+                majorStride: 10,
+                tint: tint
+            )
+            .frame(height: 50)
+            .padding()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var displayValue: String {
+        if weightKg.rounded() == weightKg {
+            return String(format: "%.0f", weightKg)
+        }
+        return String(format: "%.1f", weightKg)
     }
 }
 

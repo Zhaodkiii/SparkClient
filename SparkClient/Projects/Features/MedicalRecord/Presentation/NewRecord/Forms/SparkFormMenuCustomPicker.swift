@@ -4,15 +4,8 @@ import SwiftUI
 /// 目录类表单菜单：非中文语言环境用英文选项展示；选中预设项时持久化仍用 **中文**（与各 `*Taxonomy` 一致）。
 enum SparkFormCatalogMenuLocale {
     static let prefersEnglish: Bool = {
-        if #available(iOS 16, *) {
-            let code = Locale.current.language.languageCode?.identifier ?? ""
-            if code.hasPrefix("zh") { return false }
-            return true
-        }
-        if let lang = Locale.preferredLanguages.first?.lowercased() {
-            return lang.hasPrefix("zh") == false
-        }
-        return true
+        let code = Locale.current.language.languageCode?.identifier ?? ""
+        return code.hasPrefix("zh") == false
     }()
 }
 

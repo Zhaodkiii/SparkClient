@@ -125,9 +125,9 @@ private extension CustomCameraManager {
 
         cameraLayer.session = captureSession as? AVCaptureSession
         cameraLayer.videoGravity = .resizeAspectFill
-        cameraLayer.isHidden = !usesLegacyPreviewLayer
+        cameraLayer.isHidden = true
         cameraView.layer.addSublayer(cameraLayer)
-        cameraMetalView.isHidden = usesLegacyPreviewLayer
+        cameraMetalView.isHidden = false
         updatePreviewLayout(in: cameraView)
         cameraView.alpha = 1
 
@@ -143,7 +143,7 @@ private extension CustomCameraManager {
 
         cameraLayer.session = captureSession as? AVCaptureSession
         cameraLayer.videoGravity = .resizeAspectFill
-        cameraLayer.isHidden = !usesLegacyPreviewLayer
+        cameraLayer.isHidden = true
         cameraView.layer.addSublayer(cameraLayer)
         updatePreviewLayout(in: cameraView)
     }
@@ -270,21 +270,8 @@ extension CustomCameraManager {
             targetView.layer.insertSublayer(cameraLayer, at: 0)
         }
 
-        if usesLegacyPreviewLayer {
-            cameraLayer.isHidden = false
-            cameraMetalView.isHidden = true
-        } else {
-            cameraLayer.isHidden = true
-            cameraMetalView.isHidden = false
-        }
-    }
-
-    private var usesLegacyPreviewLayer: Bool {
-        if #available(iOS 16.0, *) {
-            return false
-        } else {
-            return true
-        }
+        cameraLayer.isHidden = true
+        cameraMetalView.isHidden = false
     }
 }
 

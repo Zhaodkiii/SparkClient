@@ -116,18 +116,6 @@ struct SparkFormTextRow: View {
                 .onChange(of: isTextFieldFocused) { focused in
                     keyboardVisible?.wrappedValue = focused
                 }
-//                .toolbar {
-//                    if #available(iOS 16.0, *) {
-//                        if keyboardVisible == nil, isTextFieldFocused {
-//                            ToolbarItemGroup(placement: .keyboard) {
-//                                Spacer()
-//                                Button(L10n.text("common.done")) {
-//                                    isTextFieldFocused = false
-//                                }
-//                            }
-//                        }
-//                    }
-//                }
         }
     }
 }

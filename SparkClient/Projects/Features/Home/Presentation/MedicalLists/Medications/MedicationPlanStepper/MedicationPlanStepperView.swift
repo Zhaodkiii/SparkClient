@@ -372,23 +372,7 @@ struct MedicationPlanStepperView: View {
                             showFrequencySheet = true
                         }
 
-                        if #available(iOS 16.0, *) {
-                            MedicationReminderTimesSection(draft: $draft, notificationClient: notificationClient)
-                        } else {
-                            MedicationPlanStepperTextField(
-                                title: L10n.text("medication_plan.form.field.reminder_times", fallback: "提醒时间"),
-                                text: $draft.reminderTimesText,
-                                placeholder: L10n.text("medication_plan.form.reminder_times_placeholder", fallback: "如 08:00, 12:00, 20:00"),
-                                required: true,
-                                keyboardVisible: $sheetKeyboardVisible
-                            )
-                            if let reminderTimesError = draft.reminderTimesError {
-                                Text(reminderTimesError)
-                                    .font(.caption)
-                                    .foregroundStyle(Color(uiColor: .systemRed))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
+                        MedicationReminderTimesSection(draft: $draft, notificationClient: notificationClient)
                     }
                     
 

@@ -108,14 +108,8 @@ struct SparkSystemInfo {
         // 当前系统时区标识
         timeZone = TimeZone.current.identifier
 
-        /// iOS16+与低版本区分Locale API，分别读取语言、地区码
-        if #available(iOS 16.0, *) {
-            languageCode = Locale.current.language.languageCode?.identifier ?? ""
-            regionCode = Locale.current.region?.identifier ?? ""
-        } else {
-            languageCode = Locale.current.languageCode ?? ""
-            regionCode = Locale.current.regionCode ?? ""
-        }
+        languageCode = Locale.current.language.languageCode?.identifier ?? ""
+        regionCode = Locale.current.region?.identifier ?? ""
 
         /// 编译期宏判断是否模拟器
         #if targetEnvironment(simulator)

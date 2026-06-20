@@ -33,15 +33,10 @@ struct ConditionalVerticalScroll<Content: View>: View {
 }
 
 extension View {
-    /// 控制当前层级滚动（iOS 16+：`scrollDisabled` + `EnvironmentValues.isScrollEnabled`）。
-    @ViewBuilder
+    /// 控制当前层级滚动。
     func sparkScrollEnabled(_ enabled: Bool) -> some View {
-        if #available(iOS 16.0, *) {
-            self
-                .scrollDisabled(!enabled)
-                .environment(\.isScrollEnabled, enabled)
-        } else {
-            self
-        }
+        self
+            .scrollDisabled(!enabled)
+            .environment(\.isScrollEnabled, enabled)
     }
 }

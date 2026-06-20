@@ -199,16 +199,10 @@ struct AddFamilyMemberView: View {
             }
         }
         .sheet(isPresented: $showDatePicker) {
-            if #available(iOS 16.0, *) {
-                DatePickerSheet(
-                    selectedDate: $birthDate,
-                    datePickerSheetHeight: datePickerSheetHeight
-                )
-            } else {
-                NavigationView {
-                    legacyBirthDatePickerSheetContent
-                }
-            }
+            DatePickerSheet(
+                selectedDate: $birthDate,
+                datePickerSheetHeight: datePickerSheetHeight
+            )
         }
         .fullScreenCover(isPresented: $bindViewModel.showMemberScanner) {
             QRCodeScannerView { ticket in
@@ -478,33 +472,6 @@ struct AddFamilyMemberView: View {
         return genderText
     }
 
-    private var legacyBirthDatePickerSheetContent: some View {
-        VStack {
-            DatePicker(
-                L10n.text("home.members.field.birth_date"),
-                selection: Binding(
-                    get: { birthDate ?? Calendar.current.date(byAdding: .year, value: -24, to: Date()) ?? Date() },
-                    set: { birthDate = $0 }
-                ),
-                in: ...Date(),
-                displayedComponents: .date
-            )
-            .datePickerStyle(.wheel)
-            .labelsHidden()
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.top, 16)
-        .navigationTitle(L10n.text("home.members.select_birth_date"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(L10n.text("common.ok")) {
-                    showDatePicker = false
-                }
-            }
-        }
-    }
-
     private var relationshipSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             fieldTitle(L10n.text("home.members.field.relationship"), required: true)
@@ -691,7 +658,6 @@ struct AddFamilyMemberView: View {
     AddFamilyMemberView(mode: .create, store: HomeViewModel.preview.memberContextStoreForBinding)
 }
 #endif
-@available(iOS 16.0, *)
 private struct DatePickerSheet: View {
     @Binding var selectedDate: Date?
     let datePickerSheetHeight: CGFloat

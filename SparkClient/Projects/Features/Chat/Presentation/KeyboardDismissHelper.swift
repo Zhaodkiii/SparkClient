@@ -14,13 +14,8 @@ enum KeyboardDismissHelper {
 }
 
 extension View {
-    /// iOS 16+ 使用系统交互式收键盘；低版本保持原行为，避免可用性问题。
-    @ViewBuilder
+    /// 使用系统交互式收键盘。
     func chatScrollDismissesKeyboardInteractively() -> some View {
-        if #available(iOS 16.0, *) {
-            self.scrollDismissesKeyboard(.interactively)
-        } else {
-            self
-        }
+        self.scrollDismissesKeyboard(.interactively)
     }
 }

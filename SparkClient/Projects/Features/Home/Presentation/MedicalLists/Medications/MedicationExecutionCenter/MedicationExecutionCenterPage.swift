@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 用药执行中心页面（主视图）
 /// 展示用户当日/选定日期的用药计划、待执行用药、已完成用药记录，支持日期切换、用药记录提交
@@ -33,6 +34,7 @@ struct MedicationExecutionCenterPage: View {
     @State private var logSheet: MedicationExecutionLogSheetContext?
     @State private var dateStripScrollID: String?
     @State private var didApplyInitialFocus = false
+    @State private var legacyDateStripDefersServerLoad = false
     private let calendar = Calendar.current
     private let logModule = LogModule.home
 
@@ -176,6 +178,7 @@ struct MedicationExecutionCenterPage: View {
             await applyInitialFocusIfNeeded()
         }
         .onChange(of: selectedDayStart) { newValue in
+            guard legacyDateStripDefersServerLoad == false else { return }
             Task {
                 await loadRecordWindow(centeredAt: newValue, preferInitialRecords: false)
                 await applyInitialFocusIfNeeded()
@@ -258,6 +261,7 @@ struct MedicationExecutionCenterPage: View {
         } else {
             legacyDateStripFallback
         }
+//        legacyDateStripFallback
     }
 
     @available(iOS 17.0, *)
@@ -379,54 +383,57 @@ struct MedicationExecutionCenterPage: View {
     }
 
     private var legacyDateStripFallback: some View {
-        GeometryReader { geometry in
-            let horizontalInset = max(
-                0,
-                (geometry.size.width - MedicationExecutionDateStripMetrics.itemWidth) / 2
-            )
-
-            VStack(spacing: 0) {
-                Divider()
-                Image(systemName: "arrowtriangle.down.fill")
-                    .font(.title3)
-                    .foregroundStyle(.primary)
-                    .frame(height: 22)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: MedicationExecutionDateStripMetrics.itemSpacing) {
-                        ForEach(dateStripDays) { item in
-                            Button {
-                                selectedDate = item.date
-                                MedicationExecutionSupport.impact(style: .light)
-                            } label: {
-                                MedicationExecutionDateDot(
-                                    date: item.date,
-                                    isSelected: calendar.isDate(item.date, inSameDayAs: selectedDayStart),
-                                    isLoaded: isDateInLoadedWindow(item.date),
-                                    progress: MedicationExecutionPlanner.progress(
-                                        plans: medicationPlans,
-                                        medicineBoxes: medicineBoxes,
-                                        records: MedicationExecutionRecordCache.records(
-                                            for: item.date,
-                                            in: recordsByDayID,
-                                            calendar: calendar
-                                        ),
-                                        on: item.date,
-                                        calendar: calendar
-                                    ),
-                                    calendar: calendar
-                                )
-                                .frame(width: MedicationExecutionDateStripMetrics.itemWidth)
-                            }
-                            .buttonStyle(.plain)
-                            .frame(width: MedicationExecutionDateStripMetrics.itemWidth)
-                        }
-                    }
-                    .padding(.horizontal, horizontalInset)
+        VStack(spacing: 0) {
+            Divider()
+            Image(systemName: "arrowtriangle.down.fill")
+                .font(.title3)
+                .foregroundStyle(.primary)
+                .frame(height: 22)
+            MedicationExecutionLegacyDateStripScrollView(
+                items: dateStripDays,
+                selectedDate: $selectedDate,
+                defersServerLoad: $legacyDateStripDefersServerLoad,
+                calendar: calendar,
+                itemWidth: MedicationExecutionDateStripMetrics.itemWidth,
+                itemSpacing: MedicationExecutionDateStripMetrics.itemSpacing,
+                onCommit: { committedDate in
+                    commitLegacyDateStripDate(committedDate)
+                },
+                content: { item in
+                MedicationExecutionDateDot(
+                    date: item.date,
+                    isSelected: calendar.isDate(item.date, inSameDayAs: selectedDayStart),
+                    isLoaded: isDateInLoadedWindow(item.date),
+                    progress: MedicationExecutionPlanner.progress(
+                        plans: medicationPlans,
+                        medicineBoxes: medicineBoxes,
+                        records: MedicationExecutionRecordCache.records(
+                            for: item.date,
+                            in: recordsByDayID,
+                            calendar: calendar
+                        ),
+                        on: item.date,
+                        calendar: calendar
+                    ),
+                    calendar: calendar
+                )
+                .frame(width: MedicationExecutionDateStripMetrics.itemWidth)
                 }
-                .frame(height: 86)
-            }
+            )
+            .frame(height: 86)
         }
         .frame(height: MedicationExecutionDateStripMetrics.stripHeight)
+    }
+
+    private func commitLegacyDateStripDate(_ date: Date) {
+        legacyDateStripDefersServerLoad = true
+        Task {
+            await loadRecordWindow(centeredAt: calendar.startOfDay(for: date), preferInitialRecords: false)
+            await applyInitialFocusIfNeeded()
+            await MainActor.run {
+                legacyDateStripDefersServerLoad = false
+            }
+        }
     }
 
     private func isDateInLoadedWindow(_ day: Date) -> Bool {
@@ -699,6 +706,206 @@ struct MedicationExecutionCenterPage: View {
             doseSequence: saved.doseSequence,
             members: members
         )
+    }
+}
+
+private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIViewRepresentable {
+    let items: [MedicationExecutionDateItem]
+    @Binding var selectedDate: Date
+    @Binding var defersServerLoad: Bool
+    let calendar: Calendar
+    let itemWidth: CGFloat
+    let itemSpacing: CGFloat
+    let onCommit: (Date) -> Void
+    @ViewBuilder let content: (MedicationExecutionDateItem) -> Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.bounces = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.decelerationRate = .fast
+        scrollView.delegate = context.coordinator
+
+        let hostingController = UIHostingController(
+            rootView: hostedContent(
+                displayedDate: context.coordinator.displayedDate,
+                onSelect: { item in context.coordinator.select(item) }
+            )
+        )
+        hostingController.view.backgroundColor = .clear
+        scrollView.addSubview(hostingController.view)
+        context.coordinator.hostingController = hostingController
+
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        context.coordinator.parent = self
+        if scrollView.isDragging == false, scrollView.isDecelerating == false {
+            context.coordinator.displayedDate = selectedDate
+        }
+        context.coordinator.hostingController?.rootView = hostedContent(
+            displayedDate: context.coordinator.displayedDate,
+            onSelect: { item in context.coordinator.select(item) }
+        )
+
+        let contentWidth = CGFloat(items.count) * itemWidth + CGFloat(max(items.count - 1, 0)) * itemSpacing
+        let frame = CGRect(x: 0, y: 0, width: contentWidth, height: 86)
+        context.coordinator.hostingController?.view.frame = frame
+        scrollView.contentSize = frame.size
+        scrollView.contentInset = contentInset(for: scrollView)
+
+        guard scrollView.isDragging == false, scrollView.isDecelerating == false else { return }
+        let targetOffset = contentOffset(for: selectedIndex, in: scrollView)
+        if abs(scrollView.contentOffset.x - targetOffset) > 0.5 {
+            context.coordinator.isProgrammaticScroll = true
+            scrollView.setContentOffset(CGPoint(x: targetOffset, y: 0), animated: false)
+            context.coordinator.isProgrammaticScroll = false
+        }
+    }
+
+    private func hostedContent(
+        displayedDate: Date,
+        onSelect: @escaping (MedicationExecutionDateItem) -> Void
+    ) -> MedicationExecutionLegacyDateStripContent<Content> {
+        MedicationExecutionLegacyDateStripContent(
+            items: items,
+            selectedDate: displayedDate,
+            calendar: calendar,
+            itemWidth: itemWidth,
+            itemSpacing: itemSpacing,
+            onSelect: onSelect,
+            content: content
+        )
+    }
+
+    private var itemPitch: CGFloat {
+        itemWidth + itemSpacing
+    }
+
+    private var selectedIndex: Int {
+        guard let index = items.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: selectedDate) }) else {
+            return 0
+        }
+        return index
+    }
+
+    private func contentInset(for scrollView: UIScrollView) -> UIEdgeInsets {
+        let horizontalInset = max((scrollView.bounds.width - itemWidth) / 2, 0)
+        return UIEdgeInsets(top: 0, left: horizontalInset, bottom: 0, right: horizontalInset)
+    }
+
+    private func contentOffset(for index: Int, in scrollView: UIScrollView) -> CGFloat {
+        CGFloat(index) * itemPitch - scrollView.contentInset.left
+    }
+
+    private func index(for scrollView: UIScrollView) -> Int {
+        guard items.isEmpty == false else { return 0 }
+        let rawIndex = ((scrollView.contentOffset.x + scrollView.contentInset.left) / itemPitch).rounded()
+        return min(max(Int(rawIndex), 0), items.count - 1)
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        var parent: MedicationExecutionLegacyDateStripScrollView
+        var hostingController: UIHostingController<MedicationExecutionLegacyDateStripContent<Content>>?
+        var isProgrammaticScroll = false
+        var displayedDate: Date
+        private let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
+
+        init(parent: MedicationExecutionLegacyDateStripScrollView) {
+            self.parent = parent
+            self.displayedDate = parent.selectedDate
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard isProgrammaticScroll == false else { return }
+            highlightItem(at: parent.index(for: scrollView))
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            snap(scrollView)
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if decelerate == false {
+                snap(scrollView)
+            }
+        }
+
+        func select(_ item: MedicationExecutionDateItem) {
+            commit(item)
+            feedbackGenerator.impactOccurred()
+        }
+
+        private func snap(_ scrollView: UIScrollView) {
+            let index = parent.index(for: scrollView)
+            let xOffset = parent.contentOffset(for: index, in: scrollView)
+            scrollView.setContentOffset(CGPoint(x: xOffset, y: 0), animated: false)
+            commitItem(at: index)
+            feedbackGenerator.impactOccurred()
+        }
+
+        private func highlightItem(at index: Int) {
+            guard parent.items.indices.contains(index) else { return }
+            let item = parent.items[index]
+            guard parent.calendar.isDate(item.date, inSameDayAs: displayedDate) == false else { return }
+            displayedDate = item.date
+            refreshRootView()
+            parent.defersServerLoad = true
+            parent.selectedDate = item.date
+        }
+
+        private func commitItem(at index: Int) {
+            guard parent.items.indices.contains(index) else { return }
+            commit(parent.items[index])
+        }
+
+        private func commit(_ item: MedicationExecutionDateItem) {
+            displayedDate = item.date
+            refreshRootView()
+            parent.defersServerLoad = true
+            parent.selectedDate = item.date
+            parent.onCommit(item.date)
+        }
+
+        private func refreshRootView() {
+            hostingController?.rootView = parent.hostedContent(
+                displayedDate: displayedDate,
+                onSelect: { [weak self] item in
+                    self?.select(item)
+                }
+            )
+        }
+    }
+}
+
+private struct MedicationExecutionLegacyDateStripContent<Content: View>: View {
+    let items: [MedicationExecutionDateItem]
+    let selectedDate: Date
+    let calendar: Calendar
+    let itemWidth: CGFloat
+    let itemSpacing: CGFloat
+    let onSelect: (MedicationExecutionDateItem) -> Void
+    @ViewBuilder let content: (MedicationExecutionDateItem) -> Content
+
+    var body: some View {
+        HStack(spacing: itemSpacing) {
+            ForEach(items) { item in
+                Button {
+                    onSelect(item)
+                } label: {
+                    content(item)
+                        .frame(width: itemWidth)
+                }
+                .buttonStyle(.plain)
+                .frame(width: itemWidth)
+            }
+        }
+        .frame(height: 86)
     }
 }
 

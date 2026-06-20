@@ -1,23 +1,13 @@
 import SwiftUI
 
 extension View {
-    @ViewBuilder
     func scrollContentBackgroundIfAvailable(_ visibility: Visibility) -> some View {
-        if #available(iOS 16.0, *) {
-            scrollContentBackground(visibility)
-        } else {
-            self
-        }
+        scrollContentBackground(visibility)
     }
 
-    @ViewBuilder
     func sparkInputPresentationChromeIfAvailable() -> some View {
-        if #available(iOS 16.0, *) {
-            presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        } else {
-            self
-        }
+        presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
     }
 
     @ViewBuilder
@@ -29,21 +19,11 @@ extension View {
         }
     }
 
-    @ViewBuilder
     func textInputAutocapitalizationIfAvailable(_ autocapitalization: TextInputAutocapitalization) -> some View {
-        if #available(iOS 15.0, *) {
-            textInputAutocapitalization(autocapitalization)
-        } else {
-            self
-        }
+        textInputAutocapitalization(autocapitalization)
     }
 
-    @ViewBuilder
     func autocorrectionDisabledIfAvailable() -> some View {
-        if #available(iOS 15.0, *) {
-            autocorrectionDisabled()
-        } else {
-            self
-        }
+        autocorrectionDisabled()
     }
 }

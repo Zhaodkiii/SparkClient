@@ -2,15 +2,15 @@ import SwiftUI
 
 /// Checkbox + links for Terms of Service and Privacy Policy on the login screen.
 struct LoginLegalAgreementNote: View {
-    @Binding var hasAgreed: Bool
-    @Binding var legalURL: URL?
+    let hasAgreed: Bool
     var shakeTrigger: Int
     var showsValidationHighlight: Bool
+    let onOpenAgreementPrompt: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Button {
-                hasAgreed.toggle()
+                onOpenAgreementPrompt()
             } label: {
                 Image(systemName: hasAgreed ? "checkmark.square.fill" : "square")
                     .font(.body)
@@ -25,20 +25,24 @@ struct LoginLegalAgreementNote: View {
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 2) {
-                    legalLinkButton(L10n.text("auth.login.legal.terms")) {
-                        legalURL = AppEnvironment.current.termsOfServiceURL
-                    }
+                    Text(L10n.text("auth.login.legal.terms"))
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
 
                     Text(L10n.text("auth.login.legal.conjunction"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
-                    legalLinkButton(L10n.text("auth.login.legal.privacy")) {
-                        legalURL = AppEnvironment.current.privacyPolicyURL
-                    }
+                    Text(L10n.text("auth.login.legal.privacy"))
+                        .font(.caption2)
+                        .foregroundStyle(.blue)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onOpenAgreementPrompt()
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 10)
@@ -55,14 +59,5 @@ struct LoginLegalAgreementNote: View {
         )
         .shakeOnTrigger(shakeTrigger)
         .padding(.top, 4)
-    }
-
-    private func legalLinkButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.blue)
-        }
-        .buttonStyle(.plain)
     }
 }

@@ -3,8 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// 统一文件选择入口：保留拍照、相册、文件三入口能力。
-/// iOS 16+ 版本：相册入口使用 `PhotosPicker` 多选。
-@available(iOS 16.0, *)
+/// 相册入口使用 `PhotosPicker` 多选。
 struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
     let buttonContent: () -> ButtonContent
     let onFilesSelected: ([MedicalUploadLocalFile]) -> Void

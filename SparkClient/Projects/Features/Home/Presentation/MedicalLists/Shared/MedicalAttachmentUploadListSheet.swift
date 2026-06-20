@@ -337,7 +337,6 @@ struct MedicalAttachmentUploadListSheet: View {
     @State private var localFiles: [MedicalUploadLocalFile] = []
     @State private var presentedCameraCover: MedicalAttachmentUploadCameraCover?
     @State private var showingPhotoPicker = false
-    @State private var showingPhotoLibrary = false
     @State private var showingFileImporter = false
     @State private var showCameraUnavailableAlert = false
     @State private var filePreviewSelection: FilePreviewInput?
@@ -446,18 +445,6 @@ struct MedicalAttachmentUploadListSheet: View {
                 )
             }
         }
-        .sheet(isPresented: $showingPhotoLibrary) {
-            SystemImagePicker(
-                source: .photoLibrary,
-                onCancel: { showingPhotoLibrary = false },
-                onImagePicked: { image in
-                    showingPhotoLibrary = false
-                    if let file = saveUIImageToTemp(image: image, namePrefix: "\(fileNamePrefix)_photo") {
-                        localFiles.append(file)
-                    }
-                }
-            )
-        }
         .fileImporter(
             isPresented: $showingFileImporter,
             allowedContentTypes: [.image, .pdf],
@@ -467,14 +454,12 @@ struct MedicalAttachmentUploadListSheet: View {
             appendFiles(urls.compactMap(copyToTempFile))
         }
         .overlay {
-            if #available(iOS 16.0, *) {
-                MedicalAttachmentPhotosPickerBridge(
-                    isPresented: $showingPhotoPicker,
-                    maxSelectionCount: remainingFileSlots,
-                    fileNamePrefix: fileNamePrefix
-                ) { files in
-                    appendFiles(files)
-                }
+            MedicalAttachmentPhotosPickerBridge(
+                isPresented: $showingPhotoPicker,
+                maxSelectionCount: remainingFileSlots,
+                fileNamePrefix: fileNamePrefix
+            ) { files in
+                appendFiles(files)
             }
         }
         .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCameraUnavailableAlert) {
@@ -677,11 +662,7 @@ struct MedicalAttachmentUploadListSheet: View {
 
     private func presentPhotoLibrary() {
         guard ensureCanAddMoreFiles() else { return }
-        if #available(iOS 16.0, *) {
-            showingPhotoPicker = true
-        } else {
-            showingPhotoLibrary = true
-        }
+        showingPhotoPicker = true
     }
 
     private func presentFileImporter() {
@@ -788,7 +769,6 @@ struct MedicalAttachmentUploadListSheet: View {
     }
 }
 
-@available(iOS 16.0, *)
 private struct MedicalAttachmentPhotosPickerBridge: View {
     @Binding var isPresented: Bool
     let maxSelectionCount: Int

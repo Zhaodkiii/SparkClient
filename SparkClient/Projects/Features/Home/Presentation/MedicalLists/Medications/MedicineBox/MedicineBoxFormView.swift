@@ -304,17 +304,10 @@ struct MedicineBoxFormView: View {
 
     @ViewBuilder
     private var attachmentPickerButton: some View {
-        if #available(iOS 16.0, *) {
-            MedicalDocumentFilePickerMenu(
-                buttonContent: { addAttachmentButtonLabel },
-                onFilesSelected: appendAttachmentFiles
-            )
-        } else {
-            MedicalDocumentLegacyFilePickerMenu(
-                buttonContent: { addAttachmentButtonLabel },
-                onFilesSelected: appendAttachmentFiles
-            )
-        }
+        MedicalDocumentFilePickerMenu(
+            buttonContent: { addAttachmentButtonLabel },
+            onFilesSelected: appendAttachmentFiles
+        )
     }
 
     private var addAttachmentButtonLabel: some View {

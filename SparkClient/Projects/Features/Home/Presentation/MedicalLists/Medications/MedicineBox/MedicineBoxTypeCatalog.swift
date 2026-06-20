@@ -43,11 +43,8 @@ enum MedicineBoxTypeCatalog {
     }
 
     nonisolated private static var prefersEnglish: Bool {
-        if #available(iOS 16, *) {
-            let code = Locale.current.language.languageCode?.identifier ?? ""
-            return code.hasPrefix("zh") == false
-        }
-        return Locale.preferredLanguages.first?.lowercased().hasPrefix("zh") == false
+        let code = Locale.current.language.languageCode?.identifier ?? ""
+        return code.hasPrefix("zh") == false
     }
 
     /// 从当前药箱数据合并出自定义 + 预设类型选项（存储值）

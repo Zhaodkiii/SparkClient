@@ -557,13 +557,11 @@ final class SparkHealthTool: @unchecked Sendable {
             HKObjectType.quantityType(forIdentifier: .flightsClimbed)!,
             HKObjectType.quantityType(forIdentifier: .distanceCycling)!
         ]
-        if #available(iOS 16.0, *) {
-            if let runningSpeed = HKObjectType.quantityType(forIdentifier: .runningSpeed) {
-                readTypes.insert(runningSpeed)
-            }
-            if let wristTemperature = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
-                readTypes.insert(wristTemperature)
-            }
+        if let runningSpeed = HKObjectType.quantityType(forIdentifier: .runningSpeed) {
+            readTypes.insert(runningSpeed)
+        }
+        if let wristTemperature = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
+            readTypes.insert(wristTemperature)
         }
         try await requestAuthorization(readTypes: readTypes, writeTypes: [])
     }
@@ -650,8 +648,7 @@ final class SparkHealthTool: @unchecked Sendable {
     }
 
     private func optionalSleepingWristTemperatureSamples(start: Date, end: Date) async -> [HKQuantitySample] {
-        guard #available(iOS 16.0, *),
-              let type = HKQuantityType.quantityType(forIdentifier: .appleSleepingWristTemperature)
+        guard let type = HKQuantityType.quantityType(forIdentifier: .appleSleepingWristTemperature)
         else {
             return []
         }
@@ -843,37 +840,32 @@ final class SparkHealthTool: @unchecked Sendable {
         var values: Set<Int> = [
             HKCategoryValueSleepAnalysis.asleep.rawValue
         ]
-        if #available(iOS 16.0, *) {
-            values.formUnion([
-                HKCategoryValueSleepAnalysis.awake.rawValue,
-                HKCategoryValueSleepAnalysis.asleepCore.rawValue,
-                HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
-                HKCategoryValueSleepAnalysis.asleepREM.rawValue,
-                HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue
-            ])
-        }
+        values.formUnion([
+            HKCategoryValueSleepAnalysis.awake.rawValue,
+            HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+            HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+            HKCategoryValueSleepAnalysis.asleepREM.rawValue,
+            HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue
+        ])
         return values
     }
 
     private static func chatStage(fromRawValue rawValue: Int) -> ChatHealthSleepModel.Stage {
-        if #available(iOS 16.0, *) {
-            switch rawValue {
-            case HKCategoryValueSleepAnalysis.awake.rawValue:
-                return .awake
-            case HKCategoryValueSleepAnalysis.asleepCore.rawValue:
-                return .core
-            case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
-                return .deep
-            case HKCategoryValueSleepAnalysis.asleepREM.rawValue:
-                return .rem
-            case HKCategoryValueSleepAnalysis.asleep.rawValue,
-                 HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue:
-                return .unspecified
-            default:
-                return .unspecified
-            }
+        switch rawValue {
+        case HKCategoryValueSleepAnalysis.awake.rawValue:
+            return .awake
+        case HKCategoryValueSleepAnalysis.asleepCore.rawValue:
+            return .core
+        case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
+            return .deep
+        case HKCategoryValueSleepAnalysis.asleepREM.rawValue:
+            return .rem
+        case HKCategoryValueSleepAnalysis.asleep.rawValue,
+             HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue:
+            return .unspecified
+        default:
+            return .unspecified
         }
-        return rawValue == HKCategoryValueSleepAnalysis.asleep.rawValue ? .unspecified : .awake
     }
 
     private static func buildSleepSegmentVitals(

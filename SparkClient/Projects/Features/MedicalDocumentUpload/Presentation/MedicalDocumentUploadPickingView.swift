@@ -194,29 +194,16 @@ struct MedicalDocumentUploadPickingView: View {
 
     // MARK: - 继续添加
 
-    /// 虚线边框按钮：内部为 `Menu`，iOS 16+ 与 iOS 15 分别使用 PhotosPicker 能力与 legacy 实现。
+    /// 虚线边框按钮：内部为 `Menu`，统一使用多选文件入口。
     private var continueAddButton: some View {
-        Group {
-            if #available(iOS 16.0, *) {
-                MedicalDocumentFilePickerMenu(
-                    buttonContent: {
-                        dashedAddFilesLabel
-                    },
-                    onFilesSelected: { files in
-                        viewModel.setSelectedFiles(viewModel.selectedFiles + files)
-                    }
-                )
-            } else {
-                MedicalDocumentLegacyFilePickerMenu(
-                    buttonContent: {
-                        dashedAddFilesLabel
-                    },
-                    onFilesSelected: { files in
-                        viewModel.setSelectedFiles(viewModel.selectedFiles + files)
-                    }
-                )
+        MedicalDocumentFilePickerMenu(
+            buttonContent: {
+                dashedAddFilesLabel
+            },
+            onFilesSelected: { files in
+                viewModel.setSelectedFiles(viewModel.selectedFiles + files)
             }
-        }
+        )
     }
 
     /// 与 `MedicalDocumentFilePickerMenu` 的 label 共用；样式为 project accent + 虚线描边。

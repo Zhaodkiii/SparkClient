@@ -30,7 +30,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 
                 // 当前版本 展示 注释 任务功能
-//                headerCard             //任务
+                headerCard             //任务
                 if viewModel.shouldShowMedicalSection {
                     medicalInfoSection
                 }
@@ -157,38 +157,50 @@ struct HomeView: View {
         )
     }
 
+    // MARK: - 首页底部弹窗内容构建器
+    /// 弹窗内容统一构造方法，根据弹窗枚举类型渲染对应页面
+    /// - Parameter sheet: 首页弹窗类型枚举，区分新增成员/待处理邀请/成员详情等弹窗
+    /// - Returns: 对应弹窗的视图内容，部分页面包裹兼容导航容器保证导航栏正常展示
     @ViewBuilder
     private func homeSheetContent(_ sheet: HomeSheet) -> some View {
         switch sheet {
+        // MARK: 新增家庭成员弹窗（创建/编辑/接受邀请三种子场景）
         case .addMember(let addMemberSheet):
+            // 兼容多版本导航容器，统一弹窗内导航栈样式
             CompatibleNavigationContainer {
                 switch addMemberSheet {
+                // 场景1：全新创建家庭成员，传入预填单据
                 case .create(let pendingTicket):
                     AddFamilyMemberView(
-                        mode: .create,
-                        store: viewModel.memberContextStoreForBinding,
-                        shareUseCase: dependencies.shareMemberUseCase,
-                        inviteUseCase: dependencies.memberInviteUseCase,
-                        nearbyTransport: addMemberNearbyTransport,
-                        initialPendingTicket: pendingTicket,
+                        mode: .create, // 页面模式：新建成员
+                        store: viewModel.memberContextStoreForBinding, // 成员表单状态存储
+                        shareUseCase: dependencies.shareMemberUseCase, // 成员分享业务用例
+                        inviteUseCase: dependencies.memberInviteUseCase, // 成员邀请业务用例
+                        nearbyTransport: addMemberNearbyTransport, // 附近设备互通传输工具
+                        initialPendingTicket: pendingTicket, // 初始化预填单据数据
+                        // 绑定关系确认完成回调：刷新首页成员列表、拉取待处理邀请
                         onBindingAccepted: {
                             Task {
                                 await viewModel.refresh()
                                 await viewModel.fetchPendingInvitesIfNeeded()
                             }
                         },
+                        // 成员创建成功回调：自动选中当前新建的成员
                         onCreatedMemberCompleted: { member in
                             viewModel.selectMember(member.id)
                         },
-                        homeDependencies: dependencies
+                        homeDependencies: dependencies // 首页全局依赖注入
                     )
+                // 场景2：编辑已有家庭成员
                 case .edit(let member):
                     AddFamilyMemberView(mode: .edit(member), store: viewModel.memberContextStoreForBinding)
+                // 场景3：接收他人发来的家庭加入邀请
                 case .acceptInvite(let inviteID, let preview):
                     AddFamilyMemberView(
-                        mode: .acceptInvite(inviteID: inviteID, preview: preview),
+                        mode: .acceptInvite(inviteID: inviteID, preview: preview), // 邀请模式：传入邀请ID与邀请预览信息
                         store: viewModel.memberContextStoreForBinding,
                         inviteUseCase: dependencies.memberInviteUseCase,
+                        // 接受邀请完成后刷新首页数据
                         onBindingAccepted: {
                             Task {
                                 await viewModel.refresh()
@@ -199,43 +211,51 @@ struct HomeView: View {
                 }
             }
 
+        // MARK: 待处理家庭成员邀请列表弹窗
         case .pendingInvites:
             PendingMemberInvitesView(
-                items: viewModel.pendingInvites,
-                highlightInviteID: viewModel.highlightInviteID,
+                items: viewModel.pendingInvites, // 待处理邀请数据源
+                highlightInviteID: viewModel.highlightInviteID, // 需要高亮展示的邀请ID
+                // 接受邀请：跳转至接受邀请编辑页
                 onAccept: { item in
                     viewModel.openInviteAccept(item)
                 },
+                // 拒绝邀请：主线程异步执行拒绝接口
                 onReject: MainActorAsyncAction { item in
                     await viewModel.rejectPendingInvite(item)
                 },
+                // 页面出现时按需拉取最新邀请列表
                 onAppearRefresh: MainActorAsyncVoidAction {
                     await viewModel.fetchPendingInvitesIfNeeded()
                 }
             )
 
+        // MARK: 家庭成员详情页弹窗
         case .memberDetail(let memberID):
             CompatibleNavigationContainer {
                 MemberDetailView(
-                    memberID: memberID,
-                    bindingUseCase: dependencies.manageMemberBindingUseCase,
-                    moduleSetupUseCase: dependencies.memberModuleSetupUseCase,
-                    nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase,
-                    nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase,
+                    memberID: memberID, // 当前查看的成员唯一ID
+                    bindingUseCase: dependencies.manageMemberBindingUseCase, // 成员绑定管理业务用例
+                    moduleSetupUseCase: dependencies.memberModuleSetupUseCase, // 成员功能模块配置用例
+                    nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase, // 营养目标业务用例
+                    nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase, // 营养数据看板用例
                     homeDependencies: dependencies,
-                    memberContextStore: viewModel.memberContextStoreForBinding,
-                    memberAPI: dependencies.medicalMemberAPI,
+                    memberContextStore: viewModel.memberContextStoreForBinding, // 成员表单状态仓库
+                    memberAPI: dependencies.medicalMemberAPI, // 医疗成员相关接口
                     shareUseCase: dependencies.shareMemberUseCase,
+                    // 分享按钮点击：打开分享弹窗
                     onShare: {
                         if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
                             viewModel.activeSheet = .share(member)
                         }
                     },
+                    // 编辑按钮点击：打开成员编辑弹窗
                     onEdit: {
                         if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
                             viewModel.activeSheet = .addMember(.edit(member))
                         }
                     },
+                    // 成员删除完成回调：关闭弹窗并刷新首页数据
                     onDeleted: {
                         viewModel.activeSheet = nil
                         Task { await viewModel.refresh() }
@@ -243,62 +263,80 @@ struct HomeView: View {
                 )
             }
 
+        // MARK: 成员功能模块配置流程弹窗
         case .memberModuleSetup(let member):
             MemberSetupFlowView(
-                mode: .maintain(member),
+                mode: .maintain(member), // 模式：维护已有成员模块配置
                 store: viewModel.memberContextStoreForBinding,
                 homeDependencies: dependencies,
+                // 模块配置/成员创建完成：选中该成员并刷新首页
                 onMemberCreated: { member in
                     viewModel.selectMember(member.id)
                     Task { await viewModel.refresh() }
                 }
             )
 
+        // MARK: 家庭成员分享弹窗
         case .share(let member):
             ShareSheet(
-                member: member,
+                member: member, // 需要分享的目标成员
                 shareUseCase: dependencies.shareMemberUseCase,
                 inviteUseCase: dependencies.memberInviteUseCase
             )
 
+        // MARK: 任务中心弹窗
         case .taskCenter:
             CompatibleNavigationContainer {
                 TaskCenterViewController(
-                    memberID: viewModel.selectedMemberID,
-                    taskManager: dependencies.taskManager
+                    memberID: viewModel.selectedMemberID, // 当前选中成员ID，用于过滤对应任务
+                    taskManager: dependencies.taskManager // 任务管理核心管理器
                 )
             }
         }
     }
-
+    // MARK: - 首页全屏弹窗内容构建器
+    /// 根据全屏弹窗枚举类型渲染对应全屏页面视图
+    /// - Parameter cover: 首页全屏弹窗枚举，区分病历上传、自定义相机等场景
+    /// - Returns: 对应场景的全屏视图内容
     @ViewBuilder
     private func homeFullScreenCoverContent(_ cover: HomeFullScreenCover) -> some View {
         switch cover {
+        // MARK: 医疗病历/单据上传全屏页
         case .medicalDocumentUpload:
+            // 兼容导航容器，提供页面导航栏能力
             CompatibleNavigationContainer {
                 MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: dependencies.aiSettingsViewModel
+                    viewModel: medicalDocumentUploadViewModel, // 病历上传页视图模型
+                    aiSettingsViewModel: dependencies.aiSettingsViewModel // AI识别配置视图模型
                 )
             }
 
+        // MARK: 自定义相机拍摄全屏页
         case .customCamera:
             CustomCameraHomeView {
+                // 相机页面关闭回调：清空当前全屏弹窗标识，退出全屏
                 activeFullScreenCover = nil
             }
         }
     }
-
+    
+    // MARK: - 顶部家庭成员选择栏组件
+    /// 左侧待邀请通知按钮 + 横向滚动成员选择标签 + 新增成员按钮
     private var memberSelectorBar: some View {
         HStack(spacing: 8) {
+            // 存在未处理邀请时，展示邀请通知铃铛按钮
             if viewModel.pendingInviteCount > 0 {
                 Button {
+                    // 打开待处理邀请弹窗
                     viewModel.activeSheet = .pendingInvites
+                    // 轻触感震动反馈
                     triggerHaptic(style: .light)
                 } label: {
                     ZStack(alignment: .topTrailing) {
+                        // 铃铛图标
                         Image(systemName: "bell.badge")
                             .font(.title3)
+                        // 邀请数量红色角标
                         Text("\(viewModel.pendingInviteCount)")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.white)
@@ -309,6 +347,7 @@ struct HomeView: View {
                     }
                     .frame(width: 40, height: 40)
                 }
+                // 无障碍文案：待处理邀请数量
                 .accessibilityLabel(
                     String(
                         format: L10n.text("home.members.invite.pending_count"),
@@ -316,62 +355,78 @@ struct HomeView: View {
                     )
                 )
             }
-
+            
+            // 横向滚动区域：所有成员选择标签
             ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(viewModel.dashboard?.members ?? []) { member in
-                    MemberSelectorChip(
-                        member: member,
-                        badgeText: memberBadgeText(for: member),
-                        isSelected: member.id == viewModel.selectedMemberID,
-                        onSelect: {
-                            viewModel.selectMember(member.id)
-                            triggerHaptic(style: .light)
-                        },
-                        onViewDetail: {
-                            viewModel.activeSheet = .memberDetail(memberID: member.id)
-                            triggerHaptic(style: .light)
-                        },
-                        onShare: {
-                            viewModel.activeSheet = .share(member)
-                            triggerHaptic(style: .light)
-                        }
-                    )
-                }
-
-                Button {
-                    viewModel.activeSheet = .addMember(.create())
-                    triggerHaptic(style: .medium)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            Circle()
-                                .fill(Color(uiColor: .secondarySystemBackground))
+                HStack(spacing: 12) {
+                    // 遍历仪表盘所有家庭成员数据
+                    ForEach(viewModel.dashboard?.members ?? []) { member in
+                        MemberSelectorChip(
+                            member: member, // 当前成员模型
+                            badgeText: memberBadgeText(for: member), // 成员附属标签文字（如身份/营养标识）
+                            isSelected: member.id == viewModel.selectedMemberID, // 是否为当前选中成员
+                            onSelect: {
+                                // 选中该成员
+                                viewModel.selectMember(member.id)
+                                triggerHaptic(style: .light)
+                            },
+                            onViewDetail: {
+                                // 打开成员详情弹窗
+                                viewModel.activeSheet = .memberDetail(memberID: member.id)
+                                triggerHaptic(style: .light)
+                            },
+                            onShare: {
+                                // 打开成员分享弹窗
+                                viewModel.activeSheet = .share(member)
+                                triggerHaptic(style: .light)
+                            }
                         )
-                        .overlay(
-                            Circle()
-                                .strokeBorder(.quaternary, lineWidth: 1)
-                        )
+                    }
+                    
+                    // 新增家庭成员圆形加号按钮
+                    Button {
+                        // 打开新建成员弹窗
+                        viewModel.activeSheet = .addMember(.create())
+                        // 中等强度震动区分操作
+                        triggerHaptic(style: .medium)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 40, height: 40)
+                            .background(
+                                Circle()
+                                    .fill(Color(uiColor: .secondarySystemBackground))
+                            )
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(.quaternary, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    // 无障碍文案：添加家庭成员
+                    .accessibilityLabel(L10n.text("home.members.add.title"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.text("home.members.add.title"))
-            }
-            .padding(.vertical, 4)
+                .padding(.vertical, 4)
             }
         }
     }
 
+    // MARK: - 首页头部信息卡片组件
+    /// 展示欢迎语、远程模式标识、登录时间，附带任务中心入口按钮
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // 欢迎标题行 + 任务中心入口按钮
             HStack(alignment: .top) {
+                // 带用户名的欢迎文案
                 Text(L10n.homeGreeting(session.displayName))
                     .font(.title.weight(.bold))
                 Spacer()
+                // 任务中心跳转按钮
                 Button {
+                    // 打开任务中心全屏弹窗
                     viewModel.activeSheet = .taskCenter
+                    // 轻量级触觉反馈
                     triggerHaptic(style: .light)
                 } label: {
                     Label(
@@ -383,10 +438,12 @@ struct HomeView: View {
                 .buttonStyle(.bordered)
             }
 
+            // 当前运行模式：远程模式提示文本
             Text(L10n.text("home.mode.remote"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
+            // 账号登录时间展示，带认证安全图标
             Label(
                 session.signedInAt.formatted(date: .abbreviated, time: .shortened),
                 systemImage: "checkmark.seal.fill"
@@ -395,26 +452,36 @@ struct HomeView: View {
             .foregroundStyle(.secondary)
         }
         .padding(20)
+        // 半透明磨砂材质背景
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.regularMaterial)
         )
+        // 细边框描边
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         )
+        // 卡片底部柔和阴影，提升悬浮层次感
         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
     }
 
+    // MARK: - 医疗信息板块组件
+    /// 包含医疗板块标题栏、各类医疗数据卡片网格、AI健康报告入口按钮
     private var medicalInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // 板块标题行：医疗标题 + 家庭药箱入口 + 当前选中成员名称
             HStack {
+                // 医疗板块标题，搭配医疗箱图标
                 Label(L10n.text("home.medical.title"), systemImage: "cross.case")
                     .font(.headline)
                 Spacer()
+                // 存在选中成员时，展示家庭药箱跳转按钮
                 if let entryMemberID = viewModel.selectedMemberID {
                     Button {
+                        // 路由跳转至对应成员的家庭药箱页面
                         dependencies.routeStore.route(to: .homeFamilyMedicineCabinet(memberID: entryMemberID))
+                        // 轻量级触觉反馈
                         triggerHaptic(style: .light)
                     } label: {
                         Label(
@@ -425,6 +492,7 @@ struct HomeView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                // 展示当前选中家庭成员姓名
 //                if viewModel.dashboard?.selectedMember != nil {
 //                    Text(viewModel.dashboard?.selectedMember?.name ?? "")
 //                        .font(.footnote)
@@ -432,20 +500,26 @@ struct HomeView: View {
 //                }
             }
 
+            // 读取仪表盘医疗模块卡片数组，无数据则为空数组
             let cards = viewModel.dashboard?.medical.cards ?? []
+            // 两列自适应网格布局，懒加载优化性能
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(cards, id: \.id) { card in
                     Button {
+                        // 埋点：记录医疗分类列表点击日志
                         viewModel.logMedicalListNavigation(kind: card.id)
+                        // 路由跳转至对应医疗分类详情列表页
                         dependencies.routeStore.route(to: .homeMedicalList(card.id.homeMedicalListRoute, nil))
                         triggerHaptic(style: .light)
                     } label: {
+                        // 渲染单张医疗分类卡片
                         medicalCard(card)
                     }
                     .buttonStyle(.plain)
                 }
             }
 
+            // AI健康报告独立入口按钮
             medicalAIReportButton
         }
     }
@@ -457,29 +531,39 @@ struct HomeView: View {
         )
     }
 
+    // MARK: - 健康模块维护板块组件
+    /// 用于开通/配置成员医疗、饮食健康模块的入口卡片，无选中成员时置灰不可点击
     private var moduleMaintenanceSection: some View {
         Button {
+            // 校验是否存在可配置模块的选中成员，无则直接返回不执行操作
             guard let member = selectedMemberForModuleMaintenance else { return }
+            // 打开成员模块配置弹窗
             viewModel.activeSheet = .memberModuleSetup(member)
+            // 中等强度触觉反馈，区分普通点击
             triggerHaptic(style: .medium)
         } label: {
             VStack(alignment: .leading, spacing: 18) {
+                // 图标 + 标题描述 + 右侧跳转箭头 横向布局
                 HStack(alignment: .top, spacing: 14) {
+                    // 模块管理网格图标
                     Image(systemName: "square.grid.2x2.fill")
                         .font(.title2.weight(.semibold))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(Color(uiColor: .systemTeal))
                         .frame(width: 44, height: 44)
+                        // 浅青色圆角背景底色
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .fill(Color(uiColor: .systemTeal).opacity(0.12))
                         )
 
                     VStack(alignment: .leading, spacing: 6) {
+                        // 卡片主标题：维护健康模块
                         Text(L10n.text("home.modules.maintenance.title", fallback: "维护健康模块"))
                             .font(.headline.weight(.semibold))
                             .foregroundStyle(.primary)
 
+                        // 卡片说明副标题，自动换行展示完整提示文案
                         Text(L10n.text("home.modules.maintenance.subtitle", fallback: "当前成员还没有开通医疗或饮食模块，可以从这里维护模块并补充资料。"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -488,12 +572,14 @@ struct HomeView: View {
 
                     Spacer(minLength: 0)
 
+                    // 右侧右箭头标识，提示可点击跳转
                     Image(systemName: "chevron.forward.circle.fill")
                         .font(.title3)
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.secondary)
                 }
 
+                // 底部功能标签组：医疗模块、饮食健康模块标签
                 HStack(spacing: 10) {
                     maintenanceModulePill(systemImage: "cross.case.fill", title: L10n.text("member.module.medical.title", fallback: "医疗模块"))
                     maintenanceModulePill(systemImage: "fork.knife.circle.fill", title: L10n.text("member.module.nutrition.title", fallback: "饮食健康"))
@@ -501,17 +587,21 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(18)
+            // 半透明磨砂材质卡片背景
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(.regularMaterial)
             )
+            // 细分割线边框
             .overlay {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
             }
+            // 卡片柔和悬浮阴影
             .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
         }
         .buttonStyle(.plain)
+        // 无有效选中成员时，按钮禁用置灰
         .disabled(selectedMemberForModuleMaintenance == nil)
     }
 

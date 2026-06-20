@@ -9,7 +9,6 @@ struct LoginView: View {
     @State private var showPhoneLogin = false
     @State private var tapCount = 0
     @State private var lastTapTime: Date?
-    @State private var legalURL: URL?
     @State private var hasAgreedToLegal = false
     @State private var legalAgreementShakeTrigger = 0
     @State private var showsLegalValidationHighlight = false
@@ -23,10 +22,12 @@ struct LoginView: View {
                     headerCluster
                     actionButtons
                     LoginLegalAgreementNote(
-                        hasAgreed: $hasAgreedToLegal,
-                        legalURL: $legalURL,
+                        hasAgreed: hasAgreedToLegal,
                         shakeTrigger: legalAgreementShakeTrigger,
-                        showsValidationHighlight: showsLegalValidationHighlight
+                        showsValidationHighlight: showsLegalValidationHighlight,
+                        onOpenAgreementPrompt: {
+                            presentInitialLegalPrompt()
+                        }
                     )
     //                safetyCard
                 }
@@ -48,12 +49,6 @@ struct LoginView: View {
                         .scaleEffect(1.5)
                 }
             }
-            .sheet(item: Binding(
-                get: { legalURL.map(IdentifiableURL.init(url:)) },
-                set: { legalURL = $0?.url }
-            )) { item in
-                SafariWebViewSheet(url: item.url)
-            }
             .sheet(isPresented: $showsInitialLegalPrompt) {
                 initialLegalPromptSheet
             }
@@ -63,8 +58,10 @@ struct LoginView: View {
                 }
             }
             .onAppear {
-                if hasAcceptedInitialLegalPrompt == false {
-                    showsInitialLegalPrompt = true
+                if hasAcceptedInitialLegalPrompt {
+                    hasAgreedToLegal = true
+                } else {
+                    presentInitialLegalPrompt(showsWarning: false)
                 }
             }
         } destination: { route in
@@ -79,58 +76,35 @@ struct LoginView: View {
     }
 
     private func requireLegalAgreementBeforeLogin() {
-        legalAgreementShakeTrigger += 1
-        showsLegalValidationHighlight = true
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        presentInitialLegalPrompt()
+    }
+
+    private func presentInitialLegalPrompt(showsWarning: Bool = true) {
+        if showsWarning {
+            showsLegalValidationHighlight = true
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            legalAgreementShakeTrigger += 1
+        }
+
+        showsInitialLegalPrompt = true
     }
 
     @ViewBuilder
     private var initialLegalPromptSheet: some View {
-        if #available(iOS 16.0, *) {
-            LoginInitialLegalPromptSheet(
-                fixedHeight: UIScreen.main.bounds.height * 0.5,
-                onOpenTerms: {
-                    openInitialPromptLegalURL(AppEnvironment.current.termsOfServiceURL)
-                },
-                onOpenPrivacy: {
-                    openInitialPromptLegalURL(AppEnvironment.current.privacyPolicyURL)
-                },
-                onDecline: {
-                    showsInitialLegalPrompt = false
-                },
-                onAgree: {
-                    hasAcceptedInitialLegalPrompt = true
-                    hasAgreedToLegal = true
-                    showsLegalValidationHighlight = false
-                    showsInitialLegalPrompt = false
-                }
-            )
-        } else {
-            LoginInitialLegalPromptLegacyView(
-                onOpenTerms: {
-                    openInitialPromptLegalURL(AppEnvironment.current.termsOfServiceURL)
-                },
-                onOpenPrivacy: {
-                    openInitialPromptLegalURL(AppEnvironment.current.privacyPolicyURL)
-                },
-                onDecline: {
-                    showsInitialLegalPrompt = false
-                },
-                onAgree: {
-                    hasAcceptedInitialLegalPrompt = true
-                    hasAgreedToLegal = true
-                    showsLegalValidationHighlight = false
-                    showsInitialLegalPrompt = false
-                }
-            )
-        }
-    }
-
-    private func openInitialPromptLegalURL(_ url: URL) {
-        showsInitialLegalPrompt = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            legalURL = url
-        }
+        LoginInitialLegalPromptSheet(
+            fixedHeight: UIScreen.main.bounds.height * 0.5,
+            onDecline: {
+                hasAcceptedInitialLegalPrompt = false
+                hasAgreedToLegal = false
+                showsInitialLegalPrompt = false
+            },
+            onAgree: {
+                hasAcceptedInitialLegalPrompt = true
+                hasAgreedToLegal = true
+                showsLegalValidationHighlight = false
+                showsInitialLegalPrompt = false
+            }
+        )
     }
 
     private var headerCluster: some View {
@@ -296,11 +270,8 @@ private enum LoginRoute: Hashable {
     case guest
 }
 
-@available(iOS 16.0, *)
 private struct LoginInitialLegalPromptSheet: View {
     let fixedHeight: CGFloat
-    let onOpenTerms: () -> Void
-    let onOpenPrivacy: () -> Void
     let onDecline: () -> Void
     let onAgree: () -> Void
 
@@ -314,8 +285,6 @@ private struct LoginInitialLegalPromptSheet: View {
             onCancel: onDecline
         ) {
             LoginInitialLegalPromptContent(
-                onOpenTerms: onOpenTerms,
-                onOpenPrivacy: onOpenPrivacy,
                 onDecline: onDecline,
                 onAgree: onAgree
             )
@@ -323,27 +292,11 @@ private struct LoginInitialLegalPromptSheet: View {
     }
 }
 
-private struct LoginInitialLegalPromptLegacyView: View {
-    let onOpenTerms: () -> Void
-    let onOpenPrivacy: () -> Void
-    let onDecline: () -> Void
-    let onAgree: () -> Void
-
-    var body: some View {
-        LoginInitialLegalPromptContent(
-            onOpenTerms: onOpenTerms,
-            onOpenPrivacy: onOpenPrivacy,
-            onDecline: onDecline,
-            onAgree: onAgree
-        )
-    }
-}
-
 private struct LoginInitialLegalPromptContent: View {
-    let onOpenTerms: () -> Void
-    let onOpenPrivacy: () -> Void
     let onDecline: () -> Void
     let onAgree: () -> Void
+
+    @State private var legalURL: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -357,9 +310,9 @@ private struct LoginInitialLegalPromptContent: View {
                     legalIntro
 
                     Text(L10n.text("auth.login.initial_prompt.medical_disclaimer"))
-                        .font(.body)
+                        .font(.body.weight(.semibold))
                         .lineSpacing(6)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
 
                     VStack(alignment: .leading, spacing: 16) {
                         ForEach(permissionItems, id: \.self) { item in
@@ -416,10 +369,16 @@ private struct LoginInitialLegalPromptContent: View {
             }
             .padding(.horizontal, 24)
             .padding(.top, 12)
-            .padding(.bottom, 24)
+                .padding(.bottom, 24)
             .background(Color(uiColor: .systemBackground))
         }
         .background(Color(uiColor: .systemBackground))
+        .sheet(item: Binding(
+            get: { legalURL.map(IdentifiableURL.init(url:)) },
+            set: { legalURL = $0?.url }
+        )) { item in
+            SafariWebViewSheet(url: item.url)
+        }
     }
 
     private var legalIntro: some View {
@@ -430,7 +389,9 @@ private struct LoginInitialLegalPromptContent: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 4) {
-                Button(action: onOpenTerms) {
+                Button {
+                    legalURL = AppEnvironment.current.termsOfServiceURL
+                } label: {
                     Text(L10n.text("auth.login.initial_prompt.terms_link"))
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.blue)
@@ -441,7 +402,9 @@ private struct LoginInitialLegalPromptContent: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
 
-                Button(action: onOpenPrivacy) {
+                Button {
+                    legalURL = AppEnvironment.current.privacyPolicyURL
+                } label: {
                     Text(L10n.text("auth.login.initial_prompt.privacy_link"))
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.blue)

@@ -10,10 +10,8 @@ enum FileUtilities {
 
     nonisolated static func mimeType(forName fileName: String) -> String {
         let ext = (fileName as NSString).pathExtension.lowercased()
-        if #available(iOS 14.0, *) {
-            if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
-                return mime
-            }
+        if let type = UTType(filenameExtension: ext), let mime = type.preferredMIMEType {
+            return mime
         }
 
         switch ext {

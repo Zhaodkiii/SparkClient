@@ -23,7 +23,7 @@ extension View {
     }
 }
 
-/// Scrollable sheet body whose **content height** drives `.presentationDetents` on iOS 16+ (capped to ~72% of screen height).
+/// Scrollable sheet body whose **content height** drives `.presentationDetents` (capped to ~72% of screen height).
 struct AdaptiveToolSheetScrollView<Content: View>: View {
     private let content: Content
     private let bottomContentPadding: CGFloat
@@ -40,12 +40,8 @@ struct AdaptiveToolSheetScrollView<Content: View>: View {
     }
 
     var body: some View {
-        if #available(iOS 16.0, *) {
-            scrollView
-                .modifier(AdaptiveToolSheetHeightModifier(extraChromeHeight: extraChromeHeight))
-        } else {
-            scrollView
-        }
+        scrollView
+            .modifier(AdaptiveToolSheetHeightModifier(extraChromeHeight: extraChromeHeight))
     }
 
     private var scrollView: some View {
@@ -57,7 +53,6 @@ struct AdaptiveToolSheetScrollView<Content: View>: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct AdaptiveToolSheetHeightModifier: ViewModifier {
     /// Fixed chrome **outside** the measured scroll content (e.g. navigation bar, or header + footer rows).
     var extraChromeHeight: CGFloat = 64

@@ -66,19 +66,13 @@ struct MemberNameBirthStepView: View {
             onPrimary: onNext
         )
         .sheet(isPresented: $showDatePicker) {
-            if #available(iOS 16.0, *) {
-                DatePickerSheet(
-                    selectedDate: Binding(
-                        get: { draft.birthDate },
-                        set: { draft.birthDate = $0 }
-                    ),
-                    datePickerSheetHeight: 300
-                )
-            } else {
-                NavigationView {
-                    legacyBirthDatePickerSheetContent
-                }
-            }
+            DatePickerSheet(
+                selectedDate: Binding(
+                    get: { draft.birthDate },
+                    set: { draft.birthDate = $0 }
+                ),
+                datePickerSheetHeight: 300
+            )
         }
     }
 
@@ -89,35 +83,6 @@ struct MemberNameBirthStepView: View {
         return birthDate.formatted(date: .long, time: .omitted)
     }
 
-    private var legacyBirthDatePickerSheetContent: some View {
-        VStack {
-            DatePicker(
-                L10n.text("home.members.field.birth_date"),
-                selection: Binding(
-                    get: {
-                        draft.birthDate ?? Calendar.current.date(byAdding: .year, value: -24, to: Date()) ?? Date()
-                    },
-                    set: { draft.birthDate = $0 }
-                ),
-                in: ...Date(),
-                displayedComponents: .date
-            )
-            .datePickerStyle(.wheel)
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .center)
-        }
-        .padding(.top, 16)
-        .navigationTitle(L10n.text("home.members.select_birth_date"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(L10n.text("common.ok")) {
-                    showDatePicker = false
-                }
-            }
-        }
-    }
-
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
 #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: style).impactOccurred()
@@ -125,7 +90,6 @@ struct MemberNameBirthStepView: View {
     }
 }
 
-@available(iOS 16.0, *)
 private struct DatePickerSheet: View {
     @Binding var selectedDate: Date?
     let datePickerSheetHeight: CGFloat

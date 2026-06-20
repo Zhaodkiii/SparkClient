@@ -163,16 +163,10 @@ struct KnowledgeDocumentDetailView: View {
 
     @ViewBuilder
     private var textEditorContent: some View {
-        if #available(iOS 16.0, *) {
-            TextEditor(text: $editor.bodyText)
-                .font(.body)
-                .scrollContentBackground(.hidden)
-                .padding(.bottom, 8)
-        } else {
-            TextEditor(text: $editor.bodyText)
-                .font(.body)
-                .padding(.bottom, 8)
-        }
+        TextEditor(text: $editor.bodyText)
+            .font(.body)
+            .scrollContentBackground(.hidden)
+            .padding(.bottom, 8)
     }
 
     @ToolbarContentBuilder
@@ -301,11 +295,7 @@ private struct KnowledgeWebInlineRow: View {
 
 private struct HiddenScrollIndicatorsIfAvailable: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 16.0, *) {
-            content.scrollIndicators(.hidden)
-        } else {
-            content
-        }
+        content.scrollIndicators(.hidden)
     }
 }
 

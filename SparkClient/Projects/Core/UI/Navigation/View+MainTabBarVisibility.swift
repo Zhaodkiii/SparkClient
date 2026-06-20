@@ -8,13 +8,7 @@ extension View {
 }
 
 private struct MainTabBarVisibilityModifier: ViewModifier {
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 16.0, *) {
-//            content.toolbar(.hidden, for: .tabBar)
-            content.background(LegacyTabBarHiddenHostingBridge())
-        } else {
-            content.background(LegacyTabBarHiddenHostingBridge())
-        }
+        content.background(LegacyTabBarHiddenHostingBridge())
     }
 }

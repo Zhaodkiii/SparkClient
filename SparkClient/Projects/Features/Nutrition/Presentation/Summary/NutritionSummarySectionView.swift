@@ -401,16 +401,10 @@ struct NutritionMealsSectionView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(.primary)
 
-                if #available(iOS 16.0, *) {
-                    Image(systemName: "arrow.right")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-                } else {
-                    Image(systemName: "arrow.right")
-                        .font(.headline.bold())
-                        .foregroundStyle(.primary)
-                }
+                Image(systemName: "arrow.right")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
             }
 
             Text(
@@ -443,28 +437,16 @@ struct NutritionMealsSectionView: View {
 
     @ViewBuilder
     private var addFoodButtonLabel: some View {
-        if #available(iOS 16.0, *) {
-            Image(systemName: "plus")
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundStyle(Color(uiColor: .systemBackground))
-                .frame(width: 42, height: 42)
-                .background {
-                    Circle()
-                        .fill(Color.primary)
-                }
-                .contentShape(Circle())
-        } else {
-            Image(systemName: "plus")
-                .font(.headline)
-                .foregroundStyle(Color(uiColor: .systemBackground))
-                .frame(width: 42, height: 42)
-                .background {
-                    Circle()
-                        .fill(Color.primary)
-                }
-                .contentShape(Circle())
-        }
+        Image(systemName: "plus")
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundStyle(Color(uiColor: .systemBackground))
+            .frame(width: 42, height: 42)
+            .background {
+                Circle()
+                    .fill(Color.primary)
+            }
+            .contentShape(Circle())
     }
 }
 

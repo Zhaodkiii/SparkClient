@@ -17,7 +17,6 @@ private enum MedicationReminderTimePickerRoute: Identifiable {
     }
 }
 
-@available(iOS 16.0, *)
 private struct MedicationReminderTimePickerSheet: View {
     @Binding var selectedTime: Date
     let onConfirm: () -> Void
@@ -50,7 +49,6 @@ private struct MedicationReminderTimePickerSheet: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct MedicationReminderTimesSection: View {
     @Binding var draft: MedicationPlanDraft
     let notificationClient: any NotificationClient

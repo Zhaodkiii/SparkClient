@@ -180,10 +180,6 @@ struct MedicineBoxListPage: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        if #available(iOS 16.0, *) {
-            content.presentationDetents([.height(180)])
-        } else {
-            content
-        }
+        content.presentationDetents([.height(180)])
     }
 }
