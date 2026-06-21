@@ -21,6 +21,7 @@ struct MedicationPlanDetailPage: View {
     var onLocalDraftDeleted: (() -> Void)?
     var onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)?
     var onLocalDraftMedicineBoxDeleted: (() -> Void)?
+    var onMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var currentPlan: SparkMedicalSyncAPI.RemoteMedicationPlan
@@ -53,7 +54,8 @@ struct MedicationPlanDetailPage: View {
         onLocalDraftSaved: ((MedicationPlanRecognitionDraft) -> Void)? = nil,
         onLocalDraftDeleted: (() -> Void)? = nil,
         onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)? = nil,
-        onLocalDraftMedicineBoxDeleted: (() -> Void)? = nil
+        onLocalDraftMedicineBoxDeleted: (() -> Void)? = nil,
+        onMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)? = nil
     ) {
         self.mode = mode
         self.plan = plan
@@ -75,6 +77,7 @@ struct MedicationPlanDetailPage: View {
         self.onLocalDraftDeleted = onLocalDraftDeleted
         self.onLocalDraftMedicineBoxSaved = onLocalDraftMedicineBoxSaved
         self.onLocalDraftMedicineBoxDeleted = onLocalDraftMedicineBoxDeleted
+        self.onMutation = onMutation
         _currentPlan = State(initialValue: plan)
         _medicineBoxes = State(
             initialValue: completeData?.familyMedicineBoxes ?? medicineBoxes
@@ -332,7 +335,8 @@ struct MedicationPlanDetailPage: View {
                         currentPlan = saved
                         onSaved(saved)
                         showingEditSheet = false
-                    }
+                    },
+                    onMutation: onMutation
                 )
             } else {
                 Text(L10n.text("home.medical.medicine_box.select_member_first"))
@@ -394,7 +398,8 @@ struct MedicationPlanDetailPage: View {
         defer { isDeleting = false }
 
         do {
-            try await workflowAPI.delete(kind: .medicationPlans, id: currentPlan.id)
+            let response = try await workflowAPI.deleteMedicationPlan(id: currentPlan.id)
+            onMutation?(response)
             onDeleted(currentPlan.id)
             dismiss()
         } catch {

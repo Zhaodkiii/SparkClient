@@ -167,11 +167,11 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var chronicConditions: [String]
     @Published var chronicConditionDetails: [String: MedicalGuideChronicConditionDetail] = [:]
     @Published var hasPrefilledChronicConditionStatus: Bool = false
-    @Published var longTermMedicationEnabled: Bool = false
-    @Published var longTermMedications: [String]
-    @Published var medicationNotes: String
     @Published var longTermMedicationStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var hasPrefilledLongTermMedicationStatus: Bool = false
+    @Published var memberMedicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] = []
+    @Published var medicationFocus: [SparkMedicalSyncAPI.RemoteMedicationFocusItem] = []
+    @Published var isLoadingMemberMedications = false
     @Published var surgeryHistory: String = ""
     @Published var surgeryTime: String = ""
     @Published var surgeryStatus: MedicalGuideDisclosureStatus = .unknown
@@ -253,8 +253,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         self.chronicConditionStatus = initialChronicConditions.isEmpty ? .unknown : .have
         self.chronicConditions = initialChronicConditions
         self.hasPrefilledChronicConditionStatus = initialChronicConditions.isEmpty == false
-        self.longTermMedications = []
-        self.medicationNotes = ""
         self.allergyStatus = initialAllergies.isEmpty ? .unknown : .have
         self.allergies = initialAllergies
         self.hasPrefilledAllergyStatus = initialAllergies.isEmpty == false
@@ -364,7 +362,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var hasHistory: Bool {
-        chronicConditions.isEmpty == false || longTermMedications.isEmpty == false || medicationNotes.isEmpty == false || surgeryHistory.isEmpty == false || surgeryTime.isEmpty == false || allergies.isEmpty == false || allergyHistory.isEmpty == false
+        chronicConditions.isEmpty == false || medicationFocus.isEmpty == false || memberMedicationPlans.isEmpty == false || surgeryHistory.isEmpty == false || surgeryTime.isEmpty == false || allergies.isEmpty == false || allergyHistory.isEmpty == false
     }
 
     var shouldSkipChronicConditionsStep: Bool {
@@ -374,8 +372,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     var shouldSkipLongTermMedicationStep: Bool {
         longTermMedicationStatus != .unknown
-            || longTermMedications.isEmpty == false
-            || medicationNotes.isEmpty == false
+            || medicationFocus.isEmpty == false
+            || memberMedicationPlans.isEmpty == false
     }
 
     var shouldSkipSurgeryHistoryStep: Bool {
@@ -467,7 +465,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if surgerySummary != "未填写" { pieces.append(surgerySummary) }
         if allergySummary != "未填写" { pieces.append(allergySummary) }
         if symptomSummary != "未填写" { pieces.append(symptomSummary) }
-        if medicationNotes.isEmpty == false { pieces.append("备注已填") }
         return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
     }
 
@@ -502,10 +499,86 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         case .none:
             return "无长期用药"
         case .have:
+            let focusSummary = MedicationFormSupport.profileSummary(from: medicationFocus)
+            if focusSummary != "暂无长期用药" {
+                return focusSummary
+            }
+            let activePlans = memberMedicationPlans.filter { $0.status == "active" || $0.status == "paused" }
+            if activePlans.isEmpty == false {
+                return activePlans.map { MedicationFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
+            }
             return "有用药记录"
         case .unknown:
             return "未填写"
         }
+    }
+
+    func refreshMemberMedicationPlansIfNeeded(force: Bool = false) async {
+        guard let member else { return }
+        if force == false, isLoadingMemberMedications { return }
+        isLoadingMemberMedications = true
+        defer { isLoadingMemberMedications = false }
+        do {
+            memberMedicationPlans = try await medicalQueryAPI.listMedicationPlans(memberID: member.id)
+            if let profile = try await medicalQueryAPI.listMemberMedicalProfiles(memberID: member.id).first {
+                ingestProfileMedicationFocus(profile)
+            } else {
+                medicationFocus = []
+            }
+            if memberMedicationPlans.isEmpty == false {
+                longTermMedicationStatus = .have
+                hasPrefilledLongTermMedicationStatus = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func applyMedicationMutation(
+        _ response: SparkMedicalSyncAPI.MedicationMutationResponse,
+        removedPlanID: Int? = nil
+    ) {
+        if response.deleted == true {
+            if let removedPlanID {
+                memberMedicationPlans.removeAll { $0.id == removedPlanID }
+            } else if let profile = response.memberProfile {
+                let survivingIDs = Set(profile.medicationFocus.map(\.sourcePlanId))
+                memberMedicationPlans.removeAll { plan in
+                    (plan.status == "active" || plan.status == "paused") && !survivingIDs.contains(plan.id)
+                }
+            }
+        } else if let plan = response.medicationPlan {
+            ingestSavedMedicationPlans([plan])
+        }
+        if let profile = response.memberProfile {
+            ingestProfileMedicationFocus(profile)
+        } else if response.deleted == true {
+            medicationFocus = []
+        }
+        if memberMedicationPlans.isEmpty, response.deleted == true {
+            hasPrefilledLongTermMedicationStatus = true
+        }
+    }
+
+    func ingestProfileMedicationFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        medicationFocus = profile.medicationFocus
+        if medicationFocus.isEmpty == false {
+            longTermMedicationStatus = .have
+            hasPrefilledLongTermMedicationStatus = true
+        }
+    }
+
+    func ingestSavedMedicationPlans(_ saved: [SparkMedicalSyncAPI.RemoteMedicationPlan]) {
+        guard saved.isEmpty == false else { return }
+        for plan in saved {
+            if let index = memberMedicationPlans.firstIndex(where: { $0.id == plan.id }) {
+                memberMedicationPlans[index] = plan
+            } else {
+                memberMedicationPlans.insert(plan, at: 0)
+            }
+        }
+        longTermMedicationStatus = .have
+        hasPrefilledLongTermMedicationStatus = true
     }
 
     var surgerySummary: String {
@@ -801,6 +874,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                 apply(keyIndicatorRecord: latest)
             }
             await refreshMemberSymptomsIfNeeded()
+            await refreshMemberMedicationPlansIfNeeded()
             if let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
                 do {
                     let goalState = try await goalUseCase.loadGoalState(memberID: member.id)
@@ -873,8 +947,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         let saved = try await setupUseCase.saveMedicalProfile(
             memberID: member.id,
             chronicConditions: chronicConditions,
-            longTermMedications: longTermMedications,
-            medicationNotes: medicationNotes,
             examFocus: keyIndicatorFocusTags,
             symptomFollowUpFocus: symptomFollowUpFocus,
             notes: profileNotes,
@@ -978,14 +1050,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             chronicConditionStatus = .have
             hasPrefilledChronicConditionStatus = true
         }
-        if profile.longTermMedications.isEmpty == false {
-            longTermMedications = profile.longTermMedications
-            longTermMedicationEnabled = true
-            longTermMedicationStatus = .have
-            hasPrefilledLongTermMedicationStatus = true
-        }
-        if profile.medicationNotes.isEmpty == false {
-            medicationNotes = profile.medicationNotes
+        if profile.medicationFocus.isEmpty == false {
+            ingestProfileMedicationFocus(profile)
         }
         if profile.examFocus.isEmpty == false {
             keyIndicatorRows = mergeKeyIndicatorRows(from: profile.examFocus)

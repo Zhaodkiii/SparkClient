@@ -21,6 +21,7 @@ struct PrescriptionMedicationPlanSummaryRow: View {
         var onLocalDraftPlanDeleted: (() -> Void)?
         var onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)?
         var onLocalDraftMedicineBoxDeleted: (() -> Void)?
+        var onPlanMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)?
     }
 
     let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
@@ -80,7 +81,8 @@ struct PrescriptionMedicationPlanSummaryRow: View {
                         onLocalDraftSaved: nav.onLocalDraftPlanSaved,
                         onLocalDraftDeleted: nav.onLocalDraftPlanDeleted,
                         onLocalDraftMedicineBoxSaved: nav.onLocalDraftMedicineBoxSaved,
-                        onLocalDraftMedicineBoxDeleted: nav.onLocalDraftMedicineBoxDeleted
+                        onLocalDraftMedicineBoxDeleted: nav.onLocalDraftMedicineBoxDeleted,
+                        onMutation: nav.onPlanMutation
                     )
                 } label: {
                     rowLabel

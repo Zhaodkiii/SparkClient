@@ -19,6 +19,7 @@ struct MedicationPlanFormView: View {
     let notificationClient: any NotificationClient
     let onMedicineBoxSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)?
+    let onMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)?
 
     @State private var draft: MedicationPlanDraft
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
@@ -45,7 +46,8 @@ struct MedicationPlanFormView: View {
         fileTransferService: FileTransferService,
         notificationClient: any NotificationClient,
         onMedicineBoxSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
-        onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)? = nil
+        onServerSaved: ((SparkMedicalSyncAPI.RemoteMedicationPlan) -> Void)? = nil,
+        onMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)? = nil
     ) {
         self.mode = mode
         self.memberID = memberID
@@ -54,6 +56,7 @@ struct MedicationPlanFormView: View {
         self.notificationClient = notificationClient
         self.onMedicineBoxSaved = onMedicineBoxSaved
         self.onServerSaved = onServerSaved
+        self.onMutation = onMutation
         _medicineBoxes = State(initialValue: medicineBoxes)
 
         switch mode {
@@ -391,25 +394,20 @@ struct MedicationPlanFormView: View {
 
         do {
             let payload = try draft.payload(memberID: memberID)
-            let saved: SparkMedicalSyncAPI.RemoteMedicationPlan
+            let mutation: SparkMedicalSyncAPI.MedicationMutationResponse
             switch mode {
             case .create:
-                saved = try await workflowAPI.create(
-                    SparkMedicalSyncAPI.RemoteMedicationPlan.self,
-                    kind: .medicationPlans,
-                    body: payload
-                )
+                mutation = try await workflowAPI.createMedicationPlan(payload)
             case .serverEdit(let existing):
-                saved = try await workflowAPI.update(
-                    SparkMedicalSyncAPI.RemoteMedicationPlan.self,
-                    kind: .medicationPlans,
-                    id: existing.id,
-                    body: payload
-                )
+                mutation = try await workflowAPI.updateMedicationPlan(id: existing.id, body: payload)
             case .localEdit:
                 return
             }
+            guard let saved = mutation.medicationPlan else {
+                throw NSError(domain: "MedicationPlanFormView", code: -1, userInfo: [NSLocalizedDescriptionKey: "保存成功但未返回用药计划"])
+            }
             onServerSaved?(saved)
+            onMutation?(mutation)
             dismiss()
         } catch {
             alertMessage = error.localizedDescription

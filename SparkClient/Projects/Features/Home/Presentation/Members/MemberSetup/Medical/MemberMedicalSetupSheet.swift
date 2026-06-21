@@ -658,19 +658,17 @@ struct MemberMedicalSetupSheetView: View {
                     onNext: { nextVisibleHistory(after: .longTermMedication) }
                 ) {
                     MemberMedicalLongTermMedicationStepView(
+                        viewModel: viewModel,
                         status: Binding(
                             get: { viewModel.longTermMedicationStatus },
                             set: { newValue in
                                 viewModel.longTermMedicationStatus = newValue
                                 if newValue != .unknown {
                                     viewModel.hasPrefilledLongTermMedicationStatus = true
-                                    viewModel.longTermMedicationEnabled = newValue == .have
                                 }
                             }
                         ),
-                        memberID: memberID,
                         completeData: nil,
-                        workflowAPI: homeDependencies.medicalWorkflowAPI,
                         medicalQueryAPI: homeDependencies.medicalQueryAPI,
                         fileTransferService: homeDependencies.fileTransferService,
                         memberContextStore: homeDependencies.memberContextStore,

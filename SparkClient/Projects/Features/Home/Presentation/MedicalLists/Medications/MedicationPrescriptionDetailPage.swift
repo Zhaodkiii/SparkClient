@@ -27,6 +27,7 @@ struct MedicationPrescriptionDetailPage: View {
     var onLocalDraftMedicationPlanDeleted: ((Int) -> Void)?
     var onLocalDraftMedicineBoxSaved: ((Int, MedicineBoxRecognitionDraft) -> Void)?
     var onLocalDraftMedicineBoxDeleted: ((Int) -> Void)?
+    var onPlanMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)?
 
     private let prescriptionIndex: Int
 
@@ -67,7 +68,8 @@ struct MedicationPrescriptionDetailPage: View {
         onLocalDraftMedicationPlanSaved: ((Int, MedicationPlanRecognitionDraft) -> Void)? = nil,
         onLocalDraftMedicationPlanDeleted: ((Int) -> Void)? = nil,
         onLocalDraftMedicineBoxSaved: ((Int, MedicineBoxRecognitionDraft) -> Void)? = nil,
-        onLocalDraftMedicineBoxDeleted: ((Int) -> Void)? = nil
+        onLocalDraftMedicineBoxDeleted: ((Int) -> Void)? = nil,
+        onPlanMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)? = nil
     ) {
         self.mode = mode
         _currentPrescription = State(initialValue: prescription)
@@ -95,6 +97,7 @@ struct MedicationPrescriptionDetailPage: View {
         self.onLocalDraftMedicationPlanDeleted = onLocalDraftMedicationPlanDeleted
         self.onLocalDraftMedicineBoxSaved = onLocalDraftMedicineBoxSaved
         self.onLocalDraftMedicineBoxDeleted = onLocalDraftMedicineBoxDeleted
+        self.onPlanMutation = onPlanMutation
         self.prescriptionIndex = prescriptionIndex
     }
 
@@ -406,7 +409,8 @@ struct MedicationPrescriptionDetailPage: View {
                                 },
                                 onLocalDraftMedicineBoxDeleted: {
                                     handleLocalDraftMedicineBoxDeleted(medicationIndex: medicationIndex)
-                                }
+                                },
+                                onPlanMutation: onPlanMutation
                             )
                         )
                     }
@@ -482,9 +486,14 @@ struct MedicationPrescriptionDetailPage: View {
 
         do {
             if deleteLinkedPlans {
+                var lastMutation: SparkMedicalSyncAPI.MedicationMutationResponse?
                 for plan in currentPlans {
-                    try await workflowAPI.delete(kind: .medicationPlans, id: plan.id)
+                    let response = try await workflowAPI.deleteMedicationPlan(id: plan.id)
+                    lastMutation = response
                     onPlanDeleted(plan.id)
+                }
+                if let lastMutation {
+                    onPlanMutation?(lastMutation)
                 }
             } else {
                 for plan in currentPlans {

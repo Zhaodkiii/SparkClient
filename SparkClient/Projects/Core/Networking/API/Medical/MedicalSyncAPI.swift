@@ -54,13 +54,23 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 成员医疗维护档案。
+    struct RemoteMedicationFocusItem: Codable, Sendable, Equatable, Identifiable {
+        var drugName: String
+        var summary: String
+        var status: String
+        var reminderEnabled: Bool
+        var sourcePlanId: Int
+
+        var id: Int { sourcePlanId }
+    }
+
+    /// 成员医疗维护档案。
     struct RemoteMemberMedicalProfile: Codable, Sendable, Equatable, Identifiable {
         var id: Int
         var user: Int?
         var member: Int
         var chronicConditions: [String]
-        var longTermMedications: [String]
-        var medicationNotes: String
+        var medicationFocus: [RemoteMedicationFocusItem]
         var examFocus: [String]
         var symptomFollowUpFocus: [String]
         var notes: String
@@ -164,6 +174,14 @@ enum SparkMedicalSyncAPI {
     struct SymptomMutationResponse: Codable, Sendable, Equatable {
         var deleted: Bool?
         var symptom: RemoteSymptom?
+        var memberProfile: RemoteMemberMedicalProfile?
+        var summary: String?
+    }
+
+    /// 用药计划增删改后返回：明细 + 重算后的成员医疗画像摘要。
+    struct MedicationMutationResponse: Codable, Sendable, Equatable {
+        var deleted: Bool?
+        var medicationPlan: RemoteMedicationPlan?
         var memberProfile: RemoteMemberMedicalProfile?
         var summary: String?
     }
@@ -350,7 +368,7 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 服药计划：独立的用药规则，可选关联药箱与处方。
-    struct RemoteMedicationPlan: Codable, Sendable, Equatable {
+    struct RemoteMedicationPlan: Codable, Sendable, Equatable, Identifiable {
         var id: Int
         var member: Int
         var medicalCase: Int?

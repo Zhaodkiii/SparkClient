@@ -17,8 +17,6 @@ struct MemberModuleSetupUseCase: Sendable {
     /// - Parameters:
     ///   - memberID: 家庭成员ID
     ///   - chronicConditions: 慢性病列表
-    ///   - longTermMedications: 长期服用药物列表
-    ///   - medicationNotes: 用药备注说明
     ///   - examFocus: 重点体检项目
     ///   - symptomFollowUpFocus: 需要持续随访的症状
     ///   - notes: 其他综合备注
@@ -28,8 +26,6 @@ struct MemberModuleSetupUseCase: Sendable {
     func saveMedicalProfile(
         memberID: Int,
         chronicConditions: [String],
-        longTermMedications: [String],
-        medicationNotes: String,
         examFocus: [String],
         symptomFollowUpFocus: [String],
         notes: String,
@@ -41,8 +37,6 @@ struct MemberModuleSetupUseCase: Sendable {
         let payload = SparkMedicalWorkflowAPI.MemberMedicalProfileSavePayload(
             member: memberID,
             chronicConditions: chronicConditions,
-            longTermMedications: longTermMedications,
-            medicationNotes: medicationNotes,
             examFocus: examFocus,
             symptomFollowUpFocus: symptomFollowUpFocus,
             notes: notes,

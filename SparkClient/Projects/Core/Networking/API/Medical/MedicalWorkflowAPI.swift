@@ -199,8 +199,6 @@ struct SparkMedicalWorkflowAPI {
     struct MemberMedicalProfileSavePayload: Encodable, Sendable {
         let member: Int
         let chronicConditions: [String]
-        let longTermMedications: [String]
-        let medicationNotes: String
         let examFocus: [String]
         let symptomFollowUpFocus: [String]
         let notes: String
@@ -425,6 +423,54 @@ struct SparkMedicalWorkflowAPI {
             queuePriority: .high,
             isIdempotent: false
         )
+    }
+
+    /// 新建用药计划；成功返回计划明细与重算后的成员画像摘要。
+    func createMedicationPlan<B: Encodable>(_ body: B) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
+        let q = kindQueryItems(.medicationPlans, extra: [])
+        return try await request(
+            method: .post,
+            path: Self.resourceCollectionPath,
+            queryItems: q,
+            body: .json(AnyEncodable(body)),
+            responseType: SparkMedicalSyncAPI.MedicationMutationResponse.self,
+            allowETag: false,
+            serialKey: "medical.resource.create.medication_plans",
+            queuePriority: .high,
+            isIdempotent: false
+        )
+    }
+
+    /// 更新用药计划；成功返回计划明细与重算后的成员画像摘要。
+    func updateMedicationPlan<B: Encodable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
+        let q = kindQueryItems(.medicationPlans, extra: [])
+        return try await request(
+            method: .patch,
+            path: resourceItemPath(id: id),
+            queryItems: q,
+            body: .json(AnyEncodable(body)),
+            responseType: SparkMedicalSyncAPI.MedicationMutationResponse.self,
+            allowETag: false,
+            serialKey: "medical.resource.update.medication_plans.\(id)",
+            queuePriority: .high,
+            isIdempotent: false
+        )
+    }
+
+    /// 删除用药计划；成功返回删除结果与重算后的成员画像摘要。
+    func deleteMedicationPlan(id: Int) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
+        let q = kindQueryItems(.medicationPlans, extra: [])
+        let response = try await executeRaw(
+            method: .delete,
+            path: resourceItemPath(id: id),
+            queryItems: q,
+            body: nil,
+            allowETag: false,
+            serialKey: "medical.resource.delete.medication_plans.\(id)",
+            queuePriority: .high,
+            isIdempotent: false
+        )
+        return try APIResponseDecoder.decodeWrappedData(SparkMedicalSyncAPI.MedicationMutationResponse.self, from: response, decoder: .medicalAPI)
     }
 
     /// 新建就诊；成功返回记录 ID。

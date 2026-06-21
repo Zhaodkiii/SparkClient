@@ -1,11 +1,10 @@
 import SwiftUI
 
 struct MemberMedicalLongTermMedicationStepView: View {
+    @ObservedObject var viewModel: MemberMedicalSetupViewModel
     @Binding var status: MedicalGuideDisclosureStatus
 
-    let memberID: Int
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
-    let workflowAPI: SparkMedicalWorkflowAPI
     let medicalQueryAPI: SparkMedicalQueryAPI
     let fileTransferService: FileTransferService
     @ObservedObject var memberContextStore: MemberContextStore
@@ -16,11 +15,18 @@ struct MemberMedicalLongTermMedicationStepView: View {
 
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = []
     @State private var prescriptions: [SparkMedicalSyncAPI.RemotePrescription] = []
-    @State private var medicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] = []
     @State private var todayMedicationRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] = []
-    @State private var isLoading = false
+    @State private var isLoadingArchive = false
     @State private var showingUploadSheet = false
     @State private var sheetDestination: MedicationPlanSheetDestination?
+
+    private var memberID: Int {
+        viewModel.member?.id ?? 0
+    }
+
+    private var workflowAPI: SparkMedicalWorkflowAPI {
+        viewModel.medicalWorkflowAPI
+    }
 
     private var medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox] {
         Dictionary(uniqueKeysWithValues: medicineBoxes.map { ($0.id, $0) })
@@ -32,7 +38,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
 
     private var sortedItems: [MedicalMedicationListItem] {
         MedicalMedicationListBuilder.sortedItems(
-            medicationPlans: medicationPlans,
+            medicationPlans: viewModel.memberMedicationPlans,
             prescriptions: prescriptions
         )
     }
@@ -49,6 +55,10 @@ struct MemberMedicalLongTermMedicationStepView: View {
             if case .prescription = $0 { return true }
             return false
         }
+    }
+
+    private var isLoading: Bool {
+        viewModel.isLoadingMemberMedications || isLoadingArchive
     }
 
     var body: some View {
@@ -187,8 +197,9 @@ struct MemberMedicalLongTermMedicationStepView: View {
                                         homeDependencies: homeDependencies,
                                         onPrescriptionSaved: upsertPrescription,
                                         onPrescriptionDeleted: removePrescription,
-                                        onPlanSaved: upsertMedicationPlan,
-                                        onPlanDeleted: removeMedicationPlan
+                                        onPlanSaved: handlePlanSavedLocally,
+                                        onPlanDeleted: handlePlanDeletedLocally,
+                                        onPlanMutation: handleMedicationMutation
                                     )
                                 } label: {
                                     MedicationPrescriptionCard(
@@ -251,7 +262,8 @@ struct MemberMedicalLongTermMedicationStepView: View {
             fileTransferService: fileTransferService,
             notificationClient: notificationClient,
             onMedicineBoxSaved: upsertMedicineBox,
-            onServerSaved: upsertMedicationPlan,
+            onServerSaved: handlePlanSavedLocally,
+            onMutation: handleMedicationMutation,
             homeDependencies: homeDependencies,
             memberContextStore: memberContextStore
         )
@@ -269,10 +281,11 @@ struct MemberMedicalLongTermMedicationStepView: View {
             fileTransferService: fileTransferService,
             notificationClient: notificationClient,
             homeDependencies: homeDependencies,
-            onSaved: upsertMedicationPlan,
-            onDeleted: removeMedicationPlan,
+            onSaved: handlePlanSavedLocally,
+            onDeleted: handlePlanDeletedLocally,
             onMedicineBoxSaved: upsertMedicineBox,
-            onMedicineBoxDeleted: removeMedicineBox
+            onMedicineBoxDeleted: removeMedicineBox,
+            onMutation: handleMedicationMutation
         )
     }
 
@@ -300,15 +313,15 @@ struct MemberMedicalLongTermMedicationStepView: View {
     @MainActor
     private func loadMedicationArchive() async {
         guard memberID > 0 else { return }
-        isLoading = true
-        defer { isLoading = false }
+        isLoadingArchive = true
+        defer { isLoadingArchive = false }
 
         do {
-            async let plansTask = medicalQueryAPI.listMedicationPlans(memberID: memberID)
+            async let plansTask = viewModel.refreshMemberMedicationPlansIfNeeded(force: true)
             async let prescriptionsTask = medicalQueryAPI.listPrescriptions(memberID: memberID)
             async let boxesTask = medicalQueryAPI.listMedicineBoxes(memberID: memberID)
-            let (plans, prescriptionRows, boxes) = try await (plansTask, prescriptionsTask, boxesTask)
-            medicationPlans = plans
+            _ = await plansTask
+            let (prescriptionRows, boxes) = try await (prescriptionsTask, boxesTask)
             prescriptions = prescriptionRows
             medicineBoxes = boxes
 
@@ -338,19 +351,20 @@ struct MemberMedicalLongTermMedicationStepView: View {
     }
 
     @MainActor
-    private func upsertMedicationPlan(_ plan: SparkMedicalSyncAPI.RemoteMedicationPlan) {
-        if let index = medicationPlans.firstIndex(where: { $0.id == plan.id }) {
-            medicationPlans[index] = plan
-        } else {
-            medicationPlans.insert(plan, at: 0)
-        }
+    private func handleMedicationMutation(_ response: SparkMedicalSyncAPI.MedicationMutationResponse) {
+        viewModel.applyMedicationMutation(response)
         sheetDestination = nil
         syncMedicationReminderAfterPlanChange()
     }
 
     @MainActor
-    private func removeMedicationPlan(id: Int) {
-        medicationPlans.removeAll { $0.id == id }
+    private func handlePlanSavedLocally(_ plan: SparkMedicalSyncAPI.RemoteMedicationPlan) {
+        viewModel.ingestSavedMedicationPlans([plan])
+    }
+
+    @MainActor
+    private func handlePlanDeletedLocally(id: Int) {
+        viewModel.memberMedicationPlans.removeAll { $0.id == id }
         syncMedicationReminderAfterPlanChange()
     }
 
