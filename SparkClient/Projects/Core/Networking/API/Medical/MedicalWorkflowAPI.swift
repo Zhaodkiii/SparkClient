@@ -390,9 +390,41 @@ struct SparkMedicalWorkflowAPI {
         try await post(path: "/api/v1/medical/workflows/case-documents/save/", body: payload, decode: IDResponse.self).id
     }
 
-    /// 新建症状；成功返回记录 ID。
-    func createSymptom(_ payload: SymptomCreatePayload) async throws -> Int {
-        try await post(path: "/api/v1/medical/workflows/symptoms/create/", body: payload, decode: IDResponse.self).id
+    /// 新建症状；成功返回症状明细与重算后的成员画像摘要。
+    func createSymptom(_ payload: SymptomCreatePayload) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
+        try await post(path: "/api/v1/medical/workflows/symptoms/create/", body: payload, decode: SparkMedicalSyncAPI.SymptomMutationResponse.self)
+    }
+
+    /// 删除症状；成功返回删除结果与重算后的成员画像摘要。
+    func deleteSymptom(id: Int) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
+        let q = kindQueryItems(.symptoms, extra: [])
+        let response = try await executeRaw(
+            method: .delete,
+            path: resourceItemPath(id: id),
+            queryItems: q,
+            body: nil,
+            allowETag: false,
+            serialKey: "medical.resource.delete.symptoms.\(id)",
+            queuePriority: .high,
+            isIdempotent: false
+        )
+        return try APIResponseDecoder.decodeWrappedData(SparkMedicalSyncAPI.SymptomMutationResponse.self, from: response, decoder: .medicalAPI)
+    }
+
+    /// 更新症状；成功返回症状明细与重算后的成员画像摘要。
+    func updateSymptom<B: Encodable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
+        let q = kindQueryItems(.symptoms, extra: [])
+        return try await request(
+            method: .patch,
+            path: resourceItemPath(id: id),
+            queryItems: q,
+            body: .json(AnyEncodable(body)),
+            responseType: SparkMedicalSyncAPI.SymptomMutationResponse.self,
+            allowETag: false,
+            serialKey: "medical.resource.update.symptoms.\(id)",
+            queuePriority: .high,
+            isIdempotent: false
+        )
     }
 
     /// 新建就诊；成功返回记录 ID。

@@ -45,7 +45,7 @@ struct MedicalCasesListPage: View {
     }
 
     var body: some View {
-        List {
+        ScrollView {
             if rows.isEmpty {
                 MedicalListEmptyRow()
             } else {

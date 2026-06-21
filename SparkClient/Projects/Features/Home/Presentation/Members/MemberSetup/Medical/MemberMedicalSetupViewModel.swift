@@ -162,9 +162,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var hasPrefilledOccupation: Bool = false
     @Published var hasPrefilledSedentaryLevel: Bool = false
     @Published var occupation: String = ""
-    @Published var sedentaryLevel: MedicalGuideSedentaryLevel = .medium
+    @Published var sedentaryLevel: MedicalGuideSedentaryLevel?
     @Published var chronicConditionStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var chronicConditions: [String]
+    @Published var chronicConditionDetails: [String: MedicalGuideChronicConditionDetail] = [:]
     @Published var hasPrefilledChronicConditionStatus: Bool = false
     @Published var longTermMedicationEnabled: Bool = false
     @Published var longTermMedications: [String]
@@ -182,8 +183,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var familyHistoryStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var familyHistory: [String] = []
     @Published var hasPrefilledFamilyHistoryStatus: Bool = false
+    @Published var symptomFollowUpStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var symptomFollowUpFocus: [String] = []
     @Published var symptomFollowUpNotes: String = ""
+    @Published var symptomFollowUpDuration: String = ""
+    @Published var symptomFollowUpSeverity: String = ""
+    @Published var memberSymptoms: [SparkMedicalSyncAPI.RemoteSymptom] = []
+    @Published var isLoadingMemberSymptoms = false
     @Published var hasPrefilledSymptomFollowUp: Bool = false
     @Published var smokingStatus: MedicalGuideSmokingStatus = .never
     @Published var smokingCount: String = ""
@@ -217,6 +223,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     let member: Member?
+
+    var medicalWorkflowAPI: SparkMedicalWorkflowAPI { medicalQueryAPI.medicalWorkflowAPI }
 
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let setupUseCase: MemberModuleSetupUseCase
@@ -360,36 +368,40 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var shouldSkipChronicConditionsStep: Bool {
-        hasPrefilledChronicConditionStatus
-            || chronicConditionStatus != .unknown
+        chronicConditionStatus != .unknown
             || chronicConditions.isEmpty == false
     }
 
     var shouldSkipLongTermMedicationStep: Bool {
-        hasPrefilledLongTermMedicationStatus
-            || longTermMedicationStatus != .unknown
+        longTermMedicationStatus != .unknown
             || longTermMedications.isEmpty == false
             || medicationNotes.isEmpty == false
     }
 
     var shouldSkipSurgeryHistoryStep: Bool {
-        hasPrefilledSurgeryStatus
-            || surgeryStatus != .unknown
+        surgeryStatus != .unknown
             || surgeryHistory.isEmpty == false
             || surgeryTime.isEmpty == false
     }
 
     var shouldSkipAllergyHistoryStep: Bool {
-        hasPrefilledAllergyStatus
-            || allergyStatus != .unknown
+        allergyStatus != .unknown
             || allergies.isEmpty == false
             || allergyHistory.isEmpty == false
     }
 
     var shouldSkipFamilyHistoryStep: Bool {
-        hasPrefilledFamilyHistoryStatus
-            || familyHistoryStatus != .unknown
+        familyHistoryStatus != .unknown
             || familyHistory.isEmpty == false
+    }
+
+    var shouldSkipSymptomFollowUpStep: Bool {
+        symptomFollowUpStatus != .unknown
+            || memberSymptoms.isEmpty == false
+            || symptomFollowUpFocus.isEmpty == false
+            || symptomFollowUpNotes.isEmpty == false
+            || symptomFollowUpDuration.isEmpty == false
+            || symptomFollowUpSeverity.isEmpty == false
     }
 
     var hasFamilyHistory: Bool {
@@ -462,12 +474,27 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     var chronicConditionsSummary: String {
         switch chronicConditionStatus {
         case .none:
-            return "无慢病"
+            return "无既往病史"
         case .have:
-            return chronicConditions.isEmpty ? "未填写" : chronicConditions.joined(separator: "、")
+            if chronicConditions.isEmpty {
+                return "有既往病史"
+            }
+            return chronicConditions.map(chronicConditionDisplayName).joined(separator: "、")
         case .unknown:
-            return chronicConditions.isEmpty ? "未填写" : chronicConditions.joined(separator: "、")
+            return chronicConditions.isEmpty ? "未填写" : chronicConditions.map(chronicConditionDisplayName).joined(separator: "、")
         }
+    }
+
+    private func chronicConditionDisplayName(_ name: String) -> String {
+        guard let detail = chronicConditionDetails[name] else { return name }
+        var pieces = [name]
+        if detail.diagnosedYear.isEmpty == false {
+            pieces.append("\(detail.diagnosedYear)年确诊")
+        }
+        if detail.controlStatus.isEmpty == false {
+            pieces.append(detail.controlStatus)
+        }
+        return pieces.joined(separator: " · ")
     }
 
     var longTermMedicationSummary: String {
@@ -475,10 +502,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         case .none:
             return "无长期用药"
         case .have:
-            if longTermMedications.isEmpty == false {
-                return longTermMedications.joined(separator: "、")
-            }
-            return medicationNotes.isEmpty ? "未填写" : "长期用药已填写"
+            return "有用药记录"
         case .unknown:
             return "未填写"
         }
@@ -538,14 +562,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var canAdvanceFromLongTermMedication: Bool {
-        switch longTermMedicationStatus {
-        case .none:
-            return true
-        case .have:
-            return longTermMedications.isEmpty == false || medicationNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        case .unknown:
-            return false
-        }
+        longTermMedicationStatus != .unknown
     }
 
     var canAdvanceFromSurgeryHistory: Bool {
@@ -576,6 +593,17 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return true
         case .have:
             return familyHistory.isEmpty == false
+        case .unknown:
+            return false
+        }
+    }
+
+    var canAdvanceFromSymptomFollowUp: Bool {
+        switch symptomFollowUpStatus {
+        case .none:
+            return true
+        case .have:
+            return memberSymptoms.isEmpty == false
         case .unknown:
             return false
         }
@@ -617,15 +645,116 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return pieces.joined(separator: " · ")
     }
 
+    var hasSymptomFollowUpContent: Bool {
+        hasPrefilledSymptomFollowUp
+            || symptomFollowUpStatus != .unknown
+            || memberSymptoms.isEmpty == false
+            || symptomFollowUpFocus.isEmpty == false
+            || symptomFollowUpNotes.isEmpty == false
+    }
+
     var symptomSummary: String {
+        if symptomFollowUpStatus == .none {
+            return "无任何不适"
+        }
+        let lines = memberSymptoms.map { SymptomFormSupport.summaryLine(for: $0) }.filter { $0.isEmpty == false }
+        if lines.isEmpty == false {
+            return lines.joined(separator: " · ")
+        }
         var pieces: [String] = []
         if symptomFollowUpFocus.isEmpty == false {
             pieces.append(symptomFollowUpFocus.joined(separator: "、"))
+        }
+        if symptomFollowUpDuration.isEmpty == false {
+            pieces.append("持续\(symptomFollowUpDuration)")
+        }
+        if symptomFollowUpSeverity.isEmpty == false {
+            pieces.append(symptomSeverityLabel(symptomFollowUpSeverity))
         }
         if symptomFollowUpNotes.isEmpty == false {
             pieces.append(symptomFollowUpNotes)
         }
         return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
+    }
+
+    func refreshMemberSymptomsIfNeeded(force: Bool = false) async {
+        guard let member else { return }
+        if force == false, isLoadingMemberSymptoms { return }
+        isLoadingMemberSymptoms = true
+        defer { isLoadingMemberSymptoms = false }
+        do {
+            memberSymptoms = try await medicalQueryAPI.listSymptoms(memberID: member.id)
+            if let profile = try await medicalQueryAPI.listMemberMedicalProfiles(memberID: member.id).first {
+                ingestProfileSymptomFocus(profile)
+            } else {
+                symptomFollowUpFocus = []
+            }
+            if memberSymptoms.isEmpty == false {
+                symptomFollowUpStatus = .have
+                hasPrefilledSymptomFollowUp = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func applySymptomMutation(_ response: SparkMedicalSyncAPI.SymptomMutationResponse, removedSymptomID: Int? = nil) {
+        if response.deleted == true, let removedSymptomID {
+            memberSymptoms.removeAll { $0.id == removedSymptomID }
+        } else if let symptom = response.symptom {
+            ingestSavedSymptoms([symptom])
+        }
+        if let profile = response.memberProfile {
+            ingestProfileSymptomFocus(profile)
+        } else if response.deleted == true {
+            symptomFollowUpFocus = []
+        }
+        if memberSymptoms.isEmpty, response.deleted == true {
+            hasPrefilledSymptomFollowUp = true
+        }
+    }
+
+    func ingestProfileSymptomFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        symptomFollowUpFocus = profile.symptomFollowUpFocus
+        if profile.symptomFollowUpFocus.isEmpty == false {
+            symptomFollowUpStatus = .have
+            hasPrefilledSymptomFollowUp = true
+        }
+    }
+
+    func ingestSavedSymptoms(_ saved: [SparkMedicalSyncAPI.RemoteSymptom]) {
+        guard saved.isEmpty == false else { return }
+        for symptom in saved {
+            if let index = memberSymptoms.firstIndex(where: { $0.id == symptom.id }) {
+                memberSymptoms[index] = symptom
+            } else {
+                memberSymptoms.insert(symptom, at: 0)
+            }
+        }
+        symptomFollowUpStatus = .have
+        hasPrefilledSymptomFollowUp = true
+    }
+
+    func clearSymptomFollowUpDraft() {
+        symptomFollowUpFocus.removeAll()
+        symptomFollowUpNotes = ""
+        symptomFollowUpDuration = ""
+        symptomFollowUpSeverity = ""
+    }
+
+    private func syncSymptomFollowUpFromRecords() {
+        guard memberSymptoms.isEmpty == false else { return }
+        symptomFollowUpStatus = .have
+        hasPrefilledSymptomFollowUp = true
+    }
+
+    private func symptomSeverityLabel(_ value: String) -> String {
+        switch value {
+        case "low": return "轻度"
+        case "medium": return "中度"
+        case "high": return "重度"
+        default: return value
+        }
     }
 
     var keyIndicatorSummary: String {
@@ -671,6 +800,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                 latestKeyIndicatorRecord = latest
                 apply(keyIndicatorRecord: latest)
             }
+            await refreshMemberSymptomsIfNeeded()
             if let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
                 do {
                     let goalState = try await goalUseCase.loadGoalState(memberID: member.id)
@@ -862,6 +992,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
         if profile.symptomFollowUpFocus.isEmpty == false {
             symptomFollowUpFocus = profile.symptomFollowUpFocus
+            symptomFollowUpStatus = .have
         }
         if profile.notes.isEmpty == false {
             extraNotes = profile.notes
@@ -945,6 +1076,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let value = extra["chronic_condition_status"], let status = MedicalGuideDisclosureStatus(rawValue: value) {
             chronicConditionStatus = status
             hasPrefilledChronicConditionStatus = true
+        }
+        if let value = extra["chronic_condition_details_json"], value.isEmpty == false {
+            chronicConditionDetails = Self.decodeChronicConditionDetails(from: value)
         }
         if let value = extra["allergy_history"], value.isEmpty == false {
             allergyHistory = value
@@ -1032,11 +1166,24 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let value = extra["extra_notes"] {
             extraNotes = value
         }
+        if let value = extra["symptom_follow_up_status"], let status = MedicalGuideDisclosureStatus(rawValue: value) {
+            symptomFollowUpStatus = status
+            if status == .none || status == .have {
+                hasPrefilledSymptomFollowUp = true
+            }
+        }
         if let value = extra["symptom_follow_up_notes"] {
             symptomFollowUpNotes = value
         }
+        if let value = extra["symptom_follow_up_duration"] {
+            symptomFollowUpDuration = value
+        }
+        if let value = extra["symptom_follow_up_severity"] {
+            symptomFollowUpSeverity = value
+        }
         if let value = extra["symptom_follow_up_focus"], value.isEmpty == false {
             symptomFollowUpFocus = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.isEmpty == false }
+            symptomFollowUpStatus = .have
             hasPrefilledSymptomFollowUp = true
         }
     }
@@ -1091,7 +1238,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private var profileNotes: String {
         [
             occupation.isEmpty ? nil : "职业：\(occupation)",
-            "久坐：\(sedentaryLevel.subtitle)",
+            sedentaryLevel.map { "久坐：\($0.subtitle)" },
             smokingText,
             drinkingText,
             exerciseText,
@@ -1099,7 +1246,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             surgeryHistory.isEmpty ? nil : "手术史：\(surgeryHistory)",
             allergyHistory.isEmpty ? nil : "过敏史：\(allergyHistory)",
             extraNotes.isEmpty ? nil : extraNotes,
-            symptomFollowUpNotes.isEmpty ? nil : symptomFollowUpNotes
+            symptomFollowUpNotes.isEmpty ? nil : symptomFollowUpNotes,
+            symptomFollowUpDuration.isEmpty ? nil : "症状持续：\(symptomFollowUpDuration)",
+            symptomFollowUpSeverity.isEmpty ? nil : "症状严重度：\(symptomSeverityLabel(symptomFollowUpSeverity))"
         ]
         .compactMap { $0 }
         .joined(separator: " · ")
@@ -1112,12 +1261,12 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "weight_kg": String(format: "%.1f", weightKg),
             "weight_skipped": hasNutritionPrefilledWeight ? "true" : "false",
             "occupation": occupation,
-            "sedentary_level": sedentaryLevel.rawValue,
-            "sedentary_hours_level": sedentaryLevel.rawValue,
+            "sedentary_level": sedentaryLevel?.rawValue ?? "",
+            "sedentary_hours_level": sedentaryLevel?.rawValue ?? "",
             "chronic_condition_status": chronicConditionStatus.rawValue,
+            "chronic_condition_details_json": Self.encodeChronicConditionDetails(chronicConditionDetails),
             "long_term_medication_status": longTermMedicationStatus.rawValue,
             "smoking_status": smokingStatus.rawValue,
-            "smoking_count": smokingCount,
             "smoking_history_duration": smokingHistoryDuration,
             "smoking_quit_duration": smokingQuitDuration,
             "drinking_status": drinkingStatus.rawValue,
@@ -1142,9 +1291,12 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "allergies": allergies.joined(separator: ","),
             "allergy_history": allergyHistory,
             "family_history_status": familyHistoryStatus.rawValue,
+            "symptom_follow_up_status": symptomFollowUpStatus.rawValue,
             "symptom_follow_up_focus": symptomFollowUpFocus.joined(separator: ","),
             "extra_notes": extraNotes,
-            "symptom_follow_up_notes": symptomFollowUpNotes
+            "symptom_follow_up_notes": symptomFollowUpNotes,
+            "symptom_follow_up_duration": symptomFollowUpDuration,
+            "symptom_follow_up_severity": symptomFollowUpSeverity
         ]
     }
 
@@ -1178,10 +1330,11 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "weight_kg": String(format: "%.1f", weightKg),
             "weight_skipped": hasNutritionPrefilledWeight ? "true" : "false",
             "occupation": occupation,
-            "sedentary_level": sedentaryLevel.rawValue,
-            "sedentary_hours_level": sedentaryLevel.rawValue,
+            "sedentary_level": sedentaryLevel?.rawValue ?? "",
+            "sedentary_hours_level": sedentaryLevel?.rawValue ?? "",
             "chronic_condition_status": chronicConditionStatus.rawValue,
             "chronic_conditions": chronicConditions.joined(separator: ","),
+            "chronic_condition_details_json": Self.encodeChronicConditionDetails(chronicConditionDetails),
             "long_term_medication_status": longTermMedicationStatus.rawValue,
             "surgery_status": surgeryStatus.rawValue,
             "allergy_status": allergyStatus.rawValue,
@@ -1288,12 +1441,26 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             heightCm > 0 ? String(format: "%.0f cm", heightCm) : "身高未填",
             weightKg > 0 ? String(format: "%.1f kg", weightKg) : "体重未填",
             occupation.isEmpty ? "职业未填" : occupation,
-            sedentaryLevel.title
+            sedentaryLevel?.title ?? "久坐未填"
         ].joined(separator: " · ")
     }
 
     /// 健康病史与症状记录说明页在汇总里展示的简短文案。
     var historyIntroSummaryText: String {
         "症状观察 / 随访 / 既往疾病 / 长期用药 / 手术史 / 过敏史 / 家族病史"
+    }
+
+    private static func encodeChronicConditionDetails(_ details: [String: MedicalGuideChronicConditionDetail]) -> String {
+        guard details.isEmpty == false else { return "" }
+        guard let data = try? JSONEncoder().encode(details) else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private static func decodeChronicConditionDetails(from json: String) -> [String: MedicalGuideChronicConditionDetail] {
+        guard let data = json.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([String: MedicalGuideChronicConditionDetail].self, from: data) else {
+            return [:]
+        }
+        return decoded
     }
 }

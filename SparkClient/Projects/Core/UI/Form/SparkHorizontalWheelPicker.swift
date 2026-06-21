@@ -37,6 +37,7 @@ struct SparkHorizontalWheelPicker: View {
     @Binding var value: Double
 
     @State private var isLoaded = false
+    private let scrollCoordinateSpaceName = "SparkHorizontalWheelPickerScroll"
 
     var body: some View {
         GeometryReader { proxy in
@@ -62,11 +63,22 @@ struct SparkHorizontalWheelPicker: View {
                                         .offset(y: 20)
                                 }
                             }
+                            .background {
+                                if index == 0 {
+                                    GeometryReader { markerProxy in
+                                        Color.clear.preference(
+                                            key: SparkHorizontalWheelLeadingMarkerXPreferenceKey.self,
+                                            value: markerProxy.frame(in: .named(scrollCoordinateSpaceName)).midX
+                                        )
+                                    }
+                                }
+                            }
                     }
                 }
                 .frame(height: size.height)
                 .scrollTargetLayout()
             }
+            .coordinateSpace(name: scrollCoordinateSpaceName)
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: Binding<Int?>(
@@ -84,6 +96,17 @@ struct SparkHorizontalWheelPicker: View {
                     .padding(.bottom, 20)
             }
             .safeAreaPadding(.horizontal, horizontalPadding)
+            .onPreferenceChange(SparkHorizontalWheelLeadingMarkerXPreferenceKey.self) { leadingMarkerX in
+                guard isLoaded, config.spacing > 0 else { return }
+
+                let rawIndex = ((size.width / 2) - leadingMarkerX) / config.spacing
+                let clampedIndex = min(max(Int(rawIndex.rounded()), 0), config.totalSteps)
+                let resolvedValue = config.value(for: clampedIndex)
+
+                if abs(resolvedValue - value) > 0.0001 {
+                    value = resolvedValue
+                }
+            }
             .onAppear {
                 if isLoaded == false {
                     value = config.value(for: config.index(for: value))
@@ -98,5 +121,14 @@ struct SparkHorizontalWheelPicker: View {
             return String(format: "%.0f", value)
         }
         return String(format: "%.1f", value)
+    }
+}
+
+@available(iOS 17.0, *)
+private struct SparkHorizontalWheelLeadingMarkerXPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

@@ -52,7 +52,7 @@ struct MemberSetupBottomBar: View {
                         .frame(minHeight: 56)
                         .background(
                             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                .fill(.regularMaterial)
+                                .fill(.ultraThinMaterial)
                         )
                 }
                 .buttonStyle(.plain)

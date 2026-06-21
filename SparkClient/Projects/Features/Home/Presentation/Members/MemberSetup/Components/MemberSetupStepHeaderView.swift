@@ -12,15 +12,16 @@ struct MemberSetupStepHeaderView: View {
                 Text(title)
                     .font(.title2.weight(.bold))
                 Spacer()
-                Text("\(step)/\(total)")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+//                Text("\(step)/\(total)")
+//                    .font(.subheadline.weight(.semibold))
+//                    .foregroundStyle(.secondary)
             }
             Text(subtitle)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(uiColor: .secondarySystemBackground)))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(uiColor: .systemGroupedBackground)))
+        
     }
 }

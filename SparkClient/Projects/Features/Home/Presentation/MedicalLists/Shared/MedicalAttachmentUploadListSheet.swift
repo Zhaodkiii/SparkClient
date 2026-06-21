@@ -382,6 +382,7 @@ struct MedicalAttachmentUploadListSheet: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
             .task {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     presentDefaultUploadEntry()
@@ -546,12 +547,13 @@ struct MedicalAttachmentUploadListSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.purple.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(style: StrokeStyle(lineWidth: 2, dash: [6]))
-                .foregroundStyle(Color.purple.opacity(0.35))
-        )
+//        .background(RoundedRectangle(cornerRadius: 12).fill(Color.purple.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .systemGroupedBackground)))
+//        .overlay(
+//            RoundedRectangle(cornerRadius: 12)
+//                .stroke(style: StrokeStyle(lineWidth: 2, dash: [6]))
+//                .foregroundStyle(Color.purple.opacity(0.35))
+//        )
         .padding(.top, 6)
     }
 
@@ -640,11 +642,12 @@ struct MedicalAttachmentUploadListSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(tint.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(tint.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6]))
-        )
+//        .background(RoundedRectangle(cornerRadius: 12).fill(tint.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .systemGroupedBackground)))
+//        .overlay(
+//            RoundedRectangle(cornerRadius: 12)
+//                .stroke(tint.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [6]))
+//        )
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
     }

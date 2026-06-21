@@ -94,7 +94,7 @@ struct MedicalCaseTimelineEditDestination: View {
                 onDeleted: { onRecordRemoved(eventID) }
             ) {
                 SymptomFormView(
-                    mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.symptomDraft(from: remote)),
+                    mode: .serverEdit(existing: remote),
                     onServerSubmit: MainActorThrowingAction { draft in
                         try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
                             .submitSymptomUpdate(memberID: memberID, existing: remote, draft: draft)

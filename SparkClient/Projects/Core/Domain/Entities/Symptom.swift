@@ -4,7 +4,7 @@ import Foundation
 struct Symptom: Identifiable, Codable, Equatable, Sendable {
     let id: Int
     var memberID: Int
-    var medicalCaseID: Int
+    var medicalCaseID: Int?
     var name: String
     var code: String
     var severity: String

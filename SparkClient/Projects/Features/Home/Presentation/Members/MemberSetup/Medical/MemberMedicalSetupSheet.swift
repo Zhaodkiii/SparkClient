@@ -168,7 +168,7 @@ struct MemberMedicalSetupSheetView: View {
                     .padding(.vertical, 4)
                 }
 
-                Text("“阿福健康”会严格保护你的隐私，此数据仅用于为你生成个人健康报告。")
+                Text("“Look健康”会严格保护你的隐私，此数据仅用于为你生成个人健康报告。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -227,56 +227,65 @@ struct MemberMedicalSetupSheetView: View {
                 )
                 .datePickerStyle(.graphical)
                 .labelsHidden()
-
+                .padding(.vertical)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(uiColor: .systemGroupedBackground)))
                 if let ageYears = viewModel.ageYears {
                     Text("年龄：\(ageYears) 岁")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
             }
+  
+            
         }
     }
 
     private var heightStep: some View {
-        MedicalGuideStepShell(
-            title: "身高",
-            subtitle: "为什么要问？\n身高和体重会用于计算 BMI，辅助判断代谢风险和体检建议。",
-            step: 4,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
+        MemberNutritionHeightStepView(
+            heightCm: $viewModel.heightCm,
+            presentation: .fullScreen
+        )
+        .background(Color(uiColor: .systemBackground))
+        .navigationTitle("身高")
+        .navigationBarTitleDisplayMode(.inline)
+        .memberSetupBottomBar(
             primaryTitle: basicInfoPrimaryTitle(after: .height),
-            onSkip: {
-                viewModel.skipHeightSelection()
-                nextVisible(after: .height)
-            },
-            onNext: {
+            primaryEnabled: viewModel.isSaving == false,
+            isLoading: viewModel.isSaving,
+            onPrimary: {
                 viewModel.confirmHeightSelection()
                 nextVisible(after: .height)
+            },
+            secondaryTitle: "跳过",
+            onSecondary: {
+                viewModel.skipHeightSelection()
+                nextVisible(after: .height)
             }
-        ) {
-            MemberNutritionHeightStepView(heightCm: $viewModel.heightCm)
-        }
+        )
     }
 
     private var weightStep: some View {
-        MedicalGuideStepShell(
-            title: "体重",
-            subtitle: "为什么要问？\n体重用于计算 BMI，并影响高血压、糖尿病、脂肪肝等风险。",
-            step: 5,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
+        MemberNutritionWeightStepView(
+            weightKg: $viewModel.weightKg,
+            presentation: .fullScreen
+        )
+        .background(Color(uiColor: .systemBackground))
+        .navigationTitle("体重")
+        .navigationBarTitleDisplayMode(.inline)
+        .memberSetupBottomBar(
             primaryTitle: basicInfoPrimaryTitle(after: .weight),
-            onSkip: {
-                viewModel.skipWeightSelection()
-                nextVisible(after: .weight)
-            },
-            onNext: {
+            primaryEnabled: viewModel.isSaving == false,
+            isLoading: viewModel.isSaving,
+            onPrimary: {
                 viewModel.confirmWeightSelection()
                 nextVisible(after: .weight)
+            },
+            secondaryTitle: "跳过",
+            onSecondary: {
+                viewModel.skipWeightSelection()
+                nextVisible(after: .weight)
             }
-        ) {
-            MemberNutritionWeightStepView(weightKg: $viewModel.weightKg)
-        }
+        )
     }
 
     private var occupationStep: some View {
@@ -294,19 +303,19 @@ struct MemberMedicalSetupSheetView: View {
                 Text("请选择最接近你日常工作状态的职业：")
                     .font(.headline.weight(.semibold))
 
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("搜索职业", text: $occupationSearchText)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemBackground))
-                )
+//                HStack(spacing: 10) {
+//                    Image(systemName: "magnifyingglass")
+//                        .foregroundStyle(.secondary)
+//                    TextField("搜索职业", text: $occupationSearchText)
+//                        .textInputAutocapitalization(.never)
+//                        .disableAutocorrection(true)
+//                }
+//                .padding(.horizontal, 14)
+//                .padding(.vertical, 12)
+//                .background(
+//                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+//                        .fill(Color(uiColor: .secondarySystemBackground))
+//                )
 
                 MedicalGuideGroupedCard {
                     ForEach(filteredOccupationGroups.indices, id: \.self) { index in
@@ -339,6 +348,7 @@ struct MemberMedicalSetupSheetView: View {
                                 }
                             }
                             .padding(.vertical, 6)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
@@ -364,11 +374,12 @@ struct MemberMedicalSetupSheetView: View {
     private var sedentaryStep: some View {
         MedicalGuideStepShell(
             title: "久坐时间",
-            subtitle: "长期连续久坐会直接影响心血管与代谢机能，了解此项数据能帮助定制针对性的运动唤醒与健康调理方案。",
+            subtitle: "平均每天在椅子或沙发上坐多久？",
             step: 7,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
             primaryTitle: "下一步",
+            primaryEnabled: viewModel.sedentaryLevel != nil,
             onSkip: { nextVisible(after: .sedentary) },
             onNext: { nextVisible(after: .sedentary) }
         ) {
@@ -380,7 +391,6 @@ struct MemberMedicalSetupSheetView: View {
                     ForEach(sedentaryOptions, id: \.value) { item in
                         Button {
                             viewModel.sedentaryLevel = item.value
-                            viewModel.hasPrefilledSedentaryLevel = true
                         } label: {
                             HStack(spacing: 12) {
                                 Circle()
@@ -402,6 +412,7 @@ struct MemberMedicalSetupSheetView: View {
                                 }
                             }
                             .padding(.vertical, 8)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
@@ -421,8 +432,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var basicInfoSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "基础档案",
-            subtitle: "为什么需要这些信息？\n年龄、性别、身高体重会影响体检项目、慢病风险和癌症筛查推荐。",
+            title: "基础档案概览",
+            subtitle: "请确认你的基础健康档案信息，随时可以点击各项进行修正。",
             step: 8,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -440,27 +451,76 @@ struct MemberMedicalSetupSheetView: View {
                 }
             }
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("我们会逐步确认以下信息：")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 18) {
+                MedicalGuideGroupedCard {
+                    MedicalGuideTextRow(
+                        systemName: "person.fill",
+                        title: "性别",
+                        subtitle: viewModel.genderDisplayTitle,
+                        action: {
+                            path.append(.gender)
+                        }
+                    )
+                    
+                    Divider()
+                    
+                    MedicalGuideTextRow(
+                        systemName: "calendar",
+                        title: "出生日期",
+                        subtitle: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? "未填写",
+                        action: {
+                            path.append(.birthDate)
+                        }
+                    )
+                }
 
-                Text("性别 / 出生日期\n身高 / 体重\n职业 / 久坐时间")
-                    .font(.body.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
+                MedicalGuideGroupedCard {
+                    MedicalGuideTextRow(
+                        systemName: "ruler",
+                        title: "身高",
+                        subtitle: viewModel.shouldSkipHeightStep ? (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "已自动带入") : (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "未填写"),
+                        action: {
+                            path.append(.height)
+                        }
+                    )
+                    Divider()
+                    MedicalGuideTextRow(
+                        systemName: "scalemass.fill",
+                        title: "体重",
+                        subtitle: viewModel.shouldSkipWeightStep ? (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "已自动带入") : (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "未填写"),
+                        action: {
+                            path.append(.weight)
+                        }
+                    )
+                }
 
-                Text("有些信息如果已经在饮食健康中填写过，会自动带入。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                MedicalGuideGroupedCard {
+                    MedicalGuideTextRow(
+                        systemName: "briefcase.fill",
+                        title: "职业",
+                        subtitle: viewModel.occupation.isEmpty ? "未填写" : viewModel.occupation,
+                        action: {
+                            path.append(.occupation)
+                        }
+                    )
+                    Divider()
+                    MedicalGuideTextRow(
+                        systemName: "chair.lounge.fill",
+                        title: "久坐时间",
+                        subtitle: viewModel.sedentaryLevel?.title ?? "未填写",
+                        action: {
+                            path.append(.sedentary)
+                        }
+                    )
+                }
 
-                VStack(spacing: 14) {
-                    summaryRow(title: "基础档案说明", value: "已完成") { path.append(.intro) }
-                    summaryRow(title: "性别", value: viewModel.genderDisplayTitle) { path.append(.gender) }
-                    summaryRow(title: "出生日期", value: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? "未填写") { path.append(.birthDate) }
-                    summaryRow(title: "身高", value: viewModel.shouldSkipHeightStep ? (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "已自动带入") : (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "未填写")) { path.append(.height) }
-                    summaryRow(title: "体重", value: viewModel.shouldSkipWeightStep ? (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "已自动带入") : (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "未填写")) { path.append(.weight) }
-                    summaryRow(title: "职业", value: viewModel.occupation.isEmpty ? "未填写" : viewModel.occupation) { path.append(.occupation) }
-                    summaryRow(title: "久坐时间", value: viewModel.sedentaryLevel.title) { path.append(.sedentary) }
+                HStack(alignment: .top, spacing: 8) {
+                    Text("💡")
+                        .font(.footnote)
+                    Text("如果你之前在“饮食健康”中填写过相关数据，系统将为你自动带入。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -530,72 +590,122 @@ struct MemberMedicalSetupSheetView: View {
 
     // 既往疾病单题页。
     private var chronicConditionsStep: some View {
-        MedicalGuideStepShell(
-            title: "既往疾病",
-            subtitle: "为什么要问？\n既往疾病会影响体检项目、复查周期和风险评估。",
-            step: 10,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
-            primaryTitle: historyPrimaryTitle(after: .chronicConditions),
-            primaryEnabled: viewModel.canAdvanceFromChronicConditions,
-            onSkip: { nextVisibleHistory(after: .chronicConditions) },
-            onNext: { nextVisibleHistory(after: .chronicConditions) }
-        ) {
-            MemberMedicalChronicConditionStepView(
-                status: $viewModel.chronicConditionStatus,
-                chronicConditions: $viewModel.chronicConditions
-            )
+        Group {
+            if let homeDependencies {
+                MedicalGuideStepShell(
+                    title: "既往疾病",
+                    subtitle: "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
+                    step: 10,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: chronicConditionsPrimaryTitle,
+                    primaryEnabled: viewModel.canAdvanceFromChronicConditions,
+                    onSkip: { nextVisibleHistory(after: .chronicConditions) },
+                    onNext: { nextVisibleHistory(after: .chronicConditions) }
+                ) {
+                    MemberMedicalChronicConditionStepView(
+                        status: $viewModel.chronicConditionStatus,
+                        chronicConditions: $viewModel.chronicConditions,
+                        conditionDetails: $viewModel.chronicConditionDetails,
+                        medicalDocumentUploadViewModel: homeDependencies.medicalDocumentUploadViewModel,
+                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel
+                    )
+                }
+            } else {
+                MedicalGuideStepShell(
+                    title: "既往疾病",
+                    subtitle: "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
+                    step: 10,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: chronicConditionsPrimaryTitle,
+                    primaryEnabled: viewModel.canAdvanceFromChronicConditions,
+                    onSkip: { nextVisibleHistory(after: .chronicConditions) },
+                    onNext: { nextVisibleHistory(after: .chronicConditions) }
+                ) {
+                    Text("缺少病历上传依赖，请从首页进入医疗引导。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var chronicConditionsPrimaryTitle: String {
+        switch viewModel.chronicConditionStatus {
+        case .none:
+            return "完成既往疾病"
+        case .have:
+            return "完成既往疾病"
+        case .unknown:
+            return historyPrimaryTitle(after: .chronicConditions)
         }
     }
 
     // 长期用药单题页。
     private var longTermMedicationStep: some View {
-        MedicalGuideStepShell(
-            title: "长期用药",
-            subtitle: "为什么要问？\n长期用药会影响复查项目、用药提醒和报告解读上下文。",
-            step: 11,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
-            primaryTitle: historyPrimaryTitle(after: .longTermMedication),
-            primaryEnabled: viewModel.canAdvanceFromLongTermMedication,
-            onSkip: { nextVisibleHistory(after: .longTermMedication) },
-            onNext: { nextVisibleHistory(after: .longTermMedication) }
-        ) {
-            VStack(spacing: 14) {
-                questionCard(title: "是否正在长期服药？") {
-                    MedicalPickerChipRow(
-                        items: historyDisclosureItems,
-                        selection: Binding(
-                            get: { viewModel.longTermMedicationStatus.rawValue },
-                            set: { rawValue in
-                                let status = MedicalGuideDisclosureStatus(rawValue: rawValue) ?? .unknown
-                                viewModel.longTermMedicationStatus = status
-                                viewModel.hasPrefilledLongTermMedicationStatus = true
-                                if status != .have {
-                                    viewModel.longTermMedicationEnabled = false
-                                    viewModel.longTermMedications.removeAll()
-                                    viewModel.medicationNotes = ""
-                                } else {
-                                    viewModel.longTermMedicationEnabled = true
+        Group {
+            if let homeDependencies, let memberID = viewModel.member?.id {
+                MedicalGuideStepShell(
+                    title: "长期用药",
+                    subtitle: "了解您的用药史，有助于我们为您提供更精准的复查项目建议、服药提醒，并辅助报告的上下文解读。",
+                    step: 11,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: longTermMedicationPrimaryTitle,
+                    primaryEnabled: viewModel.canAdvanceFromLongTermMedication,
+                    onSkip: { nextVisibleHistory(after: .longTermMedication) },
+                    onNext: { nextVisibleHistory(after: .longTermMedication) }
+                ) {
+                    MemberMedicalLongTermMedicationStepView(
+                        status: Binding(
+                            get: { viewModel.longTermMedicationStatus },
+                            set: { newValue in
+                                viewModel.longTermMedicationStatus = newValue
+                                if newValue != .unknown {
+                                    viewModel.hasPrefilledLongTermMedicationStatus = true
+                                    viewModel.longTermMedicationEnabled = newValue == .have
                                 }
                             }
-                        )
+                        ),
+                        memberID: memberID,
+                        completeData: nil,
+                        workflowAPI: homeDependencies.medicalWorkflowAPI,
+                        medicalQueryAPI: homeDependencies.medicalQueryAPI,
+                        fileTransferService: homeDependencies.fileTransferService,
+                        memberContextStore: homeDependencies.memberContextStore,
+                        medicalDocumentUploadViewModel: homeDependencies.medicalDocumentUploadViewModel,
+                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel,
+                        notificationClient: homeDependencies.notificationClient,
+                        homeDependencies: homeDependencies
                     )
                 }
-
-                if viewModel.longTermMedicationStatus == .have {
-                    // 长期用药的明细仍然复用既有用药编辑组件，避免重复造列表和备注输入逻辑。
-                    MemberMedicalMedicationStepView(
-                        longTermMedications: $viewModel.longTermMedications,
-                        medicationNotes: $viewModel.medicationNotes,
-                        medicationPlanSummary: .constant(""),
-                        onAddMedicationPlan: {
-                            viewModel.longTermMedicationEnabled = true
-                        },
-                        showsStatusToggle: false
-                    )
+            } else {
+                MedicalGuideStepShell(
+                    title: "长期用药",
+                    subtitle: "了解您的用药史，有助于我们为您提供更精准的复查项目建议、服药提醒，并辅助报告的上下文解读。",
+                    step: 11,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: longTermMedicationPrimaryTitle,
+                    primaryEnabled: viewModel.canAdvanceFromLongTermMedication,
+                    onSkip: { nextVisibleHistory(after: .longTermMedication) },
+                    onNext: { nextVisibleHistory(after: .longTermMedication) }
+                ) {
+                    Text("缺少用药档案依赖，请从首页进入医疗引导。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    private var longTermMedicationPrimaryTitle: String {
+        switch viewModel.longTermMedicationStatus {
+        case .none, .have:
+            return "完成长期用药"
+        case .unknown:
+            return historyPrimaryTitle(after: .longTermMedication)
         }
     }
 
@@ -758,25 +868,66 @@ struct MemberMedicalSetupSheetView: View {
 
     // 健康病史与症状记录中的症状观察 / 随访单题页。
     private var symptomFollowUpStep: some View {
-        MedicalGuideStepShell(
-            title: "症状观察 / 随访",
-            subtitle: "补充症状观察和随访计划，帮助后续复查与提醒。",
-            step: 15,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
-            onSkip: {
-                viewModel.hasPrefilledSymptomFollowUp = true
-                nextVisibleHistory(after: .symptomFollowUp)
-            },
-            onNext: {
-                viewModel.hasPrefilledSymptomFollowUp = true
-                nextVisibleHistory(after: .symptomFollowUp)
+        Group {
+            if let homeDependencies {
+                MedicalGuideStepShell(
+                    title: "当前症状",
+                    subtitle: "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
+                    step: 15,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: symptomFollowUpPrimaryTitle,
+                    primaryEnabled: viewModel.canAdvanceFromSymptomFollowUp,
+                    onSkip: {
+                        viewModel.hasPrefilledSymptomFollowUp = true
+                        nextVisibleHistory(after: .symptomFollowUp)
+                    },
+                    onNext: {
+                        viewModel.hasPrefilledSymptomFollowUp = true
+                        nextVisibleHistory(after: .symptomFollowUp)
+                    }
+                ) {
+                    MemberMedicalSymptomFollowUpStepView(
+                        viewModel: viewModel,
+                        symptomStatus: $viewModel.symptomFollowUpStatus,
+                        medicalDocumentUploadViewModel: homeDependencies.medicalDocumentUploadViewModel,
+                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel
+                    )
+                }
+            } else {
+                MedicalGuideStepShell(
+                    title: "当前症状",
+                    subtitle: "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
+                    step: 15,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: symptomFollowUpPrimaryTitle,
+                    primaryEnabled: viewModel.canAdvanceFromSymptomFollowUp,
+                    onSkip: {
+                        viewModel.hasPrefilledSymptomFollowUp = true
+                        nextVisibleHistory(after: .symptomFollowUp)
+                    },
+                    onNext: {
+                        viewModel.hasPrefilledSymptomFollowUp = true
+                        nextVisibleHistory(after: .symptomFollowUp)
+                    }
+                ) {
+                    Text("缺少病历上传依赖，请从首页进入医疗引导。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
-        ) {
-            MemberMedicalSymptomFollowUpStepView(
-                symptomFollowUpFocus: $viewModel.symptomFollowUpFocus,
-                notes: $viewModel.symptomFollowUpNotes
-            )
+        }
+    }
+
+    private var symptomFollowUpPrimaryTitle: String {
+        switch viewModel.symptomFollowUpStatus {
+        case .none:
+            return "下一步"
+        case .have:
+            return "保存症状记录"
+        case .unknown:
+            return "下一步"
         }
     }
 
@@ -852,7 +1003,7 @@ struct MemberMedicalSetupSheetView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Text("💡")
                         .font(.footnote)
-                    Text("贴心提示：诚实记录是对自己负责的第一步。即使现在的习惯不够完美也没关系，阿福健康会陪你一起逐步改善。")
+                    Text("贴心提示：诚实记录是对自己负责的第一步。即使现在的习惯不够完美也没关系，Look健康会陪你一起逐步改善。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1145,8 +1296,8 @@ struct MemberMedicalSetupSheetView: View {
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
             primaryTitle: "下一步",
-            onSkip: { path.append(.examArchiveSummary) },
-            onNext: { path.append(.examArchiveSummary) }
+            onSkip: { proceedAfterExamArchiveStep() },
+            onNext: { proceedAfterExamArchiveStep() }
         ) {
             VStack(spacing: 14) {
                 questionCard(title: "是否做过体检") {
@@ -1197,8 +1348,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var examArchiveSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "体检档案",
-            subtitle: "为什么要问？\n体检历史会影响体检指标补充和下一次体检计划生成。",
+            title: "过往体检档案",
+            subtitle: "为什么要汇总？\n这里会统一确认体检档案、关键指标与下一次体检计划，便于继续进入后续风险评估。",
             step: 25,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1206,13 +1357,13 @@ struct MemberMedicalSetupSheetView: View {
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
-                    proceedAfterExamArchiveSummary()
+                    path.append(.riskAssessment)
                 }
             },
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    proceedAfterExamArchiveSummary()
+                    path.append(.riskAssessment)
                 }
             }
         ) {
@@ -1226,13 +1377,24 @@ struct MemberMedicalSetupSheetView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(spacing: 14) {
-                    summaryRow(title: "体检档案说明", value: "已完成") { path.append(.examArchiveIntro) }
+                    summaryRow(title: "过往体检档案说明", value: "已完成") { path.append(.examArchiveIntro) }
                     summaryRow(title: "是否做过体检", value: viewModel.hasExamHistory ? "是" : "否") { path.append(.examArchive) }
                     if viewModel.hasExamHistory {
                         summaryRow(title: "最近一次体检", value: viewModel.lastExamYear.isEmpty ? "未填写" : viewModel.lastExamYear) { path.append(.examArchive) }
                         summaryRow(title: "体检机构", value: viewModel.examInstitution.isEmpty ? "未填写" : viewModel.examInstitution) { path.append(.examArchive) }
                         summaryRow(title: "体检报告摘要", value: viewModel.examReportSummary.isEmpty ? "未填写" : "已填写") { path.append(.examArchive) }
                     }
+                    summaryRow(
+                        title: "体检指标",
+                        value: viewModel.hasExamHistory ? viewModel.keyIndicatorSummary : "无体检史，已跳过"
+                    ) {
+                        if viewModel.hasExamHistory {
+                            path.append(.keyIndicatorSummary)
+                        } else {
+                            path.append(.examArchive)
+                        }
+                    }
+                    summaryRow(title: "下一次体检计划", value: viewModel.examPlanSummary) { path.append(.examPlan) }
                 }
             }
         }
@@ -1341,19 +1503,23 @@ struct MemberMedicalSetupSheetView: View {
 
     private var examPlanStep: some View {
         MedicalGuideStepShell(
-            title: "体检计划",
-            subtitle: "系统会根据风险等级与体检史推荐下一次体检项目。",
+            title: "过往体检档案",
+            subtitle: "系统会结合体检历史、关键指标与风险提示，生成下一次体检计划。",
             step: 28,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
             onSkip: {
-                advance(from: .examPlan)
+                path.append(.examArchiveSummary)
             },
             onNext: {
-                advance(from: .examPlan)
+                path.append(.examArchiveSummary)
             }
         ) {
             VStack(alignment: .leading, spacing: 10) {
+                Text("系统生成的下一次体检计划")
+                    .font(.headline.weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 ForEach(viewModel.examPlanLines, id: \.self) { item in
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
@@ -1391,7 +1557,7 @@ struct MemberMedicalSetupSheetView: View {
                     summaryRow(title: "身高", value: viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "未填写") { path.append(.height) }
                     summaryRow(title: "体重", value: viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "未填写") { path.append(.weight) }
                     summaryRow(title: "职业", value: viewModel.occupation.isEmpty ? "未填写" : viewModel.occupation) { path.append(.occupation) }
-                    summaryRow(title: "久坐时间", value: viewModel.sedentaryLevel.title) { path.append(.sedentary) }
+                    summaryRow(title: "久坐时间", value: viewModel.sedentaryLevel?.title ?? "未填写") { path.append(.sedentary) }
                     summaryRow(title: "健康病史与症状记录说明", value: viewModel.historyIntroSummaryText) { path.append(.history) }
                     summaryRow(title: "症状观察 / 随访", value: viewModel.symptomSummary) { path.append(.symptomFollowUp) }
                     summaryRow(title: "既往疾病", value: viewModel.chronicConditionsSummary) { path.append(.chronicConditions) }
@@ -1401,8 +1567,7 @@ struct MemberMedicalSetupSheetView: View {
                     summaryRow(title: "健康病史与症状记录汇总", value: viewModel.historySummary) { path.append(.historySummary) }
                     summaryRow(title: "家族病史", value: viewModel.familyHistorySummary) { path.append(.familyHistory) }
                     summaryRow(title: "生活习惯", value: viewModel.lifestyleSummary) { path.append(.lifestyleSummary) }
-                    summaryRow(title: "体检档案说明", value: "已完成") { path.append(.examArchiveIntro) }
-                    summaryRow(title: "体检档案汇总", value: viewModel.examArchiveSummary) { path.append(.examArchiveSummary) }
+                    summaryRow(title: "过往体检档案 · 下一次体检计划", value: viewModel.examPlanSummary) { path.append(.examPlan) }
                     summaryRow(
                         title: "体检指标",
                         value: viewModel.hasExamHistory ? viewModel.keyIndicatorSummary : "无体检史，已跳过"
@@ -1410,10 +1575,10 @@ struct MemberMedicalSetupSheetView: View {
                         if viewModel.hasExamHistory {
                             path.append(.keyIndicatorSummary)
                         } else {
-                            path.append(.examArchiveSummary)
+                            path.append(.examArchive)
                         }
                     }
-                    summaryRow(title: "体检计划", value: viewModel.examPlanSummary) { path.append(.examPlan) }
+                    summaryRow(title: "过往体检档案汇总", value: viewModel.examArchiveSummary) { path.append(.examArchiveSummary) }
                     summaryRow(title: "风险评估", value: viewModel.riskAssessmentSummary) { path.append(.riskAssessment) }
                 }
 
@@ -1503,9 +1668,7 @@ struct MemberMedicalSetupSheetView: View {
     private func hasRemainingHistoryPage(after route: MedicalGuideRoute) -> Bool {
         switch route {
         case .history:
-            return (viewModel.hasPrefilledSymptomFollowUp == false
-                && viewModel.symptomFollowUpFocus.isEmpty
-                && viewModel.symptomFollowUpNotes.isEmpty)
+            return viewModel.shouldSkipSymptomFollowUpStep == false
                 || viewModel.shouldSkipChronicConditionsStep == false
                 || viewModel.shouldSkipLongTermMedicationStep == false
                 || viewModel.shouldSkipSurgeryHistoryStep == false
@@ -1541,7 +1704,7 @@ struct MemberMedicalSetupSheetView: View {
     private func nextVisibleHistory(after route: MedicalGuideRoute) {
         switch route {
         case .history:
-            if viewModel.hasPrefilledSymptomFollowUp || viewModel.symptomFollowUpFocus.isEmpty == false || viewModel.symptomFollowUpNotes.isEmpty == false {
+            if viewModel.shouldSkipSymptomFollowUpStep {
                 nextVisibleHistory(after: .symptomFollowUp)
             } else {
                 path.append(.symptomFollowUp)
@@ -1572,11 +1735,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         case .allergyHistory:
             if viewModel.shouldSkipFamilyHistoryStep {
-                if viewModel.hasPrefilledSymptomFollowUp || viewModel.symptomFollowUpFocus.isEmpty == false || viewModel.symptomFollowUpNotes.isEmpty == false {
-                    path.append(.historySummary)
-                } else {
-                    path.append(.symptomFollowUp)
-                }
+                path.append(.historySummary)
             } else {
                 path.append(.familyHistory)
             }
@@ -1636,15 +1795,15 @@ struct MemberMedicalSetupSheetView: View {
         case .examArchiveIntro:
             nextVisibleExam(after: .examArchiveIntro)
         case .examArchive:
-            path.append(.examArchiveSummary)
+            proceedAfterExamArchiveStep()
         case .examArchiveSummary:
-            proceedAfterExamArchiveSummary()
+            path.append(.riskAssessment)
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
             proceedAfterKeyIndicatorSummary()
         case .examPlan:
-            path.append(.riskAssessment)
+            path.append(.examArchiveSummary)
         case .riskAssessment:
             path.append(.summary)
         case .summary:
@@ -1755,15 +1914,15 @@ struct MemberMedicalSetupSheetView: View {
         case .examArchiveIntro:
             nextVisibleExam(after: .examArchiveIntro)
         case .examArchive:
-            path.append(.examArchiveSummary)
+            proceedAfterExamArchiveStep()
         case .examArchiveSummary:
-            proceedAfterExamArchiveSummary()
+            path.append(.riskAssessment)
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
             proceedAfterKeyIndicatorSummary()
         case .examPlan:
-            path.append(.riskAssessment)
+            path.append(.examArchiveSummary)
         case .symptomFollowUp:
             path.append(.historySummary)
         case .riskAssessment:
@@ -1773,10 +1932,10 @@ struct MemberMedicalSetupSheetView: View {
         }
     }
 
-    private func proceedAfterExamArchiveSummary() {
+    private func proceedAfterExamArchiveStep() {
         if viewModel.hasExamHistory {
             if viewModel.shouldSkipKeyIndicatorStep {
-                path.append(.keyIndicatorSummary)
+                proceedAfterKeyIndicatorSummary()
             } else {
                 path.append(.keyIndicators)
             }
@@ -1793,14 +1952,14 @@ struct MemberMedicalSetupSheetView: View {
         switch route {
         case .examArchiveIntro:
             if viewModel.shouldSkipExamArchiveStep {
-                path.append(.examArchiveSummary)
+                proceedAfterExamArchiveStep()
             } else {
                 path.append(.examArchive)
             }
         case .examArchive:
-            path.append(.examArchiveSummary)
+            proceedAfterExamArchiveStep()
         case .examArchiveSummary:
-            proceedAfterExamArchiveSummary()
+            path.append(.riskAssessment)
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
@@ -2024,9 +2183,9 @@ private struct MedicalGuideStepShell<Content: View>: View {
             .padding(16)
             .padding(.bottom, 120)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.automatic)
         .memberSetupBottomBar(
             primaryTitle: primaryTitle ?? (step == total ? "保存" : "下一步"),
             primaryEnabled: primaryEnabled && isLoading == false,
@@ -2284,7 +2443,7 @@ private struct MedicalGuideGroupedCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 5) {
             content()
         }
         .padding(16)
@@ -2327,6 +2486,53 @@ private struct MedicalGuideListRow: View {
     }
 }
 
+private struct MedicalGuideTextRow: View {
+    let systemName: String
+    let title: String
+    let subtitle: String
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        Group {
+            if let action {
+                Button(action: action) {
+                    rowContent
+                        .contentShape(Rectangle())
+
+                }
+                .buttonStyle(.plain)
+            } else {
+                rowContent
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var rowContent: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: systemName)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 private struct OccupationGroup {
     let icon: String
     let tint: Color
@@ -2353,7 +2559,7 @@ private struct MedicalPickerChipRow: View {
                         .frame(maxWidth: .infinity)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(selection == item.value ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemBackground))
+                                .fill(selection == item.value ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemGroupedBackground))
                         )
                 }
                 .buttonStyle(.plain)

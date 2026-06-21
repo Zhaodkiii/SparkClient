@@ -262,12 +262,12 @@ struct MedicalCaseFormView: View {
                         memberPicker
                         DatePicker(L10n.text("medical_record.forms.medical_case.field.visit_date", fallback: "就诊日期"), selection: $draft.visitDate, displayedComponents: .date)
                             .datePickerStyle(.compact)
-                        SparkFormTextRow(
-                            title: L10n.text("medical_record.forms.medical_case.field.institution", fallback: "就诊机构"),
-                            text: $draft.hospitalName,
-                            placeholder: L10n.text("medical_record.forms.medical_case.placeholder.institution", fallback: "医院或诊所名称"),
-                            keyboardVisible: $isKeyboardVisible
-                        )
+//                        SparkFormTextRow(
+//                            title: L10n.text("medical_record.forms.medical_case.field.institution", fallback: "就诊机构"),
+//                            text: $draft.hospitalName,
+//                            placeholder: L10n.text("medical_record.forms.medical_case.placeholder.institution", fallback: "医院或诊所名称"),
+//                            keyboardVisible: $isKeyboardVisible
+//                        )
                         GridTwo {
                             SeverityPickerRow(
                                 title: L10n.text("medical_record.forms.medical_case.field.severity", fallback: "严重程度"),

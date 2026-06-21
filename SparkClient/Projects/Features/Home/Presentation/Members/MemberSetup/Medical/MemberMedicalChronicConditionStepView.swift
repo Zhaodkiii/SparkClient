@@ -1,93 +1,200 @@
 import SwiftUI
 
+struct MedicalGuideChronicConditionDetail: Equatable, Codable, Sendable {
+    var diagnosedYear: String = ""
+    var controlStatus: String = ""
+    var notes: String = ""
+}
+
 struct MemberMedicalChronicConditionStepView: View {
     @Binding var status: MedicalGuideDisclosureStatus
     @Binding var chronicConditions: [String]
+    @Binding var conditionDetails: [String: MedicalGuideChronicConditionDetail]
 
-    private let options = ["糖尿病", "高血压", "高血脂", "痛风", "脂肪肝", "肾病", "其他"]
+    @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+
+    @State private var showingUploadSheet = false
+    @State private var showingManualEntrySheet = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("是否有慢病？")
-                .font(.headline.weight(.semibold))
+        VStack(alignment: .leading, spacing: 16) {
+            diseaseScreeningCard
 
-            Text("如高血压、糖尿病、高血脂、痛风、脂肪肝、肾病等。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            MedicalGuideDisclosureChoiceRow(status: $status)
+            if status == .none {
+                friendlyTipRow
+            }
 
             if status == .have {
-                MemberSetupSection(title: "慢病类型") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
-                        ForEach(options, id: \.self) { condition in
-                            chip(title: condition, isSelected: chronicConditions.contains(condition)) {
-                                toggle(condition)
+//                quickUploadCard
+                existingConditionsSection
+                MemberSetupAccentAddButton(title: "添加既往疾病") {
+                    showingManualEntrySheet = true
+                }
+            }
+        }
+        .sheet(isPresented: $showingUploadSheet) {
+            MedicalAttachmentUploadListSheet(documentType: .caseDocument, onConfirm: startCaseDocumentRecognition)
+        }
+        .sheet(isPresented: $showingManualEntrySheet) {
+            CompatibleNavigationContainer {
+                ChronicConditionFormView(
+                    initial: ChronicConditionFormDraft(
+                        conditions: chronicConditions,
+                        details: conditionDetails
+                    ),
+                    onSubmit: { draft in
+                        chronicConditions = draft.conditions
+                        conditionDetails = draft.details
+                        if draft.conditions.isEmpty == false {
+                            status = .have
+                        }
+                    }
+                )
+            }
+        }
+        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+            CompatibleNavigationContainer {
+                MedicalDocumentUploadHostView(
+                    viewModel: medicalDocumentUploadViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
+            }
+        }
+        .onChange(of: status) { newValue in
+            if newValue == .none {
+                chronicConditions.removeAll()
+                conditionDetails.removeAll()
+            }
+        }
+    }
+
+    private var diseaseScreeningCard: some View {
+        MemberSetupSection(title: "疾病筛查") {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("是否曾被确诊过任何慢性疾病或重大疾病？")
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    screeningChoice(
+                        title: "无既往病史",
+                        isSelected: status == .none,
+                        action: { status = .none }
+                    )
+                    screeningChoice(
+                        title: "有既往病史",
+                        isSelected: status == .have,
+                        action: { status = .have }
+                    )
+                }
+            }
+        }
+    }
+
+    private var friendlyTipRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "lightbulb.fill")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text("贴心提示：如果没有相关病史，请直接点击下方保存即可。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var quickUploadCard: some View {
+        MemberSetupSection(title: "快速录入") {
+            Button {
+                showingUploadSheet = true
+            } label: {
+                VStack(spacing: 10) {
+                    Label("拍照 / 上传门诊病历或出院小结", systemImage: "camera.viewfinder")
+                        .font(.headline)
+                        .foregroundStyle(Color.accentColor)
+                        .multilineTextAlignment(.center)
+
+                    Text("系统将自动解析医学术语，提取确诊疾病与关键指标")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var existingConditionsSection: some View {
+        Group {
+            if chronicConditions.isEmpty == false {
+                MemberSetupSection(title: "已有既往疾病") {
+                    VStack(spacing: 10) {
+                        ForEach(chronicConditions, id: \.self) { disease in
+                            Button {
+                                showingManualEntrySheet = true
+                            } label: {
+                                chronicConditionCard(disease)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
         }
-        .onChange(of: status) { newValue in
-            if newValue != .have {
-                chronicConditions.removeAll()
-            }
-        }
     }
 
-    private func toggle(_ condition: String) {
-        if chronicConditions.contains(condition) {
-            chronicConditions.removeAll { $0 == condition }
-        } else {
-            chronicConditions.append(condition)
-        }
-    }
-
-    private func chip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .secondarySystemBackground))
+    private func chronicConditionCard(_ disease: String) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(
+                ChronicConditionFormSupport.summaryLine(
+                    name: disease,
+                    detail: conditionDetails[disease]
                 )
+            )
+            .font(.subheadline)
+            .foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(uiColor: .systemBackground))
+        )
+    }
+
+    private func screeningChoice(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                }
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemBackground))
+            )
         }
         .buttonStyle(.plain)
     }
-}
 
-private struct MedicalGuideDisclosureChoiceRow: View {
-    @Binding var status: MedicalGuideDisclosureStatus
-
-    private let items: [(title: String, value: String)] = [
-        ("有", MedicalGuideDisclosureStatus.have.rawValue),
-        ("无", MedicalGuideDisclosureStatus.none.rawValue)
-    ]
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 10)], alignment: .leading, spacing: 10) {
-            ForEach(items, id: \.value) { item in
-                Button {
-                    status = MedicalGuideDisclosureStatus(rawValue: item.value) ?? .unknown
-                } label: {
-                    Text(item.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(status.rawValue == item.value ? Color.accentColor : .primary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(status.rawValue == item.value ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemBackground))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
+    @MainActor
+    private func startCaseDocumentRecognition(files: [MedicalUploadLocalFile]) {
+        showingUploadSheet = false
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument)
     }
 }

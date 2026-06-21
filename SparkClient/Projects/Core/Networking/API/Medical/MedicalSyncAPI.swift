@@ -138,11 +138,11 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 症状实体；同时冗余 `member` 与 `medicalCase` 便于按人/按案查询。
-    struct RemoteSymptom: Codable, Sendable, Equatable {
+    struct RemoteSymptom: Codable, Sendable, Equatable, Identifiable {
         var id: Int
         var member: Int
-        /// 关联的 `RemoteMedicalCase.id`。
-        var medicalCase: Int
+        /// 关联的 `RemoteMedicalCase.id`；成员独立症状可为空。
+        var medicalCase: Int?
         var name: String
         /// 症状编码（如标准术语代码），可与 `name` 并存。
         var code: String
@@ -158,6 +158,14 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var updatedAt: Date
 
+    }
+
+    /// 症状增删改后返回：明细 + 重算后的成员医疗画像摘要。
+    struct SymptomMutationResponse: Codable, Sendable, Equatable {
+        var deleted: Bool?
+        var symptom: RemoteSymptom?
+        var memberProfile: RemoteMemberMedicalProfile?
+        var summary: String?
     }
 
     /// 就诊记录（到院一次就诊的元数据）。

@@ -155,7 +155,21 @@ private struct OnboardingWelcomeStep: View {
 private struct OnboardingProfileStep: View {
     @ObservedObject var memberContextStore: MemberContextStore
     let homeDependencies: HomeFeatureDependencies?
-    @State private var showCreateMember = false
+    @State private var activeMemberSetupRoute: MemberSetupCoverRoute?
+
+    private enum MemberSetupCoverRoute: Identifiable {
+        case create
+        case maintain(Member)
+
+        var id: String {
+            switch self {
+            case .create:
+                return "create"
+            case .maintain(let member):
+                return "maintain-\(member.id)"
+            }
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -181,29 +195,38 @@ private struct OnboardingProfileStep: View {
                 } else {
                     VStack(spacing: 10) {
                         ForEach(memberContextStore.context.members) { member in
-                            HStack(spacing: 12) {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(Color.accentColor)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(member.name)
-                                        .font(.headline)
-                                    Text(MemberRelationshipCatalog.displayTitle(for: member.relationship))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                            Button {
+                                activeMemberSetupRoute = .maintain(member)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .font(.title2)
+                                        .foregroundStyle(Color.accentColor)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(member.name)
+                                            .font(.headline)
+                                        Text(MemberRelationshipCatalog.displayTitle(for: member.relationship))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(Color.green)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
                                 }
-                                Spacer()
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color.green)
+                                .padding(14)
+                                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .padding(14)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .buttonStyle(.plain)
+                            .disabled(homeDependencies == nil)
                         }
                     }
                 }
 
                 Button {
-                    showCreateMember = true
+                    activeMemberSetupRoute = .create
                 } label: {
                     Label(L10n.text("onboarding.profile.add", fallback: "添加成员"), systemImage: "plus")
                         .font(.headline.weight(.semibold))
@@ -217,11 +240,20 @@ private struct OnboardingProfileStep: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
         }
-        .fullScreenCover(isPresented: $showCreateMember) {
+        .fullScreenCover(item: $activeMemberSetupRoute) { route in
             CompatibleNavigationContainer(legacyStackStyle: true) {
                 Group {
                     if let homeDependencies {
-                        MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
+                        switch route {
+                        case .create:
+                            MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
+                        case .maintain(let member):
+                            MemberSetupFlowView(
+                                mode: .maintain(member),
+                                store: memberContextStore,
+                                homeDependencies: homeDependencies
+                            )
+                        }
                     } else {
                         AddFamilyMemberView(mode: .create, store: memberContextStore)
                     }
@@ -231,7 +263,7 @@ private struct OnboardingProfileStep: View {
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: {
-                            showCreateMember = false
+                            activeMemberSetupRoute = nil
                         }) {
                             Image(systemName: "xmark.circle.fill")
                         }

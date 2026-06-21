@@ -4,7 +4,7 @@ import Foundation
 struct MedicalRecordFormSubmissionService: Sendable {
     let workflowAPI: SparkMedicalWorkflowAPI
 
-    func submitSymptomCreate(memberID: Int, medicalCaseID: Int?, draft: SymptomRecognitionDraft) async throws -> Int {
+    func submitSymptomCreate(memberID: Int, medicalCaseID: Int?, draft: SymptomRecognitionDraft) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
         try await workflowAPI.createSymptom(.init(
             member: memberID,
             medicalCase: medicalCaseID,
@@ -18,6 +18,10 @@ struct MedicalRecordFormSubmissionService: Sendable {
             notes: draft.notes,
             fileIds: []
         ))
+    }
+
+    func submitSymptomDelete(id: Int) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
+        try await workflowAPI.deleteSymptom(id: id)
     }
 
     func submitVisitCreate(memberID: Int, medicalCaseID: Int?, draft: VisitRecognitionDraft) async throws -> Int {
@@ -110,11 +114,9 @@ struct MedicalRecordFormSubmissionService: Sendable {
         memberID: Int,
         existing: SparkMedicalSyncAPI.RemoteSymptom,
         draft: SymptomRecognitionDraft
-    ) async throws {
+    ) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
         let startedAt = (draft.startedAt ?? "").nilIfBlank ?? existing.startedAt.map { MedicalDateCoding.encodeISO8601($0) }
-        _ = try await workflowAPI.update(
-            SparkMedicalSyncAPI.RemoteSymptom.self,
-            kind: .symptoms,
+        return try await workflowAPI.updateSymptom(
             id: existing.id,
             body: SymptomUpdatePayload(
                 member: memberID,
@@ -213,7 +215,7 @@ struct MedicalRecordFormSubmissionService: Sendable {
 
 private struct SymptomUpdatePayload: Encodable {
     let member: Int
-    let medicalCase: Int
+    let medicalCase: Int?
     let name: String
     let code: String
     let severity: String
