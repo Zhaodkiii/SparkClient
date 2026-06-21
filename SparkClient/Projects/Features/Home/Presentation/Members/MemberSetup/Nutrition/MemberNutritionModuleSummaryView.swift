@@ -3,11 +3,17 @@ import SwiftUI
 struct MemberNutritionModuleSummaryView: View {
     @StateObject private var viewModel: MemberNutritionModuleSummaryViewModel
     @ObservedObject var flowViewModel: MemberSetupFlowViewModel
+    let onPopToParent: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
-    init(member: Member, flowViewModel: MemberSetupFlowViewModel) {
+    init(
+        member: Member,
+        flowViewModel: MemberSetupFlowViewModel,
+        onPopToParent: (() -> Void)? = nil
+    ) {
         _viewModel = StateObject(wrappedValue: MemberNutritionModuleSummaryViewModel(member: member, flowViewModel: flowViewModel))
         self.flowViewModel = flowViewModel
+        self.onPopToParent = onPopToParent
     }
 
     var body: some View {
@@ -55,7 +61,7 @@ struct MemberNutritionModuleSummaryView: View {
                     viewModel.isPersisting = true
                     await viewModel.finishModule()
                     viewModel.isPersisting = false
-                    popToModules()
+                    popBack()
                 }
             },
             secondaryTitle: "暂不填写",
@@ -64,7 +70,7 @@ struct MemberNutritionModuleSummaryView: View {
                     viewModel.isPersisting = true
                     await viewModel.skipModule()
                     viewModel.isPersisting = false
-                    popToModules()
+                    popBack()
                 }
             }
         )
@@ -75,6 +81,14 @@ struct MemberNutritionModuleSummaryView: View {
             if newValue == nil {
                 Task { await viewModel.loadIfNeeded() }
             }
+        }
+    }
+
+    private func popBack() {
+        if let onPopToParent {
+            onPopToParent()
+        } else {
+            popToModules()
         }
     }
 

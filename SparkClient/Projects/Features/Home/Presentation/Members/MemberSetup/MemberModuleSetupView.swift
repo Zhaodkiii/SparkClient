@@ -74,6 +74,6 @@ struct MemberModuleSetupView: View {
                 Task { await onSkipAction.call() }
             }
         )
-        .disabled(viewModel.isLoadingExistingModules)
+        .disabled(viewModel.isLoadingExistingModules || viewModel.isPreloadingModuleCache)
     }
 }

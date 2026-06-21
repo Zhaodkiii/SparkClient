@@ -3,11 +3,17 @@ import SwiftUI
 struct MemberMedicalModuleSummaryView: View {
     @StateObject private var viewModel: MemberMedicalModuleSummaryViewModel
     @ObservedObject var flowViewModel: MemberSetupFlowViewModel
+    let onPopToParent: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
 
-    init(member: Member, flowViewModel: MemberSetupFlowViewModel) {
+    init(
+        member: Member,
+        flowViewModel: MemberSetupFlowViewModel,
+        onPopToParent: (() -> Void)? = nil
+    ) {
         _viewModel = StateObject(wrappedValue: MemberMedicalModuleSummaryViewModel(member: member, flowViewModel: flowViewModel))
         self.flowViewModel = flowViewModel
+        self.onPopToParent = onPopToParent
     }
 
     var body: some View {
@@ -38,7 +44,25 @@ struct MemberMedicalModuleSummaryView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let loadError = viewModel.loadError, viewModel.sections.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("医疗资料加载失败")
+                            .font(.headline)
+                        Text(loadError)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button("重试") {
+                            Task { await viewModel.retryLoad() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
+                    if let refreshNotice = viewModel.refreshNotice {
+                        Text(refreshNotice)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     ForEach(viewModel.sections) { section in
                         MemberModuleSectionCard(section: section) {
                             viewModel.openSection(section)
@@ -62,7 +86,7 @@ struct MemberMedicalModuleSummaryView: View {
                     viewModel.isPersisting = true
                     await viewModel.finishModule()
                     viewModel.isPersisting = false
-                    popToModules()
+                    popBack()
                 }
             },
             secondaryTitle: "暂不填写",
@@ -71,7 +95,7 @@ struct MemberMedicalModuleSummaryView: View {
                     viewModel.isPersisting = true
                     await viewModel.skipModule()
                     viewModel.isPersisting = false
-                    popToModules()
+                    popBack()
                 }
             }
         )
@@ -80,8 +104,18 @@ struct MemberMedicalModuleSummaryView: View {
         }
         .onChange(of: flowViewModel.activeSheet) { newValue in
             if newValue == nil {
-                Task { await viewModel.loadIfNeeded() }
+                Task {
+                    await viewModel.rebuildSectionsFromCache()
+                }
             }
+        }
+    }
+
+    private func popBack() {
+        if let onPopToParent {
+            onPopToParent()
+        } else {
+            popToModules()
         }
     }
 

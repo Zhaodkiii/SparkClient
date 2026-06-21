@@ -85,6 +85,10 @@ struct MemberSetupFlowView: View {
                     medicalQueryAPI: viewModel.homeDependencies.medicalQueryAPI,
                     setupUseCase: viewModel.homeDependencies.memberModuleSetupUseCase,
                     homeDependencies: viewModel.homeDependencies,
+                    preloadedCompleteData: viewModel.moduleSetupCache(for: viewModel.createdMember?.id ?? -1)?.completeData,
+                    preloadedNutritionGoalState: viewModel.moduleSetupCache(for: viewModel.createdMember?.id ?? -1)?.completeData?.nutritionGoalState
+                        ?? viewModel.moduleSetupCache(for: viewModel.createdMember?.id ?? -1)?.nutritionGoalState,
+                    onCompleteDataPatch: viewModel.patchCompleteData,
                     entryMode: entryMode
                 ) { summary in
                     Task {
@@ -140,6 +144,7 @@ struct MemberSetupFlowView: View {
             Text(viewModel.alertMessage ?? "")
         }
         .task {
+            await viewModel.preloadModuleSetupCacheIfNeeded()
             await viewModel.loadExistingModuleSettingsIfNeeded()
             await onAppearAction?.call()
         }

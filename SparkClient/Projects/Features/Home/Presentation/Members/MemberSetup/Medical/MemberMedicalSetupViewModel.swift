@@ -151,6 +151,15 @@ struct MedicalGuideKeyIndicatorDraft: Identifiable, Equatable, Sendable {
     ]
 }
 
+private enum MedicalProfileSaveScope {
+    case full
+    case basicProfile
+    case healthHistory
+    case lifestyle
+    case examArchive
+    case riskAssessment
+}
+
 @MainActor
 final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var birthDate: Date?
@@ -232,16 +241,26 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let setupUseCase: MemberModuleSetupUseCase
     private let homeDependencies: HomeFeatureDependencies?
+    private let entryMode: MedicalSetupEntryMode
+    private let completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)?
     private let guideSessionID: String
+    private var persistedProfileSnapshot: SparkMedicalSyncAPI.RemoteMemberMedicalProfile?
     private var hasSeededDefaultHeight = false
     private var hasSeededDefaultWeight = false
     private var didLoad = false
+
+    var preloadedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+    var preloadedNutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState?
 
     init(
         member: Member?,
         medicalQueryAPI: SparkMedicalQueryAPI,
         setupUseCase: MemberModuleSetupUseCase,
-        homeDependencies: HomeFeatureDependencies? = nil
+        homeDependencies: HomeFeatureDependencies? = nil,
+        preloadedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
+        preloadedNutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState? = nil,
+        entryMode: MedicalSetupEntryMode = .full,
+        onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil
     ) {
         let initialChronicConditions = member?.chronicConditions ?? []
 
@@ -249,6 +268,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         self.medicalQueryAPI = medicalQueryAPI
         self.setupUseCase = setupUseCase
         self.homeDependencies = homeDependencies
+        self.entryMode = entryMode
+        self.preloadedCompleteData = preloadedCompleteData
+        self.preloadedNutritionGoalState = preloadedNutritionGoalState
+        self.completeDataPatcher = completeDataPatcher
         self.guideSessionID = UUID().uuidString
         self.birthDate = member?.birthDate
         self.gender = member?.gender ?? "unknown"
@@ -558,6 +581,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if memberMedicationPlans.isEmpty, response.deleted == true {
             hasPrefilledLongTermMedicationStatus = true
         }
+        applyCompleteDataPatch {
+            MemberModuleSetupCompleteDataPatcher.upsertMedicationMutation(response, removedPlanID: removedPlanID, into: &$0)
+        }
     }
 
     func ingestProfileMedicationFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
@@ -623,6 +649,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
         if memberSurgeries.isEmpty, response.deleted == true {
             hasPrefilledSurgeryStatus = true
+        }
+        applyCompleteDataPatch {
+            MemberModuleSetupCompleteDataPatcher.upsertSurgeryMutation(response, removedSurgeryID: removedSurgeryID, into: &$0)
         }
     }
 
@@ -979,6 +1008,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if memberSymptoms.isEmpty, response.deleted == true {
             hasPrefilledSymptomFollowUp = true
         }
+        applyCompleteDataPatch {
+            MemberModuleSetupCompleteDataPatcher.upsertSymptomMutation(response, removedSymptomID: removedSymptomID, into: &$0)
+        }
     }
 
     func ingestProfileSymptomFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
@@ -1057,6 +1089,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
+        if let completeData = preloadedCompleteData {
+            applyFromCompleteData(completeData)
+            applyNutritionGoalStateFromCache()
+            rebuildRiskAndPlan()
+            return
+        }
+
         do {
             let guidanceState = try await medicalQueryAPI.loadMedicalGuidanceState(memberID: member.id)
             apply(member: guidanceState.member)
@@ -1070,21 +1109,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             await refreshMemberSymptomsIfNeeded()
             await refreshMemberMedicationPlansIfNeeded()
             await refreshMemberSurgeriesIfNeeded()
-            if let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
+            if preloadedNutritionGoalState == nil, preloadedCompleteData?.nutritionGoalState == nil,
+               let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
                 do {
                     let goalState = try await goalUseCase.loadGoalState(memberID: member.id)
-                    if let goal = goalState.goal {
-                        if let height = goal.heightCm, (heightCm <= 0 || hasSeededDefaultHeight) {
-                            heightCm = height
-                            hasNutritionPrefilledHeight = true
-                            hasSeededDefaultHeight = false
-                        }
-                        if let weight = goal.currentWeightKg, (weightKg <= 0 || hasSeededDefaultWeight) {
-                            weightKg = weight
-                            hasNutritionPrefilledWeight = true
-                            hasSeededDefaultWeight = false
-                        }
-                    }
+                    preloadedNutritionGoalState = goalState
+                    applyNutritionGoalStateFromCache()
+                    completeDataPatcher? { MemberModuleSetupCompleteDataPatcher.upsertNutritionGoalState(goalState, into: &$0) }
                 } catch {
                     errorMessage = error.localizedDescription
                 }
@@ -1101,7 +1132,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         defer { isSaving = false }
         do {
             syncDerivedValues()
-            _ = try await persistMedicalProfile()
+            _ = try await persistMedicalProfile(scope: saveScopeForCurrentEntry())
             _ = try await persistKeyIndicatorRecord()
         } catch {
             errorMessage = error.localizedDescription
@@ -1115,7 +1146,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         defer { isSaving = false }
         do {
             syncDerivedValues()
-            let savedProfile = try await persistMedicalProfile()
+            let savedProfile = try await persistMedicalProfile(scope: .full)
             let savedKeyRecord = try await persistKeyIndicatorRecord()
             let summary = buildModuleSummary(profile: savedProfile, keyRecord: savedKeyRecord)
             _ = try await setupUseCase.saveModuleSetting(
@@ -1135,26 +1166,32 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
     }
 
-    private func persistMedicalProfile() async throws -> SparkMedicalSyncAPI.RemoteMemberMedicalProfile {
+    private func persistMedicalProfile(scope: MedicalProfileSaveScope) async throws -> SparkMedicalSyncAPI.RemoteMemberMedicalProfile {
         guard let member else {
             throw NSError(domain: "MemberMedicalSetupViewModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "member_missing"])
         }
+        let shouldWriteHistory = scope == .full || scope == .healthHistory
+        let shouldWriteLifestyle = scope == .full || scope == .lifestyle
+        let shouldWriteExamArchive = scope == .full || scope == .examArchive
+
         let saved = try await setupUseCase.saveMedicalProfile(
             memberID: member.id,
-            chronicConditions: chronicConditions,
-            allergies: allergies,
-            allergyDetails: profileAllergyDetailsPayload(),
-            allergyHistory: allergyHistory,
-            familyHistory: profileFamilyHistoryPayload(),
-            smokingProfile: profileSmokingPayload(),
-            drinkingProfile: profileDrinkingPayload(),
-            exerciseProfile: profileExercisePayload(),
-            sleepHours: sleepHours,
-            examFocus: keyIndicatorFocusTags,
-            symptomFollowUpFocus: symptomFollowUpFocus,
-            notes: profileNotes,
-            extra: profileExtraPayload
+            chronicConditions: shouldWriteHistory ? chronicConditions : (persistedProfileSnapshot?.chronicConditions ?? []),
+            allergies: shouldWriteHistory ? allergies : (persistedProfileSnapshot?.allergies ?? []),
+            allergyDetails: shouldWriteHistory ? profileAllergyDetailsPayload() : (persistedProfileSnapshot?.allergyDetails ?? [:]),
+            allergyHistory: shouldWriteHistory ? allergyHistory : (persistedProfileSnapshot?.allergyHistory ?? ""),
+            familyHistory: shouldWriteHistory ? profileFamilyHistoryPayload() : (persistedProfileSnapshot?.familyHistory ?? []),
+            smokingProfile: smokingProfileForSave(shouldWriteLifestyle: shouldWriteLifestyle),
+            drinkingProfile: drinkingProfileForSave(shouldWriteLifestyle: shouldWriteLifestyle),
+            exerciseProfile: exerciseProfileForSave(shouldWriteLifestyle: shouldWriteLifestyle),
+            sleepHours: sleepHoursForSave(shouldWriteLifestyle: shouldWriteLifestyle),
+            examFocus: shouldWriteExamArchive ? keyIndicatorFocusTags : (persistedProfileSnapshot?.examFocus ?? []),
+            symptomFollowUpFocus: shouldWriteHistory ? symptomFollowUpFocus : (persistedProfileSnapshot?.symptomFollowUpFocus ?? []),
+            notes: notesForSave(scope: scope),
+            extra: profileExtraPayload(scope: scope)
         )
+        persistedProfileSnapshot = saved
+        applyCompleteDataPatch { MemberModuleSetupCompleteDataPatcher.upsertMedicalProfile(saved, into: &$0) }
         return saved
     }
 
@@ -1231,6 +1268,55 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return pieces.joined(separator: " · ")
     }
 
+    private func applyCompleteDataPatch(_ operation: @escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) {
+        completeDataPatcher?(operation)
+    }
+
+    private func applyFromCompleteData(_ completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData) {
+        apply(member: completeData.member)
+        if let profile = completeData.memberMedicalProfile {
+            apply(profile: profile)
+            if let riskSummary = profile.riskAssessmentSummary, riskSummary.isEmpty == false {
+                riskAssessmentLines = [riskSummary]
+            }
+            if let examPlan = profile.examPlanSummary, examPlan.isEmpty == false {
+                examPlanLines = [examPlan]
+            }
+        }
+        if let symptoms = completeData.symptoms {
+            memberSymptoms = symptoms
+            if symptoms.isEmpty == false {
+                symptomFollowUpStatus = .have
+                hasPrefilledSymptomFollowUp = true
+            }
+        }
+        if let plans = completeData.medicationPlans {
+            ingestSavedMedicationPlans(plans)
+        }
+        if let surgeries = completeData.surgeries {
+            ingestSavedSurgeries(surgeries)
+        }
+        if let nutritionGoalState = completeData.nutritionGoalState {
+            preloadedNutritionGoalState = nutritionGoalState
+        }
+        applyNutritionGoalStateFromCache()
+    }
+
+    private func applyNutritionGoalStateFromCache() {
+        let goalState = preloadedNutritionGoalState ?? preloadedCompleteData?.nutritionGoalState
+        guard let goalState, let goal = goalState.goal else { return }
+        if let height = goal.heightCm, (heightCm <= 0 || hasSeededDefaultHeight) {
+            heightCm = height
+            hasNutritionPrefilledHeight = true
+            hasSeededDefaultHeight = false
+        }
+        if let weight = goal.currentWeightKg, (weightKg <= 0 || hasSeededDefaultWeight) {
+            weightKg = weight
+            hasNutritionPrefilledWeight = true
+            hasSeededDefaultWeight = false
+        }
+    }
+
     private func apply(member: SparkMedicalSyncAPI.RemoteMember) {
         if birthDate == nil {
             birthDate = member.birthDate
@@ -1241,6 +1327,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     private func apply(profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        persistedProfileSnapshot = profile
         if profile.chronicConditions.isEmpty == false {
             chronicConditions = profile.chronicConditions
             chronicConditionStatus = .have
@@ -1436,51 +1523,159 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
     }
 
-    private var profileNotes: String {
-        [
-            occupation.isEmpty ? nil : "职业：\(occupation)",
-            sedentaryLevel.map { "久坐：\($0.subtitle)" },
-            smokingText,
-            drinkingText,
-            exerciseText,
-            sleepHours > 0 ? "睡眠：\(Int(sleepHours))小时" : nil,
-            surgerySummary == "未填写" || surgerySummary == "无手术史" ? nil : "手术史：\(surgerySummary)",
-            allergyHistory.isEmpty ? nil : "过敏史：\(allergyHistory)",
-            extraNotes.isEmpty ? nil : extraNotes,
-            symptomFollowUpNotes.isEmpty ? nil : symptomFollowUpNotes,
-            symptomFollowUpDuration.isEmpty ? nil : "症状持续：\(symptomFollowUpDuration)",
-            symptomFollowUpSeverity.isEmpty ? nil : "症状严重度：\(symptomSeverityLabel(symptomFollowUpSeverity))"
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
+    private var hasExplicitSmokingProfile: Bool {
+        hasPrefilledSmokingStatus
+            || smokingStatus != .never
+            || smokingCount.isEmpty == false
+            || smokingHistoryDuration.isEmpty == false
+            || smokingQuitDuration.isEmpty == false
     }
 
-    private var profileExtraPayload: [String: String] {
-        [
-            "height_cm": String(format: "%.1f", heightCm),
-            "height_skipped": hasNutritionPrefilledHeight ? "true" : "false",
-            "weight_kg": String(format: "%.1f", weightKg),
-            "weight_skipped": hasNutritionPrefilledWeight ? "true" : "false",
-            "occupation": occupation,
-            "sedentary_level": sedentaryLevel?.rawValue ?? "",
-            "sedentary_hours_level": sedentaryLevel?.rawValue ?? "",
-            "chronic_condition_status": chronicConditionStatus.rawValue,
-            "chronic_condition_details_json": Self.encodeChronicConditionDetails(chronicConditionDetails),
-            "long_term_medication_status": longTermMedicationStatus.rawValue,
-            "has_exam_history": hasExamHistory ? "true" : "false",
-            "last_exam_year": lastExamYear,
-            "exam_institution": examInstitution,
-            "exam_report_summary": examReportSummary,
-            "family_history_screening_status": familyHistoryStatus.rawValue,
-            "surgery_status": surgeryStatus.rawValue,
-            "allergy_status": allergyStatus.rawValue,
-            "symptom_follow_up_status": symptomFollowUpStatus.rawValue,
-            "symptom_follow_up_focus": symptomFollowUpFocus.joined(separator: ","),
-            "extra_notes": extraNotes,
-            "symptom_follow_up_notes": symptomFollowUpNotes,
-            "symptom_follow_up_duration": symptomFollowUpDuration,
-            "symptom_follow_up_severity": symptomFollowUpSeverity
-        ]
+    private var hasExplicitDrinkingProfile: Bool {
+        hasPrefilledDrinkingStatus
+            || drinkingStatus != .none
+            || drinkingCount.isEmpty == false
+            || drinkingHistoryDuration.isEmpty == false
+            || drinkingQuitDuration.isEmpty == false
+            || drinkingTypes.isEmpty == false
+    }
+
+    private var hasExplicitExerciseProfile: Bool {
+        hasPrefilledExerciseFrequency
+            || exerciseFrequency != .oneToTwo
+            || exerciseIntensity != .medium
+            || exerciseTypes.isEmpty == false
+            || exerciseDurationMinutes.isEmpty == false
+    }
+
+    private var hasExplicitSleepHours: Bool {
+        hasPrefilledSleepHours || sleepHours != 7
+    }
+
+    private func smokingProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteSmokingProfile {
+        if shouldWriteLifestyle == false {
+            return persistedProfileSnapshot?.smokingProfile
+                ?? SparkMedicalSyncAPI.RemoteSmokingProfile(status: "", count: "", historyDuration: "", quitDuration: "")
+        }
+        guard hasExplicitSmokingProfile else {
+            return persistedProfileSnapshot?.smokingProfile
+                ?? SparkMedicalSyncAPI.RemoteSmokingProfile(status: "", count: "", historyDuration: "", quitDuration: "")
+        }
+        return profileSmokingPayload()
+    }
+
+    private func drinkingProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteDrinkingProfile {
+        if shouldWriteLifestyle == false {
+            return persistedProfileSnapshot?.drinkingProfile
+                ?? SparkMedicalSyncAPI.RemoteDrinkingProfile(status: "", count: "", historyDuration: "", quitDuration: "", types: [])
+        }
+        guard hasExplicitDrinkingProfile else {
+            return persistedProfileSnapshot?.drinkingProfile
+                ?? SparkMedicalSyncAPI.RemoteDrinkingProfile(status: "", count: "", historyDuration: "", quitDuration: "", types: [])
+        }
+        return profileDrinkingPayload()
+    }
+
+    private func exerciseProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteExerciseProfile {
+        if shouldWriteLifestyle == false {
+            return persistedProfileSnapshot?.exerciseProfile
+                ?? SparkMedicalSyncAPI.RemoteExerciseProfile(frequency: "", intensity: "", types: [], durationMinutes: "")
+        }
+        guard hasExplicitExerciseProfile else {
+            return persistedProfileSnapshot?.exerciseProfile
+                ?? SparkMedicalSyncAPI.RemoteExerciseProfile(frequency: "", intensity: "", types: [], durationMinutes: "")
+        }
+        return profileExercisePayload()
+    }
+
+    private func sleepHoursForSave(shouldWriteLifestyle: Bool) -> Double? {
+        if shouldWriteLifestyle == false {
+            return persistedProfileSnapshot?.sleepHours
+        }
+        guard hasExplicitSleepHours else {
+            return persistedProfileSnapshot?.sleepHours
+        }
+        return sleepHours
+    }
+
+    private func saveScopeForCurrentEntry() -> MedicalProfileSaveScope {
+        switch entryMode {
+        case .full:
+            return .full
+        case .basicProfile:
+            return .basicProfile
+        case .healthHistory:
+            return .healthHistory
+        case .lifestyle:
+            return .lifestyle
+        case .examArchive:
+            return .examArchive
+        case .riskAssessment:
+            return .riskAssessment
+        }
+    }
+
+    private func notesForSave(scope: MedicalProfileSaveScope) -> String {
+        switch scope {
+        case .full:
+            return [
+                occupation.isEmpty ? nil : "职业：\(occupation)",
+                sedentaryLevel.map { "久坐：\($0.subtitle)" },
+                hasExplicitSmokingProfile ? smokingText : nil,
+                hasExplicitDrinkingProfile ? drinkingText : nil,
+                hasExplicitExerciseProfile ? exerciseText : nil,
+                hasExplicitSleepHours ? "睡眠：\(Int(sleepHours))小时" : nil,
+                surgerySummary == "未填写" || surgerySummary == "无手术史" ? nil : "手术史：\(surgerySummary)",
+                allergyHistory.isEmpty ? nil : "过敏史：\(allergyHistory)",
+                extraNotes.isEmpty ? nil : extraNotes,
+                symptomFollowUpNotes.isEmpty ? nil : symptomFollowUpNotes,
+                symptomFollowUpDuration.isEmpty ? nil : "症状持续：\(symptomFollowUpDuration)",
+                symptomFollowUpSeverity.isEmpty ? nil : "症状严重度：\(symptomSeverityLabel(symptomFollowUpSeverity))"
+            ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+            .joined(separator: " · ")
+        case .basicProfile, .healthHistory, .lifestyle, .examArchive, .riskAssessment:
+            return persistedProfileSnapshot?.notes ?? ""
+        }
+    }
+
+    private func profileExtraPayload(scope: MedicalProfileSaveScope) -> [String: String] {
+        var payload = persistedProfileSnapshot?.extra ?? [:]
+
+        if scope == .full || scope == .basicProfile {
+            payload["height_cm"] = String(format: "%.1f", heightCm)
+            payload["height_skipped"] = hasNutritionPrefilledHeight ? "true" : "false"
+            payload["weight_kg"] = String(format: "%.1f", weightKg)
+            payload["weight_skipped"] = hasNutritionPrefilledWeight ? "true" : "false"
+            payload["occupation"] = occupation
+            payload["sedentary_level"] = sedentaryLevel?.rawValue ?? ""
+            payload["sedentary_hours_level"] = sedentaryLevel?.rawValue ?? ""
+        }
+
+        if scope == .full || scope == .healthHistory {
+            payload["chronic_condition_status"] = chronicConditionStatus.rawValue
+            payload["chronic_condition_details_json"] = Self.encodeChronicConditionDetails(chronicConditionDetails)
+            payload["long_term_medication_status"] = longTermMedicationStatus.rawValue
+            payload["family_history_screening_status"] = familyHistoryStatus.rawValue
+            payload["surgery_status"] = surgeryStatus.rawValue
+            payload["allergy_status"] = allergyStatus.rawValue
+            payload["symptom_follow_up_status"] = symptomFollowUpStatus.rawValue
+            payload["symptom_follow_up_focus"] = symptomFollowUpFocus.joined(separator: ",")
+            payload["symptom_follow_up_notes"] = symptomFollowUpNotes
+            payload["symptom_follow_up_duration"] = symptomFollowUpDuration
+            payload["symptom_follow_up_severity"] = symptomFollowUpSeverity
+        }
+
+        if scope == .full || scope == .examArchive {
+            payload["has_exam_history"] = hasExamHistory ? "true" : "false"
+            payload["last_exam_year"] = lastExamYear
+            payload["exam_institution"] = examInstitution
+            payload["exam_report_summary"] = examReportSummary
+            payload["extra_notes"] = extraNotes
+        }
+
+        return payload
     }
 
     private var keyIndicatorExtraPayload: [String: String] {

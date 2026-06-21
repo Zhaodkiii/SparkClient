@@ -17,6 +17,9 @@ struct MemberMedicalSetupSheetView: View {
         medicalQueryAPI: SparkMedicalQueryAPI,
         setupUseCase: MemberModuleSetupUseCase,
         homeDependencies: HomeFeatureDependencies? = nil,
+        preloadedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
+        preloadedNutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState? = nil,
+        onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil,
         entryMode: MedicalSetupEntryMode = .full,
         onCompleted: @escaping (String) -> Void,
         onSectionCompleted: @escaping (MedicalSetupEntryMode, String) -> Void = { _, _ in }
@@ -26,7 +29,11 @@ struct MemberMedicalSetupSheetView: View {
                 member: member,
                 medicalQueryAPI: medicalQueryAPI,
                 setupUseCase: setupUseCase,
-                homeDependencies: homeDependencies
+                homeDependencies: homeDependencies,
+                preloadedCompleteData: preloadedCompleteData,
+                preloadedNutritionGoalState: preloadedNutritionGoalState,
+                entryMode: entryMode,
+                onCompleteDataPatch: completeDataPatcher
             )
         )
         self.homeDependencies = homeDependencies

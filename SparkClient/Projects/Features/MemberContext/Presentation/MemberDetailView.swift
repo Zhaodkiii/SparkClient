@@ -123,6 +123,7 @@ final class MemberDetailViewModel: ObservableObject {
 struct MemberDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: MemberDetailViewModel
+    @StateObject private var moduleFlowViewModel: MemberSetupFlowViewModel
     @ObservedObject var memberContextStore: MemberContextStore
 
     private let memberID: Int
@@ -131,13 +132,14 @@ struct MemberDetailView: View {
     private let homeDependencies: HomeFeatureDependencies
     let memberAPI: SparkMedicalMemberAPI
     let shareUseCase: ShareMemberUseCase
+    let onClose: (() -> Void)?
     let onShare: () -> Void
     let onEdit: () -> Void
     let onDeleted: () -> Void
 
     @State private var showDeleteConfirmation = false
     @State private var showSharedUsersManage = false
-    @State private var activeSetupSheet: MemberDetailSetupSheet?
+    @State private var moduleNavigationPath: [MemberDetailModuleRoute] = []
 
     init(
         memberID: Int,
@@ -149,10 +151,13 @@ struct MemberDetailView: View {
         memberContextStore: MemberContextStore,
         memberAPI: SparkMedicalMemberAPI,
         shareUseCase: ShareMemberUseCase,
+        onClose: (() -> Void)? = nil,
         onShare: @escaping () -> Void,
         onEdit: @escaping () -> Void,
         onDeleted: @escaping () -> Void
     ) {
+        let initialMember = memberContextStore.context.members.first(where: { $0.id == memberID })
+            ?? Member(id: memberID, name: "")
         _viewModel = StateObject(
             wrappedValue: MemberDetailViewModel(
                 bindingUseCase: bindingUseCase,
@@ -162,6 +167,13 @@ struct MemberDetailView: View {
                 memberID: memberID
             )
         )
+        _moduleFlowViewModel = StateObject(
+            wrappedValue: MemberSetupFlowViewModel(
+                mode: .maintain(initialMember),
+                store: memberContextStore,
+                homeDependencies: homeDependencies
+            )
+        )
         self.memberID = memberID
         self.moduleSetupUseCase = moduleSetupUseCase
         self.nutritionGoalUseCase = nutritionGoalUseCase
@@ -169,12 +181,38 @@ struct MemberDetailView: View {
         self.memberContextStore = memberContextStore
         self.memberAPI = memberAPI
         self.shareUseCase = shareUseCase
+        self.onClose = onClose
         self.onShare = onShare
         self.onEdit = onEdit
         self.onDeleted = onDeleted
     }
 
     var body: some View {
+        CompatibleRouteNavigationContainer(path: $moduleNavigationPath, legacyStackStyle: true) {
+            mainContent
+        } destination: { route in
+            moduleSummaryDestination(route)
+        }
+        .sheet(item: $moduleFlowViewModel.activeSheet) { sheet in
+            moduleSetupSheet(sheet)
+        }
+        .alert(
+            L10n.text("common.ok"),
+            isPresented: Binding(
+                get: { moduleFlowViewModel.alertMessage != nil },
+                set: { if !$0 { moduleFlowViewModel.alertMessage = nil } }
+            )
+        ) {
+            Button(L10n.text("common.ok"), role: .cancel) {
+                moduleFlowViewModel.alertMessage = nil
+            }
+        } message: {
+            Text(moduleFlowViewModel.alertMessage ?? "")
+        }
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
         Group {
             if viewModel.isLoading && viewModel.detail == nil {
                 loadingView
@@ -188,6 +226,15 @@ struct MemberDetailView: View {
         .navigationTitle(L10n.text("home.members.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let onClose {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                    }
+                    .accessibilityLabel(L10n.text("common.close", fallback: "关闭"))
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 actionMenu
             }
@@ -206,9 +253,13 @@ struct MemberDetailView: View {
         }
         .task {
             await viewModel.load()
+            syncModuleFlowMemberIfNeeded()
+            await moduleFlowViewModel.preloadModuleSetupCacheIfNeeded()
         }
         .refreshable {
             await viewModel.load()
+            syncModuleFlowMemberIfNeeded()
+            await moduleFlowViewModel.refreshModuleSetupCacheIfNeeded(force: true)
         }
         .sheet(isPresented: $showSharedUsersManage) {
             if let detail = viewModel.detail {
@@ -225,9 +276,117 @@ struct MemberDetailView: View {
                 }
             }
         }
-        .sheet(item: $activeSetupSheet) { sheet in
-            setupSheet(sheet)
+    }
+
+    @ViewBuilder
+    private func moduleSummaryDestination(_ route: MemberDetailModuleRoute) -> some View {
+        if let member = viewModel.detail?.domainMember {
+            switch route {
+            case .medicalSummary:
+                MemberMedicalModuleSummaryView(
+                    member: member,
+                    flowViewModel: moduleFlowViewModel,
+                    onPopToParent: popModuleSummary
+                )
+            case .nutritionSummary:
+                MemberNutritionModuleSummaryView(
+                    member: member,
+                    flowViewModel: moduleFlowViewModel,
+                    onPopToParent: popModuleSummary
+                )
+            }
+        } else {
+            Text("成员信息缺失")
+                .foregroundStyle(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private func moduleSetupSheet(_ sheet: MemberSetupSheetRoute) -> some View {
+        switch sheet {
+        case .medical(let entryMode):
+            MemberMedicalSetupSheetView(
+                member: moduleFlowViewModel.createdMember,
+                medicalQueryAPI: homeDependencies.medicalQueryAPI,
+                setupUseCase: moduleSetupUseCase,
+                homeDependencies: homeDependencies,
+                preloadedCompleteData: moduleFlowViewModel.moduleSetupCache(for: memberID)?.completeData,
+                preloadedNutritionGoalState: moduleFlowViewModel.moduleSetupCache(for: memberID)?.completeData?.nutritionGoalState
+                    ?? moduleFlowViewModel.moduleSetupCache(for: memberID)?.nutritionGoalState,
+                onCompleteDataPatch: moduleFlowViewModel.patchCompleteData,
+                entryMode: entryMode
+            ) { summary in
+                Task {
+                    if entryMode == .full {
+                        await moduleFlowViewModel.markModuleCompleted(.medical, summaryText: summary)
+                    }
+                    moduleSetupCompleted()
+                }
+            } onSectionCompleted: { mode, summary in
+                Task {
+                    if let sectionCode = mode.sectionCode {
+                        await moduleFlowViewModel.markSectionCompleted(.medical, sectionCode: sectionCode, summaryText: summary)
+                    }
+                    moduleSetupCompleted()
+                }
+            }
+        case .nutrition(let entryMode):
+            MemberNutritionSetupSheetView(
+                member: moduleFlowViewModel.createdMember,
+                goalUseCase: nutritionGoalUseCase,
+                setupUseCase: moduleSetupUseCase,
+                entryMode: entryMode
+            ) { summary in
+                Task {
+                    if entryMode == .full {
+                        await moduleFlowViewModel.markModuleCompleted(.nutrition, summaryText: summary)
+                    }
+                    moduleSetupCompleted()
+                }
+            } onSectionCompleted: { mode, summary in
+                Task {
+                    if let sectionCode = mode.sectionCode {
+                        await moduleFlowViewModel.markSectionCompleted(.nutrition, sectionCode: sectionCode, summaryText: summary)
+                    }
+                    moduleSetupCompleted()
+                }
+            }
+        case .lifestyle:
+            MemberLifestyleSetupSheetView(
+                onCompletedAction: MainActorAsyncVoidAction {
+                    await moduleFlowViewModel.markModuleCompleted(.dailyHealth, summaryText: "日常健康模块预留")
+                    moduleSetupCompleted()
+                }
+            )
+        }
+    }
+
+    private func syncModuleFlowMemberIfNeeded() {
+        guard let detail = viewModel.detail else { return }
+        moduleFlowViewModel.createdMember = detail.domainMember
+    }
+
+    private func openMedicalModuleSummary() {
+        guard let detail = viewModel.detail else { return }
+        moduleFlowViewModel.createdMember = detail.domainMember
+        Task {
+            await moduleFlowViewModel.preloadModuleSetupCacheIfNeeded()
+            moduleNavigationPath.append(.medicalSummary)
+        }
+    }
+
+    private func openNutritionModuleSummary() {
+        guard let detail = viewModel.detail else { return }
+        moduleFlowViewModel.createdMember = detail.domainMember
+        Task {
+            await moduleFlowViewModel.preloadModuleSetupCacheIfNeeded()
+            moduleNavigationPath.append(.nutritionSummary)
+        }
+    }
+
+    private func popModuleSummary() {
+        moduleNavigationPath = []
+        moduleSetupCompleted()
     }
 
     private var detail: SparkMedicalMemberAPI.MemberDetailResponse? {
@@ -374,7 +533,7 @@ struct MemberDetailView: View {
                     actionTitle: moduleActionTitle(for: "medical", fallbackEnabled: hasMedicalData(detail)),
                     tint: Color(uiColor: .systemBlue)
                 ) {
-                    activeSetupSheet = .medical
+                    openMedicalModuleSummary()
                 }
                 Divider()
                 moduleRow(
@@ -385,7 +544,7 @@ struct MemberDetailView: View {
                     actionTitle: moduleActionTitle(for: "nutrition", fallbackEnabled: hasNutritionData),
                     tint: Color(uiColor: .systemGreen)
                 ) {
-                    activeSetupSheet = .nutrition
+                    openNutritionModuleSummary()
                 }
             }
         }
@@ -440,35 +599,13 @@ struct MemberDetailView: View {
         .accessibilityHint(actionTitle)
     }
 
-    @ViewBuilder
-    private func setupSheet(_ sheet: MemberDetailSetupSheet) -> some View {
-        if let detail = viewModel.detail {
-            switch sheet {
-            case .medical:
-                MemberMedicalSetupSheetView(
-                    member: detail.domainMember,
-                    medicalQueryAPI: homeDependencies.medicalQueryAPI,
-                    setupUseCase: moduleSetupUseCase,
-                    homeDependencies: homeDependencies
-                ) { _ in
-                    moduleSetupCompleted()
-                }
-            case .nutrition:
-                MemberNutritionSetupSheetView(
-                    member: detail.domainMember,
-                    goalUseCase: nutritionGoalUseCase,
-                    setupUseCase: moduleSetupUseCase
-                ) { _ in
-                    moduleSetupCompleted()
-                }
-            }
-        }
-    }
-
     private func moduleSetupCompleted() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        activeSetupSheet = nil
-        Task { await viewModel.load() }
+        moduleFlowViewModel.activeSheet = nil
+        Task {
+            await moduleFlowViewModel.refreshModuleSetupCacheIfNeeded(force: true)
+            await viewModel.load()
+        }
         memberContextStore.membersDidChange.send()
     }
 
@@ -902,9 +1039,7 @@ struct MemberDetailView: View {
     }
 }
 
-private enum MemberDetailSetupSheet: String, Identifiable {
-    case medical
-    case nutrition
-
-    var id: String { rawValue }
+private enum MemberDetailModuleRoute: Hashable {
+    case medicalSummary
+    case nutritionSummary
 }

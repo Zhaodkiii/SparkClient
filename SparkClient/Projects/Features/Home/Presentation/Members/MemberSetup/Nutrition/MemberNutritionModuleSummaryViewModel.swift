@@ -9,17 +9,11 @@ final class MemberNutritionModuleSummaryViewModel: ObservableObject {
 
     let member: Member
     let flowViewModel: MemberSetupFlowViewModel
-    private let nutritionSetupViewModel: MemberNutritionSetupViewModel
     private var storedProgress: [String: MemberModuleSectionProgressRecord] = [:]
 
     init(member: Member, flowViewModel: MemberSetupFlowViewModel) {
         self.member = member
         self.flowViewModel = flowViewModel
-        self.nutritionSetupViewModel = MemberNutritionSetupViewModel(
-            member: member,
-            goalUseCase: flowViewModel.homeDependencies.nutritionDependencies.goalUseCase,
-            setupUseCase: flowViewModel.homeDependencies.memberModuleSetupUseCase
-        )
     }
 
     var completedCount: Int {
@@ -35,16 +29,25 @@ final class MemberNutritionModuleSummaryViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        do {
-            storedProgress = try await flowViewModel.homeDependencies.memberModuleSetupUseCase.sectionProgressMap(
-                memberID: member.id,
-                module: .nutrition
-            )
-        } catch {
-            flowViewModel.alertMessage = error.localizedDescription
+        if flowViewModel.moduleSetupCache(for: member.id)?.completeData == nil {
+            await flowViewModel.preloadModuleSetupCacheIfNeeded()
         }
 
-        await nutritionSetupViewModel.loadIfNeeded()
+        if let completeData = flowViewModel.moduleSetupCache(for: member.id)?.completeData {
+            let nutritionSetting = completeData.memberModuleSettings?
+                .first(where: { $0.moduleCode == MemberSetupModule.nutrition.rawValue })
+            storedProgress = MemberModuleSectionProgressCodec.decode(from: nutritionSetting?.extra)
+        } else {
+            do {
+                storedProgress = try await flowViewModel.homeDependencies.memberModuleSetupUseCase.sectionProgressMap(
+                    memberID: member.id,
+                    module: .nutrition
+                )
+            } catch {
+                flowViewModel.alertMessage = error.localizedDescription
+            }
+        }
+
         rebuildSections()
     }
 
@@ -96,21 +99,28 @@ final class MemberNutritionModuleSummaryViewModel: ObservableObject {
         }
     }
 
+    private var goalState: SparkNutritionAPI.RemoteNutritionGoalState? {
+        let cache = flowViewModel.moduleSetupCache(for: member.id)
+        return cache?.completeData?.nutritionGoalState ?? cache?.nutritionGoalState
+    }
+
     private var basicInfoSummary: String {
-        let height = nutritionSetupViewModel.heightCm > 0 ? String(format: "%.0fcm", nutritionSetupViewModel.heightCm) : "未填写"
-        let weight = nutritionSetupViewModel.weightKg > 0 ? String(format: "%.0fkg", nutritionSetupViewModel.weightKg) : "未填写"
-        let goal = nutritionSetupViewModel.goalMode.title
-        let kcal = nutritionSetupViewModel.targetCalories > 0 ? "\(Int(nutritionSetupViewModel.targetCalories))千卡" : "未填写"
+        guard let goal = goalState?.goal else { return "未填写" }
+        let height = (goal.heightCm ?? 0) > 0 ? String(format: "%.0fcm", goal.heightCm ?? 0) : "未填写"
+        let weight = (goal.currentWeightKg ?? 0) > 0 ? String(format: "%.0fkg", goal.currentWeightKg ?? 0) : "未填写"
+        let goalMode = MemberNutritionSetupViewModel.GoalMode(rawValue: goal.goalType)?.title ?? "未填写"
+        let kcal = (goal.dailyEnergyTargetKcal ?? 0) > 0 ? "\(Int(goal.dailyEnergyTargetKcal ?? 0))千卡" : "未填写"
         if height == "未填写", weight == "未填写" {
             return "未填写"
         }
-        return [height, weight, goal, kcal].joined(separator: " · ")
+        return [height, weight, goalMode, kcal].joined(separator: " · ")
     }
 
     private var basicInfoStatus: MemberModuleSectionStatus {
-        let hasHeight = nutritionSetupViewModel.heightCm > 0
-        let hasWeight = nutritionSetupViewModel.weightKg > 0
-        let hasGoal = nutritionSetupViewModel.targetCalories > 0
+        guard let goal = goalState?.goal else { return .notStarted }
+        let hasHeight = (goal.heightCm ?? 0) > 0
+        let hasWeight = (goal.currentWeightKg ?? 0) > 0
+        let hasGoal = (goal.dailyEnergyTargetKcal ?? 0) > 0
         if hasHeight && hasWeight && hasGoal {
             return .completed
         }

@@ -4,7 +4,6 @@ import Foundation
 enum HomeSheet: Identifiable {
     case addMember(AddMemberSheet)
     case pendingInvites
-    case memberDetail(memberID: Int)
     case memberModuleSetup(Member)
     case share(Member)
     case taskCenter
@@ -15,8 +14,6 @@ enum HomeSheet: Identifiable {
             return "addMember-\(sheet.id)"
         case .pendingInvites:
             return "pendingInvites"
-        case .memberDetail(let memberID):
-            return "memberDetail-\(memberID)"
         case .memberModuleSetup(let member):
             return "memberModuleSetup-\(member.id)"
         case .share(let member):
@@ -28,9 +25,10 @@ enum HomeSheet: Identifiable {
 }
 
 /// 首页统一全屏 Cover 路由
-enum HomeFullScreenCover: Identifiable {
+enum HomeFullScreenCover: Identifiable, Equatable {
     case medicalDocumentUpload
     case customCamera
+    case memberDetail(memberID: Int)
 
     var id: String {
         switch self {
@@ -38,6 +36,8 @@ enum HomeFullScreenCover: Identifiable {
             return "medicalDocumentUpload"
         case .customCamera:
             return "customCamera"
+        case .memberDetail(let memberID):
+            return "memberDetail-\(memberID)"
         }
     }
 }
@@ -50,8 +50,6 @@ extension HomeSheetKind {
             self = .addMember
         case .pendingInvites:
             self = .pendingInvites
-        case .memberDetail:
-            self = .memberDetail
         case .memberModuleSetup:
             self = .memberModuleSetup
         case .share:
@@ -70,6 +68,8 @@ extension HomeFullScreenCoverKind {
             self = .medicalDocumentUpload
         case .customCamera:
             self = .customCamera
+        case .memberDetail:
+            self = .memberDetail
         }
     }
 }

@@ -174,8 +174,7 @@ struct MemberModuleSetupUseCase: Sendable {
             status: status
         )
 
-        let completedSectionCount = progressMap.values.filter { $0.status == .completed }.count
-        let isModuleCompleted = completedSectionCount > 0
+        let isModuleCompleted = isModuleCompleted(module: module, progressMap: progressMap)
         let mergedExtra = mergeSectionProgress(into: existing?.extra, progressMap: progressMap)
 
         return try await saveModuleSetting(
@@ -225,5 +224,29 @@ struct MemberModuleSetupUseCase: Sendable {
         var merged = extra ?? [:]
         merged[MemberModuleSectionProgressCodec.extraKey] = MemberModuleSectionProgressCodec.encode(progressMap)
         return merged
+    }
+
+    private func isModuleCompleted(
+        module: MemberSetupModule,
+        progressMap: [String: MemberModuleSectionProgressRecord]
+    ) -> Bool {
+        let requiredSectionCodes = requiredSectionCodes(for: module)
+        guard requiredSectionCodes.isEmpty == false else {
+            return progressMap.values.contains { $0.status == .completed }
+        }
+        return requiredSectionCodes.allSatisfy { sectionCode in
+            progressMap[sectionCode]?.status == .completed
+        }
+    }
+
+    private func requiredSectionCodes(for module: MemberSetupModule) -> [String] {
+        switch module {
+        case .medical:
+            return MemberMedicalSectionCode.allCases.map(\.rawValue)
+        case .nutrition:
+            return MemberNutritionSectionCode.allCases.map(\.rawValue)
+        case .dailyHealth:
+            return []
+        }
     }
 }

@@ -139,6 +139,16 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 成员医疗维护档案。
+    struct RemoteMemberMedicalProfileSectionSummary: Codable, Sendable, Equatable, Identifiable {
+        var sectionCode: String
+        var title: String
+        var summary: String
+        var status: String
+
+        var id: String { sectionCode }
+    }
+
+    /// 成员医疗维护档案。
     struct RemoteMemberMedicalProfile: Codable, Sendable, Equatable, Identifiable {
         var id: Int
         var user: Int?
@@ -158,6 +168,14 @@ enum SparkMedicalSyncAPI {
         var symptomFollowUpFocus: [String]
         var notes: String
         var extra: [String: String]?
+        /// 医疗引导分组摘要；服务端由 profile + 症状/用药/手术/体检档案聚合生成。
+        var guidanceSections: [RemoteMemberMedicalProfileSectionSummary]?
+        /// 风险评估摘要；用于医疗模块汇总页风险卡片。
+        var riskAssessmentSummary: String?
+        /// 下一次体检计划摘要；用于体检档案分组和计划卡片。
+        var examPlanSummary: String?
+        /// 医疗引导摘要更新时间；用于缓存新鲜度判断和调试。
+        var guidanceUpdatedAt: Date?
         var createdAt: Date?
         var updatedAt: Date?
 
@@ -180,6 +198,10 @@ enum SparkMedicalSyncAPI {
             symptomFollowUpFocus: [String] = [],
             notes: String = "",
             extra: [String: String]? = nil,
+            guidanceSections: [RemoteMemberMedicalProfileSectionSummary]? = nil,
+            riskAssessmentSummary: String? = nil,
+            examPlanSummary: String? = nil,
+            guidanceUpdatedAt: Date? = nil,
             createdAt: Date? = nil,
             updatedAt: Date? = nil
         ) {
@@ -201,6 +223,10 @@ enum SparkMedicalSyncAPI {
             self.symptomFollowUpFocus = symptomFollowUpFocus
             self.notes = notes
             self.extra = extra
+            self.guidanceSections = guidanceSections
+            self.riskAssessmentSummary = riskAssessmentSummary
+            self.examPlanSummary = examPlanSummary
+            self.guidanceUpdatedAt = guidanceUpdatedAt
             self.createdAt = createdAt
             self.updatedAt = updatedAt
         }
@@ -225,6 +251,10 @@ enum SparkMedicalSyncAPI {
             symptomFollowUpFocus = try container.decodeIfPresent([String].self, forKey: .symptomFollowUpFocus) ?? []
             notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
             extra = try container.decodeIfPresent([String: String].self, forKey: .extra)
+            guidanceSections = try container.decodeIfPresent([RemoteMemberMedicalProfileSectionSummary].self, forKey: .guidanceSections)
+            riskAssessmentSummary = try container.decodeIfPresent(String.self, forKey: .riskAssessmentSummary)
+            examPlanSummary = try container.decodeIfPresent(String.self, forKey: .examPlanSummary)
+            guidanceUpdatedAt = try container.decodeIfPresent(Date.self, forKey: .guidanceUpdatedAt)
             createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
             updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         }
@@ -676,6 +706,15 @@ enum SparkMedicalSyncAPI {
         
         /// 成员基础信息
         var member: RemoteMember
+
+        /// 成员医疗画像投影；用于医疗模块汇总页、分组完成状态、AI 风险摘要和体检计划摘要。
+        var memberMedicalProfile: RemoteMemberMedicalProfile?
+
+        /// 成员模块配置列表；用于判断首页展示哪些模块，以及医疗/饮食模块汇总页完成状态。
+        var memberModuleSettings: [RemoteMemberModuleSetting]?
+
+        /// 成员营养目标；complete-data 聚合返回，缺失时客户端再补请求 nutrition goals。
+        var nutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState?
         
         /// 病例摘要列表
         var medicalCases: [RemoteMedicalCaseSummary]?

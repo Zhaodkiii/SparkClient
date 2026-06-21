@@ -184,7 +184,6 @@ enum LaunchIntentBlockedReason: String, Sendable {
 enum HomeSheetKind: String, Sendable {
     case addMember
     case pendingInvites
-    case memberDetail
     case memberModuleSetup
     case share
     case taskCenter
@@ -194,6 +193,7 @@ enum HomeSheetKind: String, Sendable {
 enum HomeFullScreenCoverKind: String, Sendable {
     case medicalDocumentUpload
     case customCamera
+    case memberDetail
 }
 
 /// 首页宿主展示状态，由 HomeView 上报给调度器

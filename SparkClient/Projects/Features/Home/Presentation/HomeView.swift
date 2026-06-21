@@ -25,12 +25,10 @@ struct HomeView: View {
         homeContent
     }
 
-    private var homeContent: some View {
+    private var homeScrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                
-                // 当前版本 展示 注释 任务功能
-                headerCard             //任务
+                headerCard
                 if viewModel.shouldShowMedicalSection {
                     medicalInfoSection
                 }
@@ -40,8 +38,6 @@ struct HomeView: View {
                 if viewModel.shouldShowModuleMaintenanceSection {
                     moduleMaintenanceSection
                 }
-//                customCameraSection    // 相机
-
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -58,80 +54,92 @@ struct HomeView: View {
                 .padding(.vertical, 8)
                 .background(.regularMaterial)
         }
-        .sheet(item: $viewModel.activeSheet) { sheet in
-            homeSheetContent(sheet)
-        }
-        .fullScreenCover(item: $activeFullScreenCover) { cover in
-            homeFullScreenCoverContent(cover)
-        }
-        .onAppear {
-            launchIntentConsumer.setHomeHostReady(true)
-            syncLaunchIntentHostState()
-            requestLaunchIntentDrain(reason: "home_appear")
-        }
-        .onDisappear {
-            launchIntentConsumer.setHomeHostReady(false)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            viewModel.consumePendingShareTicketIfNeeded()
-            viewModel.consumePendingInviteIfNeeded()
-            await viewModel.loadInitialIfNeeded(syncRemote: true)
-            requestLaunchIntentDrain(reason: "home_initial_load")
-        }
-        .task(id: launchIntentCoordinator.queueRevision) {
-            requestLaunchIntentDrain(reason: "queue_revision")
-        }
-        .onChange(of: launchIntentCoordinator.readiness.canConsume) { canConsume in
-            guard canConsume else { return }
-            requestLaunchIntentDrain(reason: "readiness_ready")
-        }
-        .onChange(of: viewModel.activeSheet?.id) { _ in
-            syncLaunchIntentHostState()
-            requestLaunchIntentDrain(reason: "home_sheet_changed")
-        }
-        .onChange(of: activeFullScreenCover) { cover in
-            if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
-                medicalDocumentUploadViewModel.dismissUploadPage()
+    }
+
+    private var homeContentWithPresentation: some View {
+        homeScrollBody
+            .sheet(item: $viewModel.activeSheet) { sheet in
+                homeSheetContent(sheet)
             }
-            syncLaunchIntentHostState()
-            if cover == nil {
-                requestLaunchIntentDrain(reason: "cover_dismissed")
+            .fullScreenCover(item: $activeFullScreenCover) { cover in
+                homeFullScreenCoverContent(cover)
             }
-        }
-        .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
-            if isPresented {
-                activeFullScreenCover = .medicalDocumentUpload
-            } else if activeFullScreenCover == .medicalDocumentUpload {
-                activeFullScreenCover = nil
+    }
+
+    private var homeContentWithLifecycle: some View {
+        homeContentWithPresentation
+            .onAppear {
+                launchIntentConsumer.setHomeHostReady(true)
+                syncLaunchIntentHostState()
+                requestLaunchIntentDrain(reason: "home_appear")
             }
-            syncLaunchIntentHostState()
-            requestLaunchIntentDrain(reason: "upload_presented_changed")
-        }
-        .onChange(of: medicalDocumentUploadViewModel.stage) { _ in
-            syncLaunchIntentHostState()
-            requestLaunchIntentDrain(reason: "upload_stage_changed")
-        }
-        .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
-            showExternalImportErrorAlert = message != nil
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .medicationReminderPreferencesChanged)) { _ in
-            triggerMedicationReminderRebuildIfSignedIn(reason: "preferences_changed")
-        }
-        .alert("无法导入文档", isPresented: $showExternalImportErrorAlert) {
-            Button("好", role: .cancel) {
-                externalMedicalDocumentImportCoordinator.clearError()
+            .onDisappear {
+                launchIntentConsumer.setHomeHostReady(false)
             }
-        } message: {
-            Text(externalMedicalDocumentImportCoordinator.errorMessage ?? "")
-        }
-        .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
-            Task {
-                await viewModel.refresh()
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                viewModel.consumePendingShareTicketIfNeeded()
+                viewModel.consumePendingInviteIfNeeded()
+                await viewModel.loadInitialIfNeeded(syncRemote: true)
+                requestLaunchIntentDrain(reason: "home_initial_load")
             }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
+            .task(id: launchIntentCoordinator.queueRevision) {
+                requestLaunchIntentDrain(reason: "queue_revision")
+            }
+            .onChange(of: launchIntentCoordinator.readiness.canConsume) { canConsume in
+                guard canConsume else { return }
+                requestLaunchIntentDrain(reason: "readiness_ready")
+            }
+            .onChange(of: viewModel.activeSheet?.id) { _ in
+                syncLaunchIntentHostState()
+                requestLaunchIntentDrain(reason: "home_sheet_changed")
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .medicationReminderPreferencesChanged)) { _ in
+                triggerMedicationReminderRebuildIfSignedIn(reason: "preferences_changed")
+            }
+    }
+
+    private var homeContent: some View {
+        homeContentWithLifecycle
+            .onChange(of: activeFullScreenCover) { cover in
+                if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
+                    medicalDocumentUploadViewModel.dismissUploadPage()
+                }
+                syncLaunchIntentHostState()
+                if cover == nil {
+                    requestLaunchIntentDrain(reason: "cover_dismissed")
+                }
+            }
+            .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
+                if isPresented {
+                    activeFullScreenCover = .medicalDocumentUpload
+                } else if activeFullScreenCover == .medicalDocumentUpload {
+                    activeFullScreenCover = nil
+                }
+                syncLaunchIntentHostState()
+                requestLaunchIntentDrain(reason: "upload_presented_changed")
+            }
+            .onChange(of: medicalDocumentUploadViewModel.stage) { _ in
+                syncLaunchIntentHostState()
+                requestLaunchIntentDrain(reason: "upload_stage_changed")
+            }
+            .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
+                showExternalImportErrorAlert = message != nil
+            }
+            .alert("无法导入文档", isPresented: $showExternalImportErrorAlert) {
+                Button("好", role: .cancel) {
+                    externalMedicalDocumentImportCoordinator.clearError()
+                }
+            } message: {
+                Text(externalMedicalDocumentImportCoordinator.errorMessage ?? "")
+            }
+            .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
+                Task {
+                    await viewModel.refresh()
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
     }
 
     private func syncLaunchIntentHostState() {
@@ -230,39 +238,6 @@ struct HomeView: View {
                 }
             )
 
-        // MARK: 家庭成员详情页弹窗
-        case .memberDetail(let memberID):
-            CompatibleNavigationContainer {
-                MemberDetailView(
-                    memberID: memberID, // 当前查看的成员唯一ID
-                    bindingUseCase: dependencies.manageMemberBindingUseCase, // 成员绑定管理业务用例
-                    moduleSetupUseCase: dependencies.memberModuleSetupUseCase, // 成员功能模块配置用例
-                    nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase, // 营养目标业务用例
-                    nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase, // 营养数据看板用例
-                    homeDependencies: dependencies,
-                    memberContextStore: viewModel.memberContextStoreForBinding, // 成员表单状态仓库
-                    memberAPI: dependencies.medicalMemberAPI, // 医疗成员相关接口
-                    shareUseCase: dependencies.shareMemberUseCase,
-                    // 分享按钮点击：打开分享弹窗
-                    onShare: {
-                        if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                            viewModel.activeSheet = .share(member)
-                        }
-                    },
-                    // 编辑按钮点击：打开成员编辑弹窗
-                    onEdit: {
-                        if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                            viewModel.activeSheet = .addMember(.edit(member))
-                        }
-                    },
-                    // 成员删除完成回调：关闭弹窗并刷新首页数据
-                    onDeleted: {
-                        viewModel.activeSheet = nil
-                        Task { await viewModel.refresh() }
-                    }
-                )
-            }
-
         // MARK: 成员功能模块配置流程弹窗
         case .memberModuleSetup(let member):
             MemberSetupFlowView(
@@ -317,6 +292,44 @@ struct HomeView: View {
                 // 相机页面关闭回调：清空当前全屏弹窗标识，退出全屏
                 activeFullScreenCover = nil
             }
+
+        // MARK: 家庭成员详情全屏页
+        case .memberDetail(let memberID):
+            memberDetailFullScreenCover(memberID: memberID)
+        }
+    }
+
+    @ViewBuilder
+    private func memberDetailFullScreenCover(memberID: Int) -> some View {
+        CompatibleNavigationContainer {
+            MemberDetailView(
+                memberID: memberID,
+                bindingUseCase: dependencies.manageMemberBindingUseCase,
+                moduleSetupUseCase: dependencies.memberModuleSetupUseCase,
+                nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase,
+                nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase,
+                homeDependencies: dependencies,
+                memberContextStore: viewModel.memberContextStoreForBinding,
+                memberAPI: dependencies.medicalMemberAPI,
+                shareUseCase: dependencies.shareMemberUseCase,
+                onClose: {
+                    activeFullScreenCover = nil
+                },
+                onShare: {
+                    if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
+                        viewModel.activeSheet = .share(member)
+                    }
+                },
+                onEdit: {
+                    if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
+                        viewModel.activeSheet = .addMember(.edit(member))
+                    }
+                },
+                onDeleted: {
+                    activeFullScreenCover = nil
+                    Task { await viewModel.refresh() }
+                }
+            )
         }
     }
     
@@ -371,8 +384,8 @@ struct HomeView: View {
                                 triggerHaptic(style: .light)
                             },
                             onViewDetail: {
-                                // 打开成员详情弹窗
-                                viewModel.activeSheet = .memberDetail(memberID: member.id)
+                                // 打开成员详情全屏页
+                                activeFullScreenCover = .memberDetail(memberID: member.id)
                                 triggerHaptic(style: .light)
                             },
                             onShare: {
