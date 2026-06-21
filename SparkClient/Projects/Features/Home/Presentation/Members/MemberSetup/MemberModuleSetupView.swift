@@ -42,9 +42,12 @@ struct MemberModuleSetupView: View {
                     ForEach(MemberSetupModule.allCases.filter(\.isVisibleInSetup)) { module in
                         MemberModuleToggleRow(
                             module: module,
-                            isSelected: viewModel.selectedModules.contains(module),
+                            selectionStatus: .init(
+                                isSelected: viewModel.selectedModules.contains(module),
+                                isCompleted: viewModel.completedModules.contains(module)
+                            ),
                             onOpen: {
-                                viewModel.openSheet(for: module)
+                                viewModel.openModuleSummary(for: module)
                             }
                         )
                     }

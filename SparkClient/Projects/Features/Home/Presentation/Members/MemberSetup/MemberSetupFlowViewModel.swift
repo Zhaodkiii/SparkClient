@@ -77,9 +77,9 @@ final class MemberSetupFlowViewModel: ObservableObject {
         MemberRelationshipCatalog.isSelectableGender(draft.gender)
     }
 
-    /// 是否允许完成整个创建流程：至少完成一个模块、无模块存储操作中
+    /// 是否允许完成整个创建流程：至少选中一个模块、无模块存储操作中
     var canFinish: Bool {
-        !completedModules.filter(\.isVisibleInSetup).isEmpty && !isPersistingModules && !isLoadingExistingModules
+        !selectedModules.filter(\.isVisibleInSetup).isEmpty && !isPersistingModules && !isLoadingExistingModules
     }
 
     // MARK: - 对外业务方法
@@ -115,6 +115,80 @@ final class MemberSetupFlowViewModel: ObservableObject {
         selectedModules.insert(module)
     }
 
+    /// 标记模块已选中（首页展示），但不计入完成。
+    func markModuleSelected(_ module: MemberSetupModule) async {
+        selectedModules.insert(module)
+        completedModules.remove(module)
+        guard let member = createdMember else { return }
+        do {
+            _ = try await homeDependencies.memberModuleSetupUseCase.markModuleSelected(
+                memberID: member.id,
+                module: module
+            )
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    /// 保存分组完成进度，并刷新模块选中/完成状态。
+    func markSectionCompleted(
+        _ module: MemberSetupModule,
+        sectionCode: String,
+        summaryText: String
+    ) async {
+        selectedModules.insert(module)
+        guard let member = createdMember else { return }
+        do {
+            let saved = try await homeDependencies.memberModuleSetupUseCase.saveSectionProgress(
+                memberID: member.id,
+                module: module,
+                sectionCode: sectionCode,
+                status: .completed,
+                summary: summaryText
+            )
+            if saved.isCompleted {
+                completedModules.insert(module)
+            } else {
+                completedModules.remove(module)
+            }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    /// 打开对应模块的汇总页
+    func openModuleSummary(for module: MemberSetupModule) {
+        selectedModules.insert(module)
+        switch module {
+        case .medical:
+            navigationPath.append(.medicalSummary)
+        case .nutrition:
+            navigationPath.append(.nutritionSummary)
+        case .dailyHealth:
+            activeSheet = .lifestyle
+        }
+    }
+
+    /// 打开模块维护 Sheet
+    func openSheet(for module: MemberSetupModule, entryMode: MedicalSetupEntryMode? = nil) {
+        switch module {
+        case .medical:
+            activeSheet = .medical(entryMode ?? .full)
+        case .nutrition:
+            activeSheet = .nutrition(.full)
+        case .dailyHealth:
+            activeSheet = .lifestyle
+        }
+    }
+
+    func openMedicalSheet(mode: MedicalSetupEntryMode) {
+        activeSheet = .medical(mode)
+    }
+
+    func openNutritionSheet(mode: NutritionSetupEntryMode) {
+        activeSheet = .nutrition(mode)
+    }
+
     /// 维护模式进入模块页时，读取成员已有模块配置并回填勾选/完成状态。
     func loadExistingModuleSettingsIfNeeded() async {
         guard case .maintain = mode else { return }
@@ -138,27 +212,31 @@ final class MemberSetupFlowViewModel: ObservableObject {
         }
     }
 
-    /// 流程收尾：模块开通只由各模块「保存/提交」动作完成，这里不补写待完善状态
+    /// 流程收尾：保存当前选中模块状态
     /// - Returns: 存储流程无异常返回true
     func finish() async -> Bool {
-        guard createdMember != nil else { return false }
+        guard let member = createdMember else { return false }
         guard !isPersistingModules else { return false }
         isPersistingModules = true
         defer { isPersistingModules = false }
-        return true
-    }
 
-    /// 打开对应模块的详情弹窗
-    /// - Parameter module: 点击的功能模块
-    func openSheet(for module: MemberSetupModule) {
-        switch module {
-        case .medical:
-            activeSheet = .medical
-        case .nutrition:
-            activeSheet = .nutrition
-        case .dailyHealth:
-            activeSheet = .lifestyle
+        do {
+            for module in selectedModules where module.isVisibleInSetup {
+                let isCompleted = completedModules.contains(module)
+                _ = try await homeDependencies.memberModuleSetupUseCase.saveModuleSetting(
+                    memberID: member.id,
+                    moduleCode: module.rawValue,
+                    isEnabled: true,
+                    isCompleted: isCompleted,
+                    displayOrder: module.displayOrder,
+                    summaryText: isCompleted ? module.title : "",
+                    completedAt: isCompleted ? Date() : nil
+                )
+            }
+            return true
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
         }
     }
-
 }

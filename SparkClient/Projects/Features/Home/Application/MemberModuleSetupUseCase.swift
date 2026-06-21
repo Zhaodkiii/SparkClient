@@ -157,4 +157,73 @@ struct MemberModuleSetupUseCase: Sendable {
         )
         return result
     }
+
+    /// 保存单个分组进度到模块配置的 `extra.section_progress`。
+    func saveSectionProgress(
+        memberID: Int,
+        module: MemberSetupModule,
+        sectionCode: String,
+        status: MemberModuleSectionStatus,
+        summary: String
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberModuleSetting {
+        let existing = try await medicalQueryAPI.listMemberModuleSettings(memberID: memberID, moduleCode: module.rawValue).first
+        var progressMap = MemberModuleSectionProgressCodec.decode(from: existing?.extra)
+        progressMap[sectionCode] = MemberModuleSectionProgressRecord(
+            sectionCode: sectionCode,
+            summary: summary,
+            status: status
+        )
+
+        let completedSectionCount = progressMap.values.filter { $0.status == .completed }.count
+        let isModuleCompleted = completedSectionCount > 0
+        let mergedExtra = mergeSectionProgress(into: existing?.extra, progressMap: progressMap)
+
+        return try await saveModuleSetting(
+            memberID: memberID,
+            moduleCode: module.rawValue,
+            isEnabled: true,
+            isCompleted: isModuleCompleted,
+            displayOrder: module.displayOrder,
+            summaryText: summary.isEmpty ? (existing?.summaryText ?? module.title) : summary,
+            detailData: existing?.detailData ?? [:],
+            completedAt: isModuleCompleted ? (existing?.completedAt ?? Date()) : nil,
+            extra: mergedExtra
+        )
+    }
+
+    /// 标记模块已选中但未完成（暂不填写场景）。
+    func markModuleSelected(
+        memberID: Int,
+        module: MemberSetupModule
+    ) async throws -> SparkMedicalSyncAPI.RemoteMemberModuleSetting {
+        let existing = try await medicalQueryAPI.listMemberModuleSettings(memberID: memberID, moduleCode: module.rawValue).first
+        return try await saveModuleSetting(
+            memberID: memberID,
+            moduleCode: module.rawValue,
+            isEnabled: true,
+            isCompleted: existing?.isCompleted ?? false,
+            displayOrder: module.displayOrder,
+            summaryText: existing?.summaryText ?? "",
+            detailData: existing?.detailData ?? [:],
+            completedAt: existing?.completedAt,
+            extra: existing?.extra ?? [:]
+        )
+    }
+
+    func sectionProgressMap(
+        memberID: Int,
+        module: MemberSetupModule
+    ) async throws -> [String: MemberModuleSectionProgressRecord] {
+        let existing = try await medicalQueryAPI.listMemberModuleSettings(memberID: memberID, moduleCode: module.rawValue).first
+        return MemberModuleSectionProgressCodec.decode(from: existing?.extra)
+    }
+
+    private func mergeSectionProgress(
+        into extra: [String: String]?,
+        progressMap: [String: MemberModuleSectionProgressRecord]
+    ) -> [String: String] {
+        var merged = extra ?? [:]
+        merged[MemberModuleSectionProgressCodec.extraKey] = MemberModuleSectionProgressCodec.encode(progressMap)
+        return merged
+    }
 }

@@ -2,8 +2,32 @@ import SwiftUI
 
 struct MemberModuleToggleRow: View {
     let module: MemberSetupModule
-    let isSelected: Bool
+    let selectionStatus: ModuleSelectionStatus
     let onOpen: () -> Void
+
+    enum ModuleSelectionStatus {
+        case notOpened
+        case selectedIncomplete
+        case completed
+
+        init(isSelected: Bool, isCompleted: Bool) {
+            if isCompleted {
+                self = .completed
+            } else if isSelected {
+                self = .selectedIncomplete
+            } else {
+                self = .notOpened
+            }
+        }
+
+        var statusText: String {
+            switch self {
+            case .notOpened: return "未开启"
+            case .selectedIncomplete: return "未完成"
+            case .completed: return "已完成"
+            }
+        }
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 18) {
@@ -17,11 +41,15 @@ struct MemberModuleToggleRow: View {
                                 .font(.title3.weight(.bold))
                                 .foregroundStyle(.primary)
 
-                            if isSelected {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title3.weight(.semibold))
-                                    .foregroundStyle(Color(uiColor: .systemGreen))
-                            }
+                            Text(selectionStatus.statusText)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(statusColor)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule(style: .continuous)
+                                        .fill(statusBackgroundColor)
+                                )
                         }
 
                         Text(module.subtitle)
@@ -43,7 +71,7 @@ struct MemberModuleToggleRow: View {
             Button(action: onOpen) {
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color(uiColor: .systemGreen) : Color(uiColor: .systemGray2))
+                    .foregroundStyle(selectionStatus == .completed ? Color(uiColor: .systemGreen) : Color(uiColor: .systemGray2))
                     .frame(width: 36, height: 44)
             }
             .buttonStyle(.plain)
@@ -55,9 +83,25 @@ struct MemberModuleToggleRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(isSelected ? Color(uiColor: .systemGreen) : .clear, lineWidth: 1.5)
+                .stroke(selectionStatus == .completed ? Color(uiColor: .systemGreen) : .clear, lineWidth: 1.5)
         }
         .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 8)
+    }
+
+    private var statusColor: Color {
+        switch selectionStatus {
+        case .notOpened: return .secondary
+        case .selectedIncomplete: return .orange
+        case .completed: return Color(uiColor: .systemGreen)
+        }
+    }
+
+    private var statusBackgroundColor: Color {
+        switch selectionStatus {
+        case .notOpened: return Color(uiColor: .tertiarySystemBackground)
+        case .selectedIncomplete: return Color.orange.opacity(0.12)
+        case .completed: return Color(uiColor: .systemGreen).opacity(0.12)
+        }
     }
 
     private var moduleIcon: some View {

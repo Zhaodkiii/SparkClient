@@ -1,9 +1,18 @@
 import Foundation
 
-enum MemberSetupSheetRoute: String, Identifiable, Hashable {
-    case medical
-    case nutrition
+enum MemberSetupSheetRoute: Identifiable, Hashable {
+    case medical(MedicalSetupEntryMode)
+    case nutrition(NutritionSetupEntryMode)
     case lifestyle
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .medical(let mode):
+            return "medical-\(mode.rawValue)"
+        case .nutrition(let mode):
+            return "nutrition-\(mode.rawValue)"
+        case .lifestyle:
+            return "lifestyle"
+        }
+    }
 }

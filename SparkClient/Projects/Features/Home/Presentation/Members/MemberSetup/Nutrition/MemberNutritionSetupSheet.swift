@@ -4,16 +4,26 @@ struct MemberNutritionSetupSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: MemberNutritionSetupViewModel
     @State private var path: [NutritionSetupRoute] = []
+    let entryMode: NutritionSetupEntryMode
     let onCompleted: (String) -> Void
+    let onSectionCompleted: (NutritionSetupEntryMode, String) -> Void
 
     init(
         member: Member?,
         goalUseCase: NutritionGoalUseCase,
         setupUseCase: MemberModuleSetupUseCase,
-        onCompleted: @escaping (String) -> Void
+        entryMode: NutritionSetupEntryMode = .full,
+        onCompleted: @escaping (String) -> Void,
+        onSectionCompleted: @escaping (NutritionSetupEntryMode, String) -> Void = { _, _ in }
     ) {
         _viewModel = StateObject(wrappedValue: MemberNutritionSetupViewModel(member: member, goalUseCase: goalUseCase, setupUseCase: setupUseCase))
+        self.entryMode = entryMode
         self.onCompleted = onCompleted
+        self.onSectionCompleted = onSectionCompleted
+    }
+
+    private var isSectionMode: Bool {
+        entryMode.isSectionMode
     }
 
     var body: some View {
@@ -211,7 +221,7 @@ struct MemberNutritionSetupSheetView: View {
             onPrimary: {
                 Task { await saveAndDismiss() }
             },
-            secondaryTitle: "跳过",
+            secondaryTitle: isSectionMode ? "暂不填写" : "跳过",
             onSecondary: {
                 dismiss()
             }
@@ -293,8 +303,13 @@ struct MemberNutritionSetupSheetView: View {
     }
 
     private func saveAndDismiss() async {
-        if let summary = await viewModel.save() {
-            onCompleted(summary)
+        let markModuleCompleted = entryMode == .full
+        if let summary = await viewModel.save(markModuleCompleted: markModuleCompleted) {
+            if isSectionMode {
+                onSectionCompleted(entryMode, summary)
+            } else {
+                onCompleted(summary)
+            }
             dismiss()
         }
     }

@@ -48,7 +48,7 @@ final class MemberNutritionSetupViewModel: ObservableObject {
         }
     }
 
-    func save() async -> String? {
+    func save(markModuleCompleted: Bool = true) async -> String? {
         guard let member else { return nil }
         guard isSaving == false else { return nil }
         isSaving = true
@@ -80,16 +80,18 @@ final class MemberNutritionSetupViewModel: ObservableObject {
                 effectiveFrom: Date(),
                 isActive: true
             )
-            _ = try await setupUseCase.saveModuleSetting(
-                memberID: member.id,
-                moduleCode: MemberSetupModule.nutrition.rawValue,
-                isEnabled: true,
-                isCompleted: true,
-                displayOrder: MemberSetupModule.nutrition.displayOrder,
-                summaryText: summaryText(for: savedGoal),
-                detailData: detailData,
-                completedAt: Date()
-            )
+            if markModuleCompleted {
+                _ = try await setupUseCase.saveModuleSetting(
+                    memberID: member.id,
+                    moduleCode: MemberSetupModule.nutrition.rawValue,
+                    isEnabled: true,
+                    isCompleted: true,
+                    displayOrder: MemberSetupModule.nutrition.displayOrder,
+                    summaryText: summaryText(for: savedGoal),
+                    detailData: detailData,
+                    completedAt: Date()
+                )
+            }
             return summaryText(for: savedGoal)
         } catch {
             errorMessage = error.localizedDescription

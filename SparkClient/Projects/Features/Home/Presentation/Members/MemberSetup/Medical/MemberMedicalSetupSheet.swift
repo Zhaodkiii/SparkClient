@@ -6,15 +6,20 @@ struct MemberMedicalSetupSheetView: View {
     @State private var path: [MedicalGuideRoute] = []
     @State private var showReportUpload = false
     @State private var occupationSearchText = ""
+    @State private var didApplyEntryRoute = false
     let homeDependencies: HomeFeatureDependencies?
+    let entryMode: MedicalSetupEntryMode
     let onCompleted: (String) -> Void
+    let onSectionCompleted: (MedicalSetupEntryMode, String) -> Void
 
     init(
         member: Member?,
         medicalQueryAPI: SparkMedicalQueryAPI,
         setupUseCase: MemberModuleSetupUseCase,
         homeDependencies: HomeFeatureDependencies? = nil,
-        onCompleted: @escaping (String) -> Void
+        entryMode: MedicalSetupEntryMode = .full,
+        onCompleted: @escaping (String) -> Void,
+        onSectionCompleted: @escaping (MedicalSetupEntryMode, String) -> Void = { _, _ in }
     ) {
         _viewModel = StateObject(
             wrappedValue: MemberMedicalSetupViewModel(
@@ -25,7 +30,13 @@ struct MemberMedicalSetupSheetView: View {
             )
         )
         self.homeDependencies = homeDependencies
+        self.entryMode = entryMode
         self.onCompleted = onCompleted
+        self.onSectionCompleted = onSectionCompleted
+    }
+
+    private var isSectionMode: Bool {
+        entryMode.isSectionMode
     }
 
     var body: some View {
@@ -99,6 +110,9 @@ struct MemberMedicalSetupSheetView: View {
         .task {
             await viewModel.loadIfNeeded()
         }
+        .onAppear {
+            applyEntryRouteIfNeeded()
+        }
         .fullScreenCover(isPresented: $showReportUpload) {
             if let homeDependencies {
                 CompatibleNavigationContainer {
@@ -126,7 +140,13 @@ struct MemberMedicalSetupSheetView: View {
             primaryTitle: "开始",
             secondaryTitle: "稍后在设置中完善",
             onStart: { nextVisible(after: .intro) },
-            onLater: { path = [.history] },
+            onLater: {
+                if isSectionMode {
+                    dismiss()
+                } else {
+                    path = [.history]
+                }
+            },
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -437,17 +457,17 @@ struct MemberMedicalSetupSheetView: View {
             step: 8,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "完成",
+            primaryTitle: isSectionMode && entryMode == .basicProfile ? "完成" : "完成",
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.history)
+                    proceedFromSectionSummary(.basicSummary, fullFlowNext: .history)
                 }
             },
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.history)
+                    proceedFromSectionSummary(.basicSummary, fullFlowNext: .history)
                 }
             }
         ) {
@@ -536,7 +556,13 @@ struct MemberMedicalSetupSheetView: View {
             primaryTitle: "开始",
             secondaryTitle: "稍后在设置中完善",
             onStart: { nextVisibleHistory(after: .history) },
-            onLater: { path.append(.lifestyle) },
+            onLater: {
+                if isSectionMode {
+                    dismiss()
+                } else {
+                    path.append(.lifestyle)
+                }
+            },
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -879,17 +905,17 @@ struct MemberMedicalSetupSheetView: View {
             step: 16,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "完成",
+            primaryTitle: isSectionMode && entryMode == .healthHistory ? "完成" : "完成",
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.lifestyle)
+                    proceedFromSectionSummary(.historySummary, fullFlowNext: .lifestyle)
                 }
             },
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.lifestyle)
+                    proceedFromSectionSummary(.historySummary, fullFlowNext: .lifestyle)
                 }
             }
         ) {
@@ -925,7 +951,13 @@ struct MemberMedicalSetupSheetView: View {
             primaryTitle: "开始",
             secondaryTitle: "稍后在设置中完善",
             onStart: { nextVisibleLifestyle(after: .lifestyle) },
-            onLater: { path.append(.examArchiveIntro) },
+            onLater: {
+                if isSectionMode {
+                    dismiss()
+                } else {
+                    path.append(.examArchiveIntro)
+                }
+            },
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -1135,17 +1167,17 @@ struct MemberMedicalSetupSheetView: View {
             step: 22,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
+            primaryTitle: isSectionMode && entryMode == .lifestyle ? "完成" : "下一步",
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.examArchiveIntro)
+                    proceedFromSectionSummary(.lifestyleSummary, fullFlowNext: .examArchiveIntro)
                 }
             },
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.examArchiveIntro)
+                    proceedFromSectionSummary(.lifestyleSummary, fullFlowNext: .examArchiveIntro)
                 }
             }
         ) {
@@ -1178,7 +1210,13 @@ struct MemberMedicalSetupSheetView: View {
             primaryTitle: "开始",
             secondaryTitle: "稍后在设置中完善",
             onStart: { nextVisibleExam(after: .examArchiveIntro) },
-            onLater: { path.append(.examPlan) },
+            onLater: {
+                if isSectionMode {
+                    dismiss()
+                } else {
+                    path.append(.examPlan)
+                }
+            },
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -1293,17 +1331,17 @@ struct MemberMedicalSetupSheetView: View {
             step: 25,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
+            primaryTitle: isSectionMode && entryMode == .examArchive ? "完成" : "下一步",
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.riskAssessment)
+                    proceedFromSectionSummary(.examArchiveSummary, fullFlowNext: .riskAssessment)
                 }
             },
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    path.append(.riskAssessment)
+                    proceedFromSectionSummary(.examArchiveSummary, fullFlowNext: .riskAssessment)
                 }
             }
         ) {
@@ -1421,13 +1459,21 @@ struct MemberMedicalSetupSheetView: View {
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
-                    advance(from: .riskAssessment)
+                    if isSectionMode && entryMode == .riskAssessment {
+                        finishCurrentSection()
+                    } else {
+                        advance(from: .riskAssessment)
+                    }
                 }
             },
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    advance(from: .riskAssessment)
+                    if isSectionMode && entryMode == .riskAssessment {
+                        finishCurrentSection()
+                    } else {
+                        advance(from: .riskAssessment)
+                    }
                 }
             }
         ) {
@@ -1567,6 +1613,71 @@ struct MemberMedicalSetupSheetView: View {
         .joined(separator: " · ")
     }
 
+    private func applyEntryRouteIfNeeded() {
+        guard didApplyEntryRoute == false else { return }
+        didApplyEntryRoute = true
+        guard isSectionMode else { return }
+        switch entryMode {
+        case .full, .basicProfile:
+            break
+        case .healthHistory:
+            path = [.history]
+        case .lifestyle:
+            path = [.lifestyle]
+        case .examArchive:
+            path = [.examArchiveIntro]
+        case .riskAssessment:
+            path = [.riskAssessment]
+        }
+    }
+
+    private func sectionSummary(for mode: MedicalSetupEntryMode) -> String {
+        switch mode {
+        case .full:
+            return summaryText
+        case .basicProfile:
+            return viewModel.basicInfoSummaryText
+        case .healthHistory:
+            return viewModel.historySummary
+        case .lifestyle:
+            return viewModel.lifestyleSummary
+        case .examArchive:
+            return viewModel.examArchiveSummary
+        case .riskAssessment:
+            return viewModel.riskAssessmentSummary
+        }
+    }
+
+    private func isTerminalRoute(_ route: MedicalGuideRoute) -> Bool {
+        switch entryMode {
+        case .full:
+            return false
+        case .basicProfile:
+            return route == .basicSummary
+        case .healthHistory:
+            return route == .historySummary
+        case .lifestyle:
+            return route == .lifestyleSummary
+        case .examArchive:
+            return route == .examArchiveSummary
+        case .riskAssessment:
+            return route == .riskAssessment
+        }
+    }
+
+    private func finishCurrentSection() {
+        onSectionCompleted(entryMode, sectionSummary(for: entryMode))
+        dismiss()
+    }
+
+    private func proceedFromSectionSummary(_ route: MedicalGuideRoute, fullFlowNext: MedicalGuideRoute) {
+        if isSectionMode && isTerminalRoute(route) {
+            finishCurrentSection()
+        } else {
+            path.append(fullFlowNext)
+        }
+    }
+
     private var birthDateBinding: Binding<Date> {
         Binding(
             get: { viewModel.birthDate ?? Date() },
@@ -1703,7 +1814,11 @@ struct MemberMedicalSetupSheetView: View {
         case .sedentary:
             nextVisible(after: .sedentary)
         case .basicSummary:
-            path.append(.history)
+            if isSectionMode && entryMode == .basicProfile {
+                finishCurrentSection()
+            } else {
+                path.append(.history)
+            }
         case .history:
             nextVisibleHistory(after: .history)
         case .chronicConditions:
@@ -1719,7 +1834,11 @@ struct MemberMedicalSetupSheetView: View {
         case .symptomFollowUp:
             nextVisibleHistory(after: .symptomFollowUp)
         case .historySummary:
-            path.append(.lifestyle)
+            if isSectionMode && entryMode == .healthHistory {
+                finishCurrentSection()
+            } else {
+                path.append(.lifestyle)
+            }
         case .lifestyle:
             nextVisibleLifestyle(after: .lifestyle)
         case .smoking:
@@ -1731,13 +1850,21 @@ struct MemberMedicalSetupSheetView: View {
         case .sleep:
             nextVisibleLifestyle(after: .sleep)
         case .lifestyleSummary:
-            path.append(.examArchiveIntro)
+            if isSectionMode && entryMode == .lifestyle {
+                finishCurrentSection()
+            } else {
+                path.append(.examArchiveIntro)
+            }
         case .examArchiveIntro:
             nextVisibleExam(after: .examArchiveIntro)
         case .examArchive:
             proceedAfterExamArchiveStep()
         case .examArchiveSummary:
-            path.append(.riskAssessment)
+            if isSectionMode && entryMode == .examArchive {
+                finishCurrentSection()
+            } else {
+                path.append(.riskAssessment)
+            }
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
@@ -1745,7 +1872,11 @@ struct MemberMedicalSetupSheetView: View {
         case .examPlan:
             path.append(.examArchiveSummary)
         case .riskAssessment:
-            path.append(.summary)
+            if isSectionMode && entryMode == .riskAssessment {
+                finishCurrentSection()
+            } else {
+                path.append(.summary)
+            }
         case .summary:
             break
         }
@@ -1822,7 +1953,11 @@ struct MemberMedicalSetupSheetView: View {
         case .sedentary:
             path.append(.basicSummary)
         case .basicSummary:
-            path.append(.history)
+            if isSectionMode && entryMode == .basicProfile {
+                finishCurrentSection()
+            } else {
+                path.append(.history)
+            }
         case .history:
             nextVisibleHistory(after: .history)
         case .chronicConditions:
@@ -1838,7 +1973,11 @@ struct MemberMedicalSetupSheetView: View {
         case .symptomFollowUp:
             nextVisibleHistory(after: .symptomFollowUp)
         case .historySummary:
-            path.append(.lifestyle)
+            if isSectionMode && entryMode == .healthHistory {
+                finishCurrentSection()
+            } else {
+                path.append(.lifestyle)
+            }
         case .lifestyle:
             nextVisibleLifestyle(after: .lifestyle)
         case .smoking:
@@ -1850,13 +1989,21 @@ struct MemberMedicalSetupSheetView: View {
         case .sleep:
             nextVisibleLifestyle(after: .sleep)
         case .lifestyleSummary:
-            path.append(.examArchiveIntro)
+            if isSectionMode && entryMode == .lifestyle {
+                finishCurrentSection()
+            } else {
+                path.append(.examArchiveIntro)
+            }
         case .examArchiveIntro:
             nextVisibleExam(after: .examArchiveIntro)
         case .examArchive:
             proceedAfterExamArchiveStep()
         case .examArchiveSummary:
-            path.append(.riskAssessment)
+            if isSectionMode && entryMode == .examArchive {
+                finishCurrentSection()
+            } else {
+                path.append(.riskAssessment)
+            }
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
@@ -1866,7 +2013,11 @@ struct MemberMedicalSetupSheetView: View {
         case .symptomFollowUp:
             path.append(.historySummary)
         case .riskAssessment:
-            path.append(.summary)
+            if isSectionMode && entryMode == .riskAssessment {
+                finishCurrentSection()
+            } else {
+                path.append(.summary)
+            }
         case .summary:
             break
         }
@@ -1899,7 +2050,11 @@ struct MemberMedicalSetupSheetView: View {
         case .examArchive:
             proceedAfterExamArchiveStep()
         case .examArchiveSummary:
-            path.append(.riskAssessment)
+            if isSectionMode && entryMode == .examArchive {
+                finishCurrentSection()
+            } else {
+                path.append(.riskAssessment)
+            }
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:

@@ -61,26 +61,62 @@ struct MemberSetupFlowView: View {
                         }
                     }
                 )
+            case .medicalSummary:
+                if let member = viewModel.createdMember {
+                    MemberMedicalModuleSummaryView(member: member, flowViewModel: viewModel)
+                } else {
+                    Text("成员信息缺失")
+                        .foregroundStyle(.secondary)
+                }
+            case .nutritionSummary:
+                if let member = viewModel.createdMember {
+                    MemberNutritionModuleSummaryView(member: member, flowViewModel: viewModel)
+                } else {
+                    Text("成员信息缺失")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .sheet(item: $viewModel.activeSheet) { route in
             switch route {
-            case .medical:
+            case .medical(let entryMode):
                 MemberMedicalSetupSheetView(
                     member: viewModel.createdMember,
                     medicalQueryAPI: viewModel.homeDependencies.medicalQueryAPI,
                     setupUseCase: viewModel.homeDependencies.memberModuleSetupUseCase,
-                    homeDependencies: viewModel.homeDependencies
+                    homeDependencies: viewModel.homeDependencies,
+                    entryMode: entryMode
                 ) { summary in
-                    Task { await viewModel.markModuleCompleted(.medical, summaryText: summary) }
+                    Task {
+                        if entryMode == .full {
+                            await viewModel.markModuleCompleted(.medical, summaryText: summary)
+                        }
+                    }
+                } onSectionCompleted: { mode, summary in
+                    Task {
+                        if let sectionCode = mode.sectionCode {
+                            await viewModel.markSectionCompleted(.medical, sectionCode: sectionCode, summaryText: summary)
+                        }
+                    }
                 }
-            case .nutrition:
+            case .nutrition(let entryMode):
                 MemberNutritionSetupSheetView(
                     member: viewModel.createdMember,
                     goalUseCase: viewModel.homeDependencies.nutritionDependencies.goalUseCase,
-                    setupUseCase: viewModel.homeDependencies.memberModuleSetupUseCase
+                    setupUseCase: viewModel.homeDependencies.memberModuleSetupUseCase,
+                    entryMode: entryMode
                 ) { summary in
-                    Task { await viewModel.markModuleCompleted(.nutrition, summaryText: summary) }
+                    Task {
+                        if entryMode == .full {
+                            await viewModel.markModuleCompleted(.nutrition, summaryText: summary)
+                        }
+                    }
+                } onSectionCompleted: { mode, summary in
+                    Task {
+                        if let sectionCode = mode.sectionCode {
+                            await viewModel.markSectionCompleted(.nutrition, sectionCode: sectionCode, summaryText: summary)
+                        }
+                    }
                 }
             case .lifestyle:
                 MemberLifestyleSetupSheetView(
