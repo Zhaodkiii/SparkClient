@@ -711,46 +711,36 @@ struct MemberMedicalSetupSheetView: View {
     private var surgeryHistoryStep: some View {
         MedicalGuideStepShell(
             title: "手术史",
-            subtitle: "为什么要问？\n手术史会影响长期随访、复查和部分体检项目建议。",
+            subtitle: "了解您的过往手术史，有助于我们为您排查禁忌项目，并制定更安全的体检方案与长期随访计划。",
             step: 12,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: historyPrimaryTitle(after: .surgeryHistory),
+            primaryTitle: surgeryHistoryPrimaryTitle,
             primaryEnabled: viewModel.canAdvanceFromSurgeryHistory,
             onSkip: { nextVisibleHistory(after: .surgeryHistory) },
             onNext: { nextVisibleHistory(after: .surgeryHistory) }
         ) {
-            VStack(spacing: 14) {
-                questionCard(title: "是否做过手术？") {
-                    MedicalPickerChipRow(
-                        items: historyDisclosureItems,
-                        selection: Binding(
-                            get: { viewModel.surgeryStatus.rawValue },
-                            set: { rawValue in
-                                let status = MedicalGuideDisclosureStatus(rawValue: rawValue) ?? .unknown
-                                viewModel.surgeryStatus = status
-                                viewModel.hasPrefilledSurgeryStatus = true
-                                if status != .have {
-                                    viewModel.surgeryHistory = ""
-                                    viewModel.surgeryTime = ""
-                                }
-                            }
-                        )
-                    )
-                }
-
-                if viewModel.surgeryStatus == .have {
-                    questionCard(title: "手术名称") {
-                        TextField("未填写", text: $viewModel.surgeryHistory)
-                            .textFieldStyle(.roundedBorder)
+            MemberMedicalSurgeryHistoryStepView(
+                viewModel: viewModel,
+                surgeryStatus: Binding(
+                    get: { viewModel.surgeryStatus },
+                    set: { newValue in
+                        viewModel.surgeryStatus = newValue
+                        if newValue != .unknown {
+                            viewModel.hasPrefilledSurgeryStatus = true
+                        }
                     }
+                )
+            )
+        }
+    }
 
-                    questionCard(title: "手术时间") {
-                        TextField("未填写", text: $viewModel.surgeryTime)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
-            }
+    private var surgeryHistoryPrimaryTitle: String {
+        switch viewModel.surgeryStatus {
+        case .none, .have:
+            return "完成记录"
+        case .unknown:
+            return historyPrimaryTitle(after: .surgeryHistory)
         }
     }
 
@@ -758,7 +748,7 @@ struct MemberMedicalSetupSheetView: View {
     private var allergyHistoryStep: some View {
         MedicalGuideStepShell(
             title: "过敏史",
-            subtitle: "为什么要问？\n过敏史是用药安全和就医资料中很重要的信息。",
+            subtitle: "了解您的过敏史，是保障用药安全、规避过敏原以及提供智能就医指导中最核心的防线。",
             step: 13,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -767,54 +757,27 @@ struct MemberMedicalSetupSheetView: View {
             onSkip: { nextVisibleHistory(after: .allergyHistory) },
             onNext: { nextVisibleHistory(after: .allergyHistory) }
         ) {
-            VStack(spacing: 14) {
-                questionCard(title: "是否有过过敏经历？") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("包括药物过敏、食物过敏、季节性过敏等。")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        MedicalPickerChipRow(
-                            items: historyDisclosureItems,
-                            selection: Binding(
-                                get: { viewModel.allergyStatus.rawValue },
-                                set: { rawValue in
-                                    let status = MedicalGuideDisclosureStatus(rawValue: rawValue) ?? .unknown
-                                    viewModel.allergyStatus = status
-                                    viewModel.hasPrefilledAllergyStatus = true
-                                    if status != .have {
-                                        viewModel.allergies.removeAll()
-                                        viewModel.allergyHistory = ""
-                                    }
-                                }
-                            )
-                        )
+            MemberMedicalAllergyHistoryStepView(
+                status: Binding(
+                    get: { viewModel.allergyStatus },
+                    set: { newValue in
+                        viewModel.allergyStatus = newValue
+                        if newValue != .unknown {
+                            viewModel.hasPrefilledAllergyStatus = true
+                        }
                     }
-                }
-
-                if viewModel.allergyStatus == .have {
-                    questionCard(title: "过敏类型") {
-                        MedicalPickerChipGrid(
-                            items: ["药物过敏", "食物过敏", "季节性过敏", "其他"],
-                            selections: $viewModel.allergies
-                        )
-                    }
-
-                    questionCard(title: "过敏备注") {
-                        TextField("可补充具体过敏原、反应或其它说明", text: $viewModel.allergyHistory, axis: .vertical)
-                            .lineLimit(2, reservesSpace: true)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                }
-            }
+                ),
+                allergies: $viewModel.allergies,
+                allergyDetails: $viewModel.allergyDetails,
+                allergyHistory: $viewModel.allergyHistory
+            )
         }
     }
 
     private var familyHistoryStep: some View {
         MedicalGuideStepShell(
             title: "家族病史",
-            subtitle: "家族病史会影响慢病和癌症筛查推荐，例如肠癌、乳腺癌等。",
+            subtitle: "了解您直系亲属的过往病史，有助于我们为您识别潜在的遗传风险，并在体检中为您针对性地推荐慢病与癌症筛查项目。",
             step: 14,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -823,44 +786,23 @@ struct MemberMedicalSetupSheetView: View {
             onSkip: { nextVisibleHistory(after: .familyHistory) },
             onNext: { nextVisibleHistory(after: .familyHistory) }
         ) {
-            VStack(spacing: 14) {
-                questionCard(title: "家族里是否有人有相关病史？") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("重点关注直系亲属的慢病和肿瘤病史。")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        MedicalPickerChipRow(
-                            items: historyDisclosureItems,
-                            selection: Binding(
-                                get: { viewModel.familyHistoryStatus.rawValue },
-                                set: { rawValue in
-                                    let status = MedicalGuideDisclosureStatus(rawValue: rawValue) ?? .unknown
-                                    viewModel.familyHistoryStatus = status
-                                    viewModel.hasPrefilledFamilyHistoryStatus = true
-                                    if status != .have {
-                                        viewModel.familyHistory.removeAll()
-                                    }
-                                }
-                            )
-                        )
+            MemberMedicalFamilyHistoryStepView(
+                status: Binding(
+                    get: { viewModel.familyHistoryStatus },
+                    set: { newValue in
+                        viewModel.familyHistoryStatus = newValue
+                        if newValue != .unknown {
+                            viewModel.hasPrefilledFamilyHistoryStatus = true
+                        }
+                        if newValue != .have {
+                            viewModel.familyHistory.removeAll()
+                            viewModel.familyHistoryDetails.removeAll()
+                        }
                     }
-                }
-
-                if viewModel.familyHistoryStatus == .have {
-                    questionCard(title: "直系亲属病史") {
-                        MedicalPickerChipGrid(
-                            items: [
-                                "高血压", "糖尿病", "脑卒中", "心脏病",
-                                "肺癌", "肝癌", "胃癌", "肠癌",
-                                "乳腺癌", "前列腺癌", "甲状腺疾病", "其他"
-                            ],
-                            selections: $viewModel.familyHistory
-                        )
-                    }
-                }
-            }
+                ),
+                familyHistory: $viewModel.familyHistory,
+                familyHistoryDetails: $viewModel.familyHistoryDetails
+            )
         }
     }
 
@@ -2528,6 +2470,23 @@ private struct MedicalGuideTextRow: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct MedicalGuideFormTextFieldRow: View {
+    let systemName: String
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: systemName)
+                .font(.subheadline.weight(.semibold))
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.roundedBorder)
+        }
+        .padding(.vertical, 8)
     }
 }
 

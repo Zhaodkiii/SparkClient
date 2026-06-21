@@ -17,6 +17,14 @@ struct MemberModuleSetupUseCase: Sendable {
     /// - Parameters:
     ///   - memberID: 家庭成员ID
     ///   - chronicConditions: 慢性病列表
+    ///   - allergies: 过敏源列表
+    ///   - allergyDetails: 过敏明细
+    ///   - allergyHistory: 过敏史补充说明
+    ///   - familyHistory: 家族病史记录
+    ///   - smokingProfile: 吸烟档案
+    ///   - drinkingProfile: 饮酒档案
+    ///   - exerciseProfile: 运动档案
+    ///   - sleepHours: 平均睡眠时长（小时）
     ///   - examFocus: 重点体检项目
     ///   - symptomFollowUpFocus: 需要持续随访的症状
     ///   - notes: 其他综合备注
@@ -26,6 +34,14 @@ struct MemberModuleSetupUseCase: Sendable {
     func saveMedicalProfile(
         memberID: Int,
         chronicConditions: [String],
+        allergies: [String],
+        allergyDetails: [String: SparkMedicalSyncAPI.RemoteAllergyDetail],
+        allergyHistory: String,
+        familyHistory: [SparkMedicalSyncAPI.RemoteFamilyHistoryRecord],
+        smokingProfile: SparkMedicalSyncAPI.RemoteSmokingProfile,
+        drinkingProfile: SparkMedicalSyncAPI.RemoteDrinkingProfile,
+        exerciseProfile: SparkMedicalSyncAPI.RemoteExerciseProfile,
+        sleepHours: Double?,
         examFocus: [String],
         symptomFollowUpFocus: [String],
         notes: String,
@@ -37,6 +53,14 @@ struct MemberModuleSetupUseCase: Sendable {
         let payload = SparkMedicalWorkflowAPI.MemberMedicalProfileSavePayload(
             member: memberID,
             chronicConditions: chronicConditions,
+            allergies: allergies,
+            allergyDetails: allergyDetails,
+            allergyHistory: allergyHistory,
+            familyHistory: familyHistory,
+            smokingProfile: smokingProfile,
+            drinkingProfile: drinkingProfile,
+            exerciseProfile: exerciseProfile,
+            sleepHours: sleepHours,
             examFocus: examFocus,
             symptomFollowUpFocus: symptomFollowUpFocus,
             notes: notes,

@@ -178,6 +178,7 @@ struct SparkMedicalWorkflowAPI {
         let incisionLevel: String?
         let asaClass: String?
         let notes: String?
+        let extra: [String: String]
         let fileIds: [Int]
 
     }
@@ -199,6 +200,14 @@ struct SparkMedicalWorkflowAPI {
     struct MemberMedicalProfileSavePayload: Encodable, Sendable {
         let member: Int
         let chronicConditions: [String]
+        let allergies: [String]
+        let allergyDetails: [String: SparkMedicalSyncAPI.RemoteAllergyDetail]
+        let allergyHistory: String
+        let familyHistory: [SparkMedicalSyncAPI.RemoteFamilyHistoryRecord]
+        let smokingProfile: SparkMedicalSyncAPI.RemoteSmokingProfile
+        let drinkingProfile: SparkMedicalSyncAPI.RemoteDrinkingProfile
+        let exerciseProfile: SparkMedicalSyncAPI.RemoteExerciseProfile
+        let sleepHours: Double?
         let examFocus: [String]
         let symptomFollowUpFocus: [String]
         let notes: String
@@ -478,9 +487,41 @@ struct SparkMedicalWorkflowAPI {
         try await post(path: "/api/v1/medical/workflows/visits/create/", body: payload, decode: IDResponse.self).id
     }
 
-    /// 新建手术；成功返回记录 ID。
-    func createSurgery(_ payload: SurgeryCreatePayload) async throws -> Int {
-        try await post(path: "/api/v1/medical/workflows/surgeries/create/", body: payload, decode: IDResponse.self).id
+    /// 新建手术；成功返回手术明细与重算后的成员画像摘要。
+    func createSurgery(_ payload: SurgeryCreatePayload) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+        try await post(path: "/api/v1/medical/workflows/surgeries/create/", body: payload, decode: SparkMedicalSyncAPI.SurgeryMutationResponse.self)
+    }
+
+    /// 更新手术；成功返回手术明细与重算后的成员画像摘要。
+    func updateSurgery<B: Encodable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+        let q = kindQueryItems(.surgeries, extra: [])
+        return try await request(
+            method: .patch,
+            path: resourceItemPath(id: id),
+            queryItems: q,
+            body: .json(AnyEncodable(body)),
+            responseType: SparkMedicalSyncAPI.SurgeryMutationResponse.self,
+            allowETag: false,
+            serialKey: "medical.resource.update.surgeries.\(id)",
+            queuePriority: .high,
+            isIdempotent: false
+        )
+    }
+
+    /// 删除手术；成功返回删除结果与重算后的成员画像摘要。
+    func deleteSurgery(id: Int) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+        let q = kindQueryItems(.surgeries, extra: [])
+        let response = try await executeRaw(
+            method: .delete,
+            path: resourceItemPath(id: id),
+            queryItems: q,
+            body: nil,
+            allowETag: false,
+            serialKey: "medical.resource.delete.surgeries.\(id)",
+            queuePriority: .high,
+            isIdempotent: false
+        )
+        return try APIResponseDecoder.decodeWrappedData(SparkMedicalSyncAPI.SurgeryMutationResponse.self, from: response, decoder: .medicalAPI)
     }
 
     /// 新建随访；成功返回记录 ID。

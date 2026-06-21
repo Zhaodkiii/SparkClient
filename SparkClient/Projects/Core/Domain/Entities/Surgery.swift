@@ -4,7 +4,7 @@ import Foundation
 struct Surgery: Identifiable, Codable, Equatable, Sendable {
     let id: Int
     var memberID: Int
-    var medicalCaseID: Int
+    var medicalCaseID: Int?
     var procedureName: String
     var procedureCode: String
     var site: String
@@ -16,5 +16,5 @@ struct Surgery: Identifiable, Codable, Equatable, Sendable {
     var sourceSystemID: String
     var notes: String
     var extra: [String: String]
-    var updatedAt: Date
+    var updatedAt: Date?
 }

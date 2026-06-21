@@ -246,7 +246,7 @@ enum MedicalCaseTimelineEventBuilder {
 
         let surgeriesForCase = (completeData?.surgeries ?? []).filter { $0.medicalCase == item.id }
         for row in surgeriesForCase {
-            let rowDate = row.performedAt ?? row.updatedAt
+            let rowDate = row.performedAt ?? row.updatedAt ?? Date.distantPast
             events.append(
                 MedicalCaseTimelineEvent(
                     id: "surgery-\(row.id)",

@@ -52,8 +52,8 @@ final class DefaultMedicalRecordRepository: MedicalRecordRepository, @unchecked 
                     memberID: $0.member,
                     title: $0.procedureName,
                     summary: makeSurgerySummary($0.surgeon),
-                    occurredAt: $0.performedAt ?? $0.updatedAt,
-                    updatedAt: $0.updatedAt
+                    occurredAt: $0.performedAt ?? $0.updatedAt ?? Date.distantPast,
+                    updatedAt: $0.updatedAt ?? Date.distantPast
                 )
             }
         // 随访

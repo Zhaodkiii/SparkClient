@@ -172,16 +172,19 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var memberMedicationPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] = []
     @Published var medicationFocus: [SparkMedicalSyncAPI.RemoteMedicationFocusItem] = []
     @Published var isLoadingMemberMedications = false
-    @Published var surgeryHistory: String = ""
-    @Published var surgeryTime: String = ""
     @Published var surgeryStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var hasPrefilledSurgeryStatus: Bool = false
+    @Published var memberSurgeries: [SparkMedicalSyncAPI.RemoteSurgery] = []
+    @Published var surgeryFocus: [SparkMedicalSyncAPI.RemoteSurgeryFocusItem] = []
+    @Published var isLoadingMemberSurgeries = false
     @Published var allergyStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var allergies: [String]
+    @Published var allergyDetails: [String: MedicalGuideAllergyDetail] = [:]
     @Published var allergyHistory: String = ""
     @Published var hasPrefilledAllergyStatus: Bool = false
     @Published var familyHistoryStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var familyHistory: [String] = []
+    @Published var familyHistoryDetails: [String: MedicalGuideFamilyHistoryDetail] = [:]
     @Published var hasPrefilledFamilyHistoryStatus: Bool = false
     @Published var symptomFollowUpStatus: MedicalGuideDisclosureStatus = .unknown
     @Published var symptomFollowUpFocus: [String] = []
@@ -241,7 +244,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         homeDependencies: HomeFeatureDependencies? = nil
     ) {
         let initialChronicConditions = member?.chronicConditions ?? []
-        let initialAllergies = member?.allergies ?? []
 
         self.member = member
         self.medicalQueryAPI = medicalQueryAPI
@@ -253,9 +255,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         self.chronicConditionStatus = initialChronicConditions.isEmpty ? .unknown : .have
         self.chronicConditions = initialChronicConditions
         self.hasPrefilledChronicConditionStatus = initialChronicConditions.isEmpty == false
-        self.allergyStatus = initialAllergies.isEmpty ? .unknown : .have
-        self.allergies = initialAllergies
-        self.hasPrefilledAllergyStatus = initialAllergies.isEmpty == false
+        self.allergies = []
         self.keyIndicatorRows = MedicalGuideKeyIndicatorDraft.defaultRows
         seedDefaultBodyMetricsIfNeeded()
         syncDerivedValues()
@@ -362,7 +362,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var hasHistory: Bool {
-        chronicConditions.isEmpty == false || medicationFocus.isEmpty == false || memberMedicationPlans.isEmpty == false || surgeryHistory.isEmpty == false || surgeryTime.isEmpty == false || allergies.isEmpty == false || allergyHistory.isEmpty == false
+        chronicConditions.isEmpty == false || medicationFocus.isEmpty == false || memberMedicationPlans.isEmpty == false || memberSurgeries.isEmpty == false || allergies.isEmpty == false || allergyHistory.isEmpty == false
     }
 
     var shouldSkipChronicConditionsStep: Bool {
@@ -378,8 +378,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     var shouldSkipSurgeryHistoryStep: Bool {
         surgeryStatus != .unknown
-            || surgeryHistory.isEmpty == false
-            || surgeryTime.isEmpty == false
+            || surgeryFocus.isEmpty == false
+            || memberSurgeries.isEmpty == false
     }
 
     var shouldSkipAllergyHistoryStep: Bool {
@@ -581,17 +581,210 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         hasPrefilledLongTermMedicationStatus = true
     }
 
+    func refreshMemberSurgeriesIfNeeded(force: Bool = false) async {
+        guard let member else { return }
+        if force == false, isLoadingMemberSurgeries { return }
+        isLoadingMemberSurgeries = true
+        defer { isLoadingMemberSurgeries = false }
+        do {
+            memberSurgeries = try await medicalQueryAPI.listSurgeries(memberID: member.id)
+            if let profile = try await medicalQueryAPI.listMemberMedicalProfiles(memberID: member.id).first {
+                ingestProfileSurgeryFocus(profile)
+            } else {
+                surgeryFocus = []
+            }
+            if memberSurgeries.isEmpty == false {
+                surgeryStatus = .have
+                hasPrefilledSurgeryStatus = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func applySurgeryMutation(
+        _ response: SparkMedicalSyncAPI.SurgeryMutationResponse,
+        removedSurgeryID: Int? = nil
+    ) {
+        if response.deleted == true {
+            if let removedSurgeryID {
+                memberSurgeries.removeAll { $0.id == removedSurgeryID }
+            } else if let profile = response.memberProfile {
+                let survivingIDs = Set(profile.surgeryFocus.map(\.sourceSurgeryId))
+                memberSurgeries.removeAll { !survivingIDs.contains($0.id) }
+            }
+        } else if let surgery = response.surgery {
+            ingestSavedSurgeries([surgery])
+        }
+        if let profile = response.memberProfile {
+            ingestProfileSurgeryFocus(profile)
+        } else if response.deleted == true {
+            surgeryFocus = []
+        }
+        if memberSurgeries.isEmpty, response.deleted == true {
+            hasPrefilledSurgeryStatus = true
+        }
+    }
+
+    func ingestProfileSurgeryFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        surgeryFocus = profile.surgeryFocus
+        if surgeryFocus.isEmpty == false {
+            surgeryStatus = .have
+            hasPrefilledSurgeryStatus = true
+        }
+    }
+
+    func ingestProfileAllergyFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        if profile.allergies.isEmpty == false {
+            allergies = profile.allergies
+            allergyStatus = .have
+            hasPrefilledAllergyStatus = true
+        }
+        allergyDetails = Self.allergyDetails(from: profile.allergyDetails)
+        if profile.allergyHistory.isEmpty == false {
+            allergyHistory = profile.allergyHistory
+        }
+    }
+
+    func ingestProfileFamilyHistoryFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        guard profile.familyHistory.isEmpty == false else { return }
+        familyHistory = profile.familyHistory.map(\.disease).filter { $0.isEmpty == false }
+        familyHistoryDetails = Dictionary(
+            uniqueKeysWithValues: profile.familyHistory.map { record in
+                (
+                    record.disease,
+                    MedicalGuideFamilyHistoryDetail(
+                        relative: record.relative,
+                        category: record.category,
+                        diagnosedAge: record.diagnosedAge,
+                        notes: record.notes
+                    )
+                )
+            }
+        )
+        if familyHistory.isEmpty == false {
+            familyHistoryStatus = .have
+            hasPrefilledFamilyHistoryStatus = true
+        }
+    }
+
+    func ingestProfileLifestyleFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        if let status = MedicalGuideSmokingStatus(rawValue: profile.smokingProfile.status) {
+            smokingStatus = status
+            hasPrefilledSmokingStatus = true
+        }
+        smokingCount = profile.smokingProfile.count
+        smokingHistoryDuration = profile.smokingProfile.historyDuration
+        smokingQuitDuration = profile.smokingProfile.quitDuration
+
+        if let status = MedicalGuideDrinkingStatus(rawValue: profile.drinkingProfile.status) {
+            drinkingStatus = status
+            hasPrefilledDrinkingStatus = true
+        }
+        drinkingCount = profile.drinkingProfile.count
+        drinkingHistoryDuration = profile.drinkingProfile.historyDuration
+        drinkingQuitDuration = profile.drinkingProfile.quitDuration
+        drinkingTypes = profile.drinkingProfile.types
+
+        if let frequency = MedicalGuideExerciseFrequency(rawValue: profile.exerciseProfile.frequency) {
+            exerciseFrequency = frequency
+            hasPrefilledExerciseFrequency = true
+        }
+        if let intensity = MedicalGuideExerciseIntensity(rawValue: profile.exerciseProfile.intensity) {
+            exerciseIntensity = intensity
+        }
+        exerciseTypes = profile.exerciseProfile.types
+        exerciseDurationMinutes = profile.exerciseProfile.durationMinutes
+
+        if let hours = profile.sleepHours {
+            sleepHours = hours
+            hasPrefilledSleepHours = true
+        }
+    }
+
+    private func profileAllergyDetailsPayload() -> [String: SparkMedicalSyncAPI.RemoteAllergyDetail] {
+        allergyDetails.mapValues { detail in
+            SparkMedicalSyncAPI.RemoteAllergyDetail(
+                category: detail.category,
+                severity: detail.severity,
+                reactions: detail.reactions,
+                notes: detail.notes
+            )
+        }
+    }
+
+    private func profileFamilyHistoryPayload() -> [SparkMedicalSyncAPI.RemoteFamilyHistoryRecord] {
+        familyHistory.map { disease in
+            let detail = familyHistoryDetails[disease] ?? MedicalGuideFamilyHistoryDetail()
+            return SparkMedicalSyncAPI.RemoteFamilyHistoryRecord(
+                disease: disease,
+                relative: detail.relative,
+                category: detail.category,
+                diagnosedAge: detail.diagnosedAge,
+                notes: detail.notes
+            )
+        }
+    }
+
+    private func profileSmokingPayload() -> SparkMedicalSyncAPI.RemoteSmokingProfile {
+        SparkMedicalSyncAPI.RemoteSmokingProfile(
+            status: smokingStatus.rawValue,
+            count: smokingCount,
+            historyDuration: smokingHistoryDuration,
+            quitDuration: smokingQuitDuration
+        )
+    }
+
+    private func profileDrinkingPayload() -> SparkMedicalSyncAPI.RemoteDrinkingProfile {
+        SparkMedicalSyncAPI.RemoteDrinkingProfile(
+            status: drinkingStatus.rawValue,
+            count: drinkingCount,
+            historyDuration: drinkingHistoryDuration,
+            quitDuration: drinkingQuitDuration,
+            types: drinkingTypes
+        )
+    }
+
+    private func profileExercisePayload() -> SparkMedicalSyncAPI.RemoteExerciseProfile {
+        SparkMedicalSyncAPI.RemoteExerciseProfile(
+            frequency: exerciseFrequency.rawValue,
+            intensity: exerciseIntensity.rawValue,
+            types: exerciseTypes,
+            durationMinutes: exerciseDurationMinutes
+        )
+    }
+
+    func ingestSavedSurgeries(_ saved: [SparkMedicalSyncAPI.RemoteSurgery]) {
+        guard saved.isEmpty == false else { return }
+        for surgery in saved {
+            if let index = memberSurgeries.firstIndex(where: { $0.id == surgery.id }) {
+                memberSurgeries[index] = surgery
+            } else {
+                memberSurgeries.insert(surgery, at: 0)
+            }
+        }
+        surgeryStatus = .have
+        hasPrefilledSurgeryStatus = true
+    }
+
     var surgerySummary: String {
         switch surgeryStatus {
         case .none:
             return "无手术史"
         case .have:
-            if surgeryHistory.isEmpty == false {
-                return surgeryTime.isEmpty ? surgeryHistory : "\(surgeryHistory) · \(surgeryTime)"
+            let focusSummary = SurgeryFormSupport.profileSummary(from: surgeryFocus)
+            if focusSummary != "无手术史" {
+                return focusSummary
             }
-            return surgeryTime.isEmpty ? "未填写" : surgeryTime
-        case .unknown:
+            if memberSurgeries.isEmpty == false {
+                return memberSurgeries.map { SurgeryFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
+            }
             return "未填写"
+        case .unknown:
+            if surgeryFocus.isEmpty == false {
+                return SurgeryFormSupport.profileSummary(from: surgeryFocus)
+            }
+            return memberSurgeries.isEmpty ? "未填写" : memberSurgeries.map { SurgeryFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
         }
     }
 
@@ -601,12 +794,16 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return "无过敏经历"
         case .have:
             if allergies.isEmpty == false {
-                return allergies.joined(separator: "、")
+                return allergies
+                    .map { AllergyRecordFormSupport.summaryLine(name: $0, detail: allergyDetails[$0]) }
+                    .joined(separator: "、")
             }
             return allergyHistory.isEmpty ? "未填写" : "过敏备注已填"
         case .unknown:
             if allergies.isEmpty == false {
-                return allergies.joined(separator: "、")
+                return allergies
+                    .map { AllergyRecordFormSupport.summaryLine(name: $0, detail: allergyDetails[$0]) }
+                    .joined(separator: "、")
             }
             return allergyHistory.isEmpty ? "未填写" : "过敏备注已填"
         }
@@ -617,9 +814,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         case .none:
             return "无家族病史"
         case .have:
-            return familyHistory.isEmpty ? "未填写" : familyHistory.joined(separator: "、")
+            return familyHistory.isEmpty ? "未填写" : familyHistory
+                .map { FamilyHistoryRecordFormSupport.summaryLine(name: $0, detail: familyHistoryDetails[$0]) }
+                .joined(separator: "、")
         case .unknown:
-            return familyHistory.isEmpty ? "未填写" : familyHistory.joined(separator: "、")
+            return familyHistory.isEmpty ? "未填写" : familyHistory
+                .map { FamilyHistoryRecordFormSupport.summaryLine(name: $0, detail: familyHistoryDetails[$0]) }
+                .joined(separator: "、")
         }
     }
 
@@ -639,14 +840,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var canAdvanceFromSurgeryHistory: Bool {
-        switch surgeryStatus {
-        case .none:
-            return true
-        case .have:
-            return surgeryHistory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        case .unknown:
-            return false
-        }
+        surgeryStatus != .unknown
     }
 
     var canAdvanceFromAllergyHistory: Bool {
@@ -875,6 +1069,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             }
             await refreshMemberSymptomsIfNeeded()
             await refreshMemberMedicationPlansIfNeeded()
+            await refreshMemberSurgeriesIfNeeded()
             if let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
                 do {
                     let goalState = try await goalUseCase.loadGoalState(memberID: member.id)
@@ -947,6 +1142,14 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         let saved = try await setupUseCase.saveMedicalProfile(
             memberID: member.id,
             chronicConditions: chronicConditions,
+            allergies: allergies,
+            allergyDetails: profileAllergyDetailsPayload(),
+            allergyHistory: allergyHistory,
+            familyHistory: profileFamilyHistoryPayload(),
+            smokingProfile: profileSmokingPayload(),
+            drinkingProfile: profileDrinkingPayload(),
+            exerciseProfile: profileExercisePayload(),
+            sleepHours: sleepHours,
             examFocus: keyIndicatorFocusTags,
             symptomFollowUpFocus: symptomFollowUpFocus,
             notes: profileNotes,
@@ -1035,13 +1238,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if gender == "unknown" {
             gender = member.gender
         }
-        if allergies.isEmpty {
-            allergies = member.allergies
-            if member.allergies.isEmpty == false {
-                allergyStatus = .have
-                hasPrefilledAllergyStatus = true
-            }
-        }
     }
 
     private func apply(profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
@@ -1050,8 +1246,14 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             chronicConditionStatus = .have
             hasPrefilledChronicConditionStatus = true
         }
+        ingestProfileAllergyFocus(profile)
+        ingestProfileFamilyHistoryFocus(profile)
+        ingestProfileLifestyleFocus(profile)
         if profile.medicationFocus.isEmpty == false {
             ingestProfileMedicationFocus(profile)
+        }
+        if profile.surgeryFocus.isEmpty == false {
+            ingestProfileSurgeryFocus(profile)
         }
         if profile.examFocus.isEmpty == false {
             keyIndicatorRows = mergeKeyIndicatorRows(from: profile.examFocus)
@@ -1127,14 +1329,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             sedentaryLevel = level
             hasPrefilledSedentaryLevel = true
         }
-        if let value = extra["surgery_history"], value.isEmpty == false {
-            surgeryHistory = value
-            hasPrefilledSurgeryStatus = true
-        }
-        if let value = extra["surgery_time"], value.isEmpty == false {
-            surgeryTime = value
-            hasPrefilledSurgeryStatus = true
-        }
         if let value = extra["surgery_status"], let status = MedicalGuideDisclosureStatus(rawValue: value) {
             surgeryStatus = status
             hasPrefilledSurgeryStatus = true
@@ -1146,14 +1340,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let value = extra["chronic_condition_details_json"], value.isEmpty == false {
             chronicConditionDetails = Self.decodeChronicConditionDetails(from: value)
         }
-        if let value = extra["allergy_history"], value.isEmpty == false {
-            allergyHistory = value
-        }
-        if let value = extra["allergies"], value.isEmpty == false {
-            allergies = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.isEmpty == false }
-            allergyStatus = .have
-            hasPrefilledAllergyStatus = true
-        }
         if let value = extra["allergy_status"], let status = MedicalGuideDisclosureStatus(rawValue: value) {
             allergyStatus = status
             hasPrefilledAllergyStatus = true
@@ -1162,60 +1348,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             longTermMedicationStatus = status
             hasPrefilledLongTermMedicationStatus = true
         }
-        if let value = extra["family_history"], value.isEmpty == false {
-            familyHistory = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.isEmpty == false }
-            familyHistoryStatus = .have
-            hasPrefilledFamilyHistoryStatus = true
-        }
-        if let value = extra["family_history_status"], let status = MedicalGuideDisclosureStatus(rawValue: value) {
+        if let value = extra["family_history_screening_status"], let status = MedicalGuideDisclosureStatus(rawValue: value) {
             familyHistoryStatus = status
             hasPrefilledFamilyHistoryStatus = true
-        }
-        if let value = extra["smoking_status"], let status = MedicalGuideSmokingStatus(rawValue: value) {
-            smokingStatus = status
-            hasPrefilledSmokingStatus = true
-        }
-        if let value = extra["smoking_count"] {
-            smokingCount = value
-        }
-        if let value = extra["smoking_history_duration"] {
-            smokingHistoryDuration = value
-        }
-        if let value = extra["smoking_quit_duration"] {
-            smokingQuitDuration = value
-        }
-        if let value = extra["drinking_status"], let status = MedicalGuideDrinkingStatus(rawValue: value) {
-            drinkingStatus = status
-            hasPrefilledDrinkingStatus = true
-        }
-        if let value = extra["drinking_count"] {
-            drinkingCount = value
-        }
-        if let value = extra["drinking_history_duration"] {
-            drinkingHistoryDuration = value
-        }
-        if let value = extra["drinking_quit_duration"] {
-            drinkingQuitDuration = value
-        }
-        if let value = extra["drinking_types"], value.isEmpty == false {
-            drinkingTypes = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.isEmpty == false }
-        }
-        if let value = extra["exercise_frequency"], let frequency = MedicalGuideExerciseFrequency(rawValue: value) {
-            exerciseFrequency = frequency
-            hasPrefilledExerciseFrequency = true
-        }
-        if let value = extra["exercise_intensity"], let intensity = MedicalGuideExerciseIntensity(rawValue: value) {
-            exerciseIntensity = intensity
-        }
-        if let value = extra["exercise_types"], value.isEmpty == false {
-            exerciseTypes = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.isEmpty == false }
-        }
-        if let value = extra["exercise_duration_minutes"] {
-            exerciseDurationMinutes = value
-        }
-        if let value = extra["sleep_hours"], let parsed = Double(value) {
-            sleepHours = parsed
-            hasPrefilledSleepHours = true
         }
         if let value = extra["has_exam_history"] {
             hasExamHistory = (value as NSString).boolValue
@@ -1309,7 +1444,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             drinkingText,
             exerciseText,
             sleepHours > 0 ? "睡眠：\(Int(sleepHours))小时" : nil,
-            surgeryHistory.isEmpty ? nil : "手术史：\(surgeryHistory)",
+            surgerySummary == "未填写" || surgerySummary == "无手术史" ? nil : "手术史：\(surgerySummary)",
             allergyHistory.isEmpty ? nil : "过敏史：\(allergyHistory)",
             extraNotes.isEmpty ? nil : extraNotes,
             symptomFollowUpNotes.isEmpty ? nil : symptomFollowUpNotes,
@@ -1332,31 +1467,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "chronic_condition_status": chronicConditionStatus.rawValue,
             "chronic_condition_details_json": Self.encodeChronicConditionDetails(chronicConditionDetails),
             "long_term_medication_status": longTermMedicationStatus.rawValue,
-            "smoking_status": smokingStatus.rawValue,
-            "smoking_history_duration": smokingHistoryDuration,
-            "smoking_quit_duration": smokingQuitDuration,
-            "drinking_status": drinkingStatus.rawValue,
-            "drinking_count": drinkingCount,
-            "drinking_history_duration": drinkingHistoryDuration,
-            "drinking_quit_duration": drinkingQuitDuration,
-            "drinking_types": drinkingTypes.joined(separator: ","),
-            "exercise_frequency": exerciseFrequency.rawValue,
-            "exercise_intensity": exerciseIntensity.rawValue,
-            "exercise_types": exerciseTypes.joined(separator: ","),
-            "exercise_duration_minutes": exerciseDurationMinutes,
-            "sleep_hours": String(format: "%.1f", sleepHours),
             "has_exam_history": hasExamHistory ? "true" : "false",
             "last_exam_year": lastExamYear,
             "exam_institution": examInstitution,
             "exam_report_summary": examReportSummary,
-            "family_history": familyHistory.joined(separator: ","),
-            "surgery_history": surgeryHistory,
-            "surgery_time": surgeryTime,
+            "family_history_screening_status": familyHistoryStatus.rawValue,
             "surgery_status": surgeryStatus.rawValue,
             "allergy_status": allergyStatus.rawValue,
-            "allergies": allergies.joined(separator: ","),
-            "allergy_history": allergyHistory,
-            "family_history_status": familyHistoryStatus.rawValue,
             "symptom_follow_up_status": symptomFollowUpStatus.rawValue,
             "symptom_follow_up_focus": symptomFollowUpFocus.joined(separator: ","),
             "extra_notes": extraNotes,
@@ -1375,15 +1492,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "occupation": occupation,
             "chronic_condition_status": chronicConditionStatus.rawValue,
             "long_term_medication_status": longTermMedicationStatus.rawValue,
-            "smoking_status": smokingStatus.rawValue,
             "surgery_status": surgeryStatus.rawValue,
             "allergy_status": allergyStatus.rawValue,
-            "family_history_status": familyHistoryStatus.rawValue,
-            "family_history": familyHistory.joined(separator: ","),
-            "symptom_follow_up_focus": symptomFollowUpFocus.joined(separator: ","),
-            "drinking_status": drinkingStatus.rawValue,
-            "exercise_frequency": exerciseFrequency.rawValue,
-            "exercise_intensity": exerciseIntensity.rawValue
+            "family_history_screening_status": familyHistoryStatus.rawValue,
+            "symptom_follow_up_focus": symptomFollowUpFocus.joined(separator: ",")
         ]
     }
 
@@ -1404,24 +1516,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "long_term_medication_status": longTermMedicationStatus.rawValue,
             "surgery_status": surgeryStatus.rawValue,
             "allergy_status": allergyStatus.rawValue,
-            "family_history_status": familyHistoryStatus.rawValue,
-            "family_history": familyHistory.joined(separator: ","),
+            "family_history_screening_status": familyHistoryStatus.rawValue,
             "symptom_follow_up_focus": symptomFollowUpFocus.joined(separator: ","),
             "symptom_follow_up": symptomFollowUpFocus.joined(separator: ","),
-            "smoking_status": smokingStatus.rawValue,
-            "smoking_count": smokingCount,
-            "smoking_history_duration": smokingHistoryDuration,
-            "smoking_quit_duration": smokingQuitDuration,
-            "drinking_status": drinkingStatus.rawValue,
-            "drinking_count": drinkingCount,
-            "drinking_history_duration": drinkingHistoryDuration,
-            "drinking_quit_duration": drinkingQuitDuration,
-            "drinking_types": drinkingTypes.joined(separator: ","),
-            "exercise_frequency": exerciseFrequency.rawValue,
-            "exercise_intensity": exerciseIntensity.rawValue,
-            "exercise_types": exerciseTypes.joined(separator: ","),
-            "exercise_duration_minutes": exerciseDurationMinutes,
-            "sleep_hours": String(format: "%.1f", sleepHours),
             "exam_history": hasExamHistory ? "true" : "false",
             "key_indicator_count": "\(keyIndicatorRows.filter { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count)",
             "risk_summary": riskAssessmentSummary,
@@ -1528,5 +1625,16 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return [:]
         }
         return decoded
+    }
+
+    private static func allergyDetails(from remote: [String: SparkMedicalSyncAPI.RemoteAllergyDetail]) -> [String: MedicalGuideAllergyDetail] {
+        remote.mapValues { detail in
+            MedicalGuideAllergyDetail(
+                category: detail.category,
+                severity: detail.severity,
+                reactions: detail.reactions,
+                notes: detail.notes
+            )
+        }
     }
 }

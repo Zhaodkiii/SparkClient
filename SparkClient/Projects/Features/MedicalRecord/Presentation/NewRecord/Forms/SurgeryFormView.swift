@@ -1,78 +1,122 @@
 import SwiftUI
 
-/// 手术记录识别草稿。
+/// 手术录入/编辑表单：支持成员独立手术（无病历）与病历内手术。
 struct SurgeryFormView: View {
     enum Mode {
-        case create
-        case serverEdit(existing: SurgeryRecognitionDraft)
+        case create(CreateContext)
+        case serverEdit(existing: SparkMedicalSyncAPI.RemoteSurgery)
         case localEdit(existing: SurgeryRecognitionDraft, onSubmit: (SurgeryRecognitionDraft) -> Void)
+    }
+
+    struct CreateContext {
+        let memberID: Int
+        let medicalCaseID: Int?
+        let submissionService: MedicalRecordFormSubmissionService
+        let onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
+        let onSaved: (([SparkMedicalSyncAPI.RemoteSurgery], String) -> Void)?
+        let onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)?
+
+        init(
+            memberID: Int,
+            medicalCaseID: Int? = nil,
+            submissionService: MedicalRecordFormSubmissionService,
+            onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil,
+            onSaved: (([SparkMedicalSyncAPI.RemoteSurgery], String) -> Void)? = nil,
+            onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)? = nil
+        ) {
+            self.memberID = memberID
+            self.medicalCaseID = medicalCaseID
+            self.submissionService = submissionService
+            self.onCreateSubmit = onCreateSubmit
+            self.onSaved = onSaved
+            self.onMutation = onMutation
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
+    let submissionService: MedicalRecordFormSubmissionService?
+    let memberID: Int?
+    let onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)?
     let onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
 
-    @State private var procedureName = ""
-    @State private var procedureCode = ""
-    @State private var site = ""
-    @State private var performedAt = ""
-    @State private var surgeon = ""
-    @State private var anesthesiaType = ""
-    @State private var incisionLevel = ""
-    @State private var asaClass = ""
-    @State private var notes = ""
+    @State private var procedureName: String
+    @State private var performedAt: String
+    @State private var recoveryStatus: String
+    @State private var hospitalName: String
+    @State private var site: String
+    @State private var notes: String
+    @State private var searchText = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
 
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
+    private let seedDraft: SurgeryRecognitionDraft?
 
-    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil) {
+    init(
+        mode: Mode,
+        submissionService: MedicalRecordFormSubmissionService? = nil,
+        memberID: Int? = nil,
+        onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)? = nil,
+        onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil
+    ) {
         self.mode = mode
-        self.onCreateSubmit = onCreateSubmit
+        self.submissionService = submissionService
+        self.memberID = memberID
+        self.onMutation = onMutation
         self.onServerSubmit = onServerSubmit
 
-        let seed: SurgeryRecognitionDraft
+        let seed: SurgeryRecognitionDraft?
+        let initialRecovery: String
+        let initialHospital: String
         switch mode {
-        case .create: seed = .init(procedureName: "", procedureCode: nil, site: nil, performedAt: nil, surgeon: nil, anesthesiaType: nil, incisionLevel: nil, asaClass: nil, notes: nil)
-        case .serverEdit(let existing), .localEdit(let existing, _): seed = existing
+        case .create:
+            seed = nil
+            initialRecovery = ""
+            initialHospital = ""
+        case .serverEdit(let existing):
+            seed = MedicalCaseTimelineRemoteMapping.surgeryDraft(from: existing)
+            initialRecovery = SurgeryFormSupport.recoveryStatus(for: existing)
+            initialHospital = SurgeryFormSupport.hospitalName(for: existing)
+            let performedText = SurgeryFormSupport.performedAtText(for: existing)
+            _procedureName = State(initialValue: seed?.procedureName ?? "")
+            _performedAt = State(initialValue: performedText.nilIfBlank ?? seed?.performedAt ?? "")
+            _recoveryStatus = State(initialValue: initialRecovery)
+            _hospitalName = State(initialValue: initialHospital)
+            _site = State(initialValue: seed?.site ?? "")
+            _notes = State(initialValue: seed?.notes ?? "")
+            self.seedDraft = seed
+            return
+        case .localEdit(let existing, _):
+            seed = existing
+            initialRecovery = ""
+            initialHospital = ""
         }
-        _procedureName = State(initialValue: seed.procedureName)
-        _procedureCode = State(initialValue: seed.procedureCode ?? "")
-        _site = State(initialValue: seed.site ?? "")
-        _performedAt = State(initialValue: seed.performedAt ?? "")
-        _surgeon = State(initialValue: seed.surgeon ?? "")
-        _anesthesiaType = State(initialValue: seed.anesthesiaType ?? "")
-        _incisionLevel = State(initialValue: seed.incisionLevel ?? "")
-        _asaClass = State(initialValue: seed.asaClass ?? "")
-        _notes = State(initialValue: seed.notes ?? "")
+
+        self.seedDraft = seed
+        _procedureName = State(initialValue: seed?.procedureName ?? "")
+        _performedAt = State(initialValue: seed?.performedAt ?? "")
+        _recoveryStatus = State(initialValue: initialRecovery)
+        _hospitalName = State(initialValue: initialHospital)
+        _site = State(initialValue: seed?.site ?? "")
+        _notes = State(initialValue: seed?.notes ?? "")
     }
 
     var body: some View {
         ScrollView {
-            SparkFormCard(title: navTitle) {
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.procedure_name"), text: $procedureName)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.procedure_code"), text: $procedureCode)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.site"), text: $site)
-                SparkFormTextRow(
-                    title: L10n.text("medical_record.forms.field.performed_at"),
-                    text: $performedAt,
-                    placeholder: L10n.text("medical_record.forms.field.date_placeholder")
-                )
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.surgeon"), text: $surgeon)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.anesthesia_type"), text: $anesthesiaType)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.incision_level"), text: $incisionLevel)
-                SparkFormTextRow(title: L10n.text("medical_record.forms.field.asa_class"), text: $asaClass)
-                SparkFormTextAreaRow(title: L10n.text("medical_record.forms.field.notes"), text: $notes)
+            VStack(alignment: .leading, spacing: 16) {
+                surgerySearchField
+                surgeryCategoryGroups
+                surgeryDetailsCard
             }
             .padding(16)
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
         .sparkFormBottomBar(
-            canSubmit: !isSaving,
+            canSubmit: canSubmit && !isSaving,
             saveTitle: saveTitle,
             onCancel: {
                 formLog.info("SurgeryFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
@@ -85,6 +129,153 @@ struct SurgeryFormView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+    }
+
+    private var canSubmit: Bool {
+        procedureName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private var surgerySearchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("搜索手术名称（支持拼音/首字母）", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+    }
+
+    private var surgeryCategoryGroups: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(SurgeryFormSupport.filteredCategories(matching: searchText).enumerated()), id: \.element.id) { index, category in
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(category.title, systemImage: category.systemImage)
+                        .font(.subheadline.weight(.semibold))
+
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        ForEach(category.procedures, id: \.self) { name in
+                            procedureChip(name)
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+
+                if index != SurgeryFormSupport.filteredCategories(matching: searchText).count - 1 {
+                    Divider()
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+    }
+
+    private var surgeryDetailsCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            formTextRow(systemName: "scissors", title: "手术名称", placeholder: "请输入或从上方选择", text: $procedureName)
+            Divider().padding(.leading, 16)
+            formTextRow(systemName: "calendar", title: "手术时间", placeholder: "例如 2018年5月", text: $performedAt)
+            Divider().padding(.leading, 16)
+            VStack(alignment: .leading, spacing: 10) {
+                Label("当前恢复状态", systemImage: "heart.text.square.fill")
+                    .font(.subheadline.weight(.semibold))
+                recoveryChipRow
+            }
+            .padding(.vertical, 12)
+            Divider().padding(.leading, 16)
+            formTextRow(systemName: "building.2.fill", title: "主治医院", placeholder: "选填", text: $hospitalName)
+            Divider().padding(.leading, 16)
+            formTextRow(systemName: "mappin.and.ellipse", title: "手术部位", placeholder: "选填", text: $site)
+            Divider().padding(.leading, 16)
+            VStack(alignment: .leading, spacing: 10) {
+                Label("补充备注", systemImage: "square.and.pencil")
+                    .font(.subheadline.weight(.semibold))
+                TextEditor(text: $notes)
+                    .frame(minHeight: 90)
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                    )
+            }
+            .padding(.vertical, 12)
+        }
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+    }
+
+    private var recoveryChipRow: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], alignment: .leading, spacing: 8) {
+            ForEach(SurgeryFormSupport.recoveryOptions, id: \.self) { option in
+                recoveryChip(option)
+            }
+        }
+    }
+
+    private func formTextRow(systemName: String, title: String, placeholder: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: systemName)
+                .font(.subheadline.weight(.semibold))
+            TextField(placeholder, text: text)
+                .textInputAutocapitalization(.never)
+        }
+        .padding(.vertical, 12)
+    }
+
+    private func procedureChip(_ name: String) -> some View {
+        let isSelected = procedureName == name
+        return Button {
+            procedureName = name
+        } label: {
+            Text(name)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .tertiarySystemGroupedBackground))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func recoveryChip(_ option: String) -> some View {
+        let isSelected = recoveryStatus == option
+        return Button {
+            recoveryStatus = option
+        } label: {
+            Text(option)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemBackground))
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var modeLogLabel: String {
@@ -111,50 +302,98 @@ struct SurgeryFormView: View {
         }
     }
 
-    private var outputDraft: SurgeryRecognitionDraft {
-        .init(procedureName: procedureName, procedureCode: procedureCode.nilIfBlank, site: site.nilIfBlank, performedAt: performedAt.nilIfBlank, surgeon: surgeon.nilIfBlank, anesthesiaType: anesthesiaType.nilIfBlank, incisionLevel: incisionLevel.nilIfBlank, asaClass: asaClass.nilIfBlank, notes: notes.nilIfBlank)
+    private var outputDraft: SurgeryRecognitionDraft? {
+        SurgeryFormSupport.makeDraft(
+            procedureName: procedureName,
+            performedAt: performedAt,
+            recoveryStatus: recoveryStatus,
+            hospitalName: hospitalName,
+            site: site,
+            notes: notes,
+            existing: seedDraft
+        )
     }
 
     private func saveNow() {
         formLog.info("SurgeryFormView: save started mode=\(modeLogLabel)", module: formLogModule)
-        let draft = outputDraft
+
         switch mode {
         case .localEdit(_, let onSubmit):
+            guard let draft = outputDraft else {
+                errorMessage = "请填写手术名称"
+                return
+            }
             onSubmit(draft)
-            formLog.info("SurgeryFormView: local submit finished", module: formLogModule)
             dismiss()
-        case .create:
-            guard let onCreateSubmit else {
-                formLog.warning("SurgeryFormView: create handler missing", module: formLogModule)
-                dismiss()
+
+        case .serverEdit(let existing):
+            guard let draft = outputDraft else {
+                errorMessage = "请填写手术名称"
                 return
             }
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onCreateSubmit.call(draft)
-                    formLog.info("SurgeryFormView: create save succeeded", module: formLogModule)
+                    if let submissionService, let memberID {
+                        let response = try await submissionService.submitSurgeryUpdate(
+                            memberID: memberID,
+                            existing: existing,
+                            draft: draft,
+                            recoveryStatus: recoveryStatus,
+                            hospitalName: hospitalName
+                        )
+                        onMutation?(response)
+                    } else if let onServerSubmit {
+                        try await onServerSubmit.call(draft)
+                    } else {
+                        throw NSError(domain: "SurgeryFormView", code: -1, userInfo: [NSLocalizedDescriptionKey: "缺少提交配置"])
+                    }
                     dismiss()
                 } catch {
-                    formLog.error("SurgeryFormView: create save failed \(error.localizedDescription)", module: formLogModule)
                     errorMessage = error.localizedDescription
                 }
                 isSaving = false
             }
-        case .serverEdit:
-            guard let onServerSubmit else {
-                formLog.warning("SurgeryFormView: server handler missing", module: formLogModule)
-                dismiss()
+
+        case .create(let context):
+            guard let draft = outputDraft else {
+                errorMessage = "请填写手术名称"
                 return
             }
             isSaving = true
             Task { @MainActor in
                 do {
-                    try await onServerSubmit.call(draft)
-                    formLog.info("SurgeryFormView: server save succeeded", module: formLogModule)
+                    var saved: [SparkMedicalSyncAPI.RemoteSurgery] = []
+                    var mutation: SparkMedicalSyncAPI.SurgeryMutationResponse?
+                    if let onCreateSubmit = context.onCreateSubmit {
+                        try await onCreateSubmit.call(draft)
+                    } else {
+                        let response = try await context.submissionService.submitSurgeryCreate(
+                            memberID: context.memberID,
+                            medicalCaseID: context.medicalCaseID,
+                            draft: draft,
+                            recoveryStatus: recoveryStatus,
+                            hospitalName: hospitalName
+                        )
+                        mutation = response
+                        if let created = response.surgery {
+                            saved = [created]
+                        }
+                    }
+
+                    let summary = mutation?.summary?.nilIfBlank ?? SurgeryFormSupport.summaryLine(
+                        procedureName: procedureName,
+                        performedAt: performedAt,
+                        recoveryStatus: recoveryStatus,
+                        hospitalName: hospitalName,
+                        site: site
+                    )
+                    context.onSaved?(saved, summary)
+                    if let mutation {
+                        context.onMutation?(mutation)
+                    }
                     dismiss()
                 } catch {
-                    formLog.error("SurgeryFormView: server save failed \(error.localizedDescription)", module: formLogModule)
                     errorMessage = error.localizedDescription
                 }
                 isSaving = false

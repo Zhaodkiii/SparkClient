@@ -309,9 +309,15 @@ struct MedicalCaseDetailPage: View {
                 try await service.submitFollowUpCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
             })
         case .surgery:
-            SurgeryFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
-                try await service.submitSurgeryCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
-            })
+            SurgeryFormView(
+                mode: .create(
+                    .init(
+                        memberID: memberID,
+                        medicalCaseID: medicalCaseID,
+                        submissionService: service
+                    )
+                )
+            )
         }
     }
 

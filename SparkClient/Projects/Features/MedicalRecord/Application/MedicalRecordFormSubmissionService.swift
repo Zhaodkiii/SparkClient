@@ -38,21 +38,37 @@ struct MedicalRecordFormSubmissionService: Sendable {
         ))
     }
 
-    func submitSurgeryCreate(memberID: Int, medicalCaseID: Int?, draft: SurgeryRecognitionDraft) async throws -> Int {
-        try await workflowAPI.createSurgery(.init(
+    func submitSurgeryCreate(
+        memberID: Int,
+        medicalCaseID: Int?,
+        draft: SurgeryRecognitionDraft,
+        recoveryStatus: String = "",
+        hospitalName: String = ""
+    ) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+        let extra = SurgeryFormSupport.buildExtra(
+            draft: draft,
+            recoveryStatus: recoveryStatus,
+            hospitalName: hospitalName
+        )
+        return try await workflowAPI.createSurgery(.init(
             member: memberID,
             medicalCase: medicalCaseID,
             procedureName: draft.procedureName,
             procedureCode: draft.procedureCode,
             site: draft.site,
-            performedAt: draft.performedAt,
+            performedAt: SurgeryFormSupport.workflowPerformedAt(for: draft),
             surgeon: draft.surgeon,
             anesthesiaType: draft.anesthesiaType,
             incisionLevel: draft.incisionLevel,
             asaClass: draft.asaClass,
             notes: draft.notes,
+            extra: extra,
             fileIds: []
         ))
+    }
+
+    func submitSurgeryDelete(id: Int) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+        try await workflowAPI.deleteSurgery(id: id)
     }
 
     func submitFollowUpCreate(memberID: Int, medicalCaseID: Int?, draft: FollowUpRecognitionDraft) async throws -> Int {
@@ -162,12 +178,23 @@ struct MedicalRecordFormSubmissionService: Sendable {
     func submitSurgeryUpdate(
         memberID: Int,
         existing: SparkMedicalSyncAPI.RemoteSurgery,
-        draft: SurgeryRecognitionDraft
-    ) async throws {
-        let performedAt = (draft.performedAt ?? "").nilIfBlank ?? existing.performedAt.map { MedicalDateCoding.encodeISO8601($0) }
-        _ = try await workflowAPI.update(
-            SparkMedicalSyncAPI.RemoteSurgery.self,
-            kind: .surgeries,
+        draft: SurgeryRecognitionDraft,
+        recoveryStatus: String = "",
+        hospitalName: String = ""
+    ) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+        var extra = existing.extra ?? [:]
+        let merged = SurgeryFormSupport.buildExtra(
+            draft: draft,
+            recoveryStatus: recoveryStatus,
+            hospitalName: hospitalName,
+            source: extra["source"] ?? "manual"
+        )
+        extra.merge(merged) { _, new in new }
+
+        let performedAt = SurgeryFormSupport.workflowPerformedAt(for: draft)
+            ?? existing.performedAt.map { MedicalDateCoding.encodeISO8601($0) }
+
+        return try await workflowAPI.updateSurgery(
             id: existing.id,
             body: SurgeryUpdatePayload(
                 member: memberID,
@@ -182,7 +209,7 @@ struct MedicalRecordFormSubmissionService: Sendable {
                 asaClass: draft.asaClass ?? "",
                 sourceSystemID: existing.sourceSystemId,
                 notes: draft.notes ?? "",
-                extra: existing.extra ?? [:]
+                extra: extra
             )
         )
     }
@@ -244,7 +271,7 @@ private struct VisitUpdatePayload: Encodable {
 
 private struct SurgeryUpdatePayload: Encodable {
     let member: Int
-    let medicalCase: Int
+    let medicalCase: Int?
     let procedureName: String
     let procedureCode: String
     let site: String

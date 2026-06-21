@@ -64,19 +64,170 @@ enum SparkMedicalSyncAPI {
         var id: Int { sourcePlanId }
     }
 
+    struct RemoteSurgeryFocusItem: Codable, Sendable, Equatable, Identifiable {
+        var procedureName: String
+        var summary: String
+        var performedAt: Date?
+        var site: String
+        var sourceSurgeryId: Int
+
+        var id: Int { sourceSurgeryId }
+    }
+
+    /// 成员医疗档案中的单条过敏明细。
+    struct RemoteAllergyDetail: Codable, Sendable, Equatable {
+        var category: String
+        var severity: String
+        var reactions: [String]
+        var notes: String
+    }
+
+    /// 成员医疗档案中的单条家族病史记录。
+    struct RemoteFamilyHistoryRecord: Codable, Sendable, Equatable {
+        var disease: String
+        var relative: String
+        var category: String
+        var diagnosedAge: String
+        var notes: String
+    }
+
+    /// 成员医疗档案中的吸烟信息。
+    struct RemoteSmokingProfile: Codable, Sendable, Equatable {
+        var status: String
+        var count: String
+        var historyDuration: String
+        var quitDuration: String
+
+        static let empty = RemoteSmokingProfile(
+            status: "never",
+            count: "",
+            historyDuration: "",
+            quitDuration: ""
+        )
+    }
+
+    /// 成员医疗档案中的饮酒信息。
+    struct RemoteDrinkingProfile: Codable, Sendable, Equatable {
+        var status: String
+        var count: String
+        var historyDuration: String
+        var quitDuration: String
+        var types: [String]
+
+        static let empty = RemoteDrinkingProfile(
+            status: "none",
+            count: "",
+            historyDuration: "",
+            quitDuration: "",
+            types: []
+        )
+    }
+
+    /// 成员医疗档案中的运动信息。
+    struct RemoteExerciseProfile: Codable, Sendable, Equatable {
+        var frequency: String
+        var intensity: String
+        var types: [String]
+        var durationMinutes: String
+
+        static let empty = RemoteExerciseProfile(
+            frequency: "oneToTwo",
+            intensity: "medium",
+            types: [],
+            durationMinutes: ""
+        )
+    }
+
     /// 成员医疗维护档案。
     struct RemoteMemberMedicalProfile: Codable, Sendable, Equatable, Identifiable {
         var id: Int
         var user: Int?
         var member: Int
         var chronicConditions: [String]
+        var allergies: [String]
+        var allergyDetails: [String: RemoteAllergyDetail]
+        var allergyHistory: String
+        var familyHistory: [RemoteFamilyHistoryRecord]
+        var smokingProfile: RemoteSmokingProfile
+        var drinkingProfile: RemoteDrinkingProfile
+        var exerciseProfile: RemoteExerciseProfile
+        var sleepHours: Double?
         var medicationFocus: [RemoteMedicationFocusItem]
+        var surgeryFocus: [RemoteSurgeryFocusItem]
         var examFocus: [String]
         var symptomFollowUpFocus: [String]
         var notes: String
         var extra: [String: String]?
         var createdAt: Date?
         var updatedAt: Date?
+
+        init(
+            id: Int,
+            user: Int? = nil,
+            member: Int,
+            chronicConditions: [String] = [],
+            allergies: [String] = [],
+            allergyDetails: [String: RemoteAllergyDetail] = [:],
+            allergyHistory: String = "",
+            familyHistory: [RemoteFamilyHistoryRecord] = [],
+            smokingProfile: RemoteSmokingProfile = .empty,
+            drinkingProfile: RemoteDrinkingProfile = .empty,
+            exerciseProfile: RemoteExerciseProfile = .empty,
+            sleepHours: Double? = nil,
+            medicationFocus: [RemoteMedicationFocusItem] = [],
+            surgeryFocus: [RemoteSurgeryFocusItem] = [],
+            examFocus: [String] = [],
+            symptomFollowUpFocus: [String] = [],
+            notes: String = "",
+            extra: [String: String]? = nil,
+            createdAt: Date? = nil,
+            updatedAt: Date? = nil
+        ) {
+            self.id = id
+            self.user = user
+            self.member = member
+            self.chronicConditions = chronicConditions
+            self.allergies = allergies
+            self.allergyDetails = allergyDetails
+            self.allergyHistory = allergyHistory
+            self.familyHistory = familyHistory
+            self.smokingProfile = smokingProfile
+            self.drinkingProfile = drinkingProfile
+            self.exerciseProfile = exerciseProfile
+            self.sleepHours = sleepHours
+            self.medicationFocus = medicationFocus
+            self.surgeryFocus = surgeryFocus
+            self.examFocus = examFocus
+            self.symptomFollowUpFocus = symptomFollowUpFocus
+            self.notes = notes
+            self.extra = extra
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(Int.self, forKey: .id)
+            user = try container.decodeIfPresent(Int.self, forKey: .user)
+            member = try container.decode(Int.self, forKey: .member)
+            chronicConditions = try container.decodeIfPresent([String].self, forKey: .chronicConditions) ?? []
+            allergies = try container.decodeIfPresent([String].self, forKey: .allergies) ?? []
+            allergyDetails = try container.decodeIfPresent([String: RemoteAllergyDetail].self, forKey: .allergyDetails) ?? [:]
+            allergyHistory = try container.decodeIfPresent(String.self, forKey: .allergyHistory) ?? ""
+            familyHistory = try container.decodeIfPresent([RemoteFamilyHistoryRecord].self, forKey: .familyHistory) ?? []
+            smokingProfile = try container.decodeIfPresent(RemoteSmokingProfile.self, forKey: .smokingProfile) ?? .empty
+            drinkingProfile = try container.decodeIfPresent(RemoteDrinkingProfile.self, forKey: .drinkingProfile) ?? .empty
+            exerciseProfile = try container.decodeIfPresent(RemoteExerciseProfile.self, forKey: .exerciseProfile) ?? .empty
+            sleepHours = try container.decodeIfPresent(Double.self, forKey: .sleepHours)
+            medicationFocus = try container.decodeIfPresent([RemoteMedicationFocusItem].self, forKey: .medicationFocus) ?? []
+            surgeryFocus = try container.decodeIfPresent([RemoteSurgeryFocusItem].self, forKey: .surgeryFocus) ?? []
+            examFocus = try container.decodeIfPresent([String].self, forKey: .examFocus) ?? []
+            symptomFollowUpFocus = try container.decodeIfPresent([String].self, forKey: .symptomFollowUpFocus) ?? []
+            notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+            extra = try container.decodeIfPresent([String: String].self, forKey: .extra)
+            createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+            updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        }
     }
 
     /// 成员模块维护状态。
@@ -186,6 +337,13 @@ enum SparkMedicalSyncAPI {
         var summary: String?
     }
 
+    struct SurgeryMutationResponse: Codable, Sendable, Equatable {
+        var deleted: Bool?
+        var surgery: RemoteSurgery?
+        var memberProfile: RemoteMemberMedicalProfile?
+        var summary: String?
+    }
+
     /// 就诊记录（到院一次就诊的元数据）。
     struct RemoteVisit: Codable, Sendable, Equatable {
         var id: Int
@@ -206,10 +364,10 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 手术记录；`asaClass` 为 ASA 分级，`incisionLevel` 为切口等级等临床字段的字符串存储。
-    struct RemoteSurgery: Codable, Sendable, Equatable {
+    struct RemoteSurgery: Codable, Sendable, Equatable, Identifiable {
         var id: Int
         var member: Int
-        var medicalCase: Int
+        var medicalCase: Int?
         var procedureName: String
         var procedureCode: String
         /// 手术部位。
@@ -222,7 +380,7 @@ enum SparkMedicalSyncAPI {
         var sourceSystemId: String
         var notes: String
         var extra: [String: String]?
-        var updatedAt: Date
+        var updatedAt: Date?
 
     }
 
