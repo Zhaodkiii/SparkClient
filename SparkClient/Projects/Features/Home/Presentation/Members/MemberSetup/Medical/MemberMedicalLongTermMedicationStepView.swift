@@ -347,7 +347,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
     @MainActor
     private func startMedicationPlanRecognition(files: [MedicalUploadLocalFile]) {
         showingUploadSheet = false
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicationPlan)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicationPlan, member: viewModel.member)
     }
 
     @MainActor

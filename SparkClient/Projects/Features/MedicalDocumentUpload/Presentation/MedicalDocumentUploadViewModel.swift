@@ -173,6 +173,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 当前流水线绑定的成员 ID，用于检测切换成员后清空抽取重试反馈
     private var pipelineMemberID: Int?
 
+    /// 本次上传识别显式绑定的成员。成员引导流程进入识别时不一定已经切换全局选中成员，
+    /// 需要用该值保证识别 envelope 与结果页默认成员都指向引导中的成员。
+    private var pendingMemberOverride: Member?
+
     // MARK: - Initialization
 
     init(
@@ -208,7 +212,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     /// 是否允许开始识别：已选文件且成员上下文中有当前选中成员。
     var canStartRecognition: Bool {
-        selectedFiles.isEmpty == false && memberContextStore.context.selectedMember != nil
+        selectedFiles.isEmpty == false && recognitionMember != nil
     }
 
     var memberContextStoreForLocalForms: MemberContextStore {
@@ -301,7 +305,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     private func runRecognitionPipeline(startingAt requestedStartStep: MedicalDocumentUploadFlowStep.Kind, resetForFreshRun: Bool) async {
         // MARK: 1. 前置校验：必须选择就诊成员（患者）
         // 从全局状态中获取当前选中的患者，没有则直接报错返回
-        guard let member = memberContextStore.context.selectedMember else {
+        guard let member = recognitionMember else {
             // 给 UI 展示国际化错误文案
             errorMessage = L10n.text("medical.upload.error.no_member")
             // 打印警告日志
@@ -711,8 +715,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         preSubmitValidationIssues = []
     }
 
-    func prepareAndStart(files: [MedicalUploadLocalFile], kind: MedicalDocumentKind) {
+    func prepareAndStart(files: [MedicalUploadLocalFile], kind: MedicalDocumentKind, member: Member? = nil) {
         reset()
+        pendingMemberOverride = member
+        selectedMemberName = recognitionMember?.name
         selectedKind = kind
         setSelectedFiles(files)
         stage = .processing
@@ -758,6 +764,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         missingModelScenarioForAlert = nil
         selectedKind = .auto
         clearPipelineCheckpoints()
+        pendingMemberOverride = nil
         selectedMemberName = memberContextStore.context.selectedMember?.name
         logger.info("已重置医疗上传流程，是否保留附件：\(keepAttachments)", module: .medical)
     }
@@ -836,6 +843,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         stepStartedAt = [:]
         pipelineMemberID = nil
         clearExtractionRetryState()
+    }
+
+    private var recognitionMember: Member? {
+        pendingMemberOverride ?? memberContextStore.context.selectedMember
     }
 
     private func clearExtractionRetryFeedback() {

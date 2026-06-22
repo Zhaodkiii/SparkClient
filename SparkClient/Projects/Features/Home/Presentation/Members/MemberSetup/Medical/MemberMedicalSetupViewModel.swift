@@ -331,6 +331,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private let homeDependencies: HomeFeatureDependencies?
     private let entryMode: MedicalSetupEntryMode
     private let completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)?
+    private let completeDataRefresher: (@MainActor () async -> SparkMedicalSyncAPI.RemoteMemberCompleteData?)?
     private let guideSessionID: String
     private var persistedProfileSnapshot: SparkMedicalSyncAPI.RemoteMemberMedicalProfile?
     private var hasSeededDefaultHeight = false
@@ -348,7 +349,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         preloadedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
         preloadedNutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState? = nil,
         entryMode: MedicalSetupEntryMode = .full,
-        onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil
+        onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil,
+        onCompleteDataRefresh completeDataRefresher: (@MainActor () async -> SparkMedicalSyncAPI.RemoteMemberCompleteData?)? = nil
     ) {
         let initialChronicConditions = member?.chronicConditions ?? []
 
@@ -360,6 +362,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         self.preloadedCompleteData = preloadedCompleteData
         self.preloadedNutritionGoalState = preloadedNutritionGoalState
         self.completeDataPatcher = completeDataPatcher
+        self.completeDataRefresher = completeDataRefresher
         self.guideSessionID = UUID().uuidString
         self.birthDate = member?.birthDate
         self.gender = member?.gender ?? "unknown"
@@ -721,6 +724,16 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    @discardableResult
+    func refreshMemberCompleteDataCacheForHealthExamReports() async -> Bool {
+        guard let refreshed = await completeDataRefresher?() else {
+            return false
+        }
+        preloadedCompleteData = refreshed
+        applyFromCompleteData(refreshed)
+        return true
     }
 
     func ingestHealthExamReports(_ reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) {

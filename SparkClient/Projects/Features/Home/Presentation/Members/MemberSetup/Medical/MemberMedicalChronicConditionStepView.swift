@@ -11,6 +11,7 @@ struct MemberMedicalChronicConditionStepView: View {
     @Binding var chronicConditions: [String]
     @Binding var conditionDetails: [String: MedicalGuideChronicConditionDetail]
 
+    let member: Member?
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
 
@@ -195,6 +196,6 @@ struct MemberMedicalChronicConditionStepView: View {
     @MainActor
     private func startCaseDocumentRecognition(files: [MedicalUploadLocalFile]) {
         showingUploadSheet = false
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument, member: member)
     }
 }

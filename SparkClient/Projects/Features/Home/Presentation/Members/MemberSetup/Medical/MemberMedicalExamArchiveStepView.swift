@@ -250,7 +250,10 @@ struct MemberMedicalExamArchiveStepView: View {
 
     @MainActor
     private func refreshAfterMedicalUploadSave() async {
-        await viewModel.refreshMemberHealthExamReportsIfNeeded(force: true)
+        let didRefreshCompleteData = await viewModel.refreshMemberCompleteDataCacheForHealthExamReports()
+        if didRefreshCompleteData == false {
+            await viewModel.refreshMemberHealthExamReportsIfNeeded(force: true)
+        }
         reportDetailLoader?.replaceReports(viewModel.memberHealthExamReports)
         hasExamHistory = true
     }
@@ -258,6 +261,6 @@ struct MemberMedicalExamArchiveStepView: View {
     @MainActor
     private func startHealthExamRecognition(files: [MedicalUploadLocalFile]) {
         showingUploadSheet = false
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .healthExamReport)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .healthExamReport, member: viewModel.member)
     }
 }

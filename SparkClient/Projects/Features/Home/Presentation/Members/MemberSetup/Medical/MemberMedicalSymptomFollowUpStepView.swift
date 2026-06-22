@@ -207,6 +207,6 @@ struct MemberMedicalSymptomFollowUpStepView: View {
     @MainActor
     private func startCaseDocumentRecognition(files: [MedicalUploadLocalFile]) {
         showingUploadSheet = false
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument, member: viewModel.member)
     }
 }

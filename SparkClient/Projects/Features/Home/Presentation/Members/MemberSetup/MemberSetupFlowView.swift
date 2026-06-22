@@ -96,6 +96,10 @@ struct MemberSetupFlowView: View {
                     preloadedNutritionGoalState: viewModel.moduleSetupCache(for: viewModel.createdMember?.id ?? -1)?.completeData?.nutritionGoalState
                         ?? viewModel.moduleSetupCache(for: viewModel.createdMember?.id ?? -1)?.nutritionGoalState,
                     onCompleteDataPatch: viewModel.patchCompleteData,
+                    onCompleteDataRefresh: {
+                        await viewModel.refreshModuleSetupCacheIfNeeded(force: true)
+                        return viewModel.moduleSetupCache(for: viewModel.createdMember?.id ?? -1)?.completeData
+                    },
                     entryMode: entryMode
                 ) { summary in
                     Task {
