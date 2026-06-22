@@ -11,7 +11,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let notificationClient: any NotificationClient
-    let homeDependencies: HomeFeatureDependencies?
+    let homeDependencies: HomeFeatureDependencies
 
     @State private var medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = []
     @State private var prescriptions: [SparkMedicalSyncAPI.RemotePrescription] = []
@@ -397,7 +397,6 @@ struct MemberMedicalLongTermMedicationStepView: View {
     }
 
     private func syncMedicationReminderAfterPlanChange() {
-        guard let homeDependencies else { return }
         guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
         let coordinator = homeDependencies.medicationReminderSyncCoordinator
         coordinator.activate(accountID: session.accountID)

@@ -10,8 +10,8 @@ struct ExamReportCard: View {
     let notificationClient: any NotificationClient
     var onDeleted: ((Int) -> Void)?
 
-    @State private var isOtherRiskExpanded = false
-    @State private var isShowingAttachments = false
+    @State private var isOtherRiskExpanded = true
+    @State private var isShowingAttachments = true
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -50,36 +50,45 @@ struct ExamReportCard: View {
     }
 
     /// 有体检综述时，作为“其他风险/关注项”展示，避免凭空补业务数据。
+    /// 其他非异常体检项目列表（最多展示6条，无则展示报告概要）
     private var otherRiskItems: [HealthExamRiskItem] {
+        // 1. 过滤出【非潜在异常】的体检明细项，最多取前6条，映射为风险展示模型
         let detailRows = detailItems
+            // 筛选：排除指标存在潜在异常的项目
             .filter { $0.flag.isPotentiallyAbnormal == false }
+            // 限制最多展示6条数据
             .prefix(6)
+            // 转换为页面展示用的风险条目模型
             .map {
                 HealthExamRiskItem(
-                    title: $0.itemName,
+                    title: $0.itemName, // 体检项目名称
+                    // 拼接分类+子分类，空字段自动过滤，用间隔符分隔
                     category: [$0.category, $0.subCategory].filter { $0.isEmpty == false }.joined(separator: " · "),
+                    // 拼接指标数值+单位，空值自动过滤合并展示
                     result: [$0.resultValue ?? "", $0.unit].filter { $0.isEmpty == false }.joined(),
-                    recommendation: $0.diagnosis?.nonEmpty,
-                    severity: .low
+                    recommendation: $0.diagnosis?.nonEmpty, // 诊断建议（空值过滤）
+                    severity: .low // 非异常项目统一标记为低风险
                 )
             }
 
-        if detailRows.isEmpty == false {
-            return Array(detailRows)
-        }
+        // 若筛选出有效明细条目，直接返回转换后的数组
+//        if !detailRows.isEmpty  {
+//            return Array(detailRows)
+//        }
 
+        // 无明细数据时，校验报告概要是否存在，不存在直接返回空数组
         guard let summary = item.summary?.nonEmpty else { return [] }
+        // 使用报告概要生成一条汇总展示条目，标记为中风险
         return [
             HealthExamRiskItem(
-                title: item.institutionName?.nonEmpty ?? "",
-                category: item.reportNo?.nonEmpty ?? "",
-                result: summary,
-                recommendation: nil,
-                severity: .medium
+                title: item.institutionName?.nonEmpty ?? "", // 体检机构名称
+                category: item.reportNo?.nonEmpty ?? "",     // 体检报告编号
+                result: summary,                             // 报告整体概要描述
+                recommendation: nil,                         // 汇总条目无单独建议
+                severity: .medium                            // 汇总信息标记为中风险
             )
         ]
     }
-
     private var canNavigateToDetail: Bool {
         detailItems.isEmpty == false
     }
@@ -103,11 +112,11 @@ struct ExamReportCard: View {
                 loadingSection
             }
 
-            if highRiskItems.isEmpty == false {
-                highRiskSection
-            }
+//            if !highRiskItems.isEmpty {
+//                highRiskSection
+//            }
 
-            if otherRiskItems.isEmpty == false {
+            if !otherRiskItems.isEmpty {
                 otherRiskSection
             }
         }
@@ -129,47 +138,59 @@ struct ExamReportCard: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 8) {
-                HStack(spacing: 6) {
-                    if dateText.isEmpty == false {
-                        Image(systemName: "calendar")
-                            .font(.subheadline)
-                            .foregroundStyle(Color(uiColor: .systemBlue))
+            MainNavigationLink {
+                HealthExamRecognitionResultView(
+                    item: item,
+                    fileTransferService: fileTransferService,
+                    memberContextStore: memberContextStore,
+                    workflowAPI: workflowAPI,
+                    notificationClient: notificationClient,
+                    onDeleted: onDeleted
+                )
+            }label: {
+                HStack(alignment: .top, spacing: 8) {
+                    HStack(spacing: 6) {
+                        if dateText.isEmpty == false {
+                            Image(systemName: "calendar")
+                                .font(.subheadline)
+                                .foregroundStyle(Color(uiColor: .systemBlue))
 
-                        Text(dateText)
-                            .font(.subheadline)
+                            Text(dateText)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .monospacedDigit()
+                        }
+
+                        Text(L10n.text("home.medical.list.health_exam.badge"))
+                            .font(.caption)
                             .foregroundStyle(.primary)
-                            .monospacedDigit()
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color(uiColor: .secondarySystemBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 0.5)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     }
 
-                    Text(L10n.text("home.medical.list.health_exam.badge"))
-                        .font(.caption)
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(Color(uiColor: .separator).opacity(0.4), lineWidth: 0.5)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                }
+                    Spacer(minLength: 8)
 
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 10) {
-                    detailAction
-
-                    MedicalAttachmentIconView(
-                        count: attachments.count,
-                        isExpanded: isShowingAttachments
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            isShowingAttachments.toggle()
-                        }
+                    VStack(alignment: .trailing, spacing: 10) {
+                        detailAction
+    //                    MedicalAttachmentIconView(
+    //                        count: attachments.count,
+    //                        isExpanded: isShowingAttachments
+    //                    ) {
+    //                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+    //                            isShowingAttachments.toggle()
+    //                        }
+    //                    }
                     }
                 }
             }
+            .disabled(!canNavigateToDetail)
+
 
             if let institutionName = item.institutionName?.nonEmpty {
                 HStack(spacing: 6) {
@@ -319,41 +340,41 @@ struct ExamReportCard: View {
 
     private var otherRiskSection: some View {
         VStack(spacing: 0) {
-            Button {
-                isOtherRiskExpanded.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.body)
-                        .foregroundStyle(Color(uiColor: .systemOrange))
-
-                    Text(L10n.text("home.medical.list.health_exam.other_risk.title"))
-                        .font(.subheadline)
-                        .foregroundStyle(.primary)
-
-                    Text("\(otherRiskItems.count)")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-                    Spacer()
-
-                    Image(systemName: isOtherRiskExpanded ? "chevron.up" : "chevron.down")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(Color.white.opacity(0.05))
-            .overlay(alignment: .bottom) {
-                Divider()
-                    .background(Color(uiColor: .separator).opacity(0.35))
-            }
+//            Button {
+//                isOtherRiskExpanded.toggle()
+//            } label: {
+//                HStack(spacing: 8) {
+//                    Image(systemName: "chart.line.uptrend.xyaxis")
+//                        .font(.body)
+//                        .foregroundStyle(Color(uiColor: .systemOrange))
+//
+//                    Text(L10n.text("home.medical.list.health_exam.other_risk.title"))
+//                        .font(.subheadline)
+//                        .foregroundStyle(.primary)
+//
+//                    Text("\(otherRiskItems.count)")
+//                        .font(.caption.weight(.medium))
+//                        .foregroundStyle(.primary)
+//                        .padding(.horizontal, 8)
+//                        .padding(.vertical, 2)
+//                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+//
+//                    Spacer()
+//
+//                    Image(systemName: isOtherRiskExpanded ? "chevron.up" : "chevron.down")
+//                        .font(.body)
+//                        .foregroundStyle(.secondary)
+//                }
+//                .padding(.horizontal, 16)
+//                .padding(.vertical, 12)
+//                .contentShape(Rectangle())
+//            }
+//            .buttonStyle(.plain)
+//            .background(Color.white.opacity(0.05))
+//            .overlay(alignment: .bottom) {
+//                Divider()
+//                    .background(Color(uiColor: .separator).opacity(0.35))
+//            }
 
             if isOtherRiskExpanded {
                 VStack(spacing: 8) {

@@ -41,7 +41,6 @@ struct MemberMedicalExamArchiveStepView: View {
                         .padding(.vertical, 24)
                 } else {
                     examReportListSection
-                    examHistoryCompletionCard
                 }
             }
         }
@@ -100,8 +99,33 @@ struct MemberMedicalExamArchiveStepView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            
+            examHistoryCompletionCard
+
+            
         } else if let reportDetailLoader {
-            MemberSetupSection(title: "体检报告列表") {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.title2.weight(.bold))
+                        .imageScale(.medium)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(Color.accentColor)
+                    Text("体检报告列表")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.primary)
+                    
+                    Spacer(minLength: 0)
+                    
+                    importActionButton(
+                        title: "拍照 / 扫描纸质报告",
+                        systemImage: "camera.viewfinder",
+                        isPrimary: true
+                    ) {
+                        showingUploadSheet = true
+                    }
+                }
+
                 VStack(spacing: 12) {
                     ForEach(sortedReports, id: \.id) { report in
                         ExamReportCard(
@@ -197,8 +221,8 @@ struct MemberMedicalExamArchiveStepView: View {
             Label(title, systemImage: systemImage)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isPrimary ? Color.white : Color.primary)
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
+                .padding(.horizontal, 5)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(isPrimary ? Color.accentColor : Color(uiColor: .systemBackground))
@@ -250,10 +274,7 @@ struct MemberMedicalExamArchiveStepView: View {
 
     @MainActor
     private func refreshAfterMedicalUploadSave() async {
-        let didRefreshCompleteData = await viewModel.refreshMemberCompleteDataCacheForHealthExamReports()
-        if didRefreshCompleteData == false {
-            await viewModel.refreshMemberHealthExamReportsIfNeeded(force: true)
-        }
+        await viewModel.refreshMemberHealthExamReportsIfNeeded(force: true)
         reportDetailLoader?.replaceReports(viewModel.memberHealthExamReports)
         hasExamHistory = true
     }

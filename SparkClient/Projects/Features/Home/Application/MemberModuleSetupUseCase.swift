@@ -230,23 +230,9 @@ struct MemberModuleSetupUseCase: Sendable {
         module: MemberSetupModule,
         progressMap: [String: MemberModuleSectionProgressRecord]
     ) -> Bool {
-        let requiredSectionCodes = requiredSectionCodes(for: module)
-        guard requiredSectionCodes.isEmpty == false else {
-            return progressMap.values.contains { $0.status == .completed }
-        }
-        return requiredSectionCodes.allSatisfy { sectionCode in
-            progressMap[sectionCode]?.status == .completed
-        }
-    }
-
-    private func requiredSectionCodes(for module: MemberSetupModule) -> [String] {
         switch module {
-        case .medical:
-            return MemberMedicalSectionCode.allCases.map(\.rawValue)
-        case .nutrition:
-            return MemberNutritionSectionCode.allCases.map(\.rawValue)
-        case .dailyHealth:
-            return []
+        case .medical, .nutrition, .dailyHealth:
+            return progressMap.values.contains { $0.status == .completed }
         }
     }
 }

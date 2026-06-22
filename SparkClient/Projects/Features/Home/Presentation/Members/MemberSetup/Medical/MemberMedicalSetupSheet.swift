@@ -6,7 +6,7 @@ struct MemberMedicalSetupSheetView: View {
     @State private var path: [MedicalGuideRoute] = []
     @State private var occupationSearchText = ""
     @State private var didApplyEntryRoute = false
-    let homeDependencies: HomeFeatureDependencies?
+    let homeDependencies: HomeFeatureDependencies
     let entryMode: MedicalSetupEntryMode
     let onCompleted: (String) -> Void
     let onSectionCompleted: (MedicalSetupEntryMode, String) -> Void
@@ -15,11 +15,10 @@ struct MemberMedicalSetupSheetView: View {
         member: Member?,
         medicalQueryAPI: SparkMedicalQueryAPI,
         setupUseCase: MemberModuleSetupUseCase,
-        homeDependencies: HomeFeatureDependencies? = nil,
+        homeDependencies: HomeFeatureDependencies,
         preloadedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
         preloadedNutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState? = nil,
         onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil,
-        onCompleteDataRefresh completeDataRefresher: (@MainActor () async -> SparkMedicalSyncAPI.RemoteMemberCompleteData?)? = nil,
         entryMode: MedicalSetupEntryMode = .full,
         onCompleted: @escaping (String) -> Void,
         onSectionCompleted: @escaping (MedicalSetupEntryMode, String) -> Void = { _, _ in }
@@ -33,8 +32,7 @@ struct MemberMedicalSetupSheetView: View {
                 preloadedCompleteData: preloadedCompleteData,
                 preloadedNutritionGoalState: preloadedNutritionGoalState,
                 entryMode: entryMode,
-                onCompleteDataPatch: completeDataPatcher,
-                onCompleteDataRefresh: completeDataRefresher
+                onCompleteDataPatch: completeDataPatcher
             )
         )
         self.homeDependencies = homeDependencies
@@ -608,45 +606,25 @@ struct MemberMedicalSetupSheetView: View {
 
     // 既往疾病单题页。
     private var chronicConditionsStep: some View {
-        Group {
-            if let homeDependencies {
-                MedicalGuideStepShell(
-                    title: "既往疾病",
-                    subtitle: "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
-                    step: 10,
-                    total: viewModel.totalGuideSteps,
-                    isLoading: viewModel.isSaving,
-                    primaryTitle: chronicConditionsPrimaryTitle,
-                    primaryEnabled: viewModel.canAdvanceFromChronicConditions,
-                    onSkip: { nextVisibleHistory(after: .chronicConditions) },
-                    onNext: { nextVisibleHistory(after: .chronicConditions) }
-                ) {
-                    MemberMedicalChronicConditionStepView(
-                        status: $viewModel.chronicConditionStatus,
-                        chronicConditions: $viewModel.chronicConditions,
-                        conditionDetails: $viewModel.chronicConditionDetails,
-                        member: viewModel.member,
-                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
-                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel
-                    )
-                }
-            } else {
-                MedicalGuideStepShell(
-                    title: "既往疾病",
-                    subtitle: "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
-                    step: 10,
-                    total: viewModel.totalGuideSteps,
-                    isLoading: viewModel.isSaving,
-                    primaryTitle: chronicConditionsPrimaryTitle,
-                    primaryEnabled: viewModel.canAdvanceFromChronicConditions,
-                    onSkip: { nextVisibleHistory(after: .chronicConditions) },
-                    onNext: { nextVisibleHistory(after: .chronicConditions) }
-                ) {
-                    Text("缺少病历上传依赖，请从首页进入医疗引导。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
+        MedicalGuideStepShell(
+            title: "既往疾病",
+            subtitle: "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
+            step: 10,
+            total: viewModel.totalGuideSteps,
+            isLoading: viewModel.isSaving,
+            primaryTitle: chronicConditionsPrimaryTitle,
+            primaryEnabled: viewModel.canAdvanceFromChronicConditions,
+            onSkip: { nextVisibleHistory(after: .chronicConditions) },
+            onNext: { nextVisibleHistory(after: .chronicConditions) }
+        ) {
+            MemberMedicalChronicConditionStepView(
+                status: $viewModel.chronicConditionStatus,
+                chronicConditions: $viewModel.chronicConditions,
+                conditionDetails: $viewModel.chronicConditionDetails,
+                member: viewModel.member,
+                medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
+                aiSettingsViewModel: homeDependencies.aiSettingsViewModel
+            )
         }
     }
 
@@ -664,7 +642,7 @@ struct MemberMedicalSetupSheetView: View {
     // 长期用药单题页。
     private var longTermMedicationStep: some View {
         Group {
-            if let homeDependencies, let memberID = viewModel.member?.id {
+            if viewModel.member?.id != nil {
                 MedicalGuideStepShell(
                     title: "长期用药",
                     subtitle: "了解您的用药史，有助于我们为您提供更精准的复查项目建议、服药提醒，并辅助报告的上下文解读。",
@@ -709,7 +687,7 @@ struct MemberMedicalSetupSheetView: View {
                     onSkip: { nextVisibleHistory(after: .longTermMedication) },
                     onNext: { nextVisibleHistory(after: .longTermMedication) }
                 ) {
-                    Text("缺少用药档案依赖，请从首页进入医疗引导。")
+                    Text("缺少成员信息，无法加载用药档案。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -827,55 +805,29 @@ struct MemberMedicalSetupSheetView: View {
 
     // 健康病史与症状记录中的症状观察 / 随访单题页。
     private var symptomFollowUpStep: some View {
-        Group {
-            if let homeDependencies {
-                MedicalGuideStepShell(
-                    title: "当前症状",
-                    subtitle: "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
-                    step: 15,
-                    total: viewModel.totalGuideSteps,
-                    isLoading: viewModel.isSaving,
-                    primaryTitle: symptomFollowUpPrimaryTitle,
-                    primaryEnabled: viewModel.canAdvanceFromSymptomFollowUp,
-                    onSkip: {
-                        viewModel.hasPrefilledSymptomFollowUp = true
-                        nextVisibleHistory(after: .symptomFollowUp)
-                    },
-                    onNext: {
-                        viewModel.hasPrefilledSymptomFollowUp = true
-                        nextVisibleHistory(after: .symptomFollowUp)
-                    }
-                ) {
-                    MemberMedicalSymptomFollowUpStepView(
-                        viewModel: viewModel,
-                        symptomStatus: $viewModel.symptomFollowUpStatus,
-                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
-                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel
-                    )
-                }
-            } else {
-                MedicalGuideStepShell(
-                    title: "当前症状",
-                    subtitle: "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
-                    step: 15,
-                    total: viewModel.totalGuideSteps,
-                    isLoading: viewModel.isSaving,
-                    primaryTitle: symptomFollowUpPrimaryTitle,
-                    primaryEnabled: viewModel.canAdvanceFromSymptomFollowUp,
-                    onSkip: {
-                        viewModel.hasPrefilledSymptomFollowUp = true
-                        nextVisibleHistory(after: .symptomFollowUp)
-                    },
-                    onNext: {
-                        viewModel.hasPrefilledSymptomFollowUp = true
-                        nextVisibleHistory(after: .symptomFollowUp)
-                    }
-                ) {
-                    Text("缺少病历上传依赖，请从首页进入医疗引导。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+        MedicalGuideStepShell(
+            title: "当前症状",
+            subtitle: "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
+            step: 15,
+            total: viewModel.totalGuideSteps,
+            isLoading: viewModel.isSaving,
+            primaryTitle: symptomFollowUpPrimaryTitle,
+            primaryEnabled: viewModel.canAdvanceFromSymptomFollowUp,
+            onSkip: {
+                viewModel.hasPrefilledSymptomFollowUp = true
+                nextVisibleHistory(after: .symptomFollowUp)
+            },
+            onNext: {
+                viewModel.hasPrefilledSymptomFollowUp = true
+                nextVisibleHistory(after: .symptomFollowUp)
             }
+        ) {
+            MemberMedicalSymptomFollowUpStepView(
+                viewModel: viewModel,
+                symptomStatus: $viewModel.symptomFollowUpStatus,
+                medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
+                aiSettingsViewModel: homeDependencies.aiSettingsViewModel
+            )
         }
     }
 
@@ -1414,7 +1366,7 @@ struct MemberMedicalSetupSheetView: View {
 
     private var examArchiveStep: some View {
         Group {
-            if let homeDependencies, viewModel.member?.id != nil {
+            if viewModel.member?.id != nil {
                 MedicalGuideStepShell(
                     title: "体检档案",
                     subtitle: "整合并追踪你的体检报告，能让我们为你绘制出核心指标的长期变化趋势图，并及时提供科学的复查建议。",
@@ -1447,7 +1399,7 @@ struct MemberMedicalSetupSheetView: View {
                     onSkip: { proceedAfterExamArchiveStep() },
                     onNext: { proceedAfterExamArchiveStep() }
                 ) {
-                    Text("缺少体检档案依赖，请从首页进入医疗引导。")
+                    Text("缺少成员信息，无法加载体检档案。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

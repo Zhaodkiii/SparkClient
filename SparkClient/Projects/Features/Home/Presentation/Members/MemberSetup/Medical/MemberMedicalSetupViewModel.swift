@@ -328,10 +328,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let setupUseCase: MemberModuleSetupUseCase
-    private let homeDependencies: HomeFeatureDependencies?
+    private let homeDependencies: HomeFeatureDependencies
     private let entryMode: MedicalSetupEntryMode
     private let completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)?
-    private let completeDataRefresher: (@MainActor () async -> SparkMedicalSyncAPI.RemoteMemberCompleteData?)?
     private let guideSessionID: String
     private var persistedProfileSnapshot: SparkMedicalSyncAPI.RemoteMemberMedicalProfile?
     private var hasSeededDefaultHeight = false
@@ -345,12 +344,11 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         member: Member?,
         medicalQueryAPI: SparkMedicalQueryAPI,
         setupUseCase: MemberModuleSetupUseCase,
-        homeDependencies: HomeFeatureDependencies? = nil,
+        homeDependencies: HomeFeatureDependencies,
         preloadedCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil,
         preloadedNutritionGoalState: SparkNutritionAPI.RemoteNutritionGoalState? = nil,
         entryMode: MedicalSetupEntryMode = .full,
-        onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil,
-        onCompleteDataRefresh completeDataRefresher: (@MainActor () async -> SparkMedicalSyncAPI.RemoteMemberCompleteData?)? = nil
+        onCompleteDataPatch completeDataPatcher: ((@escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) -> Void)? = nil
     ) {
         let initialChronicConditions = member?.chronicConditions ?? []
 
@@ -362,7 +360,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         self.preloadedCompleteData = preloadedCompleteData
         self.preloadedNutritionGoalState = preloadedNutritionGoalState
         self.completeDataPatcher = completeDataPatcher
-        self.completeDataRefresher = completeDataRefresher
         self.guideSessionID = UUID().uuidString
         self.birthDate = member?.birthDate
         self.gender = member?.gender ?? "unknown"
@@ -724,16 +721,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    @discardableResult
-    func refreshMemberCompleteDataCacheForHealthExamReports() async -> Bool {
-        guard let refreshed = await completeDataRefresher?() else {
-            return false
-        }
-        preloadedCompleteData = refreshed
-        applyFromCompleteData(refreshed)
-        return true
     }
 
     func ingestHealthExamReports(_ reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) {
@@ -1153,10 +1140,18 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     var lifestyleSummary: String {
         var pieces: [String] = []
-        if hasPrefilledSmokingStatus { pieces.append(smokingText ?? smokingStatus.title) }
-        if hasPrefilledDrinkingStatus { pieces.append(drinkingText ?? drinkingStatus.title) }
-        if hasPrefilledExerciseFrequency { pieces.append(exerciseText ?? exerciseFrequency.title) }
-        if hasPrefilledSleepHours { pieces.append(String(format: "%.1f小时", sleepHours)) }
+        if smokingStatus != .never {
+            pieces.append(smokingText ?? smokingStatus.title)
+        }
+        if drinkingStatus != .none {
+            pieces.append(drinkingText ?? drinkingStatus.title)
+        }
+        if exerciseFrequency != .none {
+            pieces.append(exerciseText ?? exerciseFrequency.title)
+        }
+        if sleepHours > 0 {
+            pieces.append(String(format: "%.1f小时", sleepHours))
+        }
         return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
     }
 
@@ -1364,8 +1359,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             await refreshMemberMedicationPlansIfNeeded()
             await refreshMemberHealthExamReportsIfNeeded()
             await refreshMemberSurgeriesIfNeeded()
-            if preloadedNutritionGoalState == nil, preloadedCompleteData?.nutritionGoalState == nil,
-               let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
+            if preloadedNutritionGoalState == nil, preloadedCompleteData?.nutritionGoalState == nil {
+                
+                let goalUseCase = homeDependencies.nutritionDependencies.goalUseCase
+                
                 do {
                     let goalState = try await goalUseCase.loadGoalState(memberID: member.id)
                     preloadedNutritionGoalState = goalState
