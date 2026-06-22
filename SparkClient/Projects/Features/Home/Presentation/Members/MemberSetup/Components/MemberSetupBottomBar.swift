@@ -10,12 +10,26 @@ struct MemberSetupBottomBar: View {
     let onPrimary: () -> Void
     var secondaryTitle: String? = nil
     var onSecondary: (() -> Void)? = nil
+    var keyboardVisible = false
 
     private var canSubmit: Bool {
         primaryEnabled && isLoading == false
     }
 
     var body: some View {
+        Group {
+            if keyboardVisible {
+                EmptyView()
+            } else {
+                bottomButtons
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: primaryEnabled)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isLoading)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: keyboardVisible)
+    }
+
+    private var bottomButtons: some View {
         VStack(spacing: 12) {
             Button {
                 guard canSubmit else { return }
@@ -28,12 +42,12 @@ struct MemberSetupBottomBar: View {
                             .tint(.white)
                     }
                     Text(primaryTitle)
-                        .font(.headline.weight(.semibold))
                 }
-                    .foregroundStyle(canSubmit || isLoading ? Color.white : Color.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 56)
-                    .background(primaryBackground)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(canSubmit || isLoading ? Color.white : Color.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 56)
+                .background(primaryBackground)
             }
             .buttonStyle(.plain)
             .disabled(!canSubmit)
@@ -52,7 +66,7 @@ struct MemberSetupBottomBar: View {
                         .frame(minHeight: 56)
                         .background(
                             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                .fill(.ultraThinMaterial)
+                                .fill(.regularMaterial)
                         )
                 }
                 .buttonStyle(.plain)
@@ -64,8 +78,6 @@ struct MemberSetupBottomBar: View {
         .padding(.top, 16)
         .padding(.bottom, 12)
         .background(.regularMaterial)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: primaryEnabled)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isLoading)
     }
 
     private var primaryBackground: some View {
@@ -85,6 +97,7 @@ extension View {
         primaryTitle: String,
         primaryEnabled: Bool,
         isLoading: Bool = false,
+        keyboardVisible: Bool = false,
         onPrimary: @escaping () -> Void,
         secondaryTitle: String? = nil,
         onSecondary: (() -> Void)? = nil
@@ -96,7 +109,8 @@ extension View {
                 isLoading: isLoading,
                 onPrimary: onPrimary,
                 secondaryTitle: secondaryTitle,
-                onSecondary: onSecondary
+                onSecondary: onSecondary,
+                keyboardVisible: keyboardVisible
             )
         }
     }

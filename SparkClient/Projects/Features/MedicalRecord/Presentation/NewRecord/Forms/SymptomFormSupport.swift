@@ -14,38 +14,43 @@ enum SymptomFormSupport {
         .init(
             title: "全身与神经系统",
             systemImage: "figure.stand",
-            symptoms: ["发热", "头痛", "疲劳/乏力", "睡眠障碍"]
+            symptoms: ["发热", "头痛", "眩晕/头晕", "疲劳/乏力", "睡眠障碍", "盗汗/异常出汗", "体重骤降"]
         ),
         .init(
             title: "心肺与呼吸系统",
             systemImage: "heart.fill",
-            symptoms: ["咳嗽", "胸痛", "心悸", "血压波动"]
+            symptoms: ["咳嗽", "咳痰", "气促/呼吸困难", "胸痛", "心悸", "血压波动"]
         ),
         .init(
             title: "胃肠与代谢系统",
             systemImage: "fork.knife",
-            symptoms: ["胃肠不适", "恶心/呕吐", "血糖波动", "食欲改变"]
+            symptoms: ["胃肠不适", "胃酸/反流", "恶心/呕吐", "腹泻", "便秘", "血糖波动", "食欲改变"]
         ),
         .init(
             title: "肌肉与体表",
             systemImage: "figure.walk",
-            symptoms: ["关节疼痛", "肌肉酸痛", "异常浮肿", "皮疹"]
+            symptoms: ["关节疼痛", "肌肉酸痛", "异常浮肿", "皮疹/瘙痒", "脱发", "淋巴结肿大"]
         )
     ]
+
+    static var allPresetSymptoms: [String] {
+        symptomCategories.flatMap(\.symptoms)
+    }
+
+    static func symptomMatchesSearch(_ symptom: String, matching searchText: String) -> Bool {
+        CatalogItemSearch.matches(symptom, searchText: searchText)
+    }
 
     static func filteredCategories(matching searchText: String) -> [SymptomCategoryGroup] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return symptomCategories }
 
-        let query = trimmed.lowercased()
-        let queryPinyin = trimmed.toPinyinForSearch().lowercased()
-
         return symptomCategories.compactMap { category in
-            let matchedSymptoms = category.symptoms.filter { symptom in
-                symptom.localizedCaseInsensitiveContains(trimmed)
-                    || symptom.toPinyinForSearch().lowercased().contains(queryPinyin)
-                    || symptom.toPinyinForSearch().lowercased().contains(query)
+            if CatalogItemSearch.matches(category.title, searchText: trimmed) {
+                return category
             }
+
+            let matchedSymptoms = category.symptoms.filter { symptomMatchesSearch($0, matching: trimmed) }
             guard matchedSymptoms.isEmpty == false else { return nil }
             return SymptomCategoryGroup(
                 title: category.title,

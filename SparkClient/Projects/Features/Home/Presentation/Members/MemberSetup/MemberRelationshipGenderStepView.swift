@@ -9,15 +9,17 @@ struct MemberRelationshipGenderStepView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                MemberSetupStepHeaderView(
-                    title: L10n.text("home.members.relationship.title", fallback: "成员关系"),
-                    subtitle: L10n.text("home.members.relationship.subtitle", fallback: "确认与当前账号的关系与性别"),
-                    step: 2,
-                    total: 3
+            VStack(alignment: .leading, spacing: 18) {
+                MemberSetupHeroView(
+                    systemImage: "person.2.fill",
+                    accentColor: .systemPurple
                 )
 
-                MemberSetupSection(title: L10n.text("home.members.field.relationship")) {
+                MemberSetupStepperCard(
+                    title: L10n.text("home.members.field.relationship"),
+                    subtitle: L10n.text("home.members.relationship.subtitle", fallback: "确认与当前账号的关系与性别"),
+                    systemImage: "figure.2.and.child.holdinghands"
+                ) {
                     VStack(spacing: 12) {
                         ForEach(MemberRelationshipCatalog.rows, id: \.self) { rowCodes in
                             HStack(spacing: 12) {
@@ -38,16 +40,18 @@ struct MemberRelationshipGenderStepView: View {
                     }
                 }
 
-                MemberSetupSection(title: L10n.text("home.members.field.gender")) {
+                MemberSetupStepperCard(
+                    title: L10n.text("home.members.field.gender"),
+                    systemImage: "person.fill"
+                ) {
                     HStack(spacing: 12) {
-                        genderChip(title: L10n.text("home.members.gender.male"), value: "male")
-                        genderChip(title: L10n.text("home.members.gender.female"), value: "female")
+                        genderChip(title: L10n.text("home.members.gender.male"), value: "male", systemImage: "figure.stand")
+                        genderChip(title: L10n.text("home.members.gender.female"), value: "female", systemImage: "figure.stand.dress")
                     }
                 }
-
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 16)
+            .padding(.top, 12)
             .padding(.bottom, 120)
         }
         .background(Color(uiColor: .systemGroupedBackground))
@@ -69,36 +73,41 @@ struct MemberRelationshipGenderStepView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(isSelected ? Color.accentColor.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
                 )
         }
         .buttonStyle(.plain)
     }
 
-    private func genderChip(title: String, value: String) -> some View {
+    private func genderChip(title: String, value: String, systemImage: String) -> some View {
         Button {
             draft.gender = value
             triggerHaptic(style: .light)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: draft.gender == value ? "record.circle.fill" : "circle")
+                Image(systemName: draft.gender == value ? "\(systemImage).fill" : systemImage)
                     .symbolRenderingMode(.hierarchical)
                 Text(title)
             }
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(draft.gender == value ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.primary))
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(draft.gender == value ? Color.accentColor.opacity(0.12) : Color.clear)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(draft.gender == value ? Color.accentColor.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(draft.gender == value ? Color.accentColor : .clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)

@@ -2,8 +2,11 @@ import SwiftUI
 
 /// 分类型结果页路由：作为抽取结果入口，使用 NavigationLink 跳转到对应的结果页面模块。
 struct MedicalDocumentResultRouterView: View {
-    @EnvironmentObject private var memberContextStore: MemberContextStore
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
+
+    private var memberContextStore: MemberContextStore {
+        viewModel.memberContextStoreForLocalForms
+    }
 
     var body: some View {
         destinationView

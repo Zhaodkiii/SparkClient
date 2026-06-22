@@ -48,8 +48,8 @@ enum MedicalGuideExerciseFrequency: String, CaseIterable, Identifiable, Sendable
     var title: String {
         switch self {
         case .none: return "不运动"
-        case .oneToTwo: return "1-2次"
-        case .threeToFive: return "3-5次"
+        case .oneToTwo: return "1-2 次"
+        case .threeToFive: return "3-5 次"
         case .moreThanFive: return "5次以上"
         }
     }
@@ -67,6 +67,46 @@ enum MedicalGuideExerciseIntensity: String, CaseIterable, Identifiable, Sendable
         case .low: return "低强度"
         case .medium: return "中强度"
         case .high: return "高强度"
+        }
+    }
+
+    var lifestyleTitle: String {
+        switch self {
+        case .low: return "低强度 (轻微出汗)"
+        case .medium: return "中强度 (呼吸加快)"
+        case .high: return "高强度"
+        }
+    }
+}
+
+enum MedicalGuideDrinkingAmountLevel: String, CaseIterable, Identifiable, Sendable {
+    case light
+    case medium
+    case heavy
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .light: return "适量/小酌"
+        case .medium: return "中度/尽兴"
+        case .heavy: return "过量/宿醉"
+        }
+    }
+}
+
+enum MedicalGuideSleepQuality: String, CaseIterable, Identifiable, Sendable {
+    case good
+    case fair
+    case poor
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .good: return "入睡快、睡得香"
+        case .fair: return "多梦/易惊醒"
+        case .poor: return "经常失眠"
         }
     }
 }
@@ -110,6 +150,47 @@ enum MedicalGuideDisclosureStatus: String, CaseIterable, Identifiable, Sendable 
         case .unknown: return "不清楚"
         }
     }
+}
+
+enum MedicalGuideOverviewBadgeStyle: Sendable {
+    case neutral
+    case success
+    case warning
+    case danger
+    case accent
+}
+
+struct MedicalGuideOverviewInlineBadge: Sendable {
+    let text: String
+    let style: MedicalGuideOverviewBadgeStyle
+}
+
+struct MedicalGuideOverviewBulletLine: Identifiable, Sendable {
+    let id: String
+    let prefix: String
+    let content: String
+    let badge: MedicalGuideOverviewInlineBadge?
+
+    init(
+        id: String,
+        prefix: String,
+        content: String,
+        badge: MedicalGuideOverviewInlineBadge? = nil
+    ) {
+        self.id = id
+        self.prefix = prefix
+        self.content = content
+        self.badge = badge
+    }
+}
+
+struct MedicalGuideOverviewCardModel: Identifiable, Sendable {
+    let id: String
+    let icon: String
+    let title: String
+    let statusText: String
+    let statusStyle: MedicalGuideOverviewBadgeStyle
+    let bullets: [MedicalGuideOverviewBulletLine]
 }
 
 struct MedicalGuideKeyIndicatorDraft: Identifiable, Equatable, Sendable {
@@ -213,18 +294,25 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var drinkingHistoryDuration: String = ""
     @Published var drinkingQuitDuration: String = ""
     @Published var drinkingTypes: [String] = []
+    @Published var customAlcoholType: String = ""
+    @Published var drinkingAmountLevel: MedicalGuideDrinkingAmountLevel?
     @Published var hasPrefilledDrinkingStatus: Bool = false
     @Published var exerciseFrequency: MedicalGuideExerciseFrequency = .oneToTwo
     @Published var exerciseIntensity: MedicalGuideExerciseIntensity = .medium
     @Published var exerciseTypes: [String] = []
+    @Published var customExerciseType: String = ""
     @Published var exerciseDurationMinutes: String = ""
     @Published var hasPrefilledExerciseFrequency: Bool = false
-    @Published var sleepHours: Double = 7
+    @Published var sleepHours: Double = 7.5
+    @Published var sleepQuality: MedicalGuideSleepQuality?
     @Published var hasPrefilledSleepHours: Bool = false
+    @Published var hasPrefilledSleepQuality: Bool = false
     @Published var hasExamHistory: Bool = false
     @Published var lastExamYear: String = ""
     @Published var examInstitution: String = ""
     @Published var examReportSummary: String = ""
+    @Published var memberHealthExamReports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments] = []
+    @Published var isLoadingMemberHealthExamReports = false
     @Published var keyIndicatorRows: [MedicalGuideKeyIndicatorDraft]
     @Published var riskAssessmentLines: [String] = []
     @Published var examPlanLines: [String] = []
@@ -462,7 +550,11 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var hasExamArchive: Bool {
-        hasExamHistory || lastExamYear.isEmpty == false || examInstitution.isEmpty == false || examReportSummary.isEmpty == false
+        hasExamHistory
+            || lastExamYear.isEmpty == false
+            || examInstitution.isEmpty == false
+            || examReportSummary.isEmpty == false
+            || memberHealthExamReports.isEmpty == false
     }
 
     var hasKeyIndicators: Bool {
@@ -607,6 +699,120 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         hasPrefilledLongTermMedicationStatus = true
     }
 
+    func refreshMemberHealthExamReportsIfNeeded(force: Bool = false) async {
+        guard let member else { return }
+        if force == false, isLoadingMemberHealthExamReports { return }
+
+        if memberHealthExamReports.isEmpty,
+           let cached = preloadedCompleteData?.healthExamReports,
+           cached.isEmpty == false {
+            ingestHealthExamReports(cached)
+        }
+
+        isLoadingMemberHealthExamReports = true
+        defer { isLoadingMemberHealthExamReports = false }
+
+        do {
+            let reports = try await medicalQueryAPI.listHealthExamReportsWithAttachments(memberID: member.id)
+            ingestHealthExamReports(reports)
+            applyCompleteDataPatch {
+                MemberModuleSetupCompleteDataPatcher.upsertHealthExamReports(reports, into: &$0)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func ingestHealthExamReports(_ reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) {
+        memberHealthExamReports = reports
+        guard reports.isEmpty == false else { return }
+        hasExamHistory = true
+        syncExamFieldsFromLatestReport()
+    }
+
+    func ingestSavedHealthExamReport(_ report: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments) {
+        if let index = memberHealthExamReports.firstIndex(where: { $0.id == report.id }) {
+            memberHealthExamReports[index] = report
+        } else {
+            memberHealthExamReports.insert(report, at: 0)
+        }
+        hasExamHistory = true
+        syncExamFieldsFromLatestReport()
+        applyCompleteDataPatch {
+            MemberModuleSetupCompleteDataPatcher.upsertHealthExamReport(report, into: &$0)
+        }
+    }
+
+    func removeHealthExamReport(id: Int) {
+        memberHealthExamReports.removeAll { $0.id == id }
+        applyCompleteDataPatch {
+            MemberModuleSetupCompleteDataPatcher.removeHealthExamReport(id: id, into: &$0)
+        }
+    }
+
+    func syncHealthExamReportsCache(_ reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) {
+        memberHealthExamReports = reports
+        if reports.isEmpty == false {
+            hasExamHistory = true
+            syncExamFieldsFromLatestReport()
+        }
+        applyCompleteDataPatch {
+            MemberModuleSetupCompleteDataPatcher.upsertHealthExamReports(reports, into: &$0)
+        }
+    }
+
+    func syncExamFieldsFromLatestReport() {
+        guard let latest = memberHealthExamReports.max(by: {
+            ($0.examDate ?? .distantPast) < ($1.examDate ?? .distantPast)
+        }) else { return }
+
+        if let examDate = latest.examDate {
+            lastExamYear = Self.yearMonthString(from: examDate)
+        }
+        if examInstitution.isEmpty, let institution = latest.institutionName?.nilIfBlank {
+            examInstitution = institution
+        }
+        if examReportSummary.isEmpty, let summary = latest.summary?.nilIfBlank {
+            examReportSummary = summary
+        }
+    }
+
+    static func yearMonthString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        return formatter.string(from: date)
+    }
+
+    static func displayYearMonth(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return value }
+
+        let parts = trimmed.split(separator: "-", omittingEmptySubsequences: false)
+        if parts.count == 2, let year = Int(parts[0]), let month = Int(parts[1]), month >= 1, month <= 12 {
+            return "\(year)年\(month)月"
+        }
+        if let year = Int(trimmed) {
+            return "\(year)年"
+        }
+        return trimmed
+    }
+
+    static func date(fromYearMonth value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        if let date = formatter.date(from: trimmed) {
+            return date
+        }
+
+        if let year = Int(trimmed) {
+            return Calendar.current.date(from: DateComponents(year: year, month: 1, day: 1))
+        }
+        return nil
+    }
+
     func refreshMemberSurgeriesIfNeeded(force: Bool = false) async {
         guard let member else { return }
         if force == false, isLoadingMemberSurgeries { return }
@@ -713,7 +919,18 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         drinkingCount = profile.drinkingProfile.count
         drinkingHistoryDuration = profile.drinkingProfile.historyDuration
         drinkingQuitDuration = profile.drinkingProfile.quitDuration
-        drinkingTypes = profile.drinkingProfile.types
+        drinkingTypes = profile.drinkingProfile.types.filter { Self.presetDrinkingTypes.contains($0) }
+        customAlcoholType = profile.extra?["other_alcohol_type"] ?? ""
+        let legacyCustomTypes = profile.drinkingProfile.types.filter { Self.presetDrinkingTypes.contains($0) == false }
+        if customAlcoholType.isEmpty, legacyCustomTypes.isEmpty == false {
+            customAlcoholType = legacyCustomTypes.joined(separator: "、")
+        }
+        if let rawAmount = profile.extra?["drinking_amount_level"],
+           let level = MedicalGuideDrinkingAmountLevel(rawValue: rawAmount) {
+            drinkingAmountLevel = level
+        } else if let legacyAmount = MedicalGuideDrinkingAmountLevel(rawValue: profile.drinkingProfile.count) {
+            drinkingAmountLevel = legacyAmount
+        }
 
         if let frequency = MedicalGuideExerciseFrequency(rawValue: profile.exerciseProfile.frequency) {
             exerciseFrequency = frequency
@@ -722,14 +939,30 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let intensity = MedicalGuideExerciseIntensity(rawValue: profile.exerciseProfile.intensity) {
             exerciseIntensity = intensity
         }
-        exerciseTypes = profile.exerciseProfile.types
+        exerciseTypes = profile.exerciseProfile.types.filter { Self.presetExerciseTypes.contains($0) }
+        customExerciseType = profile.extra?["custom_exercise_type"] ?? ""
+        let legacyCustomExercise = profile.exerciseProfile.types.filter { Self.presetExerciseTypes.contains($0) == false }
+        if customExerciseType.isEmpty, legacyCustomExercise.isEmpty == false {
+            customExerciseType = legacyCustomExercise.joined(separator: "、")
+        }
         exerciseDurationMinutes = profile.exerciseProfile.durationMinutes
 
         if let hours = profile.sleepHours {
             sleepHours = hours
             hasPrefilledSleepHours = true
         }
+        if let rawQuality = profile.extra?["sleep_quality"],
+           let quality = MedicalGuideSleepQuality(rawValue: rawQuality) {
+            sleepQuality = quality
+            hasPrefilledSleepQuality = true
+        }
     }
+
+    static let presetDrinkingTypes = ["白酒", "啤酒", "红酒/葡萄酒", "黄酒", "洋酒", "果酒/米酒"]
+    static let presetExerciseTypes = [
+        "散步/快走", "跑步", "骑行", "游泳", "器械健身", "力量训练",
+        "瑜伽/普拉提", "球类运动", "爬山/徒步", "广场舞/操课"
+    ]
 
     private func profileAllergyDetailsPayload() -> [String: SparkMedicalSyncAPI.RemoteAllergyDetail] {
         allergyDetails.mapValues { detail in
@@ -767,7 +1000,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private func profileDrinkingPayload() -> SparkMedicalSyncAPI.RemoteDrinkingProfile {
         SparkMedicalSyncAPI.RemoteDrinkingProfile(
             status: drinkingStatus.rawValue,
-            count: drinkingCount,
+            count: drinkingAmountLevel?.rawValue ?? "",
             historyDuration: drinkingHistoryDuration,
             quitDuration: drinkingQuitDuration,
             types: drinkingTypes
@@ -910,7 +1143,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if hasPrefilledSmokingStatus { pieces.append(smokingText ?? smokingStatus.title) }
         if hasPrefilledDrinkingStatus { pieces.append(drinkingText ?? drinkingStatus.title) }
         if hasPrefilledExerciseFrequency { pieces.append(exerciseText ?? exerciseFrequency.title) }
-        if hasPrefilledSleepHours { pieces.append(String(format: "%.0f小时", sleepHours)) }
+        if hasPrefilledSleepHours { pieces.append(String(format: "%.1f小时", sleepHours)) }
         return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
     }
 
@@ -928,14 +1161,22 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var sleepSummary: String {
-        hasPrefilledSleepHours ? String(format: "%.0f小时", sleepHours) : "未填写"
+        guard hasPrefilledSleepHours else { return "未填写" }
+        var pieces = [String(format: "%.1f小时", sleepHours)]
+        if hasPrefilledSleepQuality, let sleepQuality {
+            pieces.append(sleepQuality.title)
+        }
+        return pieces.joined(separator: " · ")
     }
 
     var examArchiveSummary: String {
         guard hasExamArchive else { return "未填写" }
         var pieces: [String] = []
         if hasExamHistory { pieces.append("有体检史") }
-        if lastExamYear.isEmpty == false { pieces.append(lastExamYear) }
+        if memberHealthExamReports.isEmpty == false {
+            pieces.append("\(memberHealthExamReports.count)份报告")
+        }
+        if lastExamYear.isEmpty == false { pieces.append(Self.displayYearMonth(lastExamYear)) }
         if examInstitution.isEmpty == false { pieces.append(examInstitution) }
         if examReportSummary.isEmpty == false { pieces.append("报告已填") }
         return pieces.joined(separator: " · ")
@@ -1108,6 +1349,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             }
             await refreshMemberSymptomsIfNeeded()
             await refreshMemberMedicationPlansIfNeeded()
+            await refreshMemberHealthExamReportsIfNeeded()
             await refreshMemberSurgeriesIfNeeded()
             if preloadedNutritionGoalState == nil, preloadedCompleteData?.nutritionGoalState == nil,
                let goalUseCase = homeDependencies?.nutritionDependencies.goalUseCase {
@@ -1293,6 +1535,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let plans = completeData.medicationPlans {
             ingestSavedMedicationPlans(plans)
         }
+        if let reports = completeData.healthExamReports {
+            ingestHealthExamReports(reports)
+        }
         if let surgeries = completeData.surgeries {
             ingestSavedSurgeries(surgeries)
         }
@@ -1469,6 +1714,21 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let value = extra["symptom_follow_up_severity"] {
             symptomFollowUpSeverity = value
         }
+        if let value = extra["other_alcohol_type"] {
+            customAlcoholType = value
+        }
+        if let value = extra["custom_exercise_type"] {
+            customExerciseType = value
+        }
+        if let value = extra["drinking_amount_level"],
+           let level = MedicalGuideDrinkingAmountLevel(rawValue: value) {
+            drinkingAmountLevel = level
+        }
+        if let value = extra["sleep_quality"],
+           let quality = MedicalGuideSleepQuality(rawValue: value) {
+            sleepQuality = quality
+            hasPrefilledSleepQuality = true
+        }
         if let value = extra["symptom_follow_up_focus"], value.isEmpty == false {
             symptomFollowUpFocus = value.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.isEmpty == false }
             symptomFollowUpStatus = .have
@@ -1534,10 +1794,11 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private var hasExplicitDrinkingProfile: Bool {
         hasPrefilledDrinkingStatus
             || drinkingStatus != .none
-            || drinkingCount.isEmpty == false
             || drinkingHistoryDuration.isEmpty == false
             || drinkingQuitDuration.isEmpty == false
             || drinkingTypes.isEmpty == false
+            || customAlcoholType.isEmpty == false
+            || drinkingAmountLevel != nil
     }
 
     private var hasExplicitExerciseProfile: Bool {
@@ -1545,11 +1806,12 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             || exerciseFrequency != .oneToTwo
             || exerciseIntensity != .medium
             || exerciseTypes.isEmpty == false
+            || customExerciseType.isEmpty == false
             || exerciseDurationMinutes.isEmpty == false
     }
 
     private var hasExplicitSleepHours: Bool {
-        hasPrefilledSleepHours || sleepHours != 7
+        hasPrefilledSleepHours || sleepHours != 7.5
     }
 
     private func smokingProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteSmokingProfile {
@@ -1615,6 +1877,14 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
     }
 
+    private var sleepNotesText: String {
+        var pieces = ["睡眠：\(String(format: "%.1f", sleepHours))小时"]
+        if let sleepQuality {
+            pieces.append(sleepQuality.title)
+        }
+        return pieces.joined(separator: " · ")
+    }
+
     private func notesForSave(scope: MedicalProfileSaveScope) -> String {
         switch scope {
         case .full:
@@ -1624,7 +1894,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                 hasExplicitSmokingProfile ? smokingText : nil,
                 hasExplicitDrinkingProfile ? drinkingText : nil,
                 hasExplicitExerciseProfile ? exerciseText : nil,
-                hasExplicitSleepHours ? "睡眠：\(Int(sleepHours))小时" : nil,
+                hasExplicitSleepHours ? sleepNotesText : nil,
                 surgerySummary == "未填写" || surgerySummary == "无手术史" ? nil : "手术史：\(surgerySummary)",
                 allergyHistory.isEmpty ? nil : "过敏史：\(allergyHistory)",
                 extraNotes.isEmpty ? nil : extraNotes,
@@ -1673,6 +1943,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             payload["exam_institution"] = examInstitution
             payload["exam_report_summary"] = examReportSummary
             payload["extra_notes"] = extraNotes
+        }
+
+        if scope == .full || scope == .lifestyle {
+            payload["other_alcohol_type"] = customAlcoholType
+            payload["custom_exercise_type"] = customExerciseType
+            payload["drinking_amount_level"] = drinkingAmountLevel?.rawValue ?? ""
+            payload["sleep_quality"] = sleepQuality?.rawValue ?? ""
         }
 
         return payload
@@ -1731,11 +2008,13 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             let parts = [history, quit].compactMap { $0 }
             return parts.isEmpty ? "已戒烟" : parts.joined(separator: " · ")
         case .sometimes:
-            let count = smokingCount.isEmpty ? nil : "每月约\(smokingCount)包"
-            return ["偶尔吸烟", count].compactMap { $0 }.joined(separator: " · ")
+            let count = smokingCount.isEmpty ? nil : "约\(smokingCount)/日"
+            let history = smokingHistoryDuration.isEmpty ? nil : "吸烟\(smokingHistoryDuration)"
+            return ["偶尔吸烟", history, count].compactMap { $0 }.joined(separator: " · ")
         case .often:
-            let count = smokingCount.isEmpty ? nil : "每周约\(smokingCount)包"
-            return ["经常吸烟", count].compactMap { $0 }.joined(separator: " · ")
+            let count = smokingCount.isEmpty ? nil : "约\(smokingCount)/日"
+            let history = smokingHistoryDuration.isEmpty ? nil : "吸烟\(smokingHistoryDuration)"
+            return ["经常吸烟", history, count].compactMap { $0 }.joined(separator: " · ")
         }
     }
 
@@ -1748,14 +2027,34 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             let parts = [history, quit].compactMap { $0 }
             return parts.isEmpty ? "已戒酒" : parts.joined(separator: " · ")
         case .occasionally:
-            let count = drinkingCount.isEmpty ? nil : "每月约\(drinkingCount)瓶/包"
-            let types = drinkingTypes.isEmpty ? nil : drinkingTypes.joined(separator: "、")
-            return ["偶尔饮酒", count, types].compactMap { $0 }.joined(separator: " · ")
+            let amount = drinkingAmountLevel?.title
+            let types = mergedDrinkingTypeSummary
+            let history = drinkingHistoryDuration.isEmpty ? nil : "饮酒\(drinkingHistoryDuration)"
+            return ["偶尔饮酒", history, amount, types].compactMap { $0 }.joined(separator: " · ")
         case .often:
-            let count = drinkingCount.isEmpty ? nil : "每周约\(drinkingCount)瓶/包"
-            let types = drinkingTypes.isEmpty ? nil : drinkingTypes.joined(separator: "、")
-            return ["经常饮酒", count, types].compactMap { $0 }.joined(separator: " · ")
+            let amount = drinkingAmountLevel?.title
+            let types = mergedDrinkingTypeSummary
+            let history = drinkingHistoryDuration.isEmpty ? nil : "饮酒\(drinkingHistoryDuration)"
+            return ["经常饮酒", history, amount, types].compactMap { $0 }.joined(separator: " · ")
         }
+    }
+
+    private var mergedDrinkingTypeSummary: String? {
+        var pieces = drinkingTypes
+        let custom = customAlcoholType.trimmingCharacters(in: .whitespacesAndNewlines)
+        if custom.isEmpty == false {
+            pieces.append(custom)
+        }
+        return pieces.isEmpty ? nil : pieces.joined(separator: "、")
+    }
+
+    private var mergedExerciseTypeSummary: String? {
+        var pieces = exerciseTypes
+        let custom = customExerciseType.trimmingCharacters(in: .whitespacesAndNewlines)
+        if custom.isEmpty == false {
+            pieces.append(custom)
+        }
+        return pieces.isEmpty ? nil : pieces.joined(separator: "、")
     }
 
     private var exerciseText: String? {
@@ -1763,10 +2062,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         case .none:
             return "不运动"
         case .oneToTwo, .threeToFive, .moreThanFive:
-            let duration = exerciseDurationMinutes.isEmpty ? nil : "每次\(exerciseDurationMinutes)分钟"
-            let types = exerciseTypes.isEmpty ? nil : exerciseTypes.joined(separator: "、")
+            let duration = exerciseDurationMinutes.isEmpty ? nil : "每次\(exerciseDurationMinutes)"
+            let types = mergedExerciseTypeSummary
             return [
-                "每周\(exerciseFrequency.title)运动",
+                "每周\(exerciseFrequency.title)",
                 exerciseIntensity.title,
                 types,
                 duration
@@ -1806,6 +2105,562 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     /// 健康病史与症状记录说明页在汇总里展示的简短文案。
     var historyIntroSummaryText: String {
         "症状观察 / 随访 / 既往疾病 / 长期用药 / 手术史 / 过敏史 / 家族病史"
+    }
+
+    var lifestyleOverviewCards: [MedicalGuideOverviewCardModel] {
+        [
+            smokingOverviewCard,
+            drinkingOverviewCard,
+            exerciseOverviewCard,
+            sleepOverviewCard
+        ]
+    }
+
+    var healthHistoryOverviewCards: [MedicalGuideOverviewCardModel] {
+        [
+            symptomOverviewCard,
+            chronicConditionOverviewCard,
+            medicationOverviewCard,
+            surgeryOverviewCard,
+            allergyOverviewCard,
+            familyHistoryOverviewCard
+        ]
+    }
+
+    private var smokingOverviewCard: MedicalGuideOverviewCardModel {
+        let status: (text: String, style: MedicalGuideOverviewBadgeStyle) = {
+            switch smokingStatus {
+            case .never: return ("从不吸烟", .neutral)
+            case .quit: return ("已戒烟", .success)
+            case .sometimes: return ("偶尔吸烟", .warning)
+            case .often: return ("经常吸烟", .danger)
+            }
+        }()
+
+        var bullets: [MedicalGuideOverviewBulletLine] = []
+        switch smokingStatus {
+        case .never:
+            bullets.append(.init(id: "status", prefix: "状态", content: "从不吸烟"))
+        case .quit:
+            if smokingHistoryDuration.isEmpty == false {
+                bullets.append(.init(id: "history", prefix: "烟龄", content: "历史吸烟 \(smokingHistoryDuration)"))
+            }
+            if smokingQuitDuration.isEmpty == false {
+                bullets.append(.init(id: "quit", prefix: "成果", content: "已成功戒烟 \(smokingQuitDuration)"))
+            }
+            if bullets.isEmpty {
+                bullets.append(.init(id: "quit", prefix: "成果", content: "已成功戒烟"))
+            }
+        case .sometimes, .often:
+            if smokingHistoryDuration.isEmpty == false {
+                bullets.append(.init(id: "history", prefix: "烟龄", content: "历史吸烟 \(smokingHistoryDuration)"))
+            }
+            if smokingCount.isEmpty == false {
+                bullets.append(.init(id: "amount", prefix: "日常吸烟量", content: smokingCount))
+            }
+            if bullets.isEmpty {
+                bullets.append(.init(id: "status", prefix: "状态", content: smokingStatus.title))
+            }
+        }
+
+        return MedicalGuideOverviewCardModel(
+            id: "smoking",
+            icon: "smoke.fill",
+            title: "吸烟习惯",
+            statusText: status.text,
+            statusStyle: status.style,
+            bullets: bullets
+        )
+    }
+
+    private var drinkingOverviewCard: MedicalGuideOverviewCardModel {
+        let status: (text: String, style: MedicalGuideOverviewBadgeStyle) = {
+            switch drinkingStatus {
+            case .none: return ("不饮酒", .success)
+            case .quit: return ("已戒酒", .success)
+            case .occasionally: return ("偶尔饮酒", .warning)
+            case .often: return ("经常饮酒", .danger)
+            }
+        }()
+
+        var bullets: [MedicalGuideOverviewBulletLine] = []
+        switch drinkingStatus {
+        case .none:
+            bullets.append(.init(id: "status", prefix: "状态", content: "不饮酒"))
+        case .quit:
+            if drinkingHistoryDuration.isEmpty == false {
+                bullets.append(.init(id: "history", prefix: "饮酒年限", content: drinkingHistoryDuration))
+            }
+            if drinkingQuitDuration.isEmpty == false {
+                bullets.append(.init(id: "quit", prefix: "成果", content: "已成功戒酒 \(drinkingQuitDuration)"))
+            }
+            if bullets.isEmpty {
+                bullets.append(.init(id: "quit", prefix: "成果", content: "已成功戒酒"))
+            }
+        case .occasionally, .often:
+            if let types = mergedDrinkingTypeSummary {
+                bullets.append(.init(id: "types", prefix: "偏好种类", content: types))
+            }
+            if let amount = drinkingAmountLevel?.title {
+                bullets.append(.init(id: "amount", prefix: "日常饮量", content: amount))
+            } else if drinkingHistoryDuration.isEmpty == false {
+                bullets.append(.init(id: "history", prefix: "饮酒年限", content: drinkingHistoryDuration))
+            }
+            if bullets.isEmpty {
+                bullets.append(.init(id: "status", prefix: "状态", content: drinkingStatus.title))
+            }
+        }
+
+        return MedicalGuideOverviewCardModel(
+            id: "drinking",
+            icon: "wineglass.fill",
+            title: "饮酒习惯",
+            statusText: status.text,
+            statusStyle: status.style,
+            bullets: bullets
+        )
+    }
+
+    private var exerciseOverviewCard: MedicalGuideOverviewCardModel {
+        let status: (text: String, style: MedicalGuideOverviewBadgeStyle) = {
+            switch exerciseFrequency {
+            case .none: return ("缺乏运动", .warning)
+            case .oneToTwo: return ("轻度运动", .neutral)
+            case .threeToFive: return ("规律运动", .success)
+            case .moreThanFive: return ("积极运动", .success)
+            }
+        }()
+
+        var bullets: [MedicalGuideOverviewBulletLine] = []
+        if exerciseFrequency == .none {
+            bullets.append(.init(id: "status", prefix: "状态", content: "当前不运动"))
+        } else {
+            bullets.append(.init(id: "frequency", prefix: "每周频率", content: exerciseFrequency.title))
+            bullets.append(.init(id: "intensity", prefix: "体感强度", content: "\(exerciseIntensity.title)运动"))
+            if let types = mergedExerciseTypeSummary {
+                bullets.append(.init(id: "types", prefix: "运动类型", content: types))
+            }
+            if exerciseDurationMinutes.isEmpty == false {
+                bullets.append(.init(id: "duration", prefix: "单次时长", content: exerciseDurationMinutes))
+            }
+        }
+
+        return MedicalGuideOverviewCardModel(
+            id: "exercise",
+            icon: "figure.run",
+            title: "运动习惯",
+            statusText: status.text,
+            statusStyle: status.style,
+            bullets: bullets
+        )
+    }
+
+    private var sleepOverviewCard: MedicalGuideOverviewCardModel {
+        let status = sleepStatusBadge
+        var bullets: [MedicalGuideOverviewBulletLine] = [
+            .init(
+                id: "hours",
+                prefix: "平均时长",
+                content: hasPrefilledSleepHours
+                    ? "每日 \(String(format: "%.1f", sleepHours)) 小时"
+                    : "每日 \(String(format: "%.1f", sleepHours)) 小时"
+            ),
+            .init(id: "insight", prefix: "综合提示", content: sleepInsightText)
+        ]
+        if let sleepQuality, hasPrefilledSleepQuality {
+            bullets.append(.init(id: "quality", prefix: "睡眠感受", content: sleepQuality.title))
+        }
+
+        return MedicalGuideOverviewCardModel(
+            id: "sleep",
+            icon: "moon.stars.fill",
+            title: "睡眠状况",
+            statusText: status.text,
+            statusStyle: status.style,
+            bullets: bullets
+        )
+    }
+
+    private var symptomOverviewCard: MedicalGuideOverviewCardModel {
+        switch symptomFollowUpStatus {
+        case .none:
+            return MedicalGuideOverviewCardModel(
+                id: "symptom",
+                icon: "waveform.path.ecg",
+                title: "症状观察与随访",
+                statusText: "无不适",
+                statusStyle: .success,
+                bullets: [.init(id: "status", prefix: "核心表现", content: "无任何不适")]
+            )
+        case .unknown:
+            return MedicalGuideOverviewCardModel(
+                id: "symptom",
+                icon: "waveform.path.ecg",
+                title: "症状观察与随访",
+                statusText: "待补充",
+                statusStyle: .neutral,
+                bullets: [.init(id: "status", prefix: "核心表现", content: "未填写")]
+            )
+        case .have:
+            if let symptom = memberSymptoms.first {
+                let duration = SymptomFormSupport.durationText(for: symptom)
+                let core = [symptom.name, duration.isEmpty ? nil : "(\(duration))"].compactMap { $0 }.joined(separator: " ")
+                let severityBadge = inlineBadge(forSymptomSeverity: symptom.severity ?? symptomFollowUpSeverity)
+                let statusText = symptom.notes.nilIfBlank ?? symptomFollowUpNotes.nilIfBlank ?? "已记录"
+                return MedicalGuideOverviewCardModel(
+                    id: "symptom",
+                    icon: "waveform.path.ecg",
+                    title: "症状观察与随访",
+                    statusText: severityBadge?.text ?? "随访中",
+                    statusStyle: severityBadge?.style ?? .warning,
+                    bullets: [
+                        .init(id: "core", prefix: "核心表现", content: core.isEmpty ? "已记录症状" : core),
+                        .init(
+                            id: "severity",
+                            prefix: "严重程度",
+                            content: statusText,
+                            badge: severityBadge
+                        )
+                    ]
+                )
+            }
+
+            let core = symptomFollowUpFocus.isEmpty
+                ? "已记录症状"
+                : symptomFollowUpFocus.joined(separator: "、")
+            let duration = symptomFollowUpDuration.isEmpty ? "" : "持续\(symptomFollowUpDuration)"
+            let coreLine = [core, duration].filter { $0.isEmpty == false }.joined(separator: " ")
+            let severityBadge = inlineBadge(forSymptomSeverity: symptomFollowUpSeverity)
+            return MedicalGuideOverviewCardModel(
+                id: "symptom",
+                icon: "waveform.path.ecg",
+                title: "症状观察与随访",
+                statusText: severityBadge?.text ?? "随访中",
+                statusStyle: severityBadge?.style ?? .warning,
+                bullets: [
+                    .init(id: "core", prefix: "核心表现", content: coreLine),
+                    .init(
+                        id: "severity",
+                        prefix: "严重程度",
+                        content: symptomFollowUpNotes.isEmpty ? "已记录" : symptomFollowUpNotes,
+                        badge: severityBadge
+                    )
+                ]
+            )
+        }
+    }
+
+    private var chronicConditionOverviewCard: MedicalGuideOverviewCardModel {
+        switch chronicConditionStatus {
+        case .none:
+            return MedicalGuideOverviewCardModel(
+                id: "chronic",
+                icon: "cross.case.fill",
+                title: "既往疾病史",
+                statusText: "无病史",
+                statusStyle: .success,
+                bullets: [.init(id: "status", prefix: "确诊疾病", content: "无既往病史")]
+            )
+        case .unknown:
+            return MedicalGuideOverviewCardModel(
+                id: "chronic",
+                icon: "cross.case.fill",
+                title: "既往疾病史",
+                statusText: "待补充",
+                statusStyle: .neutral,
+                bullets: [.init(id: "status", prefix: "确诊疾病", content: "未填写")]
+            )
+        case .have:
+            let disease = chronicConditions.first ?? "已记录疾病"
+            let detail = chronicConditionDetails[disease]
+            let controlBadge = inlineBadge(forControlStatus: detail?.controlStatus ?? "")
+            return MedicalGuideOverviewCardModel(
+                id: "chronic",
+                icon: "cross.case.fill",
+                title: "既往疾病史",
+                statusText: controlBadge?.text ?? "已记录",
+                statusStyle: controlBadge?.style ?? .warning,
+                bullets: [
+                    .init(id: "disease", prefix: "确诊疾病", content: chronicConditions.map(chronicConditionDisplayName).joined(separator: "、")),
+                    .init(
+                        id: "control",
+                        prefix: "当前状态",
+                        content: detail?.controlStatus.isEmpty == false ? detail!.controlStatus : "已记录",
+                        badge: controlBadge
+                    )
+                ]
+            )
+        }
+    }
+
+    private var medicationOverviewCard: MedicalGuideOverviewCardModel {
+        switch longTermMedicationStatus {
+        case .none:
+            return MedicalGuideOverviewCardModel(
+                id: "medication",
+                icon: "pills.fill",
+                title: "长期用药登记",
+                statusText: "无用药",
+                statusStyle: .success,
+                bullets: [.init(id: "status", prefix: "正在服用", content: "无长期用药")]
+            )
+        case .unknown:
+            return MedicalGuideOverviewCardModel(
+                id: "medication",
+                icon: "pills.fill",
+                title: "长期用药登记",
+                statusText: "待补充",
+                statusStyle: .neutral,
+                bullets: [.init(id: "status", prefix: "正在服用", content: "未填写")]
+            )
+        case .have:
+            let plan = memberMedicationPlans.first(where: { $0.status == "active" || $0.status == "paused" })
+            let focus = medicationFocus.first
+            let drugName = plan?.drugName ?? focus?.drugName ?? "已记录用药"
+            let schedule = medicationScheduleText(for: plan, focus: focus)
+            return MedicalGuideOverviewCardModel(
+                id: "medication",
+                icon: "pills.fill",
+                title: "长期用药登记",
+                statusText: plan?.status == "paused" ? "已暂停" : "服用中",
+                statusStyle: plan?.status == "paused" ? .warning : .accent,
+                bullets: [
+                    .init(id: "drug", prefix: "正在服用", content: drugName),
+                    .init(id: "schedule", prefix: "服药周期", content: schedule)
+                ]
+            )
+        }
+    }
+
+    private var surgeryOverviewCard: MedicalGuideOverviewCardModel {
+        switch surgeryStatus {
+        case .none:
+            return MedicalGuideOverviewCardModel(
+                id: "surgery",
+                icon: "scissors",
+                title: "手术与外伤史",
+                statusText: "无手术史",
+                statusStyle: .success,
+                bullets: [
+                    .init(
+                        id: "status",
+                        prefix: "手术记录",
+                        content: "无手术史",
+                        badge: .init(text: "无手术史", style: .success)
+                    )
+                ]
+            )
+        case .unknown:
+            return MedicalGuideOverviewCardModel(
+                id: "surgery",
+                icon: "scissors",
+                title: "手术与外伤史",
+                statusText: "待补充",
+                statusStyle: .neutral,
+                bullets: [.init(id: "status", prefix: "手术记录", content: "未填写")]
+            )
+        case .have:
+            let summary = memberSurgeries.first.map { SurgeryFormSupport.summaryLine(for: $0) }
+                ?? surgeryFocus.first?.summary
+                ?? "已记录手术史"
+            return MedicalGuideOverviewCardModel(
+                id: "surgery",
+                icon: "scissors",
+                title: "手术与外伤史",
+                statusText: "有记录",
+                statusStyle: .warning,
+                bullets: [.init(id: "record", prefix: "手术记录", content: summary)]
+            )
+        }
+    }
+
+    private var allergyOverviewCard: MedicalGuideOverviewCardModel {
+        switch allergyStatus {
+        case .none:
+            return MedicalGuideOverviewCardModel(
+                id: "allergy",
+                icon: "shield.lefthalf.filled",
+                title: "过敏史记录",
+                statusText: "无过敏",
+                statusStyle: .success,
+                bullets: [.init(id: "status", prefix: "过敏记录", content: "无过敏经历")]
+            )
+        case .unknown:
+            return MedicalGuideOverviewCardModel(
+                id: "allergy",
+                icon: "shield.lefthalf.filled",
+                title: "过敏史记录",
+                statusText: "待补充",
+                statusStyle: .neutral,
+                bullets: [.init(id: "status", prefix: "过敏记录", content: "未填写")]
+            )
+        case .have:
+            let bullets = allergies.map { allergen in
+                let detail = allergyDetails[allergen]
+                let category = detail?.category.isEmpty == false ? detail!.category : "其它"
+                let badge = inlineBadge(forAllergySeverity: detail?.severity ?? "")
+                let content = [allergen, detail?.reactions.isEmpty == false ? detail!.reactions.joined(separator: "、") : nil]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                return MedicalGuideOverviewBulletLine(
+                    id: allergen,
+                    prefix: category,
+                    content: content.isEmpty ? allergen : content,
+                    badge: badge
+                )
+            }
+            return MedicalGuideOverviewCardModel(
+                id: "allergy",
+                icon: "shield.lefthalf.filled",
+                title: "过敏史记录",
+                statusText: "有记录",
+                statusStyle: .warning,
+                bullets: bullets.isEmpty ? [.init(id: "status", prefix: "过敏记录", content: "已记录")] : bullets
+            )
+        }
+    }
+
+    private var familyHistoryOverviewCard: MedicalGuideOverviewCardModel {
+        switch familyHistoryStatus {
+        case .none:
+            return MedicalGuideOverviewCardModel(
+                id: "family",
+                icon: "person.3.fill",
+                title: "家族病史",
+                statusText: "无家族史",
+                statusStyle: .success,
+                bullets: [.init(id: "status", prefix: "相关病史", content: "无家族病史")]
+            )
+        case .unknown:
+            return MedicalGuideOverviewCardModel(
+                id: "family",
+                icon: "person.3.fill",
+                title: "家族病史",
+                statusText: "待补充",
+                statusStyle: .neutral,
+                bullets: [.init(id: "status", prefix: "相关病史", content: "未填写")]
+            )
+        case .have:
+            let bullets = familyHistory.map { disease in
+                let detail = familyHistoryDetails[disease]
+                let relative = detail?.relative.isEmpty == false ? detail!.relative : "家族成员"
+                let diagnosedAge = detail?.diagnosedAge.isEmpty == false ? " (确诊年龄：\(detail!.diagnosedAge))" : ""
+                return MedicalGuideOverviewBulletLine(
+                    id: disease,
+                    prefix: "成员关系",
+                    content: "\(relative) · \(disease)\(diagnosedAge)"
+                )
+            }
+            return MedicalGuideOverviewCardModel(
+                id: "family",
+                icon: "person.3.fill",
+                title: "家族病史",
+                statusText: "有记录",
+                statusStyle: .warning,
+                bullets: bullets.isEmpty ? [.init(id: "status", prefix: "相关病史", content: "已记录")] : bullets
+            )
+        }
+    }
+
+    private var sleepStatusBadge: (text: String, style: MedicalGuideOverviewBadgeStyle) {
+        switch sleepHours {
+        case ..<6:
+            return ("睡眠不足", .warning)
+        case 6..<7:
+            return ("接近达标", .neutral)
+        case 7..<8.5:
+            return ("睡眠达标", .success)
+        case 8.5..<10:
+            return ("睡眠充足", .success)
+        default:
+            return ("睡眠偏长", .neutral)
+        }
+    }
+
+    private var sleepInsightText: String {
+        switch sleepHours {
+        case ..<6:
+            return "睡眠偏少，建议关注作息规律"
+        case 6..<7:
+            return "接近成人推荐睡眠下限"
+        case 7..<8.5:
+            return "时长处于成年人理想区间"
+        case 8.5..<10:
+            return "睡眠时长充足"
+        default:
+            return "睡眠偏长，如持续可咨询医生"
+        }
+    }
+
+    private func medicationScheduleText(
+        for plan: SparkMedicalSyncAPI.RemoteMedicationPlan?,
+        focus: SparkMedicalSyncAPI.RemoteMedicationFocusItem?
+    ) -> String {
+        if let plan {
+            var pieces: [String] = []
+            if plan.frequencyText.nilIfBlank != nil {
+                pieces.append(plan.frequencyText)
+            }
+            let reminderSummary = plan.reminderTimes
+                .map(\.time)
+                .filter { $0.isEmpty == false }
+                .joined(separator: "、")
+            if reminderSummary.isEmpty == false {
+                pieces.append(reminderSummary + " 提醒")
+            }
+            if pieces.isEmpty == false {
+                return pieces.joined(separator: " · ")
+            }
+        }
+        if let focus, focus.summary.isEmpty == false {
+            return focus.summary
+        }
+        return "已设置用药提醒"
+    }
+
+    private func inlineBadge(forSymptomSeverity value: String) -> MedicalGuideOverviewInlineBadge? {
+        switch value {
+        case "low":
+            return .init(text: "轻度", style: .success)
+        case "medium":
+            return .init(text: "中度", style: .warning)
+        case "high":
+            return .init(text: "重度", style: .danger)
+        case "轻度":
+            return .init(text: "轻度", style: .success)
+        case "中度":
+            return .init(text: "中度", style: .warning)
+        case "重度":
+            return .init(text: "重度", style: .danger)
+        default:
+            return value.isEmpty ? nil : .init(text: value, style: .neutral)
+        }
+    }
+
+    private func inlineBadge(forControlStatus value: String) -> MedicalGuideOverviewInlineBadge? {
+        switch value {
+        case "控制良好":
+            return .init(text: "控制良好", style: .success)
+        case "治疗中":
+            return .init(text: "治疗中", style: .warning)
+        case "已治愈":
+            return .init(text: "已治愈", style: .success)
+        default:
+            return value.isEmpty ? nil : .init(text: value, style: .neutral)
+        }
+    }
+
+    private func inlineBadge(forAllergySeverity value: String) -> MedicalGuideOverviewInlineBadge? {
+        switch value {
+        case "轻度":
+            return .init(text: "轻度", style: .success)
+        case "中度":
+            return .init(text: "中度", style: .warning)
+        case "严重":
+            return .init(text: "严重", style: .danger)
+        default:
+            return value.isEmpty ? nil : .init(text: value, style: .neutral)
+        }
     }
 
     private static func encodeChronicConditionDetails(_ details: [String: MedicalGuideChronicConditionDetail]) -> String {

@@ -15,7 +15,7 @@ struct VerificationCodeField: View {
                         .frame(maxWidth: .infinity)
                 }
                 .frame(width: 46, height: 54)
-                .background(.white)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(borderColor(for: index), lineWidth: isActive(index) ? 2 : 1)

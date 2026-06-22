@@ -117,4 +117,31 @@ enum MemberModuleSetupCompleteDataPatcher {
         }
         completeData.memberModuleSettings = settings
     }
+
+    static func upsertHealthExamReports(
+        _ reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments],
+        into completeData: inout SparkMedicalSyncAPI.RemoteMemberCompleteData
+    ) {
+        completeData.healthExamReports = reports
+    }
+
+    static func upsertHealthExamReport(
+        _ report: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments,
+        into completeData: inout SparkMedicalSyncAPI.RemoteMemberCompleteData
+    ) {
+        var reports = completeData.healthExamReports ?? []
+        if let index = reports.firstIndex(where: { $0.id == report.id }) {
+            reports[index] = report
+        } else {
+            reports.insert(report, at: 0)
+        }
+        completeData.healthExamReports = reports
+    }
+
+    static func removeHealthExamReport(
+        id: Int,
+        into completeData: inout SparkMedicalSyncAPI.RemoteMemberCompleteData
+    ) {
+        completeData.healthExamReports?.removeAll { $0.id == id }
+    }
 }

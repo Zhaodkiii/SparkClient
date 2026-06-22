@@ -1,6 +1,6 @@
 import Foundation
 
-enum OnboardingStep: Int, CaseIterable, Codable, Equatable, Sendable {
+enum OnboardingStep: Int, CaseIterable, Codable, Equatable, Hashable, Sendable {
     case welcome = 0
     case profile = 1
     case agent = 2

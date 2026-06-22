@@ -43,6 +43,7 @@ struct SymptomFormView: View {
     @State private var severity: String
     @State private var notes: String
     @State private var searchText = ""
+    @State private var customSymptomText = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -76,19 +77,29 @@ struct SymptomFormView: View {
         _notes = State(initialValue: seed?.notes ?? "")
     }
 
+    private var filteredCategories: [SymptomCategoryGroup] {
+        SymptomFormSupport.filteredCategories(matching: searchText)
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                symptomSearchField
-                symptomCategoryGroups
+            VStack(alignment: .leading, spacing: 20) {
+                quickSelectionSection
+                customSymptomSection
                 if selectedSymptoms.isEmpty == false {
                     followUpDetailsCard
                 }
             }
             .padding(16)
+            .padding(.bottom, 24)
         }
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            prompt: Text("搜索症状 (支持拼音/首字母)")
+        )
         .sparkFormBottomBar(
             canSubmit: canSubmit && !isSaving,
             saveTitle: saveTitle,
@@ -133,58 +144,131 @@ struct SymptomFormView: View {
         }
     }
 
-    private var symptomSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("搜索症状 (支持拼音/首字母)", text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(uiColor: .systemGroupedBackground))
-        )
-    }
+    private var quickSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("症状快速勾选")
+                .font(.headline.weight(.semibold))
 
-    private var symptomCategoryGroups: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(SymptomFormSupport.filteredCategories(matching: searchText).enumerated()), id: \.element.id) { index, category in
-                VStack(alignment: .leading, spacing: 10) {
-                    Label(category.title, systemImage: category.systemImage)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+            VStack(spacing: 0) {
+                if filteredCategories.isEmpty {
+                    Text("未找到匹配症状，可在下方自定义录入")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                } else {
+                    ForEach(Array(filteredCategories.enumerated()), id: \.element.id) { index, category in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Label(category.title, systemImage: category.systemImage)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
 
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 88), spacing: 10)],
-                        alignment: .leading,
-                        spacing: 10
-                    ) {
-                        ForEach(category.symptoms, id: \.self) { symptom in
-                            symptomChip(symptom)
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 88), spacing: 10)],
+                                alignment: .leading,
+                                spacing: 10
+                            ) {
+                                ForEach(category.symptoms, id: \.self) { symptom in
+                                    symptomChip(symptom)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 12)
+
+                        if index < filteredCategories.count - 1 {
+                            Divider()
                         }
                     }
                 }
-                .padding(.vertical, 12)
-
-                if index < SymptomFormSupport.filteredCategories(matching: searchText).count - 1 {
-                    Divider()
-                }
             }
+            .padding(.horizontal, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+            )
         }
-        .padding(.horizontal, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(uiColor: .systemGroupedBackground))
-        )
+    }
+
+    private var customSymptomSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("自定义症状录入")
+                .font(.headline.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 14) {
+                Label("添加其他症状", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("请输入症状名称", systemImage: "pencil.line")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    TextField("例如：耳鸣、视力模糊...", text: $customSymptomText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(uiColor: .systemBackground))
+                        )
+                        .submitLabel(.done)
+                        .onSubmit { addCustomSymptom() }
+                }
+
+                Button(action: addCustomSymptom) {
+                    Label("确认添加", systemImage: "plus")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(canAddCustomSymptom ? Color.white : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 48)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(canAddCustomSymptom ? Color.accentColor : Color(uiColor: .systemGray4))
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(canAddCustomSymptom == false)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+            )
+        }
+    }
+
+    private var canAddCustomSymptom: Bool {
+        resolvedCustomSymptomName.isEmpty == false
+    }
+
+    private var resolvedCustomSymptomName: String {
+        let custom = customSymptomText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if custom.isEmpty == false { return custom }
+        return searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var followUpDetailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("随访详情与备注")
                 .font(.headline)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("已选症状")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                SparkTagFlowLayout(spacing: 8) {
+                    ForEach(selectedSymptoms, id: \.self) { symptom in
+                        selectedSymptomTag(symptom)
+                    }
+                }
+            }
+
+            Divider()
 
             detailRow(title: "症状持续时间") {
                 Menu {
@@ -214,14 +298,12 @@ struct SymptomFormView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Label("补充描述 (例如：特定时间发作、诱因等)...", systemImage: "note.text")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 SparkFormTextAreaRow(
                     title: L10n.text("补充描述 (例如：特定时间发作、诱因等)...", fallback: "补充描述 (例如：特定时间发作、诱因等)..."),
                     text: $notes,
+                    systemImage:"note.text",
                     minHeight: 88,
-                    placeholder: L10n.text("medical_record.forms.medical_case.placeholder.chief_complaint"),
+                    placeholder: "补充描述 (例如：特定时间发作、诱因等)...",
                     required: false
                 )
             }
@@ -229,7 +311,7 @@ struct SymptomFormView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(uiColor: .systemGroupedBackground))
+                .fill(Color(uiColor: .secondarySystemBackground))
         )
     }
 
@@ -269,6 +351,28 @@ struct SymptomFormView: View {
         .buttonStyle(.plain)
     }
 
+    private func selectedSymptomTag(_ symptom: String) -> some View {
+        Button {
+            toggle(symptom)
+        } label: {
+            HStack(spacing: 6) {
+                Text(symptom)
+                    .font(.caption.weight(.semibold))
+                Image(systemName: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func severityChoice(title: String, value: String, tint: Color) -> some View {
         let isSelected = severity == value
         return Button {
@@ -299,6 +403,18 @@ struct SymptomFormView: View {
         } else {
             selectedSymptoms.append(symptom)
         }
+    }
+
+    private func addCustomSymptom() {
+        let name = resolvedCustomSymptomName
+        guard name.isEmpty == false else { return }
+        guard selectedSymptoms.contains(name) == false else {
+            customSymptomText = ""
+            return
+        }
+        selectedSymptoms.append(name)
+        customSymptomText = ""
+        searchText = ""
     }
 
     private func saveNow() {

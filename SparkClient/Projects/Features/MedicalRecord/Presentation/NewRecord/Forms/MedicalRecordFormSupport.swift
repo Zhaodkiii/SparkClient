@@ -593,6 +593,7 @@ struct VisitDivider: View {
 /// 视觉与标签样式对齐 Health `FormTextArea` / `FormLabel`。
 struct SparkFormTextAreaRow: View {
     let title: String
+    var systemImage: String? = nil
     @Binding var text: String
     let minHeight: CGFloat
     let maxHeight: CGFloat
@@ -616,6 +617,7 @@ struct SparkFormTextAreaRow: View {
     init(
         title: String,
         text: Binding<String>,
+        systemImage: String? = nil,
         minHeight: CGFloat = 88,
         maxHeight: CGFloat = 220,
         placeholder: String = "",
@@ -624,6 +626,7 @@ struct SparkFormTextAreaRow: View {
     ) {
         self.title = title
         _text = text
+        self.systemImage = systemImage
         self.minHeight = minHeight
         self.maxHeight = maxHeight
         self.placeholder = placeholder
@@ -633,7 +636,7 @@ struct SparkFormTextAreaRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SparkFormFieldLabel(text: title, required: required)
+            SparkFormFieldLabel(text: title, systemImage: systemImage, required: required)
 
             SparkFormGrowingTextView(
                 text: $text,
@@ -700,15 +703,31 @@ struct SparkFormTextAreaRow: View {
 
 private struct SparkFormFieldLabel: View {
     let text: String
+    var systemImage: String? = nil
     let required: Bool
+    init(text: String, systemImage: String? = nil, required: Bool) {
+        self.text = text
+        self.systemImage = systemImage
+        self.required = required
+    }
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(text)
+        
+        if let systemImage {
+            Label(text, systemImage: systemImage)
                 .font(.subheadline.weight(.medium))
             if required {
                 Text("*")
                     .foregroundStyle(.red)
+            }
+        }else {
+            HStack(spacing: 4) {
+                Text(text)
+                    .font(.subheadline.weight(.medium))
+                if required {
+                    Text("*")
+                        .foregroundStyle(.red)
+                }
             }
         }
     }

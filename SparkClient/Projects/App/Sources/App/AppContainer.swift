@@ -656,6 +656,22 @@ final class AppContainer {
         return created
     }
 
+    /// 成员引导/详情等嵌套流程专用：每次创建独立实例，不与首页 Tab 上传 VM 共用缓存。
+    func makeScopedMedicalDocumentUploadViewModel() -> MedicalDocumentUploadViewModel {
+        MedicalDocumentUploadViewModel(
+            memberContextStore: memberContextStore,
+            uploadFilesUseCase: uploadMedicalDocumentFilesUseCase,
+            extractUseCase: extractTypedMedicalDocumentUseCase,
+            saveUseCase: saveTypedMedicalDocumentUseCase,
+            bindUseCase: bindUploadedFilesToMedicalBusinessUseCase,
+            aiConfigCenter: aiConfigCenter,
+            workflowAPIForLocalForms: backend.medicalWorkflow,
+            notificationClient: notificationClient,
+            pushAdapter: pushAdapter,
+            logger: logger
+        )
+    }
+
     /// 设置页：登出、医疗后台同步开关/触发等。
     func makeSettingsViewModel() -> SettingsViewModel {
         if let cachedSettingsViewModel {
@@ -725,6 +741,7 @@ final class AppContainer {
         let aiSettingsViewModel = makeAISettingsViewModel(ownerAccountID: ownerAccountID)
         let homeViewModel = makeHomeViewModel()
         let medicalDocumentUploadViewModel = makeMedicalDocumentUploadViewModel()
+        let memberFlowMedicalDocumentUploadViewModel = makeScopedMedicalDocumentUploadViewModel()
         let homeLaunchIntentConsumer = HomeLaunchIntentConsumer(
             coordinator: launchIntentCoordinator,
             routeStore: routeStore,
@@ -759,6 +776,7 @@ final class AppContainer {
                 memberContextStore: memberContextStore,
                 notificationClient: notificationClient,
                 medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                memberFlowMedicalDocumentUploadViewModel: memberFlowMedicalDocumentUploadViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
                 routeStore: routeStore,
                 sessionStore: sessionStore,

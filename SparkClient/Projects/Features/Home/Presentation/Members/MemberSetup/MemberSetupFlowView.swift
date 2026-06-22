@@ -23,10 +23,16 @@ struct MemberSetupFlowView: View {
             MemberNameBirthStepView(
                 draft: $viewModel.draft,
                 canAdvance: viewModel.canAdvanceFromBasicInfo,
-                onNext: { viewModel.navigationPath.append(.relationship) }
+                onNext: { viewModel.navigationPath.append(.birthDate) }
             )
         } destination: { route in
             switch route {
+            case .birthDate:
+                MemberBirthDateStepView(
+                    draft: $viewModel.draft,
+                    onNext: { viewModel.navigationPath.append(.relationship) },
+                    onSkip: { viewModel.navigationPath.append(.relationship) }
+                )
             case .relationship:
                 MemberRelationshipGenderStepView(
                     draft: $viewModel.draft,
@@ -77,6 +83,7 @@ struct MemberSetupFlowView: View {
                 }
             }
         }
+        .memberSetupFlowDismissToolbar(onDismiss: { dismiss() })
         .sheet(item: $viewModel.activeSheet) { route in
             switch route {
             case .medical(let entryMode):

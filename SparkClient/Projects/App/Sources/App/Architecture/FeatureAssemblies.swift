@@ -45,6 +45,8 @@ struct HomeFeatureDependencies {
     let memberContextStore: MemberContextStore
     let notificationClient: any NotificationClient
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
+    /// 成员引导、成员详情等嵌套流程专用上传 VM，与首页 Tab 级单例隔离，避免 `isUploadPresented` 联动首页全屏层。
+    let memberFlowMedicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let routeStore: AppRouteStore
     let sessionStore: AppSessionStore
@@ -114,6 +116,7 @@ extension HomeFeatureDependencies {
         let container = AppContainer.preview
         let routeStore = AppRouteStore()
         let uploadViewModel = container.makeMedicalDocumentUploadViewModel()
+        let memberFlowUploadViewModel = container.makeScopedMedicalDocumentUploadViewModel()
         let homeViewModel = container.makeHomeViewModel()
         let homeLaunchIntentConsumer = HomeLaunchIntentConsumer(
             coordinator: container.launchIntentCoordinator,
@@ -146,6 +149,7 @@ extension HomeFeatureDependencies {
             memberContextStore: container.memberContextStore,
             notificationClient: container.notificationClient,
             medicalDocumentUploadViewModel: uploadViewModel,
+            memberFlowMedicalDocumentUploadViewModel: memberFlowUploadViewModel,
             aiSettingsViewModel: container.makeAISettingsViewModel(ownerAccountID: 1),
             routeStore: routeStore,
             sessionStore: container.sessionStore,

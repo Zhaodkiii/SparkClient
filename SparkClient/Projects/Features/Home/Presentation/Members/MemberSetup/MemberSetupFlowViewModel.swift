@@ -74,9 +74,9 @@ final class MemberSetupFlowViewModel: ObservableObject {
     }
 
     // MARK: - 页面跳转校验计算属性
-    /// 基础信息页是否可下一步：姓名非空 + 已选择出生日期
+    /// 基础信息页是否可下一步：姓名非空
     var canAdvanceFromBasicInfo: Bool {
-        !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.birthDate != nil
+        !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// 关系性别页是否可下一步：当前性别符合可选规范

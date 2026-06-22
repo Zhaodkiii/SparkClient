@@ -4,7 +4,6 @@ struct MemberMedicalSetupSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: MemberMedicalSetupViewModel
     @State private var path: [MedicalGuideRoute] = []
-    @State private var showReportUpload = false
     @State private var occupationSearchText = ""
     @State private var didApplyEntryRoute = false
     let homeDependencies: HomeFeatureDependencies?
@@ -119,22 +118,6 @@ struct MemberMedicalSetupSheetView: View {
         }
         .onAppear {
             applyEntryRouteIfNeeded()
-        }
-        .fullScreenCover(isPresented: $showReportUpload) {
-            if let homeDependencies {
-                CompatibleNavigationContainer {
-                    MedicalDocumentUploadHostView(
-                        viewModel: homeDependencies.medicalDocumentUploadViewModel,
-                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel
-                    )
-                }
-                .onAppear {
-                    homeDependencies.medicalDocumentUploadViewModel.presentUploadPage()
-                }
-            } else {
-                Text("缺少体检报告上传依赖")
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -640,7 +623,7 @@ struct MemberMedicalSetupSheetView: View {
                         status: $viewModel.chronicConditionStatus,
                         chronicConditions: $viewModel.chronicConditions,
                         conditionDetails: $viewModel.chronicConditionDetails,
-                        medicalDocumentUploadViewModel: homeDependencies.medicalDocumentUploadViewModel,
+                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
                         aiSettingsViewModel: homeDependencies.aiSettingsViewModel
                     )
                 }
@@ -705,7 +688,7 @@ struct MemberMedicalSetupSheetView: View {
                         medicalQueryAPI: homeDependencies.medicalQueryAPI,
                         fileTransferService: homeDependencies.fileTransferService,
                         memberContextStore: homeDependencies.memberContextStore,
-                        medicalDocumentUploadViewModel: homeDependencies.medicalDocumentUploadViewModel,
+                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
                         aiSettingsViewModel: homeDependencies.aiSettingsViewModel,
                         notificationClient: homeDependencies.notificationClient,
                         homeDependencies: homeDependencies
@@ -863,7 +846,7 @@ struct MemberMedicalSetupSheetView: View {
                     MemberMedicalSymptomFollowUpStepView(
                         viewModel: viewModel,
                         symptomStatus: $viewModel.symptomFollowUpStatus,
-                        medicalDocumentUploadViewModel: homeDependencies.medicalDocumentUploadViewModel,
+                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
                         aiSettingsViewModel: homeDependencies.aiSettingsViewModel
                     )
                 }
@@ -904,21 +887,17 @@ struct MemberMedicalSetupSheetView: View {
         }
     }
 
-    // 健康病史与症状记录汇总页，点击任意行回到对应问题，便于逐项补充或修改。
+    // 健康病史与症状记录汇总页，点击任意卡片回到对应问题，便于逐项补充或修改。
     private var historySummaryStep: some View {
         MedicalGuideStepShell(
-            title: "健康病史与症状记录",
-            subtitle: "为什么要问？\n既往疾病、用药、手术、过敏、家族病史和症状随访会共同影响体检计划。",
+            title: "健康档案总览",
+            subtitle: "您的核心健康基线已盘点完毕。系统已将您的日常症状、既往史、用药、手术、过敏及家族史进行多维整合，正用于为您量身定制 AI 深度体检方案。",
             step: 16,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: isSectionMode && entryMode == .healthHistory ? "完成" : "完成",
-            onSkip: {
-                Task {
-                    await viewModel.saveProgress()
-                    proceedFromSectionSummary(.historySummary, fullFlowNext: .lifestyle)
-                }
-            },
+            primaryTitle: historySummaryPrimaryTitle,
+            showsSkipButton: false,
+            onSkip: {},
             onNext: {
                 Task {
                     await viewModel.saveProgress()
@@ -926,25 +905,42 @@ struct MemberMedicalSetupSheetView: View {
                 }
             }
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("已填写内容")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 18) {
+                Text("已录入的健康医疗档案")
+                    .font(.headline.weight(.semibold))
 
-                Text(viewModel.historySummary)
-                    .font(.body.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 14) {
-                    summaryRow(title: "健康病史与症状记录说明", value: "已完成") { path.append(.history) }
-                    summaryRow(title: "症状观察 / 随访", value: viewModel.symptomSummary) { path.append(.symptomFollowUp) }
-                    summaryRow(title: "既往疾病", value: viewModel.chronicConditionsSummary) { path.append(.chronicConditions) }
-                    summaryRow(title: "长期用药", value: viewModel.longTermMedicationSummary) { path.append(.longTermMedication) }
-                    summaryRow(title: "手术史", value: viewModel.surgerySummary) { path.append(.surgeryHistory) }
-                    summaryRow(title: "过敏史", value: viewModel.allergySummary) { path.append(.allergyHistory) }
-                    summaryRow(title: "家族病史", value: viewModel.familyHistorySummary) { path.append(.familyHistory) }
+                ForEach(viewModel.healthHistoryOverviewCards) { card in
+                    MedicalGuideOverviewCardView(card: card) {
+                        navigateToHistoryOverviewCard(card.id)
+                    }
                 }
             }
+        }
+    }
+
+    private var historySummaryPrimaryTitle: String {
+        if isSectionMode && entryMode == .healthHistory {
+            return "确认，去生成定制体检计划"
+        }
+        return "下一步"
+    }
+
+    private func navigateToHistoryOverviewCard(_ cardID: String) {
+        switch cardID {
+        case "symptom":
+            path.append(.symptomFollowUp)
+        case "chronic":
+            path.append(.chronicConditions)
+        case "medication":
+            path.append(.longTermMedication)
+        case "surgery":
+            path.append(.surgeryHistory)
+        case "allergy":
+            path.append(.allergyHistory)
+        case "family":
+            path.append(.familyHistory)
+        default:
+            break
         }
     }
 
@@ -953,7 +949,7 @@ struct MemberMedicalSetupSheetView: View {
         MedicalGuideIntroPageView(
             kind: .lifestyle,
             title: "日常生活习惯",
-            subtitle: "了解你的日常作息与生活方式，有助于更精准地评估心血管与代谢机能，并为你生成每天都能轻松执行的健康改善小贴士。",
+            subtitle: "了解您的日常作息与生活方式，有助于更精准地评估心血管与代谢机能，并为您生成每天都能轻松执行的健康改善建议。",
             isLoading: viewModel.isSaving,
             primaryTitle: "开始",
             secondaryTitle: "稍后在设置中完善",
@@ -994,8 +990,8 @@ struct MemberMedicalSetupSheetView: View {
     // 吸烟单题页。
     private var smokingStep: some View {
         MedicalGuideStepShell(
-            title: "吸烟",
-            subtitle: "为什么要问？\n吸烟会影响心血管、肺部和肿瘤风险评估。",
+            title: "吸烟习惯",
+            subtitle: "评估吸烟习惯有助于精准预测心血管健康、肺部代谢及肿瘤潜在风险，从而为您定制更科学的专项体检防御方案。",
             step: 18,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1008,11 +1004,11 @@ struct MemberMedicalSetupSheetView: View {
                 nextVisibleLifestyle(after: .smoking)
             }
         ) {
-            VStack(spacing: 16) {
-                Text("请选择吸烟状态")
+            VStack(alignment: .leading, spacing: 20) {
+                Text("吸烟状态")
                     .font(.headline.weight(.semibold))
 
-                MedicalPickerChipRow(
+                MedicalGuideSegmentedPicker(
                     items: MedicalGuideSmokingStatus.allCases.map { ($0.title, $0.rawValue) },
                     selection: Binding(
                         get: { viewModel.smokingStatus.rawValue },
@@ -1020,23 +1016,50 @@ struct MemberMedicalSetupSheetView: View {
                     )
                 )
 
-                if viewModel.smokingStatus == .quit {
-                    habitLabeledTextField(title: "历史吸烟时长", placeholder: "例如 10年", text: $viewModel.smokingHistoryDuration)
-                    habitLabeledTextField(title: "戒烟时长", placeholder: "例如 2年，可不填", text: $viewModel.smokingQuitDuration)
-                } else if viewModel.smokingStatus == .sometimes {
-                    habitLabeledTextField(title: "每月大约几包", placeholder: "可不填", text: $viewModel.smokingCount, keyboardType: .decimalPad)
-                } else if viewModel.smokingStatus == .often {
-                    habitLabeledTextField(title: "每周大约几包", placeholder: "可不填", text: $viewModel.smokingCount, keyboardType: .decimalPad)
+                if viewModel.smokingStatus != .never {
+                    MedicalHabitGroupedDetailCard {
+                        MedicalHabitMenuPickerRow(
+                            icon: "clock.fill",
+                            title: "历史吸烟时长",
+                            placeholder: "例：5年、10年...",
+                            selection: $viewModel.smokingHistoryDuration,
+                            options: MedicalLifestyleOptionCatalog.smokingHistoryDurations
+                        )
+
+                        if viewModel.smokingStatus == .quit {
+                            Divider()
+                            MedicalHabitMenuPickerRow(
+                                icon: "nosign",
+                                title: "已戒烟时长",
+                                placeholder: "例：2年，可不填",
+                                selection: $viewModel.smokingQuitDuration,
+                                options: MedicalLifestyleOptionCatalog.quitDurations
+                            )
+                        }
+
+                        if viewModel.smokingStatus == .sometimes || viewModel.smokingStatus == .often {
+                            Divider()
+                            MedicalHabitMenuPickerRow(
+                                icon: "smoke.fill",
+                                title: "平均每日吸烟量",
+                                placeholder: "例：半包/日、5支/日...",
+                                selection: $viewModel.smokingCount,
+                                options: MedicalLifestyleOptionCatalog.dailySmokingAmounts
+                            )
+                        }
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .animation(.easeInOut(duration: 0.22), value: viewModel.smokingStatus)
         }
     }
 
     // 饮酒单题页。
     private var drinkingStep: some View {
         MedicalGuideStepShell(
-            title: "饮酒",
-            subtitle: "为什么要问？\n饮酒会影响肝功能、血压和部分体检项目推荐。",
+            title: "饮酒习惯",
+            subtitle: "了解日常饮酒频率能够协助我们科学评估您的肝脏代谢负荷与血压波动趋势，以便在体检推荐中为您规避或加强特定项目的筛查。",
             step: 19,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1049,11 +1072,11 @@ struct MemberMedicalSetupSheetView: View {
                 nextVisibleLifestyle(after: .drinking)
             }
         ) {
-            VStack(spacing: 16) {
-                Text("请选择饮酒频率")
+            VStack(alignment: .leading, spacing: 20) {
+                Text("饮酒频率")
                     .font(.headline.weight(.semibold))
 
-                MedicalPickerChipRow(
+                MedicalGuideSegmentedPicker(
                     items: MedicalGuideDrinkingStatus.allCases.map { ($0.title, $0.rawValue) },
                     selection: Binding(
                         get: { viewModel.drinkingStatus.rawValue },
@@ -1061,32 +1084,80 @@ struct MemberMedicalSetupSheetView: View {
                     )
                 )
 
-                if viewModel.drinkingStatus == .quit {
-                    habitLabeledTextField(title: "历史饮酒时长", placeholder: "例如 8年", text: $viewModel.drinkingHistoryDuration)
-                    habitLabeledTextField(title: "戒酒时长", placeholder: "例如 1年，可不填", text: $viewModel.drinkingQuitDuration)
-                } else if viewModel.drinkingStatus == .occasionally {
-                    habitLabeledTextField(title: "每月大约几瓶/几次", placeholder: "可不填", text: $viewModel.drinkingCount, keyboardType: .decimalPad)
-                } else if viewModel.drinkingStatus == .often {
-                    habitLabeledTextField(title: "每周大约几瓶/几次", placeholder: "可不填", text: $viewModel.drinkingCount, keyboardType: .decimalPad)
-                }
-
                 if viewModel.drinkingStatus != .none {
-                    questionCard(title: "酒的类型") {
-                        MedicalPickerChipGrid(
-                            items: ["白酒", "啤酒", "红酒", "黄酒", "洋酒", "果酒", "米酒", "其他"],
-                            selections: $viewModel.drinkingTypes
+                    MedicalHabitGroupedDetailCard {
+                        MedicalHabitMenuPickerRow(
+                            icon: "calendar",
+                            title: "历史饮酒年限",
+                            placeholder: "例：3年、8年...",
+                            selection: $viewModel.drinkingHistoryDuration,
+                            options: MedicalLifestyleOptionCatalog.drinkingHistoryDurations
                         )
+
+                        if viewModel.drinkingStatus == .quit {
+                            Divider()
+                            MedicalHabitMenuPickerRow(
+                                icon: "nosign",
+                                title: "已戒酒时长",
+                                placeholder: "例：1年，可不填",
+                                selection: $viewModel.drinkingQuitDuration,
+                                options: MedicalLifestyleOptionCatalog.quitDurations
+                            )
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("常见饮酒类型 (可多选)", systemImage: "wineglass.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            MedicalPickerChipGrid(
+                                items: MemberMedicalSetupViewModel.presetDrinkingTypes,
+                                selections: $viewModel.drinkingTypes
+                            )
+                        }
+                        .padding(.vertical, 4)
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("其他偏好酒类 (自定义输入)", systemImage: "plus.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            TextField("请输入其他酒类名称，如：自酿药酒、鸡尾酒...", text: $viewModel.customAlcoholType)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        .padding(.vertical, 4)
+
+                        if viewModel.drinkingStatus == .occasionally || viewModel.drinkingStatus == .often {
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 12) {
+                                Label("平均单次饮酒量", systemImage: "scalemass.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+
+                                MedicalLifestyleDrinkingAmountPicker(
+                                    selection: $viewModel.drinkingAmountLevel
+                                )
+                            }
+                            .padding(.vertical, 4)
+                        }
                     }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .animation(.easeInOut(duration: 0.22), value: viewModel.drinkingStatus)
         }
     }
 
     // 每周运动单题页。
     private var exerciseStep: some View {
         MedicalGuideStepShell(
-            title: "每周运动",
-            subtitle: "为什么要问？\n运动频率会影响代谢风险、体重管理和运动建议。",
+            title: "运动习惯",
+            subtitle: "合理的运动评估能帮助我们了解您的基础代谢率、肌肉质量与心肺耐力，从而为您提供更具针对性的体重管理与防病运动处方。",
             step: 20,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1099,11 +1170,11 @@ struct MemberMedicalSetupSheetView: View {
                 nextVisibleLifestyle(after: .exercise)
             }
         ) {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 Text("每周运动频率")
                     .font(.headline.weight(.semibold))
 
-                MedicalPickerChipRow(
+                MedicalGuideSegmentedPicker(
                     items: MedicalGuideExerciseFrequency.allCases.map { ($0.title, $0.rawValue) },
                     selection: Binding(
                         get: { viewModel.exerciseFrequency.rawValue },
@@ -1112,34 +1183,69 @@ struct MemberMedicalSetupSheetView: View {
                 )
 
                 if viewModel.exerciseFrequency != .none {
-                    questionCard(title: "运动强度") {
-                        MedicalPickerChipRow(
-                            items: MedicalGuideExerciseIntensity.allCases.map { ($0.title, $0.rawValue) },
-                            selection: Binding(
-                                get: { viewModel.exerciseIntensity.rawValue },
-                                set: { viewModel.exerciseIntensity = MedicalGuideExerciseIntensity(rawValue: $0) ?? .medium }
+                    MedicalHabitGroupedDetailCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("运动强度感知", systemImage: "bolt.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            MedicalLifestyleIntensityPicker(
+                                selection: Binding(
+                                    get: { viewModel.exerciseIntensity.rawValue },
+                                    set: { viewModel.exerciseIntensity = MedicalGuideExerciseIntensity(rawValue: $0) ?? .medium }
+                                )
                             )
+                        }
+                        .padding(.vertical, 4)
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("习惯运动类型 (可多选)", systemImage: "figure.run")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            MedicalPickerChipGrid(
+                                items: MemberMedicalSetupViewModel.presetExerciseTypes,
+                                selections: $viewModel.exerciseTypes
+                            )
+                        }
+                        .padding(.vertical, 4)
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("其他运动方式 (自定义输入)", systemImage: "plus.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            TextField("请输入其他运动，如：八段锦、攀岩、冲浪...", text: $viewModel.customExerciseType)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        .padding(.vertical, 4)
+
+                        Divider()
+
+                        MedicalHabitMenuPickerRow(
+                            icon: "timer",
+                            title: "单次平均运动时长",
+                            placeholder: "例：30分钟、1小时...",
+                            selection: $viewModel.exerciseDurationMinutes,
+                            options: MedicalLifestyleOptionCatalog.exerciseDurations
                         )
                     }
-
-                    questionCard(title: "运动类型") {
-                        MedicalPickerChipGrid(
-                            items: ["散步", "跑步", "骑行", "游泳", "健身", "力量训练", "瑜伽", "球类", "爬山", "广场舞", "其他"],
-                            selections: $viewModel.exerciseTypes
-                        )
-                    }
-
-                    habitLabeledTextField(title: "单次运动时长", placeholder: "例如 45 分钟", text: $viewModel.exerciseDurationMinutes, keyboardType: .numberPad)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .animation(.easeInOut(duration: 0.22), value: viewModel.exerciseFrequency)
         }
     }
 
     // 平均睡眠单题页。
     private var sleepStep: some View {
         MedicalGuideStepShell(
-            title: "平均睡眠",
-            subtitle: "为什么要问？\n睡眠时长会影响代谢、血压和免疫状态。",
+            title: "睡眠状况",
+            subtitle: "高质量的睡眠是神经系统修复、免疫因子生成与血糖稳定的基石。记录您的日常睡眠，有助于我们全面分析您的日常精力与亚健康状态。",
             step: 21,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1152,35 +1258,50 @@ struct MemberMedicalSetupSheetView: View {
                 nextVisibleLifestyle(after: .sleep)
             }
         ) {
-            VStack(spacing: 16) {
-                Text("平均每天睡眠多久？")
+            VStack(alignment: .leading, spacing: 20) {
+                Text("每日平均睡眠时长")
                     .font(.headline.weight(.semibold))
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Slider(value: $viewModel.sleepHours, in: 4...10, step: 0.5)
-                    Text("\(Int(viewModel.sleepHours)) 小时")
-                        .font(.subheadline.weight(.semibold))
+                MedicalLifestyleSleepSliderCard(hours: $viewModel.sleepHours)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("睡眠质量自我感知", systemImage: "bed.double.fill")
+                        .font(.headline.weight(.semibold))
+
+                    Text("您的夜间睡眠通常感觉")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
+
+                    MedicalLifestyleSleepQualityPicker(
+                        selection: Binding(
+                            get: { viewModel.sleepQuality?.rawValue ?? "" },
+                            set: { newValue in
+                                viewModel.sleepQuality = MedicalGuideSleepQuality(rawValue: newValue)
+                                viewModel.hasPrefilledSleepQuality = newValue.isEmpty == false
+                            }
+                        )
+                    )
                 }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemBackground))
+                )
             }
         }
     }
 
-    // 生活习惯汇总页，点击任意行回到对应问题，便于逐项补充或修改。
+    // 生活习惯汇总页，点击任意卡片回到对应问题，便于逐项补充或修改。
     private var lifestyleSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "生活习惯",
-            subtitle: "为什么要问？\n生活习惯会影响心血管、代谢与呼吸系统的风险评估。",
+            title: "生活习惯总览",
+            subtitle: "感谢您完成生活习惯评估。这些精细的日常行为数据，将与您的病史、用药深度整合，帮助 AI 为您制定更具针对性的体检防御方案。",
             step: 22,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: isSectionMode && entryMode == .lifestyle ? "完成" : "下一步",
-            onSkip: {
-                Task {
-                    await viewModel.saveProgress()
-                    proceedFromSectionSummary(.lifestyleSummary, fullFlowNext: .examArchiveIntro)
-                }
-            },
+            primaryTitle: lifestyleSummaryPrimaryTitle,
+            showsSkipButton: false,
+            onSkip: {},
             onNext: {
                 Task {
                     await viewModel.saveProgress()
@@ -1188,23 +1309,38 @@ struct MemberMedicalSetupSheetView: View {
                 }
             }
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("已填写内容")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 18) {
+                Text("已为您生成的健康行为档案")
+                    .font(.headline.weight(.semibold))
 
-                Text(viewModel.lifestyleSummary)
-                    .font(.body.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 14) {
-                    summaryRow(title: "生活习惯说明", value: "已完成") { path.append(.lifestyle) }
-                    summaryRow(title: "吸烟", value: viewModel.smokingSummary) { path.append(.smoking) }
-                    summaryRow(title: "饮酒", value: viewModel.drinkingSummary) { path.append(.drinking) }
-                    summaryRow(title: "每周运动", value: viewModel.exerciseSummary) { path.append(.exercise) }
-                    summaryRow(title: "平均睡眠", value: viewModel.sleepSummary) { path.append(.sleep) }
+                ForEach(viewModel.lifestyleOverviewCards) { card in
+                    MedicalGuideOverviewCardView(card: card) {
+                        navigateToLifestyleOverviewCard(card.id)
+                    }
                 }
             }
+        }
+    }
+
+    private var lifestyleSummaryPrimaryTitle: String {
+        if isSectionMode && entryMode == .lifestyle {
+            return "确认并生成健康报告"
+        }
+        return "下一步"
+    }
+
+    private func navigateToLifestyleOverviewCard(_ cardID: String) {
+        switch cardID {
+        case "smoking":
+            path.append(.smoking)
+        case "drinking":
+            path.append(.drinking)
+        case "exercise":
+            path.append(.exercise)
+        case "sleep":
+            path.append(.sleep)
+        default:
+            break
         }
     }
 
@@ -1274,61 +1410,53 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     private var examArchiveStep: some View {
-        MedicalGuideStepShell(
-            title: "体检档案",
-            subtitle: "有体检历史时，AI 会优先根据历史报告生成下一次体检计划。",
-            step: 24,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
-            onSkip: { proceedAfterExamArchiveStep() },
-            onNext: { proceedAfterExamArchiveStep() }
-        ) {
-            VStack(spacing: 14) {
-                questionCard(title: "是否做过体检") {
-                    MedicalPickerChipRow(
-                        items: [("是", "true"), ("否", "false")],
-                        selection: Binding(
-                            get: { viewModel.hasExamHistory ? "true" : "false" },
-                            set: { viewModel.hasExamHistory = ($0 == "true") }
-                        )
+        Group {
+            if let homeDependencies, viewModel.member?.id != nil {
+                MedicalGuideStepShell(
+                    title: "体检档案",
+                    subtitle: "整合并追踪你的体检报告，能让我们为你绘制出核心指标的长期变化趋势图，并及时提供科学的复查建议。",
+                    step: 24,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: examArchivePrimaryTitle,
+                    onSkip: { proceedAfterExamArchiveStep() },
+                    onNext: { proceedAfterExamArchiveStep() }
+                ) {
+                    MemberMedicalExamArchiveStepView(
+                        viewModel: viewModel,
+                        hasExamHistory: $viewModel.hasExamHistory,
+                        medicalQueryAPI: homeDependencies.medicalQueryAPI,
+                        fileTransferService: homeDependencies.fileTransferService,
+                        memberContextStore: homeDependencies.memberContextStore,
+                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
+                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel,
+                        notificationClient: homeDependencies.notificationClient
                     )
                 }
-
-                if viewModel.hasExamHistory {
-                    questionCard(title: "最近一次体检") {
-                        TextField("例如 2025", text: $viewModel.lastExamYear)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    questionCard(title: "体检机构") {
-                        TextField("体检中心名称", text: $viewModel.examInstitution)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    questionCard(title: "电子体检报告") {
-                        Button {
-                            presentReportUpload()
-                        } label: {
-                            HStack {
-                                Image(systemName: "doc.text.viewfinder")
-                                Text("上传报告")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.footnote.weight(.semibold))
-                            }
-                            .foregroundStyle(.primary)
-                            .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    questionCard(title: "体检报告摘要") {
-                        TextEditor(text: $viewModel.examReportSummary)
-                            .frame(minHeight: 100)
-                            .padding(8)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(uiColor: .systemBackground)))
-                    }
+            } else {
+                MedicalGuideStepShell(
+                    title: "体检档案",
+                    subtitle: "整合并追踪你的体检报告，能让我们为你绘制出核心指标的长期变化趋势图，并及时提供科学的复查建议。",
+                    step: 24,
+                    total: viewModel.totalGuideSteps,
+                    isLoading: viewModel.isSaving,
+                    primaryTitle: examArchivePrimaryTitle,
+                    onSkip: { proceedAfterExamArchiveStep() },
+                    onNext: { proceedAfterExamArchiveStep() }
+                ) {
+                    Text("缺少体检档案依赖，请从首页进入医疗引导。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
+    }
+
+    private var examArchivePrimaryTitle: String {
+        if viewModel.hasExamHistory {
+            return "完成体检档案"
+        }
+        return "下一步"
     }
 
     private var examArchiveSummaryStep: some View {
@@ -1365,7 +1493,16 @@ struct MemberMedicalSetupSheetView: View {
                     summaryRow(title: "过往体检档案说明", value: "已完成") { path.append(.examArchiveIntro) }
                     summaryRow(title: "是否做过体检", value: viewModel.hasExamHistory ? "是" : "否") { path.append(.examArchive) }
                     if viewModel.hasExamHistory {
-                        summaryRow(title: "最近一次体检", value: viewModel.lastExamYear.isEmpty ? "未填写" : viewModel.lastExamYear) { path.append(.examArchive) }
+                        if viewModel.memberHealthExamReports.isEmpty == false {
+                            summaryRow(
+                                title: "体检报告列表",
+                                value: "\(viewModel.memberHealthExamReports.count) 份"
+                            ) { path.append(.examArchive) }
+                        }
+                        summaryRow(
+                            title: "最近一次体检",
+                            value: viewModel.lastExamYear.isEmpty ? "未填写" : MemberMedicalSetupViewModel.displayYearMonth(viewModel.lastExamYear)
+                        ) { path.append(.examArchive) }
                         summaryRow(title: "体检机构", value: viewModel.examInstitution.isEmpty ? "未填写" : viewModel.examInstitution) { path.append(.examArchive) }
                         summaryRow(title: "体检报告摘要", value: viewModel.examReportSummary.isEmpty ? "未填写" : "已填写") { path.append(.examArchive) }
                     }
@@ -1889,10 +2026,6 @@ struct MemberMedicalSetupSheetView: View {
         }
     }
 
-    private func presentReportUpload() {
-        showReportUpload = true
-    }
-
     private func nextVisible(after route: MedicalGuideRoute) {
         switch route {
         case .intro:
@@ -2240,6 +2373,7 @@ private struct MedicalGuideStepShell<Content: View>: View {
     let primaryTitle: String?
     let primaryEnabled: Bool
     let secondaryTitle: String?
+    let showsSkipButton: Bool
     let onSkip: () -> Void
     let onNext: () -> Void
     @ViewBuilder let content: () -> Content
@@ -2253,6 +2387,7 @@ private struct MedicalGuideStepShell<Content: View>: View {
         primaryTitle: String? = nil,
         primaryEnabled: Bool = true,
         secondaryTitle: String? = nil,
+        showsSkipButton: Bool = true,
         onSkip: @escaping () -> Void,
         onNext: @escaping () -> Void,
         @ViewBuilder content: @escaping () -> Content
@@ -2265,6 +2400,7 @@ private struct MedicalGuideStepShell<Content: View>: View {
         self.primaryTitle = primaryTitle
         self.primaryEnabled = primaryEnabled
         self.secondaryTitle = secondaryTitle
+        self.showsSkipButton = showsSkipButton
         self.onSkip = onSkip
         self.onNext = onNext
         self.content = content
@@ -2293,9 +2429,105 @@ private struct MedicalGuideStepShell<Content: View>: View {
             primaryEnabled: primaryEnabled && isLoading == false,
             isLoading: isLoading,
             onPrimary: onNext,
-            secondaryTitle: secondaryTitle ?? "跳过",
-            onSecondary: onSkip
+            secondaryTitle: showsSkipButton ? (secondaryTitle ?? "跳过") : nil,
+            onSecondary: showsSkipButton ? onSkip : nil
         )
+    }
+}
+
+private struct MedicalGuideOverviewCardView: View {
+    let card: MedicalGuideOverviewCardModel
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: card.icon)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.accent)
+                        .frame(width: 28)
+
+                    Text(card.title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 8)
+
+                    Text(card.statusText)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(overviewBadgeForeground(card.statusStyle))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(overviewBadgeBackground(card.statusStyle))
+                        )
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(card.bullets) { bullet in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("•")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Text("\(bullet.prefix)：")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Text(bullet.content)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.primary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let badge = bullet.badge {
+                                        Text(badge.text)
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(overviewBadgeForeground(badge.style))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                Capsule(style: .continuous)
+                                                    .fill(overviewBadgeBackground(badge.style))
+                                            )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemBackground))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func overviewBadgeForeground(_ style: MedicalGuideOverviewBadgeStyle) -> Color {
+        switch style {
+        case .neutral:
+            return .secondary
+        case .success:
+            return .green
+        case .warning:
+            return .orange
+        case .danger:
+            return .red
+        case .accent:
+            return .accentColor
+        }
+    }
+
+    private func overviewBadgeBackground(_ style: MedicalGuideOverviewBadgeStyle) -> Color {
+        overviewBadgeForeground(style).opacity(0.12)
     }
 }
 
@@ -2658,6 +2890,247 @@ private struct OccupationGroup {
     let title: String
     let subtitle: String
     let value: String
+}
+
+private enum MedicalLifestyleOptionCatalog {
+    static let smokingHistoryDurations = ["不足1年", "1-3年", "3-5年", "5-10年", "10年以上"]
+    static let drinkingHistoryDurations = ["不足1年", "1-3年", "3-5年", "5-10年", "10年以上"]
+    static let quitDurations = ["不足6个月", "6个月-1年", "1-2年", "2-5年", "5年以上"]
+    static let dailySmokingAmounts = ["几支/日", "半包/日", "1包/日", "1-2包/日", "2包以上/日"]
+    static let exerciseDurations = ["15分钟", "30分钟", "45分钟", "1小时", "1小时以上"]
+}
+
+private struct MedicalGuideSegmentedPicker: View {
+    let items: [(title: String, value: String)]
+    @Binding var selection: String
+
+    var body: some View {
+        Picker("", selection: $selection) {
+            ForEach(items, id: \.value) { item in
+                Text(item.title).tag(item.value)
+            }
+        }
+        .pickerStyle(.segmented)
+        .onAppear {
+            if selection.isEmpty, let first = items.first?.value {
+                selection = first
+            }
+        }
+    }
+}
+
+private struct MedicalHabitGroupedDetailCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground))
+        )
+    }
+}
+
+private struct MedicalHabitMenuPickerRow: View {
+    let icon: String
+    let title: String
+    let placeholder: String
+    @Binding var selection: String
+    let options: [String]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: icon)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                if selection.isEmpty {
+                    Text(placeholder)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Menu {
+                ForEach(options, id: \.self) { option in
+                    Button(option) { selection = option }
+                }
+                if selection.isEmpty == false {
+                    Divider()
+                    Button("清除", role: .destructive) { selection = "" }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selection.isEmpty ? "请选择" : selection)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(selection.isEmpty ? .secondary : .primary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+private struct MedicalLifestyleIntensityPicker: View {
+    @Binding var selection: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(MedicalGuideExerciseIntensity.allCases) { item in
+                Button {
+                    selection = item.rawValue
+                } label: {
+                    HStack {
+                        Text(item.lifestyleTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(selection == item.rawValue ? Color.accentColor : .primary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        if selection == item.rawValue {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(selection == item.rawValue ? Color.accentColor.opacity(0.12) : Color(uiColor: .systemGroupedBackground))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct MedicalLifestyleSleepSliderCard: View {
+    @Binding var hours: Double
+
+    private var feedback: (emoji: String, label: String) {
+        switch hours {
+        case ..<6:
+            return ("😴", "睡眠偏少，建议关注作息规律")
+        case 6..<7:
+            return ("🌙", "接近成人推荐睡眠下限")
+        case 7..<8.5:
+            return ("💡", "处于成人黄金睡眠区间")
+        case 8.5..<10:
+            return ("🛌", "睡眠时长充足")
+        default:
+            return ("⏰", "睡眠偏长，如持续可咨询医生")
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 8) {
+                Text("🌙")
+                    .font(.title2)
+                Text(String(format: "%.1f 小时", hours))
+                    .font(.title2.weight(.bold))
+                Text(feedback.label)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+
+            Slider(value: $hours, in: 4...12, step: 0.5)
+
+            HStack {
+                Text("4小时")
+                Spacer()
+                Text("12小时")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground))
+        )
+    }
+}
+
+private struct MedicalLifestyleSleepQualityPicker: View {
+    @Binding var selection: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(MedicalGuideSleepQuality.allCases) { item in
+                Button {
+                    selection = item.rawValue
+                } label: {
+                    HStack {
+                        Text(item.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(selection == item.rawValue ? Color.accentColor : .primary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        if selection == item.rawValue {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(selection == item.rawValue ? Color.accentColor.opacity(0.12) : Color(uiColor: .systemGroupedBackground))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+private struct MedicalLifestyleDrinkingAmountPicker: View {
+    @Binding var selection: MedicalGuideDrinkingAmountLevel?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ForEach(MedicalGuideDrinkingAmountLevel.allCases) { item in
+                Button {
+                    selection = item
+                } label: {
+                    HStack {
+                        Text(item.title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(selection == item ? Color.accentColor : .primary)
+                        Spacer()
+                        if selection == item {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(selection == item ? Color.accentColor.opacity(0.12) : Color(uiColor: .systemGroupedBackground))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 }
 
 private struct MedicalPickerChipRow: View {

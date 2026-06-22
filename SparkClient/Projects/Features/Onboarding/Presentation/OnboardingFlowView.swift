@@ -21,83 +21,77 @@ struct OnboardingFlowView: View {
     }
 
     var body: some View {
-        CompatibleNavigationContainer(legacyStackStyle: true) {
-            VStack(spacing: 0) {
-                ZStack {
-                    stepView(for: viewModel.currentStep)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                if viewModel.currentStep != .welcome {
-                    OnboardingFooter(
-                        step: viewModel.currentStep,
-                        currentIndex: viewModel.activeSteps.firstIndex(of: viewModel.currentStep) ?? 0,
-                        totalCount: viewModel.activeSteps.count,
-                        canContinue: viewModel.canGoNext,
-                        onContinue: {
-                            if viewModel.currentStep == .start {
-                                viewModel.complete()
-                            } else {
-                                viewModel.goNext()
-                            }
-                        }
-                    )
-                }
+        CompatibleRouteNavigationContainer(path: $viewModel.navigationPath, legacyStackStyle: true) {
+            OnboardingWelcomeStep {
+                viewModel.goNext()
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if viewModel.currentStep != .welcome && viewModel.currentStep != .profile {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                viewModel.goBack()
-                            }
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.headline.weight(.semibold))
-                        }
-                        .accessibilityLabel(L10n.text("common.back", fallback: "Back"))
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if viewModel.currentStep.isSkippable {
-                        Button(L10n.text("onboarding.action.skip", fallback: "跳过")) {
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                viewModel.skip()
-                            }
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .animation(.easeInOut(duration: 0.22), value: viewModel.currentStep)
+        } destination: { step in
+            onboardingDestination(for: step)
         }
     }
 
     @ViewBuilder
-    private func stepView(for step: OnboardingStep) -> some View {
-        switch step {
-        case .welcome:
-            OnboardingWelcomeStep {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    viewModel.goNext()
+    private func onboardingDestination(for step: OnboardingStep) -> some View {
+        VStack(spacing: 0) {
+            Group {
+                switch step {
+                case .welcome:
+                    EmptyView()
+                case .profile:
+                    OnboardingProfileStep(
+                        memberContextStore: memberContextStore,
+                        homeDependencies: homeDependencies
+                    )
+                case .agent:
+                    OnboardingAgentSetupStep(
+                        viewModel: agentSetupViewModel,
+                        aiSettingsViewModel: aiSettingsViewModel
+                    )
+                case .start:
+                    OnboardingStartStep {
+                        viewModel.complete()
+                    }
                 }
             }
-        case .profile:
-            OnboardingProfileStep(
-                memberContextStore: memberContextStore,
-                homeDependencies: homeDependencies
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            OnboardingFooter(
+                step: step,
+                currentIndex: viewModel.activeSteps.firstIndex(of: step) ?? 0,
+                totalCount: viewModel.activeSteps.count,
+                canContinue: viewModel.canGoNext,
+                onContinue: {
+                    if step == .start {
+                        viewModel.complete()
+                    } else {
+                        viewModel.goNext()
+                    }
+                }
             )
-        case .agent:
-            OnboardingAgentSetupStep(
-                viewModel: agentSetupViewModel,
-                aiSettingsViewModel: aiSettingsViewModel
-            )
-        case .start:
-            OnboardingStartStep {
-                viewModel.complete()
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+//        .navigationBarBackButtonHidden(step == .profile)
+        .toolbar {
+//            ToolbarItem(placement: .navigationBarLeading) {
+//                if step != .profile {
+//                    Button {
+//                        viewModel.goBack()
+//                    } label: {
+//                        Image(systemName: "chevron.left")
+//                            .font(.headline.weight(.semibold))
+//                    }
+//                    .accessibilityLabel(L10n.text("common.back", fallback: "Back"))
+//                }
+//            }
+
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if step.isSkippable {
+                    Button(L10n.text("onboarding.action.skip", fallback: "跳过")) {
+                        viewModel.skip()
+                    }
+                    .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -260,15 +254,15 @@ private struct OnboardingProfileStep: View {
                 }
                 .navigationBarTitleDisplayMode(.inline)
                 // 右上角关闭按钮
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            activeMemberSetupRoute = nil
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                    }
-                }
+//                .toolbar {
+//                    ToolbarItem(placement: .navigationBarTrailing) {
+//                        Button(action: {
+//                            activeMemberSetupRoute = nil
+//                        }) {
+//                            Image(systemName: "xmark.circle.fill")
+//                        }
+//                    }
+//                }
             }
         }
     }

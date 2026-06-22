@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class OnboardingFlowViewModel: ObservableObject {
-    @Published private(set) var currentStep: OnboardingStep
+    @Published var navigationPath: [OnboardingStep] = []
 
     private let store: OnboardingStore
     private let memberContextStore: MemberContextStore
@@ -12,14 +12,22 @@ final class OnboardingFlowViewModel: ObservableObject {
     init(store: OnboardingStore, memberContextStore: MemberContextStore) {
         self.store = store
         self.memberContextStore = memberContextStore
-        self.currentStep = store.currentStep
+        self.navigationPath = Self.navigationPath(for: store.currentStep)
 
         store.$currentStep
             .removeDuplicates()
             .sink { [weak self] step in
-                self?.currentStep = step
+                guard let self else { return }
+                let path = Self.navigationPath(for: step)
+                if self.navigationPath != path {
+                    self.navigationPath = path
+                }
             }
             .store(in: &cancellables)
+    }
+
+    var currentStep: OnboardingStep {
+        navigationPath.last ?? .welcome
     }
 
     var activeSteps: [OnboardingStep] {
@@ -37,19 +45,34 @@ final class OnboardingFlowViewModel: ObservableObject {
 
     func goNext() {
         guard canGoNext else { return }
-        store.updateStep(currentStep.next())
+        let next = currentStep.next()
+        guard next != currentStep else { return }
+        if next != .welcome {
+            navigationPath.append(next)
+        }
+        store.updateStep(next)
     }
 
     func goBack() {
-        store.updateStep(currentStep.previous())
+        guard navigationPath.isEmpty == false else { return }
+        let previous = currentStep.previous()
+        navigationPath.removeLast()
+        store.updateStep(previous)
     }
 
     func skip() {
         guard currentStep.isSkippable else { return }
-        store.updateStep(currentStep.next())
+        goNext()
     }
 
     func complete() {
         store.complete()
+    }
+
+    private static func navigationPath(for step: OnboardingStep) -> [OnboardingStep] {
+        guard let index = OnboardingStep.activeSteps.firstIndex(of: step), index > 0 else {
+            return []
+        }
+        return Array(OnboardingStep.activeSteps.dropFirst().prefix(index))
     }
 }
