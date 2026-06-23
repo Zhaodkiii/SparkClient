@@ -57,7 +57,11 @@ struct AppCoordinatorView: View {
                         memberContextStore: mainTab.memberContextStore,
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,
                         homeDependencies: mainTab.homeDependencies
-                    )
+                    ) {
+                        Task { @MainActor in
+                            await mainTab.homeViewModel.forceReload(syncRemote: true)
+                        }
+                    }
                     .id("onboarding-\(session.accountID)")
                     .onAppear {
                         mainTab.launchIntentCoordinator.updateReadiness {

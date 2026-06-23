@@ -250,7 +250,7 @@ enum SparkMedicalSyncAPI {
             examFocus = try container.decodeIfPresent([String].self, forKey: .examFocus) ?? []
             symptomFollowUpFocus = try container.decodeIfPresent([String].self, forKey: .symptomFollowUpFocus) ?? []
             notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
-            extra = try container.decodeIfPresent([String: String].self, forKey: .extra)
+            extra = try container.decodeFlexibleStringDictionary(forKeys: [.extra])
             guidanceSections = try container.decodeIfPresent([RemoteMemberMedicalProfileSectionSummary].self, forKey: .guidanceSections)
             riskAssessmentSummary = try container.decodeIfPresent(String.self, forKey: .riskAssessmentSummary)
             examPlanSummary = try container.decodeIfPresent(String.self, forKey: .examPlanSummary)

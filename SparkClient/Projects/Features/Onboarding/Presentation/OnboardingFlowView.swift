@@ -6,18 +6,21 @@ struct OnboardingFlowView: View {
     @ObservedObject private var memberContextStore: MemberContextStore
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
     private let homeDependencies: HomeFeatureDependencies?
+    private let onCompleted: () -> Void
 
     init(
         viewModel: OnboardingFlowViewModel,
         memberContextStore: MemberContextStore,
         aiSettingsViewModel: AISettingsViewModel,
-        homeDependencies: HomeFeatureDependencies? = nil
+        homeDependencies: HomeFeatureDependencies? = nil,
+        onCompleted: @escaping () -> Void = {}
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _agentSetupViewModel = StateObject(wrappedValue: OnboardingAgentSetupViewModel(aiSettingsViewModel: aiSettingsViewModel))
         self.memberContextStore = memberContextStore
         self.aiSettingsViewModel = aiSettingsViewModel
         self.homeDependencies = homeDependencies
+        self.onCompleted = onCompleted
     }
 
     var body: some View {
@@ -51,6 +54,7 @@ struct OnboardingFlowView: View {
                 case .start:
                     OnboardingStartStep {
                         viewModel.complete()
+                        onCompleted()
                     }
                 }
             }
@@ -64,6 +68,7 @@ struct OnboardingFlowView: View {
                 onContinue: {
                     if step == .start {
                         viewModel.complete()
+                        onCompleted()
                     } else {
                         viewModel.goNext()
                     }

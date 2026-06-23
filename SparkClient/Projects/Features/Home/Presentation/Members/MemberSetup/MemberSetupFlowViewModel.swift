@@ -396,6 +396,7 @@ final class MemberSetupFlowViewModel: ObservableObject {
 
     /// 打开模块维护 Sheet
     func openSheet(for module: MemberSetupModule, entryMode: MedicalSetupEntryMode? = nil) {
+        selectedModules.insert(module)
         switch module {
         case .medical:
             activeSheet = .medical(entryMode ?? .full)

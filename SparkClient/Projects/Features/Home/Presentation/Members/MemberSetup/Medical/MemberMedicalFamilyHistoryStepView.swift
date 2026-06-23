@@ -240,7 +240,6 @@ struct FamilyHistoryRecordFormView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 relativeChoiceCard
-                diseaseSearchField
                 diseaseCategoryGroups
                 if familyHistory.isEmpty == false {
                     familyHistoryDetailsCard
@@ -250,6 +249,10 @@ struct FamilyHistoryRecordFormView: View {
         }
         .navigationTitle("添加家族病史")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            prompt: Text("搜索疾病或肿瘤名称 (如: 肠癌、高血压)")
+        )
         .sparkFormBottomBar(
             canSubmit: familyHistory.isEmpty == false,
             saveTitle: "完成",
@@ -293,22 +296,6 @@ struct FamilyHistoryRecordFormView: View {
                 }
             }
         }
-    }
-
-    private var diseaseSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("搜索疾病或肿瘤名称 (如: 肠癌、高血压)", text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(uiColor: .systemGroupedBackground))
-        )
     }
 
     private var diseaseCategoryGroups: some View {

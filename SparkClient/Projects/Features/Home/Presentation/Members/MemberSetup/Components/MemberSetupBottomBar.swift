@@ -10,6 +10,7 @@ struct MemberSetupBottomBar: View {
     let onPrimary: () -> Void
     var secondaryTitle: String? = nil
     var onSecondary: (() -> Void)? = nil
+    var showsPrimaryButton = true
     var keyboardVisible = false
 
     private var canSubmit: Bool {
@@ -31,27 +32,29 @@ struct MemberSetupBottomBar: View {
 
     private var bottomButtons: some View {
         VStack(spacing: 12) {
-            Button {
-                guard canSubmit else { return }
-                triggerHaptic()
-                onPrimary()
-            } label: {
-                HStack(spacing: 10) {
-                    if isLoading {
-                        ProgressView()
-                            .tint(.white)
+            if showsPrimaryButton {
+                Button {
+                    guard canSubmit else { return }
+                    triggerHaptic()
+                    onPrimary()
+                } label: {
+                    HStack(spacing: 10) {
+                        if isLoading {
+                            ProgressView()
+                                .tint(.white)
+                        }
+                        Text(primaryTitle)
                     }
-                    Text(primaryTitle)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(canSubmit || isLoading ? Color.white : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 56)
+                    .background(primaryBackground)
                 }
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(canSubmit || isLoading ? Color.white : Color.secondary)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 56)
-                .background(primaryBackground)
+                .buttonStyle(.plain)
+                .disabled(!canSubmit)
+                .shadow(color: Color.black.opacity(canSubmit ? 0.08 : 0), radius: 12, x: 0, y: 4)
             }
-            .buttonStyle(.plain)
-            .disabled(!canSubmit)
-            .shadow(color: Color.black.opacity(canSubmit ? 0.08 : 0), radius: 12, x: 0, y: 4)
 
             if let secondaryTitle, let onSecondary {
                 Button {
@@ -98,6 +101,7 @@ extension View {
         primaryEnabled: Bool,
         isLoading: Bool = false,
         keyboardVisible: Bool = false,
+        showsPrimaryButton: Bool = true,
         onPrimary: @escaping () -> Void,
         secondaryTitle: String? = nil,
         onSecondary: (() -> Void)? = nil
@@ -110,6 +114,7 @@ extension View {
                 onPrimary: onPrimary,
                 secondaryTitle: secondaryTitle,
                 onSecondary: onSecondary,
+                showsPrimaryButton: showsPrimaryButton,
                 keyboardVisible: keyboardVisible
             )
         }

@@ -536,6 +536,8 @@ extension AIScenarioRemoteBundlesCollection {
             reportInterpretation = bundle
         case .nutritionIntakeExtraction:
             nutritionIntakeExtraction = bundle
+        case .medicalExamPlanGeneration:
+            reportInterpretation = bundle
         }
     }
 }
@@ -687,6 +689,8 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
             return reportInterpretation
         case .nutritionIntakeExtraction:
             return nutritionIntakeExtraction
+        case .medicalExamPlanGeneration:
+            return reportInterpretation
         }
     }
 

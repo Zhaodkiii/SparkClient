@@ -502,7 +502,7 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
     }
 
     /// 摘要等非统一资源路径仍走直连 GET。
-    private func request<T: Decodable>(
+    func request<T: Decodable>(
         path: String,
         query: [URLQueryItem] = [],
         responseType: T.Type,
@@ -530,7 +530,7 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
     }
 
-    private func write<T: Decodable, B: Encodable>(
+    func write<T: Decodable, B: Encodable>(
         method: SparkHTTPMethod,
         path: String,
         body: B,
@@ -546,7 +546,7 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         )
     }
 
-    private func writeOptional<T: Decodable, B: Encodable>(
+    func writeOptional<T: Decodable, B: Encodable>(
         method: SparkHTTPMethod,
         path: String,
         body: B?,

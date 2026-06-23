@@ -5,16 +5,24 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 
-/// 医疗附件上传列表所支持的识别文档场景。
+/// 医疗附件上传文档类型枚举
+/// rawValue：后端存储文件分类编码；Identifiable 用于SwiftUI列表遍历；CaseIterable 支持全部类型循环
 enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
+    /// 药盒照片
     case medicineBox
+    /// 处方用药计划
     case medicationPlan
+    /// 检验报告单
     case examinationReport
+    /// 体检报告
     case healthExamReport
+    /// 病例档案
     case caseDocument
 
+    /// Identifiable 协议唯一标识，直接使用后端原始编码
     var id: String { rawValue }
 
+    /// 文件上传前缀，用于区分不同类型文件命名
     var fileNamePrefix: String {
         switch self {
         case .medicineBox:
@@ -30,6 +38,7 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
+    /// 单类文档最大可上传文件数量限制
     var maxFileCount: Int {
         switch self {
         case .examinationReport:
@@ -41,7 +50,7 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    /// 自定义报告相机单次最多拍摄张数。
+    /// 报告类相机单次拍摄最大张数（仅检验/体检报告支持连拍，其余类型单次仅拍1张）
     var reportCameraMaxCaptureCount: Int {
         switch self {
         case .examinationReport:
@@ -53,6 +62,7 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
+    /// 报告相机业务上下文，区分检验/体检报告拍摄页面，非报告类返回nil
     var examinationReportCameraContext: ExaminationReportCameraContext? {
         switch self {
         case .examinationReport:

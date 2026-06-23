@@ -68,11 +68,6 @@ enum MemberMedicalModuleSectionBuilder {
                 return base.isEmpty ? examPlan : "\(base) · \(examPlan)"
             }
             return examArchiveSummary(profile: profile, completeData: completeData)
-        case .riskAssessment:
-            if let summary = profile?.riskAssessmentSummary, summary.isEmpty == false {
-                return summary
-            }
-            return "待生成"
         }
     }
 
@@ -116,11 +111,6 @@ enum MemberMedicalModuleSectionBuilder {
                 return .completed
             }
             return .notStarted
-        case .riskAssessment:
-            if profile?.riskAssessmentSummary?.isEmpty == false {
-                return .completed
-            }
-            return summary == "待生成" ? .notStarted : .incomplete
         }
     }
 

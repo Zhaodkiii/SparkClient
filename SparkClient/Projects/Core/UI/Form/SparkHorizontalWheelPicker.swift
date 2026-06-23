@@ -36,8 +36,8 @@ struct SparkHorizontalWheelPicker: View {
     var config: Config
     @Binding var value: Double
 
-    @State private var isLoaded = false
-    private let scrollCoordinateSpaceName = "SparkHorizontalWheelPickerScroll"
+    @State private var scrollPosition: Int?
+    @State private var didApplyInitialPosition = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -63,31 +63,26 @@ struct SparkHorizontalWheelPicker: View {
                                         .offset(y: 20)
                                 }
                             }
-                            .background {
-                                if index == 0 {
-                                    GeometryReader { markerProxy in
-                                        Color.clear.preference(
-                                            key: SparkHorizontalWheelLeadingMarkerXPreferenceKey.self,
-                                            value: markerProxy.frame(in: .named(scrollCoordinateSpaceName)).midX
-                                        )
-                                    }
-                                }
-                            }
                     }
                 }
                 .frame(height: size.height)
                 .scrollTargetLayout()
             }
-            .coordinateSpace(name: scrollCoordinateSpaceName)
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: Binding<Int?>(
                 get: {
-                    isLoaded ? config.index(for: value) : nil
+                    scrollPosition
                 },
                 set: { newValue in
-                    guard let newValue else { return }
-                    value = config.value(for: newValue)
+                    guard let newValue else {
+                        scrollPosition = nil
+                        return
+                    }
+
+                    let resolvedIndex = min(max(newValue, 0), config.totalSteps)
+                    scrollPosition = resolvedIndex
+                    updateValue(for: resolvedIndex)
                 }
             ))
             .overlay(alignment: .center) {
@@ -96,23 +91,56 @@ struct SparkHorizontalWheelPicker: View {
                     .padding(.bottom, 20)
             }
             .safeAreaPadding(.horizontal, horizontalPadding)
-            .onPreferenceChange(SparkHorizontalWheelLeadingMarkerXPreferenceKey.self) { leadingMarkerX in
-                guard isLoaded, config.spacing > 0 else { return }
-
-                let rawIndex = ((size.width / 2) - leadingMarkerX) / config.spacing
-                let clampedIndex = min(max(Int(rawIndex.rounded()), 0), config.totalSteps)
-                let resolvedValue = config.value(for: clampedIndex)
-
-                if abs(resolvedValue - value) > 0.0001 {
-                    value = resolvedValue
-                }
-            }
             .onAppear {
-                if isLoaded == false {
-                    value = config.value(for: config.index(for: value))
-                    isLoaded = true
+                applyInitialPositionIfNeeded()
+            }
+            .task(id: config) {
+                await applyInitialPositionAfterLayout()
+            }
+            .onChange(of: value) { _, newValue in
+                guard didApplyInitialPosition else { return }
+
+                let resolvedIndex = config.index(for: newValue)
+                if scrollPosition != resolvedIndex {
+                    scrollPosition = resolvedIndex
                 }
             }
+            .onChange(of: config) { _, newValue in
+                let resolvedIndex = newValue.index(for: newValue.lowerBound)
+                value = newValue.value(for: resolvedIndex)
+                scrollPosition = resolvedIndex
+            }
+        }
+    }
+
+    private func applyInitialPositionIfNeeded() {
+        guard didApplyInitialPosition == false else { return }
+
+        let resolvedIndex = config.index(for: value)
+        value = config.value(for: resolvedIndex)
+        scrollPosition = resolvedIndex
+        didApplyInitialPosition = true
+    }
+
+    private func applyInitialPositionAfterLayout() async {
+        let resolvedIndex = config.index(for: value)
+
+        await Task.yield()
+        guard Task.isCancelled == false else { return }
+
+        scrollPosition = nil
+
+        await Task.yield()
+        guard Task.isCancelled == false else { return }
+
+        value = config.value(for: resolvedIndex)
+        scrollPosition = resolvedIndex
+    }
+
+    private func updateValue(for index: Int) {
+        let resolvedValue = config.value(for: index)
+        if abs(resolvedValue - value) > 0.0001 {
+            value = resolvedValue
         }
     }
 
@@ -121,14 +149,5 @@ struct SparkHorizontalWheelPicker: View {
             return String(format: "%.0f", value)
         }
         return String(format: "%.1f", value)
-    }
-}
-
-@available(iOS 17.0, *)
-private struct SparkHorizontalWheelLeadingMarkerXPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }

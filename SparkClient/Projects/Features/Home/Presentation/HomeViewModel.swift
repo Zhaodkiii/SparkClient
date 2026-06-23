@@ -121,6 +121,16 @@ final class HomeViewModel: ObservableObject {
         await fetchPendingInvitesIfNeeded()
     }
 
+    /// 强制刷新首页大盘，并临时占用首屏加载锁，避免 `HomeView` 首次出现时重复拉取。
+    func forceReload(syncRemote: Bool = true) async {
+        guard case .signedIn = sessionStore.state else { return }
+        guard isInitialLoadInFlight == false else { return }
+
+        isInitialLoadInFlight = true
+        defer { isInitialLoadInFlight = false }
+        await load(syncRemote: syncRemote)
+    }
+
     /// 加载首页大盘完整数据
     /// - Parameter syncRemote: 是否强制从服务端拉取最新快照，false 优先使用本地缓存
     func load(syncRemote: Bool = true) async {

@@ -2,8 +2,9 @@ import SwiftUI
 
 struct MemberMedicalSetupSheetView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: MemberMedicalSetupViewModel
-    @State private var path: [MedicalGuideRoute] = []
+    @StateObject var viewModel: MemberMedicalSetupViewModel
+    @StateObject var examArchiveFlowViewModel: MemberMedicalExamArchiveFlowViewModel
+    @State var path: [MedicalGuideRoute] = []
     @State private var occupationSearchText = ""
     @State private var didApplyEntryRoute = false
     let homeDependencies: HomeFeatureDependencies
@@ -35,6 +36,14 @@ struct MemberMedicalSetupSheetView: View {
                 onCompleteDataPatch: completeDataPatcher
             )
         )
+        _examArchiveFlowViewModel = StateObject(
+            wrappedValue: MemberMedicalExamArchiveFlowViewModel(
+                memberID: member?.id ?? 0,
+                healthExamReports: preloadedCompleteData?.healthExamReports ?? [],
+                medicalQueryAPI: medicalQueryAPI,
+                onCompleteDataPatch: completeDataPatcher
+            )
+        )
         self.homeDependencies = homeDependencies
         self.entryMode = entryMode
         self.onCompleted = onCompleted
@@ -46,10 +55,12 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     var body: some View {
+        // 根页面为「基础档案介绍」；后续步骤通过 path 栈 push 对应 destination。
         CompatibleRouteNavigationContainer(path: $path, legacyStackStyle: true) {
             introStep
         } destination: { route in
             switch route {
+            // MARK: - 基础档案
             case .intro:
                 introStep
             case .gender:
@@ -66,6 +77,8 @@ struct MemberMedicalSetupSheetView: View {
                 sedentaryStep
             case .basicSummary:
                 basicInfoSummaryStep
+
+            // MARK: - 健康病史与症状记录
             case .history:
                 historyIntroStep
             case .chronicConditions:
@@ -80,6 +93,8 @@ struct MemberMedicalSetupSheetView: View {
                 familyHistoryStep
             case .historySummary:
                 historySummaryStep
+
+            // MARK: - 生活习惯
             case .lifestyle:
                 lifestyleIntroStep
             case .smoking:
@@ -92,10 +107,26 @@ struct MemberMedicalSetupSheetView: View {
                 sleepStep
             case .lifestyleSummary:
                 lifestyleSummaryStep
+
+            // MARK: - 过往体检档案
             case .examArchiveIntro:
-                examArchiveIntroStep
+                examArchiveIntroPage
             case .examArchive:
                 examArchiveStep
+            case .examArchiveReportPicker:
+                examArchiveStep // 与 examArchive 共用表单，便于汇总页回跳编辑
+            case .examArchiveAIExtractConfirm:
+                examArchiveAIExtractConfirmStep
+            case .examArchiveFollowUpPlan:
+                examArchiveFollowUpPlanStep
+            case .examArchivePlanGenerating:
+                examArchivePlanGeneratingStep
+            case .examArchivePlanResult:
+                examArchivePlanResultStep
+            case .examArchiveBaselineIntro:
+                examArchiveBaselineIntroStep
+            case .examArchiveEvidenceConfirm:
+                examArchiveEvidenceConfirmStep
             case .examArchiveSummary:
                 examArchiveSummaryStep
             case .keyIndicators:
@@ -104,10 +135,8 @@ struct MemberMedicalSetupSheetView: View {
                 keyIndicatorSummaryStep
             case .symptomFollowUp:
                 symptomFollowUpStep
-            case .riskAssessment:
-                riskAssessmentStep
-            case .examPlan:
-                examPlanStep
+
+            // MARK: - 全流程收尾
             case .summary:
                 summaryPage
             }
@@ -942,6 +971,98 @@ struct MemberMedicalSetupSheetView: View {
         }
     }
 
+    // 体检档案先给出说明，再进入报告导入与 AI 计划闭环表单。
+    private var examArchiveIntroPage: some View {
+        MedicalGuideIntroPageView(
+            kind: .examArchive,
+            title: L10n.text("medical.exam_archive.title"),
+            subtitle: L10n.text("medical.exam_archive.entry.headline") + "，" + L10n.text("medical.exam_archive.entry.subtitle"),
+            isLoading: isExamArchiveFlowLoading,
+            primaryTitle: L10n.text("medical.exam_archive.action.start"),
+            secondaryTitle: L10n.text("medical.exam_archive.action.later"),
+            onStart: { startExamArchiveForm() },
+            onLater: {
+                if isSectionMode {
+                    dismiss()
+                } else {
+                    skipExamArchiveFlow()
+                }
+            },
+            onClose: { dismiss() }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L10n.text("medical.exam_archive.intro.section_title"))
+                    .font(.headline.weight(.semibold))
+
+                MedicalGuideGroupedCard {
+                    MedicalGuideListRow(
+                        icon: "doc.text.fill",
+                        tint: .blue,
+                        title: L10n.text("medical.exam_archive.path.has_report.title"),
+                        subtitle: L10n.text("medical.exam_archive.path.has_report.subtitle")
+                    )
+                    Divider()
+                    MedicalGuideListRow(
+                        icon: "sparkles",
+                        tint: .purple,
+                        title: L10n.text("medical.exam_archive.path.no_report.title"),
+                        subtitle: L10n.text("medical.exam_archive.path.no_report.subtitle")
+                    )
+                    Divider()
+                    MedicalGuideListRow(
+                        icon: "exclamationmark.triangle.fill",
+                        tint: .orange,
+                        title: L10n.text("medical.exam_archive.extract.title"),
+                        subtitle: L10n.text("medical.exam_archive.extract.subtitle")
+                    )
+                    Divider()
+                    MedicalGuideListRow(
+                        icon: "list.clipboard.fill",
+                        tint: .teal,
+                        title: L10n.text("medical.exam_archive.result.title"),
+                        subtitle: L10n.text("medical.exam_archive.result.subtitle")
+                    )
+                }
+
+                HStack(alignment: .top, spacing: 8) {
+                    Text("💡")
+                        .font(.footnote)
+                    Text(L10n.text("medical.exam_archive.intro.tip"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("隐私与安全承诺")
+                    .font(.headline.weight(.semibold))
+
+                MedicalGuideGroupedCard {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.accent)
+                            .frame(width: 28)
+                        Text("医疗级数据加密保密")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Text("我们深知医疗隐私的重要性。体检报告与解析结果将被严格隔离保护，仅用于为你生成个人健康计划。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear {
+            configureExamArchiveFlowIfNeeded()
+            examArchiveFlowViewModel.logEntry()
+        }
+    }
+
     // 吸烟单题页。
     private var smokingStep: some View {
         MedicalGuideStepShell(
@@ -1299,188 +1420,129 @@ struct MemberMedicalSetupSheetView: View {
         }
     }
 
-    private var examArchiveIntroStep: some View {
-        MedicalGuideIntroPageView(
-            kind: .examArchive,
-            title: "过往体检档案",
-            subtitle: "整合并追踪你的体检报告，能让我们为你绘制出核心指标的长期变化趋势图，并及时提供科学的复查建议。",
-            isLoading: viewModel.isSaving,
-            primaryTitle: "开始",
-            secondaryTitle: "稍后在设置中完善",
-            onStart: { nextVisibleExam(after: .examArchiveIntro) },
-            onLater: {
-                if isSectionMode {
-                    dismiss()
-                } else {
-                    path.append(.examPlan)
-                }
-            },
-            onClose: { dismiss() }
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("档案建立方式")
-                    .font(.headline.weight(.semibold))
-
-                MedicalGuideGroupedCard {
-                    MedicalGuideListRow(icon: "calendar", tint: .blue, title: "最近一次体检时间", subtitle: "")
-                    Divider()
-                    MedicalGuideListRow(icon: "exclamationmark.triangle.fill", tint: .orange, title: "已知的主要异常指标", subtitle: "如结节、囊肿、三高")
-                    Divider()
-                    MedicalGuideListRow(icon: "camera.viewfinder", tint: .green, title: "纸质报告智能解析", subtitle: "支持直接拍照或上传截图录入")
-                }
-
-                HStack(alignment: .top, spacing: 8) {
-                    Text("💡")
-                        .font(.footnote)
-                    Text("贴心提示：如果手头暂时没有体检报告，可以先跳过，随时可以在首页使用“拍照识别”功能一键补全。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text("隐私与安全承诺")
-                    .font(.headline.weight(.semibold))
-
-                MedicalGuideGroupedCard {
-                    HStack(spacing: 12) {
-                        Image(systemName: "lock.fill")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.accent)
-                            .frame(width: 28)
-                        Text("端到端加密保护")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                Text("我们承诺你的体检数据仅保存在你的个人健康账户中，享受最高级别的隐私安全保护。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var examArchiveStep: some View {
-        Group {
-            if viewModel.member?.id != nil {
-                MedicalGuideStepShell(
-                    title: "体检档案",
-                    subtitle: "整合并追踪你的体检报告，能让我们为你绘制出核心指标的长期变化趋势图，并及时提供科学的复查建议。",
-                    step: 24,
-                    total: viewModel.totalGuideSteps,
-                    isLoading: viewModel.isSaving,
-                    primaryTitle: examArchivePrimaryTitle,
-                    onSkip: { proceedAfterExamArchiveStep() },
-                    onNext: { proceedAfterExamArchiveStep() }
-                ) {
-                    MemberMedicalExamArchiveStepView(
-                        viewModel: viewModel,
-                        hasExamHistory: $viewModel.hasExamHistory,
-                        medicalQueryAPI: homeDependencies.medicalQueryAPI,
-                        fileTransferService: homeDependencies.fileTransferService,
-                        memberContextStore: homeDependencies.memberContextStore,
-                        medicalDocumentUploadViewModel: homeDependencies.memberFlowMedicalDocumentUploadViewModel,
-                        aiSettingsViewModel: homeDependencies.aiSettingsViewModel,
-                        notificationClient: homeDependencies.notificationClient
-                    )
-                }
-            } else {
-                MedicalGuideStepShell(
-                    title: "体检档案",
-                    subtitle: "整合并追踪你的体检报告，能让我们为你绘制出核心指标的长期变化趋势图，并及时提供科学的复查建议。",
-                    step: 24,
-                    total: viewModel.totalGuideSteps,
-                    isLoading: viewModel.isSaving,
-                    primaryTitle: examArchivePrimaryTitle,
-                    onSkip: { proceedAfterExamArchiveStep() },
-                    onNext: { proceedAfterExamArchiveStep() }
-                ) {
-                    Text("缺少成员信息，无法加载体检档案。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private var examArchivePrimaryTitle: String {
-        if viewModel.hasExamHistory {
-            return "完成体检档案"
-        }
-        return "下一步"
-    }
-
     private var examArchiveSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "过往体检档案",
-            subtitle: "为什么要汇总？\n这里会统一确认体检档案、关键指标与下一次体检计划，便于继续进入后续风险评估。",
-            step: 25,
+            title: L10n.text("medical.exam_archive.title"),
+            subtitle: L10n.text("medical.exam_archive.summary.subtitle"),
+            step: 29,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: isSectionMode && entryMode == .examArchive ? "完成" : "下一步",
-            onSkip: {
-                Task {
-                    await viewModel.saveProgress()
-                    proceedFromSectionSummary(.examArchiveSummary, fullFlowNext: .riskAssessment)
-                }
-            },
+            primaryTitle: isSectionMode && entryMode == .examArchive
+                ? L10n.text("medical.exam_archive.action.finish")
+                : "下一步",
+            showsSkipButton: false,
+            onSkip: {},
             onNext: {
                 Task {
                     await viewModel.saveProgress()
-                    proceedFromSectionSummary(.examArchiveSummary, fullFlowNext: .riskAssessment)
+                    proceedFromSectionSummary(.examArchiveSummary, fullFlowNext: .summary)
                 }
             }
         ) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("已填写内容")
+                Text(L10n.text("medical.exam_archive.summary.filled"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
 
-                Text(viewModel.examArchiveSummary)
+                Text(examArchiveFilledSummaryLine)
                     .font(.body.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(spacing: 14) {
-                    summaryRow(title: "过往体检档案说明", value: "已完成") { path.append(.examArchiveIntro) }
-                    summaryRow(title: "是否做过体检", value: viewModel.hasExamHistory ? "是" : "否") { path.append(.examArchive) }
-                    if viewModel.hasExamHistory {
-                        if viewModel.memberHealthExamReports.isEmpty == false {
-                            summaryRow(
-                                title: "体检报告列表",
-                                value: "\(viewModel.memberHealthExamReports.count) 份"
-                            ) { path.append(.examArchive) }
-                        }
-                        summaryRow(
-                            title: "最近一次体检",
-                            value: viewModel.lastExamYear.isEmpty ? "未填写" : MemberMedicalSetupViewModel.displayYearMonth(viewModel.lastExamYear)
-                        ) { path.append(.examArchive) }
-                        summaryRow(title: "体检机构", value: viewModel.examInstitution.isEmpty ? "未填写" : viewModel.examInstitution) { path.append(.examArchive) }
-                        summaryRow(title: "体检报告摘要", value: viewModel.examReportSummary.isEmpty ? "未填写" : "已填写") { path.append(.examArchive) }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.summary.reports"),
+                        value: examArchiveReportStatusText
+                    ) {
+                        path.append(.examArchive)
                     }
                     summaryRow(
-                        title: "体检指标",
-                        value: viewModel.hasExamHistory ? viewModel.keyIndicatorSummary : "无体检史，已跳过"
+                        title: L10n.text("medical.exam_archive.summary.last_exam"),
+                        value: viewModel.lastExamYear.isEmpty
+                            ? "未填写"
+                            : MemberMedicalSetupViewModel.displayYearMonth(viewModel.lastExamYear)
                     ) {
-                        if viewModel.hasExamHistory {
-                            path.append(.keyIndicatorSummary)
-                        } else {
+                        path.append(.examArchiveReportPicker)
+                    }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.summary.abnormal"),
+                        value: examArchiveAbnormalCountText
+                    ) {
+                        path.append(.examArchiveAIExtractConfirm)
+                    }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.summary.follow_up"),
+                        value: examArchiveFollowUpCountText
+                    ) {
+                        path.append(.examArchiveFollowUpPlan)
+                    }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.summary.plan"),
+                        value: viewModel.examPlanLines.isEmpty
+                            ? L10n.text("medical.exam_archive.summary.plan.none")
+                            : L10n.text("medical.exam_archive.summary.plan.generated")
+                    ) {
+                        if viewModel.examPlanLines.isEmpty {
                             path.append(.examArchive)
+                        } else {
+                            path.append(.examArchivePlanResult)
                         }
                     }
-                    summaryRow(title: "下一次体检计划", value: viewModel.examPlanSummary) { path.append(.examPlan) }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.summary.supplement_indicators"),
+                        value: viewModel.keyIndicatorSummary
+                    ) {
+                        path.append(.keyIndicators)
+                    }
                 }
             }
         }
     }
 
+    private var examArchiveFilledSummaryLine: String {
+        var pieces: [String] = []
+        if let latest = viewModel.memberHealthExamReports.max(by: {
+            ($0.examDate ?? .distantPast) < ($1.examDate ?? .distantPast)
+        }) {
+            let title = MemberMedicalExamArchiveGuideContent.reportTitle(latest)
+            pieces.append(title)
+            let abnormalCount = examArchiveFlowViewModel.abnormalItems.isEmpty
+                ? 0
+                : examArchiveFlowViewModel.selectedAbnormalItemIDs.count
+            if abnormalCount > 0 {
+                pieces.append(String(format: L10n.text("medical.exam_archive.summary.abnormal_count"), abnormalCount))
+            }
+        }
+        if examArchiveFlowViewModel.createdTaskCount > 0 {
+            pieces.append(String(format: L10n.text("medical.exam_archive.summary.follow_up_count"), examArchiveFlowViewModel.createdTaskCount))
+        }
+        if viewModel.examPlanLines.isEmpty == false {
+            pieces.append(L10n.text("medical.exam_archive.summary.plan.generated"))
+        }
+        return pieces.isEmpty ? viewModel.examArchiveSummary : pieces.joined(separator: " · ")
+    }
+
+    private var examArchiveReportStatusText: String {
+        viewModel.memberHealthExamReports.isEmpty
+            ? "未填写"
+            : L10n.text("medical.exam_archive.summary.completed")
+    }
+
+    private var examArchiveAbnormalCountText: String {
+        let count = examArchiveFlowViewModel.abnormalItems.isEmpty
+            ? 0
+            : examArchiveFlowViewModel.selectedAbnormalItemIDs.count
+        return count == 0 ? "未填写" : String(format: L10n.text("medical.exam_archive.summary.items_count"), count)
+    }
+
+    private var examArchiveFollowUpCountText: String {
+        let count = examArchiveFlowViewModel.createdTaskCount
+        return count == 0 ? "未填写" : String(format: L10n.text("medical.exam_archive.summary.items_count"), count)
+    }
+
     private var keyIndicatorStep: some View {
         MedicalGuideStepShell(
-            title: "体检指标",
-            subtitle: "记录需要重点关注的体检项目，后续可用于风险评估与体检计划生成。",
+            title: L10n.text("medical.exam_archive.supplement_indicators.title"),
+            subtitle: L10n.text("medical.exam_archive.supplement_indicators.subtitle"),
             step: 26,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1513,8 +1575,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var keyIndicatorSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "体检指标",
-            subtitle: "为什么要问？\n关键指标会帮助系统做风险评估并细化体检计划。",
+            title: L10n.text("medical.exam_archive.supplement_indicators.title"),
+            subtitle: L10n.text("medical.exam_archive.supplement_indicators.summary_subtitle"),
             step: 27,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1542,78 +1604,10 @@ struct MemberMedicalSetupSheetView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(spacing: 14) {
-                    summaryRow(title: "体检指标", value: viewModel.keyIndicatorSummary) { path.append(.keyIndicators) }
-                }
-            }
-        }
-    }
-
-    private var riskAssessmentStep: some View {
-        MedicalGuideStepShell(
-            title: "风险评估",
-            subtitle: "系统将根据基础信息、病史与关键指标生成风险提示。",
-            step: 29,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
-            onSkip: {
-                Task {
-                    await viewModel.saveProgress()
-                    if isSectionMode && entryMode == .riskAssessment {
-                        finishCurrentSection()
-                    } else {
-                        advance(from: .riskAssessment)
-                    }
-                }
-            },
-            onNext: {
-                Task {
-                    await viewModel.saveProgress()
-                    if isSectionMode && entryMode == .riskAssessment {
-                        finishCurrentSection()
-                    } else {
-                        advance(from: .riskAssessment)
-                    }
-                }
-            }
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(viewModel.riskAssessmentLines, id: \.self) { line in
-                    Label(line, systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                }
-            }
-        }
-    }
-
-    private var examPlanStep: some View {
-        MedicalGuideStepShell(
-            title: "过往体检档案",
-            subtitle: "系统会结合体检历史、关键指标与风险提示，生成下一次体检计划。",
-            step: 28,
-            total: viewModel.totalGuideSteps,
-            isLoading: viewModel.isSaving,
-            onSkip: {
-                path.append(.examArchiveSummary)
-            },
-            onNext: {
-                path.append(.examArchiveSummary)
-            }
-        ) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("系统生成的下一次体检计划")
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                ForEach(viewModel.examPlanLines, id: \.self) { item in
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.accentColor)
-                        Text(item)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 0)
-                    }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.supplement_indicators.title"),
+                        value: viewModel.keyIndicatorSummary
+                    ) { path.append(.keyIndicators) }
                 }
             }
         }
@@ -1625,7 +1619,7 @@ struct MemberMedicalSetupSheetView: View {
                 MemberSetupStepHeaderView(
                     title: "医疗模块",
                     subtitle: "分步维护慢病、用药、生活习惯、体检和症状随访",
-                    step: 30,
+                    step: 29,
                     total: viewModel.totalGuideSteps
                 )
 
@@ -1652,19 +1646,18 @@ struct MemberMedicalSetupSheetView: View {
                     summaryRow(title: "健康病史与症状记录汇总", value: viewModel.historySummary) { path.append(.historySummary) }
                     summaryRow(title: "家族病史", value: viewModel.familyHistorySummary) { path.append(.familyHistory) }
                     summaryRow(title: "生活习惯", value: viewModel.lifestyleSummary) { path.append(.lifestyleSummary) }
-                    summaryRow(title: "过往体检档案 · 下一次体检计划", value: viewModel.examPlanSummary) { path.append(.examPlan) }
-                    summaryRow(
-                        title: "体检指标",
-                        value: viewModel.hasExamHistory ? viewModel.keyIndicatorSummary : "无体检史，已跳过"
-                    ) {
-                        if viewModel.hasExamHistory {
-                            path.append(.keyIndicatorSummary)
-                        } else {
-                            path.append(.examArchive)
-                        }
+                    summaryRow(title: L10n.text("medical.exam_archive.title"), value: viewModel.examPlanSummary) {
+                        path.append(.examArchive)
                     }
-                    summaryRow(title: "过往体检档案汇总", value: viewModel.examArchiveSummary) { path.append(.examArchiveSummary) }
-                    summaryRow(title: "风险评估", value: viewModel.riskAssessmentSummary) { path.append(.riskAssessment) }
+                    summaryRow(
+                        title: L10n.text("medical.exam_archive.summary.supplement_indicators"),
+                        value: viewModel.keyIndicatorSummary
+                    ) {
+                        path.append(.keyIndicators)
+                    }
+                    summaryRow(title: L10n.text("medical.exam_archive.summary.flow"), value: viewModel.examArchiveSummary) {
+                        path.append(.examArchiveSummary)
+                    }
                 }
 
                 if let errorMessage = viewModel.errorMessage {
@@ -1704,10 +1697,8 @@ struct MemberMedicalSetupSheetView: View {
             viewModel.familyHistorySummary,
             viewModel.lifestyleSummary,
             viewModel.examArchiveSummary,
-            viewModel.hasExamHistory ? viewModel.keyIndicatorSummary : "无体检史，体检指标已跳过",
-            viewModel.symptomSummary,
-            viewModel.riskAssessmentSummary,
-            viewModel.examPlanSummary
+            viewModel.examPlanSummary,
+            viewModel.symptomSummary
         ]
         .joined(separator: " · ")
     }
@@ -1725,8 +1716,6 @@ struct MemberMedicalSetupSheetView: View {
             path = [.lifestyle]
         case .examArchive:
             path = [.examArchiveIntro]
-        case .riskAssessment:
-            path = [.riskAssessment]
         }
     }
 
@@ -1742,8 +1731,6 @@ struct MemberMedicalSetupSheetView: View {
             return viewModel.lifestyleSummary
         case .examArchive:
             return viewModel.examArchiveSummary
-        case .riskAssessment:
-            return viewModel.riskAssessmentSummary
         }
     }
 
@@ -1759,8 +1746,6 @@ struct MemberMedicalSetupSheetView: View {
             return route == .lifestyleSummary
         case .examArchive:
             return route == .examArchiveSummary
-        case .riskAssessment:
-            return route == .riskAssessment
         }
     }
 
@@ -1955,27 +1940,27 @@ struct MemberMedicalSetupSheetView: View {
                 path.append(.examArchiveIntro)
             }
         case .examArchiveIntro:
-            nextVisibleExam(after: .examArchiveIntro)
+            if viewModel.shouldSkipExamArchiveStep {
+                proceedAfterExamArchiveStep()
+            } else {
+                path.append(.examArchive)
+            }
         case .examArchive:
-            proceedAfterExamArchiveStep()
+            break
+        case .examArchiveReportPicker, .examArchiveAIExtractConfirm,
+             .examArchiveFollowUpPlan, .examArchivePlanGenerating, .examArchivePlanResult,
+             .examArchiveBaselineIntro, .examArchiveEvidenceConfirm:
+            break
         case .examArchiveSummary:
             if isSectionMode && entryMode == .examArchive {
                 finishCurrentSection()
             } else {
-                path.append(.riskAssessment)
+                path.append(.summary)
             }
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
             proceedAfterKeyIndicatorSummary()
-        case .examPlan:
-            path.append(.examArchiveSummary)
-        case .riskAssessment:
-            if isSectionMode && entryMode == .riskAssessment {
-                finishCurrentSection()
-            } else {
-                path.append(.summary)
-            }
         case .summary:
             break
         }
@@ -2090,48 +2075,44 @@ struct MemberMedicalSetupSheetView: View {
                 path.append(.examArchiveIntro)
             }
         case .examArchiveIntro:
-            nextVisibleExam(after: .examArchiveIntro)
+            if viewModel.shouldSkipExamArchiveStep {
+                proceedAfterExamArchiveStep()
+            } else {
+                path.append(.examArchive)
+            }
         case .examArchive:
-            proceedAfterExamArchiveStep()
+            break
+        case .examArchiveReportPicker, .examArchiveAIExtractConfirm,
+             .examArchiveFollowUpPlan, .examArchivePlanGenerating, .examArchivePlanResult,
+             .examArchiveBaselineIntro, .examArchiveEvidenceConfirm:
+            break
         case .examArchiveSummary:
             if isSectionMode && entryMode == .examArchive {
                 finishCurrentSection()
             } else {
-                path.append(.riskAssessment)
+                path.append(.summary)
             }
         case .keyIndicators:
             path.append(.keyIndicatorSummary)
         case .keyIndicatorSummary:
             proceedAfterKeyIndicatorSummary()
-        case .examPlan:
-            path.append(.examArchiveSummary)
         case .symptomFollowUp:
             path.append(.historySummary)
-        case .riskAssessment:
-            if isSectionMode && entryMode == .riskAssessment {
-                finishCurrentSection()
-            } else {
-                path.append(.summary)
-            }
         case .summary:
             break
         }
     }
 
     private func proceedAfterExamArchiveStep() {
-        if viewModel.hasExamHistory {
-            if viewModel.shouldSkipKeyIndicatorStep {
-                proceedAfterKeyIndicatorSummary()
-            } else {
-                path.append(.keyIndicators)
-            }
-        } else {
-            path.append(.examPlan)
-        }
+        path.append(.examArchiveSummary)
     }
 
     private func proceedAfterKeyIndicatorSummary() {
-        path.append(.examPlan)
+        if examArchiveFlowViewModel.selectedReport != nil {
+            path.append(.examArchiveAIExtractConfirm)
+        } else {
+            path.append(.examArchiveSummary)
+        }
     }
 
     private func nextVisibleExam(after route: MedicalGuideRoute) {
@@ -2143,19 +2124,21 @@ struct MemberMedicalSetupSheetView: View {
                 path.append(.examArchive)
             }
         case .examArchive:
-            proceedAfterExamArchiveStep()
+            break
+        case .examArchiveReportPicker, .examArchiveAIExtractConfirm,
+             .examArchiveFollowUpPlan, .examArchivePlanGenerating, .examArchivePlanResult,
+             .examArchiveBaselineIntro, .examArchiveEvidenceConfirm:
+            break
         case .examArchiveSummary:
             if isSectionMode && entryMode == .examArchive {
                 finishCurrentSection()
             } else {
-                path.append(.riskAssessment)
+                path.append(.summary)
             }
-        case .keyIndicators:
-            path.append(.keyIndicatorSummary)
-        case .keyIndicatorSummary:
+        case .keyIndicators, .keyIndicatorSummary:
             proceedAfterKeyIndicatorSummary()
         default:
-            path.append(.examPlan)
+            proceedAfterExamArchiveStep()
         }
     }
 
@@ -2284,110 +2267,6 @@ struct MemberMedicalSetupSheetView: View {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter
     }()
-}
-
-private enum MedicalGuideRoute: Hashable {
-    case intro
-    case gender
-    case birthDate
-    case height
-    case weight
-    case occupation
-    case sedentary
-    case basicSummary
-    case history
-    case chronicConditions
-    case longTermMedication
-    case surgeryHistory
-    case allergyHistory
-    case historySummary
-    case familyHistory
-    case lifestyle
-    case smoking
-    case drinking
-    case exercise
-    case sleep
-    case lifestyleSummary
-    case examArchiveIntro
-    case examArchive
-    case examArchiveSummary
-    case keyIndicators
-    case keyIndicatorSummary
-    case symptomFollowUp
-    case riskAssessment
-    case examPlan
-    case summary
-}
-
-private struct MedicalGuideStepShell<Content: View>: View {
-    let title: String
-    let subtitle: String
-    let step: Int
-    let total: Int
-    let isLoading: Bool
-    let primaryTitle: String?
-    let primaryEnabled: Bool
-    let secondaryTitle: String?
-    let showsSkipButton: Bool
-    let onSkip: () -> Void
-    let onNext: () -> Void
-    @ViewBuilder let content: () -> Content
-
-    init(
-        title: String,
-        subtitle: String,
-        step: Int,
-        total: Int,
-        isLoading: Bool,
-        primaryTitle: String? = nil,
-        primaryEnabled: Bool = true,
-        secondaryTitle: String? = nil,
-        showsSkipButton: Bool = true,
-        onSkip: @escaping () -> Void,
-        onNext: @escaping () -> Void,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.step = step
-        self.total = total
-        self.isLoading = isLoading
-        self.primaryTitle = primaryTitle
-        self.primaryEnabled = primaryEnabled
-        self.secondaryTitle = secondaryTitle
-        self.showsSkipButton = showsSkipButton
-        self.onSkip = onSkip
-        self.onNext = onNext
-        self.content = content
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                MemberSetupStepHeaderView(
-                    title: title,
-                    subtitle: subtitle,
-                    step: step,
-                    total: total
-                )
-
-                content()
-            }
-            .padding(16)
-            .padding(.bottom, 120)
-        }
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.automatic)
-        .memberSetupBottomBar(
-            primaryTitle: primaryTitle ?? (step == total ? "保存" : "下一步"),
-            primaryEnabled: primaryEnabled && isLoading == false,
-            isLoading: isLoading,
-            onPrimary: onNext,
-            secondaryTitle: showsSkipButton ? (secondaryTitle ?? "跳过") : nil,
-            onSecondary: showsSkipButton ? onSkip : nil
-        )
-    }
 }
 
 private struct MedicalGuideOverviewCardView: View {
@@ -2620,113 +2499,6 @@ private struct MedicalGuideIntroPageView<Content: View>: View {
     }
 }
 
-private struct MedicalGuideIntroIllustration: View {
-    let kind: MedicalGuideIntroKind
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.accentColor.opacity(0.12),
-                            Color.blue.opacity(0.08),
-                            Color.purple.opacity(0.08)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Circle()
-                .fill(Color(uiColor: .systemBackground))
-                .frame(width: 142, height: 142)
-                .shadow(color: .black.opacity(0.05), radius: 18, y: 10)
-
-            ForEach(kind.illustrationSymbols) { symbol in
-                Image(systemName: symbol.systemName)
-                    .font(.system(size: symbol.size, weight: symbol.weight))
-                    .foregroundStyle(symbol.tint)
-                    .symbolRenderingMode(.hierarchical)
-                    .rotationEffect(.degrees(symbol.rotationDegrees))
-                    .offset(x: symbol.offsetX, y: symbol.offsetY)
-                    .shadow(color: symbol.tint.opacity(0.18), radius: 6, y: 3)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: UIScreen.main.bounds.height * 0.3)
-    }
-}
-
-private struct MedicalGuideIllustrationSymbol: Identifiable {
-    let id: String
-    let systemName: String
-    let size: CGFloat
-    let weight: Font.Weight
-    let tint: Color
-    let offsetX: CGFloat
-    let offsetY: CGFloat
-    let rotationDegrees: Double
-
-    init(
-        systemName: String,
-        size: CGFloat,
-        weight: Font.Weight = .semibold,
-        tint: Color,
-        offsetX: CGFloat,
-        offsetY: CGFloat,
-        rotationDegrees: Double = 0
-    ) {
-        self.id = "\(systemName)-\(offsetX)-\(offsetY)-\(size)"
-        self.systemName = systemName
-        self.size = size
-        self.weight = weight
-        self.tint = tint
-        self.offsetX = offsetX
-        self.offsetY = offsetY
-        self.rotationDegrees = rotationDegrees
-    }
-}
-
-private enum MedicalGuideIntroKind {
-    case basicProfile
-    case healthHistory
-    case lifestyle
-    case examArchive
-
-    var illustrationSymbols: [MedicalGuideIllustrationSymbol] {
-        switch self {
-        case .basicProfile:
-            return [
-                .init(systemName: "chart.bar.fill", size: 18, tint: .yellow, offsetX: 18, offsetY: -40),
-                .init(systemName: "person.crop.circle.fill", size: 34, tint: .blue, offsetX: -28, offsetY: -6),
-                .init(systemName: "scalemass.fill", size: 28, tint: .purple, offsetX: 28, offsetY: -4),
-                .init(systemName: "briefcase.fill", size: 24, tint: .orange, offsetX: 0, offsetY: 30)
-            ]
-        case .healthHistory:
-            return [
-                .init(systemName: "stethoscope", size: 18, tint: .red, offsetX: 20, offsetY: -40),
-                .init(systemName: "list.clipboard.fill", size: 31, tint: .blue, offsetX: -28, offsetY: -5),
-                .init(systemName: "pills.fill", size: 29, tint: .pink, offsetX: 29, offsetY: -4, rotationDegrees: -12),
-                .init(systemName: "dna", size: 24, tint: .teal, offsetX: 0, offsetY: 30)
-            ]
-        case .lifestyle:
-            return [
-                .init(systemName: "lungs.fill", size: 18, tint: .green, offsetX: 18, offsetY: -40),
-                .init(systemName: "smoke.fill", size: 30, tint: .orange, offsetX: -28, offsetY: -5),
-                .init(systemName: "bed.double.fill", size: 28, tint: .indigo, offsetX: 28, offsetY: -4),
-                .init(systemName: "wineglass.fill", size: 23, tint: .purple, offsetX: 0, offsetY: 30)
-            ]
-        case .examArchive:
-            return [
-                .init(systemName: "doc.text.fill", size: 18, tint: .blue, offsetX: 18, offsetY: -40),
-                .init(systemName: "building.2.fill", size: 29, tint: .teal, offsetX: -28, offsetY: -5),
-                .init(systemName: "magnifyingglass", size: 25, tint: .indigo, offsetX: 28, offsetY: -4),
-                .init(systemName: "chart.line.uptrend.xyaxis", size: 22, tint: .green, offsetX: 0, offsetY: 30)
-            ]
-        }
-    }
-}
 
 private struct MedicalGuideGroupedCard<Content: View>: View {
     @ViewBuilder let content: () -> Content

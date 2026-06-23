@@ -238,7 +238,6 @@ private enum MedicalProfileSaveScope {
     case healthHistory
     case lifestyle
     case examArchive
-    case riskAssessment
 }
 
 @MainActor
@@ -314,7 +313,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     @Published var memberHealthExamReports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments] = []
     @Published var isLoadingMemberHealthExamReports = false
     @Published var keyIndicatorRows: [MedicalGuideKeyIndicatorDraft]
-    @Published var riskAssessmentLines: [String] = []
     @Published var examPlanLines: [String] = []
     @Published var extraNotes: String = ""
     @Published var latestKeyIndicatorRecord: SparkMedicalSyncAPI.RemoteMemberMedicalKeyIndicatorRecord?
@@ -373,7 +371,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     private func syncDerivedValues() {
-        rebuildRiskAndPlan()
+        rebuildExamPlan()
     }
 
     private func seedDefaultBodyMetricsIfNeeded() {
@@ -437,7 +435,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     // 一题一页后，医疗引导总页数会随问题拆分而增加。
-    var totalGuideSteps: Int { 30 }
+    var totalGuideSteps: Int { 29 }
 
     var shouldSkipGenderStep: Bool {
         gender != "unknown"
@@ -758,6 +756,35 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
         applyCompleteDataPatch {
             MemberModuleSetupCompleteDataPatcher.upsertHealthExamReports(reports, into: &$0)
+        }
+    }
+
+    func applyExamArchiveFlowResult(_ response: SparkMedicalExamArchiveAPI.AIPlanResponse?) {
+        guard let response else { return }
+        hasExamHistory = response.mode == "report_based" || memberHealthExamReports.isEmpty == false
+        if let profile = response.memberMedicalProfile {
+            apply(profile: profile)
+        }
+        let plan = response.examPlan
+        var lines: [String] = [plan.title]
+        if plan.mustItems.isEmpty == false {
+            lines.append("必做 \(plan.mustItems.count) 项")
+        }
+        if plan.recommendedItems.isEmpty == false {
+            lines.append("建议增加 \(plan.recommendedItems.count) 项")
+        }
+        if response.createdTasks.isEmpty == false {
+            lines.append("已生成 \(response.createdTasks.count) 项随访")
+        }
+        examPlanLines = lines
+        applyCompleteDataPatch { completeData in
+            if let profile = response.memberMedicalProfile {
+                completeData.memberMedicalProfile = profile
+            }
+            if let reportID = response.sourceReportID,
+               let report = self.memberHealthExamReports.first(where: { $0.id == reportID }) {
+                MemberModuleSetupCompleteDataPatcher.upsertHealthExamReport(report, into: &completeData)
+            }
         }
     }
 
@@ -1221,24 +1248,36 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
         return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
     }
-
+    /// 按需刷新成员症状列表与随访关注配置
+    /// - Parameter force: 是否强制刷新，true 无视加载状态直接拉取；false 正在加载时直接跳过
     func refreshMemberSymptomsIfNeeded(force: Bool = false) async {
+        // 无当前成员直接终止
         guard let member else { return }
+        // 非强制刷新且正在加载症状，避免并发重复请求
         if force == false, isLoadingMemberSymptoms { return }
+        
         isLoadingMemberSymptoms = true
+        // 无论成功失败，最终关闭加载状态
         defer { isLoadingMemberSymptoms = false }
+        
         do {
+            // 请求接口拉取该成员全部症状记录
             memberSymptoms = try await medicalQueryAPI.listSymptoms(memberID: member.id)
+            // 查询成员医疗档案，提取随访关注症状配置
             if let profile = try await medicalQueryAPI.listMemberMedicalProfiles(memberID: member.id).first {
                 ingestProfileSymptomFocus(profile)
             } else {
+                // 无医疗档案，清空随访关注列表
                 symptomFollowUpFocus = []
             }
             if memberSymptoms.isEmpty == false {
                 symptomFollowUpStatus = .have
                 hasPrefilledSymptomFollowUp = true
             }
+            // 存在症状记录，标记状态为已有症状、已预填随访数据
+            syncSymptomFollowUpFromRecords()
         } catch {
+            // 接口异常，赋值错误文案用于弹窗提示
             errorMessage = error.localizedDescription
         }
     }
@@ -1262,8 +1301,12 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
     }
 
+    /// 从医疗档案中同步随访关注症状配置到页面状态
+    /// - Parameter profile: 服务端返回的成员医疗档案实体
     func ingestProfileSymptomFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
+        // 将档案里的随访关注症状赋值给页面展示数组
         symptomFollowUpFocus = profile.symptomFollowUpFocus
+        // 存在随访关注症状，更新状态标记
         if profile.symptomFollowUpFocus.isEmpty == false {
             symptomFollowUpStatus = .have
             hasPrefilledSymptomFollowUp = true
@@ -1310,10 +1353,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return count == 0 ? "未填写" : "已填写 \(count) 项关键指标"
     }
 
-    var riskAssessmentSummary: String {
-        riskAssessmentLines.isEmpty ? "系统将根据当前问答生成风险提示" : riskAssessmentLines.joined(separator: " · ")
-    }
-
     var examPlanSummary: String {
         examPlanLines.isEmpty ? "系统将根据风险与体检史推荐体检计划" : examPlanLines.joined(separator: " · ")
     }
@@ -1341,7 +1380,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let completeData = preloadedCompleteData {
             applyFromCompleteData(completeData)
             applyNutritionGoalStateFromCache()
-            rebuildRiskAndPlan()
+            rebuildExamPlan()
             return
         }
 
@@ -1372,7 +1411,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                     errorMessage = error.localizedDescription
                 }
             }
-            rebuildRiskAndPlan()
+            rebuildExamPlan()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1524,13 +1563,14 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         completeDataPatcher?(operation)
     }
 
+    func patchCompleteData(_ operation: @escaping (inout SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void) {
+        applyCompleteDataPatch(operation)
+    }
+
     private func applyFromCompleteData(_ completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData) {
         apply(member: completeData.member)
         if let profile = completeData.memberMedicalProfile {
             apply(profile: profile)
-            if let riskSummary = profile.riskAssessmentSummary, riskSummary.isEmpty == false {
-                riskAssessmentLines = [riskSummary]
-            }
             if let examPlan = profile.examPlanSummary, examPlan.isEmpty == false {
                 examPlanLines = [examPlan]
             }
@@ -1746,23 +1786,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
     }
 
-    private func rebuildRiskAndPlan() {
-        var riskLines: [String] = []
-        if bmi.map({ $0 >= 24 }) == true {
-            riskLines.append("BMI 偏高")
-        }
-        if chronicConditions.contains("高血压") { riskLines.append("高血压风险") }
-        if chronicConditions.contains("糖尿病") { riskLines.append("血糖管理风险") }
-        if chronicConditions.contains("高血脂") { riskLines.append("血脂风险") }
-        if smokingStatus == .often || smokingStatus == .sometimes { riskLines.append("吸烟相关风险") }
-        if familyHistory.contains("肺癌") || familyHistory.contains("肠癌") || familyHistory.contains("乳腺癌") {
-            riskLines.append("家族肿瘤筛查风险")
-        }
-        if sedentaryLevel == .high {
-            riskLines.append("久坐时间偏长")
-        }
-        riskAssessmentLines = riskLines.isEmpty ? ["当前未见明显高风险特征"] : riskLines
-
+    private func rebuildExamPlan() {
         var plan: [String] = ["血常规", "尿常规", "肝功能", "肾功能", "血脂", "空腹血糖"]
         if gender == "female" {
             plan.append("乳腺超声")
@@ -1882,8 +1906,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return .lifestyle
         case .examArchive:
             return .examArchive
-        case .riskAssessment:
-            return .riskAssessment
         }
     }
 
@@ -1915,7 +1937,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.isEmpty == false }
             .joined(separator: " · ")
-        case .basicProfile, .healthHistory, .lifestyle, .examArchive, .riskAssessment:
+        case .basicProfile, .healthHistory, .lifestyle, .examArchive:
             return persistedProfileSnapshot?.notes ?? ""
         }
     }
@@ -2003,7 +2025,6 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             "symptom_follow_up": symptomFollowUpFocus.joined(separator: ","),
             "exam_history": hasExamHistory ? "true" : "false",
             "key_indicator_count": "\(keyIndicatorRows.filter { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count)",
-            "risk_summary": riskAssessmentSummary,
             "exam_plan_summary": examPlanSummary
         ]
     }

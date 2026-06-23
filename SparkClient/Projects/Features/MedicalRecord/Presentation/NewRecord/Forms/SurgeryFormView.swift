@@ -107,7 +107,6 @@ struct SurgeryFormView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                surgerySearchField
                 surgeryCategoryGroups
                 surgeryDetailsCard
             }
@@ -115,6 +114,10 @@ struct SurgeryFormView: View {
         }
         .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $searchText,
+            prompt: Text("搜索手术名称（支持拼音/首字母）")
+        )
         .sparkFormBottomBar(
             canSubmit: canSubmit && !isSaving,
             saveTitle: saveTitle,
@@ -133,22 +136,6 @@ struct SurgeryFormView: View {
 
     private var canSubmit: Bool {
         procedureName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    }
-
-    private var surgerySearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("搜索手术名称（支持拼音/首字母）", text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
     }
 
     private var surgeryCategoryGroups: some View {

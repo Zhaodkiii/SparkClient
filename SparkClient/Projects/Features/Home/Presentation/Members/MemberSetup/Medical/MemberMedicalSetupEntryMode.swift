@@ -6,7 +6,6 @@ enum MedicalSetupEntryMode: String, Hashable, Sendable, CaseIterable {
     case healthHistory
     case lifestyle
     case examArchive
-    case riskAssessment
 
     var sectionCode: String? {
         switch self {
@@ -15,7 +14,6 @@ enum MedicalSetupEntryMode: String, Hashable, Sendable, CaseIterable {
         case .healthHistory: return MemberMedicalSectionCode.healthHistory.rawValue
         case .lifestyle: return MemberMedicalSectionCode.lifestyle.rawValue
         case .examArchive: return MemberMedicalSectionCode.examArchive.rawValue
-        case .riskAssessment: return MemberMedicalSectionCode.riskAssessment.rawValue
         }
     }
 
@@ -29,7 +27,6 @@ enum MemberMedicalSectionCode: String, CaseIterable, Sendable {
     case healthHistory = "health_history"
     case lifestyle = "lifestyle"
     case examArchive = "exam_archive"
-    case riskAssessment = "risk_assessment"
 
     var title: String {
         switch self {
@@ -37,7 +34,6 @@ enum MemberMedicalSectionCode: String, CaseIterable, Sendable {
         case .healthHistory: return "健康病史与症状记录"
         case .lifestyle: return "生活习惯"
         case .examArchive: return "过往体检档案"
-        case .riskAssessment: return "风险评估"
         }
     }
 
@@ -47,7 +43,6 @@ enum MemberMedicalSectionCode: String, CaseIterable, Sendable {
         case .healthHistory: return "症状、慢病、用药、手术、过敏、家族史"
         case .lifestyle: return "吸烟、饮酒、运动、睡眠"
         case .examArchive: return "体检记录、关键指标、下一次体检计划"
-        case .riskAssessment: return "风险提示、AI体检建议"
         }
     }
 
@@ -57,7 +52,6 @@ enum MemberMedicalSectionCode: String, CaseIterable, Sendable {
         case .healthHistory: return "stethoscope"
         case .lifestyle: return "figure.run"
         case .examArchive: return "doc.text.fill"
-        case .riskAssessment: return "exclamationmark.triangle.fill"
         }
     }
 
@@ -67,7 +61,6 @@ enum MemberMedicalSectionCode: String, CaseIterable, Sendable {
         case .healthHistory: return .healthHistory
         case .lifestyle: return .lifestyle
         case .examArchive: return .examArchive
-        case .riskAssessment: return .riskAssessment
         }
     }
 }
