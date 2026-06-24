@@ -13,8 +13,8 @@ struct AllergyRecordFormView: View {
     @State private var customAllergenText = ""
     @State private var focusedAllergy: String?
 
-    private let severityOptions = ["轻度", "中度", "严重"]
-    private let reactionOptions = ["皮疹/发痒", "红肿", "恶心呕吐", "腹痛/腹泻", "呼吸困难/哮喘", "头晕/休克"]
+    private let severityOptions = AllergyRecordFormSupport.severityOptions
+    private let reactionOptions = AllergyRecordFormSupport.reactionOptions
 
     private var filteredCategories: [AllergyCategoryGroup] {
         AllergyRecordFormSupport.filteredCategories(matching: searchText)
@@ -51,7 +51,7 @@ struct AllergyRecordFormView: View {
         )
         .sparkFormBottomBar(
             canSubmit: allergies.isEmpty == false,
-            saveTitle: "完成",
+            saveTitle: L10n.text("common.done"),
             onCancel: { dismiss() },
             onSave: { saveNow() }
         )
@@ -201,7 +201,7 @@ struct AllergyRecordFormView: View {
             if let focusedAllergy {
                 Divider()
 
-                Text(focusedAllergy)
+                Text(AllergyRecordFormSupport.displayAllergen(focusedAllergy))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
 
@@ -259,7 +259,7 @@ struct AllergyRecordFormView: View {
                 toggle(allergen, category: category)
             }
         } label: {
-            Text(allergen)
+            Text(AllergyRecordFormSupport.displayAllergen(allergen))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
                 .padding(.horizontal, 12)
@@ -278,7 +278,7 @@ struct AllergyRecordFormView: View {
             Button {
                 focusedAllergy = allergen
             } label: {
-                Text(allergen)
+                Text(AllergyRecordFormSupport.displayAllergen(allergen))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isFocused ? Color.accentColor : .primary)
             }
@@ -308,7 +308,7 @@ struct AllergyRecordFormView: View {
                 Button {
                     updateDetail(for: allergen) { $0.severity = option }
                 } label: {
-                    Text(option)
+                    Text(AllergyRecordFormSupport.displaySeverity(option))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isSelected ? AllergyRecordFormSupport.severityTint(option) : .primary)
                         .padding(.horizontal, 10)
@@ -337,7 +337,7 @@ struct AllergyRecordFormView: View {
                         }
                     }
                 } label: {
-                    Text(reaction)
+                    Text(AllergyRecordFormSupport.displayReaction(reaction))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isSelected ? Color.accentColor : .primary)
                         .padding(.horizontal, 10)

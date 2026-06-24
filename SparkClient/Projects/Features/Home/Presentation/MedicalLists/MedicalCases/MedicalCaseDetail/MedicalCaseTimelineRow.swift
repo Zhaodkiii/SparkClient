@@ -193,7 +193,6 @@ struct MedicalCaseTimelineRow: View {
                 MedicationPlanDetailPage(
                     plan: plan,
                     medicineBoxes: medicineBoxes,
-                    records: recordsByPlanID[plan.id] ?? [],
                     memberID: memberID,
                     completeData: completeData,
                     memberContextStore: memberContextStore,

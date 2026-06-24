@@ -3,7 +3,6 @@ import SwiftUI
 struct MedicationPlanDetailPage: View {
     let mode: MedicationPlanDetailMode
     let plan: SparkMedicalSyncAPI.RemoteMedicationPlan
-    let records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
     let memberID: Int?
     let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     @ObservedObject var memberContextStore: MemberContextStore
@@ -31,12 +30,14 @@ struct MedicationPlanDetailPage: View {
     @State private var showingDeleteConfirm = false
     @State private var isDeleting = false
     @State private var alertMessage: String?
+    @State private var planRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] = []
+    @State private var isLoadingPlanRecords = false
+    @State private var planRecordsLoadError: String?
 
     init(
         mode: MedicationPlanDetailMode = .server,
         plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
-        records: [SparkMedicalSyncAPI.RemoteMedicationRecord],
         memberID: Int?,
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
         memberContextStore: MemberContextStore,
@@ -59,7 +60,6 @@ struct MedicationPlanDetailPage: View {
     ) {
         self.mode = mode
         self.plan = plan
-        self.records = records
         self.memberID = memberID
         self.completeData = completeData
         self.memberContextStore = memberContextStore
@@ -85,8 +85,12 @@ struct MedicationPlanDetailPage: View {
         _sourcePlanDraft = State(initialValue: sourcePlanDraft)
     }
 
+    private var medicalQueryAPI: SparkMedicalQueryAPI {
+        SparkMedicalQueryAPI(configuration: workflowAPI.configuration)
+    }
+
     private var sortedRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] {
-        records.sorted { $0.scheduledAt < $1.scheduledAt }
+        planRecords.sorted { $0.scheduledAt < $1.scheduledAt }
     }
 
     private enum LinkedMedicineBoxAvailability {
@@ -236,14 +240,23 @@ struct MedicationPlanDetailPage: View {
 
             if mode == .server {
             Section(L10n.text("home.medical.medication_plan.section.records")) {
-                if sortedRecords.isEmpty {
+                if isLoadingPlanRecords {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text(L10n.text("home.medical.list.details.loading"))
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let planRecordsLoadError {
+                    Text(planRecordsLoadError)
+                        .foregroundStyle(.secondary)
+                } else if sortedRecords.isEmpty {
                     Text(L10n.text("home.medical.medication_plan.no_records"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedRecords, id: \.id) { record in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text(record.scheduledAt.formatted(date: .omitted, time: .shortened))
+                                Text(record.scheduledAt.formatted(date: .abbreviated, time: .shortened))
                                     .font(.subheadline.weight(.semibold))
                                 Spacer()
                                 Text(medicationPlanDetailRecordStatusLabel(record.status))
@@ -257,7 +270,7 @@ struct MedicationPlanDetailPage: View {
                                 Text(
                                     String(
                                         format: L10n.text("home.medical.medication_plan.record.taken_at_format"),
-                                        takenAt.formatted(date: .omitted, time: .shortened)
+                                        takenAt.formatted(date: .abbreviated, time: .shortened)
                                     )
                                 )
                                     .font(.caption)
@@ -367,6 +380,31 @@ struct MedicationPlanDetailPage: View {
         .onChange(of: completeData?.familyMedicineBoxes) { newValue in
             guard let newValue else { return }
             medicineBoxes = newValue
+        }
+        .task(id: currentPlan.id) {
+            guard mode == .server else { return }
+            await loadPlanRecords()
+        }
+    }
+
+    @MainActor
+    private func loadPlanRecords() async {
+        let planID = currentPlan.id
+        isLoadingPlanRecords = true
+        planRecordsLoadError = nil
+        defer { isLoadingPlanRecords = false }
+
+        do {
+            let fetched = try await medicalQueryAPI.listMedicationRecords(
+                memberID: currentPlan.member,
+                planID: planID
+            )
+            guard planID == currentPlan.id else { return }
+            planRecords = fetched
+        } catch {
+            guard planID == currentPlan.id else { return }
+            planRecords = []
+            planRecordsLoadError = error.localizedDescription
         }
     }
 
@@ -553,6 +591,8 @@ private func medicationPlanDetailStatusLabel(_ status: String) -> String {
         return L10n.text("home.medical.medication_plan.detail.status.completed")
     case "cancelled":
         return L10n.text("home.medical.medication_plan.detail.status.cancelled")
+    case "as_needed":
+        return L10n.text("home.medical.medication_execution.as_needed")
     default:
         return status
     }

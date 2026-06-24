@@ -98,7 +98,7 @@ struct SymptomFormView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            prompt: Text("搜索症状 (支持拼音/首字母)")
+            prompt: Text(L10n.text("medical_record.forms.symptom.search_prompt"))
         )
         .sparkFormBottomBar(
             canSubmit: canSubmit && !isSaving,
@@ -146,12 +146,12 @@ struct SymptomFormView: View {
 
     private var quickSelectionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("症状快速勾选")
+            Text(L10n.text("medical_record.forms.symptom.quick_select_title"))
                 .font(.headline.weight(.semibold))
 
             VStack(spacing: 0) {
                 if filteredCategories.isEmpty {
-                    Text("未找到匹配症状，可在下方自定义录入")
+                    Text(L10n.text("medical_record.forms.symptom.no_match_hint"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -191,22 +191,22 @@ struct SymptomFormView: View {
 
     private var customSymptomSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("自定义症状录入")
+            Text(L10n.text("medical_record.forms.symptom.custom_title"))
                 .font(.headline.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 14) {
-                Label("添加其他症状", systemImage: "plus")
+                Label(L10n.text("medical_record.forms.symptom.add_other"), systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
 
                 Divider()
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("请输入症状名称", systemImage: "pencil.line")
+                    Label(L10n.text("medical_record.forms.symptom.enter_name"), systemImage: "pencil.line")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    TextField("例如：耳鸣、视力模糊...", text: $customSymptomText)
+                    TextField(L10n.text("medical_record.forms.symptom.name_placeholder"), text: $customSymptomText)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .padding(.horizontal, 12)
@@ -220,7 +220,7 @@ struct SymptomFormView: View {
                 }
 
                 Button(action: addCustomSymptom) {
-                    Label("确认添加", systemImage: "plus")
+                    Label(L10n.text("medical_record.forms.symptom.confirm_add"), systemImage: "plus")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(canAddCustomSymptom ? Color.white : Color.secondary)
                         .frame(maxWidth: .infinity)
@@ -253,11 +253,11 @@ struct SymptomFormView: View {
 
     private var followUpDetailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("随访详情与备注")
+            Text(L10n.text("medical_record.forms.symptom.follow_up_title"))
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("已选症状")
+                Text(L10n.text("medical_record.forms.symptom.selected_symptoms"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -270,14 +270,14 @@ struct SymptomFormView: View {
 
             Divider()
 
-            detailRow(title: "症状持续时间") {
+            detailRow(title: L10n.text("medical_record.forms.symptom.duration")) {
                 Menu {
                     ForEach(SymptomFormSupport.durationOptions, id: \.self) { option in
-                        Button(option) { duration = option }
+                        Button(SymptomFormSupport.displayDuration(option)) { duration = option }
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Text(duration.isEmpty ? "请选择" : duration)
+                        Text(duration.isEmpty ? L10n.text("medical_record.forms.symptom.select_placeholder") : SymptomFormSupport.displayDuration(duration))
                             .foregroundStyle(duration.isEmpty ? .secondary : .primary)
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
@@ -289,7 +289,7 @@ struct SymptomFormView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("严重程度评估")
+                Text(L10n.text("medical_record.forms.symptom.severity_title"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 severityPicker
@@ -299,11 +299,11 @@ struct SymptomFormView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 SparkFormTextAreaRow(
-                    title: L10n.text("补充描述 (例如：特定时间发作、诱因等)...", fallback: "补充描述 (例如：特定时间发作、诱因等)..."),
+                    title: L10n.text("medical_record.forms.symptom.notes_title"),
                     text: $notes,
                     systemImage:"note.text",
                     minHeight: 88,
-                    placeholder: "补充描述 (例如：特定时间发作、诱因等)...",
+                    placeholder: L10n.text("medical_record.forms.symptom.notes_placeholder"),
                     required: false
                 )
             }
@@ -317,9 +317,9 @@ struct SymptomFormView: View {
 
     private var severityPicker: some View {
         HStack(spacing: 10) {
-            severityChoice(title: "轻", value: "low", tint: .green)
-            severityChoice(title: "中", value: "medium", tint: .yellow)
-            severityChoice(title: "重", value: "high", tint: .red)
+            severityChoice(title: L10n.text("medical_record.forms.symptom.severity_mild_short"), value: "low", tint: .green)
+            severityChoice(title: L10n.text("medical_record.forms.symptom.severity_moderate_short"), value: "medium", tint: .yellow)
+            severityChoice(title: L10n.text("medical_record.forms.symptom.severity_severe_short"), value: "high", tint: .red)
         }
     }
 
@@ -338,7 +338,7 @@ struct SymptomFormView: View {
         return Button {
             toggle(symptom)
         } label: {
-            Text(symptom)
+            Text(SymptomFormSupport.displaySymptom(symptom))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
                 .padding(.horizontal, 12)
@@ -356,7 +356,7 @@ struct SymptomFormView: View {
             toggle(symptom)
         } label: {
             HStack(spacing: 6) {
-                Text(symptom)
+                Text(SymptomFormSupport.displaySymptom(symptom))
                     .font(.caption.weight(.semibold))
                 Image(systemName: "xmark.circle.fill")
                     .font(.caption)
@@ -423,7 +423,7 @@ struct SymptomFormView: View {
         switch mode {
         case .localEdit(let existing, let onSubmit):
             guard let draft = outputDraft else {
-                errorMessage = "请至少选择一个症状"
+                errorMessage = L10n.text("medical_record.forms.symptom.error_select_one")
                 return
             }
             onSubmit(draft)
@@ -432,7 +432,7 @@ struct SymptomFormView: View {
 
         case .serverEdit:
             guard let draft = outputDraft else {
-                errorMessage = "请至少选择一个症状"
+                errorMessage = L10n.text("medical_record.forms.symptom.error_select_one")
                 return
             }
             guard let onServerSubmit else {
@@ -455,7 +455,7 @@ struct SymptomFormView: View {
 
         case .create(let context):
             guard let draft = outputDraft else {
-                errorMessage = "请至少选择一个症状"
+                errorMessage = L10n.text("medical_record.forms.symptom.error_select_one")
                 return
             }
 

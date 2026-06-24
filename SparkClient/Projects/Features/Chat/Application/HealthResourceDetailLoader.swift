@@ -20,8 +20,7 @@ enum HealthResourceReferenceDetailPayload: Equatable, Sendable {
     )
     case medicationPlan(
         SparkMedicalSyncAPI.RemoteMedicationPlan,
-        medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
-        records: [SparkMedicalSyncAPI.RemoteMedicationRecord]
+        medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     )
     case medicineBox(SparkMedicalSyncAPI.RemoteMedicineBox, allBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox])
     case medicationExecution(
@@ -109,8 +108,7 @@ struct HealthResourceDetailLoader {
         case .medicationPlan:
             guard let plan = data.medicationPlans?.first(where: { $0.id == ref.resourceID }) else { return nil }
             let boxes = data.medicineBoxes ?? []
-            let records = data.todayMedicationRecords?.filter { $0.plan == ref.resourceID } ?? []
-            return .medicationPlan(plan, medicineBoxes: boxes, records: records)
+            return .medicationPlan(plan, medicineBoxes: boxes)
         case .medicineBox:
             guard let box = data.medicineBoxes?.first(where: { $0.id == ref.resourceID }) else { return nil }
             return .medicineBox(box, allBoxes: data.medicineBoxes ?? [])
@@ -189,8 +187,7 @@ struct HealthResourceDetailLoader {
         case .medicationPlan:
             guard case .success(let plan) = await repository.retrieveMedicationPlan(id: ref.resourceID) else { return nil }
             let boxes = await listValueOrEmpty { await repository.listMedicineBoxes(memberID: ref.memberID) }
-            let records = await listValueOrEmpty { await repository.listMedicationRecords(memberID: ref.memberID, planID: ref.resourceID) }
-            return .medicationPlan(plan, medicineBoxes: boxes, records: records)
+            return .medicationPlan(plan, medicineBoxes: boxes)
         case .medicineBox:
             guard case .success(let box) = await repository.retrieveMedicineBox(id: ref.resourceID) else { return nil }
             let all = await listValueOrEmpty { await repository.listMedicineBoxes(memberID: ref.memberID) }

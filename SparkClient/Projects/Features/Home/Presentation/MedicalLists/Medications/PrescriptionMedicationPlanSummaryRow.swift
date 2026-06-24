@@ -65,7 +65,6 @@ struct PrescriptionMedicationPlanSummaryRow: View {
                         mode: nav.mode,
                         plan: plan,
                         medicineBoxes: nav.medicineBoxes,
-                        records: records,
                         memberID: nav.memberID,
                         completeData: nav.completeData,
                         memberContextStore: nav.memberContextStore,

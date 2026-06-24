@@ -1,67 +1,69 @@
 import SwiftUI
 
 struct AllergyCategoryGroup: Identifiable, Equatable {
-    var id: String { title }
-    let title: String
+    let titleItem: SparkBilingualItem
     let systemImage: String
     let tint: Color
-    let allergens: [String]
-    let detailCategory: String
+    let allergenItems: [SparkBilingualItem]
+    let detailCategoryCN: String
+
+    var id: String { titleItem.cn }
+    var title: String { MedicalFormBilingualCatalog.display(titleItem) }
+    var allergens: [String] { allergenItems.map(\.cn) }
+    var detailCategory: String { detailCategoryCN }
 }
 
 enum AllergyRecordFormSupport {
-    static let introText = "记录明确的过敏史是保护您就医与用药安全的核心防线。系统将深度解析您的过敏原，在未来的体检排查、影像检查（如造影剂）及日常用药中自动为您拦截高危禁忌。"
+    static var introText: String { L10n.text("member.setup.medical.allergy.intro_form") }
 
-    static let customCategory = "自定义"
+    static var customCategory: String { MedicalFormBilingualCatalog.allergyCustomCategoryCN }
 
-    static let allergyCategories: [AllergyCategoryGroup] = [
-        .init(
-            title: L10n.text("member.setup.medical.allergy.allergy.17314b"),
-            systemImage: "pills.fill",
-            tint: .red,
-            allergens: ["青霉素/阿莫西林", "头孢菌素", "阿司匹林/解热镇痛药", "磺胺类药物", "碘造影剂 (增强CT必备)", "局部麻醉药"],
-            detailCategory: "药物过敏"
-        ),
-        .init(
-            title: L10n.text("member.setup.medical.allergy.allergy.353649"),
-            systemImage: "fork.knife",
-            tint: .orange,
-            allergens: ["鱼/虾/蟹海鲜", "花生/坚果", "鸡蛋", "牛奶/乳制品", "大豆/豆制品", "小麦/麸质", "芒果/热带水果"],
-            detailCategory: "食物过敏"
-        ),
-        .init(
-            title: L10n.text("member.setup.medical.allergy.allergy.c99222"),
-            systemImage: "leaf.fill",
-            tint: .green,
-            allergens: ["花粉/柳絮/艾草", "尘螨", "动物皮毛/猫狗皮屑", "霉菌", "杨树毛/梧桐絮"],
-            detailCategory: "环境与吸入性过敏"
-        ),
-        .init(
-            title: L10n.text("member.setup.medical.allergy.allergy.9c6464"),
-            systemImage: "hand.raised.fill",
-            tint: .purple,
-            allergens: ["乳胶制品", "油漆", "金属镍/饰品", "紫外线/日光", "染发剂/香精", "蚊虫/蜂叮咬"],
-            detailCategory: "接触性与其它"
-        )
-    ]
+    static var allergyCategories: [AllergyCategoryGroup] {
+        MedicalFormBilingualCatalog.allergyCategoryDefinitions.map { definition in
+            AllergyCategoryGroup(
+                titleItem: definition.title,
+                systemImage: definition.systemImage,
+                tint: tint(forDetailCategory: definition.detailCategoryCN),
+                allergenItems: definition.allergens,
+                detailCategoryCN: definition.detailCategoryCN
+            )
+        }
+    }
+
+    static var severityOptions: [String] {
+        MedicalFormBilingualCatalog.allergySeverityOptions.map(\.cn)
+    }
+
+    static var reactionOptions: [String] {
+        MedicalFormBilingualCatalog.allergyReactionOptions.map(\.cn)
+    }
+
+    static func displayAllergen(_ stored: String) -> String {
+        MedicalFormBilingualCatalog.displayStored(stored, in: MedicalFormBilingualCatalog.allAllergyItems)
+    }
+
+    static func displaySeverity(_ stored: String) -> String {
+        MedicalFormBilingualCatalog.displayStored(stored, in: MedicalFormBilingualCatalog.allergySeverityOptions)
+    }
+
+    static func displayReaction(_ stored: String) -> String {
+        MedicalFormBilingualCatalog.displayStored(stored, in: MedicalFormBilingualCatalog.allergyReactionOptions)
+    }
+
+    static func displayDetailCategory(_ stored: String) -> String {
+        MedicalFormBilingualCatalog.displayStored(stored, in: MedicalFormBilingualCatalog.allergyDetailCategories + [
+            .init(cn: customCategory, en: L10n.text("member.setup.medical.allergy.custom_category"))
+        ])
+    }
 
     static func filteredCategories(matching searchText: String) -> [AllergyCategoryGroup] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return allergyCategories }
-
-        return allergyCategories.compactMap { category in
-            if CatalogItemSearch.matches(category.title, searchText: trimmed) {
-                return category
-            }
-
-            let matchedAllergens = category.allergens.filter { CatalogItemSearch.matches($0, searchText: trimmed) }
-            guard matchedAllergens.isEmpty == false else { return nil }
-            return AllergyCategoryGroup(
-                title: category.title,
-                systemImage: category.systemImage,
-                tint: category.tint,
-                allergens: matchedAllergens,
-                detailCategory: category.detailCategory
+        MedicalFormBilingualCatalog.filteredAllergyCategories(matching: searchText).map { definition in
+            AllergyCategoryGroup(
+                titleItem: definition.title,
+                systemImage: definition.systemImage,
+                tint: tint(forDetailCategory: definition.detailCategoryCN),
+                allergenItems: definition.allergens,
+                detailCategoryCN: definition.detailCategoryCN
             )
         }
     }
@@ -74,16 +76,17 @@ enum AllergyRecordFormSupport {
     }
 
     static func summaryLine(name: String, detail: MedicalGuideAllergyDetail?) -> String {
-        var pieces = [name]
+        var pieces = [displayAllergen(name)]
         if let detail {
             if detail.severity.isEmpty == false {
-                pieces.append(detail.severity)
+                pieces.append(displaySeverity(detail.severity))
             }
             if detail.reactions.isEmpty == false {
-                pieces.append(detail.reactions.joined(separator: "、"))
+                let reactions = detail.reactions.map { displayReaction($0) }.joined(separator: "、")
+                pieces.append(reactions)
             }
             if detail.category.isEmpty == false {
-                pieces.append(detail.category)
+                pieces.append(displayDetailCategory(detail.category))
             }
             if detail.notes.isEmpty == false {
                 pieces.append(detail.notes)
@@ -101,15 +104,14 @@ enum AllergyRecordFormSupport {
     }
 
     static func tint(for category: String) -> Color {
-        if category.contains("药物") { return .red }
-        if category.contains("食物") { return .orange }
-        if category.contains("环境") { return .green }
-        if category.contains("接触") { return .purple }
-        return .accentColor
+        tint(forDetailCategory: category)
     }
 
     static func severityTint(_ severity: String) -> Color {
-        switch severity {
+        let canonical = MedicalFormBilingualCatalog.allergySeverityOptions.first(where: {
+            $0.cn == severity || $0.en == severity
+        })?.cn ?? severity
+        switch canonical {
         case "严重":
             return .red
         case "中度":
@@ -117,5 +119,13 @@ enum AllergyRecordFormSupport {
         default:
             return .green
         }
+    }
+
+    private static func tint(forDetailCategory category: String) -> Color {
+        if category.contains("药物") { return .red }
+        if category.contains("食物") { return .orange }
+        if category.contains("环境") { return .green }
+        if category.contains("接触") { return .purple }
+        return .accentColor
     }
 }

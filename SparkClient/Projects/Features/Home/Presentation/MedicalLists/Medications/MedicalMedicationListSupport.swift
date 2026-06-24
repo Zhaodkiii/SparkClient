@@ -80,8 +80,10 @@ enum MedicalMedicationListBuilder {
             return 2
         case "cancelled":
             return 3
-        default:
+        case MedicationPlanStatus.asNeeded:
             return 4
+        default:
+            return 5
         }
     }
 }

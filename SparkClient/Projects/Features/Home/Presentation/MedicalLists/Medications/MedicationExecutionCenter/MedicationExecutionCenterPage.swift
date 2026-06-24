@@ -35,6 +35,7 @@ struct MedicationExecutionCenterPage: View {
     @State private var dateStripScrollID: String?
     @State private var didApplyInitialFocus = false
     @State private var legacyDateStripDefersServerLoad = false
+    @State private var createdAsNeededPlansByBoxID: [Int: SparkMedicalSyncAPI.RemoteMedicationPlan] = [:]
     private let calendar = Calendar.current
     private let logModule = LogModule.home
 
@@ -113,11 +114,25 @@ struct MedicationExecutionCenterPage: View {
         scheduledDoses.filter(\.isCompleted)
     }
 
+    /// 按需用药：展示全部服药计划（不区分状态、是否有定时提醒）
     private var asNeededPlans: [SparkMedicalSyncAPI.RemoteMedicationPlan] {
-        medicationPlans
-            .filter { MedicationExecutionPlanner.isPlanActive($0, on: selectedDayStart, calendar: calendar) }
-//            .filter { $0.reminderTimes.isEmpty }
-            .sorted { $0.drugName < $1.drugName }
+        medicationPlans.sorted { $0.drugName < $1.drugName }
+    }
+
+    private var asNeededDoses: [MedicationExecutionDose] {
+        asNeededPlans.enumerated().map { index, plan in
+            MedicationExecutionPlanner.asNeededDose(
+                plan: plan,
+                medicineBoxesByID: medicineBoxesByID,
+                date: selectedDayStart,
+                sequence: index + 1,
+                calendar: calendar
+            )
+        }
+    }
+
+    private var showsAsNeededCard: Bool {
+        memberID != nil && homeDependencies != nil
     }
 
     private var medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox] {
@@ -164,9 +179,15 @@ struct MedicationExecutionCenterPage: View {
                 context: context,
                 isSaving: isSaving,
                 fileTransferService: fileTransferService,
+                memberID: memberID,
+                homeDependencies: homeDependencies,
+                medicineBoxes: medicineBoxes,
+                medicationPlans: medicationPlans,
+                onMedicineBoxesChanged: onMedicineBoxesChanged,
+                onMedicineBoxAdded: { logSheet = nil },
                 onCancel: { logSheet = nil },
-                onDone: { selections in
-                    Task { await saveSelections(selections, for: context.doses) }
+                onDone: { submission in
+                    Task { await saveSelections(submission, for: submission.doses) }
                 }
             )
         }
@@ -467,21 +488,13 @@ struct MedicationExecutionCenterPage: View {
                 }
             }
 
-            if asNeededPlans.isEmpty == false {
+            if showsAsNeededCard {
                 MedicationExecutionAsNeededCard {
-                    let doses = asNeededPlans.enumerated().map { index, plan in
-                        MedicationExecutionPlanner.asNeededDose(
-                            plan: plan,
-                            medicineBoxesByID: medicineBoxesByID,
-                            date: selectedDayStart,
-                            sequence: index + 1,
-                            calendar: calendar
-                        )
-                    }
                     logSheet = MedicationExecutionLogSheetContext(
                         title: MedicationExecutionSupport.allDrugsLogTitle(),
                         date: selectedDayStart,
-                        doses: doses
+                        doses: asNeededDoses,
+                        source: .medicationPlans
                     )
                 }
             }
@@ -497,7 +510,13 @@ struct MedicationExecutionCenterPage: View {
             VStack(spacing: 0) {
                 let groups = MedicationExecutionPlanner.groupByTime(completedDoses)
                 ForEach(groups, id: \.timeText) { group in
-                    MedicationExecutionCompletedGroup(group: group)
+                    MedicationExecutionCompletedGroup(group: group) {
+                        logSheet = MedicationExecutionLogSheetContext(
+                            title: MedicationExecutionSupport.logTitle(at: group.timeText),
+                            date: selectedDayStart,
+                            doses: group.doses
+                        )
+                    }
                     if group.timeText != groups.last?.timeText {
                         Divider()
                             .padding(.leading, 8)
@@ -576,11 +595,11 @@ struct MedicationExecutionCenterPage: View {
 
     @MainActor
     private func saveSelections(
-        _ selections: [MedicationExecutionDose.ID: MedicationDoseLogStatus],
+        _ submission: MedicationExecutionLogSubmission,
         for doses: [MedicationExecutionDose]
     ) async {
         guard isSaving == false else { return }
-        let selectedDoses = doses.filter { selections[$0.id] != nil }
+        let selectedDoses = doses.filter { submission.selections[$0.id] != nil }
         guard selectedDoses.isEmpty == false else {
             logSheet = nil
             return
@@ -591,10 +610,12 @@ struct MedicationExecutionCenterPage: View {
 
         do {
             for dose in selectedDoses {
-                guard let status = selections[dose.id] else { continue }
-                let saved = try await saveDose(dose, status: status)
+                guard let status = submission.selections[dose.id] else { continue }
+                let merged = mergedDose(dose, edit: submission.edits[dose.id])
+                if shouldSkipSave(original: dose, merged: merged, status: status) { continue }
+                let saved = try await saveDose(merged, status: status)
                 upsertRecord(saved)
-                await notifyDoseCompleted(dose: dose, saved: saved)
+                await notifyDoseCompleted(dose: merged, saved: saved)
             }
             logSheet = nil
             MedicationExecutionSupport.impact(style: .medium)
@@ -608,17 +629,47 @@ struct MedicationExecutionCenterPage: View {
         }
     }
 
+    private func mergedDose(
+        _ dose: MedicationExecutionDose,
+        edit: MedicationExecutionDoseEdit?
+    ) -> MedicationExecutionDose {
+        guard let edit else { return dose }
+        return MedicationExecutionDose(
+            id: dose.id,
+            plan: dose.plan,
+            scheduledAt: edit.scheduledAt,
+            plannedDose: edit.plannedDose,
+            doseSequence: dose.doseSequence,
+            record: dose.record,
+            imageAttachment: dose.imageAttachment
+        )
+    }
+
+    private func shouldSkipSave(
+        original: MedicationExecutionDose,
+        merged: MedicationExecutionDose,
+        status: MedicationDoseLogStatus
+    ) -> Bool {
+        guard let record = original.record else { return false }
+        guard record.status == status.rawValue else { return false }
+        guard record.plannedDose == merged.plannedDose else { return false }
+        return calendar.isDate(record.scheduledAt, equalTo: merged.scheduledAt, toGranularity: .minute)
+    }
+
     private func saveDose(
         _ dose: MedicationExecutionDose,
         status: MedicationDoseLogStatus
     ) async throws -> SparkMedicalSyncAPI.RemoteMedicationRecord {
+        let plan = try await resolvedPlan(for: dose)
         let takenAt = status == .taken ? MedicalDateCoding.encodeISO8601(Date()) : nil
         let actualDose = status == .taken ? dose.plannedDose : ""
 
         if let record = dose.record {
             let payload = MedicationRecordUpdatePayload(
+                scheduledAt: MedicalDateCoding.encodeISO8601(dose.scheduledAt),
                 takenAt: takenAt,
                 status: status.rawValue,
+                plannedDose: dose.plannedDose,
                 actualDose: actualDose,
                 notes: record.notes,
                 extra: record.extra ?? [:]
@@ -632,8 +683,8 @@ struct MedicationExecutionCenterPage: View {
         }
 
         let payload = MedicationRecordCreatePayload(
-            member: dose.plan.member,
-            plan: dose.plan.id,
+            member: plan.member,
+            plan: plan.id,
             scheduledAt: MedicalDateCoding.encodeISO8601(dose.scheduledAt),
             takenAt: takenAt,
             status: status.rawValue,
@@ -649,6 +700,53 @@ struct MedicationExecutionCenterPage: View {
             kind: .medicationRecords,
             body: payload
         )
+    }
+
+    @MainActor
+    private func resolvedPlan(
+        for dose: MedicationExecutionDose
+    ) async throws -> SparkMedicalSyncAPI.RemoteMedicationPlan {
+        if dose.plan.id > 0 {
+            return dose.plan
+        }
+        guard let boxID = dose.plan.medicineBox else {
+            return dose.plan
+        }
+        if let cached = createdAsNeededPlansByBoxID[boxID] {
+            return cached
+        }
+        if let linked = medicationPlans.first(where: { $0.medicineBox == boxID }) {
+            return linked
+        }
+
+        let payload = MedicationPlanPayload(
+            member: dose.plan.member,
+            medicalCase: nil,
+            medicineBox: boxID,
+            prescription: nil,
+            drugName: dose.plan.drugName,
+            dosePerTime: dose.plan.dosePerTime,
+            doseValue: dose.plan.doseValue,
+            doseUnit: dose.plan.doseUnit,
+            frequencyType: dose.plan.frequencyType,
+            everyNDays: dose.plan.everyNDays,
+            weeklyWeekdays: dose.plan.weeklyWeekdays,
+            frequencyText: dose.plan.frequencyText,
+            reminderTimes: [],
+            startDate: MedicalDateCoding.encodeDateOnly(dose.plan.startDate),
+            endDate: dose.plan.endDate.map { MedicalDateCoding.encodeDateOnly($0) },
+            instructions: dose.plan.instructions,
+            reminderEnabled: false,
+            status: MedicationPlanStatus.asNeeded,
+            extra: [:]
+        )
+        let mutation = try await workflowAPI.createMedicationPlan(payload)
+        guard let created = mutation.medicationPlan else {
+            throw MedicationExecutionPlanResolutionError.missingCreatedPlan
+        }
+        createdAsNeededPlansByBoxID[boxID] = created
+        onMedicationPlansChanged?(medicationPlans + [created])
+        return created
     }
 
     private func upsertRecord(_ record: SparkMedicalSyncAPI.RemoteMedicationRecord) {
@@ -714,6 +812,17 @@ struct MedicationExecutionCenterPage: View {
             doseSequence: saved.doseSequence,
             members: members
         )
+    }
+}
+
+private enum MedicationExecutionPlanResolutionError: LocalizedError {
+    case missingCreatedPlan
+
+    var errorDescription: String? {
+        switch self {
+        case .missingCreatedPlan:
+            return L10n.text("home.medical.medication_execution.error.save_failed")
+        }
     }
 }
 

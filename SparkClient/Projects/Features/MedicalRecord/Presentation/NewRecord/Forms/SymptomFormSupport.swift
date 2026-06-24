@@ -1,76 +1,61 @@
 import Foundation
 
 struct SymptomCategoryGroup: Identifiable, Equatable {
-    var id: String { title }
-    let title: String
+    let titleItem: SparkBilingualItem
     let systemImage: String
-    let symptoms: [String]
+    let symptomItems: [SparkBilingualItem]
+
+    var id: String { titleItem.cn }
+    var title: String { MedicalFormBilingualCatalog.display(titleItem) }
+    var symptoms: [String] { symptomItems.map(\.cn) }
 }
 
 enum SymptomFormSupport {
-    static let durationOptions = ["1天", "3天", "1周", "2周", "1个月", "3个月以上"]
+    static var durationOptions: [String] {
+        MedicalFormBilingualCatalog.symptomDurationOptions.map(\.cn)
+    }
 
-    static let symptomCategories: [SymptomCategoryGroup] = [
-        .init(
-            title: "全身与神经系统",
-            systemImage: "figure.stand",
-            symptoms: ["发热", "头痛", "眩晕/头晕", "疲劳/乏力", "睡眠障碍", "盗汗/异常出汗", "体重骤降"]
-        ),
-        .init(
-            title: "心肺与呼吸系统",
-            systemImage: "heart.fill",
-            symptoms: ["咳嗽", "咳痰", "气促/呼吸困难", "胸痛", "心悸", "血压波动"]
-        ),
-        .init(
-            title: "胃肠与代谢系统",
-            systemImage: "fork.knife",
-            symptoms: ["胃肠不适", "胃酸/反流", "恶心/呕吐", "腹泻", "便秘", "血糖波动", "食欲改变"]
-        ),
-        .init(
-            title: "肌肉与体表",
-            systemImage: "figure.walk",
-            symptoms: ["关节疼痛", "肌肉酸痛", "异常浮肿", "皮疹/瘙痒", "脱发", "淋巴结肿大"]
-        )
-    ]
+    static var symptomCategories: [SymptomCategoryGroup] {
+        MedicalFormBilingualCatalog.symptomCategories.map {
+            SymptomCategoryGroup(titleItem: $0.title, systemImage: $0.systemImage, symptomItems: $0.items)
+        }
+    }
 
     static var allPresetSymptoms: [String] {
         symptomCategories.flatMap(\.symptoms)
     }
 
+    static func displaySymptom(_ stored: String) -> String {
+        MedicalFormBilingualCatalog.displayStored(stored, in: MedicalFormBilingualCatalog.allSymptomItems)
+    }
+
+    static func displayDuration(_ stored: String) -> String {
+        MedicalFormBilingualCatalog.displayStored(stored, in: MedicalFormBilingualCatalog.symptomDurationOptions)
+    }
+
     static func symptomMatchesSearch(_ symptom: String, matching searchText: String) -> Bool {
-        CatalogItemSearch.matches(symptom, searchText: searchText)
+        if let item = MedicalFormBilingualCatalog.allSymptomItems.first(where: { $0.cn == symptom }) {
+            return CatalogItemSearch.matches(item, searchText: searchText)
+        }
+        return CatalogItemSearch.matches(symptom, searchText: searchText)
     }
 
     static func filteredCategories(matching searchText: String) -> [SymptomCategoryGroup] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return symptomCategories }
-
-        return symptomCategories.compactMap { category in
-            if CatalogItemSearch.matches(category.title, searchText: trimmed) {
-                return category
-            }
-
-            let matchedSymptoms = category.symptoms.filter { symptomMatchesSearch($0, matching: trimmed) }
-            guard matchedSymptoms.isEmpty == false else { return nil }
-            return SymptomCategoryGroup(
-                title: category.title,
-                systemImage: category.systemImage,
-                symptoms: matchedSymptoms
-            )
-        }
+        MedicalFormBilingualCatalog.filteredGroups(MedicalFormBilingualCatalog.symptomCategories, matching: searchText)
+            .map { SymptomCategoryGroup(titleItem: $0.title, systemImage: $0.systemImage, symptomItems: $0.items) }
     }
 
     static func severityLabel(_ value: String) -> String {
-        switch value {
-        case "low": return "轻度"
-        case "medium": return "中度"
-        case "high": return "重度"
-        default: return value
-        }
+        MedicalFormBilingualCatalog.displaySymptomSeverity(value)
     }
 
     static func parseDurationOption(_ option: String) -> (value: Int?, unit: String?) {
-        switch option {
+        let canonical = MedicalFormBilingualCatalog.displayStored(option, in: MedicalFormBilingualCatalog.symptomDurationOptions)
+        let cn = MedicalFormBilingualCatalog.symptomDurationOptions.first(where: {
+            $0.cn == canonical || $0.en == canonical
+        })?.cn ?? option
+
+        switch cn {
         case "1天": return (1, "天")
         case "3天": return (3, "天")
         case "1周": return (1, "周")
@@ -78,8 +63,8 @@ enum SymptomFormSupport {
         case "1个月": return (1, "月")
         case "3个月以上": return (3, "月")
         default:
-            guard option.isEmpty == false else { return (nil, nil) }
-            return (nil, option)
+            guard cn.isEmpty == false else { return (nil, nil) }
+            return (nil, cn)
         }
     }
 
@@ -95,15 +80,17 @@ enum SymptomFormSupport {
     static func sourceLabel(for symptom: SparkMedicalSyncAPI.RemoteSymptom) -> String {
         let raw = symptom.extra?["source"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         switch raw {
-        case "manual", "": return "手动添加"
-        case "case_recognition", "case_document": return "病历识别"
-        case "ai_extraction", "ai": return "AI 抽取"
+        case "manual", "": return L10n.text("medical_record.forms.symptom.source.manual")
+        case "case_recognition", "case_document": return L10n.text("medical_record.forms.symptom.source.case_recognition")
+        case "ai_extraction", "ai": return L10n.text("medical_record.forms.symptom.source.ai")
         default: return raw
         }
     }
 
     static func medicalCaseLabel(for symptom: SparkMedicalSyncAPI.RemoteSymptom) -> String {
-        symptom.medicalCase == nil ? "未关联" : "已关联病历"
+        symptom.medicalCase == nil
+            ? L10n.text("medical_record.forms.symptom.case.unlinked")
+            : L10n.text("medical_record.forms.symptom.case.linked")
     }
 
     static func startedAtText(for symptom: SparkMedicalSyncAPI.RemoteSymptom) -> String {
@@ -114,7 +101,7 @@ enum SymptomFormSupport {
     static func durationText(for symptom: SparkMedicalSyncAPI.RemoteSymptom) -> String {
         let option = durationOption(value: symptom.durationValue, unit: symptom.durationUnit.nilIfBlank)
         guard option.isEmpty == false else { return "" }
-        return "持续\(option)"
+        return L10n.format("medical_record.forms.symptom.duration_prefix", displayDuration(option))
     }
 
     static func summaryLine(for symptom: SparkMedicalSyncAPI.RemoteSymptom) -> String {
@@ -135,10 +122,11 @@ enum SymptomFormSupport {
         var pieces: [String] = []
         let trimmedNames = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { $0.isEmpty == false }
         if trimmedNames.isEmpty == false {
-            pieces.append(trimmedNames.joined(separator: "、"))
+            let displayNames = trimmedNames.map { displaySymptom($0) }
+            pieces.append(displayNames.joined(separator: "、"))
         }
         if duration.isEmpty == false {
-            pieces.append("持续\(duration)")
+            pieces.append(L10n.format("medical_record.forms.symptom.duration_prefix", displayDuration(duration)))
         }
         if severity.isEmpty == false {
             pieces.append(severityLabel(severity))
@@ -188,7 +176,10 @@ enum SymptomFormSupport {
     ) -> SymptomRecognitionDraft? {
         guard let joinedName = joinedSymptomName(selectedSymptoms) else { return nil }
 
-        let parsedDuration = parseDurationOption(duration)
+        let canonicalDuration = MedicalFormBilingualCatalog.symptomDurationOptions.first(where: {
+            $0.cn == duration || $0.en == duration
+        })?.cn ?? duration
+        let parsedDuration = parseDurationOption(canonicalDuration)
         return SymptomRecognitionDraft(
             name: joinedName,
             code: existing?.code,

@@ -677,7 +677,6 @@ struct PrescriptionBatchListSectionView: View {
             mode: .localDraft,
             plan: plan,
             medicineBoxes: medicineBoxes,
-            records: [],
             memberID: context.memberID,
             completeData: nil,
             memberContextStore: context.memberContextStore,

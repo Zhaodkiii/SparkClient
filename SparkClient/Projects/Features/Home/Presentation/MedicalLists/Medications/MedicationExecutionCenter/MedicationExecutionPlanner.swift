@@ -83,6 +83,71 @@ enum MedicationExecutionPlanner {
         }
     }
 
+    /// 查找药箱药品关联的用药计划（优先按需用药状态）
+    static func linkedPlan(
+        for medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox,
+        in plans: [SparkMedicalSyncAPI.RemoteMedicationPlan]
+    ) -> SparkMedicalSyncAPI.RemoteMedicationPlan? {
+        let matching = plans.filter { $0.medicineBox == medicineBox.id }
+        guard matching.isEmpty == false else { return nil }
+        return matching.first { $0.status == MedicationPlanStatus.asNeeded }
+            ?? matching.first { $0.status == "active" && $0.reminderTimes.isEmpty }
+            ?? matching.first { $0.status == "active" }
+            ?? matching.first
+    }
+
+    /// 药箱内药品无关联计划时，用药品信息构造本地按需计划投影（`id < 0` 表示待创建）
+    static func asNeededFallbackPlan(
+        from medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox,
+        memberID: Int,
+        calendar: Calendar
+    ) -> SparkMedicalSyncAPI.RemoteMedicationPlan {
+        SparkMedicalSyncAPI.RemoteMedicationPlan(
+            id: -medicineBox.id,
+            member: memberID,
+            medicalCase: nil,
+            medicineBox: medicineBox.id,
+            prescription: nil,
+            drugName: medicineBox.medicineName,
+            dosePerTime: "",
+            doseValue: nil,
+            doseUnit: medicineBox.doseUnit,
+            frequencyType: "daily",
+            everyNDays: nil,
+            weeklyWeekdays: [],
+            frequencyText: L10n.text("home.medical.medication_execution.as_needed"),
+            reminderTimes: CodableReminderTimesList(wrappedValue: []),
+            startDate: calendar.startOfDay(for: Date()),
+            endDate: nil,
+            instructions: "",
+            reminderEnabled: false,
+            status: MedicationPlanStatus.asNeeded,
+            extra: nil,
+            attachments: nil,
+            updatedAt: medicineBox.updatedAt
+        )
+    }
+
+    /// 基于个人药箱药品生成【按需临时服药】执行条目
+    static func asNeededDose(
+        from medicineBox: SparkMedicalSyncAPI.RemoteMedicineBox,
+        plans: [SparkMedicalSyncAPI.RemoteMedicationPlan],
+        memberID: Int,
+        date: Date,
+        sequence: Int,
+        calendar: Calendar
+    ) -> MedicationExecutionDose {
+        let plan = linkedPlan(for: medicineBox, in: plans)
+            ?? asNeededFallbackPlan(from: medicineBox, memberID: memberID, calendar: calendar)
+        return asNeededDose(
+            plan: plan,
+            medicineBoxesByID: [medicineBox.id: medicineBox],
+            date: date,
+            sequence: sequence,
+            calendar: calendar
+        )
+    }
+
     /// 生成【按需临时服药】执行条目（无预设提醒，用户手动即时记录）
     /// - Parameters:
     ///   - plan: 目标用药计划

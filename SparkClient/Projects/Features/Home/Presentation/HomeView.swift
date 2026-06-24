@@ -28,7 +28,7 @@ struct HomeView: View {
     private var homeScrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                headerCard
+//                headerCard
                 if viewModel.shouldShowMedicalSection {
                     medicalInfoSection
                 }

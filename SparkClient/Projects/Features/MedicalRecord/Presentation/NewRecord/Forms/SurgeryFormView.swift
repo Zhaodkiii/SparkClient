@@ -116,7 +116,7 @@ struct SurgeryFormView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            prompt: Text("搜索手术名称（支持拼音/首字母）")
+            prompt: Text(L10n.text("medical_record.forms.surgery.search_prompt"))
         )
         .sparkFormBottomBar(
             canSubmit: canSubmit && !isSaving,
@@ -172,23 +172,23 @@ struct SurgeryFormView: View {
 
     private var surgeryDetailsCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            formTextRow(systemName: "scissors", title: "手术名称", placeholder: "请输入或从上方选择", text: $procedureName)
+            formTextRow(systemName: "scissors", title: L10n.text("medical_record.forms.surgery.field.name"), placeholder: L10n.text("medical_record.forms.surgery.field.name_placeholder"), text: $procedureName)
             Divider().padding(.leading, 16)
-            formTextRow(systemName: "calendar", title: "手术时间", placeholder: "例如 2018年5月", text: $performedAt)
+            formTextRow(systemName: "calendar", title: L10n.text("medical_record.forms.surgery.field.date"), placeholder: L10n.text("medical_record.forms.surgery.field.date_placeholder"), text: $performedAt)
             Divider().padding(.leading, 16)
             VStack(alignment: .leading, spacing: 10) {
-                Label("当前恢复状态", systemImage: "heart.text.square.fill")
+                Label(L10n.text("medical_record.forms.surgery.field.recovery"), systemImage: "heart.text.square.fill")
                     .font(.subheadline.weight(.semibold))
                 recoveryChipRow
             }
             .padding(.vertical, 12)
             Divider().padding(.leading, 16)
-            formTextRow(systemName: "building.2.fill", title: "主治医院", placeholder: "选填", text: $hospitalName)
+            formTextRow(systemName: "building.2.fill", title: L10n.text("medical_record.forms.surgery.field.hospital"), placeholder: L10n.text("medical_record.forms.surgery.field.optional"), text: $hospitalName)
             Divider().padding(.leading, 16)
-            formTextRow(systemName: "mappin.and.ellipse", title: "手术部位", placeholder: "选填", text: $site)
+            formTextRow(systemName: "mappin.and.ellipse", title: L10n.text("medical_record.forms.surgery.field.site"), placeholder: L10n.text("medical_record.forms.surgery.field.optional"), text: $site)
             Divider().padding(.leading, 16)
             VStack(alignment: .leading, spacing: 10) {
-                Label("补充备注", systemImage: "square.and.pencil")
+                Label(L10n.text("medical_record.forms.surgery.field.notes"), systemImage: "square.and.pencil")
                     .font(.subheadline.weight(.semibold))
                 TextEditor(text: $notes)
                     .frame(minHeight: 90)
@@ -230,7 +230,7 @@ struct SurgeryFormView: View {
         return Button {
             procedureName = name
         } label: {
-            Text(name)
+            Text(SurgeryFormSupport.displayProcedure(name))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
                 .lineLimit(1)
@@ -251,7 +251,7 @@ struct SurgeryFormView: View {
         return Button {
             recoveryStatus = option
         } label: {
-            Text(option)
+            Text(SurgeryFormSupport.displayRecoveryStatus(option))
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
                 .padding(.horizontal, 12)

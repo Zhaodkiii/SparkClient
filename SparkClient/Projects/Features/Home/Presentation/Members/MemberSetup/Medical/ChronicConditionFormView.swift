@@ -18,7 +18,7 @@ struct ChronicConditionFormView: View {
     @State private var customDiseaseText = ""
     @State private var focusedCondition: String?
 
-    private let controlStatusOptions = ["控制良好", "治疗中", "已治愈"]
+    private let controlStatusOptions = ChronicConditionFormSupport.controlStatusOptions
 
     private var filteredCategories: [ChronicDiseaseCategoryGroup] {
         ChronicConditionFormSupport.filteredCategories(matching: searchText)
@@ -61,7 +61,7 @@ struct ChronicConditionFormView: View {
         )
         .sparkFormBottomBar(
             canSubmit: chronicConditions.isEmpty == false,
-            saveTitle: "完成",
+            saveTitle: L10n.text("common.done"),
             onCancel: { dismiss() },
             onSave: { saveNow() }
         )
@@ -211,7 +211,7 @@ struct ChronicConditionFormView: View {
             if let focusedCondition {
                 Divider()
 
-                Text(focusedCondition)
+                Text(ChronicConditionFormSupport.displayDisease(focusedCondition))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
 
@@ -279,7 +279,7 @@ struct ChronicConditionFormView: View {
                 toggle(disease)
             }
         } label: {
-            Text(disease)
+            Text(ChronicConditionFormSupport.displayDisease(disease))
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
                 .padding(.horizontal, 12)
@@ -298,7 +298,7 @@ struct ChronicConditionFormView: View {
             Button {
                 focusedCondition = disease
             } label: {
-                Text(disease)
+                Text(ChronicConditionFormSupport.displayDisease(disease))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isFocused ? Color.accentColor : .primary)
             }
@@ -328,7 +328,7 @@ struct ChronicConditionFormView: View {
                 Button {
                     updateDetail(for: disease) { $0.controlStatus = option }
                 } label: {
-                    Text(option)
+                    Text(ChronicConditionFormSupport.displayControlStatus(option))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isSelected ? Color.accentColor : .primary)
                         .padding(.horizontal, 10)

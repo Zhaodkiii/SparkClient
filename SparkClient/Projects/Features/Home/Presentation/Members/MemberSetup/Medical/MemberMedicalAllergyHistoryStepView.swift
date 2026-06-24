@@ -128,12 +128,12 @@ struct MemberMedicalAllergyHistoryStepView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(allergen)
+                    Text(AllergyRecordFormSupport.displayAllergen(allergen))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Spacer()
                     if let severity = detail?.severity, severity.isEmpty == false {
-                        Text(severity)
+                        Text(AllergyRecordFormSupport.displaySeverity(severity))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(AllergyRecordFormSupport.severityTint(severity))
                             .padding(.horizontal, 8)
@@ -143,14 +143,14 @@ struct MemberMedicalAllergyHistoryStepView: View {
                 }
 
                 if let reactions = detail?.reactions, reactions.isEmpty == false {
-                    Text("过敏反应：\(reactions.joined(separator: "、"))")
+                    Text(reactions.map { AllergyRecordFormSupport.displayReaction($0) }.joined(separator: "、"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let category = detail?.category, category.isEmpty == false {
-                    Text("类别：\(category)")
+                    Text(AllergyRecordFormSupport.displayDetailCategory(category))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

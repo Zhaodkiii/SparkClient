@@ -28,20 +28,28 @@ struct AdaptiveToolSheetScrollView<Content: View>: View {
     private let content: Content
     private let bottomContentPadding: CGFloat
     private let extraChromeHeight: CGFloat
+    private let minimumHeight: CGFloat
 
     init(
         bottomContentPadding: CGFloat = 80,
         extraChromeHeight: CGFloat = 64,
+        minimumHeight: CGFloat = 300,
         @ViewBuilder content: () -> Content
     ) {
         self.bottomContentPadding = bottomContentPadding
         self.extraChromeHeight = extraChromeHeight
+        self.minimumHeight = minimumHeight
         self.content = content()
     }
 
     var body: some View {
         scrollView
-            .modifier(AdaptiveToolSheetHeightModifier(extraChromeHeight: extraChromeHeight))
+            .modifier(
+                AdaptiveToolSheetHeightModifier(
+                    extraChromeHeight: extraChromeHeight,
+                    minimumHeight: minimumHeight
+                )
+            )
     }
 
     private var scrollView: some View {
@@ -56,6 +64,7 @@ struct AdaptiveToolSheetScrollView<Content: View>: View {
 struct AdaptiveToolSheetHeightModifier: ViewModifier {
     /// Fixed chrome **outside** the measured scroll content (e.g. navigation bar, or header + footer rows).
     var extraChromeHeight: CGFloat = 64
+    var minimumHeight: CGFloat = 300
 
     @State private var measuredHeight: CGFloat = AdaptiveSheetHeightPreferenceKey.defaultValue
     @State private var selectedDetent: PresentationDetent = .height(AdaptiveSheetHeightPreferenceKey.defaultValue)
@@ -64,12 +73,16 @@ struct AdaptiveToolSheetHeightModifier: ViewModifier {
         UIScreen.main.bounds.height * 0.8
     }
 
+    private var resolvedHeight: CGFloat {
+        max(measuredHeight, minimumHeight)
+    }
+
     private var fittedHeight: CGFloat {
-        min(measuredHeight, maxFittedHeight)
+        min(resolvedHeight, maxFittedHeight)
     }
 
     private var canScroll: Bool {
-        measuredHeight > maxFittedHeight && selectedDetent == .large
+        resolvedHeight > maxFittedHeight && selectedDetent == .large
     }
 
     func body(content: Content) -> some View {
@@ -79,15 +92,20 @@ struct AdaptiveToolSheetHeightModifier: ViewModifier {
                 guard height > 0 else { return }
                 let nextHeight = height + extraChromeHeight
                 measuredHeight = nextHeight
-                if selectedDetent != .large || nextHeight <= maxFittedHeight {
-                    selectedDetent = .height(min(nextHeight, maxFittedHeight))
+                let detentHeight = min(max(nextHeight, minimumHeight), maxFittedHeight)
+                if selectedDetent != .large || detentHeight <= maxFittedHeight {
+                    selectedDetent = .height(detentHeight)
                 }
             }
             .presentationDetents(detents, selection: $selectedDetent)
             .presentationDragIndicator(.visible)
+            .onAppear {
+                measuredHeight = max(measuredHeight, minimumHeight)
+                selectedDetent = .height(fittedHeight)
+            }
     }
 
     private var detents: Set<PresentationDetent> {
-        measuredHeight > maxFittedHeight ? [.height(fittedHeight), .large] : [.height(measuredHeight)]
+        resolvedHeight > maxFittedHeight ? [.height(fittedHeight), .large] : [.height(fittedHeight)]
     }
 }

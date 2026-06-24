@@ -14,6 +14,8 @@ struct FamilyMedicineCabinetPage: View {
     let initialMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     /// 个人模式下药箱变更时回写上层缓存（如用药执行中心 completeData）
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+    /// 新建药品保存成功后回调（如从用药记录 Sheet 跳转添加时关闭外层 Sheet）
+    let onBoxCreated: ((SparkMedicalSyncAPI.RemoteMedicineBox) -> Void)?
 
     @StateObject private var viewModel: FamilyMedicineCabinetViewModel
     @State private var sheetDestination: MedicineBoxSheetDestination?
@@ -25,7 +27,8 @@ struct FamilyMedicineCabinetPage: View {
         onMemberCompleteDataChanged: ((SparkMedicalSyncAPI.RemoteMemberCompleteData) -> Void)? = nil,
         initialMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] = [],
         dependencies: HomeFeatureDependencies,
-        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
+        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil,
+        onBoxCreated: ((SparkMedicalSyncAPI.RemoteMedicineBox) -> Void)? = nil
     ) {
         self.entryMemberID = entryMemberID
         self.mode = mode
@@ -35,6 +38,7 @@ struct FamilyMedicineCabinetPage: View {
         self.initialMedicineBoxes = mode == .personal ? initialMedicineBoxes : []
         self.dependencies = dependencies
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
+        self.onBoxCreated = onBoxCreated
         _viewModel = StateObject(
             wrappedValue: FamilyMedicineCabinetViewModel(
                 entryMemberID: entryMemberID,
@@ -176,6 +180,9 @@ struct FamilyMedicineCabinetPage: View {
                 onServerSaved: { box in
                     handleBoxSaved(box)
                     sheetDestination = nil
+                    if case .create = destination {
+                        onBoxCreated?(box)
+                    }
                 }
             )
         }

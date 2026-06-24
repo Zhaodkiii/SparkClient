@@ -110,31 +110,49 @@ struct MedicationExecutionAllDoneCard: View {
 
 struct MedicationExecutionCompletedGroup: View {
     let group: MedicationExecutionTimeGroup
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text(group.timeText)
-                .font(.title3.weight(.bold))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
-                .frame(width: 64, alignment: .leading)
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 14) {
+                Text(group.timeText)
+                    .font(.title3.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                    .frame(width: 64, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(group.doses) { dose in
-                    HStack(spacing: 8) {
-                        Image(systemName: dose.status == "taken" ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(dose.status == "taken" ? Color(uiColor: .systemTeal) : Color(uiColor: .systemGray))
-                        Text(completedDoseLabel(for: dose))
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(group.doses) { dose in
+                        HStack(spacing: 8) {
+                            Image(systemName: dose.status == "taken" ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(dose.status == "taken" ? Color(uiColor: .systemTeal) : Color(uiColor: .systemGray))
+                            Text(completedDoseLabel(for: dose))
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                        }
                     }
                 }
-            }
 
-            Spacer()
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 14)
+        .buttonStyle(.plain)
+        .accessibilityLabel(completedGroupAccessibilityLabel)
+        .accessibilityHint(L10n.text("home.medical.medication_execution.a11y.edit_record"))
+    }
+
+    private var completedGroupAccessibilityLabel: String {
+        let names = group.doses.map { dose in
+            dose.status == "taken" ? dose.displayName : completedDoseLabel(for: dose)
+        }
+        return "\(group.timeText), \(names.joined(separator: ", "))"
     }
 
     private func completedDoseLabel(for dose: MedicationExecutionDose) -> String {

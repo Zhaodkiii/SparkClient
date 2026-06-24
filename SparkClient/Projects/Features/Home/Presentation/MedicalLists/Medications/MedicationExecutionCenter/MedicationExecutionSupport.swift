@@ -34,4 +34,8 @@ enum MedicationExecutionSupport {
     static func allDrugsLogTitle() -> String {
         L10n.text("home.medical.medication_execution.log_title_all_drugs")
     }
+
+    static func medicineBoxLogTitle() -> String {
+        L10n.text("home.medical.medication_execution.log_title_medicine_box")
+    }
 }

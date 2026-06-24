@@ -92,11 +92,10 @@ struct HealthResourceReferenceDestination: View {
                 onPlanSaved: { _ in },
                 onPlanDeleted: { _ in }
             )
-        case .medicationPlan(let plan, let boxes, let records):
+        case .medicationPlan(let plan, let boxes):
             MedicationPlanDetailPage(
                 plan: plan,
                 medicineBoxes: boxes,
-                records: records,
                 memberID: reference.memberID,
                 completeData: cachedCompleteData,
                 memberContextStore: memberContextStore,

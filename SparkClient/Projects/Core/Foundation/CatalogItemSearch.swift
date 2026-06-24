@@ -12,4 +12,8 @@ enum CatalogItemSearch {
             || item.toPinyinForSearch().lowercased().contains(query)
             || item.toPinyinInitialsForSearch().contains(query)
     }
+
+    static func matches(_ item: SparkBilingualItem, searchText: String) -> Bool {
+        matches(item.cn, searchText: searchText) || matches(item.en, searchText: searchText)
+    }
 }
