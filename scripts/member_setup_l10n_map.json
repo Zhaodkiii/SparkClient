@@ -1,0 +1,5068 @@
+{
+  "entries": [
+    {
+      "key": "common.done",
+      "zh": "完成",
+      "en": "Done",
+      "files": [
+        "Lifestyle/MemberLifestyleSetupSheet.swift",
+        "Medical/ExamArchive/Components/MemberMedicalExamArchiveComponents.swift",
+        "MemberModuleSetupView.swift",
+        "Nutrition/MemberNutritionModuleSummaryView.swift"
+      ],
+      "notes": "shared across 4 files"
+    },
+    {
+      "key": "common.next",
+      "zh": "下一步",
+      "en": "Next",
+      "files": [
+        "Medical/MedicalGuideStepShell.swift",
+        "Medical/MemberMedicalSetupSheet.swift",
+        "MemberBirthDateStepView.swift",
+        "MemberNameBirthStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 5 files"
+    },
+    {
+      "key": "common.preview",
+      "zh": "预留",
+      "en": "Placeholder",
+      "files": [
+        "MemberCreationStepperView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "common.retry",
+      "zh": "重试",
+      "en": "Retry",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "common.save",
+      "zh": "保存",
+      "en": "Save",
+      "files": [
+        "Medical/MedicalGuideStepShell.swift",
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "common.skip",
+      "zh": "跳过",
+      "en": "Skip",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "home.members.add.failed",
+      "zh": "成员创建失败",
+      "en": "Failed to add member",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupFlowViewModel.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.add.save",
+      "zh": "创建",
+      "en": "Create",
+      "files": [
+        "MemberRelationshipGenderStepView.swift"
+      ]
+    },
+    {
+      "key": "home.members.add.subtitle",
+      "zh": "先填写成员的基础信息",
+      "en": "Enter the member's basic information first",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberNameBirthStepView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.birth_date.subtitle",
+      "zh": "年龄会影响健康建议与模块推荐",
+      "en": "Age affects health recommendations and module suggestions",
+      "files": [
+        "MemberBirthDateStepView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.field.basic_info",
+      "zh": "基本信息",
+      "en": "Basic information",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "MemberModuleSetupView.swift",
+        "MemberNameBirthStepView.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "home.members.finish",
+      "zh": "去完善",
+      "en": "Complete profile",
+      "files": [
+        "MemberCreationStepperView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.relationship.subtitle",
+      "zh": "确认与当前账号的关系与性别",
+      "en": "Confirm relationship to this account and gender",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberRelationshipGenderStepView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.relationship.title",
+      "zh": "成员关系",
+      "en": "Member relationship",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberRelationshipGenderStepView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.save.loading",
+      "zh": "正在保存",
+      "en": "Saving…",
+      "files": [
+        "MemberCreationStepperView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "home.members.save.success",
+      "zh": "已完成",
+      "en": "Completed",
+      "files": [
+        "MemberCreationStepperView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.daily_health.subtitle",
+      "zh": "运动、睡眠、饮水、照护提醒（预留）",
+      "en": "Exercise, sleep, hydration, care reminders (placeholder)",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.daily_health.title",
+      "zh": "日常健康",
+      "en": "Daily health",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.general.05d1c1",
+      "zh": "选择维护模块",
+      "en": "Choose modules to maintain",
+      "files": [
+        "MemberModuleSetupView.swift"
+      ]
+    },
+    {
+      "key": "member.module.general.7c6a41",
+      "zh": "至少开启一个模块，后续可以分步完善",
+      "en": "Enable at least one module; you can complete details later",
+      "files": [
+        "MemberModuleSetupView.swift"
+      ]
+    },
+    {
+      "key": "member.module.general.ba30b4",
+      "zh": "已完成 %@ / %@",
+      "en": "Completed %@ / %@",
+      "files": [
+        "Components/MemberModuleSummaryComponents.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.module.general.fd8f61",
+      "zh": "正在读取已开通模块",
+      "en": "Loading enabled modules",
+      "files": [
+        "MemberModuleSetupView.swift"
+      ]
+    },
+    {
+      "key": "member.module.lifestyle.b94beb",
+      "zh": "记录运动、睡眠、饮水和照护提醒，帮助形成稳定的日常健康习惯。",
+      "en": "Log exercise, sleep, hydration, and care reminders to build steady daily health habits.",
+      "files": [
+        "Components/MemberModuleToggleRow.swift"
+      ]
+    },
+    {
+      "key": "member.module.medical.load_failed",
+      "zh": "医疗资料加载失败，请稍后重试",
+      "en": "Failed to load medical profile. Please try again later.",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryViewModel.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.medical.subtitle",
+      "zh": "慢病、用药、体检、症状随访",
+      "en": "Chronic conditions, medications, exams, symptom follow-up",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.medical.title",
+      "zh": "医疗模块",
+      "en": "Medical module",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.nutrition.5ff02b",
+      "zh": "制定个性化饮食计划，追踪每日营养摄入与热量，科学管理体重与体脂变化。",
+      "en": "Build a personalized diet plan, track daily nutrition and calories, and manage weight and body fat.",
+      "files": [
+        "Components/MemberModuleToggleRow.swift"
+      ]
+    },
+    {
+      "key": "member.module.nutrition.subtitle",
+      "zh": "饮食目标、营养、体重管理",
+      "en": "Diet goals, nutrition, weight management",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.nutrition.title",
+      "zh": "饮食健康",
+      "en": "Nutrition",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.selection.load_failed",
+      "zh": "模块配置加载失败，请稍后重试",
+      "en": "Failed to load module settings. Please try again later.",
+      "files": [
+        "MemberSetupFlowViewModel.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.selection.loading",
+      "zh": "正在读取已开通模块",
+      "en": "Loading enabled modules",
+      "files": [
+        "MemberModuleSetupView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.selection.skip",
+      "zh": "暂不完善",
+      "en": "Complete later",
+      "files": [
+        "MemberModuleSetupView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.selection.subtitle",
+      "zh": "至少开启一个模块，后续可以分步完善",
+      "en": "Enable at least one module; you can complete details later",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberModuleSetupView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.selection.title",
+      "zh": "选择维护模块",
+      "en": "Choose modules to maintain",
+      "files": [
+        "MemberCreationStepperView.swift",
+        "MemberModuleSetupView.swift"
+      ],
+      "notes": "L10n key missing from Localizable.strings"
+    },
+    {
+      "key": "member.module.status.not_opened",
+      "zh": "未开启",
+      "en": "Not enabled",
+      "files": [
+        "Components/MemberModuleToggleRow.swift"
+      ]
+    },
+    {
+      "key": "member.module.symptom.d0d35c",
+      "zh": "记录慢性病史、用药计划与体检报告，持续追踪症状变化，辅助健康随访与病情管理。",
+      "en": "Track chronic conditions, medications, and exam reports; monitor symptoms for follow-up and care management.",
+      "files": [
+        "Components/MemberModuleToggleRow.swift"
+      ]
+    },
+    {
+      "key": "member.setup.common.completed",
+      "zh": "已完成",
+      "en": "Completed",
+      "files": [
+        "Components/MemberModuleCompletionBadge.swift",
+        "Components/MemberModuleSectionProgress.swift",
+        "Components/MemberModuleToggleRow.swift",
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 5 files"
+    },
+    {
+      "key": "member.setup.common.incomplete",
+      "zh": "未完成",
+      "en": "Incomplete",
+      "files": [
+        "Components/MemberModuleSectionProgress.swift",
+        "Components/MemberModuleToggleRow.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.common.not_filled",
+      "zh": "未填写",
+      "en": "Not filled",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "Nutrition/MemberNutritionModuleSummaryViewModel.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 4 files"
+    },
+    {
+      "key": "member.setup.common.not_started",
+      "zh": "未开始",
+      "en": "Not started",
+      "files": [
+        "Components/MemberModuleSectionProgress.swift"
+      ]
+    },
+    {
+      "key": "member.setup.common.pending",
+      "zh": "待补充",
+      "en": "Pending",
+      "files": [
+        "Medical/MemberMedicalModuleSectionBuilder.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.common.start",
+      "zh": "开始",
+      "en": "Start",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.chronic.9b94a3",
+      "zh": "慢病、用药、体检、症状随访",
+      "en": "Chronic conditions, medications, exams, symptom follow-up",
+      "files": [
+        "MemberSetupDraft.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.197be9",
+      "zh": "待完善",
+      "en": "To be completed",
+      "files": [
+        "Components/MemberModuleCompletionBadge.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.23bd00",
+      "zh": "确认与当前账号的关系与性别",
+      "en": "Confirm relationship to this account and gender",
+      "files": [
+        "MemberRelationshipGenderStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.87f37f",
+      "zh": "年龄会影响健康建议与模块推荐",
+      "en": "Age affects health recommendations and module suggestions",
+      "files": [
+        "MemberBirthDateStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.a237be",
+      "zh": "模块配置加载失败，请稍后重试",
+      "en": "Failed to load module settings. Please try again later.",
+      "files": [
+        "MemberSetupFlowViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.b1aaf9",
+      "zh": "日常健康模块预留",
+      "en": "Daily health module (placeholder)",
+      "files": [
+        "MemberSetupFlowView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.e67e6b",
+      "zh": "先填写成员的基础信息",
+      "en": "Enter the member's basic information first",
+      "files": [
+        "MemberNameBirthStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.general.f58c35",
+      "zh": "已选择 %@ 个模块，已完成 %@ 个",
+      "en": "%@ modules selected, %@ completed",
+      "files": [
+        "Components/MemberSetupSummaryView.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.flow.lifestyle.a86919",
+      "zh": "运动、睡眠、饮水、照护提醒（预留）",
+      "en": "Exercise, sleep, hydration, care reminders (placeholder)",
+      "files": [
+        "MemberSetupDraft.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.member_missing",
+      "zh": "成员信息缺失",
+      "en": "Member information is missing",
+      "files": [
+        "MemberSetupFlowView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.nutrition.588f70",
+      "zh": "饮食目标、营养、体重管理",
+      "en": "Diet goals, nutrition, weight management",
+      "files": [
+        "MemberSetupDraft.swift"
+      ]
+    },
+    {
+      "key": "member.setup.flow.nutrition.8ea7a9",
+      "zh": "饮食健康",
+      "en": "Nutrition",
+      "files": [
+        "MemberSetupDraft.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.lifestyle.general.07c272",
+      "zh": "日常健康",
+      "en": "Daily health",
+      "files": [
+        "Lifestyle/MemberLifestyleSetupSheet.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.lifestyle.general.2838ca",
+      "zh": "日常健康模块第一期预留",
+      "en": "Daily health module phase 1 (placeholder)",
+      "files": [
+        "Lifestyle/MemberLifestyleSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.lifestyle.lifestyle.7bb6d0",
+      "zh": "运动、睡眠、饮水、照护提醒后续再接入。",
+      "en": "Exercise, sleep, hydration, and care reminders will be added later.",
+      "files": [
+        "Lifestyle/MemberLifestyleSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.095087",
+      "zh": "过敏史记录",
+      "en": "Allergy history records",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.199a19",
+      "zh": "过敏记录",
+      "en": "Allergy record",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.2ac7fd",
+      "zh": "过敏史",
+      "en": "Allergy history",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.418865",
+      "zh": "症状、慢病、用药、手术、过敏、家族史",
+      "en": "Symptoms, chronic conditions, medications, surgery, allergies, family history",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.99ee3f",
+      "zh": "手术史 / 过敏史",
+      "en": "Surgery history / Allergy history",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.040b29",
+      "zh": "芒果/热带水果",
+      "en": "Mango / tropical fruits",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.0d565f",
+      "zh": "紫外线/日光",
+      "en": "UV / sunlight",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.0f71a3",
+      "zh": "磺胺类药物",
+      "en": "Sulfonamide drugs",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.11e896",
+      "zh": "动物皮毛/猫狗皮屑",
+      "en": "Animal fur / pet dander",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.17314b",
+      "zh": "药物过敏 (体检及就医高危项)",
+      "en": "Drug allergies (high-risk for exams and care)",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.1cae3b",
+      "zh": "阿司匹林/解热镇痛药",
+      "en": "Aspirin / analgesics",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.2138b7",
+      "zh": "头孢菌素",
+      "en": "Cephalosporins",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.273251",
+      "zh": "金属镍/饰品",
+      "en": "Nickel / jewelry",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.30bf85",
+      "zh": "类别：%@",
+      "en": "Category: %@",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.353649",
+      "zh": "食物过敏",
+      "en": "Food allergies",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.37143a",
+      "zh": "鱼/虾/蟹海鲜",
+      "en": "Fish / shrimp / crab / seafood",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.39db80",
+      "zh": "牛奶/乳制品",
+      "en": "Milk / dairy products",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.3e036f",
+      "zh": "过敏详情补全",
+      "en": "Complete allergy details",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.3ffc39",
+      "zh": "添加过敏记录",
+      "en": "Add allergy record",
+      "files": [
+        "Medical/AllergyRecordFormView.swift",
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.409534",
+      "zh": "染发剂/香精",
+      "en": "Hair dye / fragrance",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.49c3dc",
+      "zh": "油漆",
+      "en": "Paint",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.4e5cec",
+      "zh": "未找到匹配过敏原，可在下方自定义录入",
+      "en": "No matching allergen found; enter a custom one below",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.5845e6",
+      "zh": "小麦/麸质",
+      "en": "Wheat / gluten",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.5e3640",
+      "zh": "确认添加",
+      "en": "Confirm add",
+      "files": [
+        "Medical/AllergyRecordFormView.swift",
+        "Medical/ChronicConditionFormView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.6604e5",
+      "zh": "尘螨",
+      "en": "Dust mites",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.76e483",
+      "zh": "请输入过敏原名称",
+      "en": "Enter allergen name",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.7e26a0",
+      "zh": "发生过的过敏反应",
+      "en": "Reported allergic reactions",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.889a45",
+      "zh": "自定义过敏原录入",
+      "en": "Enter custom allergen",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.8b65bf",
+      "zh": "无过敏史",
+      "en": "No allergy history",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.910211",
+      "zh": "青霉素/阿莫西林",
+      "en": "Penicillin / amoxicillin",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.92231a",
+      "zh": "常见过敏原快速勾选",
+      "en": "Quick select common allergens",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.94d9f0",
+      "zh": "过敏史筛查",
+      "en": "Allergy history screening",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.9c6464",
+      "zh": "接触性、昆虫与其它",
+      "en": "Contact, insect, and other",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.9cd434",
+      "zh": "已录入过敏档案",
+      "en": "Allergy profile recorded",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.9e89b1",
+      "zh": "蚊虫/蜂叮咬",
+      "en": "Mosquito / bee stings",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.a680ca",
+      "zh": "添加其他未列出的过敏原",
+      "en": "Add other unlisted allergens",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.a68a32",
+      "zh": "杨树毛/梧桐絮",
+      "en": "Poplar / plane tree fluff",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.a8c141",
+      "zh": "搜索过敏原名称 (如：头孢、花粉、大豆)",
+      "en": "Search allergen name (e.g. cephalosporin, pollen, soy)",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.ab06ee",
+      "zh": "贴心提示：如果没有相关过敏反应，请直接点击下方保存即可。",
+      "en": "Tip: If you have no relevant allergies, tap Save below.",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.ad8f67",
+      "zh": "碘造影剂 (增强CT必备)",
+      "en": "Iodine contrast (required for enhanced CT)",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.b3a549",
+      "zh": "乳胶制品",
+      "en": "Latex products",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.reactions",
+      "zh": "过敏反应：%@",
+      "en": "Allergic reactions: %@",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.bd2962",
+      "zh": "鸡蛋",
+      "en": "Eggs",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.c30b8d",
+      "zh": "花生/坚果",
+      "en": "Peanuts / nuts",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.c99222",
+      "zh": "环境与吸入性过敏 (季节性)",
+      "en": "Environmental and inhalant allergies (seasonal)",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.d0ade4",
+      "zh": "大豆/豆制品",
+      "en": "Soy / soy products",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.d28cc7",
+      "zh": "补充备注 (例如：确诊时间、首次发作表现、抢救史等)...",
+      "en": "Additional notes (e.g. diagnosis date, first episode, emergency history)…",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.d59546",
+      "zh": "食物",
+      "en": "Food",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.d6a969",
+      "zh": "接触",
+      "en": "Contact",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.de5ce8",
+      "zh": "已选过敏原",
+      "en": "Selected allergens",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.e1454b",
+      "zh": "花粉/柳絮/艾草",
+      "en": "Pollen / willow fluff / mugwort",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.e9a20f",
+      "zh": "有过敏史",
+      "en": "Has allergy history",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.edab63",
+      "zh": "霉菌",
+      "en": "Mold",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.ee3112",
+      "zh": "局部麻醉药",
+      "en": "Local anesthetics",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.f49c6e",
+      "zh": "您过往是否有明确的过敏经历？",
+      "en": "Do you have any confirmed allergy history?",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.f61739",
+      "zh": "严重程度评估",
+      "en": "Severity assessment",
+      "files": [
+        "Medical/AllergyRecordFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.fa405f",
+      "zh": "环境",
+      "en": "Environment",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.fb6739",
+      "zh": "编辑过敏记录",
+      "en": "Edit allergy record",
+      "files": [
+        "Medical/MemberMedicalAllergyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.allergy.fc9b6f",
+      "zh": "药物",
+      "en": "Medication",
+      "files": [
+        "Medical/AllergyRecordFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.bdbbe6",
+      "zh": "无过敏经历",
+      "en": "No allergy history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.c233d4",
+      "zh": "了解您的过敏史，是保障用药安全、规避过敏原以及提供智能就医指导中最核心的防线。",
+      "en": "Allergy history is essential for medication safety, allergen avoidance, and smart care guidance.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.d9c0fb",
+      "zh": "过敏史：%@",
+      "en": "Allergy history: %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.allergy.eba1d3",
+      "zh": "您的核心健康基线已盘点完毕。系统已将您的日常症状、既往史、用药、手术、过敏及家族史进行多维整合，正用于为您量身定制 AI 深度体检方案。",
+      "en": "Your core health baseline is complete. Symptoms, history, medications, surgery, allergies, and family history are integrated for your AI exam plan.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.ed8ba3",
+      "zh": "过敏备注已填",
+      "en": "Allergy notes provided",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.allergy.fbaf84",
+      "zh": "无过敏",
+      "en": "No allergies",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.310f1b",
+      "zh": "确诊疾病",
+      "en": "Diagnosed condition",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.331858",
+      "zh": "已记录疾病",
+      "en": "Conditions recorded",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.4324ae",
+      "zh": "了解您直系亲属的过往病史，有助于我们为您识别潜在的遗传风险，并在体检中为您针对性地推荐慢病与癌症筛查项目。",
+      "en": "Family history helps identify inherited risks and target chronic disease and cancer screening in your exam plan.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.8c6c77",
+      "zh": "既往疾病 / 长期用药",
+      "en": "Past conditions / long-term medications",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.9134ba",
+      "zh": "完善基础档案有助于为你量身定制体检项目推荐，并提供精准的慢病与癌症风险筛查。",
+      "en": "Completing your basic profile helps tailor exam recommendations and chronic disease and cancer risk screening.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.93e2dd",
+      "zh": "为什么要问？\n年龄会影响体检频率、慢病风险和部分癌症筛查建议。",
+      "en": "Why we ask:\nAge affects exam frequency, chronic disease risk, and some cancer screening recommendations.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.a054fd",
+      "zh": "分步维护慢病、用药、生活习惯、体检和症状随访",
+      "en": "Step through chronic conditions, medications, lifestyle, exams, and symptom follow-up",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.allergy.f6be8e",
+      "zh": "过敏性鼻炎",
+      "en": "Allergic rhinitis",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.b40355",
+      "zh": "完成既往疾病",
+      "en": "Finish past conditions",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.bbf28e",
+      "zh": "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
+      "en": "Knowing your diagnosed conditions and chronic history helps us avoid risks and tailor exams and follow-up.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.008b6b",
+      "zh": "搜索疾病名称 (支持拼音/首字母)",
+      "en": "Search condition name (pinyin/initials supported)",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.08b03b",
+      "zh": "甲状腺结节",
+      "en": "Thyroid nodule",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.091763",
+      "zh": "已选疾病",
+      "en": "Selected conditions",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.12d496",
+      "zh": "心脑血管系统",
+      "en": "Cardiovascular system",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.210cee",
+      "zh": "当前控制状态",
+      "en": "Current control status",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.23b51e",
+      "zh": "慢性支气管炎/COPD",
+      "en": "Chronic bronchitis / COPD",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.29e6fc",
+      "zh": "疾病筛查",
+      "en": "Condition screening",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.2fd427",
+      "zh": "心肌缺血",
+      "en": "Myocardial ischemia",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.31f558",
+      "zh": "有既往病史",
+      "en": "Has past medical history",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.336f61",
+      "zh": "脂肪肝",
+      "en": "Fatty liver",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift",
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.34d7a8",
+      "zh": "肾结石/尿路结石",
+      "en": "Kidney / urinary stones",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.36d2cb",
+      "zh": "高血压",
+      "en": "Hypertension",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift",
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.3c0582",
+      "zh": "前列腺增生",
+      "en": "Benign prostatic hyperplasia",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.3d3103",
+      "zh": "无既往病史",
+      "en": "No past medical history",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.3ec025",
+      "zh": "是否曾被确诊过任何慢性疾病或重大疾病？",
+      "en": "Have you ever been diagnosed with a chronic or major disease?",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.3f2609",
+      "zh": "颈椎病/腰椎间盘突出",
+      "en": "Cervical spondylosis / lumbar disc herniation",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.4781c6",
+      "zh": "脑卒中/脑梗死",
+      "en": "Stroke / cerebral infarction",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift",
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.4809ec",
+      "zh": "慢性胃炎/胃溃疡",
+      "en": "Chronic gastritis / gastric ulcer",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.4bd70f",
+      "zh": "消化与呼吸系统",
+      "en": "Digestive and respiratory system",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.4bfb23",
+      "zh": "内分泌与代谢",
+      "en": "Endocrine and metabolic",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.4c71a2",
+      "zh": "拍照 / 上传门诊病历或出院小结",
+      "en": "Photo / upload outpatient record or discharge summary",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.57571c",
+      "zh": "已有既往疾病",
+      "en": "Existing past conditions",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.5774fd",
+      "zh": "常见疾病快速勾选",
+      "en": "Quick select common conditions",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.5a14b8",
+      "zh": "自定义疾病录入",
+      "en": "Enter custom condition",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.6015fa",
+      "zh": "心律失常",
+      "en": "Arrhythmia",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.63cfb6",
+      "zh": "骨质疏松",
+      "en": "Osteoporosis",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.661bd9",
+      "zh": "支气管哮喘",
+      "en": "Bronchial asthma",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.68b55f",
+      "zh": "添加既往疾病",
+      "en": "Add past condition",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.6e06e7",
+      "zh": "高脂血症",
+      "en": "Hyperlipidemia",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.712e06",
+      "zh": "未找到匹配疾病，可在下方自定义录入",
+      "en": "No matching condition found; enter a custom one below",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.79f82a",
+      "zh": "补充备注 (例如：并发症、主治医院等)...",
+      "en": "Additional notes (e.g. complications, treating hospital)…",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.7bd40b",
+      "zh": "添加其他未列出的疾病",
+      "en": "Add other unlisted conditions",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.89a8de",
+      "zh": "既往疾病史",
+      "en": "Past medical history",
+      "files": [
+        "Medical/ChronicConditionFormView.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.8d38f0",
+      "zh": "贴心提示：如果没有相关病史，请直接点击下方保存即可。",
+      "en": "Tip: If you have no relevant history, tap Save below.",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.934d72",
+      "zh": "甲亢/甲减",
+      "en": "Hyperthyroidism / hypothyroidism",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.9b2a21",
+      "zh": "慢性肾脏病",
+      "en": "Chronic kidney disease",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.a79200",
+      "zh": "退行性关节炎",
+      "en": "Osteoarthritis",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.b97337",
+      "zh": "疾病详情补全",
+      "en": "Complete condition details",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.bd9332",
+      "zh": "1型糖尿病",
+      "en": "Type 1 diabetes",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.cd9c7d",
+      "zh": "高尿酸血症/痛风",
+      "en": "Hyperuricemia / gout",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.ce5633",
+      "zh": "冠心病",
+      "en": "Coronary heart disease",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift",
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.d4632a",
+      "zh": "泌尿与骨骼系统",
+      "en": "Urinary and musculoskeletal system",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.d6c422",
+      "zh": "快速录入",
+      "en": "Quick entry",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift",
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.e977ba",
+      "zh": "请输入疾病准确名称",
+      "en": "Enter exact condition name",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.f3edec",
+      "zh": "系统将自动解析医学术语，提取确诊疾病与关键指标",
+      "en": "Medical terms will be parsed automatically to extract diagnoses and key indicators",
+      "files": [
+        "Medical/MemberMedicalChronicConditionStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.f8c70c",
+      "zh": "确诊时间",
+      "en": "Diagnosis date",
+      "files": [
+        "Medical/ChronicConditionFormView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.facbdb",
+      "zh": "2型糖尿病",
+      "en": "Type 2 diabetes",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift",
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.chronic.chronic.ff30e8",
+      "zh": "胆囊结石/胆囊炎",
+      "en": "Gallstones / cholecystitis",
+      "files": [
+        "Medical/ChronicConditionFormSupport.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.chronic.d9e8b1",
+      "zh": "既往疾病",
+      "en": "Past conditions",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.03959d",
+      "zh": "上传电子版 (PDF/图片)",
+      "en": "Upload digital copy (PDF/image)",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.057456",
+      "zh": "系统将启动 AI 智能 OCR 识别，自动提取您的异常指标与结论。",
+      "en": "AI OCR will extract abnormal indicators and conclusions automatically.",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.07b967",
+      "zh": "点击报告卡片进入 AI 异常项确认与体检计划生成。",
+      "en": "Tap a report card to confirm AI-detected abnormalities and generate an exam plan.",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.08c1e0",
+      "zh": "结节",
+      "en": "Nodule",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.11bc16",
+      "zh": "体检机构/医院",
+      "en": "Exam institution / hospital",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.1e05bd",
+      "zh": "暂无历史报告",
+      "en": "No historical reports yet",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.26057e",
+      "zh": "成员信息未加载",
+      "en": "Member information not loaded",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFlowViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.31db90",
+      "zh": "拍照 / 扫描纸质报告",
+      "en": "Photo / scan paper report",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.4835d8",
+      "zh": "体检报告列表",
+      "en": "Exam report list",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.574d1d",
+      "zh": "最近一次体检时间",
+      "en": "Most recent exam date",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.69bb0e",
+      "zh": "偏低",
+      "en": "Low",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.7647e3",
+      "zh": "阳性",
+      "en": "Positive",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.7f866b",
+      "zh": "历史体检信息补全",
+      "en": "Complete historical exam information",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.982715",
+      "zh": "请输入体检中心名称",
+      "en": "Enter exam center name",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.9bbd2c",
+      "zh": "有历史报告",
+      "en": "Has historical reports",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.a74f8a",
+      "zh": "报告摘要 / 核心异常项 (选填)",
+      "en": "Report summary / key abnormalities (optional)",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.bfb8ec",
+      "zh": "增生",
+      "en": "Hyperplasia",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.c195df",
+      "zh": "异常",
+      "en": "Abnormal",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.c94676",
+      "zh": "电子体检报告导入 (推荐)",
+      "en": "Import digital exam report (recommended)",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.cd4de9",
+      "zh": "降低",
+      "en": "Decrease",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.d081c5",
+      "zh": "囊肿",
+      "en": "Cyst",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.f316c5",
+      "zh": "未找到体检报告",
+      "en": "Exam report not found",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFlowViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.f9f515",
+      "zh": "可简要记录您记忆中的异常（如：甲状腺结节、高血脂），或留空等待 AI 扫描解析",
+      "en": "Briefly note remembered abnormalities (e.g. thyroid nodules, high lipids), or leave blank for AI scan parsing",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.fa30fa",
+      "zh": "是否有历史体检报告",
+      "en": "Do you have historical exam reports?",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveFormContent.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.fd77a3",
+      "zh": "偏高",
+      "en": "High",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.exam_archive.general.ff6da5",
+      "zh": "增高",
+      "en": "Elevated",
+      "files": [
+        "Medical/ExamArchive/MemberMedicalExamArchiveAbnormalExtractor.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.2060b0",
+      "zh": "无家族病史",
+      "en": "No family history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.401276",
+      "zh": "家族病史",
+      "en": "Family history",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.family.cf0dc9",
+      "zh": "无家族史",
+      "en": "No family history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.chronic.08fc9a",
+      "zh": "您的直系亲属（父母、祖父母、外祖父母、兄弟姐妹）是否有人患有明确的慢性疾病或肿瘤病史？",
+      "en": "Do any close relatives (parents, grandparents, siblings) have confirmed chronic diseases or cancer?",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.chronic.33de37",
+      "zh": "搜索疾病或肿瘤名称 (如: 肠癌、高血压)",
+      "en": "Search disease or cancer name (e.g. colon cancer, hypertension)",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.chronic.bef6cd",
+      "zh": "疾病细分：%@",
+      "en": "Condition subtype: %@",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.family.family.001697",
+      "zh": "添加家族病史",
+      "en": "Add family history",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.02211b",
+      "zh": "建议关注肠镜或粪便潜血筛查时机。",
+      "en": "Consider timing for colonoscopy or fecal occult blood screening.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.05da69",
+      "zh": "姐",
+      "en": "Older sister",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.0a2cdd",
+      "zh": "胃癌",
+      "en": "Stomach cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.0bf2ce",
+      "zh": "奶",
+      "en": "Mother",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.12f837",
+      "zh": "高血脂",
+      "en": "Hyperlipidemia",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.172583",
+      "zh": "痛风/高尿酸血症",
+      "en": "Gout / hyperuricemia",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.1c4151",
+      "zh": "脑卒中",
+      "en": "Stroke",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.1f04ad",
+      "zh": "肝癌",
+      "en": "Liver cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.21e4bd",
+      "zh": "母",
+      "en": "Mother",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.2e501a",
+      "zh": "亲属确诊时的大致年龄 (选填)",
+      "en": "Approximate age at diagnosis for relative (optional)",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.310895",
+      "zh": "家族病史筛查",
+      "en": "Family history screening",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.32c308",
+      "zh": "外婆",
+      "en": "Maternal grandmother",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.3de623",
+      "zh": "高发肿瘤 / 癌症",
+      "en": "Common cancers",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.3f6d5e",
+      "zh": "肺癌",
+      "en": "Lung cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.42807e",
+      "zh": "直系亲属",
+      "en": "Close relatives",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.4dc6b4",
+      "zh": "贴心提示：如果直系亲属身体都健康或不了解，请直接点击下方保存。",
+      "en": "Tip: If close relatives are healthy or unknown, tap Save below.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.53a3d9",
+      "zh": "编辑家族病史",
+      "en": "Edit family history",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.63b9b5",
+      "zh": "兄",
+      "en": "Older brother",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.6c178f",
+      "zh": "无已知家族病史",
+      "en": "No known family history",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.788e18",
+      "zh": "建议关注肝脏彩超、AFP 及乙肝相关风险。",
+      "en": "Consider liver ultrasound, AFP, and hepatitis-related risk screening.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.7f0ade",
+      "zh": "补充备注 (例如：多位亲属患同类病、发病细节等)...",
+      "en": "Additional notes (e.g. multiple relatives with same disease, onset details)…",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.81dc1f",
+      "zh": "食管癌",
+      "en": "Esophageal cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.833a0d",
+      "zh": "家族病史详情补全",
+      "en": "Complete family history details",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.834ec2",
+      "zh": "阿尔茨海默病/老年痴呆",
+      "en": "Alzheimer's disease / dementia",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.871118",
+      "zh": "建议结合年龄提前开展年度乳腺超声或钼靶筛查。",
+      "en": "Consider annual breast ultrasound or mammography based on age.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.889d28",
+      "zh": "结直肠癌",
+      "en": "Colorectal cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.88f91c",
+      "zh": "选择患病亲属",
+      "en": "Select affected relative",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.a31774",
+      "zh": "乳腺癌",
+      "en": "Breast cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.aa8098",
+      "zh": "妹",
+      "en": "Younger sister",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.ab7228",
+      "zh": "慢性心脑血管",
+      "en": "Chronic cardiovascular disease",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.b41877",
+      "zh": "糖尿病",
+      "en": "Diabetes",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.b9502d",
+      "zh": "代谢与免疫系统",
+      "en": "Metabolic and immune system",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.ba1201",
+      "zh": "外公",
+      "en": "Maternal grandfather",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.risk_hint",
+      "zh": "风险提示：%@",
+      "en": "Risk alert: %@",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.family.family.cc6071",
+      "zh": "爷",
+      "en": "Paternal grandfather",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.d0d16e",
+      "zh": "建议在体检计划中纳入对应风险筛查。",
+      "en": "Include corresponding risk screening in your exam plan.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.d8ca16",
+      "zh": "有家族病史",
+      "en": "Has family history",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.e12eef",
+      "zh": "肠癌",
+      "en": "Colorectal cancer",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.e2efca",
+      "zh": "建议定期监测血压、血脂和心脑血管风险。",
+      "en": "Monitor blood pressure, lipids, and cardiovascular risk regularly.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.e7378b",
+      "zh": "父",
+      "en": "Father",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.f41c8f",
+      "zh": "建议定期监测空腹血糖与糖化血红蛋白。",
+      "en": "Monitor fasting glucose and HbA1c regularly.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.f7dfd2",
+      "zh": "已录入家族病史",
+      "en": "Family history recorded",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.family.family.f7eb5e",
+      "zh": "建议结合吸烟史评估低剂量胸部 CT 筛查。",
+      "en": "Consider low-dose chest CT screening based on smoking history.",
+      "files": [
+        "Medical/MemberMedicalFamilyHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.01a43e",
+      "zh": "性别 / 出生日期",
+      "en": "Sex / date of birth",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.03ccf9",
+      "zh": "有体检史",
+      "en": "Has exam history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.080e74",
+      "zh": "经常失眠",
+      "en": "Often insomnia",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.08fe50",
+      "zh": "严重程度",
+      "en": "Severity",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.09015e",
+      "zh": "程序员 / 开发 / 产品 / 设计",
+      "en": "Developers / product / design",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.091ac2",
+      "zh": "中强度 (呼吸加快)",
+      "en": "Moderate intensity (breathing quickens)",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0a096d",
+      "zh": "稍后在设置中完善",
+      "en": "Complete later in Settings",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0a13df",
+      "zh": "果酒/米酒",
+      "en": "Fruit wine / rice wine",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0a879a",
+      "zh": "1包/日",
+      "en": "1 pack/day",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0afd59",
+      "zh": "多梦/易惊醒",
+      "en": "Many dreams / easy to wake",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0ce08d",
+      "zh": "收缩压",
+      "en": "Systolic blood pressure",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0d391c",
+      "zh": "例：3年、8年...",
+      "en": "e.g. 3 years, 8 years…",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0e8d07",
+      "zh": "单次时长",
+      "en": "Duration per session",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0ebcc5",
+      "zh": "红酒/葡萄酒",
+      "en": "Red wine / wine",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.0efbaf",
+      "zh": "了解您的日常作息与生活方式，有助于更精准地评估心血管与代谢机能，并为您生成每天都能轻松执行的健康改善建议。",
+      "en": "Understanding your daily routine and lifestyle helps assess cardiovascular and metabolic health and provide actionable daily improvements.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.105b8e",
+      "zh": "3-5 次",
+      "en": "3–5 times",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.118bde",
+      "zh": "已治愈",
+      "en": "Resolved",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.121635",
+      "zh": "轻松点：如果平时身体健康，各项都可以直接选择“无”；如果记不太清，也可以随时选择“不清楚”。",
+      "en": "No pressure: if you're generally healthy, choose \"None\"; if unsure, choose \"Not sure\".",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1442e5",
+      "zh": "不足1年",
+      "en": "Less than 1 year",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.15a668",
+      "zh": "%.1f 小时",
+      "en": "%.1f hours",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.15c6e5",
+      "zh": "高强度",
+      "en": "High intensity",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.162946",
+      "zh": "不足6个月",
+      "en": "Less than 6 months",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.16485c",
+      "zh": "谷丙转氨酶",
+      "en": "ALT",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.18ccf9",
+      "zh": "成果",
+      "en": "Outcome",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1a21c0",
+      "zh": "糖化血红蛋白",
+      "en": "HbA1c",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1b1cbe",
+      "zh": "其他偏好酒类 (自定义输入)",
+      "en": "Other preferred drinks (custom)",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1ca012",
+      "zh": "将包含以下记录",
+      "en": "Will include the following records",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1d10f0",
+      "zh": "骑行",
+      "en": "Cycling",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1e90af",
+      "zh": "请选择成员性别",
+      "en": "Select member sex",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1f1f09",
+      "zh": "5年以上",
+      "en": "More than 5 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.1f5e99",
+      "zh": "服药周期",
+      "en": "Medication cycle",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.20d9b7",
+      "zh": "适量/小酌",
+      "en": "Light / social drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.219bc3",
+      "zh": "已戒烟%@",
+      "en": "Quit smoking %@ ago",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.221486",
+      "zh": "游泳",
+      "en": "Swimming",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.256f5e",
+      "zh": "每次%@",
+      "en": "%@ per session",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.25f588",
+      "zh": "确认并生成健康报告",
+      "en": "Confirm and generate health report",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.2619ca",
+      "zh": "职业 / 久坐时间",
+      "en": "Occupation / sedentary time",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.271fda",
+      "zh": "轻度",
+      "en": "Mild",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.28d7dd",
+      "zh": "我们深知医疗隐私的重要性。体检报告与解析结果将被严格隔离保护，仅用于为你生成个人健康计划。",
+      "en": "We take medical privacy seriously. Exam reports and parsed results are isolated and used only for your personal health plan.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.295324",
+      "zh": "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
+      "en": "Record recent discomfort for accurate reference during follow-up or care.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.2a055f",
+      "zh": "广场舞/操课",
+      "en": "Square dance / group fitness",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.2af08c",
+      "zh": "总胆固醇",
+      "en": "Total cholesterol",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.2cf088",
+      "zh": "体检记录、关键指标、下一次体检计划",
+      "en": "Exam records, key indicators, next exam plan",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.2ec7b1",
+      "zh": "日常饮量",
+      "en": "Daily drinking amount",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.2fd6b8",
+      "zh": "服用中",
+      "en": "Currently taking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.309cdb",
+      "zh": "过往体检档案",
+      "en": "Past exam archive",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.30f039",
+      "zh": "随访中",
+      "en": "In follow-up",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.30f0ce",
+      "zh": "职业类别",
+      "en": "Occupation category",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.329bdc",
+      "zh": "少于4小时",
+      "en": "Less than 4 hours",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.3348cd",
+      "zh": "血压舒张压",
+      "en": "Diastolic blood pressure",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.33a3eb",
+      "zh": "6个月-1年",
+      "en": "6 months to 1 year",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.34874c",
+      "zh": "例：2年，可不填",
+      "en": "e.g. 2 years, optional",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.34e637",
+      "zh": "已戒酒%@",
+      "en": "Quit drinking %@ ago",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.35f905",
+      "zh": "请选择最接近你日常工作状态的职业：",
+      "en": "Select the occupation closest to your daily work:",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.36a490",
+      "zh": "男",
+      "en": "Male",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.371d09",
+      "zh": "参考：%@",
+      "en": "Reference: %@",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.379d8b",
+      "zh": "控制良好",
+      "en": "Well controlled",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.37c582",
+      "zh": "教学授课、站立与沟通较多，作息受课程安排影响",
+      "en": "Teaching-heavy, lots of standing and communication, schedule driven by classes",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.39739e",
+      "zh": "无不适",
+      "en": "No discomfort",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.3a771e",
+      "zh": "基础档案",
+      "en": "Basic profile",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift",
+        "Medical/MemberMedicalSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.general.3de9ce",
+      "zh": "1-2 次",
+      "en": "1–2 times",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.3f766e",
+      "zh": "已戒酒",
+      "en": "Quit drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.3fea7c",
+      "zh": "状态",
+      "en": "Status",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.4081ed",
+      "zh": "超过8小时",
+      "en": "More than 8 hours",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.41795e",
+      "zh": "包含以下分步内容",
+      "en": "Includes the following steps",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.4403fc",
+      "zh": "清除",
+      "en": "Clear",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.44668f",
+      "zh": "教师 / 教培人员",
+      "en": "Teachers / education staff",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.45ee89",
+      "zh": "偏好种类",
+      "en": "Preferred types",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.480f74",
+      "zh": "入睡快、睡得香",
+      "en": "Fall asleep quickly, sleep well",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.48711c",
+      "zh": "例：30分钟、1小时...",
+      "en": "e.g. 30 minutes, 1 hour…",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.487496",
+      "zh": "从不",
+      "en": "Never",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.48d928",
+      "zh": "常规办公室工作、久坐明显、节奏相对固定",
+      "en": "Regular office work, clearly sedentary, relatively fixed pace",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.4933bd",
+      "zh": "已为您生成的健康行为档案",
+      "en": "Your generated health behavior profile",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.4e5428",
+      "zh": "2包以上/日",
+      "en": "More than 2 packs/day",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.50b90f",
+      "zh": "日常生活习惯",
+      "en": "Daily lifestyle habits",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.516f79",
+      "zh": "瑜伽/普拉提",
+      "en": "Yoga / Pilates",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.51927b",
+      "zh": "舒张压",
+      "en": "Diastolic blood pressure",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5227cb",
+      "zh": "医疗引导关键指标",
+      "en": "Medical guide key indicators",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.525a84",
+      "zh": "性别、出生日期、身高体重、职业、久坐时间",
+      "en": "Sex, date of birth, height/weight, occupation, sedentary time",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5276e0",
+      "zh": "久坐、体力劳动或重复作业并存，作息与负荷差异大",
+      "en": "Mix of sedentary work, physical labor, or repetitive tasks with varied schedules and workload",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.54297b",
+      "zh": "销售 / 商务 / 自由职业",
+      "en": "Sales / business / self-employed",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5567db",
+      "zh": "体检指标",
+      "en": "Exam indicators",
+      "files": [
+        "Medical/MemberMedicalExamIndicatorStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.572896",
+      "zh": "我们深知医疗隐私的重要性。此数据将被严格隔离保护，绝不用于任何未经授权的商业用途。",
+      "en": "We take medical privacy seriously. This data is strictly isolated and never used for unauthorized commercial purposes.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.582b60",
+      "zh": "已戒酒时长",
+      "en": "Time since quitting drinking",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.587d5f",
+      "zh": "过量/宿醉",
+      "en": "Heavy / hangover",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.58ed75",
+      "zh": "日常习惯",
+      "en": "Daily habits",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5ab853",
+      "zh": "平均每天在椅子或沙发上坐多久？",
+      "en": "On average, how long do you sit in a chair or on a sofa each day?",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5b36a1",
+      "zh": "生活习惯",
+      "en": "Lifestyle habits",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift",
+        "Medical/MemberMedicalSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.general.5bf059",
+      "zh": "生活习惯总览",
+      "en": "Lifestyle overview",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5c6b24",
+      "zh": "白酒",
+      "en": "Baijiu (white spirit)",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5fb46a",
+      "zh": "端到端加密保护",
+      "en": "End-to-end encryption",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5fb488",
+      "zh": "不清楚",
+      "en": "Not sure",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5fbf34",
+      "zh": "啤酒",
+      "en": "Beer",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.5ff37f",
+      "zh": "办公室文职 / 财务 / 法务 / 企业管理",
+      "en": "Office admin / finance / legal / management",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.622e7c",
+      "zh": "医疗资料加载失败",
+      "en": "Failed to load medical profile",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.62aaa9",
+      "zh": "基础档案 -> 病史 -> 生活习惯 -> 体检档案",
+      "en": "Basic profile → Medical history → Lifestyle → Exam archive",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.667f91",
+      "zh": "贴心提示：诚实记录是对自己负责的第一步。即使现在的习惯不够完美也没关系，Look健康会陪你一起逐步改善。",
+      "en": "Tip: Honest records are the first step. Imperfect habits are okay—Look Health will help you improve gradually.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.69f090",
+      "zh": "每周频率",
+      "en": "Weekly frequency",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6a4e85",
+      "zh": "几支/日",
+      "en": "Cigarettes per day",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6a7221",
+      "zh": "低强度",
+      "en": "Low intensity",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6ba4f6",
+      "zh": "1小时以上",
+      "en": "More than 1 hour",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6bf1f3",
+      "zh": "当前状态",
+      "en": "Current status",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6c4c80",
+      "zh": "司机 / 物流 / 快递 / 制造业工人",
+      "en": "Drivers / logistics / delivery / manufacturing workers",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6c6915",
+      "zh": "中强度",
+      "en": "Moderate intensity",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6f0d95",
+      "zh": "医疗级数据加密保密",
+      "en": "Medical-grade encrypted data protection",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.6fa270",
+      "zh": "久坐时间",
+      "en": "Sedentary time",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.708c9d",
+      "zh": "请选择",
+      "en": "Please select",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.70aa25",
+      "zh": "尿酸",
+      "en": "Uric acid",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.722316",
+      "zh": "4-8小时",
+      "en": "4–8 hours",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.7379c9",
+      "zh": "职业",
+      "en": "Occupation",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.751a79",
+      "zh": "30分钟",
+      "en": "30 minutes",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.763be1",
+      "zh": "将包含以下四块内容",
+      "en": "Will include the following four sections",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.765a16",
+      "zh": "低密度脂蛋白",
+      "en": "LDL cholesterol",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.787b56",
+      "zh": "性别",
+      "en": "Sex",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.792bf8",
+      "zh": "职业未填",
+      "en": "Occupation not filled",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.7b385d",
+      "zh": "跑步",
+      "en": "Running",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.7b42f9",
+      "zh": "请选择出生日期",
+      "en": "Select date of birth",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.7c9043",
+      "zh": "无病史",
+      "en": "No medical history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.7ecd39",
+      "zh": "血压收缩压",
+      "en": "Systolic blood pressure",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.800c01",
+      "zh": "例：半包/日、5支/日...",
+      "en": "e.g. half pack/day, 5 cigarettes/day…",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.80bbe5",
+      "zh": "时长处于成年人理想区间",
+      "en": "Within the ideal adult sleep range",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.812562",
+      "zh": "男性 208-428 / 女性 155-357",
+      "en": "Male 208–428 / Female 155–357",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.82df24",
+      "zh": "相关病史",
+      "en": "Related medical history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.83b40e",
+      "zh": "男性 57-97 / 女性 41-73",
+      "en": "Male 57–97 / Female 41–73",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.8508ce",
+      "zh": "不同的职业特征伴随着不同的作息规律与环境暴露风险，这能让体检项目推荐和健康建议更贴近实际。",
+      "en": "Different occupations come with different routines and exposure risks, helping us tailor exam recommendations and health advice.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.870bd3",
+      "zh": "综合提示",
+      "en": "Overall insight",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.8780a0",
+      "zh": "为什么要问？\n性别会影响乳腺、宫颈、前列腺等筛查项目推荐。",
+      "en": "Why we ask:\nSex affects screening recommendations such as breast, cervical, and prostate exams.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.87c835",
+      "zh": "女",
+      "en": "Female",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.87f259",
+      "zh": "医护与健康服务人员",
+      "en": "Healthcare and wellness workers",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.88747d",
+      "zh": "散步/快走",
+      "en": "Walking / brisk walking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.896814",
+      "zh": "已成功戒烟 %@",
+      "en": "Quit smoking %@ ago",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.897f3b",
+      "zh": "确认，去生成定制体检计划",
+      "en": "Confirm and generate custom exam plan",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.8a0b76",
+      "zh": "5次以上",
+      "en": "More than 5 times",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.930ef9",
+      "zh": "3-5年",
+      "en": "3–5 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.937b8a",
+      "zh": "健康档案总览",
+      "en": "Health profile overview",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.94ddce",
+      "zh": "请确认你的基础健康档案信息，随时可以点击各项进行修正。",
+      "en": "Confirm your basic health profile; tap any item to edit.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.97eb95",
+      "zh": "完成记录",
+      "en": "Finish recording",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.988ae1",
+      "zh": "手动补充其他职业名称",
+      "en": "Manually enter another occupation",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.9bceb6",
+      "zh": "1-2年",
+      "en": "1–2 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.9eae9d",
+      "zh": "偏久坐、用脑强度高、常伴随加班与屏幕暴露",
+      "en": "Mostly sedentary, high mental workload, often overtime and screen exposure",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.9f1394",
+      "zh": "频次 / 强度",
+      "en": "Frequency / intensity",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.9f8a5c",
+      "zh": "45分钟",
+      "en": "45 minutes",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.a2d930",
+      "zh": "已暂停",
+      "en": "Paused",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.a33532",
+      "zh": "隐私与安全",
+      "en": "Privacy and security",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.a53e79",
+      "zh": "正在服用",
+      "en": "Currently taking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.a5c25e",
+      "zh": "正在加载医疗资料",
+      "en": "Loading medical profile",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.a85ca7",
+      "zh": "职业：%@",
+      "en": "Occupation: %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.aa84a4",
+      "zh": "中度/尽兴",
+      "en": "Moderate / hearty drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.abbe4b",
+      "zh": "出生日期",
+      "en": "Date of birth",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.adc320",
+      "zh": "力量训练",
+      "en": "Strength training",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b05876",
+      "zh": "已戒烟",
+      "en": "Quit smoking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b112e4",
+      "zh": "体感强度",
+      "en": "Perceived intensity",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b16738",
+      "zh": "已自动带入",
+      "en": "Auto-filled",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b23e88",
+      "zh": "%.1f小时",
+      "en": "%.1f hours",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b3395e",
+      "zh": "已成功戒烟",
+      "en": "Successfully quit smoking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b54b90",
+      "zh": "中度",
+      "en": "Moderate",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b57d26",
+      "zh": "爬山/徒步",
+      "en": "Hiking / trekking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b74a9a",
+      "zh": "还没有填写医疗资料。可以从任意一组开始，也可以直接使用「开始全部流程」一次性完成。",
+      "en": "No medical profile yet. Start with any section, or use \"Start full flow\" to complete everything at once.",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b7a1c8",
+      "zh": "2-5年",
+      "en": "2–5 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b8a232",
+      "zh": "4小时",
+      "en": "4 hours",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.b8f86b",
+      "zh": "经常",
+      "en": "Often",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.ba2a94",
+      "zh": "半包/日",
+      "en": "Half pack/day",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.bb0236",
+      "zh": "烟龄",
+      "en": "Smoking duration",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.beedf1",
+      "zh": "已成功戒酒",
+      "en": "Successfully quit drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.bef433",
+      "zh": "频率 / 剂量",
+      "en": "Frequency / dose",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.c658fd",
+      "zh": "1小时",
+      "en": "1 hour",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.c6f8a9",
+      "zh": "倒班、站立、夜班与职业暴露风险相对更高",
+      "en": "Shift work, standing, night shifts, and higher occupational exposure risk",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.c752d8",
+      "zh": "例：5年、10年...",
+      "en": "e.g. 5 years, 10 years…",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.c9ac80",
+      "zh": "核心表现",
+      "en": "Main presentation",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.caf644",
+      "zh": "洋酒",
+      "en": "Spirits",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.cc4ad2",
+      "zh": "有",
+      "en": "Yes",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.cf5206",
+      "zh": "年龄：%@ 岁",
+      "en": "Age: %@ years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "MemberBirthDateStepView.swift"
+      ],
+      "notes": "shared across 2 files; contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.d04708",
+      "zh": "12小时",
+      "en": "12 hours",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.d1c536",
+      "zh": "例：1年，可不填",
+      "en": "e.g. 1 year, optional",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.d38e5a",
+      "zh": "黄酒",
+      "en": "Huangjiu (yellow rice wine)",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.d61e3c",
+      "zh": "身高 / 体重",
+      "en": "Height / weight",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.d6ac94",
+      "zh": "低强度 (轻微出汗)",
+      "en": "Low intensity (light sweat)",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.d799ce",
+      "zh": "成员关系",
+      "en": "Member relationship",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "MemberRelationshipGenderStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.general.d7c341",
+      "zh": "医疗模块",
+      "en": "Medical module",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "MemberSetupDraft.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.general.d81bb2",
+      "zh": "无",
+      "en": "None",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.da9497",
+      "zh": "已成功戒酒 %@",
+      "en": "Successfully quit drinking %@ ago",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.da9f6b",
+      "zh": "5-10年",
+      "en": "5–10 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.dc6349",
+      "zh": "器械健身",
+      "en": "Gym equipment training",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.df476a",
+      "zh": "开始全部流程",
+      "en": "Start full flow",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e024d0",
+      "zh": "已记录",
+      "en": "Recorded",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e1c9ed",
+      "zh": "隐私与安全承诺",
+      "en": "Privacy and security commitment",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e1de6b",
+      "zh": "治疗中",
+      "en": "Under treatment",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e2e27a",
+      "zh": "严重",
+      "en": "Severe",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e59414",
+      "zh": "1-3年",
+      "en": "1–3 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e64690",
+      "zh": "有记录",
+      "en": "Has records",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e7cd5f",
+      "zh": "肌酐",
+      "en": "Creatinine",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e80ed5",
+      "zh": "“Look健康”会严格保护你的隐私，此数据仅用于为你生成个人健康报告。",
+      "en": "Look Health strictly protects your privacy. This data is used only to generate your personal health report.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.e9afae",
+      "zh": "约%@/日",
+      "en": "About %@/day",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.eac447",
+      "zh": "重度",
+      "en": "Severe",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.ec8b41",
+      "zh": "血压",
+      "en": "Blood pressure",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.ed82bc",
+      "zh": "身体指标",
+      "en": "Body metrics",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.ee1b82",
+      "zh": "平均时长",
+      "en": "Average duration",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.ef74a1",
+      "zh": "已填写 %@ 项关键指标",
+      "en": "%@ key indicators filled",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.general.efb01c",
+      "zh": "已录入的健康医疗档案",
+      "en": "Recorded health and medical profile",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f0409e",
+      "zh": "未选择",
+      "en": "Not selected",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f20f41",
+      "zh": "10年以上",
+      "en": "More than 10 years",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f291bc",
+      "zh": "空腹血糖",
+      "en": "Fasting glucose",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f37bc0",
+      "zh": "请输入职业名称",
+      "en": "Enter occupation name",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f4a414",
+      "zh": "已戒烟时长",
+      "en": "Time since quitting smoking",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f511e9",
+      "zh": "15分钟",
+      "en": "15 minutes",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f5ea0d",
+      "zh": "1-2包/日",
+      "en": "1–2 packs/day",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.general.f98995",
+      "zh": "偶尔",
+      "en": "Occasionally",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.guide.699494",
+      "zh": "基础档案说明",
+      "en": "Basic profile guide",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.guide.feaed5",
+      "zh": "基础档案概览",
+      "en": "Basic profile overview",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.04f647",
+      "zh": "睡眠状况",
+      "en": "Sleep status",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.0562ad",
+      "zh": "睡眠偏长，如持续可咨询医生",
+      "en": "Sleep is long; consult a doctor if this persists",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.065a51",
+      "zh": "您的夜间睡眠通常感觉",
+      "en": "How your nightly sleep usually feels",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.08f432",
+      "zh": "吸烟与饮酒习惯",
+      "en": "Smoking and drinking habits",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.0d3895",
+      "zh": "运动类型",
+      "en": "Exercise type",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.2548c3",
+      "zh": "睡眠时长充足",
+      "en": "Sleep duration is sufficient",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.2a59aa",
+      "zh": "吸烟、饮酒、运动、睡眠",
+      "en": "Smoking, drinking, exercise, sleep",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.316eff",
+      "zh": "偶尔吸烟",
+      "en": "Occasional smoking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.33e5f7",
+      "zh": "运动强度感知",
+      "en": "Perceived exercise intensity",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.3d29ea",
+      "zh": "了解日常饮酒频率能够协助我们科学评估您的肝脏代谢负荷与血压波动趋势，以便在体检推荐中为您规避或加强特定项目的筛查。",
+      "en": "Drinking frequency helps assess liver load and blood pressure trends to adjust recommended screening items.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.42ab82",
+      "zh": "饮酒习惯",
+      "en": "Drinking habits",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.458c59",
+      "zh": "睡眠质量自我感知",
+      "en": "Self-rated sleep quality",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.472143",
+      "zh": "既往饮酒%@",
+      "en": "Previously drank %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.4e2c68",
+      "zh": "其他运动方式 (自定义输入)",
+      "en": "Other exercise types (custom)",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.5402a9",
+      "zh": "高质量的睡眠是神经系统修复、免疫因子生成与血糖稳定的基石。记录您的日常睡眠，有助于我们全面分析您的日常精力与亚健康状态。",
+      "en": "Quality sleep supports nervous system repair, immunity, and stable blood sugar. Recording sleep helps assess energy and subhealth.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.56639d",
+      "zh": "平均单次饮酒量",
+      "en": "Average amount per drinking session",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.5b54cf",
+      "zh": "睡眠偏少，建议关注作息规律",
+      "en": "Sleep is on the low side; consider improving your routine",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.5c2dfa",
+      "zh": "球类运动",
+      "en": "Ball sports",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.5cd8ae",
+      "zh": "合理的运动评估能帮助我们了解您的基础代谢率、肌肉质量与心肺耐力，从而为您提供更具针对性的体重管理与防病运动处方。",
+      "en": "Exercise assessment helps us understand metabolism, muscle mass, and cardio fitness for tailored weight and prevention plans.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.5dd94d",
+      "zh": "饮酒频率",
+      "en": "Drinking frequency",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.640798",
+      "zh": "吸烟状态",
+      "en": "Smoking status",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.648e72",
+      "zh": "经常饮酒",
+      "en": "Frequent drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.64a775",
+      "zh": "睡眠感受",
+      "en": "Sleep quality feel",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.6c9a5c",
+      "zh": "长期连续久坐会直接影响心血管与代谢机能，了解此项数据能为你定制针对性的运动唤醒与健康调理方案。",
+      "en": "Prolonged sitting affects cardiovascular and metabolic health; this helps tailor movement and wellness plans.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.785308",
+      "zh": "接近成人推荐睡眠下限",
+      "en": "Near the lower recommended sleep range for adults",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.7a4d81",
+      "zh": "历史饮酒年限",
+      "en": "Years of drinking",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.80316f",
+      "zh": "经常吸烟",
+      "en": "Frequent smoking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.8070b2",
+      "zh": "从不吸烟",
+      "en": "Never smoked",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.83bdcc",
+      "zh": "饮酒年限",
+      "en": "Years of drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.8464fe",
+      "zh": "平均每日吸烟量",
+      "en": "Average daily cigarettes",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.8baa4c",
+      "zh": "平均睡眠时长与质量",
+      "en": "Average sleep duration and quality",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.90997d",
+      "zh": "运动习惯",
+      "en": "Exercise habits",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.93a796",
+      "zh": "偶尔饮酒",
+      "en": "Occasional drinking",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.964e12",
+      "zh": "常见饮酒类型 (可多选)",
+      "en": "Common drink types (multi-select)",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.9dc1d7",
+      "zh": "当前不运动",
+      "en": "Currently no exercise",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.a6753d",
+      "zh": "历史吸烟%@",
+      "en": "Smoked for %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.a812ed",
+      "zh": "吸烟%@",
+      "en": "Smoking %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.aac751",
+      "zh": "单次平均运动时长",
+      "en": "Average duration per session",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.af6452",
+      "zh": "不饮酒",
+      "en": "No alcohol",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.bc1d4e",
+      "zh": "每周运动频率",
+      "en": "Weekly exercise frequency",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.caed93",
+      "zh": "历史吸烟时长",
+      "en": "Years of smoking",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.cd9cc7",
+      "zh": "历史吸烟 %@",
+      "en": "Smoked for %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.d7ea67",
+      "zh": "习惯运动类型 (可多选)",
+      "en": "Usual exercise types (multi-select)",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.e68284",
+      "zh": "每日平均睡眠时长",
+      "en": "Average daily sleep duration",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.e80fad",
+      "zh": "评估吸烟习惯有助于精准预测心血管健康、肺部代谢及肿瘤潜在风险，从而为您定制更科学的专项体检防御方案。",
+      "en": "Smoking assessment helps predict cardiovascular, lung, and cancer risks for a tailored screening plan.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.f7cbb2",
+      "zh": "每周运动状况",
+      "en": "Weekly exercise status",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.fbeffa",
+      "zh": "日常吸烟量",
+      "en": "Daily smoking amount",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.fbf243",
+      "zh": "不运动",
+      "en": "No exercise",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.lifestyle.fcc2ab",
+      "zh": "饮酒%@",
+      "en": "Drinking %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.lifestyle.fd0447",
+      "zh": "吸烟习惯",
+      "en": "Smoking habits",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.medication.24f228",
+      "zh": "有用药记录",
+      "en": "Has medication records",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.medication.278b22",
+      "zh": "长期用药登记",
+      "en": "Long-term medication registration",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.3d3075",
+      "zh": "用药情况筛查",
+      "en": "Medication screening",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.4775f3",
+      "zh": "医院处方计划组",
+      "en": "Hospital prescription plan group",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.49c1bc",
+      "zh": "无用药",
+      "en": "No medications",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.4c60e8",
+      "zh": "无长期用药",
+      "en": "No long-term medications",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift",
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.medication.4ce152",
+      "zh": "了解您的用药史，有助于我们为您提供更精准的复查项目建议、服药提醒，并辅助报告的上下文解读。",
+      "en": "Knowing your medication history helps us recommend follow-up tests, reminders, and contextual report interpretation.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.5e6c3f",
+      "zh": "目前是否正在长期服用药物，或有近期的处方用药记录？",
+      "en": "Are you currently on long-term medications or recent prescriptions?",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.611a78",
+      "zh": "已设置用药提醒",
+      "en": "Medication reminders set",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.63edd6",
+      "zh": "手动添加",
+      "en": "Add manually",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.7a6f13",
+      "zh": "缺少成员信息，无法加载用药档案。",
+      "en": "Member information missing; cannot load medication profile.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.9be2aa",
+      "zh": "当前用药档案",
+      "en": "Current medication profile",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.b2baf4",
+      "zh": "长期用药",
+      "en": "Long-term medications",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.b5d1e1",
+      "zh": "完成长期用药",
+      "en": "Finish long-term medications",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.b85a51",
+      "zh": "暂无用药记录，可通过下方按钮拍照识别或手动添加。",
+      "en": "No medication records yet. Use the button below to scan or add manually.",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.bbe51b",
+      "zh": "感谢您完成生活习惯评估。这些精细的日常行为数据，将与您的病史、用药深度整合，帮助 AI 为您制定更具针对性的体检防御方案。",
+      "en": "Thank you for completing the lifestyle assessment. These details will integrate with your history and medications for a targeted exam plan.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.d23003",
+      "zh": "贴心提示：如果没有相关用药情况，请直接点击下方保存即可。",
+      "en": "Tip: If you have no relevant medications, tap Save below.",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.e451a1",
+      "zh": "拍照添加计划",
+      "en": "Add plan by photo",
+      "files": [
+        "Medical/MemberMedicalLongTermMedicationStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.medication.none_long_term",
+      "zh": "暂无长期用药",
+      "en": "No long-term medications",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.nutrition.19a854",
+      "zh": "身高",
+      "en": "Height",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Nutrition/MemberNutritionBodyInfoStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "member.setup.medical.nutrition.19ac67",
+      "zh": "低",
+      "en": "Low",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "Nutrition/MemberNutritionGoalStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "member.setup.medical.nutrition.2e16ac",
+      "zh": "暂不填写",
+      "en": "Skip for now",
+      "files": [
+        "Medical/MemberMedicalModuleSummaryView.swift",
+        "Nutrition/MemberNutritionModuleSummaryView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.nutrition.4296d7",
+      "zh": "高",
+      "en": "High",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "Nutrition/MemberNutritionGoalStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "member.setup.medical.nutrition.440093",
+      "zh": "体重",
+      "en": "Weight",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Nutrition/MemberNutritionBodyInfoStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "member.setup.medical.nutrition.519b61",
+      "zh": "已填写内容",
+      "en": "Filled content",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.nutrition.5892f0",
+      "zh": "出行沟通频繁，作息弹性大，饮食与休息不稳定",
+      "en": "Frequent travel and communication, flexible schedule, irregular diet and rest",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.nutrition.5c4542",
+      "zh": "如果你之前在“饮食健康”中填写过相关数据，系统将为你自动带入。",
+      "en": "If you previously entered related data in Nutrition, it will be auto-filled here.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.nutrition.aed1df",
+      "zh": "中",
+      "en": "Medium",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "Nutrition/MemberNutritionGoalStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 3 files"
+    },
+    {
+      "key": "member.setup.medical.surgery.16ac72",
+      "zh": "手术情况筛查",
+      "en": "Surgery screening",
+      "files": [
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.44426e",
+      "zh": "手术史",
+      "en": "Surgery history",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.57175c",
+      "zh": "手术记录",
+      "en": "Surgery record",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.57cd26",
+      "zh": "手术与外伤史",
+      "en": "Surgery and trauma history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.6725eb",
+      "zh": "有手术史",
+      "en": "Has surgery history",
+      "files": [
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.9725c9",
+      "zh": "已有手术记录",
+      "en": "Existing surgery records",
+      "files": [
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.9afee9",
+      "zh": "添加手术记录",
+      "en": "Add surgery record",
+      "files": [
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.a8444b",
+      "zh": "了解您的过往手术史，有助于我们为您排查禁忌项目，并制定更安全的体检方案与长期随访计划。",
+      "en": "Knowing your surgical history helps us avoid contraindicated tests and plan safer exams and long-term follow-up.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.adde24",
+      "zh": "您过往是否曾接受过任何手术治疗（包含微创手术）？",
+      "en": "Have you ever had any surgery, including minimally invasive procedures?",
+      "files": [
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.bd9481",
+      "zh": "无手术史",
+      "en": "No surgical history",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.surgery.bf1209",
+      "zh": "如果没有相关手术经历，请直接点击下方保存即可。",
+      "en": "If you have no relevant surgeries, tap Save below.",
+      "files": [
+        "Medical/MemberMedicalSurgeryHistoryStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.surgery.fa9fa1",
+      "zh": "手术史：%@",
+      "en": "Surgery history: %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.symptom.05e47f",
+      "zh": "症状观察与随访",
+      "en": "Symptom observation and follow-up",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.0a337b",
+      "zh": "贴心提示：保持健康是最好的状态，直接点击下方保存即可。",
+      "en": "Tip: Staying healthy is the best outcome—tap Save below.",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.0dea09",
+      "zh": "健康病史与症状记录汇总",
+      "en": "Medical history and symptom summary",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.3d9476",
+      "zh": "无任何不适",
+      "en": "No discomfort",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift",
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.symptom.53280d",
+      "zh": "已记录症状",
+      "en": "Symptoms recorded",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.6b2ca4",
+      "zh": "了解你的既往病史、症状观察与随访情况，有助于我们更早识别潜在医疗风险，并定制更精准的复查周期与健康跟踪计划。",
+      "en": "Understanding your medical history, symptoms, and follow-up helps us identify risks earlier and tailor review cycles and health tracking.",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.6cb2f5",
+      "zh": "症状筛查",
+      "en": "Symptom screening",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.7ecee4",
+      "zh": "健康病史与症状记录说明",
+      "en": "Medical history and symptom guide",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.84d7df",
+      "zh": "健康病史与症状记录",
+      "en": "Medical history and symptom records",
+      "files": [
+        "Medical/MemberMedicalSetupEntryMode.swift",
+        "Medical/MemberMedicalSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.medical.symptom.8edac7",
+      "zh": "近期是否有任何身体不适？",
+      "en": "Any recent physical discomfort?",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.a221b8",
+      "zh": "症状持续：%@",
+      "en": "Symptom duration: %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.medical.symptom.a851ac",
+      "zh": "拍照 / 上传病历凭证",
+      "en": "Photo / upload medical record",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.ae3b5e",
+      "zh": "已有症状",
+      "en": "Existing symptoms",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.b4ff8d",
+      "zh": "系统将自动解析病历，提取症状与复查随访建议",
+      "en": "Medical records will be parsed automatically for symptoms and follow-up suggestions",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.c1b96d",
+      "zh": "症状观察 / 随访",
+      "en": "Symptom observation / follow-up",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.c8a51c",
+      "zh": "添加症状记录",
+      "en": "Add symptom record",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.dc316b",
+      "zh": "有症状",
+      "en": "Has symptoms",
+      "files": [
+        "Medical/MemberMedicalSymptomFollowUpStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.e3da8f",
+      "zh": "保存症状记录",
+      "en": "Save symptom record",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.efefcb",
+      "zh": "当前症状",
+      "en": "Current symptoms",
+      "files": [
+        "Medical/MemberMedicalSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.medical.symptom.severity",
+      "zh": "症状严重度：%@",
+      "en": "Symptom severity: %@",
+      "files": [
+        "Medical/MemberMedicalSetupViewModel.swift"
+      ],
+      "notes": "contains format placeholders"
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.02d981",
+      "zh": "提示",
+      "en": "Tip",
+      "files": [
+        "Nutrition/MemberNutritionEnergyStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.0489d1",
+      "zh": "去完善",
+      "en": "Complete profile",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.0b5baa",
+      "zh": "正在加载饮食资料",
+      "en": "Loading nutrition profile",
+      "files": [
+        "Nutrition/MemberNutritionModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.0e8892",
+      "zh": "还没有填写饮食资料。可以从基础信息开始逐步完善。",
+      "en": "No nutrition profile yet. Start with basic information.",
+      "files": [
+        "Nutrition/MemberNutritionModuleSummaryView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.14a64e",
+      "zh": "蛋白质",
+      "en": "Protein",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.2a1890",
+      "zh": "设置成员身高，用于估算基础代谢和每日能量目标",
+      "en": "Set member height to estimate basal metabolism and daily energy target",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.2faa26",
+      "zh": "目标设置",
+      "en": "Target settings",
+      "files": [
+        "Nutrition/MemberNutritionGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.32ad06",
+      "zh": "分步维护饮食目标、营养和体重管理",
+      "en": "Step through diet goals, nutrition, and weight management",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.3bad9a",
+      "zh": "营养目标",
+      "en": "Nutrition goals",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.3cc4b7",
+      "zh": "午餐",
+      "en": "Lunch",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.3d7c0e",
+      "zh": "脂肪",
+      "en": "Fat",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.50b876",
+      "zh": "重新计算",
+      "en": "Recalculate",
+      "files": [
+        "Nutrition/MemberNutritionEnergyStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.53e4b7",
+      "zh": "控糖",
+      "en": "Low sugar",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.5a8094",
+      "zh": "目标模式",
+      "en": "Goal mode",
+      "files": [
+        "Nutrition/MemberNutritionGoalStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.5f3406",
+      "zh": "摄入与消耗",
+      "en": "Intake and expenditure",
+      "files": [
+        "Nutrition/MemberNutritionEnergyStepView.swift",
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ],
+      "notes": "shared across 2 files"
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.6337f4",
+      "zh": "设置三大营养素比例与餐次分配",
+      "en": "Set macronutrient ratios and meal distribution",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.6ea1fe",
+      "zh": "基础信息",
+      "en": "Basic information",
+      "files": [
+        "Nutrition/MemberNutritionSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.84499d",
+      "zh": "建议摄入",
+      "en": "Recommended intake",
+      "files": [
+        "Nutrition/MemberNutritionEnergyStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.84e2cf",
+      "zh": "选择目标模式、活跃水平和每周体重变化范围",
+      "en": "Select goal mode, activity level, and weekly weight change range",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.85eda8",
+      "zh": "根据基础信息计算建议摄入，支持手动调整到合理范围",
+      "en": "Suggested intake is calculated from basics; you can adjust to a reasonable range",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.96a6ae",
+      "zh": "晚餐",
+      "en": "Dinner",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.990f7f",
+      "zh": "每周目标",
+      "en": "Weekly target",
+      "files": [
+        "Nutrition/MemberNutritionGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.9b2401",
+      "zh": "减重",
+      "en": "Lose weight",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.a0ccc4",
+      "zh": "打造肌肉",
+      "en": "Build muscle",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.be62bd",
+      "zh": "增重",
+      "en": "Gain weight",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.c28e60",
+      "zh": "控盐",
+      "en": "Low salt",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.c7c48e",
+      "zh": "卡路里目标",
+      "en": "Calorie target",
+      "files": [
+        "Nutrition/MemberNutritionEnergyStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.cb0420",
+      "zh": "小吃",
+      "en": "Snacks",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.d57f7d",
+      "zh": "碳水化合物",
+      "en": "Carbohydrates",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.d861ae",
+      "zh": "保持体重",
+      "en": "Maintain weight",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.de0619",
+      "zh": "控脂",
+      "en": "Low fat",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.de81a2",
+      "zh": "设置当前体重，用于计算摄入建议和体重目标",
+      "en": "Set current weight for intake suggestions and weight goals",
+      "files": [
+        "Nutrition/MemberNutritionSetupSheet.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.edb336",
+      "zh": "早餐",
+      "en": "Breakfast",
+      "files": [
+        "Nutrition/MemberNutritionMacroGoalStepView.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.f1d4ff",
+      "zh": "自定义",
+      "en": "Custom",
+      "files": [
+        "Nutrition/MemberNutritionSetupViewModel.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.f6db8a",
+      "zh": "身高、体重、目标模式、营养目标",
+      "en": "Height, weight, goal mode, nutrition targets",
+      "files": [
+        "Nutrition/MemberNutritionSetupEntryMode.swift"
+      ]
+    },
+    {
+      "key": "member.setup.nutrition.nutrition.ff6dc2",
+      "zh": "基础代谢",
+      "en": "Basal metabolism",
+      "files": [
+        "Nutrition/MemberNutritionEnergyStepView.swift"
+      ]
+    }
+  ]
+}

@@ -62,7 +62,7 @@ struct MedicationReminderTimesSection: View {
 
     private var countSubtitle: String {
         let n = slots.count
-        return String(format: L10n.text("medication_plan.form.reminder_times.count_per_day", fallback: "%d times/day"), locale: .current, n)
+        return L10n.format("medication_plan.form.reminder_times.count_per_day", fallback: "%d times/day", n)
     }
 
     var body: some View {
@@ -126,7 +126,7 @@ struct MedicationReminderTimesSection: View {
                                     .strokeBorder(Color(uiColor: .separator), lineWidth: 1)
                             )
                         }
-                        .accessibilityLabel(String(format: L10n.text("medication_plan.form.a11y.medication_time_format", fallback: "Medication time %@"), locale: .current, time))
+                        .accessibilityLabel(L10n.format("medication_plan.form.a11y.medication_time_format", fallback: "Medication time %@", time))
                     }
                 }
                 .padding(.vertical, 2)

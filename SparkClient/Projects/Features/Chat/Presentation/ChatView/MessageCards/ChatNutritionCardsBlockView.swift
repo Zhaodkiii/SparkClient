@@ -192,10 +192,10 @@ struct ChatNutritionCardsBlockView: View {
         let timeText = timeFormatter.string(from: date)
 
         if calendar.isDateInToday(date) {
-            return String(format: L10n.text("chat.nutrition_card.time.today"), timeText)
+            return L10n.format("chat.nutrition_card.time.today", timeText)
         }
         if calendar.isDateInYesterday(date) {
-            return String(format: L10n.text("chat.nutrition_card.time.yesterday"), timeText)
+            return L10n.format("chat.nutrition_card.time.yesterday", timeText)
         }
 
         let dateFormatter = DateFormatter()

@@ -12,7 +12,7 @@ struct MemberNutritionEnergyStepView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            MemberSetupSection(title: "摄入与消耗") {
+            MemberSetupSection(title: L10n.text("member.setup.nutrition.nutrition.5f3406")) {
                 VStack(alignment: .leading, spacing: 14) {
                     metricRow("建议摄入", value: formatEnergy(suggestedCalories))
                     metricRow("基础代谢", value: formatEnergy(bmrKcal))
@@ -23,7 +23,7 @@ struct MemberNutritionEnergyStepView: View {
                     Divider()
 
                     HStack {
-                        Text("卡路里目标")
+                        Text(L10n.text("member.setup.nutrition.nutrition.c7c48e"))
                         Spacer()
                         TextField("kcal", value: $targetCalories, format: .number)
                             .keyboardType(.decimalPad)
@@ -31,7 +31,7 @@ struct MemberNutritionEnergyStepView: View {
                             .frame(width: 120)
                     }
 
-                    Button("重新计算") {
+                    Button(L10n.text("member.setup.nutrition.nutrition.50b876")) {
                         onRecalculate()
                     }
                     .font(.subheadline.weight(.semibold))
@@ -40,7 +40,7 @@ struct MemberNutritionEnergyStepView: View {
             }
 
             if warnings.isEmpty == false {
-                MemberSetupSection(title: "提示") {
+                MemberSetupSection(title: L10n.text("member.setup.nutrition.nutrition.02d981")) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(warnings, id: \.self) { warning in
                             Text(warning)

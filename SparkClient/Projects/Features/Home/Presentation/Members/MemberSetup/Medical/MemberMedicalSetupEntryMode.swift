@@ -30,20 +30,18 @@ enum MemberMedicalSectionCode: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .basicProfile: return "基础档案"
-        case .healthHistory: return "健康病史与症状记录"
-        case .lifestyle: return "生活习惯"
-        case .examArchive: return "过往体检档案"
-        }
+        case .basicProfile: return L10n.text("member.setup.medical.general.3a771e");
+        case .healthHistory: return L10n.text("member.setup.medical.symptom.84d7df");
+        case .lifestyle: return L10n.text("member.setup.medical.general.5b36a1");
+        case .examArchive: return L10n.text("member.setup.medical.general.309cdb");        }
     }
 
     var subtitle: String {
         switch self {
-        case .basicProfile: return "性别、出生日期、身高体重、职业、久坐时间"
-        case .healthHistory: return "症状、慢病、用药、手术、过敏、家族史"
-        case .lifestyle: return "吸烟、饮酒、运动、睡眠"
-        case .examArchive: return "体检记录、关键指标、下一次体检计划"
-        }
+        case .basicProfile: return L10n.text("member.setup.medical.general.525a84");
+        case .healthHistory: return L10n.text("member.setup.medical.allergy.418865");
+        case .lifestyle: return L10n.text("member.setup.medical.lifestyle.2a59aa");
+        case .examArchive: return L10n.text("member.setup.medical.general.2cf088");        }
     }
 
     var iconName: String {

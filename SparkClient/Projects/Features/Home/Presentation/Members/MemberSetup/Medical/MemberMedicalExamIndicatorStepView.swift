@@ -6,7 +6,7 @@ struct MemberMedicalExamIndicatorStepView: View {
     private let options = ["血糖", "血脂", "尿酸", "肝肾功能"]
 
     var body: some View {
-        MemberSetupSection(title: "体检指标") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.general.5567db")) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(options, id: \.self) { option in
                     Toggle(option, isOn: Binding(

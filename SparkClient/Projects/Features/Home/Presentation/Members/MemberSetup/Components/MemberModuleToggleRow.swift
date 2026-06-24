@@ -22,25 +22,25 @@ struct MemberModuleToggleRow: View {
 
         var statusText: String {
             switch self {
-            case .notOpened: return "未开启"
-            case .selectedIncomplete: return "未完成"
-            case .completed: return "已完成"
-            }
+            case .notOpened: return L10n.text("member.module.status.not_opened");
+        case .selectedIncomplete: return L10n.text("member.setup.common.incomplete");
+        case .completed: return L10n.text("home.members.save.success");            }
         }
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 18) {
-            Button(action: onOpen) {
+        
+        Button(action: onOpen) {
+            HStack(alignment: .center, spacing: 18) {
                 HStack(alignment: .center, spacing: 18) {
                     moduleIcon
-
+                    
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
                             Text(module.title)
                                 .font(.title3.weight(.bold))
                                 .foregroundStyle(.primary)
-
+                            
                             Text(selectionStatus.statusText)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(statusColor)
@@ -51,11 +51,11 @@ struct MemberModuleToggleRow: View {
                                         .fill(statusBackgroundColor)
                                 )
                         }
-
+                        
                         Text(module.subtitle)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Color(uiColor: .systemBlue))
-
+                        
                         Text(description)
                             .font(.subheadline)
                             .lineSpacing(4)
@@ -65,27 +65,82 @@ struct MemberModuleToggleRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button(action: onOpen) {
+                
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(selectionStatus == .completed ? Color(uiColor: .systemGreen) : Color(uiColor: .systemGray2))
                     .frame(width: 36, height: 44)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 28)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(selectionStatus == .selectedIncomplete ? Color(uiColor: .systemGreen) : .clear, lineWidth: 1.5)
+            }
+            .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 8)
         }
-        .padding(.horizontal, 34)
-        .padding(.vertical, 28)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(selectionStatus == .completed ? Color(uiColor: .systemGreen) : .clear, lineWidth: 1.5)
-        }
-        .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 8)
+        .buttonStyle(.plain)
+
+//        
+//        HStack(alignment: .center, spacing: 18) {
+//            Button(action: onOpen) {
+//                HStack(alignment: .center, spacing: 18) {
+//                    moduleIcon
+//
+//                    VStack(alignment: .leading, spacing: 8) {
+//                        HStack(spacing: 8) {
+//                            Text(module.title)
+//                                .font(.title3.weight(.bold))
+//                                .foregroundStyle(.primary)
+//
+//                            Text(selectionStatus.statusText)
+//                                .font(.caption.weight(.semibold))
+//                                .foregroundStyle(statusColor)
+//                                .padding(.horizontal, 10)
+//                                .padding(.vertical, 4)
+//                                .background(
+//                                    Capsule(style: .continuous)
+//                                        .fill(statusBackgroundColor)
+//                                )
+//                        }
+//
+//                        Text(module.subtitle)
+//                            .font(.subheadline.weight(.semibold))
+//                            .foregroundStyle(Color(uiColor: .systemBlue))
+//
+//                        Text(description)
+//                            .font(.subheadline)
+//                            .lineSpacing(4)
+//                            .foregroundStyle(.secondary)
+//                            .fixedSize(horizontal: false, vertical: true)
+//                    }
+//                }
+//                .frame(maxWidth: .infinity, alignment: .leading)
+//                .contentShape(Rectangle())
+//            }
+//            .buttonStyle(.plain)
+//
+//            Button(action: onOpen) {
+//                Image(systemName: "chevron.right")
+//                    .font(.title3.weight(.semibold))
+//                    .foregroundStyle(selectionStatus == .completed ? Color(uiColor: .systemGreen) : Color(uiColor: .systemGray2))
+//                    .frame(width: 36, height: 44)
+//            }
+//            .buttonStyle(.plain)
+//        }
+//        .padding(.horizontal, 34)
+//        .padding(.vertical, 28)
+//        .frame(maxWidth: .infinity, alignment: .leading)
+//        .background(Color(uiColor: .secondarySystemGroupedBackground))
+//        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+//        .overlay {
+//            RoundedRectangle(cornerRadius: 24, style: .continuous)
+//                .stroke(selectionStatus == .completed ? Color(uiColor: .systemGreen) : .clear, lineWidth: 1.5)
+//        }
+//        .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 8)
     }
 
     private var statusColor: Color {
@@ -141,11 +196,10 @@ struct MemberModuleToggleRow: View {
     private var description: String {
         switch module {
         case .medical:
-            return "记录慢性病史、用药计划与体检报告，持续追踪症状变化，辅助健康随访与病情管理。"
+            return L10n.text("member.module.symptom.d0d35c");
         case .nutrition:
-            return "制定个性化饮食计划，追踪每日营养摄入与热量，科学管理体重与体脂变化。"
+            return L10n.text("member.module.nutrition.5ff02b");
         case .dailyHealth:
-            return "记录运动、睡眠、饮水和照护提醒，帮助形成稳定的日常健康习惯。"
-        }
+            return L10n.text("member.module.lifestyle.b94beb");        }
     }
 }

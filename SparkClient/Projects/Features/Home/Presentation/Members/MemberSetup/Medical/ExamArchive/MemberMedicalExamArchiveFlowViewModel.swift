@@ -74,7 +74,7 @@ final class MemberMedicalExamArchiveFlowViewModel: ObservableObject {
 
     func selectPath(_ path: MemberMedicalExamArchivePath) {
         selectedPath = path
-        logger.info("体检档案流程：选择\(path == .hasHistoryReport ? "有历史报告" : "暂无历史报告") memberID=\(memberID)")
+        logger.info("体检档案流程：选择\(path == .hasHistoryReport ? L10n.text("member.setup.medical.exam_archive.general.9bbd2c") : "暂无历史报告") memberID=\(memberID)")
     }
 
     func refreshReports(_ reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) {

@@ -11,11 +11,10 @@ enum MedicalGuideSmokingStatus: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .never: return "从不"
-        case .quit: return "已戒烟"
-        case .sometimes: return "偶尔"
-        case .often: return "经常"
-        }
+        case .never: return L10n.text("member.setup.medical.general.487496");
+        case .quit: return L10n.text("member.setup.medical.general.b05876");
+        case .sometimes: return L10n.text("member.setup.medical.general.f98995");
+        case .often: return L10n.text("member.setup.medical.general.b8f86b");        }
     }
 }
 
@@ -29,11 +28,10 @@ enum MedicalGuideDrinkingStatus: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .none: return "不饮酒"
-        case .quit: return "已戒酒"
-        case .occasionally: return "偶尔"
-        case .often: return "经常"
-        }
+        case .none: return L10n.text("member.setup.medical.lifestyle.af6452");
+        case .quit: return L10n.text("member.setup.medical.general.3f766e");
+        case .occasionally: return L10n.text("member.setup.medical.general.f98995");
+        case .often: return L10n.text("member.setup.medical.general.b8f86b");        }
     }
 }
 
@@ -47,11 +45,10 @@ enum MedicalGuideExerciseFrequency: String, CaseIterable, Identifiable, Sendable
 
     var title: String {
         switch self {
-        case .none: return "不运动"
-        case .oneToTwo: return "1-2 次"
-        case .threeToFive: return "3-5 次"
-        case .moreThanFive: return "5次以上"
-        }
+        case .none: return L10n.text("member.setup.medical.lifestyle.fbf243");
+        case .oneToTwo: return L10n.text("member.setup.medical.general.3de9ce");
+        case .threeToFive: return L10n.text("member.setup.medical.general.105b8e");
+        case .moreThanFive: return L10n.text("member.setup.medical.general.8a0b76");        }
     }
 }
 
@@ -64,18 +61,16 @@ enum MedicalGuideExerciseIntensity: String, CaseIterable, Identifiable, Sendable
 
     var title: String {
         switch self {
-        case .low: return "低强度"
-        case .medium: return "中强度"
-        case .high: return "高强度"
-        }
+        case .low: return L10n.text("member.setup.medical.general.6a7221");
+        case .medium: return L10n.text("member.setup.medical.general.6c6915");
+        case .high: return L10n.text("member.setup.medical.general.15c6e5");        }
     }
 
     var lifestyleTitle: String {
         switch self {
-        case .low: return "低强度 (轻微出汗)"
-        case .medium: return "中强度 (呼吸加快)"
-        case .high: return "高强度"
-        }
+        case .low: return L10n.text("member.setup.medical.general.d6ac94");
+        case .medium: return L10n.text("member.setup.medical.general.091ac2");
+        case .high: return L10n.text("member.setup.medical.general.15c6e5");        }
     }
 }
 
@@ -88,10 +83,9 @@ enum MedicalGuideDrinkingAmountLevel: String, CaseIterable, Identifiable, Sendab
 
     var title: String {
         switch self {
-        case .light: return "适量/小酌"
-        case .medium: return "中度/尽兴"
-        case .heavy: return "过量/宿醉"
-        }
+        case .light: return L10n.text("member.setup.medical.general.20d9b7");
+        case .medium: return L10n.text("member.setup.medical.general.aa84a4");
+        case .heavy: return L10n.text("member.setup.medical.general.587d5f");        }
     }
 }
 
@@ -104,10 +98,9 @@ enum MedicalGuideSleepQuality: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .good: return "入睡快、睡得香"
-        case .fair: return "多梦/易惊醒"
-        case .poor: return "经常失眠"
-        }
+        case .good: return L10n.text("member.setup.medical.general.480f74");
+        case .fair: return L10n.text("member.setup.medical.general.0afd59");
+        case .poor: return L10n.text("member.setup.medical.general.080e74");        }
     }
 }
 
@@ -120,18 +113,16 @@ enum MedicalGuideSedentaryLevel: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .low: return "低"
-        case .medium: return "中"
-        case .high: return "高"
-        }
+        case .low: return L10n.text("member.setup.medical.nutrition.19ac67");
+        case .medium: return L10n.text("member.setup.medical.nutrition.aed1df");
+        case .high: return L10n.text("member.setup.medical.nutrition.4296d7");        }
     }
 
     var subtitle: String {
         switch self {
-        case .low: return "少于4小时"
-        case .medium: return "4-8小时"
-        case .high: return "超过8小时"
-        }
+        case .low: return L10n.text("member.setup.medical.general.329bdc");
+        case .medium: return L10n.text("member.setup.medical.general.722316");
+        case .high: return L10n.text("member.setup.medical.general.4081ed");        }
     }
 }
 
@@ -145,10 +136,9 @@ enum MedicalGuideDisclosureStatus: String, CaseIterable, Identifiable, Sendable 
 
     var title: String {
         switch self {
-        case .none: return "无"
-        case .have: return "有"
-        case .unknown: return "不清楚"
-        }
+        case .none: return L10n.text("member.setup.medical.general.d81bb2");
+        case .have: return L10n.text("member.setup.medical.general.cc4ad2");
+        case .unknown: return L10n.text("member.setup.medical.general.5fb488");        }
     }
 }
 
@@ -220,15 +210,15 @@ struct MedicalGuideKeyIndicatorDraft: Identifiable, Equatable, Sendable {
     }
 
     static let defaultRows: [MedicalGuideKeyIndicatorDraft] = [
-        .init(title: "血压收缩压", unit: "mmHg", referenceRange: "90-140", sortOrder: 0),
-        .init(title: "血压舒张压", unit: "mmHg", referenceRange: "60-90", sortOrder: 1),
-        .init(title: "空腹血糖", unit: "mmol/L", referenceRange: "3.9-6.1", sortOrder: 2),
-        .init(title: "糖化血红蛋白", unit: "%", referenceRange: "4.0-6.0", sortOrder: 3),
-        .init(title: "总胆固醇", unit: "mmol/L", referenceRange: "<5.2", sortOrder: 4),
-        .init(title: "低密度脂蛋白", unit: "mmol/L", referenceRange: "<3.4", sortOrder: 5),
-        .init(title: "尿酸", unit: "μmol/L", referenceRange: "男性 208-428 / 女性 155-357", sortOrder: 6),
-        .init(title: "谷丙转氨酶", unit: "U/L", referenceRange: "7-40", sortOrder: 7),
-        .init(title: "肌酐", unit: "μmol/L", referenceRange: "男性 57-97 / 女性 41-73", sortOrder: 8)
+        .init(title: L10n.text("member.setup.medical.general.7ecd39"), unit: "mmHg", referenceRange: "90-140", sortOrder: 0),
+        .init(title: L10n.text("member.setup.medical.general.3348cd"), unit: "mmHg", referenceRange: "60-90", sortOrder: 1),
+        .init(title: L10n.text("member.setup.medical.general.f291bc"), unit: "mmol/L", referenceRange: "3.9-6.1", sortOrder: 2),
+        .init(title: L10n.text("member.setup.medical.general.1a21c0"), unit: "%", referenceRange: "4.0-6.0", sortOrder: 3),
+        .init(title: L10n.text("member.setup.medical.general.2af08c"), unit: "mmol/L", referenceRange: "<5.2", sortOrder: 4),
+        .init(title: L10n.text("member.setup.medical.general.765a16"), unit: "mmol/L", referenceRange: "<3.4", sortOrder: 5),
+        .init(title: L10n.text("member.setup.medical.general.70aa25"), unit: "μmol/L", referenceRange: "男性 208-428 / 女性 155-357", sortOrder: 6),
+        .init(title: L10n.text("member.setup.medical.general.16485c"), unit: "U/L", referenceRange: "7-40", sortOrder: 7),
+        .init(title: L10n.text("member.setup.medical.general.e7cd5f"), unit: "μmol/L", referenceRange: "男性 57-97 / 女性 41-73", sortOrder: 8)
     ]
 }
 
@@ -573,25 +563,24 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     var historySummary: String {
         var pieces: [String] = []
-        if chronicConditionsSummary != "未填写" { pieces.append(chronicConditionsSummary) }
-        if longTermMedicationSummary != "未填写" { pieces.append(longTermMedicationSummary) }
-        if surgerySummary != "未填写" { pieces.append(surgerySummary) }
-        if allergySummary != "未填写" { pieces.append(allergySummary) }
-        if symptomSummary != "未填写" { pieces.append(symptomSummary) }
-        return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
+        if chronicConditionsSummary != L10n.text("member.setup.common.not_filled") { pieces.append(chronicConditionsSummary) }
+        if longTermMedicationSummary != L10n.text("member.setup.common.not_filled") { pieces.append(longTermMedicationSummary) }
+        if surgerySummary != L10n.text("member.setup.common.not_filled") { pieces.append(surgerySummary) }
+        if allergySummary != L10n.text("member.setup.common.not_filled") { pieces.append(allergySummary) }
+        if symptomSummary != L10n.text("member.setup.common.not_filled") { pieces.append(symptomSummary) }
+        return pieces.isEmpty ? L10n.text("member.setup.common.not_filled") : pieces.joined(separator: " · ")
     }
 
     var chronicConditionsSummary: String {
         switch chronicConditionStatus {
         case .none:
-            return "无既往病史"
+            return L10n.text("member.setup.medical.chronic.chronic.3d3103");
         case .have:
             if chronicConditions.isEmpty {
-                return "有既往病史"
-            }
+                return L10n.text("member.setup.medical.chronic.chronic.31f558");            }
             return chronicConditions.map(chronicConditionDisplayName).joined(separator: "、")
         case .unknown:
-            return chronicConditions.isEmpty ? "未填写" : chronicConditions.map(chronicConditionDisplayName).joined(separator: "、")
+            return chronicConditions.isEmpty ? L10n.text("member.setup.common.not_filled") : chronicConditions.map(chronicConditionDisplayName).joined(separator: "、")
         }
     }
 
@@ -610,7 +599,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     var longTermMedicationSummary: String {
         switch longTermMedicationStatus {
         case .none:
-            return "无长期用药"
+            return L10n.text("member.setup.medical.medication.4c60e8");
         case .have:
             let focusSummary = MedicationFormSupport.profileSummary(from: medicationFocus)
             if focusSummary != "暂无长期用药" {
@@ -620,10 +609,9 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             if activePlans.isEmpty == false {
                 return activePlans.map { MedicationFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
             }
-            return "有用药记录"
+            return L10n.text("member.setup.medical.medication.24f228");
         case .unknown:
-            return "未填写"
-        }
+            return L10n.text("member.setup.common.not_filled");        }
     }
 
     func refreshMemberMedicationPlansIfNeeded(force: Bool = false) async {
@@ -985,11 +973,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         }
     }
 
-    static let presetDrinkingTypes = ["白酒", "啤酒", "红酒/葡萄酒", "黄酒", "洋酒", "果酒/米酒"]
-    static let presetExerciseTypes = [
-        "散步/快走", "跑步", "骑行", "游泳", "器械健身", "力量训练",
-        "瑜伽/普拉提", "球类运动", "爬山/徒步", "广场舞/操课"
-    ]
+    static let presetDrinkingTypes = MemberSetupPresetOptionsCatalog.presetDrinkingTypeValues
+    static let presetExerciseTypes = MemberSetupPresetOptionsCatalog.presetExerciseTypeValues
 
     private func profileAllergyDetailsPayload() -> [String: SparkMedicalSyncAPI.RemoteAllergyDetail] {
         allergyDetails.mapValues { detail in
@@ -1059,7 +1044,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     var surgerySummary: String {
         switch surgeryStatus {
         case .none:
-            return "无手术史"
+            return L10n.text("member.setup.medical.surgery.bd9481");
         case .have:
             let focusSummary = SurgeryFormSupport.profileSummary(from: surgeryFocus)
             if focusSummary != "无手术史" {
@@ -1068,46 +1053,46 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             if memberSurgeries.isEmpty == false {
                 return memberSurgeries.map { SurgeryFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
             }
-            return "未填写"
+            return L10n.text("member.setup.common.not_filled");
         case .unknown:
             if surgeryFocus.isEmpty == false {
                 return SurgeryFormSupport.profileSummary(from: surgeryFocus)
             }
-            return memberSurgeries.isEmpty ? "未填写" : memberSurgeries.map { SurgeryFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
+            return memberSurgeries.isEmpty ? L10n.text("member.setup.common.not_filled") : memberSurgeries.map { SurgeryFormSupport.summaryLine(for: $0) }.joined(separator: " / ")
         }
     }
 
     var allergySummary: String {
         switch allergyStatus {
         case .none:
-            return "无过敏经历"
+            return L10n.text("member.setup.medical.allergy.bdbbe6");
         case .have:
             if allergies.isEmpty == false {
                 return allergies
                     .map { AllergyRecordFormSupport.summaryLine(name: $0, detail: allergyDetails[$0]) }
                     .joined(separator: "、")
             }
-            return allergyHistory.isEmpty ? "未填写" : "过敏备注已填"
+            return allergyHistory.isEmpty ? L10n.text("member.setup.common.not_filled") : "过敏备注已填"
         case .unknown:
             if allergies.isEmpty == false {
                 return allergies
                     .map { AllergyRecordFormSupport.summaryLine(name: $0, detail: allergyDetails[$0]) }
                     .joined(separator: "、")
             }
-            return allergyHistory.isEmpty ? "未填写" : "过敏备注已填"
+            return allergyHistory.isEmpty ? L10n.text("member.setup.common.not_filled") : "过敏备注已填"
         }
     }
 
     var familyHistorySummary: String {
         switch familyHistoryStatus {
         case .none:
-            return "无家族病史"
+            return L10n.text("member.setup.medical.family.2060b0");
         case .have:
-            return familyHistory.isEmpty ? "未填写" : familyHistory
+            return familyHistory.isEmpty ? L10n.text("member.setup.common.not_filled") : familyHistory
                 .map { FamilyHistoryRecordFormSupport.summaryLine(name: $0, detail: familyHistoryDetails[$0]) }
                 .joined(separator: "、")
         case .unknown:
-            return familyHistory.isEmpty ? "未填写" : familyHistory
+            return familyHistory.isEmpty ? L10n.text("member.setup.common.not_filled") : familyHistory
                 .map { FamilyHistoryRecordFormSupport.summaryLine(name: $0, detail: familyHistoryDetails[$0]) }
                 .joined(separator: "、")
         }
@@ -1179,24 +1164,24 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if sleepHours > 0 {
             pieces.append(String(format: "%.1f小时", sleepHours))
         }
-        return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
+        return pieces.isEmpty ? L10n.text("member.setup.common.not_filled") : pieces.joined(separator: " · ")
     }
 
     /// 生活习惯拆成单题页后，每一页都需要独立显示“已填写 / 未填写”。
     var smokingSummary: String {
-        hasPrefilledSmokingStatus ? (smokingText ?? smokingStatus.title) : "未填写"
+        hasPrefilledSmokingStatus ? (smokingText ?? smokingStatus.title) : L10n.text("member.setup.common.not_filled")
     }
 
     var drinkingSummary: String {
-        hasPrefilledDrinkingStatus ? (drinkingText ?? drinkingStatus.title) : "未填写"
+        hasPrefilledDrinkingStatus ? (drinkingText ?? drinkingStatus.title) : L10n.text("member.setup.common.not_filled")
     }
 
     var exerciseSummary: String {
-        hasPrefilledExerciseFrequency ? (exerciseText ?? exerciseFrequency.title) : "未填写"
+        hasPrefilledExerciseFrequency ? (exerciseText ?? exerciseFrequency.title) : L10n.text("member.setup.common.not_filled")
     }
 
     var sleepSummary: String {
-        guard hasPrefilledSleepHours else { return "未填写" }
+        guard hasPrefilledSleepHours else { return L10n.text("member.setup.common.not_filled");}
         var pieces = [String(format: "%.1f小时", sleepHours)]
         if hasPrefilledSleepQuality, let sleepQuality {
             pieces.append(sleepQuality.title)
@@ -1205,7 +1190,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     var examArchiveSummary: String {
-        guard hasExamArchive else { return "未填写" }
+        guard hasExamArchive else { return L10n.text("member.setup.common.not_filled");}
         var pieces: [String] = []
         if hasExamHistory { pieces.append("有体检史") }
         if memberHealthExamReports.isEmpty == false {
@@ -1227,8 +1212,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     var symptomSummary: String {
         if symptomFollowUpStatus == .none {
-            return "无任何不适"
-        }
+            return L10n.text("member.setup.medical.symptom.3d9476");        }
         let lines = memberSymptoms.map { SymptomFormSupport.summaryLine(for: $0) }.filter { $0.isEmpty == false }
         if lines.isEmpty == false {
             return lines.joined(separator: " · ")
@@ -1246,7 +1230,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if symptomFollowUpNotes.isEmpty == false {
             pieces.append(symptomFollowUpNotes)
         }
-        return pieces.isEmpty ? "未填写" : pieces.joined(separator: " · ")
+        return pieces.isEmpty ? L10n.text("member.setup.common.not_filled") : pieces.joined(separator: " · ")
     }
     /// 按需刷新成员症状列表与随访关注配置
     /// - Parameter force: 是否强制刷新，true 无视加载状态直接拉取；false 正在加载时直接跳过
@@ -1341,16 +1325,16 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     private func symptomSeverityLabel(_ value: String) -> String {
         switch value {
-        case "low": return "轻度"
-        case "medium": return "中度"
-        case "high": return "重度"
+        case "low": return L10n.text("member.setup.medical.general.271fda");
+        case "medium": return L10n.text("member.setup.medical.general.b54b90");
+        case "high": return L10n.text("member.setup.medical.general.eac447");
         default: return value
         }
     }
 
     var keyIndicatorSummary: String {
         let count = keyIndicatorRows.filter { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count
-        return count == 0 ? "未填写" : "已填写 \(count) 项关键指标"
+        return count == 0 ? L10n.text("member.setup.common.not_filled") : "已填写 \(count) 项关键指标"
     }
 
     var examPlanSummary: String {
@@ -1516,7 +1500,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             scenario: "medical_guide",
             recordedAt: Date(),
             qaSessionId: guideSessionID,
-            title: "医疗引导关键指标",
+            title: L10n.text("member.setup.medical.general.5227cb"),
             summary: keyIndicatorSummary,
             extra: keyIndicatorExtraPayload,
             details: details
@@ -1681,8 +1665,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         var merged = MedicalGuideKeyIndicatorDraft.defaultRows
         let focusSet = Set(examFocus)
         if focusSet.contains("血压") {
-            merged.insert(.init(title: "收缩压", unit: "mmHg", referenceRange: "90-140", sortOrder: 0), at: 0)
-            merged.insert(.init(title: "舒张压", unit: "mmHg", referenceRange: "60-90", sortOrder: 1), at: 1)
+            merged.insert(.init(title: L10n.text("member.setup.medical.general.0ce08d"), unit: "mmHg", referenceRange: "90-140", sortOrder: 0), at: 0)
+            merged.insert(.init(title: L10n.text("member.setup.medical.general.51927b"), unit: "mmHg", referenceRange: "60-90", sortOrder: 1), at: 1)
         }
         return merged
     }
@@ -1927,7 +1911,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                 hasExplicitDrinkingProfile ? drinkingText : nil,
                 hasExplicitExerciseProfile ? exerciseText : nil,
                 hasExplicitSleepHours ? sleepNotesText : nil,
-                surgerySummary == "未填写" || surgerySummary == "无手术史" ? nil : "手术史：\(surgerySummary)",
+                surgerySummary == L10n.text("member.setup.common.not_filled") || surgerySummary == "无手术史" ? nil : "手术史：\(surgerySummary)",
                 allergyHistory.isEmpty ? nil : "过敏史：\(allergyHistory)",
                 extraNotes.isEmpty ? nil : extraNotes,
                 symptomFollowUpNotes.isEmpty ? nil : symptomFollowUpNotes,
@@ -2037,7 +2021,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             let history = smokingHistoryDuration.isEmpty ? nil : "历史吸烟\(smokingHistoryDuration)"
             let quit = smokingQuitDuration.isEmpty ? nil : "已戒烟\(smokingQuitDuration)"
             let parts = [history, quit].compactMap { $0 }
-            return parts.isEmpty ? "已戒烟" : parts.joined(separator: " · ")
+            return parts.isEmpty ? L10n.text("member.setup.medical.general.b05876") : parts.joined(separator: " · ")
         case .sometimes:
             let count = smokingCount.isEmpty ? nil : "约\(smokingCount)/日"
             let history = smokingHistoryDuration.isEmpty ? nil : "吸烟\(smokingHistoryDuration)"
@@ -2056,7 +2040,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             let history = drinkingHistoryDuration.isEmpty ? nil : "既往饮酒\(drinkingHistoryDuration)"
             let quit = drinkingQuitDuration.isEmpty ? nil : "已戒酒\(drinkingQuitDuration)"
             let parts = [history, quit].compactMap { $0 }
-            return parts.isEmpty ? "已戒酒" : parts.joined(separator: " · ")
+            return parts.isEmpty ? L10n.text("member.setup.medical.general.3f766e") : parts.joined(separator: " · ")
         case .occasionally:
             let amount = drinkingAmountLevel?.title
             let types = mergedDrinkingTypeSummary
@@ -2091,7 +2075,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private var exerciseText: String? {
         switch exerciseFrequency {
         case .none:
-            return "不运动"
+            return L10n.text("member.setup.medical.lifestyle.fbf243");
         case .oneToTwo, .threeToFive, .moreThanFive:
             let duration = exerciseDurationMinutes.isEmpty ? nil : "每次\(exerciseDurationMinutes)"
             let types = mergedExerciseTypeSummary
@@ -2116,19 +2100,18 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     var genderDisplayTitle: String {
         switch gender {
-        case "male": return "男"
-        case "female": return "女"
-        default: return "未选择"
-        }
+        case "male": return L10n.text("member.setup.medical.general.36a490");
+        case "female": return L10n.text("member.setup.medical.general.87c835");
+        default: return L10n.text("member.setup.medical.general.f0409e");        }
     }
 
     var basicInfoSummaryText: String {
         [
             genderDisplayTitle,
-            birthDate.map { Self.dateFormatter.string(from: $0) } ?? "未填写",
+            birthDate.map { Self.dateFormatter.string(from: $0) } ?? L10n.text("member.setup.common.not_filled"),
             heightCm > 0 ? String(format: "%.0f cm", heightCm) : "身高未填",
             weightKg > 0 ? String(format: "%.1f kg", weightKg) : "体重未填",
-            occupation.isEmpty ? "职业未填" : occupation,
+            occupation.isEmpty ? L10n.text("member.setup.medical.general.792bf8") : occupation,
             sedentaryLevel?.title ?? "久坐未填"
         ].joined(separator: " · ")
     }
@@ -2197,7 +2180,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return MedicalGuideOverviewCardModel(
             id: "smoking",
             icon: "smoke.fill",
-            title: "吸烟习惯",
+            title: L10n.text("member.setup.medical.lifestyle.fd0447"),
             statusText: status.text,
             statusStyle: status.style,
             bullets: bullets
@@ -2245,7 +2228,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return MedicalGuideOverviewCardModel(
             id: "drinking",
             icon: "wineglass.fill",
-            title: "饮酒习惯",
+            title: L10n.text("member.setup.medical.lifestyle.42ab82"),
             statusText: status.text,
             statusStyle: status.style,
             bullets: bullets
@@ -2279,7 +2262,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return MedicalGuideOverviewCardModel(
             id: "exercise",
             icon: "figure.run",
-            title: "运动习惯",
+            title: L10n.text("member.setup.medical.lifestyle.90997d"),
             statusText: status.text,
             statusStyle: status.style,
             bullets: bullets
@@ -2305,7 +2288,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         return MedicalGuideOverviewCardModel(
             id: "sleep",
             icon: "moon.stars.fill",
-            title: "睡眠状况",
+            title: L10n.text("member.setup.medical.lifestyle.04f647"),
             statusText: status.text,
             statusStyle: status.style,
             bullets: bullets
@@ -2318,7 +2301,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "symptom",
                 icon: "waveform.path.ecg",
-                title: "症状观察与随访",
+                title: L10n.text("member.setup.medical.symptom.05e47f"),
                 statusText: "无不适",
                 statusStyle: .success,
                 bullets: [.init(id: "status", prefix: "核心表现", content: "无任何不适")]
@@ -2327,10 +2310,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "symptom",
                 icon: "waveform.path.ecg",
-                title: "症状观察与随访",
-                statusText: "待补充",
+                title: L10n.text("member.setup.medical.symptom.05e47f"),
+                statusText: L10n.text("member.setup.common.pending"),
                 statusStyle: .neutral,
-                bullets: [.init(id: "status", prefix: "核心表现", content: "未填写")]
+                bullets: [.init(id: "status", prefix: "核心表现", content: L10n.text("member.setup.common.not_filled"))]
             )
         case .have:
             if let symptom = memberSymptoms.first {
@@ -2341,11 +2324,11 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                 return MedicalGuideOverviewCardModel(
                     id: "symptom",
                     icon: "waveform.path.ecg",
-                    title: "症状观察与随访",
+                    title: L10n.text("member.setup.medical.symptom.05e47f"),
                     statusText: severityBadge?.text ?? "随访中",
                     statusStyle: severityBadge?.style ?? .warning,
                     bullets: [
-                        .init(id: "core", prefix: "核心表现", content: core.isEmpty ? "已记录症状" : core),
+                        .init(id: "core", prefix: "核心表现", content: core.isEmpty ? L10n.text("member.setup.medical.symptom.53280d") : core),
                         .init(
                             id: "severity",
                             prefix: "严重程度",
@@ -2365,7 +2348,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "symptom",
                 icon: "waveform.path.ecg",
-                title: "症状观察与随访",
+                title: L10n.text("member.setup.medical.symptom.05e47f"),
                 statusText: severityBadge?.text ?? "随访中",
                 statusStyle: severityBadge?.style ?? .warning,
                 bullets: [
@@ -2373,7 +2356,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
                     .init(
                         id: "severity",
                         prefix: "严重程度",
-                        content: symptomFollowUpNotes.isEmpty ? "已记录" : symptomFollowUpNotes,
+                        content: symptomFollowUpNotes.isEmpty ? L10n.text("member.setup.medical.general.e024d0") : symptomFollowUpNotes,
                         badge: severityBadge
                     )
                 ]
@@ -2387,7 +2370,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "chronic",
                 icon: "cross.case.fill",
-                title: "既往疾病史",
+                title: L10n.text("member.setup.medical.chronic.chronic.89a8de"),
                 statusText: "无病史",
                 statusStyle: .success,
                 bullets: [.init(id: "status", prefix: "确诊疾病", content: "无既往病史")]
@@ -2396,10 +2379,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "chronic",
                 icon: "cross.case.fill",
-                title: "既往疾病史",
-                statusText: "待补充",
+                title: L10n.text("member.setup.medical.chronic.chronic.89a8de"),
+                statusText: L10n.text("member.setup.common.pending"),
                 statusStyle: .neutral,
-                bullets: [.init(id: "status", prefix: "确诊疾病", content: "未填写")]
+                bullets: [.init(id: "status", prefix: "确诊疾病", content: L10n.text("member.setup.common.not_filled"))]
             )
         case .have:
             let disease = chronicConditions.first ?? "已记录疾病"
@@ -2408,7 +2391,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "chronic",
                 icon: "cross.case.fill",
-                title: "既往疾病史",
+                title: L10n.text("member.setup.medical.chronic.chronic.89a8de"),
                 statusText: controlBadge?.text ?? "已记录",
                 statusStyle: controlBadge?.style ?? .warning,
                 bullets: [
@@ -2430,7 +2413,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "medication",
                 icon: "pills.fill",
-                title: "长期用药登记",
+                title: L10n.text("member.setup.medical.medication.278b22"),
                 statusText: "无用药",
                 statusStyle: .success,
                 bullets: [.init(id: "status", prefix: "正在服用", content: "无长期用药")]
@@ -2439,10 +2422,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "medication",
                 icon: "pills.fill",
-                title: "长期用药登记",
-                statusText: "待补充",
+                title: L10n.text("member.setup.medical.medication.278b22"),
+                statusText: L10n.text("member.setup.common.pending"),
                 statusStyle: .neutral,
-                bullets: [.init(id: "status", prefix: "正在服用", content: "未填写")]
+                bullets: [.init(id: "status", prefix: "正在服用", content: L10n.text("member.setup.common.not_filled"))]
             )
         case .have:
             let plan = memberMedicationPlans.first(where: { $0.status == "active" || $0.status == "paused" })
@@ -2452,8 +2435,8 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "medication",
                 icon: "pills.fill",
-                title: "长期用药登记",
-                statusText: plan?.status == "paused" ? "已暂停" : "服用中",
+                title: L10n.text("member.setup.medical.medication.278b22"),
+                statusText: plan?.status == "paused" ? L10n.text("member.setup.medical.general.a2d930") : "服用中",
                 statusStyle: plan?.status == "paused" ? .warning : .accent,
                 bullets: [
                     .init(id: "drug", prefix: "正在服用", content: drugName),
@@ -2469,7 +2452,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "surgery",
                 icon: "scissors",
-                title: "手术与外伤史",
+                title: L10n.text("member.setup.medical.surgery.57cd26"),
                 statusText: "无手术史",
                 statusStyle: .success,
                 bullets: [
@@ -2485,10 +2468,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "surgery",
                 icon: "scissors",
-                title: "手术与外伤史",
-                statusText: "待补充",
+                title: L10n.text("member.setup.medical.surgery.57cd26"),
+                statusText: L10n.text("member.setup.common.pending"),
                 statusStyle: .neutral,
-                bullets: [.init(id: "status", prefix: "手术记录", content: "未填写")]
+                bullets: [.init(id: "status", prefix: "手术记录", content: L10n.text("member.setup.common.not_filled"))]
             )
         case .have:
             let summary = memberSurgeries.first.map { SurgeryFormSupport.summaryLine(for: $0) }
@@ -2497,7 +2480,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "surgery",
                 icon: "scissors",
-                title: "手术与外伤史",
+                title: L10n.text("member.setup.medical.surgery.57cd26"),
                 statusText: "有记录",
                 statusStyle: .warning,
                 bullets: [.init(id: "record", prefix: "手术记录", content: summary)]
@@ -2511,7 +2494,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "allergy",
                 icon: "shield.lefthalf.filled",
-                title: "过敏史记录",
+                title: L10n.text("member.setup.medical.allergy.095087"),
                 statusText: "无过敏",
                 statusStyle: .success,
                 bullets: [.init(id: "status", prefix: "过敏记录", content: "无过敏经历")]
@@ -2520,10 +2503,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "allergy",
                 icon: "shield.lefthalf.filled",
-                title: "过敏史记录",
-                statusText: "待补充",
+                title: L10n.text("member.setup.medical.allergy.095087"),
+                statusText: L10n.text("member.setup.common.pending"),
                 statusStyle: .neutral,
-                bullets: [.init(id: "status", prefix: "过敏记录", content: "未填写")]
+                bullets: [.init(id: "status", prefix: "过敏记录", content: L10n.text("member.setup.common.not_filled"))]
             )
         case .have:
             let bullets = allergies.map { allergen in
@@ -2543,7 +2526,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "allergy",
                 icon: "shield.lefthalf.filled",
-                title: "过敏史记录",
+                title: L10n.text("member.setup.medical.allergy.095087"),
                 statusText: "有记录",
                 statusStyle: .warning,
                 bullets: bullets.isEmpty ? [.init(id: "status", prefix: "过敏记录", content: "已记录")] : bullets
@@ -2557,7 +2540,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "family",
                 icon: "person.3.fill",
-                title: "家族病史",
+                title: L10n.text("member.setup.medical.family.401276"),
                 statusText: "无家族史",
                 statusStyle: .success,
                 bullets: [.init(id: "status", prefix: "相关病史", content: "无家族病史")]
@@ -2566,10 +2549,10 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "family",
                 icon: "person.3.fill",
-                title: "家族病史",
-                statusText: "待补充",
+                title: L10n.text("member.setup.medical.family.401276"),
+                statusText: L10n.text("member.setup.common.pending"),
                 statusStyle: .neutral,
-                bullets: [.init(id: "status", prefix: "相关病史", content: "未填写")]
+                bullets: [.init(id: "status", prefix: "相关病史", content: L10n.text("member.setup.common.not_filled"))]
             )
         case .have:
             let bullets = familyHistory.map { disease in
@@ -2585,7 +2568,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
             return MedicalGuideOverviewCardModel(
                 id: "family",
                 icon: "person.3.fill",
-                title: "家族病史",
+                title: L10n.text("member.setup.medical.family.401276"),
                 statusText: "有记录",
                 statusStyle: .warning,
                 bullets: bullets.isEmpty ? [.init(id: "status", prefix: "相关病史", content: "已记录")] : bullets
@@ -2611,16 +2594,15 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     private var sleepInsightText: String {
         switch sleepHours {
         case ..<6:
-            return "睡眠偏少，建议关注作息规律"
+            return L10n.text("member.setup.medical.lifestyle.5b54cf");
         case 6..<7:
-            return "接近成人推荐睡眠下限"
+            return L10n.text("member.setup.medical.lifestyle.785308");
         case 7..<8.5:
-            return "时长处于成年人理想区间"
+            return L10n.text("member.setup.medical.general.80bbe5");
         case 8.5..<10:
-            return "睡眠时长充足"
+            return L10n.text("member.setup.medical.lifestyle.2548c3");
         default:
-            return "睡眠偏长，如持续可咨询医生"
-        }
+            return L10n.text("member.setup.medical.lifestyle.0562ad");        }
     }
 
     private func medicationScheduleText(
@@ -2646,8 +2628,7 @@ final class MemberMedicalSetupViewModel: ObservableObject {
         if let focus, focus.summary.isEmpty == false {
             return focus.summary
         }
-        return "已设置用药提醒"
-    }
+        return L10n.text("member.setup.medical.medication.611a78");    }
 
     private func inlineBadge(forSymptomSeverity value: String) -> MedicalGuideOverviewInlineBadge? {
         switch value {

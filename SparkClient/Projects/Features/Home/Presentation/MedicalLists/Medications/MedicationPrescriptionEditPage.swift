@@ -228,7 +228,7 @@ struct MedicationPrescriptionEditPage: View {
                 Label(L10n.text("home.medical.prescription.linked_medications"), systemImage: "pills.fill")
                     .font(.headline)
                 Spacer()
-                Text(String(format: L10n.text("home.medical.prescription.linked_count"), plans.count))
+                Text(L10n.format("home.medical.prescription.linked_count", plans.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }

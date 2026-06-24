@@ -153,11 +153,11 @@ struct MemberMedicalSetupSheetView: View {
     private var introStep: some View {
         MedicalGuideIntroPageView(
             kind: .basicProfile,
-            title: "基础档案",
-            subtitle: "完善基础档案有助于为你量身定制体检项目推荐，并提供精准的慢病与癌症风险筛查。",
+            title: L10n.text("member.setup.medical.general.3a771e"),
+            subtitle: L10n.text("member.setup.medical.chronic.9134ba"),
             isLoading: viewModel.isSaving,
-            primaryTitle: "开始",
-            secondaryTitle: "稍后在设置中完善",
+            primaryTitle: L10n.text("member.setup.common.start"),
+            secondaryTitle: L10n.text("member.setup.medical.general.0a096d"),
             onStart: { nextVisible(after: .intro) },
             onLater: {
                 if isSectionMode {
@@ -169,21 +169,21 @@ struct MemberMedicalSetupSheetView: View {
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("包含以下分步内容")
+                Text(L10n.text("member.setup.medical.general.41795e"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
-                    MedicalGuideListRow(icon: "person.fill", tint: .blue, title: "基本信息", subtitle: "性别 / 出生日期")
+                    MedicalGuideListRow(icon: "person.fill", tint: .blue, title: L10n.text("home.members.field.basic_info"), subtitle: L10n.text("member.setup.medical.general.01a43e"))
                     Divider()
-                    MedicalGuideListRow(icon: "scalemass.fill", tint: .purple, title: "身体指标", subtitle: "身高 / 体重")
+                    MedicalGuideListRow(icon: "scalemass.fill", tint: .purple, title: L10n.text("member.setup.medical.general.ed82bc"), subtitle: L10n.text("member.setup.medical.general.d61e3c"))
                     Divider()
-                    MedicalGuideListRow(icon: "briefcase.fill", tint: .orange, title: "日常习惯", subtitle: "职业 / 久坐时间")
+                    MedicalGuideListRow(icon: "briefcase.fill", tint: .orange, title: L10n.text("member.setup.medical.general.58ed75"), subtitle: L10n.text("member.setup.medical.general.2619ca"))
                 }
 
                 HStack(alignment: .top, spacing: 8) {
                     Text("💡")
                         .font(.footnote)
-                    Text("如果你之前在“饮食健康”中填写过相关数据，系统将为你自动带入。")
+                    Text(L10n.text("member.setup.medical.nutrition.5c4542"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -191,7 +191,7 @@ struct MemberMedicalSetupSheetView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("隐私与安全")
+                Text(L10n.text("member.setup.medical.general.a33532"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
@@ -200,14 +200,14 @@ struct MemberMedicalSetupSheetView: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.accent)
                             .frame(width: 28)
-                        Text("端到端加密保护")
+                        Text(L10n.text("member.setup.medical.general.5fb46a"))
                             .font(.subheadline.weight(.semibold))
                         Spacer()
                     }
                     .padding(.vertical, 4)
                 }
 
-                Text("“Look健康”会严格保护你的隐私，此数据仅用于为你生成个人健康报告。")
+                Text(L10n.text("member.setup.medical.general.e80ed5"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -217,8 +217,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var genderStep: some View {
         MedicalGuideStepShell(
-            title: "性别",
-            subtitle: "为什么要问？\n性别会影响乳腺、宫颈、前列腺等筛查项目推荐。",
+            title: L10n.text("member.setup.medical.general.787b56"),
+            subtitle: L10n.text("member.setup.medical.general.8780a0"),
             step: 2,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -226,14 +226,14 @@ struct MemberMedicalSetupSheetView: View {
             onNext: { nextVisible(after: .gender) }
         ) {
             VStack(spacing: 20) {
-                Text("请选择成员性别")
+                Text(L10n.text("member.setup.medical.general.1e90af"))
                     .font(.headline.weight(.semibold))
 
                 MedicalPickerChipRow(
                     items: [
-                        ("男", "male"),
-                        ("女", "female"),
-                        ("不确定 / 暂不填", "unknown")
+                        (L10n.text("home.members.gender.male"), "male"),
+                        (L10n.text("home.members.gender.female"), "female"),
+                        (L10n.text("member.setup.medical.general.gender_unknown"), "unknown")
                     ],
                     selection: Binding(
                         get: { viewModel.gender },
@@ -246,8 +246,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var birthDateStep: some View {
         MedicalGuideStepShell(
-            title: "出生日期",
-            subtitle: "为什么要问？\n年龄会影响体检频率、慢病风险和部分癌症筛查建议。",
+            title: L10n.text("member.setup.medical.general.abbe4b"),
+            subtitle: L10n.text("member.setup.medical.chronic.93e2dd"),
             step: 3,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -256,7 +256,7 @@ struct MemberMedicalSetupSheetView: View {
             onNext: { nextVisible(after: .birthDate) }
         ) {
             VStack(spacing: 18) {
-                Text("请选择出生日期")
+                Text(L10n.text("member.setup.medical.general.7b42f9"))
                     .font(.headline.weight(.semibold))
 
                 DatePicker(
@@ -285,7 +285,7 @@ struct MemberMedicalSetupSheetView: View {
             presentation: .fullScreen
         )
         .background(Color(uiColor: .systemBackground))
-        .navigationTitle("身高")
+        .navigationTitle(L10n.text("member.setup.medical.nutrition.19a854"))
         .navigationBarTitleDisplayMode(.inline)
         .memberSetupBottomBar(
             primaryTitle: basicInfoPrimaryTitle(after: .height),
@@ -295,7 +295,7 @@ struct MemberMedicalSetupSheetView: View {
                 viewModel.confirmHeightSelection()
                 nextVisible(after: .height)
             },
-            secondaryTitle: "跳过",
+            secondaryTitle: L10n.text("common.skip"),
             onSecondary: {
                 viewModel.skipHeightSelection()
                 nextVisible(after: .height)
@@ -309,7 +309,7 @@ struct MemberMedicalSetupSheetView: View {
             presentation: .fullScreen
         )
         .background(Color(uiColor: .systemBackground))
-        .navigationTitle("体重")
+        .navigationTitle(L10n.text("member.setup.medical.nutrition.440093"))
         .navigationBarTitleDisplayMode(.inline)
         .memberSetupBottomBar(
             primaryTitle: basicInfoPrimaryTitle(after: .weight),
@@ -319,7 +319,7 @@ struct MemberMedicalSetupSheetView: View {
                 viewModel.confirmWeightSelection()
                 nextVisible(after: .weight)
             },
-            secondaryTitle: "跳过",
+            secondaryTitle: L10n.text("common.skip"),
             onSecondary: {
                 viewModel.skipWeightSelection()
                 nextVisible(after: .weight)
@@ -329,8 +329,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var occupationStep: some View {
         MedicalGuideStepShell(
-            title: "职业类别",
-            subtitle: "不同的职业特征伴随着不同的作息规律与环境暴露风险，这能让体检项目推荐和健康建议更贴近实际。",
+            title: L10n.text("member.setup.medical.general.30f0ce"),
+            subtitle: L10n.text("member.setup.medical.general.8508ce"),
             step: 6,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -339,7 +339,7 @@ struct MemberMedicalSetupSheetView: View {
             onNext: { nextVisible(after: .occupation) }
         ) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("请选择最接近你日常工作状态的职业：")
+                Text(L10n.text("member.setup.medical.general.35f905"))
                     .font(.headline.weight(.semibold))
 
 //                HStack(spacing: 10) {
@@ -399,7 +399,7 @@ struct MemberMedicalSetupSheetView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("手动补充其他职业名称")
+                        Text(L10n.text("member.setup.medical.general.988ae1"))
                             .font(.subheadline.weight(.semibold))
                         TextField("请输入职业名称", text: $viewModel.occupation)
                             .textFieldStyle(.roundedBorder)
@@ -412,18 +412,18 @@ struct MemberMedicalSetupSheetView: View {
 
     private var sedentaryStep: some View {
         MedicalGuideStepShell(
-            title: "久坐时间",
-            subtitle: "平均每天在椅子或沙发上坐多久？",
+            title: L10n.text("member.setup.medical.general.6fa270"),
+            subtitle: L10n.text("member.setup.medical.general.5ab853"),
             step: 7,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
+            primaryTitle: L10n.text("common.next"),
             primaryEnabled: viewModel.sedentaryLevel != nil,
             onSkip: { nextVisible(after: .sedentary) },
             onNext: { nextVisible(after: .sedentary) }
         ) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("平均每天在椅子或沙发上坐多久？")
+                Text(L10n.text("member.setup.medical.general.5ab853"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
@@ -461,7 +461,7 @@ struct MemberMedicalSetupSheetView: View {
                     }
                 }
 
-                Text("长期连续久坐会直接影响心血管与代谢机能，了解此项数据能为你定制针对性的运动唤醒与健康调理方案。")
+                Text(L10n.text("member.setup.medical.lifestyle.6c9a5c"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -471,12 +471,12 @@ struct MemberMedicalSetupSheetView: View {
 
     private var basicInfoSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "基础档案概览",
-            subtitle: "请确认你的基础健康档案信息，随时可以点击各项进行修正。",
+            title: L10n.text("member.setup.medical.guide.feaed5"),
+            subtitle: L10n.text("member.setup.medical.general.94ddce"),
             step: 8,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: isSectionMode && entryMode == .basicProfile ? "完成" : "完成",
+            primaryTitle: isSectionMode && entryMode == .basicProfile ? L10n.text("common.done") : "完成",
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
@@ -494,7 +494,7 @@ struct MemberMedicalSetupSheetView: View {
                 MedicalGuideGroupedCard {
                     MedicalGuideTextRow(
                         systemName: "person.fill",
-                        title: "性别",
+                        title: L10n.text("member.setup.medical.general.787b56"),
                         subtitle: viewModel.genderDisplayTitle,
                         action: {
                             path.append(.gender)
@@ -505,8 +505,8 @@ struct MemberMedicalSetupSheetView: View {
                     
                     MedicalGuideTextRow(
                         systemName: "calendar",
-                        title: "出生日期",
-                        subtitle: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? "未填写",
+                        title: L10n.text("member.setup.medical.general.abbe4b"),
+                        subtitle: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? L10n.text("member.setup.common.not_filled"),
                         action: {
                             path.append(.birthDate)
                         }
@@ -516,8 +516,8 @@ struct MemberMedicalSetupSheetView: View {
                 MedicalGuideGroupedCard {
                     MedicalGuideTextRow(
                         systemName: "ruler",
-                        title: "身高",
-                        subtitle: viewModel.shouldSkipHeightStep ? (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "已自动带入") : (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "未填写"),
+                        title: L10n.text("member.setup.medical.nutrition.19a854"),
+                        subtitle: viewModel.shouldSkipHeightStep ? (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "已自动带入") : (viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : L10n.text("member.setup.common.not_filled")),
                         action: {
                             path.append(.height)
                         }
@@ -525,8 +525,8 @@ struct MemberMedicalSetupSheetView: View {
                     Divider()
                     MedicalGuideTextRow(
                         systemName: "scalemass.fill",
-                        title: "体重",
-                        subtitle: viewModel.shouldSkipWeightStep ? (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "已自动带入") : (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "未填写"),
+                        title: L10n.text("member.setup.medical.nutrition.440093"),
+                        subtitle: viewModel.shouldSkipWeightStep ? (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "已自动带入") : (viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : L10n.text("member.setup.common.not_filled")),
                         action: {
                             path.append(.weight)
                         }
@@ -536,8 +536,8 @@ struct MemberMedicalSetupSheetView: View {
                 MedicalGuideGroupedCard {
                     MedicalGuideTextRow(
                         systemName: "briefcase.fill",
-                        title: "职业",
-                        subtitle: viewModel.occupation.isEmpty ? "未填写" : viewModel.occupation,
+                        title: L10n.text("member.setup.medical.general.7379c9"),
+                        subtitle: viewModel.occupation.isEmpty ? L10n.text("member.setup.common.not_filled") : viewModel.occupation,
                         action: {
                             path.append(.occupation)
                         }
@@ -545,8 +545,8 @@ struct MemberMedicalSetupSheetView: View {
                     Divider()
                     MedicalGuideTextRow(
                         systemName: "chair.lounge.fill",
-                        title: "久坐时间",
-                        subtitle: viewModel.sedentaryLevel?.title ?? "未填写",
+                        title: L10n.text("member.setup.medical.general.6fa270"),
+                        subtitle: viewModel.sedentaryLevel?.title ?? L10n.text("member.setup.common.not_filled"),
                         action: {
                             path.append(.sedentary)
                         }
@@ -556,7 +556,7 @@ struct MemberMedicalSetupSheetView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Text("💡")
                         .font(.footnote)
-                    Text("如果你之前在“饮食健康”中填写过相关数据，系统将为你自动带入。")
+                    Text(L10n.text("member.setup.medical.nutrition.5c4542"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -569,11 +569,11 @@ struct MemberMedicalSetupSheetView: View {
     private var historyIntroStep: some View {
         MedicalGuideIntroPageView(
             kind: .healthHistory,
-            title: "健康病史与症状记录",
-            subtitle: "了解你的既往病史、症状观察与随访情况，有助于我们更早识别潜在医疗风险，并定制更精准的复查周期与健康跟踪计划。",
+            title: L10n.text("member.setup.medical.symptom.84d7df"),
+            subtitle: L10n.text("member.setup.medical.symptom.6b2ca4"),
             isLoading: viewModel.isSaving,
-            primaryTitle: "开始",
-            secondaryTitle: "稍后在设置中完善",
+            primaryTitle: L10n.text("member.setup.common.start"),
+            secondaryTitle: L10n.text("member.setup.medical.general.0a096d"),
             onStart: { nextVisibleHistory(after: .history) },
             onLater: {
                 if isSectionMode {
@@ -585,23 +585,23 @@ struct MemberMedicalSetupSheetView: View {
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("将包含以下四块内容")
+                Text(L10n.text("member.setup.medical.general.763be1"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
-                    MedicalGuideListRow(icon: "waveform.path.ecg", tint: .pink, title: "症状观察 / 随访", subtitle: "")
+                    MedicalGuideListRow(icon: "waveform.path.ecg", tint: .pink, title: L10n.text("member.setup.medical.symptom.c1b96d"), subtitle: "")
                     Divider()
-                    MedicalGuideListRow(icon: "cross.case.fill", tint: .red, title: "既往疾病 / 长期用药", subtitle: "")
+                    MedicalGuideListRow(icon: "cross.case.fill", tint: .red, title: L10n.text("member.setup.medical.chronic.8c6c77"), subtitle: "")
                     Divider()
-                    MedicalGuideListRow(icon: "allergens.fill", tint: .orange, title: "手术史 / 过敏史", subtitle: "")
+                    MedicalGuideListRow(icon: "allergens.fill", tint: .orange, title: L10n.text("member.setup.medical.allergy.99ee3f"), subtitle: "")
                     Divider()
-                    MedicalGuideListRow(icon: "person.3.fill", tint: .teal, title: "家族病史", subtitle: "")
+                    MedicalGuideListRow(icon: "person.3.fill", tint: .teal, title: L10n.text("member.setup.medical.family.401276"), subtitle: "")
                 }
 
                 HStack(alignment: .top, spacing: 8) {
                     Text("💡")
                         .font(.footnote)
-                    Text("轻松点：如果平时身体健康，各项都可以直接选择“无”；如果记不太清，也可以随时选择“不清楚”。")
+                    Text(L10n.text("member.setup.medical.general.121635"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -609,7 +609,7 @@ struct MemberMedicalSetupSheetView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("隐私与安全承诺")
+                Text(L10n.text("member.setup.medical.general.e1c9ed"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
@@ -618,14 +618,14 @@ struct MemberMedicalSetupSheetView: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.accent)
                             .frame(width: 28)
-                        Text("医疗级数据加密保密")
+                        Text(L10n.text("member.setup.medical.general.6f0d95"))
                             .font(.subheadline.weight(.semibold))
                         Spacer()
                     }
                     .padding(.vertical, 4)
                 }
 
-                Text("我们深知医疗隐私的重要性。此数据将被严格隔离保护，绝不用于任何未经授权的商业用途。")
+                Text(L10n.text("member.setup.medical.general.572896"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -636,8 +636,8 @@ struct MemberMedicalSetupSheetView: View {
     // 既往疾病单题页。
     private var chronicConditionsStep: some View {
         MedicalGuideStepShell(
-            title: "既往疾病",
-            subtitle: "了解你过往的确诊疾病与慢病史，有助于我们为你避开潜在医疗风险，并定制更精准的体检项目与复查周期。",
+            title: L10n.text("member.setup.medical.chronic.d9e8b1"),
+            subtitle: L10n.text("member.setup.medical.chronic.bbf28e"),
             step: 10,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -660,9 +660,9 @@ struct MemberMedicalSetupSheetView: View {
     private var chronicConditionsPrimaryTitle: String {
         switch viewModel.chronicConditionStatus {
         case .none:
-            return "完成既往疾病"
+            return L10n.text("member.setup.medical.chronic.b40355");
         case .have:
-            return "完成既往疾病"
+            return L10n.text("member.setup.medical.chronic.b40355");
         case .unknown:
             return historyPrimaryTitle(after: .chronicConditions)
         }
@@ -673,8 +673,8 @@ struct MemberMedicalSetupSheetView: View {
         Group {
             if viewModel.member?.id != nil {
                 MedicalGuideStepShell(
-                    title: "长期用药",
-                    subtitle: "了解您的用药史，有助于我们为您提供更精准的复查项目建议、服药提醒，并辅助报告的上下文解读。",
+                    title: L10n.text("member.setup.medical.medication.b2baf4"),
+                    subtitle: L10n.text("member.setup.medical.medication.4ce152"),
                     step: 11,
                     total: viewModel.totalGuideSteps,
                     isLoading: viewModel.isSaving,
@@ -706,8 +706,8 @@ struct MemberMedicalSetupSheetView: View {
                 }
             } else {
                 MedicalGuideStepShell(
-                    title: "长期用药",
-                    subtitle: "了解您的用药史，有助于我们为您提供更精准的复查项目建议、服药提醒，并辅助报告的上下文解读。",
+                    title: L10n.text("member.setup.medical.medication.b2baf4"),
+                    subtitle: L10n.text("member.setup.medical.medication.4ce152"),
                     step: 11,
                     total: viewModel.totalGuideSteps,
                     isLoading: viewModel.isSaving,
@@ -716,7 +716,7 @@ struct MemberMedicalSetupSheetView: View {
                     onSkip: { nextVisibleHistory(after: .longTermMedication) },
                     onNext: { nextVisibleHistory(after: .longTermMedication) }
                 ) {
-                    Text("缺少成员信息，无法加载用药档案。")
+                    Text(L10n.text("member.setup.medical.medication.7a6f13"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -727,7 +727,7 @@ struct MemberMedicalSetupSheetView: View {
     private var longTermMedicationPrimaryTitle: String {
         switch viewModel.longTermMedicationStatus {
         case .none, .have:
-            return "完成长期用药"
+            return L10n.text("member.setup.medical.medication.b5d1e1");
         case .unknown:
             return historyPrimaryTitle(after: .longTermMedication)
         }
@@ -736,8 +736,8 @@ struct MemberMedicalSetupSheetView: View {
     // 手术史单题页。
     private var surgeryHistoryStep: some View {
         MedicalGuideStepShell(
-            title: "手术史",
-            subtitle: "了解您的过往手术史，有助于我们为您排查禁忌项目，并制定更安全的体检方案与长期随访计划。",
+            title: L10n.text("member.setup.medical.surgery.44426e"),
+            subtitle: L10n.text("member.setup.medical.surgery.a8444b"),
             step: 12,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -764,7 +764,7 @@ struct MemberMedicalSetupSheetView: View {
     private var surgeryHistoryPrimaryTitle: String {
         switch viewModel.surgeryStatus {
         case .none, .have:
-            return "完成记录"
+            return L10n.text("member.setup.medical.general.97eb95");
         case .unknown:
             return historyPrimaryTitle(after: .surgeryHistory)
         }
@@ -773,8 +773,8 @@ struct MemberMedicalSetupSheetView: View {
     // 过敏史单题页。
     private var allergyHistoryStep: some View {
         MedicalGuideStepShell(
-            title: "过敏史",
-            subtitle: "了解您的过敏史，是保障用药安全、规避过敏原以及提供智能就医指导中最核心的防线。",
+            title: L10n.text("member.setup.medical.allergy.2ac7fd"),
+            subtitle: L10n.text("member.setup.medical.allergy.c233d4"),
             step: 13,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -802,12 +802,12 @@ struct MemberMedicalSetupSheetView: View {
 
     private var familyHistoryStep: some View {
         MedicalGuideStepShell(
-            title: "家族病史",
-            subtitle: "了解您直系亲属的过往病史，有助于我们为您识别潜在的遗传风险，并在体检中为您针对性地推荐慢病与癌症筛查项目。",
+            title: L10n.text("member.setup.medical.family.401276"),
+            subtitle: L10n.text("member.setup.medical.chronic.4324ae"),
             step: 14,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
+            primaryTitle: L10n.text("common.next"),
             primaryEnabled: viewModel.canAdvanceFromFamilyHistory,
             onSkip: { nextVisibleHistory(after: .familyHistory) },
             onNext: { nextVisibleHistory(after: .familyHistory) }
@@ -835,8 +835,8 @@ struct MemberMedicalSetupSheetView: View {
     // 健康病史与症状记录中的症状观察 / 随访单题页。
     private var symptomFollowUpStep: some View {
         MedicalGuideStepShell(
-            title: "当前症状",
-            subtitle: "记录近期的身体不适，以便在后续复查或就医时提供准确参考。",
+            title: L10n.text("member.setup.medical.symptom.efefcb"),
+            subtitle: L10n.text("member.setup.medical.general.295324"),
             step: 15,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -863,19 +863,18 @@ struct MemberMedicalSetupSheetView: View {
     private var symptomFollowUpPrimaryTitle: String {
         switch viewModel.symptomFollowUpStatus {
         case .none:
-            return "下一步"
+            return L10n.text("common.next");
         case .have:
-            return "保存症状记录"
+            return L10n.text("member.setup.medical.symptom.e3da8f");
         case .unknown:
-            return "下一步"
-        }
+            return L10n.text("common.next");        }
     }
 
     // 健康病史与症状记录汇总页，点击任意卡片回到对应问题，便于逐项补充或修改。
     private var historySummaryStep: some View {
         MedicalGuideStepShell(
-            title: "健康档案总览",
-            subtitle: "您的核心健康基线已盘点完毕。系统已将您的日常症状、既往史、用药、手术、过敏及家族史进行多维整合，正用于为您量身定制 AI 深度体检方案。",
+            title: L10n.text("member.setup.medical.general.937b8a"),
+            subtitle: L10n.text("member.setup.medical.allergy.eba1d3"),
             step: 16,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -890,7 +889,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 18) {
-                Text("已录入的健康医疗档案")
+                Text(L10n.text("member.setup.medical.general.efb01c"))
                     .font(.headline.weight(.semibold))
 
                 ForEach(viewModel.healthHistoryOverviewCards) { card in
@@ -904,10 +903,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var historySummaryPrimaryTitle: String {
         if isSectionMode && entryMode == .healthHistory {
-            return "确认，去生成定制体检计划"
-        }
-        return "下一步"
-    }
+            return L10n.text("member.setup.medical.general.897f3b");        }
+        return L10n.text("common.next");    }
 
     private func navigateToHistoryOverviewCard(_ cardID: String) {
         switch cardID {
@@ -932,11 +929,11 @@ struct MemberMedicalSetupSheetView: View {
     private var lifestyleIntroStep: some View {
         MedicalGuideIntroPageView(
             kind: .lifestyle,
-            title: "日常生活习惯",
-            subtitle: "了解您的日常作息与生活方式，有助于更精准地评估心血管与代谢机能，并为您生成每天都能轻松执行的健康改善建议。",
+            title: L10n.text("member.setup.medical.general.50b90f"),
+            subtitle: L10n.text("member.setup.medical.general.0efbaf"),
             isLoading: viewModel.isSaving,
-            primaryTitle: "开始",
-            secondaryTitle: "稍后在设置中完善",
+            primaryTitle: L10n.text("member.setup.common.start"),
+            secondaryTitle: L10n.text("member.setup.medical.general.0a096d"),
             onStart: { nextVisibleLifestyle(after: .lifestyle) },
             onLater: {
                 if isSectionMode {
@@ -948,21 +945,21 @@ struct MemberMedicalSetupSheetView: View {
             onClose: { dismiss() }
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("将包含以下记录")
+                Text(L10n.text("member.setup.medical.general.1ca012"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
-                    MedicalGuideListRow(icon: "smoke.fill", tint: .orange, title: "吸烟与饮酒习惯", subtitle: "频率 / 剂量")
+                    MedicalGuideListRow(icon: "smoke.fill", tint: .orange, title: L10n.text("member.setup.medical.lifestyle.08f432"), subtitle: L10n.text("member.setup.medical.general.bef433"))
                     Divider()
-                    MedicalGuideListRow(icon: "figure.run", tint: .green, title: "每周运动状况", subtitle: "频次 / 强度")
+                    MedicalGuideListRow(icon: "figure.run", tint: .green, title: L10n.text("member.setup.medical.lifestyle.f7cbb2"), subtitle: L10n.text("member.setup.medical.general.9f1394"))
                     Divider()
-                    MedicalGuideListRow(icon: "bed.double.fill", tint: .indigo, title: "平均睡眠时长与质量", subtitle: "")
+                    MedicalGuideListRow(icon: "bed.double.fill", tint: .indigo, title: L10n.text("member.setup.medical.lifestyle.8baa4c"), subtitle: L10n.text("member.setup.medical.lifestyle.sleep_row_subtitle"))
                 }
 
                 HStack(alignment: .top, spacing: 8) {
                     Text("💡")
                         .font(.footnote)
-                    Text("贴心提示：诚实记录是对自己负责的第一步。即使现在的习惯不够完美也没关系，Look健康会陪你一起逐步改善。")
+                    Text(L10n.text("member.setup.medical.general.667f91"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1035,7 +1032,7 @@ struct MemberMedicalSetupSheetView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("隐私与安全承诺")
+                Text(L10n.text("member.setup.medical.general.e1c9ed"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideGroupedCard {
@@ -1044,14 +1041,14 @@ struct MemberMedicalSetupSheetView: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.accent)
                             .frame(width: 28)
-                        Text("医疗级数据加密保密")
+                        Text(L10n.text("member.setup.medical.general.6f0d95"))
                             .font(.subheadline.weight(.semibold))
                         Spacer()
                     }
                     .padding(.vertical, 4)
                 }
 
-                Text("我们深知医疗隐私的重要性。体检报告与解析结果将被严格隔离保护，仅用于为你生成个人健康计划。")
+                Text(L10n.text("member.setup.medical.general.28d7dd"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1066,8 +1063,8 @@ struct MemberMedicalSetupSheetView: View {
     // 吸烟单题页。
     private var smokingStep: some View {
         MedicalGuideStepShell(
-            title: "吸烟习惯",
-            subtitle: "评估吸烟习惯有助于精准预测心血管健康、肺部代谢及肿瘤潜在风险，从而为您定制更科学的专项体检防御方案。",
+            title: L10n.text("member.setup.medical.lifestyle.fd0447"),
+            subtitle: L10n.text("member.setup.medical.lifestyle.e80fad"),
             step: 18,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1081,7 +1078,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 20) {
-                Text("吸烟状态")
+                Text(L10n.text("member.setup.medical.lifestyle.640798"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideSegmentedPicker(
@@ -1096,8 +1093,8 @@ struct MemberMedicalSetupSheetView: View {
                     MedicalHabitGroupedDetailCard {
                         MedicalHabitMenuPickerRow(
                             icon: "clock.fill",
-                            title: "历史吸烟时长",
-                            placeholder: "例：5年、10年...",
+                            title: L10n.text("member.setup.medical.lifestyle.caed93"),
+                            placeholder: L10n.text("member.setup.medical.general.c752d8"),
                             selection: $viewModel.smokingHistoryDuration,
                             options: MedicalLifestyleOptionCatalog.smokingHistoryDurations
                         )
@@ -1106,8 +1103,8 @@ struct MemberMedicalSetupSheetView: View {
                             Divider()
                             MedicalHabitMenuPickerRow(
                                 icon: "nosign",
-                                title: "已戒烟时长",
-                                placeholder: "例：2年，可不填",
+                                title: L10n.text("member.setup.medical.general.f4a414"),
+                                placeholder: L10n.text("member.setup.medical.general.34874c"),
                                 selection: $viewModel.smokingQuitDuration,
                                 options: MedicalLifestyleOptionCatalog.quitDurations
                             )
@@ -1117,8 +1114,8 @@ struct MemberMedicalSetupSheetView: View {
                             Divider()
                             MedicalHabitMenuPickerRow(
                                 icon: "smoke.fill",
-                                title: "平均每日吸烟量",
-                                placeholder: "例：半包/日、5支/日...",
+                                title: L10n.text("member.setup.medical.lifestyle.8464fe"),
+                                placeholder: L10n.text("member.setup.medical.general.800c01"),
                                 selection: $viewModel.smokingCount,
                                 options: MedicalLifestyleOptionCatalog.dailySmokingAmounts
                             )
@@ -1134,8 +1131,8 @@ struct MemberMedicalSetupSheetView: View {
     // 饮酒单题页。
     private var drinkingStep: some View {
         MedicalGuideStepShell(
-            title: "饮酒习惯",
-            subtitle: "了解日常饮酒频率能够协助我们科学评估您的肝脏代谢负荷与血压波动趋势，以便在体检推荐中为您规避或加强特定项目的筛查。",
+            title: L10n.text("member.setup.medical.lifestyle.42ab82"),
+            subtitle: L10n.text("member.setup.medical.lifestyle.3d29ea"),
             step: 19,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1149,7 +1146,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 20) {
-                Text("饮酒频率")
+                Text(L10n.text("member.setup.medical.lifestyle.5dd94d"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideSegmentedPicker(
@@ -1164,8 +1161,8 @@ struct MemberMedicalSetupSheetView: View {
                     MedicalHabitGroupedDetailCard {
                         MedicalHabitMenuPickerRow(
                             icon: "calendar",
-                            title: "历史饮酒年限",
-                            placeholder: "例：3年、8年...",
+                            title: L10n.text("member.setup.medical.lifestyle.7a4d81"),
+                            placeholder: L10n.text("member.setup.medical.general.0d391c"),
                             selection: $viewModel.drinkingHistoryDuration,
                             options: MedicalLifestyleOptionCatalog.drinkingHistoryDurations
                         )
@@ -1174,8 +1171,8 @@ struct MemberMedicalSetupSheetView: View {
                             Divider()
                             MedicalHabitMenuPickerRow(
                                 icon: "nosign",
-                                title: "已戒酒时长",
-                                placeholder: "例：1年，可不填",
+                                title: L10n.text("member.setup.medical.general.582b60"),
+                                placeholder: L10n.text("member.setup.medical.general.d1c536"),
                                 selection: $viewModel.drinkingQuitDuration,
                                 options: MedicalLifestyleOptionCatalog.quitDurations
                             )
@@ -1184,12 +1181,12 @@ struct MemberMedicalSetupSheetView: View {
                         Divider()
 
                         VStack(alignment: .leading, spacing: 12) {
-                            Label("常见饮酒类型 (可多选)", systemImage: "wineglass.fill")
+                            Label(L10n.text("member.setup.medical.lifestyle.964e12"), systemImage: "wineglass.fill")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
                             MedicalPickerChipGrid(
-                                items: MemberMedicalSetupViewModel.presetDrinkingTypes,
+                                items: MemberSetupPresetOptionsCatalog.drinkingTypes,
                                 selections: $viewModel.drinkingTypes
                             )
                         }
@@ -1198,7 +1195,7 @@ struct MemberMedicalSetupSheetView: View {
                         Divider()
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Label("其他偏好酒类 (自定义输入)", systemImage: "plus.circle.fill")
+                            Label(L10n.text("member.setup.medical.general.1b1cbe"), systemImage: "plus.circle.fill")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
@@ -1211,7 +1208,7 @@ struct MemberMedicalSetupSheetView: View {
                             Divider()
 
                             VStack(alignment: .leading, spacing: 12) {
-                                Label("平均单次饮酒量", systemImage: "scalemass.fill")
+                                Label(L10n.text("member.setup.medical.lifestyle.56639d"), systemImage: "scalemass.fill")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.primary)
 
@@ -1232,8 +1229,8 @@ struct MemberMedicalSetupSheetView: View {
     // 每周运动单题页。
     private var exerciseStep: some View {
         MedicalGuideStepShell(
-            title: "运动习惯",
-            subtitle: "合理的运动评估能帮助我们了解您的基础代谢率、肌肉质量与心肺耐力，从而为您提供更具针对性的体重管理与防病运动处方。",
+            title: L10n.text("member.setup.medical.lifestyle.90997d"),
+            subtitle: L10n.text("member.setup.medical.lifestyle.5cd8ae"),
             step: 20,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1247,7 +1244,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 20) {
-                Text("每周运动频率")
+                Text(L10n.text("member.setup.medical.lifestyle.bc1d4e"))
                     .font(.headline.weight(.semibold))
 
                 MedicalGuideSegmentedPicker(
@@ -1261,7 +1258,7 @@ struct MemberMedicalSetupSheetView: View {
                 if viewModel.exerciseFrequency != .none {
                     MedicalHabitGroupedDetailCard {
                         VStack(alignment: .leading, spacing: 12) {
-                            Label("运动强度感知", systemImage: "bolt.fill")
+                            Label(L10n.text("member.setup.medical.lifestyle.33e5f7"), systemImage: "bolt.fill")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
@@ -1277,12 +1274,12 @@ struct MemberMedicalSetupSheetView: View {
                         Divider()
 
                         VStack(alignment: .leading, spacing: 12) {
-                            Label("习惯运动类型 (可多选)", systemImage: "figure.run")
+                            Label(L10n.text("member.setup.medical.lifestyle.d7ea67"), systemImage: "figure.run")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
                             MedicalPickerChipGrid(
-                                items: MemberMedicalSetupViewModel.presetExerciseTypes,
+                                items: MemberSetupPresetOptionsCatalog.exerciseTypes,
                                 selections: $viewModel.exerciseTypes
                             )
                         }
@@ -1291,7 +1288,7 @@ struct MemberMedicalSetupSheetView: View {
                         Divider()
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Label("其他运动方式 (自定义输入)", systemImage: "plus.circle.fill")
+                            Label(L10n.text("member.setup.medical.lifestyle.4e2c68"), systemImage: "plus.circle.fill")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
 
@@ -1304,8 +1301,8 @@ struct MemberMedicalSetupSheetView: View {
 
                         MedicalHabitMenuPickerRow(
                             icon: "timer",
-                            title: "单次平均运动时长",
-                            placeholder: "例：30分钟、1小时...",
+                            title: L10n.text("member.setup.medical.lifestyle.aac751"),
+                            placeholder: L10n.text("member.setup.medical.general.48711c"),
                             selection: $viewModel.exerciseDurationMinutes,
                             options: MedicalLifestyleOptionCatalog.exerciseDurations
                         )
@@ -1320,8 +1317,8 @@ struct MemberMedicalSetupSheetView: View {
     // 平均睡眠单题页。
     private var sleepStep: some View {
         MedicalGuideStepShell(
-            title: "睡眠状况",
-            subtitle: "高质量的睡眠是神经系统修复、免疫因子生成与血糖稳定的基石。记录您的日常睡眠，有助于我们全面分析您的日常精力与亚健康状态。",
+            title: L10n.text("member.setup.medical.lifestyle.04f647"),
+            subtitle: L10n.text("member.setup.medical.lifestyle.5402a9"),
             step: 21,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1335,16 +1332,16 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 20) {
-                Text("每日平均睡眠时长")
+                Text(L10n.text("member.setup.medical.lifestyle.e68284"))
                     .font(.headline.weight(.semibold))
 
                 MedicalLifestyleSleepSliderCard(hours: $viewModel.sleepHours)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("睡眠质量自我感知", systemImage: "bed.double.fill")
+                    Label(L10n.text("member.setup.medical.lifestyle.458c59"), systemImage: "bed.double.fill")
                         .font(.headline.weight(.semibold))
 
-                    Text("您的夜间睡眠通常感觉")
+                    Text(L10n.text("member.setup.medical.lifestyle.065a51"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -1370,8 +1367,8 @@ struct MemberMedicalSetupSheetView: View {
     // 生活习惯汇总页，点击任意卡片回到对应问题，便于逐项补充或修改。
     private var lifestyleSummaryStep: some View {
         MedicalGuideStepShell(
-            title: "生活习惯总览",
-            subtitle: "感谢您完成生活习惯评估。这些精细的日常行为数据，将与您的病史、用药深度整合，帮助 AI 为您制定更具针对性的体检防御方案。",
+            title: L10n.text("member.setup.medical.general.5bf059"),
+            subtitle: L10n.text("member.setup.medical.medication.bbe51b"),
             step: 22,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
@@ -1386,7 +1383,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 18) {
-                Text("已为您生成的健康行为档案")
+                Text(L10n.text("member.setup.medical.general.4933bd"))
                     .font(.headline.weight(.semibold))
 
                 ForEach(viewModel.lifestyleOverviewCards) { card in
@@ -1400,10 +1397,8 @@ struct MemberMedicalSetupSheetView: View {
 
     private var lifestyleSummaryPrimaryTitle: String {
         if isSectionMode && entryMode == .lifestyle {
-            return "确认并生成健康报告"
-        }
-        return "下一步"
-    }
+            return L10n.text("member.setup.medical.general.25f588");        }
+        return L10n.text("common.next");    }
 
     private func navigateToLifestyleOverviewCard(_ cardID: String) {
         switch cardID {
@@ -1509,11 +1504,11 @@ struct MemberMedicalSetupSheetView: View {
                 ? 0
                 : examArchiveFlowViewModel.selectedAbnormalItemIDs.count
             if abnormalCount > 0 {
-                pieces.append(String(format: L10n.text("medical.exam_archive.summary.abnormal_count"), abnormalCount))
+                pieces.append(L10n.format("medical.exam_archive.summary.abnormal_count", abnormalCount))
             }
         }
         if examArchiveFlowViewModel.createdTaskCount > 0 {
-            pieces.append(String(format: L10n.text("medical.exam_archive.summary.follow_up_count"), examArchiveFlowViewModel.createdTaskCount))
+            pieces.append(L10n.format("medical.exam_archive.summary.follow_up_count", examArchiveFlowViewModel.createdTaskCount))
         }
         if viewModel.examPlanLines.isEmpty == false {
             pieces.append(L10n.text("medical.exam_archive.summary.plan.generated"))
@@ -1531,12 +1526,12 @@ struct MemberMedicalSetupSheetView: View {
         let count = examArchiveFlowViewModel.abnormalItems.isEmpty
             ? 0
             : examArchiveFlowViewModel.selectedAbnormalItemIDs.count
-        return count == 0 ? "未填写" : String(format: L10n.text("medical.exam_archive.summary.items_count"), count)
+        return count == 0 ? L10n.text("member.setup.common.not_filled") : L10n.format("medical.exam_archive.summary.items_count", count)
     }
 
     private var examArchiveFollowUpCountText: String {
         let count = examArchiveFlowViewModel.createdTaskCount
-        return count == 0 ? "未填写" : String(format: L10n.text("medical.exam_archive.summary.items_count"), count)
+        return count == 0 ? L10n.text("member.setup.common.not_filled") : L10n.format("medical.exam_archive.summary.items_count", count)
     }
 
     private var keyIndicatorStep: some View {
@@ -1546,7 +1541,7 @@ struct MemberMedicalSetupSheetView: View {
             step: 26,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
+            primaryTitle: L10n.text("common.next"),
             onSkip: { path.append(.keyIndicatorSummary) },
             onNext: { path.append(.keyIndicatorSummary) }
         ) {
@@ -1580,7 +1575,7 @@ struct MemberMedicalSetupSheetView: View {
             step: 27,
             total: viewModel.totalGuideSteps,
             isLoading: viewModel.isSaving,
-            primaryTitle: "下一步",
+            primaryTitle: L10n.text("common.next"),
             onSkip: {
                 Task {
                     await viewModel.saveProgress()
@@ -1595,7 +1590,7 @@ struct MemberMedicalSetupSheetView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("已填写内容")
+                Text(L10n.text("member.setup.medical.nutrition.519b61"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
 
@@ -1617,26 +1612,26 @@ struct MemberMedicalSetupSheetView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 MemberSetupStepHeaderView(
-                    title: "医疗模块",
-                    subtitle: "分步维护慢病、用药、生活习惯、体检和症状随访",
+                    title: L10n.text("member.module.medical.title"),
+                    subtitle: L10n.text("member.setup.medical.chronic.a054fd"),
                     step: 29,
                     total: viewModel.totalGuideSteps
                 )
 
-                questionCard(title: "已填写内容") {
+                questionCard(title: L10n.text("member.setup.medical.nutrition.519b61")) {
                     Text(summaryText)
                         .font(.title3.weight(.bold))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 VStack(spacing: 14) {
-                    summaryRow(title: "基础档案说明", value: "已完成") { path.append(.intro) }
+                    summaryRow(title: "基础档案说明", value: L10n.text("member.setup.common.completed")) { path.append(.intro) }
                     summaryRow(title: "性别", value: viewModel.genderDisplayTitle) { path.append(.gender) }
-                    summaryRow(title: "出生日期", value: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? "未填写") { path.append(.birthDate) }
-                    summaryRow(title: "身高", value: viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : "未填写") { path.append(.height) }
-                    summaryRow(title: "体重", value: viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : "未填写") { path.append(.weight) }
-                    summaryRow(title: "职业", value: viewModel.occupation.isEmpty ? "未填写" : viewModel.occupation) { path.append(.occupation) }
-                    summaryRow(title: "久坐时间", value: viewModel.sedentaryLevel?.title ?? "未填写") { path.append(.sedentary) }
+                    summaryRow(title: "出生日期", value: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? L10n.text("member.setup.common.not_filled")) { path.append(.birthDate) }
+                    summaryRow(title: "身高", value: viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : L10n.text("member.setup.common.not_filled")) { path.append(.height) }
+                    summaryRow(title: "体重", value: viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : L10n.text("member.setup.common.not_filled")) { path.append(.weight) }
+                    summaryRow(title: "职业", value: viewModel.occupation.isEmpty ? L10n.text("member.setup.common.not_filled") : viewModel.occupation) { path.append(.occupation) }
+                    summaryRow(title: "久坐时间", value: viewModel.sedentaryLevel?.title ?? L10n.text("member.setup.common.not_filled")) { path.append(.sedentary) }
                     summaryRow(title: "健康病史与症状记录说明", value: viewModel.historyIntroSummaryText) { path.append(.history) }
                     summaryRow(title: "症状观察 / 随访", value: viewModel.symptomSummary) { path.append(.symptomFollowUp) }
                     summaryRow(title: "既往疾病", value: viewModel.chronicConditionsSummary) { path.append(.chronicConditions) }
@@ -1669,10 +1664,10 @@ struct MemberMedicalSetupSheetView: View {
             .padding(24)
             .padding(.bottom, 120)
         }
-        .navigationTitle("医疗模块")
+        .navigationTitle(L10n.text("member.module.medical.title"))
         .navigationBarTitleDisplayMode(.inline)
         .memberSetupBottomBar(
-            primaryTitle: "保存",
+            primaryTitle: L10n.text("common.save"),
             primaryEnabled: viewModel.canSave,
             isLoading: viewModel.isSaving,
             onPrimary: {
@@ -1683,7 +1678,7 @@ struct MemberMedicalSetupSheetView: View {
                     }
                 }
             },
-            secondaryTitle: "跳过",
+            secondaryTitle: L10n.text("common.skip"),
             onSecondary: {
                 dismiss()
             }
@@ -1770,7 +1765,7 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     private func basicInfoPrimaryTitle(after route: MedicalGuideRoute) -> String {
-        hasRemainingBasicInfoPage(after: route) ? "下一步" : "完成"
+        hasRemainingBasicInfoPage(after: route) ? L10n.text("common.next") : "完成"
     }
 
     private func hasRemainingBasicInfoPage(after route: MedicalGuideRoute) -> Bool {
@@ -1797,7 +1792,7 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     private func historyPrimaryTitle(after route: MedicalGuideRoute) -> String {
-        hasRemainingHistoryPage(after: route) ? "下一步" : "完成"
+        hasRemainingHistoryPage(after: route) ? L10n.text("common.next") : "完成"
     }
 
     private func hasRemainingHistoryPage(after route: MedicalGuideRoute) -> Bool {
@@ -2183,7 +2178,7 @@ struct MemberMedicalSetupSheetView: View {
                     .foregroundStyle(.primary)
                 Spacer()
                 Text(value)
-                    .foregroundStyle(value == "未填写" ? .secondary : .primary)
+                    .foregroundStyle(value == L10n.text("member.setup.common.not_filled") ? .secondary : .primary)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -2211,7 +2206,7 @@ struct MemberMedicalSetupSheetView: View {
     @ViewBuilder
     private func summarySection(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            MedicalSummaryRow(title: title, subtitle: subtitle, isCompleted: subtitle.isEmpty == false && subtitle != "未填写")
+            MedicalSummaryRow(title: title, subtitle: subtitle, isCompleted: subtitle.isEmpty == false && subtitle != L10n.text("member.setup.common.not_filled"))
         }
         .buttonStyle(.plain)
     }
@@ -2226,14 +2221,27 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     private var occupationGroups: [OccupationGroup] {
-        [
-            .init(icon: "desktopcomputer", tint: .blue, title: "程序员 / 开发 / 产品 / 设计", subtitle: "偏久坐、用脑强度高、常伴随加班与屏幕暴露", value: "程序员 / 开发 / 产品 / 设计"),
-            .init(icon: "building.2.fill", tint: .indigo, title: "办公室文职 / 财务 / 法务 / 企业管理", subtitle: "常规办公室工作、久坐明显、节奏相对固定", value: "办公室文职 / 财务 / 法务 / 企业管理"),
-            .init(icon: "graduationcap.fill", tint: .orange, title: "教师 / 教培人员", subtitle: "教学授课、站立与沟通较多，作息受课程安排影响", value: "教师 / 教培人员"),
-            .init(icon: "cross.case.fill", tint: .red, title: "医护与健康服务人员", subtitle: "倒班、站立、夜班与职业暴露风险相对更高", value: "医护与健康服务人员"),
-            .init(icon: "briefcase.fill", tint: .green, title: "销售 / 商务 / 自由职业", subtitle: "出行沟通频繁，作息弹性大，饮食与休息不稳定", value: "销售 / 商务 / 自由职业"),
-            .init(icon: "truck.box.fill", tint: .brown, title: "司机 / 物流 / 快递 / 制造业工人", subtitle: "久坐、体力劳动或重复作业并存，作息与负荷差异大", value: "司机 / 物流 / 快递 / 制造业工人")
-        ]
+        MemberSetupOccupationCatalog.groups.map { option in
+            OccupationGroup(
+                icon: option.icon,
+                tint: occupationTint(for: option.icon),
+                title: option.displayTitle,
+                subtitle: option.displaySubtitle,
+                value: option.value
+            )
+        }
+    }
+
+    private func occupationTint(for icon: String) -> Color {
+        switch icon {
+        case "desktopcomputer": return .blue
+        case "building.2.fill": return .indigo
+        case "graduationcap.fill": return .orange
+        case "cross.case.fill": return .red
+        case "briefcase.fill": return .green
+        case "truck.box.fill": return .brown
+        default: return .blue
+        }
     }
 
     private var filteredOccupationGroups: [OccupationGroup] {
@@ -2247,18 +2255,28 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     private var sedentaryOptions: [(title: String, subtitle: String, color: Color, value: MedicalGuideSedentaryLevel)] {
-        [
-            ("低", "少于 4 小时", .green, .low),
-            ("中", "4 至 8 小时", .yellow, .medium),
-            ("高", "超过 8 小时", .red, .high)
-        ]
+        MedicalGuideSedentaryLevel.allCases.map { level in
+            (
+                title: level.title,
+                subtitle: level.subtitle,
+                color: sedentaryColor(for: level),
+                value: level
+            )
+        }
+    }
+
+    private func sedentaryColor(for level: MedicalGuideSedentaryLevel) -> Color {
+        switch level {
+        case .low: return .green
+        case .medium: return .yellow
+        case .high: return .red
+        }
     }
 
     private var historyDisclosureItems: [(title: String, value: String)] {
-        [
-            ("有", MedicalGuideDisclosureStatus.have.rawValue),
-            ("无", MedicalGuideDisclosureStatus.none.rawValue)
-        ]
+        MedicalGuideDisclosureStatus.allCases
+            .filter { $0 != .unknown }
+            .map { ($0.title, $0.rawValue) }
     }
 
     private static let dateFormatter: DateFormatter = {
@@ -2377,7 +2395,7 @@ private struct MedicalSummaryRow: View {
                     Text(title)
                         .font(.headline.weight(.bold))
                     if isCompleted {
-                        Text("已完成")
+                        Text(L10n.text("home.members.save.success"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(Color.accentColor)
                             .padding(.horizontal, 10)
@@ -2619,12 +2637,63 @@ private struct OccupationGroup {
     let value: String
 }
 
-private enum MedicalLifestyleOptionCatalog {
-    static let smokingHistoryDurations = ["不足1年", "1-3年", "3-5年", "5-10年", "10年以上"]
-    static let drinkingHistoryDurations = ["不足1年", "1-3年", "3-5年", "5-10年", "10年以上"]
-    static let quitDurations = ["不足6个月", "6个月-1年", "1-2年", "2-5年", "5年以上"]
-    static let dailySmokingAmounts = ["几支/日", "半包/日", "1包/日", "1-2包/日", "2包以上/日"]
-    static let exerciseDurations = ["15分钟", "30分钟", "45分钟", "1小时", "1小时以上"]
+private struct MedicalHabitMenuPickerRow: View {
+    let icon: String
+    let title: String
+    let placeholder: String
+    @Binding var selection: String
+    let options: [SparkBilingualItem]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: icon)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                if selection.isEmpty {
+                    Text(placeholder)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Menu {
+                ForEach(options, id: \.cn) { option in
+                    Button(MemberSetupBilingualCatalog.display(option)) {
+                        selection = option.cn
+                    }
+                }
+                if selection.isEmpty == false {
+                    Divider()
+                    Button(L10n.text("member.setup.medical.general.clear_selection"), role: .destructive) {
+                        selection = ""
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(
+                        selection.isEmpty
+                            ? L10n.text("member.setup.medical.general.708c9d")
+                            : MemberSetupBilingualCatalog.displayString(stored: selection, in: options)
+                    )
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(selection.isEmpty ? .secondary : .primary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
 }
 
 private struct MedicalGuideSegmentedPicker: View {
@@ -2658,57 +2727,6 @@ private struct MedicalHabitGroupedDetailCard<Content: View>: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemBackground))
         )
-    }
-}
-
-private struct MedicalHabitMenuPickerRow: View {
-    let icon: String
-    let title: String
-    let placeholder: String
-    @Binding var selection: String
-    let options: [String]
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: icon)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 22)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                if selection.isEmpty {
-                    Text(placeholder)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            Menu {
-                ForEach(options, id: \.self) { option in
-                    Button(option) { selection = option }
-                }
-                if selection.isEmpty == false {
-                    Divider()
-                    Button("清除", role: .destructive) { selection = "" }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(selection.isEmpty ? "请选择" : selection)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(selection.isEmpty ? .secondary : .primary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .padding(.vertical, 6)
     }
 }
 
@@ -2780,9 +2798,9 @@ private struct MedicalLifestyleSleepSliderCard: View {
             Slider(value: $hours, in: 4...12, step: 0.5)
 
             HStack {
-                Text("4小时")
+                Text(L10n.text("member.setup.medical.general.b8a232"))
                 Spacer()
-                Text("12小时")
+                Text(L10n.text("member.setup.medical.general.d04708"))
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -2888,24 +2906,24 @@ private struct MedicalPickerChipRow: View {
 }
 
 private struct MedicalPickerChipGrid: View {
-    let items: [String]
+    let items: [SparkBilingualItem]
     @Binding var selections: [String]
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 10)], alignment: .leading, spacing: 10) {
-            ForEach(items, id: \.self) { item in
+            ForEach(items, id: \.cn) { item in
                 Button {
-                    toggle(item)
+                    toggle(item.cn)
                 } label: {
-                    Text(item)
+                    Text(MemberSetupBilingualCatalog.display(item))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(isSelected(item) ? Color.accentColor : .primary)
+                        .foregroundStyle(isSelected(item.cn) ? Color.accentColor : .primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(isSelected(item) ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemBackground))
+                                .fill(isSelected(item.cn) ? Color.accentColor.opacity(0.14) : Color(uiColor: .systemBackground))
                         )
                 }
                 .buttonStyle(.plain)
@@ -2913,30 +2931,16 @@ private struct MedicalPickerChipGrid: View {
         }
     }
 
-    private func toggle(_ item: String) {
-        if item == "无" {
-            selections = ["无"]
-            return
-        }
-        if item == "不清楚" {
-            if selections.contains(item) {
-                selections.removeAll { $0 == item }
-            } else {
-                selections.removeAll { $0 == "无" }
-                selections.append(item)
-            }
-            return
-        }
-        selections.removeAll { $0 == "无" || $0 == "不清楚" }
-        if selections.contains(item) {
-            selections.removeAll { $0 == item }
+    private func toggle(_ canonicalCN: String) {
+        if selections.contains(canonicalCN) {
+            selections.removeAll { $0 == canonicalCN }
         } else {
-            selections.append(item)
+            selections.append(canonicalCN)
         }
     }
 
-    private func isSelected(_ item: String) -> Bool {
-        selections.contains(item)
+    private func isSelected(_ canonicalCN: String) -> Bool {
+        selections.contains(canonicalCN)
     }
 }
 

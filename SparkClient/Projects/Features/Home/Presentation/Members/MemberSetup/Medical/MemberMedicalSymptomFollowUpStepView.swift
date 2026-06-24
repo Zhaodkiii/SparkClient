@@ -22,7 +22,7 @@ struct MemberMedicalSymptomFollowUpStepView: View {
             if symptomStatus == .have {
 //                quickUploadCard
                 existingSymptomsSection
-                MemberSetupAccentAddButton(title: "添加症状记录") {
+                MemberSetupAccentAddButton(title: L10n.text("member.setup.medical.symptom.c8a51c")) {
                     showingSymptomFormSheet = true
                 }
             }
@@ -80,20 +80,20 @@ struct MemberMedicalSymptomFollowUpStepView: View {
     }
 
     private var symptomScreeningCard: some View {
-        MemberSetupSection(title: "症状筛查") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.symptom.6cb2f5")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("近期是否有任何身体不适？")
+                Text(L10n.text("member.setup.medical.symptom.8edac7"))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     screeningChoice(
-                        title: "无任何不适",
+                        title: L10n.text("member.setup.medical.symptom.3d9476"),
                         isSelected: symptomStatus == .none,
                         action: { symptomStatus = .none }
                     )
                     screeningChoice(
-                        title: "有症状",
+                        title: L10n.text("member.setup.medical.symptom.dc316b"),
                         isSelected: symptomStatus == .have,
                         action: { symptomStatus = .have }
                     )
@@ -107,7 +107,7 @@ struct MemberMedicalSymptomFollowUpStepView: View {
             Image(systemName: "lightbulb.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("贴心提示：保持健康是最好的状态，直接点击下方保存即可。")
+            Text(L10n.text("member.setup.medical.symptom.0a337b"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -115,16 +115,16 @@ struct MemberMedicalSymptomFollowUpStepView: View {
     }
 
     private var quickUploadCard: some View {
-        MemberSetupSection(title: "快速录入") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.chronic.chronic.d6c422")) {
             Button {
                 showingUploadSheet = true
             } label: {
                 VStack(spacing: 10) {
-                    Label("拍照 / 上传病历凭证", systemImage: "camera.viewfinder")
+                    Label(L10n.text("member.setup.medical.symptom.a851ac"), systemImage: "camera.viewfinder")
                         .font(.headline)
                         .foregroundStyle(Color.accentColor)
 
-                    Text("系统将自动解析病历，提取症状与复查随访建议")
+                    Text(L10n.text("member.setup.medical.symptom.b4ff8d"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -140,13 +140,13 @@ struct MemberMedicalSymptomFollowUpStepView: View {
     private var existingSymptomsSection: some View {
         Group {
             if viewModel.isLoadingMemberSymptoms {
-                MemberSetupSection(title: "已有症状") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.symptom.ae3b5e")) {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
             } else if viewModel.memberSymptoms.isEmpty == false {
-                MemberSetupSection(title: "已有症状") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.symptom.ae3b5e")) {
                     VStack(spacing: 10) {
                         ForEach(viewModel.memberSymptoms, id: \.id) { symptom in
                             Button {

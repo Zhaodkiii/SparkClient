@@ -141,7 +141,7 @@ struct MedicationExecutionCenterPage: View {
             .padding(.bottom, 32)
         }
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .navigationTitle("用药")
+        .navigationTitle(L10n.text("home.medical.medication_execution.nav_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -442,7 +442,7 @@ struct MedicationExecutionCenterPage: View {
 
     private var recordSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("记录")
+            Text(L10n.text("home.medical.medication_execution.section.record"))
                 .font(.title2.weight(.bold))
                 .foregroundStyle(.primary)
 
@@ -457,7 +457,7 @@ struct MedicationExecutionCenterPage: View {
                             fileTransferService: fileTransferService,
                             onAdd: {
                                 logSheet = MedicationExecutionLogSheetContext(
-                                    title: "记录于 \(group.timeText)",
+                                    title: MedicationExecutionSupport.logTitle(at: group.timeText),
                                     date: selectedDayStart,
                                     doses: group.doses
                                 )
@@ -478,7 +478,11 @@ struct MedicationExecutionCenterPage: View {
                             calendar: calendar
                         )
                     }
-                    logSheet = MedicationExecutionLogSheetContext(title: "全部药品", date: selectedDayStart, doses: doses)
+                    logSheet = MedicationExecutionLogSheetContext(
+                        title: MedicationExecutionSupport.allDrugsLogTitle(),
+                        date: selectedDayStart,
+                        doses: doses
+                    )
                 }
             }
         }
@@ -486,7 +490,7 @@ struct MedicationExecutionCenterPage: View {
 
     private var completedSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("已记录")
+            Text(L10n.text("home.medical.medication_execution.section.recorded"))
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.primary)
 
@@ -559,7 +563,7 @@ struct MedicationExecutionCenterPage: View {
             guard loadingWindowID == request.requestID else { return }
             notificationClient.error(
                 error.localizedDescription,
-                title: "加载服药记录失败",
+                title: L10n.text("home.medical.medication_execution.error.load_failed"),
                 source: "medical.medication_execution.load"
             )
             logger.warning("用药执行中心加载记录失败 error=\(error.localizedDescription)", module: logModule)
@@ -595,7 +599,11 @@ struct MedicationExecutionCenterPage: View {
             logSheet = nil
             MedicationExecutionSupport.impact(style: .medium)
         } catch {
-            notificationClient.error(error.localizedDescription, title: "记录用药失败", source: "medical.medication_execution.save")
+            notificationClient.error(
+                error.localizedDescription,
+                title: L10n.text("home.medical.medication_execution.error.save_failed"),
+                source: "medical.medication_execution.save"
+            )
             logger.warning("用药执行中心保存状态失败 error=\(error.localizedDescription)", module: logModule)
         }
     }
@@ -684,7 +692,7 @@ struct MedicationExecutionCenterPage: View {
 
         let timeText = MedicationExecutionPlanner.timeText(for: initialFocus.scheduledAt)
         logSheet = MedicationExecutionLogSheetContext(
-            title: "记录于 \(timeText)",
+            title: MedicationExecutionSupport.logTitle(at: timeText),
             date: selectedDayStart,
             doses: pending
         )

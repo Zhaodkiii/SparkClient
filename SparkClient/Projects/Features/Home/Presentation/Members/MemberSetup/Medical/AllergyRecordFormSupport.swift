@@ -16,28 +16,28 @@ enum AllergyRecordFormSupport {
 
     static let allergyCategories: [AllergyCategoryGroup] = [
         .init(
-            title: "药物过敏 (体检及就医高危项)",
+            title: L10n.text("member.setup.medical.allergy.allergy.17314b"),
             systemImage: "pills.fill",
             tint: .red,
             allergens: ["青霉素/阿莫西林", "头孢菌素", "阿司匹林/解热镇痛药", "磺胺类药物", "碘造影剂 (增强CT必备)", "局部麻醉药"],
             detailCategory: "药物过敏"
         ),
         .init(
-            title: "食物过敏",
+            title: L10n.text("member.setup.medical.allergy.allergy.353649"),
             systemImage: "fork.knife",
             tint: .orange,
             allergens: ["鱼/虾/蟹海鲜", "花生/坚果", "鸡蛋", "牛奶/乳制品", "大豆/豆制品", "小麦/麸质", "芒果/热带水果"],
             detailCategory: "食物过敏"
         ),
         .init(
-            title: "环境与吸入性过敏 (季节性)",
+            title: L10n.text("member.setup.medical.allergy.allergy.c99222"),
             systemImage: "leaf.fill",
             tint: .green,
             allergens: ["花粉/柳絮/艾草", "尘螨", "动物皮毛/猫狗皮屑", "霉菌", "杨树毛/梧桐絮"],
             detailCategory: "环境与吸入性过敏"
         ),
         .init(
-            title: "接触性、昆虫与其它",
+            title: L10n.text("member.setup.medical.allergy.allergy.9c6464"),
             systemImage: "hand.raised.fill",
             tint: .purple,
             allergens: ["乳胶制品", "油漆", "金属镍/饰品", "紫外线/日光", "染发剂/香精", "蚊虫/蜂叮咬"],

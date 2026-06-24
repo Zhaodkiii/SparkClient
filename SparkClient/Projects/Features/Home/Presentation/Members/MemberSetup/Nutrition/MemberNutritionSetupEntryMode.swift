@@ -21,14 +21,12 @@ enum MemberNutritionSectionCode: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .basicInfo: return "基础信息"
-        }
+        case .basicInfo: return L10n.text("member.setup.nutrition.nutrition.6ea1fe");        }
     }
 
     var subtitle: String {
         switch self {
-        case .basicInfo: return "身高、体重、目标模式、营养目标"
-        }
+        case .basicInfo: return L10n.text("member.setup.nutrition.nutrition.f6db8a");        }
     }
 
     var iconName: String {

@@ -133,10 +133,10 @@ struct MedicationPrescriptionCard<Destination: View>: View {
     private var subtitleItems: [String] {
         [
             prescription?.prescriberName.nilIfBlank.map {
-                String(format: L10n.text("home.medical.list.medications.prescriber_format", fallback: "医生：%@"), locale: .current, $0)
+                L10n.format("home.medical.list.medications.prescriber_format", fallback: "医生：%@", $0)
             },
             prescription?.prescriptionNo?.nilIfBlank.map {
-                String(format: L10n.text("home.medical.list.medications.prescription_no_format", fallback: "处方号：%@"), locale: .current, $0)
+                L10n.format("home.medical.list.medications.prescription_no_format", fallback: "处方号：%@", $0)
             },
             prescriptionDateText
         ].compactMap { $0 }
@@ -172,7 +172,7 @@ struct MedicationPrescriptionCard<Destination: View>: View {
             Divider()
 
             HStack(spacing: 8) {
-                Text(String(format: L10n.text("home.medical.list.medications.plan_count_format", fallback: "用药（%d种）"), locale: .current, plans.count))
+                Text(L10n.format("home.medical.list.medications.plan_count_format", fallback: "用药（%d种）", plans.count))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()

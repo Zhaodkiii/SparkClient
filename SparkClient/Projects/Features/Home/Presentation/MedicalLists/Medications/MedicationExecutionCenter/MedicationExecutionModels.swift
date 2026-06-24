@@ -6,8 +6,8 @@ enum MedicationDoseLogStatus: String, Equatable {
 
     var title: String {
         switch self {
-        case .taken: return "已用药"
-        case .skipped: return "已跳过"
+        case .taken: return L10n.text("home.medical.medication_execution.status.taken")
+        case .skipped: return L10n.text("home.medical.medication_execution.status.skipped")
         }
     }
 
@@ -59,17 +59,20 @@ struct MedicationExecutionDose: Identifiable, Equatable {
     }
 
     var displayName: String {
-        plan.drugName.trimmedNonEmpty ?? "未命名药品"
+        plan.drugName.trimmedNonEmpty ?? L10n.text("home.medical.medication_execution.unnamed_drug")
     }
 
     var specificationText: String {
         let doseUnit = plan.doseUnit.trimmedNonEmpty
-        return ["药片", doseUnit].compactMap { $0 }.joined(separator: "，")
+        let tablet = L10n.text("home.medical.medication_execution.spec.tablet")
+        let parts = [tablet, doseUnit].compactMap { $0 }
+        let separator = Locale.current.language.languageCode?.identifier.hasPrefix("zh") == true ? "，" : ", "
+        return parts.joined(separator: separator)
     }
 
     var instructionText: String {
         let time = MedicationExecutionPlanner.timeText(for: scheduledAt)
-        return "\(time) 用药： \(plannedDose)"
+        return L10n.format("home.medical.medication_execution.instruction", time, plannedDose)
     }
 }
 

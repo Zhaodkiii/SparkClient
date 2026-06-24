@@ -241,9 +241,9 @@ private struct ProgressCardView: View {
 
         let elapsedPart: String = {
             if elapsedMin == 0 {
-                return String(format: L10n.text("medical.upload.time.elapsed.seconds"), elapsedSec)
+                return L10n.format("medical.upload.time.elapsed.seconds", elapsedSec)
             } else {
-                return String(format: L10n.text("medical.upload.time.elapsed.minutes"), elapsedMin, elapsedSec)
+                return L10n.format("medical.upload.time.elapsed.minutes", elapsedMin, elapsedSec)
             }
         }()
 
@@ -252,11 +252,11 @@ private struct ProgressCardView: View {
         }
 
         if est < 60 {
-            return String(format: L10n.text("medical.upload.time.estimated.seconds"), elapsedPart, est)
+            return L10n.format("medical.upload.time.estimated.seconds", elapsedPart, est)
         }
 
         let estMin = Int(ceil(Double(est) / 60.0))
-        return String(format: L10n.text("medical.upload.time.estimated.minutes"), elapsedPart, estMin)
+        return L10n.format("medical.upload.time.estimated.minutes", elapsedPart, estMin)
     }
 
     // MARK: - 步骤列表
@@ -276,7 +276,7 @@ private struct ProgressCardView: View {
                     onShowOCRText: onShowOCRText
                 )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(String(format: L10n.text("medical.upload.a11y.step"), idx + 1, step.flowStep.title()))
+                    .accessibilityLabel(L10n.format("medical.upload.a11y.step", idx + 1, step.flowStep.title()))
                     .accessibilityValue(step.flowStep.outcome.accessibilityValue)
             }
         }

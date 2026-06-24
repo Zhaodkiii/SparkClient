@@ -23,9 +23,9 @@ enum GuestAIChatError: LocalizedError {
             return L10n.text("guest.ai.error.empty_reply")
         case .httpFailed(let code, let message):
             if message.isEmpty {
-                return String(format: L10n.text("guest.ai.error.http_failed"), code)
+                return L10n.format("guest.ai.error.http_failed", code)
             }
-            return String(format: L10n.text("guest.ai.error.http_failed_detail"), code, message)
+            return L10n.format("guest.ai.error.http_failed_detail", code, message)
         }
     }
 }

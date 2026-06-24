@@ -71,10 +71,9 @@ struct MemberModuleSetupView: View {
                                     ),
                                     onOpen: {
                                         // 点击模块进入详情汇总预览页
-                                        // viewModel.openModuleSummary(for: module)
-                                        
+                                         viewModel.openModuleSummary(for: module)
                                         // sheet 打开
-                                        onOpenModule(module)
+//                                        onOpenModule(module)
                                     }
                                 )
                             }

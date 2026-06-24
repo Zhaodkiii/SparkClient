@@ -255,25 +255,25 @@ enum ChatAskReportRelatedCountFormatter {
         var parts: [String] = []
         // 根据数量拼接对应本地化文案
         if reports > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.reports_format"), reports))
+            parts.append(L10n.format("chat.ask_report.sheet.count.reports_format", reports))
         }
         if prescriptions > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.prescriptions_format"), prescriptions))
+            parts.append(L10n.format("chat.ask_report.sheet.count.prescriptions_format", prescriptions))
         }
         if plans > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.plans_format"), plans))
+            parts.append(L10n.format("chat.ask_report.sheet.count.plans_format", plans))
         }
         if symptoms > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.symptoms_format"), symptoms))
+            parts.append(L10n.format("chat.ask_report.sheet.count.symptoms_format", symptoms))
         }
         if visits > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.visits_format"), visits))
+            parts.append(L10n.format("chat.ask_report.sheet.count.visits_format", visits))
         }
         if surgeries > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.surgeries_format"), surgeries))
+            parts.append(L10n.format("chat.ask_report.sheet.count.surgeries_format", surgeries))
         }
         if followUps > 0 {
-            parts.append(String(format: L10n.text("chat.ask_report.sheet.count.follow_ups_format"), followUps))
+            parts.append(L10n.format("chat.ask_report.sheet.count.follow_ups_format", followUps))
         }
         
         // 无统计数据返回nil，有数据用 · 拼接返回

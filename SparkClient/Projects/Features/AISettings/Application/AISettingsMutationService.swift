@@ -18,7 +18,7 @@ enum AISettingsMutationError: LocalizedError {
         case .providerNotFound, .modelNotFound:
             return L10n.text("common.operation_failed")
         case .providerKeyRequired(let displayName):
-            return String(format: L10n.text("ai_settings.providers.error.key_required_with_name"), displayName)
+            return L10n.format("ai_settings.providers.error.key_required_with_name", displayName)
         case .systemModelCannotBeDeleted:
             return L10n.text("ai_settings.models.alert.cannot_delete_system")
         }

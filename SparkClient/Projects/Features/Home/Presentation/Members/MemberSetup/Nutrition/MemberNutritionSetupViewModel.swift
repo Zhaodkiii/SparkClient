@@ -323,15 +323,14 @@ extension MemberNutritionSetupViewModel {
 
         var title: String {
             switch self {
-            case .loseWeight: return "减重"
-            case .maintain: return "保持体重"
-            case .gainWeight: return "增重"
-            case .buildMuscle: return "打造肌肉"
-            case .controlSugar: return "控糖"
-            case .controlSalt: return "控盐"
-            case .controlFat: return "控脂"
-            case .custom: return "自定义"
-            }
+            case .loseWeight: return L10n.text("member.setup.nutrition.nutrition.9b2401");
+        case .maintain: return L10n.text("member.setup.nutrition.nutrition.d861ae");
+        case .gainWeight: return L10n.text("member.setup.nutrition.nutrition.be62bd");
+        case .buildMuscle: return L10n.text("member.setup.nutrition.nutrition.a0ccc4");
+        case .controlSugar: return L10n.text("member.setup.nutrition.nutrition.53e4b7");
+        case .controlSalt: return L10n.text("member.setup.nutrition.nutrition.c28e60");
+        case .controlFat: return L10n.text("member.setup.nutrition.nutrition.de0619");
+        case .custom: return L10n.text("member.setup.nutrition.nutrition.f1d4ff");            }
         }
 
         var energyAdjustment: Double {

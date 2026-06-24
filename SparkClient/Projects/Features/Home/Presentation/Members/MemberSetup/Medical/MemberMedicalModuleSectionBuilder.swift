@@ -104,7 +104,7 @@ enum MemberMedicalModuleSectionBuilder {
             }
             return .notStarted
         case .lifestyle:
-            return lifestyleSummary(profile: profile) == "待补充" ? .notStarted : .completed
+            return lifestyleSummary(profile: profile) == L10n.text("member.setup.common.pending") ? .notStarted : .completed
         case .examArchive:
             if examArchiveSummary(profile: profile, completeData: completeData).isEmpty == false
                 || profile?.examPlanSummary?.isEmpty == false {
@@ -145,7 +145,7 @@ enum MemberMedicalModuleSectionBuilder {
         if let occupation = extra["occupation"], occupation.isEmpty == false {
             pieces.append(occupation)
         }
-        return pieces.isEmpty ? "待补充" : pieces.joined(separator: " · ")
+        return pieces.isEmpty ? L10n.text("member.setup.common.pending") : pieces.joined(separator: " · ")
     }
 
     private static func healthHistorySummary(
@@ -183,14 +183,14 @@ enum MemberMedicalModuleSectionBuilder {
         if pieces.isEmpty, let surgeries = completeData.surgeries, surgeries.isEmpty == false {
             pieces.append(surgeries.map(\.procedureName).joined(separator: " · "))
         }
-        return pieces.isEmpty ? "待补充" : pieces.joined(separator: " · ")
+        return pieces.isEmpty ? L10n.text("member.setup.common.pending") : pieces.joined(separator: " · ")
     }
 
     private static func hasHealthHistoryContent(
         profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile?,
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData
     ) -> Bool {
-        if healthHistorySummary(profile: profile, completeData: completeData) != "待补充" {
+        if healthHistorySummary(profile: profile, completeData: completeData) != L10n.text("member.setup.common.pending") {
             return true
         }
         let extra = profile?.extra ?? [:]
@@ -199,7 +199,7 @@ enum MemberMedicalModuleSectionBuilder {
     }
 
     private static func lifestyleSummary(profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile?) -> String {
-        guard let profile else { return "待补充" }
+        guard let profile else { return L10n.text("member.setup.common.pending");}
         var pieces: [String] = []
         if profile.smokingProfile.status.isEmpty == false,
            profile.smokingProfile.status != "never" {
@@ -216,7 +216,7 @@ enum MemberMedicalModuleSectionBuilder {
         if let sleepHours = profile.sleepHours {
             pieces.append(String(format: "%.0f小时睡眠", sleepHours))
         }
-        return pieces.isEmpty ? "待补充" : pieces.joined(separator: " · ")
+        return pieces.isEmpty ? L10n.text("member.setup.common.pending") : pieces.joined(separator: " · ")
     }
 
     private static func examArchiveSummary(

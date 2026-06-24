@@ -31,7 +31,7 @@ struct MemberMedicalAllergyHistoryStepView: View {
 
             if status == .have {
                 existingAllergiesSection
-                MemberSetupAccentAddButton(title: allergies.isEmpty ? "添加过敏记录" : "编辑过敏记录") {
+                MemberSetupAccentAddButton(title: allergies.isEmpty ? L10n.text("member.setup.medical.allergy.allergy.3ffc39") : "编辑过敏记录") {
                     showingManualEntrySheet = true
                 }
             }
@@ -65,20 +65,20 @@ struct MemberMedicalAllergyHistoryStepView: View {
     }
 
     private var allergyScreeningCard: some View {
-        MemberSetupSection(title: "过敏史筛查") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.allergy.allergy.94d9f0")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("您过往是否有明确的过敏经历？")
+                Text(L10n.text("member.setup.medical.allergy.allergy.f49c6e"))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     screeningChoice(
-                        title: "无过敏史",
+                        title: L10n.text("member.setup.medical.allergy.allergy.8b65bf"),
                         isSelected: status == .none,
                         action: { status = .none }
                     )
                     screeningChoice(
-                        title: "有过敏史",
+                        title: L10n.text("member.setup.medical.allergy.allergy.e9a20f"),
                         isSelected: status == .have,
                         action: { status = .have }
                     )
@@ -92,7 +92,7 @@ struct MemberMedicalAllergyHistoryStepView: View {
             Image(systemName: "lightbulb.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("贴心提示：如果没有相关过敏反应，请直接点击下方保存即可。")
+            Text(L10n.text("member.setup.medical.allergy.allergy.ab06ee"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -102,7 +102,7 @@ struct MemberMedicalAllergyHistoryStepView: View {
     private var existingAllergiesSection: some View {
         Group {
             if allergies.isEmpty == false {
-                MemberSetupSection(title: "已录入过敏档案") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.allergy.allergy.9cd434")) {
                     VStack(spacing: 10) {
                         ForEach(allergies, id: \.self) { allergen in
                             Button {

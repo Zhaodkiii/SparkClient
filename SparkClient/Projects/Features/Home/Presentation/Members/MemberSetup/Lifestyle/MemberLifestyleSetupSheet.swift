@@ -6,18 +6,18 @@ struct MemberLifestyleSetupSheetView: View {
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
             VStack(spacing: 16) {
-                Text("日常健康模块第一期预留")
+                Text(L10n.text("member.setup.lifestyle.general.2838ca"))
                     .font(.headline)
-                Text("运动、睡眠、饮水、照护提醒后续再接入。")
+                Text(L10n.text("member.setup.lifestyle.lifestyle.7bb6d0"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                Button("完成") {
+                Button(L10n.text("common.done")) {
                     Task { await onCompletedAction.call() }
                 }
                 .buttonStyle(.borderedProminent)
             }
             .padding()
-            .navigationTitle("日常健康")
+            .navigationTitle(L10n.text("member.module.daily_health.title"))
         }
     }
 }

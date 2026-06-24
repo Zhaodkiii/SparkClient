@@ -138,8 +138,8 @@ struct SparkPromptInputDrawerSheet: View {
                 Spacer(minLength: 8)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(String(format: L10n.text("knowledge.toolbar.chars"), locale: Locale.current, text.count))
-                    Text(String(format: L10n.text("knowledge.toolbar.tokens_approx"), locale: Locale.current, tokenEstimate))
+                    Text(L10n.format("knowledge.toolbar.chars", text.count))
+                    Text(L10n.format("knowledge.toolbar.tokens_approx", tokenEstimate))
                 }
                 .font(.caption)
                 .foregroundColor(.gray)

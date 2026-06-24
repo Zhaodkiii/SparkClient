@@ -29,7 +29,7 @@ struct MemberMedicalChronicConditionStepView: View {
             if status == .have {
 //                quickUploadCard
                 existingConditionsSection
-                MemberSetupAccentAddButton(title: "添加既往疾病") {
+                MemberSetupAccentAddButton(title: L10n.text("member.setup.medical.chronic.chronic.68b55f")) {
                     showingManualEntrySheet = true
                 }
             }
@@ -71,20 +71,20 @@ struct MemberMedicalChronicConditionStepView: View {
     }
 
     private var diseaseScreeningCard: some View {
-        MemberSetupSection(title: "疾病筛查") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.chronic.chronic.29e6fc")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("是否曾被确诊过任何慢性疾病或重大疾病？")
+                Text(L10n.text("member.setup.medical.chronic.chronic.3ec025"))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     screeningChoice(
-                        title: "无既往病史",
+                        title: L10n.text("member.setup.medical.chronic.chronic.3d3103"),
                         isSelected: status == .none,
                         action: { status = .none }
                     )
                     screeningChoice(
-                        title: "有既往病史",
+                        title: L10n.text("member.setup.medical.chronic.chronic.31f558"),
                         isSelected: status == .have,
                         action: { status = .have }
                     )
@@ -98,7 +98,7 @@ struct MemberMedicalChronicConditionStepView: View {
             Image(systemName: "lightbulb.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("贴心提示：如果没有相关病史，请直接点击下方保存即可。")
+            Text(L10n.text("member.setup.medical.chronic.chronic.8d38f0"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -106,17 +106,17 @@ struct MemberMedicalChronicConditionStepView: View {
     }
 
     private var quickUploadCard: some View {
-        MemberSetupSection(title: "快速录入") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.chronic.chronic.d6c422")) {
             Button {
                 showingUploadSheet = true
             } label: {
                 VStack(spacing: 10) {
-                    Label("拍照 / 上传门诊病历或出院小结", systemImage: "camera.viewfinder")
+                    Label(L10n.text("member.setup.medical.chronic.chronic.4c71a2"), systemImage: "camera.viewfinder")
                         .font(.headline)
                         .foregroundStyle(Color.accentColor)
                         .multilineTextAlignment(.center)
 
-                    Text("系统将自动解析医学术语，提取确诊疾病与关键指标")
+                    Text(L10n.text("member.setup.medical.chronic.chronic.f3edec"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -132,7 +132,7 @@ struct MemberMedicalChronicConditionStepView: View {
     private var existingConditionsSection: some View {
         Group {
             if chronicConditions.isEmpty == false {
-                MemberSetupSection(title: "已有既往疾病") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.chronic.chronic.57571c")) {
                     VStack(spacing: 10) {
                         ForEach(chronicConditions, id: \.self) { disease in
                             Button {

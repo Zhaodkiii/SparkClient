@@ -194,7 +194,7 @@ struct ChatThreadSettingsSheet: View {
                 id: "tokens-\(value)",
                 value: value,
                 title: "\(value)",
-                detail: String(format: L10n.text("chat.settings.max_tokens.detail"), locale: Locale.current, value)
+                detail: L10n.format("chat.settings.max_tokens.detail", value)
             )
         }
     }
@@ -205,7 +205,7 @@ struct ChatThreadSettingsSheet: View {
                 id: "messages-\(value)",
                 value: value,
                 title: "\(value)",
-                detail: String(format: L10n.text("chat.settings.max_messages.detail"), locale: Locale.current, value)
+                detail: L10n.format("chat.settings.max_messages.detail", value)
             )
         }
     }

@@ -53,11 +53,11 @@ struct ChronicConditionFormView: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("既往疾病史")
+        .navigationTitle(L10n.text("member.setup.medical.chronic.chronic.89a8de"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            prompt: Text("搜索疾病名称 (支持拼音/首字母)")
+            prompt: Text(L10n.text("member.setup.medical.chronic.chronic.008b6b"))
         )
         .sparkFormBottomBar(
             canSubmit: chronicConditions.isEmpty == false,
@@ -86,12 +86,12 @@ struct ChronicConditionFormView: View {
 
     private var quickSelectionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("常见疾病快速勾选")
+            Text(L10n.text("member.setup.medical.chronic.chronic.5774fd"))
                 .font(.headline.weight(.semibold))
 
             VStack(spacing: 0) {
                 if filteredCategories.isEmpty {
-                    Text("未找到匹配疾病，可在下方自定义录入")
+                    Text(L10n.text("member.setup.medical.chronic.chronic.712e06"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -131,18 +131,18 @@ struct ChronicConditionFormView: View {
 
     private var customDiseaseSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("自定义疾病录入")
+            Text(L10n.text("member.setup.medical.chronic.chronic.5a14b8"))
                 .font(.headline.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 14) {
-                Label("添加其他未列出的疾病", systemImage: "plus")
+                Label(L10n.text("member.setup.medical.chronic.chronic.7bd40b"), systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
 
                 Divider()
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("请输入疾病准确名称", systemImage: "pencil.line")
+                    Label(L10n.text("member.setup.medical.chronic.chronic.e977ba"), systemImage: "pencil.line")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -160,7 +160,7 @@ struct ChronicConditionFormView: View {
                 }
 
                 Button(action: addCustomDisease) {
-                    Label("确认添加", systemImage: "plus")
+                    Label(L10n.text("member.setup.medical.allergy.allergy.5e3640"), systemImage: "plus")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(canAddCustomDisease ? Color.white : Color.secondary)
                         .frame(maxWidth: .infinity)
@@ -193,11 +193,11 @@ struct ChronicConditionFormView: View {
 
     private var conditionDetailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("疾病详情补全")
+            Text(L10n.text("member.setup.medical.chronic.chronic.b97337"))
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("已选疾病")
+                Text(L10n.text("member.setup.medical.chronic.chronic.091763"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -217,7 +217,7 @@ struct ChronicConditionFormView: View {
 
                 VStack(spacing: 0) {
                     HStack {
-                        Label("确诊时间", systemImage: "calendar")
+                        Label(L10n.text("member.setup.medical.chronic.chronic.f8c70c"), systemImage: "calendar")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -234,7 +234,7 @@ struct ChronicConditionFormView: View {
                     Divider().padding(.vertical, 10)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("当前控制状态", systemImage: "stethoscope")
+                        Label(L10n.text("member.setup.medical.chronic.chronic.210cee"), systemImage: "stethoscope")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         controlStatusPicker(for: focusedCondition)
@@ -244,7 +244,7 @@ struct ChronicConditionFormView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("补充备注 (例如：并发症、主治医院等)...", systemImage: "note.text")
+                        Label(L10n.text("member.setup.medical.chronic.chronic.79f82a"), systemImage: "note.text")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         TextEditor(text: detailNotesBinding(for: focusedCondition))

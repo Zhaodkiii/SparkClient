@@ -65,7 +65,7 @@ struct ModelManagementView: View {
                 availableModelsSection
             }
             .listStyle(.insetGrouped)
-            .navigationTitle(String(format: L10n.text("ai_settings.models.management.nav_title"), provider.displayName))
+            .navigationTitle(L10n.format("ai_settings.models.management.nav_title", provider.displayName))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: L10n.text("ai_settings.models.management.search_prompt"))
             .toolbar {
@@ -165,7 +165,7 @@ struct ModelManagementView: View {
                 }
             }
         } header: {
-            Text(String(format: L10n.text("ai_settings.models.management.section.added"), filteredCompanyModels.count))
+            Text(L10n.format("ai_settings.models.management.section.added", filteredCompanyModels.count))
         }
     }
 
@@ -207,7 +207,7 @@ struct ModelManagementView: View {
                 }
             }
         } header: {
-            Text(String(format: L10n.text("ai_settings.models.management.section.remote"), filteredRemoteModels.count))
+            Text(L10n.format("ai_settings.models.management.section.remote", filteredRemoteModels.count))
         } footer: {
             Text(L10n.text("ai_settings.models.management.remote.footer"))
         }

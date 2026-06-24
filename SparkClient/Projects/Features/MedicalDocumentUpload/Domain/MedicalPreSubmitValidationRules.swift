@@ -212,7 +212,7 @@ enum MedicalPreSubmitValidationRules {
     }
 
     static func requiredFieldMessage(fieldLabel: String) -> String {
-        String(format: L10n.text("medical.upload.presubmit.error.required"), fieldLabel)
+        L10n.format("medical.upload.presubmit.error.required", fieldLabel)
     }
 
     static func completeDateMessage() -> String {
@@ -228,7 +228,7 @@ enum MedicalPreSubmitValidationRules {
     }
 
     static func validEnumMessage(fieldLabel: String) -> String {
-        String(format: L10n.text("medical.upload.presubmit.error.valid_enum"), fieldLabel)
+        L10n.format("medical.upload.presubmit.error.valid_enum", fieldLabel)
     }
 
     static func indexedRequiredMessage(index: Int, fieldLabel: String) -> String {

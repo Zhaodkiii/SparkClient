@@ -318,9 +318,9 @@ enum ProbeError: LocalizedError {
             return L10n.text("ai_settings.models.online.probe.err.unsupported_image_probe")
         case .httpFailed(let code, let message):
             if message.isEmpty {
-                return String(format: L10n.text("ai_settings.models.online.probe.err.http_failed"), code)
+                return L10n.format("ai_settings.models.online.probe.err.http_failed", code)
             }
-            return String(format: L10n.text("ai_settings.models.online.probe.err.http_failed_detail"), code, message)
+            return L10n.format("ai_settings.models.online.probe.err.http_failed_detail", code, message)
         }
     }
 }

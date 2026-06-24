@@ -66,7 +66,7 @@ final class GuestChatViewModel: ObservableObject {
             sessionStore.messages.append(
                 GuestChatMessage(
                     role: .assistant,
-                    text: String(format: L10n.text("guest.chat.error_prefix"), error.localizedDescription)
+                    text: L10n.format("guest.chat.error_prefix", error.localizedDescription)
                 )
             )
         }

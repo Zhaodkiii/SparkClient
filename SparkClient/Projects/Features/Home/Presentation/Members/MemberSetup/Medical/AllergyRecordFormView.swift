@@ -43,11 +43,11 @@ struct AllergyRecordFormView: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("添加过敏记录")
+        .navigationTitle(L10n.text("member.setup.medical.allergy.allergy.3ffc39"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            prompt: Text("搜索过敏原名称 (如：头孢、花粉、大豆)")
+            prompt: Text(L10n.text("member.setup.medical.allergy.allergy.a8c141"))
         )
         .sparkFormBottomBar(
             canSubmit: allergies.isEmpty == false,
@@ -76,12 +76,12 @@ struct AllergyRecordFormView: View {
 
     private var quickSelectionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("常见过敏原快速勾选")
+            Text(L10n.text("member.setup.medical.allergy.allergy.92231a"))
                 .font(.headline.weight(.semibold))
 
             VStack(spacing: 0) {
                 if filteredCategories.isEmpty {
-                    Text("未找到匹配过敏原，可在下方自定义录入")
+                    Text(L10n.text("member.setup.medical.allergy.allergy.4e5cec"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -121,18 +121,18 @@ struct AllergyRecordFormView: View {
 
     private var customAllergenSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("自定义过敏原录入")
+            Text(L10n.text("member.setup.medical.allergy.allergy.889a45"))
                 .font(.headline.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 14) {
-                Label("添加其他未列出的过敏原", systemImage: "plus")
+                Label(L10n.text("member.setup.medical.allergy.allergy.a680ca"), systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
 
                 Divider()
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("请输入过敏原名称", systemImage: "pencil.line")
+                    Label(L10n.text("member.setup.medical.allergy.allergy.76e483"), systemImage: "pencil.line")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -150,7 +150,7 @@ struct AllergyRecordFormView: View {
                 }
 
                 Button(action: addCustomAllergen) {
-                    Label("确认添加", systemImage: "plus")
+                    Label(L10n.text("member.setup.medical.allergy.allergy.5e3640"), systemImage: "plus")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(canAddCustomAllergen ? Color.white : Color.secondary)
                         .frame(maxWidth: .infinity)
@@ -183,11 +183,11 @@ struct AllergyRecordFormView: View {
 
     private var allergyDetailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("过敏详情补全")
+            Text(L10n.text("member.setup.medical.allergy.allergy.3e036f"))
                 .font(.headline)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("已选过敏原")
+                Text(L10n.text("member.setup.medical.allergy.allergy.de5ce8"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -207,7 +207,7 @@ struct AllergyRecordFormView: View {
 
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("严重程度评估", systemImage: "exclamationmark.triangle.fill")
+                        Label(L10n.text("member.setup.medical.allergy.allergy.f61739"), systemImage: "exclamationmark.triangle.fill")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         severityPicker(for: focusedAllergy)
@@ -216,7 +216,7 @@ struct AllergyRecordFormView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("发生过的过敏反应", systemImage: "allergens")
+                        Label(L10n.text("member.setup.medical.allergy.allergy.7e26a0"), systemImage: "allergens")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         reactionPicker(for: focusedAllergy)
@@ -225,7 +225,7 @@ struct AllergyRecordFormView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("补充备注 (例如：确诊时间、首次发作表现、抢救史等)...", systemImage: "note.text")
+                        Label(L10n.text("member.setup.medical.allergy.allergy.d28cc7"), systemImage: "note.text")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         TextEditor(text: detailNotesBinding(for: focusedAllergy))

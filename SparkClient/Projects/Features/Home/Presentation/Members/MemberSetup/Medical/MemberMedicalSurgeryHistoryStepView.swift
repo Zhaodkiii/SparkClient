@@ -17,7 +17,7 @@ struct MemberMedicalSurgeryHistoryStepView: View {
 
             if surgeryStatus == .have {
                 existingSurgeriesSection
-                MemberSetupAccentAddButton(title: "添加手术记录") {
+                MemberSetupAccentAddButton(title: L10n.text("member.setup.medical.surgery.9afee9")) {
                     showingSurgeryFormSheet = true
                 }
             }
@@ -62,20 +62,20 @@ struct MemberMedicalSurgeryHistoryStepView: View {
     }
 
     private var surgeryScreeningCard: some View {
-        MemberSetupSection(title: "手术情况筛查") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.surgery.16ac72")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("您过往是否曾接受过任何手术治疗（包含微创手术）？")
+                Text(L10n.text("member.setup.medical.surgery.adde24"))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     screeningChoice(
-                        title: "无手术史",
+                        title: L10n.text("member.setup.medical.surgery.bd9481"),
                         isSelected: surgeryStatus == .none,
                         action: { surgeryStatus = .none }
                     )
                     screeningChoice(
-                        title: "有手术史",
+                        title: L10n.text("member.setup.medical.surgery.6725eb"),
                         isSelected: surgeryStatus == .have,
                         action: { surgeryStatus = .have }
                     )
@@ -89,7 +89,7 @@ struct MemberMedicalSurgeryHistoryStepView: View {
             Image(systemName: "lightbulb.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("如果没有相关手术经历，请直接点击下方保存即可。")
+            Text(L10n.text("member.setup.medical.surgery.bf1209"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -99,13 +99,13 @@ struct MemberMedicalSurgeryHistoryStepView: View {
     private var existingSurgeriesSection: some View {
         Group {
             if viewModel.isLoadingMemberSurgeries {
-                MemberSetupSection(title: "已有手术记录") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.surgery.9725c9")) {
                     ProgressView()
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                 }
             } else if viewModel.memberSurgeries.isEmpty == false {
-                MemberSetupSection(title: "已有手术记录") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.surgery.9725c9")) {
                     VStack(spacing: 10) {
                         ForEach(viewModel.memberSurgeries) { surgery in
                             Button {

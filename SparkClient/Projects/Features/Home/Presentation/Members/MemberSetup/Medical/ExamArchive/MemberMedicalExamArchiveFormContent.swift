@@ -74,13 +74,13 @@ struct MemberMedicalExamArchiveFormContent: View {
     }
 
     private var examHistoryScreeningCard: some View {
-        MemberSetupSection(title: "是否有历史体检报告") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.exam_archive.general.fa30fa")) {
             HStack(spacing: 10) {
                 screeningChoice(title: "暂无历史报告", isSelected: hasExamHistory == false) {
                     hasExamHistory = false
                     flowViewModel.selectPath(.noHistoryReport)
                 }
-                screeningChoice(title: "有历史报告", isSelected: hasExamHistory) {
+                screeningChoice(title: L10n.text("member.setup.medical.exam_archive.general.9bbd2c"), isSelected: hasExamHistory) {
                     hasExamHistory = true
                     flowViewModel.selectPath(.hasHistoryReport)
                 }
@@ -99,11 +99,11 @@ struct MemberMedicalExamArchiveFormContent: View {
                     .imageScale(.medium)
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(Color.accentColor)
-                Text("体检报告列表")
+                Text(L10n.text("member.setup.medical.exam_archive.general.4835d8"))
                     .font(.title2.weight(.bold))
                 Spacer(minLength: 0)
                 importActionButton(
-                    title: "拍照 / 扫描纸质报告",
+                    title: L10n.text("member.setup.medical.exam_archive.general.31db90"),
                     systemImage: "camera.viewfinder",
                     isPrimary: true
                 ) {
@@ -136,17 +136,17 @@ struct MemberMedicalExamArchiveFormContent: View {
                 }
             }
 
-            Text("点击报告卡片进入 AI 异常项确认与体检计划生成。")
+            Text(L10n.text("member.setup.medical.exam_archive.general.07b967"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
     }
 
     private var examHistoryCompletionCard: some View {
-        MemberSetupSection(title: "历史体检信息补全") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.exam_archive.general.7f866b")) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Label("最近一次体检时间", systemImage: "calendar")
+                    Label(L10n.text("member.setup.medical.exam_archive.general.574d1d"), systemImage: "calendar")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -163,7 +163,7 @@ struct MemberMedicalExamArchiveFormContent: View {
                 Divider()
 
                 HStack {
-                    Label("体检机构/医院", systemImage: "building.2")
+                    Label(L10n.text("member.setup.medical.exam_archive.general.11bc16"), systemImage: "building.2")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     TextField("请输入体检中心名称", text: $viewModel.examInstitution)
@@ -173,24 +173,24 @@ struct MemberMedicalExamArchiveFormContent: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("电子体检报告导入 (推荐)")
+                    Text(L10n.text("member.setup.medical.exam_archive.general.c94676"))
                         .font(.subheadline.weight(.semibold))
 
-                    Text("系统将启动 AI 智能 OCR 识别，自动提取您的异常指标与结论。")
+                    Text(L10n.text("member.setup.medical.exam_archive.general.057456"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 10) {
                         importActionButton(
-                            title: "拍照 / 扫描纸质报告",
+                            title: L10n.text("member.setup.medical.exam_archive.general.31db90"),
                             systemImage: "camera.viewfinder",
                             isPrimary: true
                         ) {
                             showingUploadSheet = true
                         }
                         importActionButton(
-                            title: "上传电子版 (PDF/图片)",
+                            title: L10n.text("member.setup.medical.exam_archive.general.03959d"),
                             systemImage: "folder",
                             isPrimary: false
                         ) {
@@ -202,7 +202,7 @@ struct MemberMedicalExamArchiveFormContent: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("报告摘要 / 核心异常项 (选填)", systemImage: "pencil.line")
+                    Label(L10n.text("member.setup.medical.exam_archive.general.a74f8a"), systemImage: "pencil.line")
                         .font(.subheadline.weight(.semibold))
                     TextField(
                         "可简要记录您记忆中的异常（如：甲状腺结节、高血脂），或留空等待 AI 扫描解析",

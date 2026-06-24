@@ -60,7 +60,7 @@ struct MemberModuleSummaryHeaderView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("已完成 \(completedCount) / \(totalCount)")
+                    Text(L10n.format("member.module.general.ba30b4", fallback: "已完成 %d / %d", completedCount, totalCount))
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Color(uiColor: .systemBlue))
                 }

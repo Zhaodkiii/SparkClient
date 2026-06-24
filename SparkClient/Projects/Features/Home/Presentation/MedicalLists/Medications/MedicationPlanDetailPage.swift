@@ -250,7 +250,7 @@ struct MedicationPlanDetailPage: View {
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(record.status == "taken" ? Color(uiColor: .systemGreen) : Color(uiColor: .secondaryLabel))
                             }
-                            Text(String(format: L10n.text("home.medical.medication_plan.record.planned_dose_format"), record.plannedDose))
+                            Text(L10n.format("home.medical.medication_plan.record.planned_dose_format", record.plannedDose))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let takenAt = record.takenAt {

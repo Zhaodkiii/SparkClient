@@ -229,7 +229,7 @@ struct AISearchToolSettingsView: View {
         guard let selected = searchKeys.first(where: { $0.id == id }) else { return }
         // 非 Spark 服务商启用时必须配置 API Key
         if enabled, SearchProviderID(company: selected.company) != .spark, hasAPIKey(selected) == false {
-            errorMessage = String(format: L10n.text("ai_settings.search.error.need_api_key_format"), displayName(for: selected))
+            errorMessage = L10n.format("ai_settings.search.error.need_api_key_format", displayName(for: selected))
             return
         }
 
@@ -370,7 +370,7 @@ private struct SearchKeyEditorView: View {
                             .padding(.top, 4)
 
                         // 页面说明文本
-                        Text(String(format: L10n.text("ai_settings.search.editor.intro_format"), displayName))
+                        Text(L10n.format("ai_settings.search.editor.intro_format", displayName))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -381,11 +381,11 @@ private struct SearchKeyEditorView: View {
                                 // 打开帮助文档Sheet
                                 helpPage = SearchHelpPage(
                                     url: url,
-                                    title: String(format: L10n.text("ai_settings.search.editor.help_title_format"), displayName)
+                                    title: L10n.format("ai_settings.search.editor.help_title_format", displayName)
                                 )
                             } label: {
                                 Label(
-                                    String(format: L10n.text("ai_settings.search.editor.help_link_format"), displayName),
+                                    L10n.format("ai_settings.search.editor.help_link_format", displayName),
                                     systemImage: "safari"
                                 )
                                 .font(.footnote)
@@ -541,7 +541,7 @@ private struct SearchKeyEditorView: View {
         if key.isUsing,
            SearchProviderID(company: key.company) != .spark,
            key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            errorMessage = String(format: L10n.text("ai_settings.search.error.need_api_key_format"), displayName)
+            errorMessage = L10n.format("ai_settings.search.error.need_api_key_format", displayName)
             return false
         }
         // 校验通过，清空错误

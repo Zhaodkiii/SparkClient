@@ -210,8 +210,8 @@ enum ChatHealthResourcePreviewLoader {
                     summary.todayTotal
                 ),
                 extraLines: [
-                    String(format: L10n.text("chat.ask_report.preview.adherence_format"), Int(summary.adherenceRate * 100)),
-                    String(format: L10n.text("chat.ask_report.preview.active_plans_format"), summary.activePlanCount)
+                    L10n.format("chat.ask_report.preview.adherence_format", Int(summary.adherenceRate * 100)),
+                    L10n.format("chat.ask_report.preview.active_plans_format", summary.activePlanCount)
                 ],
                 attachments: nil
             )
@@ -352,8 +352,8 @@ enum ChatHealthResourcePreviewLoader {
             findingsText: trimmed(findings),
             impressionText: trimmed(impression),
             extraLines: [
-                trimmed(departmentName).map { String(format: L10n.text("chat.ask_report.preview.department_format"), $0) },
-                trimmed(doctorName).map { String(format: L10n.text("chat.ask_report.preview.doctor_format"), $0) }
+                trimmed(departmentName).map { L10n.format("chat.ask_report.preview.department_format", $0) },
+                trimmed(doctorName).map { L10n.format("chat.ask_report.preview.doctor_format", $0) }
             ].compactMap { $0 },
             detailGroups: groupedDetails(details),
             attachments: attachments ?? []
@@ -484,7 +484,7 @@ enum ChatHealthResourcePreviewLoader {
             .map(\.name)
             .filter { $0.isEmpty == false }
         guard names.isEmpty == false else { return [] }
-        return [String(format: L10n.text("chat.ask_report.preview.related_symptoms_format"), names.joined(separator: "、"))]
+        return [L10n.format("chat.ask_report.preview.related_symptoms_format", names.joined(separator: "、"))]
     }
 
     private static func planRange(start: Date, end: Date?) -> String {
@@ -496,7 +496,7 @@ enum ChatHealthResourcePreviewLoader {
 
     private static func line(_ key: String, _ value: String?) -> String? {
         guard let text = trimmed(value) else { return nil }
-        return String(format: L10n.text(key), text)
+        return L10n.format(key, text)
     }
 
     private static func formatDate(_ date: Date?) -> String? {

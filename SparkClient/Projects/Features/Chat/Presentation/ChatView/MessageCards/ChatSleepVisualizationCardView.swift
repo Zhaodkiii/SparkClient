@@ -71,7 +71,7 @@ struct SleepComparisonCard: View {
             Text(L10n.text("chat.sleep.comparison.title"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text(String(format: L10n.text("chat.sleep.comparison.subtitle"), locale: Locale.current, sortedDays.count))
+            Text(L10n.format("chat.sleep.comparison.subtitle", sortedDays.count))
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -146,7 +146,7 @@ struct SleepAverageCard: View {
 
     private var dateRangeText: String {
         guard let first = sortedDays.first?.date, let last = sortedDays.last?.date else { return "" }
-        return String(format: L10n.text("chat.sleep.average.date_range"), locale: Locale.current, first, last)
+        return L10n.format("chat.sleep.average.date_range", first, last)
     }
 
     var body: some View {
@@ -505,9 +505,9 @@ struct SleepDayTimelineCard: View {
     private func formatLegendMinutes(_ minutes: Int) -> String {
         let parts = splitHoursMinutes(minutes)
         if parts.hours > 0 {
-            return String(format: L10n.text("chat.sleep.legend.hours_minutes"), locale: Locale.current, parts.hours, parts.minutes)
+            return L10n.format("chat.sleep.legend.hours_minutes", parts.hours, parts.minutes)
         }
-        return String(format: L10n.text("chat.sleep.legend.minutes"), locale: Locale.current, parts.minutes)
+        return L10n.format("chat.sleep.legend.minutes", parts.minutes)
     }
 }
 

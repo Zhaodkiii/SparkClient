@@ -121,10 +121,10 @@ struct KnowledgeTextEditToolbar: View {
     /// 与 Health `tokenCounter()` 一致：右侧两行、caption、灰色。
     private var tokenCounter: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(String(format: L10n.text("knowledge.toolbar.chars"), locale: Locale.current, characterCount))
+            Text(L10n.format("knowledge.toolbar.chars", characterCount))
                 .font(.caption)
                 .foregroundColor(.gray)
-            Text(String(format: L10n.text("knowledge.toolbar.tokens_approx"), locale: Locale.current, tokenEstimate))
+            Text(L10n.format("knowledge.toolbar.tokens_approx", tokenEstimate))
                 .font(.caption)
                 .foregroundColor(.gray)
         }

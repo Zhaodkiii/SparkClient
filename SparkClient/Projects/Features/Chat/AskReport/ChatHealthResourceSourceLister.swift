@@ -85,7 +85,7 @@ enum ChatHealthResourceSourceLister {
         if source.searchText.contains(keyword) { fields.append("searchText") }
         let reason = fields.isEmpty
             ? L10n.text("chat.ask_report.tool.match.weak")
-            : String(format: L10n.text("chat.ask_report.tool.match.keyword_format"), keyword)
+            : L10n.format("chat.ask_report.tool.match.keyword_format", keyword)
         let confidence: Double = fields.contains("title") ? 0.88 : (fields.isEmpty ? 0.42 : 0.72)
         return (fields, reason, confidence)
     }

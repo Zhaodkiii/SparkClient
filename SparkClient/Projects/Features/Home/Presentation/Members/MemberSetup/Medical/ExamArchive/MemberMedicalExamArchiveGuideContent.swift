@@ -86,7 +86,7 @@ enum MemberMedicalExamArchiveGuideContent {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(String(format: L10n.text("medical.exam_archive.extract.count"), flowViewModel.abnormalItems.count))
+            Text(L10n.format("medical.exam_archive.extract.count", flowViewModel.abnormalItems.count))
                 .font(.headline.weight(.semibold))
 
             if case .failed(let message) = flowViewModel.loadState {
@@ -278,7 +278,7 @@ enum MemberMedicalExamArchiveGuideContent {
     static func reportTitle(_ report: SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments) -> String {
         if let date = report.examDate {
             let year = Calendar.current.component(.year, from: date)
-            return String(format: L10n.text("medical.exam_archive.report.title_year"), year)
+            return L10n.format("medical.exam_archive.report.title_year", year)
         }
         return (report.institutionName ?? "").isEmpty
             ? L10n.text("medical.exam_archive.report.title_default")

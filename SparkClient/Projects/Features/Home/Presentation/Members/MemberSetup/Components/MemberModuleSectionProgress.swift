@@ -7,9 +7,9 @@ enum MemberModuleSectionStatus: String, Codable, Sendable, Equatable {
 
     var displayTitle: String {
         switch self {
-        case .notStarted: return "未开始"
-        case .incomplete: return "未完成"
-        case .completed: return "已完成"
+        case .notStarted: return L10n.text("member.setup.common.not_started");
+        case .incomplete: return L10n.text("member.setup.common.incomplete");
+        case .completed: return L10n.text("home.members.save.success")
         }
     }
 }

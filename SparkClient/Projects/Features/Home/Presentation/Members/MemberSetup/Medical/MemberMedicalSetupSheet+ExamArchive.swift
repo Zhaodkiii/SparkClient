@@ -191,7 +191,9 @@ extension MemberMedicalSetupSheetView {
     }
 
     private var examArchiveStepPrimaryTitle: String {
-        viewModel.hasExamHistory ? "选择报告后继续" : "生成体检计划"
+        viewModel.hasExamHistory
+            ? L10n.text("member.setup.medical.exam_archive.action.continue_after_select")
+            : L10n.text("member.setup.medical.exam_archive.action.generate_plan_short")
     }
 
     func configureExamArchiveFlowIfNeeded() {

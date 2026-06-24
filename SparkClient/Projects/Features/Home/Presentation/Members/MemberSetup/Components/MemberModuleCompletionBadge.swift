@@ -4,7 +4,7 @@ struct MemberModuleCompletionBadge: View {
     let isCompleted: Bool
 
     var body: some View {
-        Text(isCompleted ? "已完成" : "待完善")
+        Text(isCompleted ? L10n.text("home.members.save.success") : "待完善")
             .font(.caption.weight(.semibold))
             .foregroundStyle(isCompleted ? .green : .secondary)
             .padding(.horizontal, 10)

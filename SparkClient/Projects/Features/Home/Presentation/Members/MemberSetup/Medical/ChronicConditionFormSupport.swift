@@ -12,22 +12,22 @@ enum ChronicConditionFormSupport {
 
     static let diseaseCategories: [ChronicDiseaseCategoryGroup] = [
         .init(
-            title: "心脑血管系统",
+            title: L10n.text("member.setup.medical.chronic.chronic.12d496"),
             systemImage: "heart.fill",
             diseases: ["高血压", "冠心病", "高脂血症", "脑卒中/脑梗死", "心律失常", "心肌缺血"]
         ),
         .init(
-            title: "内分泌与代谢",
+            title: L10n.text("member.setup.medical.chronic.chronic.4bfb23"),
             systemImage: "drop.fill",
             diseases: ["2型糖尿病", "1型糖尿病", "高尿酸血症/痛风", "甲状腺结节", "甲亢/甲减", "骨质疏松"]
         ),
         .init(
-            title: "消化与呼吸系统",
+            title: L10n.text("member.setup.medical.chronic.chronic.4bd70f"),
             systemImage: "lungs.fill",
             diseases: ["慢性胃炎/胃溃疡", "脂肪肝", "胆囊结石/胆囊炎", "支气管哮喘", "慢性支气管炎/COPD", "过敏性鼻炎"]
         ),
         .init(
-            title: "泌尿与骨骼系统",
+            title: L10n.text("member.setup.medical.chronic.chronic.d4632a"),
             systemImage: "figure.walk",
             diseases: ["慢性肾脏病", "肾结石/尿路结石", "前列腺增生", "颈椎病/腰椎间盘突出", "退行性关节炎"]
         )

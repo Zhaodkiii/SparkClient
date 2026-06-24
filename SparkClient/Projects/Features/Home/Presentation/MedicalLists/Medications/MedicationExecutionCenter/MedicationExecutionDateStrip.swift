@@ -17,8 +17,8 @@ struct MedicationExecutionDateDot: View {
 
     private var weekdayText: String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "E"
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("E")
         return formatter.string(from: date)
     }
 
@@ -91,24 +91,29 @@ struct MedicationExecutionDateDot: View {
     private var accessibilityText: String {
         let status: String
         if isSelected {
-            status = "已选中"
+            status = L10n.text("home.medical.medication_execution.date.selected")
         } else if isLoaded == false {
-            status = "暂无加载"
+            status = L10n.text("home.medical.medication_execution.date.not_loaded")
         } else if effectiveProgress >= 1 {
-            status = "已全部完成"
+            status = L10n.text("home.medical.medication_execution.date.all_done")
         } else if effectiveProgress > 0 {
-            status = "部分完成"
+            status = L10n.text("home.medical.medication_execution.date.partial")
         } else {
-            status = "未完成"
+            status = L10n.text("home.medical.medication_execution.date.incomplete")
         }
 
-        return "\(weekdayText)，\(Self.accessibilityDateFormatter.string(from: date))，\(status)"
+        return L10n.format(
+            "home.medical.medication_execution.date.accessibility",
+            weekdayText,
+            Self.accessibilityDateFormatter.string(from: date),
+            status
+        )
     }
 
     private static let accessibilityDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "M月d日"
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("Md")
         return formatter
     }()
 }

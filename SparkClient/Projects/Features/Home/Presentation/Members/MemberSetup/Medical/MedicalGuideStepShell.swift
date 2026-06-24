@@ -64,7 +64,7 @@ struct MedicalGuideStepShell<Content: View>: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.automatic)
         .memberSetupBottomBar(
-            primaryTitle: primaryTitle ?? (step == total ? "保存" : "下一步"),
+            primaryTitle: primaryTitle ?? (step == total ? L10n.text("common.save") : "下一步"),
             primaryEnabled: primaryEnabled && isLoading == false,
             isLoading: isLoading,
             showsPrimaryButton: showsPrimaryButton,

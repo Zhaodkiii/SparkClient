@@ -121,7 +121,7 @@ struct AITrialSettingsView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                     if snapshot.trial.remainingSeconds > 0 {
-                        Text(String(format: L10n.text("ai_settings.providers.trial.status.remaining_days"), daysRemaining))
+                        Text(L10n.format("ai_settings.providers.trial.status.remaining_days", daysRemaining))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()

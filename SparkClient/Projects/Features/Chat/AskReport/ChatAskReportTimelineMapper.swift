@@ -175,11 +175,11 @@ enum ChatAskReportTimelineMapper {
         let abnormalCount = item.medExamDetails?.filter { $0.flag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }.count ?? 0
         var badges: [String] = []
         if abnormalCount > 0 {
-            badges.append(String(format: L10n.text("chat.ask_report.sheet.badge.abnormal_format"), abnormalCount))
+            badges.append(L10n.format("chat.ask_report.sheet.badge.abnormal_format", abnormalCount))
         }
         let attachmentCount = item.attachments?.count ?? 0
         if attachmentCount > 0 {
-            badges.append(String(format: L10n.text("chat.ask_report.message_card.attachment_count_format"), attachmentCount))
+            badges.append(L10n.format("chat.ask_report.message_card.attachment_count_format", attachmentCount))
         }
         let searchText = joinSearch(
             title, subtitle, summary, item.reportNo, item.institutionName,
@@ -216,7 +216,7 @@ enum ChatAskReportTimelineMapper {
         let attachmentCount = item.attachments?.count ?? 0
         var badges = [L10n.text(category.titleKey)]
         if attachmentCount > 0 {
-            badges.append(String(format: L10n.text("chat.ask_report.message_card.attachment_count_format"), attachmentCount))
+            badges.append(L10n.format("chat.ask_report.message_card.attachment_count_format", attachmentCount))
         }
         let searchText = joinSearch(
             title, subtitle, summary, item.category, item.subCategory,

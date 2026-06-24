@@ -384,7 +384,7 @@ struct ExamReportFormView: View {
     private func chipSubtitle(for item: ItemDraft) -> String {
         switch pageType {
         case .laboratory:
-            return String(format: L10n.text("medical_record.forms.exam_report.result_line"), item.resultValue)
+            return L10n.format("medical_record.forms.exam_report.result_line", item.resultValue)
         case .imaging, .pathology:
             let diag = item.diagnosis.trimmingCharacters(in: .whitespacesAndNewlines)
             if diag.isEmpty == false {

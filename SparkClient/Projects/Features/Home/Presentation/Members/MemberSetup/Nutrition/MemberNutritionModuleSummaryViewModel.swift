@@ -105,14 +105,13 @@ final class MemberNutritionModuleSummaryViewModel: ObservableObject {
     }
 
     private var basicInfoSummary: String {
-        guard let goal = goalState?.goal else { return "未填写" }
-        let height = (goal.heightCm ?? 0) > 0 ? String(format: "%.0fcm", goal.heightCm ?? 0) : "未填写"
-        let weight = (goal.currentWeightKg ?? 0) > 0 ? String(format: "%.0fkg", goal.currentWeightKg ?? 0) : "未填写"
-        let goalMode = MemberNutritionSetupViewModel.GoalMode(rawValue: goal.goalType)?.title ?? "未填写"
-        let kcal = (goal.dailyEnergyTargetKcal ?? 0) > 0 ? "\(Int(goal.dailyEnergyTargetKcal ?? 0))千卡" : "未填写"
-        if height == "未填写", weight == "未填写" {
-            return "未填写"
-        }
+        guard let goal = goalState?.goal else { return L10n.text("member.setup.common.not_filled");}
+        let height = (goal.heightCm ?? 0) > 0 ? String(format: "%.0fcm", goal.heightCm ?? 0) : L10n.text("member.setup.common.not_filled")
+        let weight = (goal.currentWeightKg ?? 0) > 0 ? String(format: "%.0fkg", goal.currentWeightKg ?? 0) : L10n.text("member.setup.common.not_filled")
+        let goalMode = MemberNutritionSetupViewModel.GoalMode(rawValue: goal.goalType)?.title ?? L10n.text("member.setup.common.not_filled")
+        let kcal = (goal.dailyEnergyTargetKcal ?? 0) > 0 ? "\(Int(goal.dailyEnergyTargetKcal ?? 0))千卡" : L10n.text("member.setup.common.not_filled")
+        if height == L10n.text("member.setup.common.not_filled"), weight == L10n.text("member.setup.common.not_filled") {
+            return L10n.text("member.setup.common.not_filled");        }
         return [height, weight, goalMode, kcal].joined(separator: " · ")
     }
 

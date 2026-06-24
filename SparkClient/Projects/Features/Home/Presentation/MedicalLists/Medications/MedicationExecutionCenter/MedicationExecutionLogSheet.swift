@@ -50,14 +50,14 @@ struct MedicationExecutionLogSheet: View {
                             .background(.regularMaterial, in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("关闭")
+                    .accessibilityLabel(L10n.text("common.close"))
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Button {
                     onDone(selections)
                 } label: {
-                    Text("完成")
+                    Text(L10n.text("common.done"))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -89,7 +89,7 @@ struct MedicationExecutionLogSheet: View {
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
 
-            Text("\(context.doses.count)种用药")
+            Text(L10n.format("home.medical.medication_execution.dose_count", context.doses.count))
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }

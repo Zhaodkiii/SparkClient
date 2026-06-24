@@ -14,20 +14,24 @@ enum MedicationExecutionSupport {
         let month = comps.month ?? 1
         let day = comps.day ?? 1
         if calendar.isDateInToday(date) {
-            return "\(month)月\(day)日 今天"
+            return L10n.format("home.medical.medication_execution.date.today_header", month, day)
         }
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "EEEE"
-        return "\(month)月\(day)日 \(formatter.string(from: date))"
+        formatter.locale = Locale.current
+        formatter.setLocalizedDateFormatFromTemplate("EEEE")
+        let weekday = formatter.string(from: date)
+        return L10n.format("home.medical.medication_execution.date.weekday_header", month, day, weekday)
     }
 
     static func logSheetDateTitle(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let comps = calendar.dateComponents([.month, .day], from: date)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "EEEE"
-        return "\(comps.month ?? 1)月\(comps.day ?? 1)日 \(formatter.string(from: date))"
+        longDateTitle(date, calendar: Calendar.current)
+    }
+
+    static func logTitle(at timeText: String) -> String {
+        L10n.format("home.medical.medication_execution.log_title_at_time", timeText)
+    }
+
+    static func allDrugsLogTitle() -> String {
+        L10n.text("home.medical.medication_execution.log_title_all_drugs")
     }
 }

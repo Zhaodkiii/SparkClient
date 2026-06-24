@@ -99,7 +99,7 @@ struct MemberSetupFlowView: View {
                 if let member = viewModel.createdMember {
                     MemberMedicalModuleSummaryView(member: member, flowViewModel: viewModel)
                 } else {
-                    Text("成员信息缺失")
+                    Text(L10n.text("member.setup.flow.member_missing"))
                         .foregroundStyle(.secondary)
                 }
             case .nutritionSummary:
@@ -107,7 +107,7 @@ struct MemberSetupFlowView: View {
                 if let member = viewModel.createdMember {
                     MemberNutritionModuleSummaryView(member: member, flowViewModel: viewModel)
                 } else {
-                    Text("成员信息缺失")
+                    Text(L10n.text("member.setup.flow.member_missing"))
                         .foregroundStyle(.secondary)
                 }
             }

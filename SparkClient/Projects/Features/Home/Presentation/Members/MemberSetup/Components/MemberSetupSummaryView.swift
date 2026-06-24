@@ -19,7 +19,7 @@ struct MemberSetupSummaryView: View {
                 MemberModuleCompletionBadge(isCompleted: completedCount == selectedCount && selectedCount > 0)
             }
 
-            Text("已选择 \(selectedCount) 个模块，已完成 \(completedCount) 个")
+            Text(L10n.format("member.setup.flow.general.f58c35", fallback: "已选择 %d 个模块，已完成 %d 个", selectedCount, completedCount))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

@@ -20,12 +20,22 @@ nonisolated enum L10n {
         return fallback ?? key
     }
 
-    nonisolated static func homeGreeting(_ name: String) -> String {
+    /// 带占位符的本地化文案，统一使用 `Locale.current` 格式化。
+    nonisolated static func format(
+        _ key: String,
+        fallback: String? = nil,
+        comment: StaticString = "",
+        _ args: CVarArg...
+    ) -> String {
         String(
-            format: text("home.greeting"),
+            format: text(key, fallback: fallback, comment: comment),
             locale: Locale.current,
-            name
+            arguments: args
         )
+    }
+
+    nonisolated static func homeGreeting(_ name: String) -> String {
+        format("home.greeting", name)
     }
 
     private nonisolated static func preferredLocalizations(locale: Locale = .current) -> [String] {

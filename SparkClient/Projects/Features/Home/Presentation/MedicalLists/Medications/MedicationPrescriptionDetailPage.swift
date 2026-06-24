@@ -269,10 +269,10 @@ struct MedicationPrescriptionDetailPage: View {
     private var headerSubtitle: String {
         [
             currentPrescription?.prescriberName.nilIfBlank.map {
-                String(format: L10n.text("home.medical.prescription.header.doctor_format"), $0)
+                L10n.format("home.medical.prescription.header.doctor_format", $0)
             },
             currentPrescription?.prescriptionNo?.nilIfBlank.map {
-                String(format: L10n.text("home.medical.prescription.header.rx_no_format"), $0)
+                L10n.format("home.medical.prescription.header.rx_no_format", $0)
             },
             currentPrescription?.prescribedAt.map { $0.formatted(date: .abbreviated, time: .omitted) }
         ].compactMap { $0 }.joined(separator: " · ")
@@ -351,7 +351,7 @@ struct MedicationPrescriptionDetailPage: View {
                 Label(L10n.text("home.medical.prescription.linked_medications"), systemImage: "pills.fill")
                     .font(.headline)
                 Spacer()
-                Text(String(format: L10n.text("home.medical.prescription.linked_count"), currentPlans.count))
+                Text(L10n.format("home.medical.prescription.linked_count", currentPlans.count))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }

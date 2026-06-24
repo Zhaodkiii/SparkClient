@@ -39,13 +39,13 @@ struct MemberMedicalModuleSummaryView: View {
                     subtitle: viewModel.headerSubtitle,
                     completedCount: viewModel.completedCount,
                     totalCount: viewModel.sections.count,
-                    emptyHint: "还没有填写医疗资料。可以从任意一组开始，也可以直接使用「开始全部流程」一次性完成。"
+                    emptyHint: L10n.text("member.setup.medical.general.b74a9a")
                 )
 
                 // 一键完整填写医疗全流程入口卡片
                 MemberModuleStartAllCard(
-                    title: "开始全部流程",
-                    subtitle: "基础档案 -> 病史 -> 生活习惯 -> 体检档案"
+                    title: L10n.text("member.setup.medical.general.df476a"),
+                    subtitle: L10n.text("member.setup.medical.general.62aaa9")
                 ) {
                     viewModel.openFullFlow()
                 }
@@ -54,7 +54,7 @@ struct MemberMedicalModuleSummaryView: View {
                 if viewModel.isLoading {
                     HStack(spacing: 10) {
                         ProgressView()
-                        Text("正在加载医疗资料")
+                        Text(L10n.text("member.setup.medical.general.a5c25e"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -63,12 +63,12 @@ struct MemberMedicalModuleSummaryView: View {
                 // 加载失败且无任何分区数据，展示重试按钮
                 else if let loadError = viewModel.loadError, viewModel.sections.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("医疗资料加载失败")
+                        Text(L10n.text("member.setup.medical.general.622e7c"))
                             .font(.headline)
                         Text(loadError)
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                        Button("重试") {
+                        Button(L10n.text("common.retry")) {
                             Task { await viewModel.retryLoad() }
                         }
                         .buttonStyle(.borderedProminent)
@@ -112,7 +112,7 @@ struct MemberMedicalModuleSummaryView: View {
                     popBack()
                 }
             },
-            secondaryTitle: "暂不填写",
+            secondaryTitle: L10n.text("member.setup.medical.nutrition.2e16ac"),
             onSecondary: {
                 Task {
                     viewModel.isPersisting = true
@@ -125,6 +125,11 @@ struct MemberMedicalModuleSummaryView: View {
         // 页面出现自动加载缓存/远程医疗分区数据
         .task {
             await viewModel.loadIfNeeded()
+        }
+        // 进入页面后延迟自动打开完整流程
+        .task {
+            try? await Task.sleep(for: .seconds(0.4))
+            viewModel.openFullFlow()
         }
         // 模块编辑弹窗关闭后，重新基于本地缓存刷新页面分区列表
         .onChange(of: flowViewModel.activeSheet) { newValue in

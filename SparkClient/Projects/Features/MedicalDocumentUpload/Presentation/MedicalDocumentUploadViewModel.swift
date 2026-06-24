@@ -1000,13 +1000,13 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         guard let feedback = lastExtractionRetryFeedback else { return [] }
         var lines: [String] = []
         if let fieldPath = feedback.fieldPath {
-            lines.append(String(format: L10n.text("medical.upload.extract.retry.debug_field"), fieldPath))
+            lines.append(L10n.format("medical.upload.extract.retry.debug_field", fieldPath))
         }
         if let expectedType = feedback.expectedType {
-            lines.append(String(format: L10n.text("medical.upload.extract.retry.debug_expected"), expectedType))
+            lines.append(L10n.format("medical.upload.extract.retry.debug_expected", expectedType))
         }
         if let actualType = feedback.actualType {
-            lines.append(String(format: L10n.text("medical.upload.extract.retry.debug_actual"), actualType))
+            lines.append(L10n.format("medical.upload.extract.retry.debug_actual", actualType))
         }
         return lines
     }

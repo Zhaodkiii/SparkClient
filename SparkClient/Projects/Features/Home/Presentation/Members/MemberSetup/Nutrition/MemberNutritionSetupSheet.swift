@@ -53,8 +53,8 @@ struct MemberNutritionSetupSheetView: View {
 
     private var heightStep: some View {
         NutritionStepShell(
-            title: "身高",
-            subtitle: "设置成员身高，用于估算基础代谢和每日能量目标",
+            title: L10n.text("member.setup.medical.nutrition.19a854"),
+            subtitle: L10n.text("member.setup.nutrition.nutrition.2a1890"),
             step: 1,
             total: 5,
             onSkip: { goNext(from: .height) },
@@ -68,8 +68,8 @@ struct MemberNutritionSetupSheetView: View {
 
     private var weightStep: some View {
         NutritionStepShell(
-            title: "体重",
-            subtitle: "设置当前体重，用于计算摄入建议和体重目标",
+            title: L10n.text("member.setup.medical.nutrition.440093"),
+            subtitle: L10n.text("member.setup.nutrition.nutrition.de81a2"),
             step: 2,
             total: 5,
             onSkip: { goNext(from: .weight) },
@@ -83,8 +83,8 @@ struct MemberNutritionSetupSheetView: View {
 
     private var goalStep: some View {
         NutritionStepShell(
-            title: "目标模式",
-            subtitle: "选择目标模式、活跃水平和每周体重变化范围",
+            title: L10n.text("member.setup.nutrition.nutrition.5a8094"),
+            subtitle: L10n.text("member.setup.nutrition.nutrition.84e2cf"),
             step: 3,
             total: 5,
             onSkip: { goNext(from: .goal) },
@@ -100,8 +100,8 @@ struct MemberNutritionSetupSheetView: View {
 
     private var energyStep: some View {
         NutritionStepShell(
-            title: "摄入与消耗",
-            subtitle: "根据基础信息计算建议摄入，支持手动调整到合理范围",
+            title: L10n.text("member.setup.nutrition.nutrition.5f3406"),
+            subtitle: L10n.text("member.setup.nutrition.nutrition.85eda8"),
             step: 4,
             total: 5,
             onSkip: { goNext(from: .energy) },
@@ -126,8 +126,8 @@ struct MemberNutritionSetupSheetView: View {
 
     private var macroGoalStep: some View {
         NutritionStepShell(
-            title: "营养目标",
-            subtitle: "设置三大营养素比例与餐次分配",
+            title: L10n.text("member.setup.nutrition.nutrition.3bad9a"),
+            subtitle: L10n.text("member.setup.nutrition.nutrition.6337f4"),
             step: 5,
             total: 5,
             onSkip: { goNext(from: .macroGoal) },
@@ -147,14 +147,14 @@ struct MemberNutritionSetupSheetView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 MemberSetupStepHeaderView(
-                    title: "饮食健康",
-                    subtitle: "分步维护饮食目标、营养和体重管理",
+                    title: L10n.text("member.module.nutrition.title"),
+                    subtitle: L10n.text("member.setup.nutrition.nutrition.32ad06"),
                     step: 1,
                     total: 1
                 )
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("已填写内容")
+                    Text(L10n.text("member.setup.medical.nutrition.519b61"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text(summaryText)
@@ -166,35 +166,35 @@ struct MemberNutritionSetupSheetView: View {
 
                 VStack(spacing: 28) {
                     NutritionSummaryRow(
-                        title: "身高",
+                        title: L10n.text("member.setup.medical.nutrition.19a854"),
                         subtitle: heightSubtitle,
                         isCompleted: hasHeight
                     ) {
                         path.append(.height)
                     }
                     NutritionSummaryRow(
-                        title: "体重",
+                        title: L10n.text("member.setup.medical.nutrition.440093"),
                         subtitle: weightSubtitle,
                         isCompleted: hasWeight
                     ) {
                         path.append(.weight)
                     }
                     NutritionSummaryRow(
-                        title: "目标模式",
+                        title: L10n.text("member.setup.nutrition.nutrition.5a8094"),
                         subtitle: goalSubtitle,
                         isCompleted: isGoalCompleted
                     ) {
                         path.append(.goal)
                     }
                     NutritionSummaryRow(
-                        title: "摄入与消耗",
+                        title: L10n.text("member.setup.nutrition.nutrition.5f3406"),
                         subtitle: energySubtitle,
                         isCompleted: isEnergyCompleted
                     ) {
                         path.append(.energy)
                     }
                     NutritionSummaryRow(
-                        title: "营养目标",
+                        title: L10n.text("member.setup.nutrition.nutrition.3bad9a"),
                         subtitle: macroSubtitle,
                         isCompleted: isMacroCompleted
                     ) {
@@ -212,16 +212,16 @@ struct MemberNutritionSetupSheetView: View {
             .padding(24)
             .padding(.bottom, 120)
         }
-        .navigationTitle("饮食健康")
+        .navigationTitle(L10n.text("member.module.nutrition.title"))
         .navigationBarTitleDisplayMode(.inline)
         .memberSetupBottomBar(
-            primaryTitle: "保存",
+            primaryTitle: L10n.text("common.save"),
             primaryEnabled: viewModel.isSaving == false,
             isLoading: viewModel.isSaving,
             onPrimary: {
                 Task { await saveAndDismiss() }
             },
-            secondaryTitle: isSectionMode ? "暂不填写" : "跳过",
+            secondaryTitle: isSectionMode ? L10n.text("member.setup.medical.nutrition.2e16ac") : "跳过",
             onSecondary: {
                 dismiss()
             }
@@ -253,23 +253,23 @@ struct MemberNutritionSetupSheetView: View {
     }
 
     private var heightSubtitle: String {
-        guard hasHeight else { return "未填写" }
+        guard hasHeight else { return L10n.text("member.setup.common.not_filled");}
         return String(format: "%.0fcm", viewModel.heightCm)
     }
 
     private var weightSubtitle: String {
-        guard hasWeight else { return "未填写" }
+        guard hasWeight else { return L10n.text("member.setup.common.not_filled");}
         return String(format: "%.1fkg", viewModel.weightKg)
     }
 
     private var goalSubtitle: String {
-        guard isGoalCompleted else { return "未填写" }
+        guard isGoalCompleted else { return L10n.text("member.setup.common.not_filled");}
         let weekly = String(format: "%.2f", viewModel.weeklyTargetKg)
         return "\(viewModel.goalMode.title) · \(viewModel.activityLevel.title) · 每周 \(weekly) kg"
     }
 
     private var energySubtitle: String {
-        guard isEnergyCompleted else { return "未填写" }
+        guard isEnergyCompleted else { return L10n.text("member.setup.common.not_filled");}
         if let suggested = viewModel.suggestedCalories {
             return "目标 \(String(format: "%.0f", viewModel.targetCalories)) 千卡 · 建议 \(String(format: "%.0f", suggested)) 千卡"
         }
@@ -277,7 +277,7 @@ struct MemberNutritionSetupSheetView: View {
     }
 
     private var macroSubtitle: String {
-        guard isMacroCompleted else { return "未填写" }
+        guard isMacroCompleted else { return L10n.text("member.setup.common.not_filled");}
         return "碳水 \(String(format: "%.0f", viewModel.carbohydratePercent))% · 蛋白质 \(String(format: "%.0f", viewModel.proteinPercent))% · 脂肪 \(String(format: "%.0f", viewModel.fatPercent))%"
     }
 
@@ -337,7 +337,7 @@ private struct NutritionSummaryRow: View {
                     Text(title)
                         .font(.headline.weight(.bold))
                     if isCompleted {
-                        Text("已完成")
+                        Text(L10n.text("home.members.save.success"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(Color.accentColor)
                             .padding(.horizontal, 10)
@@ -389,10 +389,10 @@ private struct NutritionStepShell<Content: View>: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .memberSetupBottomBar(
-            primaryTitle: "下一步",
+            primaryTitle: L10n.text("common.next"),
             primaryEnabled: true,
             onPrimary: onNext,
-            secondaryTitle: "跳过",
+            secondaryTitle: L10n.text("common.skip"),
             onSecondary: onSkip
         )
     }
@@ -401,9 +401,8 @@ private struct NutritionStepShell<Content: View>: View {
 private extension MemberNutritionSetupViewModel.ActivityLevel {
     var title: String {
         switch self {
-        case .low: return "低"
-        case .medium: return "中"
-        case .high: return "高"
-        }
+        case .low: return L10n.text("member.setup.medical.nutrition.19ac67");
+        case .medium: return L10n.text("member.setup.medical.nutrition.aed1df");
+        case .high: return L10n.text("member.setup.medical.nutrition.4296d7");        }
     }
 }

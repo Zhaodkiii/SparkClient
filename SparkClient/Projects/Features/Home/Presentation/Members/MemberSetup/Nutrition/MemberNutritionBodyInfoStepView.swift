@@ -59,7 +59,7 @@ struct MemberNutritionHeightStepView: View {
 
     var body: some View {
         MemberNutritionMetricStepView(
-            title: "身高",
+            title: L10n.text("member.setup.medical.nutrition.19a854"),
             value: $heightCm,
             unit: "cm",
             imageName: "heightMeasurement",
@@ -153,7 +153,7 @@ private struct MemberNutritionWeightSliderStepView: View {
 
     private var valueSection: some View {
         VStack(spacing: 12) {
-            Text("体重")
+            Text(L10n.text("member.setup.medical.nutrition.440093"))
                 .font(presentation == .fullScreen ? .title.weight(.heavy) : .title2.weight(.bold))
                 .foregroundStyle(.primary)
 

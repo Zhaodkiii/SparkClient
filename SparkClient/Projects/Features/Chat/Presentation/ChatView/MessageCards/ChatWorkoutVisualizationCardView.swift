@@ -61,7 +61,7 @@ struct ChatWorkoutVisualizationMessageCard: View {
                 }
 
                 if workouts.count > 20 {
-                    Text(String(format: L10n.text("chat.workout.more_format", fallback: "%d more sessions"), locale: .current, workouts.count - 20))
+                    Text(L10n.format("chat.workout.more_format", fallback: "%d more sessions", workouts.count - 20))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -100,13 +100,13 @@ struct ChatHealthResourcePreviewSheet: View {
                 .font(.title3.weight(.semibold))
 
             if let member = content.memberName {
-                metaRow(icon: "person.crop.circle", text: String(format: L10n.text("chat.ask_report.preview.member_format"), member))
+                metaRow(icon: "person.crop.circle", text: L10n.format("chat.ask_report.preview.member_format", member))
             }
             if let date = content.dateText {
-                metaRow(icon: "calendar", text: String(format: L10n.text("chat.ask_report.preview.date_format"), date))
+                metaRow(icon: "calendar", text: L10n.format("chat.ask_report.preview.date_format", date))
             }
             if let org = content.organizationText {
-                metaRow(icon: "building.2", text: String(format: L10n.text("chat.ask_report.preview.org_format"), org))
+                metaRow(icon: "building.2", text: L10n.format("chat.ask_report.preview.org_format", org))
             }
         }
         .padding(14)

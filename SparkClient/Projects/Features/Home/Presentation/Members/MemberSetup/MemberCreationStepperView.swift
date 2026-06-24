@@ -379,7 +379,7 @@
 //                }
 //            }
 //            if completedModules.contains(module) {
-//                Text(L10n.text("home.members.save.success", fallback: "已完成"))
+//                Text(L10n.text("home.members.save.success", fallback: L10n.text("member.setup.common.completed")))
 //                    .font(.footnote)
 //                    .foregroundStyle(.green)
 //            }

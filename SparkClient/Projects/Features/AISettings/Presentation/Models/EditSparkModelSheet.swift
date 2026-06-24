@@ -97,7 +97,7 @@ struct EditSparkModelSheet: View {
                             
                             MultiSelectOptionsView(
                                 title: L10n.text("ai_settings.models.agent.related_tasks.title", fallback: "Related small tasks", comment: "关联小任务选择页标题"),
-                                options: viewModel.effectiveSmallTasks.map { ($0.code, String(format: L10n.text("ai_settings.models.agent.related_tasks.option_format", fallback: "%@ (%@)", comment: "关联小任务选项格式"), locale: Locale.current, $0.name, $0.code)) },
+                                options: viewModel.effectiveSmallTasks.map { ($0.code, L10n.format("ai_settings.models.agent.related_tasks.option_format", fallback: "%@ (%@)", comment: "关联小任务选项格式", $0.name, $0.code)) },
                                 selectedValues: $selectedTaskCodes
                             )
                         } label: {

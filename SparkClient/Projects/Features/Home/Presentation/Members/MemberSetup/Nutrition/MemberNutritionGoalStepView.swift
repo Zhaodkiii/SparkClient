@@ -6,7 +6,7 @@ struct MemberNutritionGoalStepView: View {
     @Binding var weeklyTargetKg: Double
 
     var body: some View {
-        MemberSetupSection(title: "目标设置") {
+        MemberSetupSection(title: L10n.text("member.setup.nutrition.nutrition.2faa26")) {
             VStack(alignment: .leading, spacing: 14) {
                 Picker("目标模式", selection: $goalMode) {
                     ForEach(MemberNutritionSetupViewModel.GoalMode.allCases) { mode in
@@ -23,7 +23,7 @@ struct MemberNutritionGoalStepView: View {
                 .pickerStyle(.segmented)
 
                 HStack {
-                    Text("每周目标")
+                    Text(L10n.text("member.setup.nutrition.nutrition.990f7f"))
                     Spacer()
                     TextField("kg", value: $weeklyTargetKg, format: .number)
                         .keyboardType(.decimalPad)
@@ -39,9 +39,8 @@ struct MemberNutritionGoalStepView: View {
 private extension MemberNutritionSetupViewModel.ActivityLevel {
     var title: String {
         switch self {
-        case .low: return "低"
-        case .medium: return "中"
-        case .high: return "高"
-        }
+        case .low: return L10n.text("member.setup.medical.nutrition.19ac67");
+        case .medium: return L10n.text("member.setup.medical.nutrition.aed1df");
+        case .high: return L10n.text("member.setup.medical.nutrition.4296d7");        }
     }
 }

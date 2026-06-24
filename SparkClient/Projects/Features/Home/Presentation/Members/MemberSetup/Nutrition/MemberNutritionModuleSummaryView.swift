@@ -26,13 +26,13 @@ struct MemberNutritionModuleSummaryView: View {
                     subtitle: viewModel.headerSubtitle,
                     completedCount: viewModel.completedCount,
                     totalCount: viewModel.sections.count,
-                    emptyHint: "还没有填写饮食资料。可以从基础信息开始逐步完善。"
+                    emptyHint: L10n.text("member.setup.nutrition.nutrition.0e8892")
                 )
 
                 if viewModel.isLoading {
                     HStack(spacing: 10) {
                         ProgressView()
-                        Text("正在加载饮食资料")
+                        Text(L10n.text("member.setup.nutrition.nutrition.0b5baa"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -64,7 +64,7 @@ struct MemberNutritionModuleSummaryView: View {
                     popBack()
                 }
             },
-            secondaryTitle: "暂不填写",
+            secondaryTitle: L10n.text("member.setup.medical.nutrition.2e16ac"),
             onSecondary: {
                 Task {
                     viewModel.isPersisting = true

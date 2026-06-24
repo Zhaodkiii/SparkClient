@@ -281,17 +281,17 @@ extension ChatHealthWorkoutModel {
             if let analysis = Self.analyzeHeartRate(workout.heartRateSamples) {
                 lines.append("")
                 lines.append(Self.localizedSection("chat.workout.readable.section.heart_rate", fallback: "[Heart Rate Insights]"))
-                lines.append(String(format: L10n.text("chat.workout.readable.field.avg_hr", fallback: "Avg HR: %.0f bpm"), locale: .current, analysis.avg))
-                lines.append(String(format: L10n.text("chat.workout.readable.field.peak_hr", fallback: "Peak HR: %.0f bpm"), locale: .current, analysis.max))
+                lines.append(L10n.format("chat.workout.readable.field.avg_hr", fallback: "Avg HR: %.0f bpm", analysis.avg))
+                lines.append(L10n.format("chat.workout.readable.field.peak_hr", fallback: "Peak HR: %.0f bpm", analysis.max))
                 if let peak = analysis.peakSegment {
                     let start = Self.formatElapsedTime(peak.start - workout.start)
                     let end = Self.formatElapsedTime(peak.end - workout.start)
-                    lines.append(String(format: L10n.text("chat.workout.readable.field.peak_segment", fallback: "Peak Segment: %@-%@ (avg %.0f bpm)"), locale: .current, start, end, peak.avgBpm))
+                    lines.append(L10n.format("chat.workout.readable.field.peak_segment", fallback: "Peak Segment: %@-%@ (avg %.0f bpm)", start, end, peak.avgBpm))
                 }
                 lines.append(Self.localizedField("chat.workout.readable.field.zones", value: Self.formatHeartRateZones(analysis.zones), fallback: "Zones: %@"))
 
                 if let recoveryDrop = analysis.recoveryDropBpm {
-                    lines.append(String(format: L10n.text("chat.workout.readable.field.recovery", fallback: "Recovery: %@ (HR drop %.0f bpm in 1 min)"), locale: .current, Self.recoveryLabel(for: recoveryDrop), recoveryDrop))
+                    lines.append(L10n.format("chat.workout.readable.field.recovery", fallback: "Recovery: %@ (HR drop %.0f bpm in 1 min)", Self.recoveryLabel(for: recoveryDrop), recoveryDrop))
                 }
 
                 let tags = Self.aiTags(for: workout, heartRateAnalysis: analysis)
@@ -303,7 +303,7 @@ extension ChatHealthWorkoutModel {
             } else if let heartRate = workout.averageHeartRateBpm, heartRate > 0 {
                 lines.append("")
                 lines.append(Self.localizedSection("chat.workout.readable.section.heart_rate", fallback: "[Heart Rate Insights]"))
-                lines.append(String(format: L10n.text("chat.workout.readable.field.avg_hr", fallback: "Avg HR: %.0f bpm"), locale: .current, heartRate))
+                lines.append(L10n.format("chat.workout.readable.field.avg_hr", fallback: "Avg HR: %.0f bpm", heartRate))
             }
         }
 
@@ -328,10 +328,10 @@ extension ChatHealthWorkoutModel {
         case .swimming:
             appendDistance(workout.distanceMeters, to: &metrics)
             if let lengths = workout.swimmingLengthCount, lengths > 0 {
-                metrics.append(String(format: L10n.text("chat.workout.readable.field.lengths", fallback: "Lengths: %d"), locale: .current, lengths))
+                metrics.append(L10n.format("chat.workout.readable.field.lengths", fallback: "Lengths: %d", lengths))
             }
             if let poolLength = workout.poolLengthMeters, poolLength > 0 {
-                metrics.append(String(format: L10n.text("chat.workout.readable.field.pool_length", fallback: "Pool Length: %.0f m"), locale: .current, poolLength))
+                metrics.append(L10n.format("chat.workout.readable.field.pool_length", fallback: "Pool Length: %.0f m", poolLength))
             }
             appendSwimmingPace(workout.averagePaceMinPerKm, to: &metrics)
             appendEnergy(workout.activeEnergyKcal, to: &metrics)
@@ -358,7 +358,7 @@ extension ChatHealthWorkoutModel {
 
     private static func appendEnergy(_ energy: Double?, to metrics: inout [String]) {
         guard let energy, energy > 0 else { return }
-        metrics.append(String(format: L10n.text("chat.workout.readable.field.active_energy", fallback: "Active Energy: %.0f kcal"), locale: .current, energy))
+        metrics.append(L10n.format("chat.workout.readable.field.active_energy", fallback: "Active Energy: %.0f kcal", energy))
     }
 
     private static func appendPace(_ pace: Double?, label: String, to metrics: inout [String]) {
@@ -373,22 +373,22 @@ extension ChatHealthWorkoutModel {
 
     private static func appendSpeed(_ speed: Double?, to metrics: inout [String]) {
         guard let speed, speed > 0 else { return }
-        metrics.append(String(format: L10n.text("chat.workout.readable.field.avg_speed", fallback: "Avg Speed: %.1f km/h"), locale: .current, speed * 3.6))
+        metrics.append(L10n.format("chat.workout.readable.field.avg_speed", fallback: "Avg Speed: %.1f km/h", speed * 3.6))
     }
 
     private static func appendPower(_ power: Double?, to metrics: inout [String]) {
         guard let power, power > 0 else { return }
-        metrics.append(String(format: L10n.text("chat.workout.readable.field.avg_power", fallback: "Avg Power: %.0f W"), locale: .current, power))
+        metrics.append(L10n.format("chat.workout.readable.field.avg_power", fallback: "Avg Power: %.0f W", power))
     }
 
     private static func appendCadence(_ cadence: Double?, to metrics: inout [String]) {
         guard let cadence, cadence > 0 else { return }
-        metrics.append(String(format: L10n.text("chat.workout.readable.field.cadence", fallback: "Cadence: %.0f"), locale: .current, cadence))
+        metrics.append(L10n.format("chat.workout.readable.field.cadence", fallback: "Cadence: %.0f", cadence))
     }
 
     private static func appendElevation(_ elevation: Double?, to metrics: inout [String]) {
         guard let elevation, elevation > 0 else { return }
-        metrics.append(String(format: L10n.text("chat.workout.readable.field.elevation_gain", fallback: "Elevation Gain: %.0f m"), locale: .current, elevation))
+        metrics.append(L10n.format("chat.workout.readable.field.elevation_gain", fallback: "Elevation Gain: %.0f m", elevation))
     }
 
     private static func findPeakSegment(in samples: [HeartRatePoint], maxBpm: Double) -> HeartRatePeakSegment? {
@@ -532,7 +532,7 @@ extension ChatHealthWorkoutModel {
     }
 
     private static func localizedField(_ key: String, value: String, fallback: String) -> String {
-        String(format: L10n.text(key, fallback: fallback), locale: .current, value)
+        L10n.format(key, fallback: fallback, value)
     }
 
     private static func formatElapsedTime(_ seconds: Int64) -> String {
@@ -559,16 +559,16 @@ extension ChatHealthWorkoutModel {
         let hours = Int(minutes / 60)
         let mins = Int(minutes.truncatingRemainder(dividingBy: 60))
         if hours > 0 {
-            return String(format: L10n.text("health.tool.unit.duration.hours_minutes", fallback: "%dh %dm"), locale: .current, hours, mins)
+            return L10n.format("health.tool.unit.duration.hours_minutes", fallback: "%dh %dm", hours, mins)
         }
-        return String(format: L10n.text("health.tool.unit.duration.minutes", fallback: "%dm"), locale: .current, mins)
+        return L10n.format("health.tool.unit.duration.minutes", fallback: "%dm", mins)
     }
 
     /// 格式化距离：米 → 1.25 km / 300 m
     static func formatDistanceMeters(_ meters: Double) -> String {
         if meters >= 1000 {
-            return String(format: L10n.text("health.tool.unit.kilometers.precision", fallback: "%.2f km"), locale: .current, meters / 1000)
+            return L10n.format("health.tool.unit.kilometers.precision", fallback: "%.2f km", meters / 1000)
         }
-        return String(format: L10n.text("health.tool.unit.meters", fallback: "%d m"), locale: .current, Int(meters.rounded()))
+        return L10n.format("health.tool.unit.meters", fallback: "%d m", Int(meters.rounded()))
     }
 }

@@ -129,12 +129,12 @@ struct MemberMedicalExamFollowUpTaskCard: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                     if let source = task.sourceAbnormalName, source.isEmpty == false {
-                        Text(String(format: L10n.text("medical.exam_archive.follow_up.source"), source))
+                        Text(L10n.format("medical.exam_archive.follow_up.source", source))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                     if let priority = task.priority, priority.isEmpty == false {
-                        Text(String(format: L10n.text("medical.exam_archive.follow_up.priority"), priorityLabel(priority)))
+                        Text(L10n.format("medical.exam_archive.follow_up.priority", priorityLabel(priority)))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

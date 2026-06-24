@@ -40,7 +40,7 @@ struct KnowledgeEmbeddingPanel: View {
             .disabled(isBuilding || models.isEmpty || isIndexed)
 
             if isIndexed, let last = lastModelName {
-                Text(String(format: L10n.text("knowledge.embedding.indexed_hint"), locale: Locale.current, last))
+                Text(L10n.format("knowledge.embedding.indexed_hint", last))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

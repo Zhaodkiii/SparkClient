@@ -46,7 +46,7 @@ struct MedicationExecutionPendingCard: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("添加用药记录")
+            .accessibilityLabel(L10n.text("home.medical.medication_execution.a11y.add_record"))
         }
         .padding(18)
         .background(
@@ -61,7 +61,7 @@ struct MedicationExecutionAsNeededCard: View {
 
     var body: some View {
         HStack {
-            Text("按需用药")
+            Text(L10n.text("home.medical.medication_execution.as_needed"))
                 .font(.headline)
                 .foregroundStyle(.primary)
             Spacer()
@@ -86,7 +86,7 @@ struct MedicationExecutionAsNeededCard: View {
 struct MedicationExecutionAllDoneCard: View {
     var body: some View {
         HStack(spacing: 16) {
-            Text("已记录今天的所有定时用药")
+            Text(L10n.text("home.medical.medication_execution.all_done"))
                 .font(.headline)
                 .foregroundStyle(.white)
             Spacer()
@@ -125,7 +125,7 @@ struct MedicationExecutionCompletedGroup: View {
                         Image(systemName: dose.status == "taken" ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .symbolRenderingMode(.hierarchical)
                             .foregroundStyle(dose.status == "taken" ? Color(uiColor: .systemTeal) : Color(uiColor: .systemGray))
-                        Text(dose.status == "taken" ? dose.displayName : "\(dose.displayName)（已跳过）")
+                        Text(completedDoseLabel(for: dose))
                             .font(.headline)
                             .foregroundStyle(.primary)
                     }
@@ -135,5 +135,12 @@ struct MedicationExecutionCompletedGroup: View {
             Spacer()
         }
         .padding(.vertical, 14)
+    }
+
+    private func completedDoseLabel(for dose: MedicationExecutionDose) -> String {
+        if dose.status == "taken" {
+            return dose.displayName
+        }
+        return L10n.format("home.medical.medication_execution.skipped_name", dose.displayName)
     }
 }

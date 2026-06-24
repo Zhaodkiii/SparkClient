@@ -45,7 +45,7 @@ struct ModelsSettingsMainRow: View {
                             .foregroundStyle(.secondary)
                     }
                     if isAgent, let base = model.baseModelName, base.isEmpty == false {
-                        Text(String(format: L10n.text("ai_settings.models.row.based_on_format"), base))
+                        Text(L10n.format("ai_settings.models.row.based_on_format", base))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

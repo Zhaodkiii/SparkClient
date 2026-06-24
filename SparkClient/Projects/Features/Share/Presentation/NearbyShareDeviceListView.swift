@@ -96,6 +96,6 @@ struct NearbyShareDeviceListView: View {
         if seconds < 5 {
             return L10n.text("home.members.share.nearby.just_now")
         }
-        return String(format: L10n.text("home.members.share.nearby.seen_seconds_ago"), seconds)
+        return L10n.format("home.members.share.nearby.seen_seconds_ago", seconds)
     }
 }

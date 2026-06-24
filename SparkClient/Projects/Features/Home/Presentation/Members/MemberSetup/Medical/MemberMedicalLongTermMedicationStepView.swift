@@ -111,20 +111,20 @@ struct MemberMedicalLongTermMedicationStepView: View {
     }
 
     private var medicationScreeningCard: some View {
-        MemberSetupSection(title: "用药情况筛查") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.medication.3d3075")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("目前是否正在长期服用药物，或有近期的处方用药记录？")
+                Text(L10n.text("member.setup.medical.medication.5e6c3f"))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     screeningChoice(
-                        title: "无长期用药",
+                        title: L10n.text("member.setup.medical.medication.4c60e8"),
                         isSelected: status == .none,
                         action: { status = .none }
                     )
                     screeningChoice(
-                        title: "有用药记录",
+                        title: L10n.text("member.setup.medical.medication.24f228"),
                         isSelected: status == .have,
                         action: { status = .have }
                     )
@@ -138,7 +138,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
             Image(systemName: "lightbulb.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("贴心提示：如果没有相关用药情况，请直接点击下方保存即可。")
+            Text(L10n.text("member.setup.medical.medication.d23003"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -148,15 +148,15 @@ struct MemberMedicalLongTermMedicationStepView: View {
     @ViewBuilder
     private var medicationArchiveSection: some View {
         if sortedItems.isEmpty {
-            MemberSetupSection(title: "当前用药档案") {
-                Text("暂无用药记录，可通过下方按钮拍照识别或手动添加。")
+            MemberSetupSection(title: L10n.text("member.setup.medical.medication.9be2aa")) {
+                Text(L10n.text("member.setup.medical.medication.b85a51"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
             if standaloneItems.isEmpty == false {
-                MemberSetupSection(title: "当前用药档案") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.medication.9be2aa")) {
                     VStack(spacing: 10) {
                         ForEach(standaloneItems) { item in
                             if case .standalonePlan(let plan) = item {
@@ -178,7 +178,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
             }
 
             if prescriptionItems.isEmpty == false {
-                MemberSetupSection(title: "医院处方计划组") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.medication.4775f3")) {
                     VStack(spacing: 10) {
                         ForEach(prescriptionItems) { item in
                             if case .prescription(_, let prescription, let plans) = item {
@@ -225,7 +225,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
             Button {
                 showingUploadSheet = true
             } label: {
-                Label("拍照添加计划", systemImage: "camera.viewfinder")
+                Label(L10n.text("member.setup.medical.medication.e451a1"), systemImage: "camera.viewfinder")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -237,7 +237,7 @@ struct MemberMedicalLongTermMedicationStepView: View {
             Button {
                 sheetDestination = .create
             } label: {
-                Label("手动添加", systemImage: "pencil.line")
+                Label(L10n.text("member.setup.medical.medication.63edd6"), systemImage: "pencil.line")
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity)

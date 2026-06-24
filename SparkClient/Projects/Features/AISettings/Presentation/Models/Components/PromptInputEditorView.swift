@@ -133,7 +133,7 @@ struct PromptInputEditorView: View {
                     Text(L10n.text("prompt_input.prompt_repo.bottom_title", fallback: "Choose preset prompt", comment: "Prompt preset selector bottom row title"))
                         .font(.subheadline)
                         .foregroundStyle(.primary)
-                    Text(String(format: L10n.text("prompt_input.prompt_repo.bottom_subtitle_format", fallback: "%d templates available", comment: "Prompt preset selector bottom row subtitle"), locale: Locale.current, availableTemplates.count))
+                    Text(L10n.format("prompt_input.prompt_repo.bottom_subtitle_format", fallback: "%d templates available", comment: "Prompt preset selector bottom row subtitle", availableTemplates.count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

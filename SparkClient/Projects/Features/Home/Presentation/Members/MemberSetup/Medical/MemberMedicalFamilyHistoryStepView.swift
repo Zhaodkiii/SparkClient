@@ -37,7 +37,7 @@ struct MemberMedicalFamilyHistoryStepView: View {
 
             if status == .have {
                 existingFamilyHistorySection
-                MemberSetupAccentAddButton(title: familyHistory.isEmpty ? "添加家族病史" : "编辑家族病史") {
+                MemberSetupAccentAddButton(title: familyHistory.isEmpty ? L10n.text("member.setup.medical.family.family.001697") : "编辑家族病史") {
                     showingManualEntrySheet = true
                 }
             }
@@ -68,20 +68,20 @@ struct MemberMedicalFamilyHistoryStepView: View {
     }
 
     private var familyHistoryScreeningCard: some View {
-        MemberSetupSection(title: "家族病史筛查") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.family.family.310895")) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("您的直系亲属（父母、祖父母、外祖父母、兄弟姐妹）是否有人患有明确的慢性疾病或肿瘤病史？")
+                Text(L10n.text("member.setup.medical.family.chronic.08fc9a"))
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 10) {
                     screeningChoice(
-                        title: "无已知家族病史",
+                        title: L10n.text("member.setup.medical.family.family.6c178f"),
                         isSelected: status == .none,
                         action: { status = .none }
                     )
                     screeningChoice(
-                        title: "有家族病史",
+                        title: L10n.text("member.setup.medical.family.family.d8ca16"),
                         isSelected: status == .have,
                         action: { status = .have }
                     )
@@ -95,7 +95,7 @@ struct MemberMedicalFamilyHistoryStepView: View {
             Image(systemName: "lightbulb.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Text("贴心提示：如果直系亲属身体都健康或不了解，请直接点击下方保存。")
+            Text(L10n.text("member.setup.medical.family.family.4dc6b4"))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -105,7 +105,7 @@ struct MemberMedicalFamilyHistoryStepView: View {
     private var existingFamilyHistorySection: some View {
         Group {
             if familyHistory.isEmpty == false {
-                MemberSetupSection(title: "已录入家族病史") {
+                MemberSetupSection(title: L10n.text("member.setup.medical.family.family.f7dfd2")) {
                     VStack(spacing: 10) {
                         ForEach(familyHistory, id: \.self) { disease in
                             Button {
@@ -131,7 +131,7 @@ struct MemberMedicalFamilyHistoryStepView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(detail?.relative.isEmpty == false ? detail?.relative ?? "直系亲属" : "直系亲属")
+                    Text(detail?.relative.isEmpty == false ? detail?.relative ?? L10n.text("member.setup.medical.family.family.42807e") : "直系亲属")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Spacer()
@@ -208,19 +208,19 @@ struct FamilyHistoryRecordFormView: View {
 
     private let diseaseCategories: [FamilyDiseaseCategoryGroup] = [
         .init(
-            title: "高发肿瘤 / 癌症",
+            title: L10n.text("member.setup.medical.family.family.3de623"),
             systemImage: "cross.case.fill",
             tint: .pink,
             diseases: ["肺癌", "胃癌", "结直肠癌", "乳腺癌", "肝癌", "食管癌"]
         ),
         .init(
-            title: "慢性心脑血管",
+            title: L10n.text("member.setup.medical.family.family.ab7228"),
             systemImage: "heart.fill",
             tint: .red,
             diseases: ["高血压", "冠心病", "脑卒中/脑梗死", "高血脂"]
         ),
         .init(
-            title: "代谢与免疫系统",
+            title: L10n.text("member.setup.medical.family.family.b9502d"),
             systemImage: "drop.fill",
             tint: .orange,
             diseases: ["2型糖尿病", "痛风/高尿酸血症", "阿尔茨海默病/老年痴呆"]
@@ -247,11 +247,11 @@ struct FamilyHistoryRecordFormView: View {
             }
             .padding(16)
         }
-        .navigationTitle("添加家族病史")
+        .navigationTitle(L10n.text("member.setup.medical.family.family.001697"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(
             text: $searchText,
-            prompt: Text("搜索疾病或肿瘤名称 (如: 肠癌、高血压)")
+            prompt: Text(L10n.text("member.setup.medical.family.chronic.33de37"))
         )
         .sparkFormBottomBar(
             canSubmit: familyHistory.isEmpty == false,
@@ -272,7 +272,7 @@ struct FamilyHistoryRecordFormView: View {
     }
 
     private var relativeChoiceCard: some View {
-        MemberSetupSection(title: "选择患病亲属") {
+        MemberSetupSection(title: L10n.text("member.setup.medical.family.family.88f91c")) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
                 ForEach(relatives, id: \.self) { relative in
                     Button {
@@ -332,7 +332,7 @@ struct FamilyHistoryRecordFormView: View {
 
     private var familyHistoryDetailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("家族病史详情补全")
+            Text(L10n.text("member.setup.medical.family.family.833a0d"))
                 .font(.headline)
 
             if familyHistory.count > 1 {
@@ -369,7 +369,7 @@ struct FamilyHistoryRecordFormView: View {
 
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("亲属确诊时的大致年龄 (选填)", systemImage: "calendar")
+                        Label(L10n.text("member.setup.medical.family.family.2e501a"), systemImage: "calendar")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         diagnosisAgePicker(for: focusedDisease)
@@ -378,7 +378,7 @@ struct FamilyHistoryRecordFormView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("补充备注 (例如：多位亲属患同类病、发病细节等)...", systemImage: "note.text")
+                        Label(L10n.text("member.setup.medical.family.family.7f0ade"), systemImage: "note.text")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         TextEditor(text: detailNotesBinding(for: focusedDisease))
@@ -570,23 +570,16 @@ enum FamilyHistoryRecordFormSupport {
 
     static func riskHint(for disease: String) -> String {
         if disease.contains("糖尿病") {
-            return "建议定期监测空腹血糖与糖化血红蛋白。"
-        }
+            return L10n.text("member.setup.medical.family.family.f41c8f");        }
         if disease.contains("乳腺癌") {
-            return "建议结合年龄提前开展年度乳腺超声或钼靶筛查。"
-        }
+            return L10n.text("member.setup.medical.family.family.871118");        }
         if disease.contains("结直肠癌") || disease.contains("肠癌") {
-            return "建议关注肠镜或粪便潜血筛查时机。"
-        }
+            return L10n.text("member.setup.medical.family.family.02211b");        }
         if disease.contains("肺癌") {
-            return "建议结合吸烟史评估低剂量胸部 CT 筛查。"
-        }
+            return L10n.text("member.setup.medical.family.family.f7eb5e");        }
         if disease.contains("肝癌") {
-            return "建议关注肝脏彩超、AFP 及乙肝相关风险。"
-        }
+            return L10n.text("member.setup.medical.family.family.788e18");        }
         if disease.contains("高血压") || disease.contains("冠心病") || disease.contains("脑卒中") || disease.contains("高血脂") {
-            return "建议定期监测血压、血脂和心脑血管风险。"
-        }
-        return "建议在体检计划中纳入对应风险筛查。"
-    }
+            return L10n.text("member.setup.medical.family.family.e2efca");        }
+        return L10n.text("member.setup.medical.family.family.d0d16e");    }
 }

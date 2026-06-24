@@ -741,7 +741,7 @@ struct HomeView: View {
         case .medicalReports:
             return L10n.text("home.medical.card.medical_reports.title")
         case .medicationPlans:
-            return L10n.text("home.medical.card.medication_plans.title", fallback: "服药计划")
+            return L10n.text("home.medical.card.medication_plans.title")
         }
     }
 
@@ -754,7 +754,7 @@ struct HomeView: View {
         case .medicalReports:
             return L10n.text("home.medical.card.medical_reports.subtitle")
         case .medicationPlans:
-            return L10n.text("home.medical.card.medication_plans.subtitle", fallback: "执行中的规则")
+            return L10n.text("home.medical.card.medication_plans.subtitle")
         }
     }
 

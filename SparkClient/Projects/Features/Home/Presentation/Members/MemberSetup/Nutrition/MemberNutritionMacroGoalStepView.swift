@@ -8,18 +8,18 @@ struct MemberNutritionMacroGoalStepView: View {
     @Binding var mealDistribution: [String: Double]
 
     var body: some View {
-        MemberSetupSection(title: "营养目标") {
+        MemberSetupSection(title: L10n.text("member.setup.nutrition.nutrition.3bad9a")) {
             VStack(alignment: .leading, spacing: 14) {
-                macroRow(title: "碳水化合物", percent: $carbohydratePercent)
-                macroRow(title: "蛋白质", percent: $proteinPercent)
-                macroRow(title: "脂肪", percent: $fatPercent)
+                macroRow(title: L10n.text("member.setup.nutrition.nutrition.d57f7d"), percent: $carbohydratePercent)
+                macroRow(title: L10n.text("member.setup.nutrition.nutrition.14a64e"), percent: $proteinPercent)
+                macroRow(title: L10n.text("member.setup.nutrition.nutrition.3d7c0e"), percent: $fatPercent)
 
                 Divider()
 
-                mealRow(title: "早餐", key: "breakfast")
-                mealRow(title: "午餐", key: "lunch")
-                mealRow(title: "晚餐", key: "dinner")
-                mealRow(title: "小吃", key: "snack")
+                mealRow(title: L10n.text("member.setup.nutrition.nutrition.edb336"), key: "breakfast")
+                mealRow(title: L10n.text("member.setup.nutrition.nutrition.3cc4b7"), key: "lunch")
+                mealRow(title: L10n.text("member.setup.nutrition.nutrition.96a6ae"), key: "dinner")
+                mealRow(title: L10n.text("member.setup.nutrition.nutrition.cb0420"), key: "snack")
             }
             .font(.subheadline)
         }
