@@ -919,48 +919,54 @@ final class MemberMedicalSetupViewModel: ObservableObject {
     }
 
     func ingestProfileLifestyleFocus(_ profile: SparkMedicalSyncAPI.RemoteMemberMedicalProfile) {
-        if let status = MedicalGuideSmokingStatus(rawValue: profile.smokingProfile.status) {
+        let smokingProfile = profile.smokingProfile ?? .empty
+        let drinkingProfile = profile.drinkingProfile ?? .empty
+        let exerciseProfile = profile.exerciseProfile ?? .empty
+
+        if let status = MedicalGuideSmokingStatus(rawValue: smokingProfile.status) {
             smokingStatus = status
             hasPrefilledSmokingStatus = true
         }
-        smokingCount = profile.smokingProfile.count
-        smokingHistoryDuration = profile.smokingProfile.historyDuration
-        smokingQuitDuration = profile.smokingProfile.quitDuration
+        smokingCount = smokingProfile.count
+        smokingHistoryDuration = smokingProfile.historyDuration
+        smokingQuitDuration = smokingProfile.quitDuration
 
-        if let status = MedicalGuideDrinkingStatus(rawValue: profile.drinkingProfile.status) {
+        if let status = MedicalGuideDrinkingStatus(rawValue: drinkingProfile.status) {
             drinkingStatus = status
             hasPrefilledDrinkingStatus = true
         }
-        drinkingCount = profile.drinkingProfile.count
-        drinkingHistoryDuration = profile.drinkingProfile.historyDuration
-        drinkingQuitDuration = profile.drinkingProfile.quitDuration
-        drinkingTypes = profile.drinkingProfile.types.filter { Self.presetDrinkingTypes.contains($0) }
+        drinkingCount = drinkingProfile.count
+        drinkingHistoryDuration = drinkingProfile.historyDuration
+        drinkingQuitDuration = drinkingProfile.quitDuration
+        let profileDrinkingTypes = drinkingProfile.types
+        drinkingTypes = profileDrinkingTypes.filter { Self.presetDrinkingTypes.contains($0) }
         customAlcoholType = profile.extra?["other_alcohol_type"] ?? ""
-        let legacyCustomTypes = profile.drinkingProfile.types.filter { Self.presetDrinkingTypes.contains($0) == false }
+        let legacyCustomTypes = profileDrinkingTypes.filter { Self.presetDrinkingTypes.contains($0) == false }
         if customAlcoholType.isEmpty, legacyCustomTypes.isEmpty == false {
             customAlcoholType = legacyCustomTypes.joined(separator: "、")
         }
         if let rawAmount = profile.extra?["drinking_amount_level"],
            let level = MedicalGuideDrinkingAmountLevel(rawValue: rawAmount) {
             drinkingAmountLevel = level
-        } else if let legacyAmount = MedicalGuideDrinkingAmountLevel(rawValue: profile.drinkingProfile.count) {
+        } else if let legacyAmount = MedicalGuideDrinkingAmountLevel(rawValue: drinkingProfile.count) {
             drinkingAmountLevel = legacyAmount
         }
 
-        if let frequency = MedicalGuideExerciseFrequency(rawValue: profile.exerciseProfile.frequency) {
+        if let frequency = MedicalGuideExerciseFrequency(rawValue: exerciseProfile.frequency) {
             exerciseFrequency = frequency
             hasPrefilledExerciseFrequency = true
         }
-        if let intensity = MedicalGuideExerciseIntensity(rawValue: profile.exerciseProfile.intensity) {
+        if let intensity = MedicalGuideExerciseIntensity(rawValue: exerciseProfile.intensity) {
             exerciseIntensity = intensity
         }
-        exerciseTypes = profile.exerciseProfile.types.filter { Self.presetExerciseTypes.contains($0) }
+        let profileExerciseTypes = exerciseProfile.types
+        exerciseTypes = profileExerciseTypes.filter { Self.presetExerciseTypes.contains($0) }
         customExerciseType = profile.extra?["custom_exercise_type"] ?? ""
-        let legacyCustomExercise = profile.exerciseProfile.types.filter { Self.presetExerciseTypes.contains($0) == false }
+        let legacyCustomExercise = profileExerciseTypes.filter { Self.presetExerciseTypes.contains($0) == false }
         if customExerciseType.isEmpty, legacyCustomExercise.isEmpty == false {
             customExerciseType = legacyCustomExercise.joined(separator: "、")
         }
-        exerciseDurationMinutes = profile.exerciseProfile.durationMinutes
+        exerciseDurationMinutes = exerciseProfile.durationMinutes
 
         if let hours = profile.sleepHours {
             sleepHours = hours
@@ -1834,36 +1840,30 @@ final class MemberMedicalSetupViewModel: ObservableObject {
 
     private func smokingProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteSmokingProfile {
         if shouldWriteLifestyle == false {
-            return persistedProfileSnapshot?.smokingProfile
-                ?? SparkMedicalSyncAPI.RemoteSmokingProfile(status: "", count: "", historyDuration: "", quitDuration: "")
+            return persistedProfileSnapshot?.smokingProfile ?? .empty
         }
         guard hasExplicitSmokingProfile else {
-            return persistedProfileSnapshot?.smokingProfile
-                ?? SparkMedicalSyncAPI.RemoteSmokingProfile(status: "", count: "", historyDuration: "", quitDuration: "")
+            return persistedProfileSnapshot?.smokingProfile ?? .empty
         }
         return profileSmokingPayload()
     }
 
     private func drinkingProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteDrinkingProfile {
         if shouldWriteLifestyle == false {
-            return persistedProfileSnapshot?.drinkingProfile
-                ?? SparkMedicalSyncAPI.RemoteDrinkingProfile(status: "", count: "", historyDuration: "", quitDuration: "", types: [])
+            return persistedProfileSnapshot?.drinkingProfile ?? .empty
         }
         guard hasExplicitDrinkingProfile else {
-            return persistedProfileSnapshot?.drinkingProfile
-                ?? SparkMedicalSyncAPI.RemoteDrinkingProfile(status: "", count: "", historyDuration: "", quitDuration: "", types: [])
+            return persistedProfileSnapshot?.drinkingProfile ?? .empty
         }
         return profileDrinkingPayload()
     }
 
     private func exerciseProfileForSave(shouldWriteLifestyle: Bool) -> SparkMedicalSyncAPI.RemoteExerciseProfile {
         if shouldWriteLifestyle == false {
-            return persistedProfileSnapshot?.exerciseProfile
-                ?? SparkMedicalSyncAPI.RemoteExerciseProfile(frequency: "", intensity: "", types: [], durationMinutes: "")
+            return persistedProfileSnapshot?.exerciseProfile ?? .empty
         }
         guard hasExplicitExerciseProfile else {
-            return persistedProfileSnapshot?.exerciseProfile
-                ?? SparkMedicalSyncAPI.RemoteExerciseProfile(frequency: "", intensity: "", types: [], durationMinutes: "")
+            return persistedProfileSnapshot?.exerciseProfile ?? .empty
         }
         return profileExercisePayload()
     }

@@ -669,7 +669,7 @@ struct MemberDetailView: View {
                 infoRow(L10n.text("nutrition.goal.type", fallback: "目标模式"), nutritionGoalTypeTitle(goal.goalType))
                 infoRow(L10n.text("nutrition.goal.activity_level", fallback: "活跃水平"), activityLevelTitle(goal.activityLevel))
                 infoRow(L10n.text("nutrition.goal.energy_target", fallback: "每日摄入目标"), kcalText(goal.dailyEnergyTargetKcal ?? target.energyKcal))
-                infoRow("BMR / TDEE", bmrTdeeText(goal))
+                infoRow(L10n.text("nutrition.goal.bmr_tdee", fallback: "基础代谢 / 总消耗"), bmrTdeeText(goal))
                 infoRow(L10n.text("nutrition.goal.macro_target", fallback: "碳水 / 蛋白 / 脂肪"), macroTargetText(target))
                 infoRow(L10n.text("nutrition.goal.current_weight", fallback: "当前体重"), kgText(goal.currentWeightKg))
                 infoRow(L10n.text("nutrition.goal.target_weight", fallback: "目标体重"), kgText(goal.targetWeightKg))
@@ -876,11 +876,7 @@ struct MemberDetailView: View {
         if recordedMeals == 0 {
             return L10n.text("home.members.detail.nutrition.no_record_today", fallback: "今日暂无记录")
         }
-        return String(
-            format: L10n.text("home.members.detail.nutrition.record_progress", fallback: "今日已记 %d/%d 餐"),
-            recordedMeals,
-            totalMeals
-        )
+        return L10n.format("home.members.detail.nutrition.record_progress", fallback: "今日已记 %d/%d 餐", recordedMeals, totalMeals)
     }
 
     private func nutritionTarget(from goalState: SparkNutritionAPI.RemoteNutritionGoalState) -> SparkNutritionAPI.RemoteNutritionMacroTarget {
@@ -916,8 +912,9 @@ struct MemberDetailView: View {
 
     private func medicalModuleSummary(_ detail: SparkMedicalMemberAPI.MemberDetailResponse) -> String {
         let overview = detail.medicalOverview
-        return String(
-            format: L10n.text("home.members.detail.medical_summary", fallback: "病历 %d · 体检 %d · 用药 %d"),
+        return L10n.format(
+            "home.members.detail.medical_summary",
+            fallback: "病历 %d · 体检 %d · 用药 %d",
             overview?.medicalCaseCount ?? 0,
             overview?.healthExamReportCount ?? 0,
             overview?.medicationPlanCount ?? 0

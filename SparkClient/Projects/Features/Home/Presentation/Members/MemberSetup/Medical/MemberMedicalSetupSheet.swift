@@ -1417,7 +1417,7 @@ struct MemberMedicalSetupSheetView: View {
 
     private var examArchiveSummaryStep: some View {
         MedicalGuideStepShell(
-            title: L10n.text("medical.exam_archive.title"),
+            title: L10n.text("medical.exam_archive.summary.title"),
             subtitle: L10n.text("medical.exam_archive.summary.subtitle"),
             step: 29,
             total: viewModel.totalGuideSteps,
@@ -1434,104 +1434,206 @@ struct MemberMedicalSetupSheetView: View {
                 }
             }
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(L10n.text("medical.exam_archive.summary.filled"))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 18) {
+                Text(L10n.text("medical.exam_archive.summary.section.basic"))
+                    .font(.headline.weight(.semibold))
 
-                Text(examArchiveFilledSummaryLine)
-                    .font(.body.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 14) {
-                    summaryRow(
-                        title: L10n.text("medical.exam_archive.summary.reports"),
-                        value: examArchiveReportStatusText
-                    ) {
-                        path.append(.examArchive)
-                    }
-                    summaryRow(
+                MedicalGuideGroupedCard {
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "calendar",
                         title: L10n.text("medical.exam_archive.summary.last_exam"),
-                        value: viewModel.lastExamYear.isEmpty
-                            ? "未填写"
-                            : MemberMedicalSetupViewModel.displayYearMonth(viewModel.lastExamYear)
-                    ) {
-                        path.append(.examArchiveReportPicker)
-                    }
-                    summaryRow(
-                        title: L10n.text("medical.exam_archive.summary.abnormal"),
-                        value: examArchiveAbnormalCountText
-                    ) {
-                        path.append(.examArchiveAIExtractConfirm)
-                    }
-                    summaryRow(
-                        title: L10n.text("medical.exam_archive.summary.follow_up"),
-                        value: examArchiveFollowUpCountText
-                    ) {
-                        path.append(.examArchiveFollowUpPlan)
-                    }
-                    summaryRow(
-                        title: L10n.text("medical.exam_archive.summary.plan"),
-                        value: viewModel.examPlanLines.isEmpty
-                            ? L10n.text("medical.exam_archive.summary.plan.none")
-                            : L10n.text("medical.exam_archive.summary.plan.generated")
-                    ) {
-                        if viewModel.examPlanLines.isEmpty {
-                            path.append(.examArchive)
-                        } else {
-                            path.append(.examArchivePlanResult)
+                        badgeText: examArchiveLastExamBadgeText,
+                        badgeStyle: examArchiveLastExamBadgeStyle,
+                        action: { path.append(.examArchiveReportPicker) }
+                    )
+
+                    Divider()
+
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "doc.text.fill",
+                        title: L10n.text("medical.exam_archive.summary.digital_report"),
+                        badgeText: examArchiveReportParsedBadgeText,
+                        badgeStyle: examArchiveReportParsedBadgeStyle,
+                        action: { path.append(.examArchive) }
+                    )
+                }
+
+                Text(L10n.text("medical.exam_archive.summary.section.ai"))
+                    .font(.headline.weight(.semibold))
+
+                MedicalGuideGroupedCard {
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "exclamationmark.circle.fill",
+                        iconTint: .red,
+                        title: L10n.text("medical.exam_archive.summary.abnormal_found"),
+                        subtitle: examArchiveAbnormalPreviewSubtitle,
+                        badgeText: examArchiveAbnormalCountBadgeText,
+                        badgeStyle: examArchiveAbnormalCountBadgeStyle,
+                        action: { path.append(.examArchiveAIExtractConfirm) }
+                    )
+
+                    Divider()
+
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "clock.badge.exclamationmark.fill",
+                        iconTint: .orange,
+                        title: L10n.text("medical.exam_archive.summary.follow_up_suggested"),
+                        subtitle: examArchiveFollowUpPreviewSubtitle,
+                        badgeText: examArchiveFollowUpCountBadgeText,
+                        badgeStyle: examArchiveFollowUpCountBadgeStyle,
+                        action: { path.append(.examArchiveFollowUpPlan) }
+                    )
+                }
+
+                Text(L10n.text("medical.exam_archive.summary.section.planning"))
+                    .font(.headline.weight(.semibold))
+
+                MedicalGuideGroupedCard {
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "list.clipboard.fill",
+                        title: L10n.text("medical.exam_archive.summary.next_custom_plan"),
+                        subtitle: examArchivePlanPreviewSubtitle,
+                        badgeText: examArchivePlanBadgeText,
+                        badgeStyle: examArchivePlanBadgeStyle,
+                        action: {
+                            if viewModel.examPlanLines.isEmpty {
+                                path.append(.examArchive)
+                            } else {
+                                path.append(.examArchivePlanResult)
+                            }
                         }
-                    }
-                    summaryRow(
-                        title: L10n.text("medical.exam_archive.summary.supplement_indicators"),
-                        value: viewModel.keyIndicatorSummary
-                    ) {
-                        path.append(.keyIndicators)
-                    }
+                    )
+
+                    Divider()
+
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "chart.line.uptrend.xyaxis",
+                        title: L10n.text("medical.exam_archive.summary.supplement_core"),
+                        subtitle: L10n.text("medical.exam_archive.summary.supplement_trend_hint"),
+                        badgeText: examArchiveSupplementBadgeText,
+                        badgeStyle: examArchiveSupplementBadgeStyle,
+                        action: { path.append(.keyIndicators) }
+                    )
                 }
             }
         }
     }
 
-    private var examArchiveFilledSummaryLine: String {
-        var pieces: [String] = []
-        if let latest = viewModel.memberHealthExamReports.max(by: {
-            ($0.examDate ?? .distantPast) < ($1.examDate ?? .distantPast)
-        }) {
-            let title = MemberMedicalExamArchiveGuideContent.reportTitle(latest)
-            pieces.append(title)
-            let abnormalCount = examArchiveFlowViewModel.abnormalItems.isEmpty
-                ? 0
-                : examArchiveFlowViewModel.selectedAbnormalItemIDs.count
-            if abnormalCount > 0 {
-                pieces.append(L10n.format("medical.exam_archive.summary.abnormal_count", abnormalCount))
-            }
+    private var examArchiveSelectedAbnormalItems: [SparkMedicalExamArchiveAPI.AbnormalItem] {
+        examArchiveFlowViewModel.abnormalItems.filter {
+            examArchiveFlowViewModel.selectedAbnormalItemIDs.contains($0.id)
         }
-        if examArchiveFlowViewModel.createdTaskCount > 0 {
-            pieces.append(L10n.format("medical.exam_archive.summary.follow_up_count", examArchiveFlowViewModel.createdTaskCount))
-        }
-        if viewModel.examPlanLines.isEmpty == false {
-            pieces.append(L10n.text("medical.exam_archive.summary.plan.generated"))
-        }
-        return pieces.isEmpty ? viewModel.examArchiveSummary : pieces.joined(separator: " · ")
     }
 
-    private var examArchiveReportStatusText: String {
-        viewModel.memberHealthExamReports.isEmpty
-            ? "未填写"
-            : L10n.text("medical.exam_archive.summary.completed")
-    }
-
-    private var examArchiveAbnormalCountText: String {
-        let count = examArchiveFlowViewModel.abnormalItems.isEmpty
+    private var examArchiveAbnormalCount: Int {
+        examArchiveFlowViewModel.abnormalItems.isEmpty
             ? 0
             : examArchiveFlowViewModel.selectedAbnormalItemIDs.count
-        return count == 0 ? L10n.text("member.setup.common.not_filled") : L10n.format("medical.exam_archive.summary.items_count", count)
     }
 
-    private var examArchiveFollowUpCountText: String {
-        let count = examArchiveFlowViewModel.createdTaskCount
-        return count == 0 ? L10n.text("member.setup.common.not_filled") : L10n.format("medical.exam_archive.summary.items_count", count)
+    private var examArchiveFollowUpCount: Int {
+        examArchiveFlowViewModel.createdTaskCount
+    }
+
+    private var examArchiveLastExamBadgeText: String {
+        if let latest = viewModel.memberHealthExamReports.max(by: {
+            ($0.examDate ?? .distantPast) < ($1.examDate ?? .distantPast)
+        }), let date = latest.examDate {
+            let year = Calendar.current.component(.year, from: date)
+            return L10n.format("medical.exam_archive.summary.year_badge", "\(year)")
+        }
+        if viewModel.lastExamYear.isEmpty == false {
+            let yearText = MemberMedicalSetupViewModel.displayYearMonth(viewModel.lastExamYear)
+            if yearText.count >= 4 {
+                return L10n.format("medical.exam_archive.summary.year_badge", String(yearText.prefix(4)))
+            }
+            return yearText
+        }
+        return L10n.text("member.setup.common.not_filled")
+    }
+
+    private var examArchiveLastExamBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        examArchiveLastExamBadgeText == L10n.text("member.setup.common.not_filled") ? .neutral : .accent
+    }
+
+    private var examArchiveReportParsedBadgeText: String {
+        viewModel.memberHealthExamReports.isEmpty
+            ? L10n.text("member.setup.common.not_filled")
+            : L10n.text("medical.exam_archive.summary.parsed")
+    }
+
+    private var examArchiveReportParsedBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        viewModel.memberHealthExamReports.isEmpty ? .neutral : .success
+    }
+
+    private var examArchiveAbnormalCountBadgeText: String {
+        examArchiveAbnormalCount == 0
+            ? L10n.text("member.setup.common.not_filled")
+            : L10n.format("medical.exam_archive.summary.items_count_spaced", examArchiveAbnormalCount)
+    }
+
+    private var examArchiveAbnormalCountBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        examArchiveAbnormalCount == 0 ? .neutral : .danger
+    }
+
+    private var examArchiveAbnormalPreviewSubtitle: String? {
+        let names = examArchiveSelectedAbnormalItems.map(\.name).filter { $0.isEmpty == false }
+        guard names.isEmpty == false else { return nil }
+        let preview = names.prefix(3).joined(separator: "、")
+        if names.count > 3 {
+            return L10n.format("medical.exam_archive.summary.abnormal_includes", preview)
+        }
+        return L10n.format("medical.exam_archive.summary.abnormal_includes_short", preview)
+    }
+
+    private var examArchiveFollowUpCountBadgeText: String {
+        examArchiveFollowUpCount == 0
+            ? L10n.text("member.setup.common.not_filled")
+            : L10n.format("medical.exam_archive.summary.items_count_spaced", examArchiveFollowUpCount)
+    }
+
+    private var examArchiveFollowUpCountBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        examArchiveFollowUpCount == 0 ? .neutral : .warning
+    }
+
+    private var examArchiveFollowUpPreviewSubtitle: String? {
+        let selectedTasks = examArchiveFlowViewModel.followUpTasks.filter {
+            examArchiveFlowViewModel.selectedFollowUpTaskIDs.contains($0.id)
+        }
+        if let title = selectedTasks.first?.title, title.isEmpty == false {
+            return title
+        }
+        return nil
+    }
+
+    private var examArchivePlanBadgeText: String {
+        viewModel.examPlanLines.isEmpty
+            ? L10n.text("medical.exam_archive.summary.plan.none")
+            : L10n.text("medical.exam_archive.summary.plan_generated_badge")
+    }
+
+    private var examArchivePlanBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        viewModel.examPlanLines.isEmpty ? .neutral : .accent
+    }
+
+    private var examArchivePlanPreviewSubtitle: String? {
+        viewModel.examPlanLines.isEmpty ? nil : L10n.text("medical.exam_archive.summary.plan_optimized_hint")
+    }
+
+    private var examArchiveSupplementBadgeText: String {
+        let count = viewModel.keyIndicatorRows.filter {
+            $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }.count
+        return count == 0
+            ? L10n.text("medical.exam_archive.summary.supplement_action")
+            : L10n.format("medical.exam_archive.summary.items_count_spaced", count)
+    }
+
+    private var examArchiveSupplementBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        let count = viewModel.keyIndicatorRows.filter {
+            $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }.count
+        return count == 0 ? .neutral : .success
     }
 
     private var keyIndicatorStep: some View {
@@ -1609,50 +1711,105 @@ struct MemberMedicalSetupSheetView: View {
     }
 
     private var summaryPage: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                MemberSetupStepHeaderView(
-                    title: L10n.text("member.module.medical.title"),
-                    subtitle: L10n.text("member.setup.medical.chronic.a054fd"),
-                    step: 29,
-                    total: viewModel.totalGuideSteps
-                )
+        MedicalGuideStepShell(
+            title: L10n.text("medical.profile.summary.title"),
+            subtitle: L10n.text("medical.profile.summary.subtitle"),
+            step: viewModel.totalGuideSteps,
+            total: viewModel.totalGuideSteps,
+            isLoading: viewModel.isSaving,
+            primaryTitle: L10n.text("common.save"),
+            primaryEnabled: viewModel.canSave,
+            onSkip: { dismiss() },
+            onNext: {
+                Task {
+                    if let summary = await viewModel.save() {
+                        onCompleted(summary)
+                        dismiss()
+                    }
+                }
+            }
+        ) {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(L10n.text("medical.profile.summary.section.physiology"))
+                    .font(.headline.weight(.semibold))
 
-                questionCard(title: L10n.text("member.setup.medical.nutrition.519b61")) {
-                    Text(summaryText)
-                        .font(.title3.weight(.bold))
-                        .fixedSize(horizontal: false, vertical: true)
+                MedicalGuideGroupedCard {
+                    MedicalGuideTextRow(
+                        systemName: "figure.stand",
+                        title: L10n.text("medical.profile.summary.physiology"),
+                        subtitle: medicalSummaryPhysiologySubtitle,
+                        action: { path.append(.basicSummary) }
+                    )
+
+                    Divider()
+
+                    MedicalGuideTextRow(
+                        systemName: "briefcase.fill",
+                        title: L10n.text("medical.profile.summary.occupation"),
+                        subtitle: medicalSummaryOccupationSubtitle,
+                        action: { path.append(.basicSummary) }
+                    )
+
+                    Divider()
+
+                    MedicalGuideTextRow(
+                        systemName: "figure.run",
+                        title: L10n.text("medical.profile.summary.lifestyle"),
+                        subtitle: medicalSummaryLifestyleSubtitle,
+                        action: { path.append(.lifestyleSummary) }
+                    )
                 }
 
-                VStack(spacing: 14) {
-                    summaryRow(title: "基础档案说明", value: L10n.text("member.setup.common.completed")) { path.append(.intro) }
-                    summaryRow(title: "性别", value: viewModel.genderDisplayTitle) { path.append(.gender) }
-                    summaryRow(title: "出生日期", value: viewModel.birthDate.map { Self.dateFormatter.string(from: $0) } ?? L10n.text("member.setup.common.not_filled")) { path.append(.birthDate) }
-                    summaryRow(title: "身高", value: viewModel.heightCm > 0 ? String(format: "%.0f cm", viewModel.heightCm) : L10n.text("member.setup.common.not_filled")) { path.append(.height) }
-                    summaryRow(title: "体重", value: viewModel.weightKg > 0 ? String(format: "%.1f kg", viewModel.weightKg) : L10n.text("member.setup.common.not_filled")) { path.append(.weight) }
-                    summaryRow(title: "职业", value: viewModel.occupation.isEmpty ? L10n.text("member.setup.common.not_filled") : viewModel.occupation) { path.append(.occupation) }
-                    summaryRow(title: "久坐时间", value: viewModel.sedentaryLevel?.title ?? L10n.text("member.setup.common.not_filled")) { path.append(.sedentary) }
-                    summaryRow(title: "健康病史与症状记录说明", value: viewModel.historyIntroSummaryText) { path.append(.history) }
-                    summaryRow(title: "症状观察 / 随访", value: viewModel.symptomSummary) { path.append(.symptomFollowUp) }
-                    summaryRow(title: "既往疾病", value: viewModel.chronicConditionsSummary) { path.append(.chronicConditions) }
-                    summaryRow(title: "长期用药", value: viewModel.longTermMedicationSummary) { path.append(.longTermMedication) }
-                    summaryRow(title: "手术史", value: viewModel.surgerySummary) { path.append(.surgeryHistory) }
-                    summaryRow(title: "过敏史", value: viewModel.allergySummary) { path.append(.allergyHistory) }
-                    summaryRow(title: "健康病史与症状记录汇总", value: viewModel.historySummary) { path.append(.historySummary) }
-                    summaryRow(title: "家族病史", value: viewModel.familyHistorySummary) { path.append(.familyHistory) }
-                    summaryRow(title: "生活习惯", value: viewModel.lifestyleSummary) { path.append(.lifestyleSummary) }
-                    summaryRow(title: L10n.text("medical.exam_archive.title"), value: viewModel.examPlanSummary) {
-                        path.append(.examArchive)
+                Text(L10n.text("medical.profile.summary.section.medical_history"))
+                    .font(.headline.weight(.semibold))
+
+                MedicalGuideGroupedCard {
+                    ForEach(Array(viewModel.healthHistoryOverviewCards.enumerated()), id: \.element.id) { index, card in
+                        if index > 0 {
+                            Divider()
+                        }
+
+                        let badge = medicalSummaryHistoryBadge(for: card)
+                        MedicalGuideSummaryBadgeRow(
+                            systemName: card.icon,
+                            iconTint: medicalSummaryHistoryIconTint(for: card.statusStyle),
+                            title: card.title,
+                            badgeText: badge.text,
+                            badgeStyle: badge.style,
+                            action: { navigateToHistoryOverviewCard(card.id) }
+                        )
                     }
-                    summaryRow(
-                        title: L10n.text("medical.exam_archive.summary.supplement_indicators"),
-                        value: viewModel.keyIndicatorSummary
-                    ) {
-                        path.append(.keyIndicators)
-                    }
-                    summaryRow(title: L10n.text("medical.exam_archive.summary.flow"), value: viewModel.examArchiveSummary) {
-                        path.append(.examArchiveSummary)
-                    }
+                }
+
+                Text(L10n.text("medical.profile.summary.section.exam_planning"))
+                    .font(.headline.weight(.semibold))
+
+                MedicalGuideGroupedCard {
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "target",
+                        title: L10n.text("medical.profile.summary.next_exam_plan"),
+                        subtitle: medicalSummaryExamPlanPreviewSubtitle,
+                        badgeText: medicalSummaryExamPlanBadgeText,
+                        badgeStyle: medicalSummaryExamPlanBadgeStyle,
+                        action: {
+                            if viewModel.examPlanLines.isEmpty {
+                                path.append(.examArchiveSummary)
+                            } else {
+                                path.append(.examArchivePlanResult)
+                            }
+                        }
+                    )
+
+                    Divider()
+
+                    MedicalGuideSummaryBadgeRow(
+                        systemName: "chart.line.uptrend.xyaxis",
+                        title: L10n.text("medical.profile.summary.supplement_indicators"),
+                        subtitle: L10n.text("medical.profile.summary.supplement_baseline"),
+                        badgeText: medicalSummarySupplementBadgeText,
+                        badgeStyle: medicalSummarySupplementBadgeStyle,
+                        action: { path.append(.keyIndicators) }
+                    )
                 }
 
                 if let errorMessage = viewModel.errorMessage {
@@ -1661,28 +1818,116 @@ struct MemberMedicalSetupSheetView: View {
                         .foregroundStyle(.red)
                 }
             }
-            .padding(24)
-            .padding(.bottom, 120)
         }
-        .navigationTitle(L10n.text("member.module.medical.title"))
-        .navigationBarTitleDisplayMode(.inline)
-        .memberSetupBottomBar(
-            primaryTitle: L10n.text("common.save"),
-            primaryEnabled: viewModel.canSave,
-            isLoading: viewModel.isSaving,
-            onPrimary: {
-                Task {
-                    if let summary = await viewModel.save() {
-                        onCompleted(summary)
-                        dismiss()
-                    }
-                }
-            },
-            secondaryTitle: L10n.text("common.skip"),
-            onSecondary: {
-                dismiss()
-            }
-        )
+    }
+
+    private var medicalSummaryPhysiologySubtitle: String {
+        var pieces: [String] = [viewModel.genderDisplayTitle]
+        if let ageYears = viewModel.ageYears, let birthDate = viewModel.birthDate {
+            pieces.append("\(ageYears)岁 (\(Self.dateFormatter.string(from: birthDate)))")
+        } else if let birthDate = viewModel.birthDate {
+            pieces.append(Self.dateFormatter.string(from: birthDate))
+        }
+        if viewModel.heightCm > 0 {
+            pieces.append(String(format: "%.0f cm", viewModel.heightCm))
+        }
+        if viewModel.weightKg > 0 {
+            pieces.append(String(format: "%.1f kg", viewModel.weightKg))
+        }
+        return pieces.joined(separator: " · ")
+    }
+
+    private var medicalSummaryOccupationSubtitle: String {
+        var pieces: [String] = []
+        if viewModel.occupation.isEmpty {
+            pieces.append(L10n.text("member.setup.common.not_filled"))
+        } else {
+            pieces.append(viewModel.occupation)
+        }
+        if viewModel.sedentaryLevel == .high {
+            pieces.append(L10n.text("medical.profile.summary.sedentary_high"))
+        } else if let sedentaryLevel = viewModel.sedentaryLevel {
+            pieces.append(sedentaryLevel.title)
+        }
+        return pieces.joined(separator: " · ")
+    }
+
+    private var medicalSummaryLifestyleSubtitle: String {
+        var pieces: [String] = []
+        if viewModel.exerciseFrequency != .none {
+            pieces.append(L10n.format("medical.profile.summary.exercise_frequency", viewModel.exerciseFrequency.title))
+            pieces.append(L10n.format("medical.profile.summary.exercise_intensity", viewModel.exerciseIntensity.lifestyleTitle))
+        }
+        if viewModel.sleepHours > 0 {
+            pieces.append(L10n.format("medical.profile.summary.sleep_hours", viewModel.sleepHours))
+        }
+        if pieces.isEmpty {
+            return viewModel.lifestyleSummary
+        }
+        return pieces.joined(separator: " · ")
+    }
+
+    private func medicalSummaryHistoryBadge(
+        for card: MedicalGuideOverviewCardModel
+    ) -> (text: String, style: MedicalGuideOverviewBadgeStyle) {
+        switch card.statusStyle {
+        case .success:
+            return (L10n.format("medical.profile.summary.status_ok", card.statusText), .success)
+        case .warning, .danger:
+            return (L10n.format("medical.profile.summary.status_attention", card.statusText), card.statusStyle)
+        default:
+            return (card.statusText, card.statusStyle)
+        }
+    }
+
+    private func medicalSummaryHistoryIconTint(for style: MedicalGuideOverviewBadgeStyle) -> Color {
+        switch style {
+        case .success:
+            return .green
+        case .warning:
+            return .orange
+        case .danger:
+            return .red
+        case .accent:
+            return .accentColor
+        case .neutral:
+            return .secondary
+        }
+    }
+
+    private var medicalSummaryExamPlanBadgeText: String {
+        viewModel.examPlanLines.isEmpty
+            ? L10n.text("medical.exam_archive.summary.plan.none")
+            : L10n.text("medical.profile.summary.plan_generated")
+    }
+
+    private var medicalSummaryExamPlanBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        viewModel.examPlanLines.isEmpty ? .neutral : .accent
+    }
+
+    private var medicalSummaryExamPlanPreviewSubtitle: String? {
+        guard viewModel.examPlanLines.isEmpty == false else { return nil }
+        let preview = viewModel.examPlanLines.prefix(4).joined(separator: "、")
+        if viewModel.examPlanLines.count > 4 {
+            return L10n.format("medical.profile.summary.plan_includes", preview)
+        }
+        return L10n.format("medical.profile.summary.plan_includes_short", preview)
+    }
+
+    private var medicalSummarySupplementBadgeText: String {
+        let count = viewModel.keyIndicatorRows.filter {
+            $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }.count
+        return count == 0
+            ? L10n.text("medical.profile.summary.supplement_action")
+            : L10n.format("medical.exam_archive.summary.items_count_spaced", count)
+    }
+
+    private var medicalSummarySupplementBadgeStyle: MedicalGuideOverviewBadgeStyle {
+        let count = viewModel.keyIndicatorRows.filter {
+            $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }.count
+        return count == 0 ? .neutral : .success
     }
 
     private var summaryText: String {
@@ -2562,6 +2807,77 @@ private struct MedicalGuideListRow: View {
             Spacer()
         }
         .padding(.vertical, 6)
+    }
+}
+
+private struct MedicalGuideSummaryBadgeRow: View {
+    let systemName: String
+    var iconTint: Color = .secondary
+    let title: String
+    var subtitle: String? = nil
+    let badgeText: String
+    var badgeStyle: MedicalGuideOverviewBadgeStyle = .neutral
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: subtitle == nil ? .center : .top, spacing: 12) {
+                Image(systemName: systemName)
+                    .font(.title3)
+                    .foregroundStyle(iconTint)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Text(badgeText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(badgeForeground)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(badgeBackground)
+                    )
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 6)
+    }
+
+    private var badgeForeground: Color {
+        switch badgeStyle {
+        case .neutral:
+            return .secondary
+        case .success:
+            return .green
+        case .warning:
+            return .orange
+        case .danger:
+            return .red
+        case .accent:
+            return .accentColor
+        }
+    }
+
+    private var badgeBackground: Color {
+        badgeForeground.opacity(0.12)
     }
 }
 

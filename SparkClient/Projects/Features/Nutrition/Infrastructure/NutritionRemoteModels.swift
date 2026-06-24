@@ -12,43 +12,6 @@ import Foundation
 /// 营养 API 的远程数据模型容器（无 case 的 enum，仅作命名空间使用）
 enum SparkNutritionAPI {}
 
-@propertyWrapper
-struct FlexibleOptionalDouble: Codable, Sendable, Equatable {
-    var wrappedValue: Double?
-
-    init(wrappedValue: Double?) {
-        self.wrappedValue = wrappedValue
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() {
-            wrappedValue = nil
-        } else if let value = try? container.decode(Double.self) {
-            wrappedValue = value
-        } else if let text = try? container.decode(String.self) {
-            wrappedValue = Double(text)
-        } else {
-            wrappedValue = nil
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        if let wrappedValue {
-            try container.encode(wrappedValue)
-        } else {
-            try container.encodeNil()
-        }
-    }
-}
-
-extension KeyedDecodingContainer {
-    func decode(_ type: FlexibleOptionalDouble.Type, forKey key: Key) throws -> FlexibleOptionalDouble {
-        try decodeIfPresent(type, forKey: key) ?? FlexibleOptionalDouble(wrappedValue: nil)
-    }
-}
-
 // MARK: - 响应模型（Remote*）
 
 extension SparkNutritionAPI {

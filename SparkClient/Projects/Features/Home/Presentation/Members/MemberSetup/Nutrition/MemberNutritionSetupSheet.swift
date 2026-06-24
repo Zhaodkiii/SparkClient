@@ -52,33 +52,37 @@ struct MemberNutritionSetupSheetView: View {
     }
 
     private var heightStep: some View {
-        NutritionStepShell(
-            title: L10n.text("member.setup.medical.nutrition.19a854"),
-            subtitle: L10n.text("member.setup.nutrition.nutrition.2a1890"),
-            step: 1,
-            total: 5,
-            onSkip: { goNext(from: .height) },
-            onNext: { goNext(from: .height) }
-        ) {
-            MemberNutritionHeightStepView(
-                heightCm: $viewModel.heightCm
-            )
-        }
+        MemberNutritionHeightStepView(
+            heightCm: $viewModel.heightCm,
+            presentation: .fullScreen
+        )
+        .background(Color(uiColor: .systemBackground))
+        .navigationTitle(L10n.text("member.setup.medical.nutrition.19a854"))
+        .navigationBarTitleDisplayMode(.inline)
+        .memberSetupBottomBar(
+            primaryTitle: L10n.text("common.next"),
+            primaryEnabled: true,
+            onPrimary: { goNext(from: .height) },
+            secondaryTitle: L10n.text("common.skip"),
+            onSecondary: { goNext(from: .height) }
+        )
     }
 
     private var weightStep: some View {
-        NutritionStepShell(
-            title: L10n.text("member.setup.medical.nutrition.440093"),
-            subtitle: L10n.text("member.setup.nutrition.nutrition.de81a2"),
-            step: 2,
-            total: 5,
-            onSkip: { goNext(from: .weight) },
-            onNext: { goNext(from: .weight) }
-        ) {
-            MemberNutritionWeightStepView(
-                weightKg: $viewModel.weightKg
-            )
-        }
+        MemberNutritionWeightStepView(
+            weightKg: $viewModel.weightKg,
+            presentation: .fullScreen
+        )
+        .background(Color(uiColor: .systemBackground))
+        .navigationTitle(L10n.text("member.setup.medical.nutrition.440093"))
+        .navigationBarTitleDisplayMode(.inline)
+        .memberSetupBottomBar(
+            primaryTitle: L10n.text("common.next"),
+            primaryEnabled: true,
+            onPrimary: { goNext(from: .weight) },
+            secondaryTitle: L10n.text("common.skip"),
+            onSecondary: { goNext(from: .weight) }
+        )
     }
 
     private var goalStep: some View {

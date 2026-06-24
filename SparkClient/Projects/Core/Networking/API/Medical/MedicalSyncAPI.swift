@@ -158,9 +158,12 @@ enum SparkMedicalSyncAPI {
         var allergyDetails: [String: RemoteAllergyDetail]
         var allergyHistory: String
         var familyHistory: [RemoteFamilyHistoryRecord]
-        var smokingProfile: RemoteSmokingProfile
-        var drinkingProfile: RemoteDrinkingProfile
-        var exerciseProfile: RemoteExerciseProfile
+        @EmptyObjectAsNil
+        var smokingProfile: RemoteSmokingProfile?
+        @EmptyObjectAsNil
+        var drinkingProfile: RemoteDrinkingProfile?
+        @EmptyObjectAsNil
+        var exerciseProfile: RemoteExerciseProfile?
         var sleepHours: Double?
         var medicationFocus: [RemoteMedicationFocusItem]
         var surgeryFocus: [RemoteSurgeryFocusItem]
@@ -178,86 +181,6 @@ enum SparkMedicalSyncAPI {
         var guidanceUpdatedAt: Date?
         var createdAt: Date?
         var updatedAt: Date?
-
-        init(
-            id: Int,
-            user: Int? = nil,
-            member: Int,
-            chronicConditions: [String] = [],
-            allergies: [String] = [],
-            allergyDetails: [String: RemoteAllergyDetail] = [:],
-            allergyHistory: String = "",
-            familyHistory: [RemoteFamilyHistoryRecord] = [],
-            smokingProfile: RemoteSmokingProfile = .empty,
-            drinkingProfile: RemoteDrinkingProfile = .empty,
-            exerciseProfile: RemoteExerciseProfile = .empty,
-            sleepHours: Double? = nil,
-            medicationFocus: [RemoteMedicationFocusItem] = [],
-            surgeryFocus: [RemoteSurgeryFocusItem] = [],
-            examFocus: [String] = [],
-            symptomFollowUpFocus: [String] = [],
-            notes: String = "",
-            extra: [String: String]? = nil,
-            guidanceSections: [RemoteMemberMedicalProfileSectionSummary]? = nil,
-            riskAssessmentSummary: String? = nil,
-            examPlanSummary: String? = nil,
-            guidanceUpdatedAt: Date? = nil,
-            createdAt: Date? = nil,
-            updatedAt: Date? = nil
-        ) {
-            self.id = id
-            self.user = user
-            self.member = member
-            self.chronicConditions = chronicConditions
-            self.allergies = allergies
-            self.allergyDetails = allergyDetails
-            self.allergyHistory = allergyHistory
-            self.familyHistory = familyHistory
-            self.smokingProfile = smokingProfile
-            self.drinkingProfile = drinkingProfile
-            self.exerciseProfile = exerciseProfile
-            self.sleepHours = sleepHours
-            self.medicationFocus = medicationFocus
-            self.surgeryFocus = surgeryFocus
-            self.examFocus = examFocus
-            self.symptomFollowUpFocus = symptomFollowUpFocus
-            self.notes = notes
-            self.extra = extra
-            self.guidanceSections = guidanceSections
-            self.riskAssessmentSummary = riskAssessmentSummary
-            self.examPlanSummary = examPlanSummary
-            self.guidanceUpdatedAt = guidanceUpdatedAt
-            self.createdAt = createdAt
-            self.updatedAt = updatedAt
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try container.decode(Int.self, forKey: .id)
-            user = try container.decodeIfPresent(Int.self, forKey: .user)
-            member = try container.decode(Int.self, forKey: .member)
-            chronicConditions = try container.decodeIfPresent([String].self, forKey: .chronicConditions) ?? []
-            allergies = try container.decodeIfPresent([String].self, forKey: .allergies) ?? []
-            allergyDetails = try container.decodeIfPresent([String: RemoteAllergyDetail].self, forKey: .allergyDetails) ?? [:]
-            allergyHistory = try container.decodeIfPresent(String.self, forKey: .allergyHistory) ?? ""
-            familyHistory = try container.decodeIfPresent([RemoteFamilyHistoryRecord].self, forKey: .familyHistory) ?? []
-            smokingProfile = try container.decodeIfPresent(RemoteSmokingProfile.self, forKey: .smokingProfile) ?? .empty
-            drinkingProfile = try container.decodeIfPresent(RemoteDrinkingProfile.self, forKey: .drinkingProfile) ?? .empty
-            exerciseProfile = try container.decodeIfPresent(RemoteExerciseProfile.self, forKey: .exerciseProfile) ?? .empty
-            sleepHours = try container.decodeIfPresent(Double.self, forKey: .sleepHours)
-            medicationFocus = try container.decodeIfPresent([RemoteMedicationFocusItem].self, forKey: .medicationFocus) ?? []
-            surgeryFocus = try container.decodeIfPresent([RemoteSurgeryFocusItem].self, forKey: .surgeryFocus) ?? []
-            examFocus = try container.decodeIfPresent([String].self, forKey: .examFocus) ?? []
-            symptomFollowUpFocus = try container.decodeIfPresent([String].self, forKey: .symptomFollowUpFocus) ?? []
-            notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
-            extra = try container.decodeFlexibleStringDictionary(forKeys: [.extra])
-            guidanceSections = try container.decodeIfPresent([RemoteMemberMedicalProfileSectionSummary].self, forKey: .guidanceSections)
-            riskAssessmentSummary = try container.decodeIfPresent(String.self, forKey: .riskAssessmentSummary)
-            examPlanSummary = try container.decodeIfPresent(String.self, forKey: .examPlanSummary)
-            guidanceUpdatedAt = try container.decodeIfPresent(Date.self, forKey: .guidanceUpdatedAt)
-            createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
-            updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
-        }
     }
 
     /// 成员模块维护状态。
