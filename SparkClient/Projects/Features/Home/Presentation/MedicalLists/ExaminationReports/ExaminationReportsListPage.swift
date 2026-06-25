@@ -19,6 +19,8 @@ struct ExaminationReportsListPage: View {
     @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
     @State private var isPresentingAddExamSheet = false
+    /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
+    private static let uploadDocumentKind: MedicalDocumentKind = .medicalReport
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -121,7 +123,7 @@ struct ExaminationReportsListPage: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if memberID > 0 {
                 MedicalListBottomActionBar(
-                    documentType: .examinationReport,
+                    documentKind: Self.uploadDocumentKind,
                     onManualAdd: { isPresentingAddExamSheet = true },
                     onUploadConfirmed: { files in startExaminationReportRecognition(files: files) }
                 )
@@ -148,14 +150,14 @@ struct ExaminationReportsListPage: View {
                 )
             }
         }
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: medicalDocumentUploadViewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
     }
 
     @ViewBuilder
@@ -240,7 +242,7 @@ struct ExaminationReportsListPage: View {
 
     @MainActor
     private func startExaminationReportRecognition(files: [MedicalUploadLocalFile]) {
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicalReport)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
     }
 }
 

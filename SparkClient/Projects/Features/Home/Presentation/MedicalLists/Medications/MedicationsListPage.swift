@@ -67,6 +67,8 @@ struct MedicationsListPage: View {
 
     /// 日志模块标记：首页模块
     private let logModule = LogModule.home
+    /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
+    private static let uploadDocumentKind: MedicalDocumentKind = .prescription
 
     // MARK: - 构造方法
     init(
@@ -162,9 +164,9 @@ struct MedicationsListPage: View {
                 medicationPlanSheetContent(for: destination)
             }
             // 处方OCR上传全屏页面
-            .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-                uploadHostView
-            }
+//            .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//                uploadHostView
+//            }
     }
 
     /// 页面生命周期监听容器（出现、数据变更回调）
@@ -190,7 +192,7 @@ struct MedicationsListPage: View {
             // 底部固定操作栏：手动新增、拍照上传识别处方
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 MedicalListBottomActionBar(
-                    documentType: .medicationPlan,
+                    documentKind: Self.uploadDocumentKind,
                     isEnabled: memberID != nil,
                     onManualAdd: { sheetDestination = .create },
                     onUploadConfirmed: { files in startMedicationPlanRecognition(files: files) }
@@ -622,7 +624,7 @@ struct MedicationsListPage: View {
     /// 启动处方图片OCR识别流程
     @MainActor
     private func startMedicationPlanRecognition(files: [MedicalUploadLocalFile]) {
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicationPlan)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
     }
 
     // MARK: - 状态/日期工具函数

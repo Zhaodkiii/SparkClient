@@ -5,67 +5,63 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 
-/// 医疗附件上传文档类型枚举
-/// rawValue：后端存储文件分类编码；Identifiable 用于SwiftUI列表遍历；CaseIterable 支持全部类型循环
-enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
-    /// 药盒照片
-    case medicineBox
-    /// 处方用药计划
-    case medicationPlan
-    /// 检验报告单
-    case examinationReport
-    /// 体检报告
-    case healthExamReport
-    /// 病例档案
-    case caseDocument
-
-    /// Identifiable 协议唯一标识，直接使用后端原始编码
+extension MedicalDocumentKind: Identifiable {
     var id: String { rawValue }
+}
 
+// MARK: - 医疗列表附件上传 Sheet 展示配置
+
+extension MedicalDocumentKind {
     /// 文件上传前缀，用于区分不同类型文件命名
-    var fileNamePrefix: String {
+    var attachmentUploadFileNamePrefix: String {
         switch self {
-        case .medicineBox:
-            return "medicine_box"
-        case .medicationPlan:
-            return "medication_plan"
-        case .examinationReport:
-            return "examination_report"
-        case .healthExamReport:
-            return "health_exam_report"
+        case .auto:
+            return "medical_upload"
         case .caseDocument:
             return "case_document"
+        case .healthExamReport:
+            return "health_exam_report"
+        case .medicalReport:
+            return "medical_report"
+        case .prescription:
+            return "prescription"
+        case .medicationPlan:
+            return "medication_plan"
+        case .medicineBox:
+            return "medicine_box"
         }
     }
 
     /// 单类文档最大可上传文件数量限制
-    var maxFileCount: Int {
+    var attachmentUploadMaxFileCount: Int {
         switch self {
-        case .examinationReport:
+        case .medicalReport:
             return 3
         case .healthExamReport:
             return 6
-        case .medicineBox, .medicationPlan, .caseDocument:
+        case .auto, .caseDocument, .prescription, .medicationPlan, .medicineBox:
             return 5
         }
     }
 
-    /// 报告类相机单次拍摄最大张数（仅检验/体检报告支持连拍，其余类型单次仅拍1张）
-    var reportCameraMaxCaptureCount: Int {
+    /// 连续拍摄类相机单次拍摄最大张数
+    var attachmentUploadReportCameraMaxCaptureCount: Int {
         switch self {
-        case .examinationReport:
+        case .medicalReport:
             return 3
         case .healthExamReport:
             return 6
+        case .prescription, .medicationPlan, .caseDocument:
+            return 5
         default:
             return 1
         }
     }
 
-    /// 报告相机业务上下文，区分检验/体检报告拍摄页面，非报告类返回nil
-    var examinationReportCameraContext: ExaminationReportCameraContext? {
+    /// 报告相机业务上下文，区分检查/体检报告拍摄页面，非报告类返回 nil
+    var attachmentUploadExaminationReportCameraContext: ExaminationReportCameraContext? {
         switch self {
-        case .examinationReport:
+        case .medicalReport:
             return .examinationReport
         case .healthExamReport:
             return .healthExamReport
@@ -74,13 +70,29 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    var title: String {
+    /// 处方/服药计划相机业务上下文，非对应类型返回 nil
+    var attachmentUploadPrescriptionMedicationCameraContext: PrescriptionMedicationCameraContext? {
         switch self {
+        case .prescription:
+            return .prescription
+        case .medicationPlan:
+            return .medicationPlan
+        default:
+            return nil
+        }
+    }
+
+    var attachmentUploadSheetTitle: String {
+        switch self {
+        case .auto:
+            return L10n.text("medical.upload.kind.auto")
         case .medicineBox:
             return L10n.text("medical.upload.medicine_box.sheet.title")
         case .medicationPlan:
             return L10n.text("medical.upload.medication_plan.sheet.title", fallback: "选择服药计划图片")
-        case .examinationReport:
+        case .prescription:
+            return L10n.text("common.prescription")
+        case .medicalReport:
             return L10n.text("medical.upload.examination_report.sheet.title", fallback: "选择检查报告图片")
         case .healthExamReport:
             return L10n.text("medical.upload.health_exam_report.sheet.title", fallback: "选择体检报告")
@@ -89,13 +101,17 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    var headerTitle: String {
+    var attachmentUploadSheetHeaderTitle: String {
         switch self {
+        case .auto:
+            return L10n.text("medical.upload.kind.auto")
         case .medicineBox:
             return L10n.text("medical.upload.medicine_box.sheet.header")
         case .medicationPlan:
             return L10n.text("medical.upload.medication_plan.sheet.header", fallback: "选择上传方式")
-        case .examinationReport:
+        case .prescription:
+            return L10n.text("common.prescription")
+        case .medicalReport:
             return L10n.text("medical.upload.examination_report.sheet.header", fallback: "选择上传方式")
         case .healthExamReport:
             return L10n.text("medical.upload.health_exam_report.sheet.header", fallback: "选择上传方式")
@@ -104,13 +120,17 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    var headerSubtitle: String {
+    var attachmentUploadSheetHeaderSubtitle: String {
         switch self {
+        case .auto:
+            return L10n.text("medical.upload.kind.auto")
         case .medicineBox:
             return L10n.text("medical.upload.medicine_box.sheet.subtitle")
         case .medicationPlan:
             return L10n.text("medical.upload.medication_plan.sheet.subtitle", fallback: "可一次选择多张处方、药品说明或服药计划图片，确认后开始识别。")
-        case .examinationReport:
+        case .prescription:
+            return L10n.text("medical.upload.medication_plan.sheet.subtitle", fallback: "可一次选择多张处方、药品说明或服药计划图片，确认后开始识别。")
+        case .medicalReport:
             return L10n.text("medical.upload.examination_report.sheet.subtitle", fallback: "可一次选择多张检查、检验或影像报告图片，确认后开始识别。")
         case .healthExamReport:
             return L10n.text("medical.upload.health_exam_report.sheet.subtitle", fallback: "一次仅选择 1 个体检报告文件，确认后开始识别。")
@@ -119,13 +139,17 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    var emptyTitle: String {
+    var attachmentUploadSheetEmptyTitle: String {
         switch self {
+        case .auto:
+            return L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件")
         case .medicineBox:
             return L10n.text("medical.upload.medicine_box.sheet.empty_title")
         case .medicationPlan:
             return L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件")
-        case .examinationReport:
+        case .prescription:
+            return L10n.text("medical.upload.medication_plan.sheet.empty.title", fallback: "尚未选择文件")
+        case .medicalReport:
             return L10n.text("medical.upload.examination_report.sheet.empty.title", fallback: "尚未选择文件")
         case .healthExamReport:
             return L10n.text("medical.upload.health_exam_report.sheet.empty.title", fallback: "尚未选择文件")
@@ -134,13 +158,15 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    var emptySubtitle: String {
+    var attachmentUploadSheetEmptySubtitle: String {
         switch self {
+        case .auto:
+            return L10n.text("medical.upload.medication_plan.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片")
         case .medicineBox:
             return L10n.text("medical.upload.medicine_box.sheet.empty_subtitle")
-        case .medicationPlan:
+        case .medicationPlan, .prescription:
             return L10n.text("medical.upload.medication_plan.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片")
-        case .examinationReport:
+        case .medicalReport:
             return L10n.text("medical.upload.examination_report.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片")
         case .healthExamReport:
             return L10n.text("medical.upload.health_exam_report.sheet.empty.subtitle", fallback: "可拍照、从相册选择或上传 PDF/图片")
@@ -149,13 +175,19 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
         }
     }
 
-    var cameraCover: MedicalAttachmentUploadCameraCover {
+    var attachmentUploadCameraCover: MedicalAttachmentUploadCameraCover {
         switch self {
         case .medicineBox:
             return .medicineBoxCustomCamera
-        case .examinationReport, .healthExamReport:
+        case .medicalReport, .healthExamReport:
             return .examinationReportCustomCamera
-        case .medicationPlan, .caseDocument:
+        case .prescription:
+            return .prescriptionMedicationCustomCamera(.prescription)
+        case .medicationPlan:
+            return .prescriptionMedicationCustomCamera(.medicationPlan)
+        case .caseDocument:
+            return .caseDocumentCustomCamera
+        case .auto:
             return .systemCamera
         }
     }
@@ -163,9 +195,9 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
     /// 列表页底部是否展示「手动添加」按钮。
     var showsListManualAddButton: Bool {
         switch self {
-        case .medicineBox, .healthExamReport:
+        case .medicineBox, .healthExamReport, .auto:
             return false
-        case .medicationPlan, .examinationReport, .caseDocument:
+        case .prescription, .medicationPlan, .medicalReport, .caseDocument:
             return true
         }
     }
@@ -173,11 +205,11 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
     /// 列表页底部按钮主题色。
     var listActionTintColor: Color {
         switch self {
-        case .medicationPlan, .medicineBox:
+        case .medicationPlan, .prescription, .medicineBox:
             return Color(uiColor: .systemPurple)
         case .healthExamReport:
             return Color(uiColor: .systemTeal)
-        case .examinationReport, .caseDocument:
+        case .auto, .medicalReport, .caseDocument:
             return Color(uiColor: .systemBlue)
         }
     }
@@ -185,13 +217,13 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
     /// 列表页底部「手动添加」按钮文案；不支持手动添加时为 `nil`。
     var listManualAddActionTitle: String? {
         switch self {
-        case .examinationReport:
+        case .medicalReport:
             return L10n.text("home.medical.list.examination.action.manual_add", fallback: "手动添加")
         case .caseDocument:
             return L10n.text("home.medical.list.medical_cases.action.manual_add", fallback: "手动添加")
-        case .medicationPlan:
+        case .medicationPlan, .prescription:
             return L10n.text("home.medical.list.medications.action.manual_add", fallback: "手动添加")
-        case .medicineBox, .healthExamReport:
+        case .auto, .medicineBox, .healthExamReport:
             return nil
         }
     }
@@ -199,11 +231,15 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
     /// 列表页底部「拍摄添加」按钮文案。
     var listCameraAddActionTitle: String {
         switch self {
+        case .auto:
+            return L10n.text("medical.upload.kind.auto")
         case .medicineBox:
             return L10n.text("home.medical.medicine_box.camera_add", fallback: "拍照添加药品")
         case .medicationPlan:
             return L10n.text("home.medical.list.medications.action.camera_add_plan", fallback: "拍摄添加计划")
-        case .examinationReport:
+        case .prescription:
+            return L10n.text("home.medical.list.medications.action.camera_add_plan", fallback: "拍摄添加计划")
+        case .medicalReport:
             return L10n.text("home.medical.list.examination.action.camera_add_report", fallback: "拍摄添加报告")
         case .healthExamReport:
             return L10n.text("home.medical.list.health_exam.action.camera_add_report", fallback: "拍摄添加体检报告")
@@ -213,13 +249,13 @@ enum MedicalAttachmentUploadDocumentType: String, Identifiable, CaseIterable {
     }
 
     /// Sheet 打开后默认自动弹出的上传入口。
-    var sheetAutoPresentation: MedicalAttachmentUploadAutoPresentation {
+    var attachmentUploadSheetAutoPresentation: MedicalAttachmentUploadAutoPresentation {
         switch self {
         case .healthExamReport:
             return .fileImporter
         case .caseDocument:
             return .photoLibrary
-        case .medicineBox, .medicationPlan, .examinationReport:
+        case .auto, .medicineBox, .prescription, .medicationPlan, .medicalReport:
             return .camera
         }
     }
@@ -232,26 +268,26 @@ enum MedicalAttachmentUploadAutoPresentation {
     case fileImporter
 }
 
-/// 医疗列表页统一底部操作栏：按 `documentType` 展示手动添加 / 拍摄添加，并内置上传 Sheet。
+/// 医疗列表页统一底部操作栏：按 `documentKind` 展示手动添加 / 拍摄添加，并内置上传 Sheet。
 struct MedicalListBottomActionBar: View {
-    let documentType: MedicalAttachmentUploadDocumentType
+    let documentKind: MedicalDocumentKind
     var isEnabled: Bool = true
     var onManualAdd: (() -> Void)?
     let onUploadConfirmed: ([MedicalUploadLocalFile]) -> Void
 
     @State private var showingUploadSheet = false
 
-    private var tintColor: Color { documentType.listActionTintColor }
+    private var tintColor: Color { documentKind.listActionTintColor }
 
     var body: some View {
         VStack(spacing: 0) {
-            if documentType.showsListManualAddButton {
+            if documentKind.showsListManualAddButton {
                 Divider()
                     .background(Color(uiColor: .separator).opacity(0.2))
             }
 
             VStack(spacing: 12) {
-                if documentType.showsListManualAddButton {
+                if documentKind.showsListManualAddButton {
                     dualActionButtons
                 } else {
                     cameraOnlyButton
@@ -262,7 +298,7 @@ struct MedicalListBottomActionBar: View {
             .background(.ultraThinMaterial)
         }
         .sheet(isPresented: $showingUploadSheet) {
-            MedicalAttachmentUploadListSheet(documentType: documentType, onConfirm: onUploadConfirmed)
+            MedicalAttachmentUploadListSheet(documentKind: documentKind, onConfirm: onUploadConfirmed)
         }
     }
 
@@ -272,7 +308,7 @@ struct MedicalListBottomActionBar: View {
                 Button {
                     onManualAdd?()
                 } label: {
-                    Label(documentType.listManualAddActionTitle ?? "", systemImage: "plus")
+                    Label(documentKind.listManualAddActionTitle ?? "", systemImage: "plus")
                         .font(.headline)
                         .foregroundStyle(tintColor)
                         .lineLimit(1)
@@ -305,7 +341,7 @@ struct MedicalListBottomActionBar: View {
         Button {
             showingUploadSheet = true
         } label: {
-            Label(documentType.listCameraAddActionTitle, systemImage: "camera.fill")
+            Label(documentKind.listCameraAddActionTitle, systemImage: "camera.fill")
                 .font(.headline)
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -325,6 +361,8 @@ struct MedicalListBottomActionBar: View {
 enum MedicalAttachmentUploadCameraCover: Identifiable {
     case medicineBoxCustomCamera
     case examinationReportCustomCamera
+    case prescriptionMedicationCustomCamera(PrescriptionMedicationCameraContext)
+    case caseDocumentCustomCamera
     case systemCamera
 
     var id: String {
@@ -333,6 +371,10 @@ enum MedicalAttachmentUploadCameraCover: Identifiable {
             return "medicineBoxCustomCamera"
         case .examinationReportCustomCamera:
             return "examinationReportCustomCamera"
+        case .prescriptionMedicationCustomCamera(let context):
+            return "prescriptionMedicationCustomCamera:\(context)"
+        case .caseDocumentCustomCamera:
+            return "caseDocumentCustomCamera"
         case .systemCamera:
             return "systemCamera"
         }
@@ -341,7 +383,7 @@ enum MedicalAttachmentUploadCameraCover: Identifiable {
 
 struct MedicalAttachmentUploadListSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let documentType: MedicalAttachmentUploadDocumentType
+    let documentKind: MedicalDocumentKind
     let onConfirm: ([MedicalUploadLocalFile]) -> Void
 
     @State private var localFiles: [MedicalUploadLocalFile] = []
@@ -358,20 +400,20 @@ struct MedicalAttachmentUploadListSheet: View {
     private let logger: Logger = ConsoleLogger()
 
     init(
-        documentType: MedicalAttachmentUploadDocumentType,
+        documentKind: MedicalDocumentKind,
         onConfirm: @escaping ([MedicalUploadLocalFile]) -> Void
     ) {
-        self.documentType = documentType
+        self.documentKind = documentKind
         self.onConfirm = onConfirm
     }
 
-    private var title: String { documentType.title }
-    private var headerTitle: String { documentType.headerTitle }
-    private var headerSubtitle: String { documentType.headerSubtitle }
-    private var emptyTitle: String { documentType.emptyTitle }
-    private var emptySubtitle: String { documentType.emptySubtitle }
-    private var fileNamePrefix: String { documentType.fileNamePrefix }
-    private var maxFileCount: Int { max(1, documentType.maxFileCount) }
+    private var title: String { documentKind.attachmentUploadSheetTitle }
+    private var headerTitle: String { documentKind.attachmentUploadSheetHeaderTitle }
+    private var headerSubtitle: String { documentKind.attachmentUploadSheetHeaderSubtitle }
+    private var emptyTitle: String { documentKind.attachmentUploadSheetEmptyTitle }
+    private var emptySubtitle: String { documentKind.attachmentUploadSheetEmptySubtitle }
+    private var fileNamePrefix: String { documentKind.attachmentUploadFileNamePrefix }
+    private var maxFileCount: Int { max(1, documentKind.attachmentUploadMaxFileCount) }
 
     var body: some View {
         CompatibleNavigationContainer {
@@ -426,10 +468,10 @@ struct MedicalAttachmentUploadListSheet: View {
                     }
                 )
             case .examinationReportCustomCamera:
-                if let context = documentType.examinationReportCameraContext {
+                if let context = documentKind.attachmentUploadExaminationReportCameraContext {
                     ExaminationReportCameraSceneView(
                         context: context,
-                        maxCaptureCount: min(documentType.reportCameraMaxCaptureCount, remainingFileSlots),
+                        maxCaptureCount: min(documentKind.attachmentUploadReportCameraMaxCaptureCount, remainingFileSlots),
                         onCancel: { presentedCameraCover = nil },
                         onImagesCaptured: { images in
                             presentedCameraCover = nil
@@ -443,6 +485,37 @@ struct MedicalAttachmentUploadListSheet: View {
                         }
                     )
                 }
+            case .prescriptionMedicationCustomCamera(let context):
+                PrescriptionMedicationCameraSceneView(
+                    context: context,
+                    maxCaptureCount: min(documentKind.attachmentUploadReportCameraMaxCaptureCount, remainingFileSlots),
+                    onCancel: { presentedCameraCover = nil },
+                    onImagesCaptured: { images in
+                        presentedCameraCover = nil
+                        let files = images.compactMap { captured in
+                            saveUIImageToTemp(
+                                image: captured.image,
+                                namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
+                            )
+                        }
+                        appendFiles(files)
+                    }
+                )
+            case .caseDocumentCustomCamera:
+                CaseDocumentCameraSceneView(
+                    maxCaptureCount: min(documentKind.attachmentUploadReportCameraMaxCaptureCount, remainingFileSlots),
+                    onCancel: { presentedCameraCover = nil },
+                    onImagesCaptured: { images in
+                        presentedCameraCover = nil
+                        let files = images.compactMap { captured in
+                            saveUIImageToTemp(
+                                image: captured.image,
+                                namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
+                            )
+                        }
+                        appendFiles(files)
+                    }
+                )
             case .systemCamera:
                 SystemImagePicker(
                     source: .camera,
@@ -663,7 +736,7 @@ struct MedicalAttachmentUploadListSheet: View {
     }
 
     private func presentDefaultUploadEntry() {
-        switch documentType.sheetAutoPresentation {
+        switch documentKind.attachmentUploadSheetAutoPresentation {
         case .camera:
             presentCamera()
         case .photoLibrary:
@@ -690,7 +763,7 @@ struct MedicalAttachmentUploadListSheet: View {
             return
         }
 
-        presentedCameraCover = documentType.cameraCover
+        presentedCameraCover = documentKind.attachmentUploadCameraCover
     }
 
     private func saveUIImageToTemp(image: UIImage, namePrefix: String) -> MedicalUploadLocalFile? {

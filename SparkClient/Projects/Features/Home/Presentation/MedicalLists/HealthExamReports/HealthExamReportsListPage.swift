@@ -15,6 +15,8 @@ struct HealthExamReportsListPage: View {
 
     @State private var query = ""
     @State private var selectedFilter: HealthExamFilter = .all
+    /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
+    private static let uploadDocumentKind: MedicalDocumentKind = .healthExamReport
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -108,19 +110,19 @@ struct HealthExamReportsListPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(
-                documentType: .healthExamReport,
+                documentKind: Self.uploadDocumentKind,
                 isEnabled: memberID != nil,
                 onUploadConfirmed: { files in startHealthExamReportRecognition(files: files) }
             )
         }
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: medicalDocumentUploadViewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
     }
 
     @ViewBuilder
@@ -179,7 +181,7 @@ struct HealthExamReportsListPage: View {
 
     @MainActor
     private func startHealthExamReportRecognition(files: [MedicalUploadLocalFile]) {
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .healthExamReport)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
     }
 }
 

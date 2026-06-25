@@ -58,7 +58,7 @@ struct MemberMedicalExamArchiveFormContent: View {
             }
         }
         .sheet(isPresented: $showingUploadSheet) {
-            MedicalAttachmentUploadListSheet(documentType: .healthExamReport, onConfirm: startHealthExamRecognition)
+            MedicalAttachmentUploadListSheet(documentKind: .healthExamReport, onConfirm: startHealthExamRecognition)
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
             CompatibleNavigationContainer {

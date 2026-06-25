@@ -14,6 +14,8 @@ struct MedicineBoxListPage: View {
 
     @State private var localMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var sheetDestination: MedicineBoxSheetDestination?
+    /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
+    private static let uploadDocumentKind: MedicalDocumentKind = .medicineBox
 
     init(
         medicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox],
@@ -79,7 +81,7 @@ struct MedicineBoxListPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(
-                documentType: .medicineBox,
+                documentKind: Self.uploadDocumentKind,
                 isEnabled: memberID != nil,
                 onUploadConfirmed: { files in startMedicineBoxRecognition(files: files) }
             )
@@ -118,14 +120,14 @@ struct MedicineBoxListPage: View {
         .onChange(of: viewModel.saveSucceededRevision) { _ in
             Task { await refreshMedicineBoxes() }
         }
-        .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: viewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: viewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
     }
 
     private func upsertMedicineBox(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
@@ -170,7 +172,7 @@ struct MedicineBoxListPage: View {
 
     @MainActor
     private func startMedicineBoxRecognition(files: [MedicalUploadLocalFile]) {
-        viewModel.prepareAndStart(files: files, kind: .medicineBox)
+        viewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
     }
 
     @ViewBuilder

@@ -19,6 +19,8 @@ struct FamilyMedicineCabinetPage: View {
 
     @StateObject private var viewModel: FamilyMedicineCabinetViewModel
     @State private var sheetDestination: MedicineBoxSheetDestination?
+    /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
+    private static let uploadDocumentKind: MedicalDocumentKind = .medicineBox
 
     init(
         entryMemberID: Int,
@@ -160,10 +162,8 @@ struct FamilyMedicineCabinetPage: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(
-                documentType: .medicineBox,
-                onUploadConfirmed: { files in
-                    dependencies.medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .medicineBox)
-                }
+                documentKind: Self.uploadDocumentKind,
+                onUploadConfirmed: { files in startMedicineBoxRecognition(files: files) }
             )
         }
         .sheet(item: $sheetDestination) { destination in
@@ -256,5 +256,10 @@ struct FamilyMedicineCabinetPage: View {
             notifyParentIfPersonal()
             notifyParentCompleteDataIfFamily()
         }
+    }
+
+    @MainActor
+    private func startMedicineBoxRecognition(files: [MedicalUploadLocalFile]) {
+        dependencies.medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
     }
 }

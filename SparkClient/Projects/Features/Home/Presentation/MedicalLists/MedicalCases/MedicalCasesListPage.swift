@@ -16,6 +16,8 @@ struct MedicalCasesListPage: View {
 
     @State private var rows: [SparkMedicalSyncAPI.RemoteMedicalCaseSummary]
     @State private var showingCreateSheet = false
+    /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
+    private static let uploadDocumentKind: MedicalDocumentKind = .caseDocument
 
     init(
         completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
@@ -74,7 +76,7 @@ struct MedicalCasesListPage: View {
         .navigationTitle(L10n.text("home.medical.list.medical_cases.title"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(
-                documentType: .caseDocument,
+                documentKind: Self.uploadDocumentKind,
                 isEnabled: defaultMemberID > 0,
                 onManualAdd: { showingCreateSheet = true },
                 onUploadConfirmed: { files in startCaseDocumentRecognition(files: files) }
@@ -93,14 +95,14 @@ struct MedicalCasesListPage: View {
                 )
             }
         }
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: medicalDocumentUploadViewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
     }
 
     private var defaultMemberID: Int {
@@ -127,7 +129,7 @@ struct MedicalCasesListPage: View {
 
     @MainActor
     private func startCaseDocumentRecognition(files: [MedicalUploadLocalFile]) {
-        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: .caseDocument)
+        medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
     }
 
     @MainActor
