@@ -78,11 +78,8 @@ struct MedicalCaseTimelineEditDestination: View {
                 onDeleted: { onRecordRemoved(eventID) }
             ) {
                 ExamReportFormView(
-                    mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.examinationDraft(from: report)),
-                    onServerSubmit: MainActorThrowingAction { draft in
-                        try await ExaminationReportServerMutationService(resources: workflowAPI)
-                            .updateReport(report: report, draft: draft)
-                    }
+                    mode: .serverEdit(existing: report),
+                    submissionService: MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
                 )
             }
 
@@ -95,10 +92,8 @@ struct MedicalCaseTimelineEditDestination: View {
             ) {
                 SymptomFormView(
                     mode: .serverEdit(existing: remote),
-                    onServerSubmit: MainActorThrowingAction { draft in
-                        try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
-                            .submitSymptomUpdate(memberID: memberID, existing: remote, draft: draft)
-                    }
+                    submissionService: MedicalRecordFormSubmissionService(workflowAPI: workflowAPI),
+                    memberID: memberID
                 )
             }
 
@@ -110,11 +105,9 @@ struct MedicalCaseTimelineEditDestination: View {
                 onDeleted: { onRecordRemoved(eventID) }
             ) {
                 VisitFormView(
-                    mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.visitDraft(from: remote)),
-                    onServerSubmit: MainActorThrowingAction { draft in
-                        try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
-                            .submitVisitUpdate(memberID: memberID, existing: remote, draft: draft)
-                    }
+                    mode: .serverEdit(existing: remote),
+                    submissionService: MedicalRecordFormSubmissionService(workflowAPI: workflowAPI),
+                    memberID: memberID
                 )
             }
 
@@ -140,11 +133,9 @@ struct MedicalCaseTimelineEditDestination: View {
                 onDeleted: { onRecordRemoved(eventID) }
             ) {
                 FollowUpFormView(
-                    mode: .serverEdit(existing: MedicalCaseTimelineRemoteMapping.followUpDraft(from: remote)),
-                    onServerSubmit: MainActorThrowingAction { draft in
-                        try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
-                            .submitFollowUpUpdate(memberID: memberID, existing: remote, draft: draft)
-                    }
+                    mode: .serverEdit(existing: remote),
+                    submissionService: MedicalRecordFormSubmissionService(workflowAPI: workflowAPI),
+                    memberID: memberID
                 )
             }
         }

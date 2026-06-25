@@ -289,25 +289,40 @@ struct MedicalCaseDetailPage: View {
                     .init(
                         memberID: memberID,
                         medicalCaseID: medicalCaseID,
-                        submissionService: service,
-                        onCreateSubmit: MainActorThrowingAction { draft in
-                            _ = try await service.submitSymptomCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
-                        }
+                        submissionService: service
                     )
                 )
             )
         case .examination:
-            ExamReportFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
-                try await service.submitMedicalReportCreate(memberID: memberID, draft: draft, medicalCaseID: medicalCaseID)
-            })
+            ExamReportFormView(
+                mode: .create(
+                    .init(
+                        memberID: memberID,
+                        medicalCaseID: medicalCaseID,
+                        submissionService: service
+                    )
+                )
+            )
         case .visit:
-            VisitFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
-                try await service.submitVisitCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
-            })
+            VisitFormView(
+                mode: .create(
+                    .init(
+                        memberID: memberID,
+                        medicalCaseID: medicalCaseID,
+                        submissionService: service
+                    )
+                )
+            )
         case .followUp:
-            FollowUpFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
-                try await service.submitFollowUpCreate(memberID: memberID, medicalCaseID: medicalCaseID, draft: draft)
-            })
+            FollowUpFormView(
+                mode: .create(
+                    .init(
+                        memberID: memberID,
+                        medicalCaseID: medicalCaseID,
+                        submissionService: service
+                    )
+                )
+            )
         case .surgery:
             SurgeryFormView(
                 mode: .create(

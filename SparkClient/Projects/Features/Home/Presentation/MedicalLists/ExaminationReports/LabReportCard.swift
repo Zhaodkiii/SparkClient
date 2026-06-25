@@ -559,10 +559,10 @@ private struct ExaminationReportDetailHostPage: View {
             .sheet(isPresented: $isShowingEditSheet) {
                 CompatibleNavigationContainer(legacyStackStyle: true) {
                     ExamReportFormView(
-                        mode: .serverEdit(existing: existingDraft),
-                        onServerSubmit: MainActorThrowingAction { draft in
-                            let mergedReport = report.applyingRecognitionDraft(draft)
-                            try await mutationService.updateReport(report: mergedReport)
+                        mode: .serverEdit(existing: report),
+                        submissionService: MedicalRecordFormSubmissionService(workflowAPI: resources),
+                        onReportDraftSaved: { draft in
+                            report = report.applyingRecognitionDraft(draft)
                         }
                     )
                 }

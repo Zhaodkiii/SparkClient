@@ -3154,3 +3154,34 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "onboarding.agent.error.no_base_model" = "Add or enable a base model for chat first.";
 "tool.error.structured_health_card.extraction_failed" = "Failed to generate structured health card. Try again or provide a more complete summary.";
 "tool.result.request_member_selection.completed" = "The user has completed member selection. Use the returned member_id to continue tool calls or produce the final answer.";
+
+// MARK: - AI provider company names (used by APIKeys.localizedDisplayName)
+"company_AI302" = "302.AI";
+"company_AIHUBMIX" = "AiHubMix";
+"company_ANTHROPIC" = "Anthropic";
+"company_CHERRY_IN" = "CherryIN";
+"company_DEEPSEEK" = "DeepSeek";
+"company_DOUBAO" = "ByteDance Doubao";
+"company_GITEE" = "Gitee AI";
+"company_GOOGLE" = "Google Gemini";
+"company_HUNYUAN" = "Tencent Hunyuan";
+"company_IFLOW" = "iFlow";
+"company_KIMI" = "Moonshot";
+"company_LAN" = "LAN";
+"company_LOCAL" = "Local";
+"company_LONGCAT" = "LongCat";
+"company_MIMO" = "MIMO";
+"company_MINIMAX" = "MiniMax";
+"company_MODELSCOPE" = "ModelScope";
+"company_N1N" = "N1N.AI";
+"company_OPENAI" = "OpenAI";
+"company_OPENROUTER" = "OpenRouter";
+"company_PERPLEXITY" = "Perplexity";
+"company_POE" = "Poe";
+"company_QWEN" = "Alibaba Tongyi";
+"company_SILICONCLOUD" = "SiliconCloud";
+"company_STEP" = "StepFun";
+"company_WENXIN" = "Baidu Wenxin";
+"company_XAI" = "xAI";
+"company_YI" = "01.AI";
+"company_ZHIPUAI" = "Z.AI";

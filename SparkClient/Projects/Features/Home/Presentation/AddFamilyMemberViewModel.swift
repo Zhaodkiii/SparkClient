@@ -56,12 +56,19 @@ final class AddFamilyMemberViewModel: ObservableObject {
             && (relationshipCode != "other" || !customRelationship.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
+    /// 按需消费页面初始化携带的待处理分享票据
+    /// 页面打开时如果外部传入了分享绑定票据，自动解析并进入绑定流程，仅执行一次
     func consumeInitialPendingTicketIfNeeded() async {
+        // 已经处理过初始票据，直接退出，避免重复执行
         guard didConsumeInitialTicket == false else { return }
+        // 标记已处理，防止重复触发
         didConsumeInitialTicket = true
+        // 不存在待处理票据则直接返回
         guard let ticket = initialPendingTicket else { return }
+        // 解析票据并切换到绑定流程页面
         await resolveAndEnterBindMode(ticket: ticket)
     }
+    
 
     func presentShareAcceptAfterScanner(ticket: String) {
         showMemberScanner = false
@@ -86,28 +93,45 @@ final class AddFamilyMemberViewModel: ObservableObject {
         nearbyTransport?.stopReceiving()
     }
 
+    /// 解析分享绑定票据并进入成员绑定流程
+    /// - Parameter ticket: 他人分享的家庭绑定票据字符串
     func resolveAndEnterBindMode(ticket: String) async {
+        // 分享绑定用例为空，直接终止流程
         guard let shareUseCase else { return }
+        
+        // 开启解析加载状态
         isResolvingShare = true
+        // 清空上次分享错误提示
         shareErrorMessage = nil
+        // 无论解析成功/失败，最终都关闭加载状态
         defer { isResolvingShare = false }
 
         do {
+            // 调用用例解析票据，获取分享绑定信息
             let resolved = try await shareUseCase.resolve(ticket: ticket)
+            // 判断该分享已被绑定过
             if resolved.alreadyBound {
+                // 切回新建成员页面
                 mode = .create
+                // 弹出已被他人绑定的提示弹窗
                 shareAlertMessage = L10n.text("home.members.bind.already_bound_blocked")
                 return
             }
+            // 票据有效，切换至绑定模式，携带票据与解析后的分享数据
             mode = .bind(ticket: ticket, resolved: resolved)
+            // 初始化默认亲属关系编码
             relationshipCode = MemberRelationshipCatalog.defaultCode
+            // 清空自定义亲属关系输入内容
             customRelationship = ""
         } catch {
+            // 票据解析失败（过期、错误、失效等）
             if case .bind = mode {
-                // 已在绑定模式时保留当前摘要，仅提示错误
+                // 当前已经处于绑定页面，不切换页面，仅展示错误文案
             } else {
+                // 不在绑定页则切回普通新建成员页面
                 mode = .create
             }
+            // 赋值票据无效错误提示文案
             shareErrorMessage = L10n.text("home.members.share.ticket_invalid")
         }
     }

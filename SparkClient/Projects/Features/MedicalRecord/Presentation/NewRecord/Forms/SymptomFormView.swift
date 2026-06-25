@@ -12,7 +12,6 @@ struct SymptomFormView: View {
         let memberID: Int
         let medicalCaseID: Int?
         let submissionService: MedicalRecordFormSubmissionService
-        let onCreateSubmit: MainActorThrowingAction<SymptomRecognitionDraft>?
         let onSaved: (([SparkMedicalSyncAPI.RemoteSymptom], String) -> Void)?
         let onMutation: ((SparkMedicalSyncAPI.SymptomMutationResponse) -> Void)?
 
@@ -20,14 +19,12 @@ struct SymptomFormView: View {
             memberID: Int,
             medicalCaseID: Int? = nil,
             submissionService: MedicalRecordFormSubmissionService,
-            onCreateSubmit: MainActorThrowingAction<SymptomRecognitionDraft>? = nil,
             onSaved: (([SparkMedicalSyncAPI.RemoteSymptom], String) -> Void)? = nil,
             onMutation: ((SparkMedicalSyncAPI.SymptomMutationResponse) -> Void)? = nil
         ) {
             self.memberID = memberID
             self.medicalCaseID = medicalCaseID
             self.submissionService = submissionService
-            self.onCreateSubmit = onCreateSubmit
             self.onSaved = onSaved
             self.onMutation = onMutation
         }
@@ -36,7 +33,9 @@ struct SymptomFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onServerSubmit: MainActorThrowingAction<SymptomRecognitionDraft>?
+    let submissionService: MedicalRecordFormSubmissionService?
+    let memberID: Int?
+    let onMutation: ((SparkMedicalSyncAPI.SymptomMutationResponse) -> Void)?
 
     @State private var selectedSymptoms: [String]
     @State private var duration: String
@@ -51,9 +50,16 @@ struct SymptomFormView: View {
     private let formLogModule: LogModule = .medical
     private let seedDraft: SymptomRecognitionDraft?
 
-    init(mode: Mode, onServerSubmit: MainActorThrowingAction<SymptomRecognitionDraft>? = nil) {
+    init(
+        mode: Mode,
+        submissionService: MedicalRecordFormSubmissionService? = nil,
+        memberID: Int? = nil,
+        onMutation: ((SparkMedicalSyncAPI.SymptomMutationResponse) -> Void)? = nil
+    ) {
         self.mode = mode
-        self.onServerSubmit = onServerSubmit
+        self.submissionService = submissionService
+        self.memberID = memberID
+        self.onMutation = onMutation
 
         let seed: SymptomRecognitionDraft?
         switch mode {
@@ -107,7 +113,7 @@ struct SymptomFormView: View {
                 formLog.info("SymptomFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
             },
-            onSave: { saveNow() }
+            onSave: { Task { await saveNow() } }
         )
         .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button(L10n.text("common.ok"), role: .cancel) {}
@@ -417,11 +423,12 @@ struct SymptomFormView: View {
         searchText = ""
     }
 
-    private func saveNow() {
+    @MainActor
+    private func saveNow() async {
         formLog.info("SymptomFormView: save started mode=\(modeLogLabel)", module: formLogModule)
 
         switch mode {
-        case .localEdit(let existing, let onSubmit):
+        case .localEdit(_, let onSubmit):
             guard let draft = outputDraft else {
                 errorMessage = L10n.text("medical_record.forms.symptom.error_select_one")
                 return
@@ -430,27 +437,30 @@ struct SymptomFormView: View {
             formLog.info("SymptomFormView: local submit finished", module: formLogModule)
             dismiss()
 
-        case .serverEdit:
+        case .serverEdit(let existing):
             guard let draft = outputDraft else {
                 errorMessage = L10n.text("medical_record.forms.symptom.error_select_one")
                 return
             }
-            guard let onServerSubmit else {
-                formLog.warning("SymptomFormView: server handler missing", module: formLogModule)
-                dismiss()
+            guard let submissionService, let memberID else {
+                formLog.warning("SymptomFormView: server submit config missing", module: formLogModule)
+                errorMessage = L10n.text("medical_record.forms.error.submit_failed")
                 return
             }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onServerSubmit.call(draft)
-                    formLog.info("SymptomFormView: server save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("SymptomFormView: server save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
+            defer { isSaving = false }
+            do {
+                let response = try await submissionService.submitSymptomUpdate(
+                    memberID: memberID,
+                    existing: existing,
+                    draft: draft
+                )
+                onMutation?(response)
+                formLog.info("SymptomFormView: server save succeeded", module: formLogModule)
+                dismiss()
+            } catch {
+                formLog.error("SymptomFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
 
         case .create(let context):
@@ -460,36 +470,26 @@ struct SymptomFormView: View {
             }
 
             isSaving = true
-            Task { @MainActor in
-                do {
-                    var saved: [SparkMedicalSyncAPI.RemoteSymptom] = []
-                    var mutation: SparkMedicalSyncAPI.SymptomMutationResponse?
-                    if let onCreateSubmit = context.onCreateSubmit {
-                        try await onCreateSubmit.call(draft)
-                    } else {
-                        let response = try await context.submissionService.submitSymptomCreate(
-                            memberID: context.memberID,
-                            medicalCaseID: context.medicalCaseID,
-                            draft: draft
-                        )
-                        mutation = response
-                        if let created = response.symptom {
-                            saved = [created]
-                        }
-                    }
-
-                    let summary = mutation?.summary?.nilIfBlank ?? currentSummaryDescription()
-                    context.onSaved?(saved, summary)
-                    if let mutation {
-                        context.onMutation?(mutation)
-                    }
-                    formLog.info("SymptomFormView: create save succeeded count=\(saved.count)", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("SymptomFormView: create save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
+            defer { isSaving = false }
+            do {
+                let response = try await context.submissionService.submitSymptomCreate(
+                    memberID: context.memberID,
+                    medicalCaseID: context.medicalCaseID,
+                    draft: draft
+                )
+                var saved: [SparkMedicalSyncAPI.RemoteSymptom] = []
+                if let created = response.symptom {
+                    saved = [created]
                 }
-                isSaving = false
+
+                let summary = response.summary?.nilIfBlank ?? currentSummaryDescription()
+                context.onSaved?(saved, summary)
+                context.onMutation?(response)
+                formLog.info("SymptomFormView: create save succeeded count=\(saved.count)", module: formLogModule)
+                dismiss()
+            } catch {
+                formLog.error("SymptomFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
         }
     }

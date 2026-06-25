@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MemberLifestyleSetupSheetView: View {
-    let onCompletedAction: MainActorAsyncVoidAction
+    let onCompleted: () -> Void
 
     var body: some View {
         CompatibleNavigationContainer(legacyStackStyle: true) {
@@ -12,7 +12,7 @@ struct MemberLifestyleSetupSheetView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button(L10n.text("common.done")) {
-                    Task { await onCompletedAction.call() }
+                    onCompleted()
                 }
                 .buttonStyle(.borderedProminent)
             }

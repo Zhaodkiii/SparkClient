@@ -221,22 +221,7 @@ struct HomeView: View {
 
         // MARK: 待处理家庭成员邀请列表弹窗
         case .pendingInvites:
-            PendingMemberInvitesView(
-                items: viewModel.pendingInvites, // 待处理邀请数据源
-                highlightInviteID: viewModel.highlightInviteID, // 需要高亮展示的邀请ID
-                // 接受邀请：跳转至接受邀请编辑页
-                onAccept: { item in
-                    viewModel.openInviteAccept(item)
-                },
-                // 拒绝邀请：主线程异步执行拒绝接口
-                onReject: MainActorAsyncAction { item in
-                    await viewModel.rejectPendingInvite(item)
-                },
-                // 页面出现时按需拉取最新邀请列表
-                onAppearRefresh: MainActorAsyncVoidAction {
-                    await viewModel.fetchPendingInvitesIfNeeded()
-                }
-            )
+            PendingMemberInvitesView(viewModel: viewModel)
 
         // MARK: 成员功能模块配置流程弹窗
         case .memberModuleSetup(let member):
@@ -314,11 +299,6 @@ struct HomeView: View {
                 shareUseCase: dependencies.shareMemberUseCase,
                 onClose: {
                     activeFullScreenCover = nil
-                },
-                onShare: {
-                    if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                        viewModel.activeSheet = .share(member)
-                    }
                 },
                 onEdit: {
                     if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {

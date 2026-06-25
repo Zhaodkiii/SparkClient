@@ -3,9 +3,28 @@ import SwiftUI
 /// 医疗检查报告草稿：支持新建、服务端编辑与本地编辑；子项通过 `AddLabItemSheet` 维护。
 struct ExamReportFormView: View {
     enum Mode {
-        case create
-        case serverEdit(existing: MedicalReportRecognitionDraft)
+        case create(CreateContext)
+        case serverEdit(existing: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments)
         case localEdit(existing: MedicalReportRecognitionDraft, onSubmit: (MedicalReportRecognitionDraft) -> Void)
+    }
+
+    struct CreateContext {
+        let memberID: Int
+        let medicalCaseID: Int?
+        let submissionService: MedicalRecordFormSubmissionService
+        let onCreated: ((Int, MedicalReportRecognitionDraft) -> Void)?
+
+        init(
+            memberID: Int,
+            medicalCaseID: Int? = nil,
+            submissionService: MedicalRecordFormSubmissionService,
+            onCreated: ((Int, MedicalReportRecognitionDraft) -> Void)? = nil
+        ) {
+            self.memberID = memberID
+            self.medicalCaseID = medicalCaseID
+            self.submissionService = submissionService
+            self.onCreated = onCreated
+        }
     }
 
     struct ItemDraft: Identifiable, Equatable {
@@ -58,8 +77,8 @@ struct ExamReportFormView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>?
-    let onServerSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>?
+    let submissionService: MedicalRecordFormSubmissionService?
+    let onReportDraftSaved: ((MedicalReportRecognitionDraft) -> Void)?
 
     @State private var pageType: ExaminationReportCategory
     @State private var category: String
@@ -83,18 +102,20 @@ struct ExamReportFormView: View {
 
     init(
         mode: Mode,
-        onCreateSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>? = nil,
-        onServerSubmit: MainActorThrowingAction<MedicalReportRecognitionDraft>? = nil
+        submissionService: MedicalRecordFormSubmissionService? = nil,
+        onReportDraftSaved: ((MedicalReportRecognitionDraft) -> Void)? = nil
     ) {
         self.mode = mode
-        self.onCreateSubmit = onCreateSubmit
-        self.onServerSubmit = onServerSubmit
+        self.submissionService = submissionService
+        self.onReportDraftSaved = onReportDraftSaved
 
         let seed: MedicalReportRecognitionDraft
         switch mode {
         case .create:
             seed = .init(category: "laboratory", title: "", hospital: "", doctor: "", content: "", date: "", details: [])
-        case .serverEdit(let existing), .localEdit(let existing, _):
+        case .serverEdit(let existing):
+            seed = MedicalCaseTimelineRemoteMapping.examinationDraft(from: existing)
+        case .localEdit(let existing, _):
             seed = existing
         }
 
@@ -226,7 +247,7 @@ struct ExamReportFormView: View {
                 formLog.info("ExamReportFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
             },
-            onSave: { saveNow() }
+            onSave: { Task { await saveNow() } }
         )
         .sheet(item: $editingItem) { item in
             Group {
@@ -428,7 +449,8 @@ struct ExamReportFormView: View {
         }
     }
 
-    private func saveNow() {
+    @MainActor
+    private func saveNow() async {
         formLog.info("ExamReportFormView: save started mode=\(modeLogLabel) items=\(items.count)", module: formLogModule)
 
         let details = items.enumerated().map { index, row in
@@ -464,41 +486,40 @@ struct ExamReportFormView: View {
             onSubmit(draft)
             formLog.info("ExamReportFormView: local submit finished", module: formLogModule)
             dismiss()
-        case .create:
-            guard let onCreateSubmit else {
-                formLog.warning("ExamReportFormView: create submit missing handler, dismiss", module: formLogModule)
-                dismiss()
+
+        case .serverEdit(let existing):
+            guard let submissionService else {
+                formLog.warning("ExamReportFormView: server submit config missing", module: formLogModule)
+                errorMessage = L10n.text("medical_record.forms.error.submit_failed")
                 return
             }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onCreateSubmit.call(draft)
-                    formLog.info("ExamReportFormView: create save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("ExamReportFormView: create save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
-            }
-        case .serverEdit:
-            guard let onServerSubmit else {
-                formLog.warning("ExamReportFormView: server submit missing handler, dismiss", module: formLogModule)
+            defer { isSaving = false }
+            do {
+                try await submissionService.submitMedicalReportUpdate(report: existing, draft: draft)
+                onReportDraftSaved?(draft)
+                formLog.info("ExamReportFormView: server save succeeded", module: formLogModule)
                 dismiss()
-                return
+            } catch {
+                formLog.error("ExamReportFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
+
+        case .create(let context):
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onServerSubmit.call(draft)
-                    formLog.info("ExamReportFormView: server save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("ExamReportFormView: server save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
+            defer { isSaving = false }
+            do {
+                let newID = try await context.submissionService.submitMedicalReportCreate(
+                    memberID: context.memberID,
+                    draft: draft,
+                    medicalCaseID: context.medicalCaseID
+                )
+                context.onCreated?(newID, draft)
+                formLog.info("ExamReportFormView: create save succeeded id=\(newID)", module: formLogModule)
+                dismiss()
+            } catch {
+                formLog.error("ExamReportFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
         }
     }

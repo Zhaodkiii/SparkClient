@@ -3155,3 +3155,34 @@
 "onboarding.agent.error.no_base_model" = "请先添加或启用一个可用于对话的基础模型。";
 "tool.error.structured_health_card.extraction_failed" = "结构化健康卡片生成失败，请稍后重试或补充更完整的病历摘要。";
 "tool.result.request_member_selection.completed" = "用户已完成成员选择。请使用返回的 member_id 继续后续工具调用或生成最终回答。";
+
+// MARK: - AI provider company names (used by APIKeys.localizedDisplayName)
+"company_AI302" = "302.AI";
+"company_AIHUBMIX" = "推理时代";
+"company_ANTHROPIC" = "Anthropic";
+"company_CHERRY_IN" = "CherryIN";
+"company_DEEPSEEK" = "深度求索";
+"company_DOUBAO" = "字节豆包";
+"company_GITEE" = "模力方舟";
+"company_GOOGLE" = "谷歌Gemini";
+"company_HUNYUAN" = "腾讯混元";
+"company_IFLOW" = "心流";
+"company_KIMI" = "月之暗面";
+"company_LAN" = "局域网模型";
+"company_LOCAL" = "本地模型";
+"company_LONGCAT" = "美团LongCat";
+"company_MIMO" = "小米MIMO";
+"company_MINIMAX" = "MiniMax";
+"company_MODELSCOPE" = "魔搭社区";
+"company_N1N" = "N1N.AI";
+"company_OPENAI" = "OpenAI";
+"company_OPENROUTER" = "OpenRouter";
+"company_PERPLEXITY" = "Perplexity";
+"company_POE" = "Poe";
+"company_QWEN" = "阿里通义";
+"company_SILICONCLOUD" = "硅基流动";
+"company_STEP" = "阶跃星辰";
+"company_WENXIN" = "百度文心";
+"company_XAI" = "xAI";
+"company_YI" = "零一万物";
+"company_ZHIPUAI" = "智谱华章";

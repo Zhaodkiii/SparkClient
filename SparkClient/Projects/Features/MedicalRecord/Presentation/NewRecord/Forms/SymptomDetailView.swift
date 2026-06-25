@@ -84,9 +84,9 @@ struct SymptomDetailView: View {
             CompatibleNavigationContainer {
                 SymptomFormView(
                     mode: .serverEdit(existing: currentSymptom),
-                    onServerSubmit: MainActorThrowingAction { draft in
-                        let response = try await MedicalRecordFormSubmissionService(workflowAPI: workflowAPI)
-                            .submitSymptomUpdate(memberID: memberID, existing: currentSymptom, draft: draft)
+                    submissionService: MedicalRecordFormSubmissionService(workflowAPI: workflowAPI),
+                    memberID: memberID,
+                    onMutation: { response in
                         if let updated = response.symptom {
                             currentSymptom = updated
                         }

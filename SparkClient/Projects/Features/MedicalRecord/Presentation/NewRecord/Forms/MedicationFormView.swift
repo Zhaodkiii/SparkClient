@@ -3,16 +3,33 @@ import SwiftUI
 /// 单条用药识别草稿：字段与 `MedicationPlanRecognitionDraft` 对齐。
 struct MedicationFormView: View {
     enum Mode {
-        case create
-        case serverEdit(existing: MedicationPlanRecognitionDraft)
+        case create(CreateContext)
+        case serverEdit(existing: SparkMedicalSyncAPI.RemoteMedicationPlan)
         case localEdit(existing: MedicationPlanRecognitionDraft, onSubmit: (MedicationPlanRecognitionDraft) -> Void)
+    }
+
+    struct CreateContext {
+        let memberID: Int
+        let medicalCaseID: Int?
+        let submissionService: MedicalRecordFormSubmissionService
+
+        init(
+            memberID: Int,
+            medicalCaseID: Int? = nil,
+            submissionService: MedicalRecordFormSubmissionService
+        ) {
+            self.memberID = memberID
+            self.medicalCaseID = medicalCaseID
+            self.submissionService = submissionService
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: MainActorThrowingAction<MedicationPlanRecognitionDraft>?
-    let onServerSubmit: MainActorThrowingAction<MedicationPlanRecognitionDraft>?
+    let submissionService: MedicalRecordFormSubmissionService?
+    let memberID: Int?
+    let onMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)?
 
     @State private var medicineName = ""
     @State private var medicineType = ""
@@ -36,17 +53,49 @@ struct MedicationFormView: View {
     private let formLogModule: LogModule = .medical
     private let seedSortOrder: String
 
-    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<MedicationPlanRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<MedicationPlanRecognitionDraft>? = nil) {
+    init(
+        mode: Mode,
+        submissionService: MedicalRecordFormSubmissionService? = nil,
+        memberID: Int? = nil,
+        onMutation: ((SparkMedicalSyncAPI.MedicationMutationResponse) -> Void)? = nil
+    ) {
         self.mode = mode
-        self.onCreateSubmit = onCreateSubmit
-        self.onServerSubmit = onServerSubmit
+        self.submissionService = submissionService
+        self.memberID = memberID
+        self.onMutation = onMutation
 
         let seed: MedicationPlanRecognitionDraft
         switch mode {
         case .create:
-            seed = .init(medicineName: nil, medicineType: nil, totalQuantity: nil, expireDate: nil, brandName: nil, dosageForm: nil, strength: nil, dosePerTime: nil, doseValue: nil, doseUnit: nil, frequencyType: "daily", frequencyText: nil, startDate: nil, endDate: nil, instructions: nil, reminderEnabled: false, reminderTimes: [], sortOrder: "0", extra: nil)
+            seed = .init(
+                medicineName: nil, medicineType: nil, totalQuantity: nil, expireDate: nil,
+                brandName: nil, dosageForm: nil, strength: nil, dosePerTime: nil,
+                doseValue: nil, doseUnit: nil, frequencyType: "daily", frequencyText: nil,
+                startDate: nil, endDate: nil, instructions: nil,
+                reminderEnabled: false, reminderTimes: [], sortOrder: "0", extra: nil
+            )
             seedSortOrder = "0"
-        case .serverEdit(let existing), .localEdit(let existing, _):
+        case .serverEdit(let existing):
+            seed = MedicationPlanRecognitionDraft(
+                medicineName: existing.drugName,
+                medicineType: nil,
+                dosageForm: nil,
+                strength: nil,
+                dosePerTime: existing.dosePerTime,
+                doseValue: existing.doseValue.map { String($0) },
+                doseUnit: existing.doseUnit,
+                frequencyType: existing.frequencyType,
+                frequencyText: existing.frequencyText,
+                startDate: MedicalDateCoding.encodeDateOnly(existing.startDate),
+                endDate: existing.endDate.map { MedicalDateCoding.encodeDateOnly($0) },
+                instructions: existing.instructions,
+                reminderEnabled: existing.reminderEnabled,
+                reminderTimes: existing.reminderTimes,
+                sortOrder: "0",
+                extra: existing.extra
+            )
+            seedSortOrder = "0"
+        case .localEdit(let existing, _):
             seed = existing
             seedSortOrder = existing.sortOrder ?? "0"
         }
@@ -98,7 +147,7 @@ struct MedicationFormView: View {
                 formLog.info("MedicationFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
             },
-            onSave: { saveNow() }
+            onSave: { Task { await saveNow() } }
         )
         .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button(L10n.text("common.ok"), role: .cancel) {}
@@ -132,52 +181,76 @@ struct MedicationFormView: View {
     }
 
     private var outputDraft: MedicationPlanRecognitionDraft {
-        .init(medicineName: medicineName.nilIfBlank, medicineType: medicineType.nilIfBlank, totalQuantity: totalQuantity.nilIfBlank, expireDate: expireDate.nilIfBlank, brandName: brandName.nilIfBlank, dosageForm: dosageForm.nilIfBlank, strength: strength.nilIfBlank, dosePerTime: dosePerTime.nilIfBlank, doseValue: doseValue.nilIfBlank, doseUnit: doseUnit.nilIfBlank, frequencyType: frequencyType.nilIfBlank, frequencyText: frequencyText.nilIfBlank, startDate: startDate.nilIfBlank, endDate: endDate.nilIfBlank, instructions: instructions.nilIfBlank, reminderEnabled: false, reminderTimes: [], sortOrder: seedSortOrder, extra: nil)
+        .init(
+            medicineName: medicineName.nilIfBlank,
+            medicineType: medicineType.nilIfBlank,
+            totalQuantity: totalQuantity.nilIfBlank,
+            expireDate: expireDate.nilIfBlank,
+            brandName: brandName.nilIfBlank,
+            dosageForm: dosageForm.nilIfBlank,
+            strength: strength.nilIfBlank,
+            dosePerTime: dosePerTime.nilIfBlank,
+            doseValue: doseValue.nilIfBlank,
+            doseUnit: doseUnit.nilIfBlank,
+            frequencyType: frequencyType.nilIfBlank,
+            frequencyText: frequencyText.nilIfBlank,
+            startDate: startDate.nilIfBlank,
+            endDate: endDate.nilIfBlank,
+            instructions: instructions.nilIfBlank,
+            reminderEnabled: false,
+            reminderTimes: [],
+            sortOrder: seedSortOrder,
+            extra: nil
+        )
     }
 
-    private func saveNow() {
+    @MainActor
+    private func saveNow() async {
         formLog.info("MedicationFormView: save started mode=\(modeLogLabel)", module: formLogModule)
         let draft = outputDraft
+
         switch mode {
         case .localEdit(_, let onSubmit):
             onSubmit(draft)
             formLog.info("MedicationFormView: local submit finished", module: formLogModule)
             dismiss()
-        case .create:
-            guard let onCreateSubmit else {
-                formLog.warning("MedicationFormView: create handler missing", module: formLogModule)
-                dismiss()
+
+        case .serverEdit(let existing):
+            guard let submissionService, let memberID else {
+                formLog.warning("MedicationFormView: server submit config missing", module: formLogModule)
+                errorMessage = L10n.text("medical_record.forms.error.submit_failed")
                 return
             }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onCreateSubmit.call(draft)
-                    formLog.info("MedicationFormView: create save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("MedicationFormView: create save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
-            }
-        case .serverEdit:
-            guard let onServerSubmit else {
-                formLog.warning("MedicationFormView: server handler missing", module: formLogModule)
+            defer { isSaving = false }
+            do {
+                let response = try await submissionService.submitMedicationPlanUpdate(
+                    memberID: memberID,
+                    existing: existing,
+                    draft: draft
+                )
+                onMutation?(response)
+                formLog.info("MedicationFormView: server save succeeded", module: formLogModule)
                 dismiss()
-                return
+            } catch {
+                formLog.error("MedicationFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
+
+        case .create(let context):
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onServerSubmit.call(draft)
-                    formLog.info("MedicationFormView: server save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("MedicationFormView: server save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
+            defer { isSaving = false }
+            do {
+                _ = try await context.submissionService.submitMedicationPlanCreate(
+                    memberID: context.memberID,
+                    medicalCaseID: context.medicalCaseID,
+                    draft: draft
+                )
+                formLog.info("MedicationFormView: create save succeeded", module: formLogModule)
+                dismiss()
+            } catch {
+                formLog.error("MedicationFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
         }
     }

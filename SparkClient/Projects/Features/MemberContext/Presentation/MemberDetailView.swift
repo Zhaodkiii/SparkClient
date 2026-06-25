@@ -133,11 +133,11 @@ struct MemberDetailView: View {
     let memberAPI: SparkMedicalMemberAPI
     let shareUseCase: ShareMemberUseCase
     let onClose: (() -> Void)?
-    let onShare: () -> Void
     let onEdit: () -> Void
     let onDeleted: () -> Void
 
     @State private var showDeleteConfirmation = false
+    @State private var showShareSheet = false
     @State private var showSharedUsersManage = false
     @State private var moduleNavigationPath: [MemberDetailModuleRoute] = []
 
@@ -152,7 +152,6 @@ struct MemberDetailView: View {
         memberAPI: SparkMedicalMemberAPI,
         shareUseCase: ShareMemberUseCase,
         onClose: (() -> Void)? = nil,
-        onShare: @escaping () -> Void,
         onEdit: @escaping () -> Void,
         onDeleted: @escaping () -> Void
     ) {
@@ -182,7 +181,6 @@ struct MemberDetailView: View {
         self.memberAPI = memberAPI
         self.shareUseCase = shareUseCase
         self.onClose = onClose
-        self.onShare = onShare
         self.onEdit = onEdit
         self.onDeleted = onDeleted
     }
@@ -268,12 +266,21 @@ struct MemberDetailView: View {
                         memberID: memberID,
                         detail: detail,
                         bindingUseCase: viewModel.bindingUseCase,
-                        onShareMore: onShare,
+                        onShareMore: openShareSheet,
                         onUpdated: {
                             Task { await viewModel.load() }
                         }
                     )
                 }
+            }
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let member = viewModel.detail?.domainMember {
+                ShareSheet(
+                    member: member,
+                    shareUseCase: shareUseCase,
+                    inviteUseCase: homeDependencies.memberInviteUseCase
+                )
             }
         }
     }
@@ -353,9 +360,11 @@ struct MemberDetailView: View {
             }
         case .lifestyle:
             MemberLifestyleSetupSheetView(
-                onCompletedAction: MainActorAsyncVoidAction {
-                    await moduleFlowViewModel.markModuleCompleted(.dailyHealth, summaryText: "日常健康模块预留")
-                    moduleSetupCompleted()
+                onCompleted: {
+                    Task {
+                        await moduleFlowViewModel.markModuleCompleted(.dailyHealth, summaryText: "日常健康模块预留")
+                        moduleSetupCompleted()
+                    }
                 }
             )
         }
@@ -389,6 +398,11 @@ struct MemberDetailView: View {
         moduleSetupCompleted()
     }
 
+    private func openShareSheet() {
+        guard viewModel.detail?.domainMember != nil else { return }
+        showShareSheet = true
+    }
+
     private var detail: SparkMedicalMemberAPI.MemberDetailResponse? {
         viewModel.detail
     }
@@ -403,7 +417,7 @@ struct MemberDetailView: View {
         Menu {
             if viewModel.detail?.canShare == true {
                 Button(L10n.text("home.members.action.share"), systemImage: "square.and.arrow.up") {
-                    onShare()
+                    openShareSheet()
                 }
             }
             if viewModel.detail?.canEdit == true {
@@ -712,7 +726,7 @@ struct MemberDetailView: View {
             }
 
             if detail.canShare == true {
-                Button(action: onShare) {
+                Button(action: openShareSheet) {
                     Label(L10n.text("home.members.action.share"), systemImage: "plus.circle.fill")
                         .font(.headline)
                 }

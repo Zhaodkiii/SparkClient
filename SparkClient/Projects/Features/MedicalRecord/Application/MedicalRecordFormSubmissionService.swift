@@ -238,6 +238,164 @@ struct MedicalRecordFormSubmissionService: Sendable {
             )
         )
     }
+
+    func submitPrescriptionCreate(
+        memberID: Int,
+        medicalCaseID: Int?,
+        draft: PrescriptionRecognitionDraft
+    ) async throws -> SparkMedicalWorkflowAPI.MedicationPlanBundleSaveResponse {
+        let prescription = SparkMedicalWorkflowAPI.PrescriptionPayload(
+            medicalCase: medicalCaseID ?? draft.medicalCase,
+            prescriberName: draft.prescriberName,
+            institutionName: draft.institutionName,
+            prescribedAt: draft.prescribedAt,
+            diagnosis: draft.diagnosis,
+            prescriptionNo: draft.prescriptionNo,
+            status: PrescriptionFieldNormalization.resolvedLifecycleStatus(draft.status),
+            extra: draft.extra ?? [:]
+        )
+        let payload = SparkMedicalWorkflowAPI.MedicationPlanBundleSavePayload(
+            member: memberID,
+            medicalCase: medicalCaseID ?? draft.medicalCase,
+            prescriptionID: nil,
+            prescription: prescription,
+            items: medicationPlanBundleItems(from: draft.medicationPlans ?? []),
+            fileIds: []
+        )
+        return try await workflowAPI.saveMedicationPlanBundleResponse(payload)
+    }
+
+    func submitPrescriptionUpdate(
+        memberID: Int,
+        existing: SparkMedicalSyncAPI.RemotePrescription,
+        draft: PrescriptionRecognitionDraft
+    ) async throws -> SparkMedicalSyncAPI.RemotePrescription {
+        let updated = try await workflowAPI.update(
+            SparkMedicalSyncAPI.RemotePrescription.self,
+            kind: .prescriptions,
+            id: existing.id,
+            body: PrescriptionUpdatePayload(
+                medicalCase: existing.medicalCase,
+                prescriberName: draft.prescriberName ?? existing.prescriberName,
+                institutionName: draft.institutionName ?? existing.institutionName,
+                prescribedAt: draft.prescribedAt?.nilIfBlank ?? existing.prescribedAt.map { MedicalDateCoding.encodeDateOnly($0) },
+                diagnosis: draft.diagnosis ?? existing.diagnosis,
+                prescriptionNo: draft.prescriptionNo ?? existing.prescriptionNo,
+                status: PrescriptionFieldNormalization.resolvedLifecycleStatus(draft.status ?? existing.status),
+                extra: existing.extra ?? [:]
+            )
+        )
+
+        let items = medicationPlanBundleItems(from: draft.medicationPlans ?? [])
+        if items.isEmpty == false {
+            _ = try await workflowAPI.saveMedicationPlanBundleResponse(
+                SparkMedicalWorkflowAPI.MedicationPlanBundleSavePayload(
+                    member: memberID,
+                    medicalCase: existing.medicalCase,
+                    prescriptionID: existing.id,
+                    prescription: nil,
+                    items: items,
+                    fileIds: []
+                )
+            )
+        }
+        return updated
+    }
+
+    func submitMedicalReportUpdate(
+        report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments,
+        draft: MedicalReportRecognitionDraft
+    ) async throws {
+        try await ExaminationReportServerMutationService(resources: workflowAPI)
+            .updateReport(report: report, draft: draft)
+    }
+
+    func submitMedicationPlanCreate(
+        memberID: Int,
+        medicalCaseID: Int?,
+        draft: MedicationPlanRecognitionDraft
+    ) async throws -> SparkMedicalWorkflowAPI.MedicationPlanBundleSaveResponse {
+        try await workflowAPI.saveMedicationPlanBundleResponse(
+            SparkMedicalWorkflowAPI.MedicationPlanBundleSavePayload(
+                member: memberID,
+                medicalCase: medicalCaseID,
+                prescriptionID: nil,
+                prescription: nil,
+                items: medicationPlanBundleItems(from: [draft]),
+                fileIds: []
+            )
+        )
+    }
+
+    func submitMedicationPlanUpdate(
+        memberID: Int,
+        existing: SparkMedicalSyncAPI.RemoteMedicationPlan,
+        draft: MedicationPlanRecognitionDraft
+    ) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
+        try await workflowAPI.updateMedicationPlan(
+            id: existing.id,
+            body: medicationPlanPayload(memberID: memberID, existing: existing, draft: draft)
+        )
+    }
+
+    private func medicationPlanPayload(
+        memberID: Int,
+        existing: SparkMedicalSyncAPI.RemoteMedicationPlan,
+        draft: MedicationPlanRecognitionDraft
+    ) -> MedicationPlanPayload {
+        MedicationPlanPayload(
+            member: memberID,
+            medicalCase: existing.medicalCase,
+            medicineBox: existing.medicineBox,
+            prescription: existing.prescription,
+            drugName: draft.medicineName?.nilIfBlank ?? draft.brandName?.nilIfBlank ?? existing.drugName,
+            dosePerTime: draft.dosePerTime?.nilIfBlank ?? existing.dosePerTime,
+            doseValue: draft.doseValue.flatMap { Double($0) } ?? existing.doseValue,
+            doseUnit: draft.doseUnit?.nilIfBlank ?? existing.doseUnit,
+            frequencyType: draft.frequencyType?.nilIfBlank ?? existing.frequencyType,
+            everyNDays: existing.everyNDays,
+            weeklyWeekdays: existing.weeklyWeekdays,
+            frequencyText: draft.frequencyText?.nilIfBlank ?? existing.frequencyText,
+            reminderTimes: .normalized(from: draft.reminderTimes),
+            startDate: draft.startDate?.nilIfBlank ?? MedicalDateCoding.encodeDateOnly(existing.startDate),
+            endDate: draft.endDate?.nilIfBlank ?? existing.endDate.map { MedicalDateCoding.encodeDateOnly($0) },
+            instructions: draft.instructions?.nilIfBlank ?? existing.instructions,
+            reminderEnabled: draft.reminderEnabled ?? existing.reminderEnabled,
+            status: PrescriptionFieldNormalization.normalizeMedicationPlanStatus(draft.status ?? existing.status),
+            extra: existing.extra ?? [:]
+        )
+    }
+
+    private func medicationPlanBundleItems(
+        from drafts: [MedicationPlanRecognitionDraft]
+    ) -> [SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload] {
+        let now = Date()
+        return drafts.enumerated().map { index, draft in
+            let medicineName = draft.medicineName?.nilIfBlank ?? draft.brandName?.nilIfBlank ?? "未命名药品"
+            let doseUnit = draft.doseUnit?.nilIfBlank ?? "片"
+            let dosePerTime = draft.dosePerTime?.nilIfBlank ?? "按医嘱"
+            return SparkMedicalWorkflowAPI.MedicationPlanBundleItemPayload(
+                medicineBoxID: nil,
+                medicineBox: nil,
+                drugName: medicineName,
+                dosePerTime: dosePerTime,
+                doseValue: draft.doseValue?.nilIfBlank,
+                doseUnit: doseUnit,
+                frequencyType: "daily",
+                everyNDays: nil,
+                weeklyWeekdays: [],
+                frequencyText: draft.frequencyText?.nilIfBlank ?? "按医嘱",
+                reminderTimes: .normalized(from: draft.reminderTimes),
+                startDate: draft.startDate?.nilIfBlank ?? MedicalDateCoding.encodeDateOnly(now),
+                endDate: draft.endDate?.nilIfBlank,
+                instructions: draft.instructions?.nilIfBlank ?? "",
+                reminderEnabled: draft.reminderEnabled ?? false,
+                status: PrescriptionFieldNormalization.normalizeMedicationPlanStatus(draft.status),
+                extra: ["sort_order": "\(index)"],
+                fileIds: []
+            )
+        }
+    }
 }
 
 private struct SymptomUpdatePayload: Encodable {
@@ -297,4 +455,15 @@ private struct FollowUpUpdatePayload: Encodable {
     let nextAction: String
     let extra: [String: String]
 
+}
+
+private struct PrescriptionUpdatePayload: Encodable {
+    let medicalCase: Int?
+    let prescriberName: String
+    let institutionName: String
+    let prescribedAt: String?
+    let diagnosis: String
+    let prescriptionNo: String?
+    let status: String
+    let extra: [String: String]
 }

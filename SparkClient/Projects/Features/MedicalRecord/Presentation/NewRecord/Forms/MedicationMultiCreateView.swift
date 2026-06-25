@@ -3,9 +3,25 @@ import SwiftUI
 /// 处方 + 多条用药计划：用于批量录入 `PrescriptionRecognitionDraft`。
 struct MedicationMultiCreateView: View {
     enum Mode {
-        case create
-        case serverEdit(existing: PrescriptionRecognitionDraft)
+        case create(CreateContext)
+        case serverEdit(existing: SparkMedicalSyncAPI.RemotePrescription)
         case localEdit(existing: PrescriptionRecognitionDraft, onSubmit: (PrescriptionRecognitionDraft) -> Void)
+    }
+
+    struct CreateContext {
+        let memberID: Int
+        let medicalCaseID: Int?
+        let submissionService: MedicalRecordFormSubmissionService
+
+        init(
+            memberID: Int,
+            medicalCaseID: Int? = nil,
+            submissionService: MedicalRecordFormSubmissionService
+        ) {
+            self.memberID = memberID
+            self.medicalCaseID = medicalCaseID
+            self.submissionService = submissionService
+        }
     }
 
     struct MedicationItemDraft: Identifiable {
@@ -20,8 +36,9 @@ struct MedicationMultiCreateView: View {
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>?
-    let onServerSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>?
+    let submissionService: MedicalRecordFormSubmissionService?
+    let memberID: Int?
+    let onPrescriptionUpdated: ((SparkMedicalSyncAPI.RemotePrescription) -> Void)?
 
     @State private var prescriberName = ""
     @State private var institutionName = ""
@@ -38,30 +55,56 @@ struct MedicationMultiCreateView: View {
     /// 创建模式为 `nil`；编辑模式保留病例关联，避免保存时丢失 `medical_case`。
     private let seedMedicalCase: Int?
 
-    init(mode: Mode, createMedicalCaseID: Int? = nil, onCreateSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<PrescriptionRecognitionDraft>? = nil) {
+    init(
+        mode: Mode,
+        submissionService: MedicalRecordFormSubmissionService? = nil,
+        memberID: Int? = nil,
+        onPrescriptionUpdated: ((SparkMedicalSyncAPI.RemotePrescription) -> Void)? = nil
+    ) {
         self.mode = mode
-        self.onCreateSubmit = onCreateSubmit
-        self.onServerSubmit = onServerSubmit
+        self.submissionService = submissionService
+        self.memberID = memberID
+        self.onPrescriptionUpdated = onPrescriptionUpdated
 
-        let seed: PrescriptionRecognitionDraft
+        let seedMedicalCase: Int?
         switch mode {
-        case .create:
-            seed = .init(medicalCase: createMedicalCaseID, prescriberName: nil, institutionName: nil, prescribedAt: nil, diagnosis: nil, prescriptionNo: nil, status: "active", extra: nil, medicationPlans: [])
-            seedMedicalCase = createMedicalCaseID
-        case .serverEdit(let existing), .localEdit(let existing, _):
-            seed = existing
+        case .create(let context):
+            seedMedicalCase = context.medicalCaseID
+            _prescriberName = State(initialValue: "")
+            _institutionName = State(initialValue: "")
+            _prescribedAt = State(initialValue: "")
+            _diagnosis = State(initialValue: "")
+            _prescriptionNo = State(initialValue: "")
+            _status = State(initialValue: "active")
+            _items = State(initialValue: [])
+        case .serverEdit(let existing):
             seedMedicalCase = existing.medicalCase
+            _prescriberName = State(initialValue: existing.prescriberName)
+            _institutionName = State(initialValue: existing.institutionName)
+            _prescribedAt = State(initialValue: existing.prescribedAt.map { MedicalDateCoding.encodeDateOnly($0) } ?? "")
+            _diagnosis = State(initialValue: existing.diagnosis)
+            _prescriptionNo = State(initialValue: existing.prescriptionNo ?? "")
+            _status = State(initialValue: existing.status)
+            _items = State(initialValue: [])
+        case .localEdit(let existing, _):
+            seedMedicalCase = existing.medicalCase
+            _prescriberName = State(initialValue: existing.prescriberName ?? "")
+            _institutionName = State(initialValue: existing.institutionName ?? "")
+            _prescribedAt = State(initialValue: existing.prescribedAt ?? "")
+            _diagnosis = State(initialValue: existing.diagnosis ?? "")
+            _prescriptionNo = State(initialValue: existing.prescriptionNo ?? "")
+            _status = State(initialValue: existing.status ?? "active")
+            _items = State(initialValue: (existing.medicationPlans ?? []).map {
+                MedicationItemDraft(
+                    medicineName: $0.medicineName ?? $0.medicineBox?.medicineName ?? $0.brandName ?? "",
+                    medicineType: $0.medicineType ?? $0.medicineBox?.medicineType ?? "",
+                    strength: $0.strength ?? "",
+                    frequencyText: $0.frequencyText ?? "",
+                    dosePerTime: $0.dosePerTime ?? ""
+                )
+            })
         }
-
-        _prescriberName = State(initialValue: seed.prescriberName ?? "")
-        _institutionName = State(initialValue: seed.institutionName ?? "")
-        _prescribedAt = State(initialValue: seed.prescribedAt ?? "")
-        _diagnosis = State(initialValue: seed.diagnosis ?? "")
-        _prescriptionNo = State(initialValue: seed.prescriptionNo ?? "")
-        _status = State(initialValue: seed.status ?? "active")
-        _items = State(initialValue: (seed.medicationPlans ?? []).map {
-            MedicationItemDraft(medicineName: $0.medicineName ?? $0.medicineBox?.medicineName ?? $0.brandName ?? "", medicineType: $0.medicineType ?? $0.medicineBox?.medicineType ?? "", strength: $0.strength ?? "", frequencyText: $0.frequencyText ?? "", dosePerTime: $0.dosePerTime ?? "")
-        })
+        self.seedMedicalCase = seedMedicalCase
     }
 
     var body: some View {
@@ -106,7 +149,7 @@ struct MedicationMultiCreateView: View {
                 formLog.info("MedicationMultiCreateView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
             },
-            onSave: { saveNow() }
+            onSave: { Task { await saveNow() } }
         )
         .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button(L10n.text("common.ok"), role: .cancel) {}
@@ -170,49 +213,53 @@ struct MedicationMultiCreateView: View {
         )
     }
 
-    private func saveNow() {
+    @MainActor
+    private func saveNow() async {
         formLog.info("MedicationMultiCreateView: save started mode=\(modeLogLabel) medRows=\(items.count)", module: formLogModule)
         let draft = outputDraft
+
         switch mode {
         case .localEdit(_, let onSubmit):
             onSubmit(draft)
             formLog.info("MedicationMultiCreateView: local submit finished", module: formLogModule)
             dismiss()
-        case .create:
-            guard let onCreateSubmit else {
-                formLog.warning("MedicationMultiCreateView: create handler missing", module: formLogModule)
-                dismiss()
+
+        case .serverEdit(let existing):
+            guard let submissionService, let memberID else {
+                formLog.warning("MedicationMultiCreateView: server submit config missing", module: formLogModule)
+                errorMessage = L10n.text("medical_record.forms.error.submit_failed")
                 return
             }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onCreateSubmit.call(draft)
-                    formLog.info("MedicationMultiCreateView: create save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("MedicationMultiCreateView: create save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
-            }
-        case .serverEdit:
-            guard let onServerSubmit else {
-                formLog.warning("MedicationMultiCreateView: server handler missing", module: formLogModule)
+            defer { isSaving = false }
+            do {
+                let updated = try await submissionService.submitPrescriptionUpdate(
+                    memberID: memberID,
+                    existing: existing,
+                    draft: draft
+                )
+                onPrescriptionUpdated?(updated)
+                formLog.info("MedicationMultiCreateView: server save succeeded", module: formLogModule)
                 dismiss()
-                return
+            } catch {
+                formLog.error("MedicationMultiCreateView: server save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
+
+        case .create(let context):
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onServerSubmit.call(draft)
-                    formLog.info("MedicationMultiCreateView: server save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("MedicationMultiCreateView: server save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
+            defer { isSaving = false }
+            do {
+                _ = try await context.submissionService.submitPrescriptionCreate(
+                    memberID: context.memberID,
+                    medicalCaseID: context.medicalCaseID,
+                    draft: draft
+                )
+                formLog.info("MedicationMultiCreateView: create save succeeded", module: formLogModule)
+                dismiss()
+            } catch {
+                formLog.error("MedicationMultiCreateView: create save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
         }
     }

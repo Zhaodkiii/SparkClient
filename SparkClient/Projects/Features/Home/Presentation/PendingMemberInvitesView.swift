@@ -2,22 +2,17 @@ import SwiftUI
 
 struct PendingMemberInvitesView: View {
     @Environment(\.dismiss) private var dismiss
-
-    let items: [SparkMedicalMemberAPI.PendingInviteItem]
-    var highlightInviteID: Int?
-    let onAccept: (SparkMedicalMemberAPI.PendingInviteItem) -> Void
-    let onReject: MainActorAsyncAction<SparkMedicalMemberAPI.PendingInviteItem>
-    let onAppearRefresh: MainActorAsyncVoidAction?
+    @ObservedObject var viewModel: HomeViewModel
 
     var body: some View {
         NavigationView {
             ScrollViewReader { proxy in
                 List {
-                    if items.isEmpty {
+                    if viewModel.pendingInvites.isEmpty {
                         Text(L10n.text("home.members.invite.empty"))
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(items, id: \.inviteId) { item in
+                        ForEach(viewModel.pendingInvites, id: \.inviteId) { item in
                             inviteRow(item)
                                 .id(item.inviteId)
                         }
@@ -25,11 +20,11 @@ struct PendingMemberInvitesView: View {
                 }
                 .onAppear {
                     Task {
-                        await onAppearRefresh?.call()
+                        await viewModel.fetchPendingInvitesIfNeeded()
                         scrollToHighlight(proxy: proxy)
                     }
                 }
-                .onChange(of: items.map(\.inviteId)) { _ in
+                .onChange(of: viewModel.pendingInvites.map(\.inviteId)) { _ in
                     scrollToHighlight(proxy: proxy)
                 }
             }
@@ -45,7 +40,7 @@ struct PendingMemberInvitesView: View {
 
     @ViewBuilder
     private func inviteRow(_ item: SparkMedicalMemberAPI.PendingInviteItem) -> some View {
-        let isHighlighted = highlightInviteID == item.inviteId
+        let isHighlighted = viewModel.highlightInviteID == item.inviteId
         VStack(alignment: .leading, spacing: 8) {
             Text(item.member.name)
                 .font(.headline)
@@ -69,13 +64,13 @@ struct PendingMemberInvitesView: View {
             HStack(spacing: 12) {
                 Button(L10n.text("home.members.invite.accept")) {
                     dismiss()
-                    onAccept(item)
+                    viewModel.openInviteAccept(item)
                 }
                 .buttonStyle(.borderedProminent)
 
                 Button(L10n.text("home.members.invite.reject"), role: .destructive) {
                     Task {
-                        await onReject.call(item)
+                        await viewModel.rejectPendingInvite(item)
                     }
                 }
                 .buttonStyle(.bordered)
@@ -91,8 +86,8 @@ struct PendingMemberInvitesView: View {
     }
 
     private func scrollToHighlight(proxy: ScrollViewProxy) {
-        guard let highlightInviteID else { return }
-        guard items.contains(where: { $0.inviteId == highlightInviteID }) else { return }
+        guard let highlightInviteID = viewModel.highlightInviteID else { return }
+        guard viewModel.pendingInvites.contains(where: { $0.inviteId == highlightInviteID }) else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             withAnimation {
                 proxy.scrollTo(highlightInviteID, anchor: .center)

@@ -826,7 +826,7 @@ private enum MedicationExecutionPlanResolutionError: LocalizedError {
     }
 }
 
-private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIViewRepresentable {
+private struct MedicationExecutionLegacyDateStripScrollView: UIViewRepresentable {
     let items: [MedicationExecutionDateItem]
     @Binding var selectedDate: Date
     @Binding var defersServerLoad: Bool
@@ -834,19 +834,40 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
     let itemWidth: CGFloat
     let itemSpacing: CGFloat
     let onCommit: (Date) -> Void
-    @ViewBuilder let content: (MedicationExecutionDateItem) -> Content
-
+    let content: (MedicationExecutionDateItem) -> AnyView
+    
+    init<Content: View>(
+        items: [MedicationExecutionDateItem],
+        selectedDate: Binding<Date>,
+        defersServerLoad: Binding<Bool>,
+        calendar: Calendar,
+        itemWidth: CGFloat,
+        itemSpacing: CGFloat,
+        onCommit: @escaping (Date) -> Void,
+        @ViewBuilder content: @escaping (MedicationExecutionDateItem) -> Content
+    ) {
+        self.items = items
+        self._selectedDate = selectedDate
+        self._defersServerLoad = defersServerLoad
+        self.calendar = calendar
+        self.itemWidth = itemWidth
+        self.itemSpacing = itemSpacing
+        self.onCommit = onCommit
+        self.content = { AnyView(content($0)) }
+    }
+    
+    
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
-
+    
     func makeUIView(context: Context) -> UIScrollView {
         let scrollView = UIScrollView()
         scrollView.bounces = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.decelerationRate = .fast
         scrollView.delegate = context.coordinator
-
+        
         let hostingController = UIHostingController(
             rootView: hostedContent(
                 displayedDate: context.coordinator.displayedDate,
@@ -856,10 +877,10 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
         hostingController.view.backgroundColor = .clear
         scrollView.addSubview(hostingController.view)
         context.coordinator.hostingController = hostingController
-
+        
         return scrollView
     }
-
+    
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         context.coordinator.parent = self
         if scrollView.isDragging == false, scrollView.isDecelerating == false {
@@ -869,13 +890,13 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
             displayedDate: context.coordinator.displayedDate,
             onSelect: { item in context.coordinator.select(item) }
         )
-
+        
         let contentWidth = CGFloat(items.count) * itemWidth + CGFloat(max(items.count - 1, 0)) * itemSpacing
         let frame = CGRect(x: 0, y: 0, width: contentWidth, height: 86)
         context.coordinator.hostingController?.view.frame = frame
         scrollView.contentSize = frame.size
         scrollView.contentInset = contentInset(for: scrollView)
-
+        
         guard scrollView.isDragging == false, scrollView.isDecelerating == false else { return }
         let targetOffset = contentOffset(for: selectedIndex, in: scrollView)
         if abs(scrollView.contentOffset.x - targetOffset) > 0.5 {
@@ -884,11 +905,11 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
             context.coordinator.isProgrammaticScroll = false
         }
     }
-
+    
     private func hostedContent(
         displayedDate: Date,
         onSelect: @escaping (MedicationExecutionDateItem) -> Void
-    ) -> MedicationExecutionLegacyDateStripContent<Content> {
+    ) -> MedicationExecutionLegacyDateStripContent {
         MedicationExecutionLegacyDateStripContent(
             items: items,
             selectedDate: displayedDate,
@@ -899,65 +920,65 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
             content: content
         )
     }
-
+    
     private var itemPitch: CGFloat {
         itemWidth + itemSpacing
     }
-
+    
     private var selectedIndex: Int {
         guard let index = items.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: selectedDate) }) else {
             return 0
         }
         return index
     }
-
+    
     private func contentInset(for scrollView: UIScrollView) -> UIEdgeInsets {
         let horizontalInset = max((scrollView.bounds.width - itemWidth) / 2, 0)
         return UIEdgeInsets(top: 0, left: horizontalInset, bottom: 0, right: horizontalInset)
     }
-
+    
     private func contentOffset(for index: Int, in scrollView: UIScrollView) -> CGFloat {
         CGFloat(index) * itemPitch - scrollView.contentInset.left
     }
-
+    
     private func index(for scrollView: UIScrollView) -> Int {
         guard items.isEmpty == false else { return 0 }
         let rawIndex = ((scrollView.contentOffset.x + scrollView.contentInset.left) / itemPitch).rounded()
         return min(max(Int(rawIndex), 0), items.count - 1)
     }
-
+    
     final class Coordinator: NSObject, UIScrollViewDelegate {
         var parent: MedicationExecutionLegacyDateStripScrollView
-        var hostingController: UIHostingController<MedicationExecutionLegacyDateStripContent<Content>>?
+        var hostingController: UIHostingController<MedicationExecutionLegacyDateStripContent>?
         var isProgrammaticScroll = false
         var displayedDate: Date
         private let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
-
+        
         init(parent: MedicationExecutionLegacyDateStripScrollView) {
             self.parent = parent
             self.displayedDate = parent.selectedDate
         }
-
+        
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard isProgrammaticScroll == false else { return }
             highlightItem(at: parent.index(for: scrollView))
         }
-
+        
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             snap(scrollView)
         }
-
+        
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
             if decelerate == false {
                 snap(scrollView)
             }
         }
-
+        
         func select(_ item: MedicationExecutionDateItem) {
             commit(item)
             feedbackGenerator.impactOccurred()
         }
-
+        
         private func snap(_ scrollView: UIScrollView) {
             let index = parent.index(for: scrollView)
             let xOffset = parent.contentOffset(for: index, in: scrollView)
@@ -965,7 +986,7 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
             commitItem(at: index)
             feedbackGenerator.impactOccurred()
         }
-
+        
         private func highlightItem(at index: Int) {
             guard parent.items.indices.contains(index) else { return }
             let item = parent.items[index]
@@ -975,12 +996,12 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
             parent.defersServerLoad = true
             parent.selectedDate = item.date
         }
-
+        
         private func commitItem(at index: Int) {
             guard parent.items.indices.contains(index) else { return }
             commit(parent.items[index])
         }
-
+        
         private func commit(_ item: MedicationExecutionDateItem) {
             displayedDate = item.date
             refreshRootView()
@@ -988,7 +1009,7 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
             parent.selectedDate = item.date
             parent.onCommit(item.date)
         }
-
+        
         private func refreshRootView() {
             hostingController?.rootView = parent.hostedContent(
                 displayedDate: displayedDate,
@@ -1000,14 +1021,14 @@ private struct MedicationExecutionLegacyDateStripScrollView<Content: View>: UIVi
     }
 }
 
-private struct MedicationExecutionLegacyDateStripContent<Content: View>: View {
+private struct MedicationExecutionLegacyDateStripContent: View {
     let items: [MedicationExecutionDateItem]
     let selectedDate: Date
     let calendar: Calendar
     let itemWidth: CGFloat
     let itemSpacing: CGFloat
     let onSelect: (MedicationExecutionDateItem) -> Void
-    @ViewBuilder let content: (MedicationExecutionDateItem) -> Content
+    let content: (MedicationExecutionDateItem) -> AnyView
 
     var body: some View {
         HStack(spacing: itemSpacing) {

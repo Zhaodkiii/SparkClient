@@ -12,7 +12,6 @@ struct SurgeryFormView: View {
         let memberID: Int
         let medicalCaseID: Int?
         let submissionService: MedicalRecordFormSubmissionService
-        let onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
         let onSaved: (([SparkMedicalSyncAPI.RemoteSurgery], String) -> Void)?
         let onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)?
 
@@ -20,14 +19,12 @@ struct SurgeryFormView: View {
             memberID: Int,
             medicalCaseID: Int? = nil,
             submissionService: MedicalRecordFormSubmissionService,
-            onCreateSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil,
             onSaved: (([SparkMedicalSyncAPI.RemoteSurgery], String) -> Void)? = nil,
             onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)? = nil
         ) {
             self.memberID = memberID
             self.medicalCaseID = medicalCaseID
             self.submissionService = submissionService
-            self.onCreateSubmit = onCreateSubmit
             self.onSaved = onSaved
             self.onMutation = onMutation
         }
@@ -39,7 +36,6 @@ struct SurgeryFormView: View {
     let submissionService: MedicalRecordFormSubmissionService?
     let memberID: Int?
     let onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)?
-    let onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>?
 
     @State private var procedureName: String
     @State private var performedAt: String
@@ -59,14 +55,12 @@ struct SurgeryFormView: View {
         mode: Mode,
         submissionService: MedicalRecordFormSubmissionService? = nil,
         memberID: Int? = nil,
-        onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)? = nil,
-        onServerSubmit: MainActorThrowingAction<SurgeryRecognitionDraft>? = nil
+        onMutation: ((SparkMedicalSyncAPI.SurgeryMutationResponse) -> Void)? = nil
     ) {
         self.mode = mode
         self.submissionService = submissionService
         self.memberID = memberID
         self.onMutation = onMutation
-        self.onServerSubmit = onServerSubmit
 
         let seed: SurgeryRecognitionDraft?
         let initialRecovery: String
@@ -125,7 +119,7 @@ struct SurgeryFormView: View {
                 formLog.info("SurgeryFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
             },
-            onSave: { saveNow() }
+            onSave: { Task { await saveNow() } }
         )
         .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button(L10n.text("common.ok"), role: .cancel) {}
@@ -301,7 +295,8 @@ struct SurgeryFormView: View {
         )
     }
 
-    private func saveNow() {
+    @MainActor
+    private func saveNow() async {
         formLog.info("SurgeryFormView: save started mode=\(modeLogLabel)", module: formLogModule)
 
         switch mode {
@@ -318,28 +313,25 @@ struct SurgeryFormView: View {
                 errorMessage = "请填写手术名称"
                 return
             }
+            guard let submissionService, let memberID else {
+                formLog.warning("SurgeryFormView: server submit config missing", module: formLogModule)
+                errorMessage = L10n.text("medical_record.forms.error.submit_failed")
+                return
+            }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    if let submissionService, let memberID {
-                        let response = try await submissionService.submitSurgeryUpdate(
-                            memberID: memberID,
-                            existing: existing,
-                            draft: draft,
-                            recoveryStatus: recoveryStatus,
-                            hospitalName: hospitalName
-                        )
-                        onMutation?(response)
-                    } else if let onServerSubmit {
-                        try await onServerSubmit.call(draft)
-                    } else {
-                        throw NSError(domain: "SurgeryFormView", code: -1, userInfo: [NSLocalizedDescriptionKey: "缺少提交配置"])
-                    }
-                    dismiss()
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
+            defer { isSaving = false }
+            do {
+                let response = try await submissionService.submitSurgeryUpdate(
+                    memberID: memberID,
+                    existing: existing,
+                    draft: draft,
+                    recoveryStatus: recoveryStatus,
+                    hospitalName: hospitalName
+                )
+                onMutation?(response)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
             }
 
         case .create(let context):
@@ -348,42 +340,32 @@ struct SurgeryFormView: View {
                 return
             }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    var saved: [SparkMedicalSyncAPI.RemoteSurgery] = []
-                    var mutation: SparkMedicalSyncAPI.SurgeryMutationResponse?
-                    if let onCreateSubmit = context.onCreateSubmit {
-                        try await onCreateSubmit.call(draft)
-                    } else {
-                        let response = try await context.submissionService.submitSurgeryCreate(
-                            memberID: context.memberID,
-                            medicalCaseID: context.medicalCaseID,
-                            draft: draft,
-                            recoveryStatus: recoveryStatus,
-                            hospitalName: hospitalName
-                        )
-                        mutation = response
-                        if let created = response.surgery {
-                            saved = [created]
-                        }
-                    }
-
-                    let summary = mutation?.summary?.nilIfBlank ?? SurgeryFormSupport.summaryLine(
-                        procedureName: procedureName,
-                        performedAt: performedAt,
-                        recoveryStatus: recoveryStatus,
-                        hospitalName: hospitalName,
-                        site: site
-                    )
-                    context.onSaved?(saved, summary)
-                    if let mutation {
-                        context.onMutation?(mutation)
-                    }
-                    dismiss()
-                } catch {
-                    errorMessage = error.localizedDescription
+            defer { isSaving = false }
+            do {
+                let response = try await context.submissionService.submitSurgeryCreate(
+                    memberID: context.memberID,
+                    medicalCaseID: context.medicalCaseID,
+                    draft: draft,
+                    recoveryStatus: recoveryStatus,
+                    hospitalName: hospitalName
+                )
+                var saved: [SparkMedicalSyncAPI.RemoteSurgery] = []
+                if let created = response.surgery {
+                    saved = [created]
                 }
-                isSaving = false
+
+                let summary = response.summary?.nilIfBlank ?? SurgeryFormSupport.summaryLine(
+                    procedureName: procedureName,
+                    performedAt: performedAt,
+                    recoveryStatus: recoveryStatus,
+                    hospitalName: hospitalName,
+                    site: site
+                )
+                context.onSaved?(saved, summary)
+                context.onMutation?(response)
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
             }
         }
     }

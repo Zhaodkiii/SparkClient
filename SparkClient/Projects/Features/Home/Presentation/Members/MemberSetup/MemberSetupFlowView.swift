@@ -8,8 +8,8 @@ struct MemberSetupFlowView: View {
     @StateObject private var viewModel: MemberSetupFlowViewModel
     /// 页面退出环境变量
     @Environment(\.dismiss) private var dismiss
-    /// 页面出现时执行的异步回调，可为nil
-    let onAppearAction: MainActorAsyncVoidAction?
+    /// 页面出现时执行的回调，可为 nil
+    let onAppear: (() -> Void)?
     /// 成员创建成功后的外部回调，回传新建成员实体
     let onMemberCreated: ((Member) -> Void)?
 
@@ -18,18 +18,18 @@ struct MemberSetupFlowView: View {
     ///   - mode: 流程模式，默认新建成员create
     ///   - store: 家庭成员上下文仓库
     ///   - homeDependencies: 首页全量业务依赖容器
-    ///   - onAppearAction: 页面加载前置异步动作
+    ///   - onAppear: 页面加载前置动作
     ///   - onMemberCreated: 成员创建完成回调
     init(
         mode: MemberSetupFlowMode = .create,
         store: MemberContextStore,
         homeDependencies: HomeFeatureDependencies,
-        onAppearAction: MainActorAsyncVoidAction? = nil,
+        onAppear: (() -> Void)? = nil,
         onMemberCreated: ((Member) -> Void)? = nil
     ) {
         // 初始化流程视图模型，注入流程模式与业务依赖
         _viewModel = StateObject(wrappedValue: MemberSetupFlowViewModel(mode: mode, store: store, homeDependencies: homeDependencies))
-        self.onAppearAction = onAppearAction
+        self.onAppear = onAppear
         self.onMemberCreated = onMemberCreated
     }
 
@@ -75,24 +75,8 @@ struct MemberSetupFlowView: View {
                     onOpenModule: { module in
                         viewModel.openSheet(for: module)
                     },
-                    onDoneAction: MainActorAsyncVoidAction {
-                        // 点击完成：持久化模块配置，回调外部并关闭流程
-                        if await viewModel.finish() {
-                            if let member = viewModel.createdMember {
-                                onMemberCreated?(member)
-                            }
-                            dismiss()
-                        }
-                    },
-                    onSkipAction: MainActorAsyncVoidAction {
-                        // 跳过模块配置：直接保存默认配置后退出
-                        if await viewModel.finish() {
-                            if let member = viewModel.createdMember {
-                                onMemberCreated?(member)
-                            }
-                            dismiss()
-                        }
-                    }
+                    onDone: completeModuleSetup,
+                    onSkip: completeModuleSetup
                 )
             case .medicalSummary:
                 // 医疗模块信息汇总预览页
@@ -168,8 +152,10 @@ struct MemberSetupFlowView: View {
             case .lifestyle:
                 // 日常健康预留模块弹窗
                 MemberLifestyleSetupSheetView(
-                    onCompletedAction: MainActorAsyncVoidAction {
-                        await viewModel.markModuleCompleted(.dailyHealth, summaryText: "日常健康模块预留")
+                    onCompleted: {
+                        Task {
+                            await viewModel.markModuleCompleted(.dailyHealth, summaryText: "日常健康模块预留")
+                        }
                     }
                 )
             }
@@ -192,7 +178,7 @@ struct MemberSetupFlowView: View {
         .task {
             await viewModel.preloadModuleSetupCacheIfNeeded()
             await viewModel.loadExistingModuleSettingsIfNeeded()
-            await onAppearAction?.call()
+            onAppear?()
         }
     }
 
@@ -200,5 +186,17 @@ struct MemberSetupFlowView: View {
     private func pop() {
         guard viewModel.navigationPath.isEmpty == false else { return }
         _ = viewModel.navigationPath.popLast()
+    }
+
+    /// 持久化模块配置，成功后回调外部并关闭流程
+    private func completeModuleSetup() {
+        Task {
+            if await viewModel.finish() {
+                if let member = viewModel.createdMember {
+                    onMemberCreated?(member)
+                }
+                dismiss()
+            }
+        }
     }
 }

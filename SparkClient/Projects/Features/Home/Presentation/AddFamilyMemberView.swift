@@ -119,12 +119,14 @@ struct AddFamilyMemberView: View {
     }
 
     var body: some View {
-        if case .create = bindViewModel.mode, let homeDependencies {
+        if case .create = bindViewModel.mode, let homeDependencies/*, false*/ {
             MemberSetupFlowView(
                 store: store,
                 homeDependencies: homeDependencies,
-                onAppearAction: MainActorAsyncVoidAction {
-                    await bindViewModel.consumeInitialPendingTicketIfNeeded()
+                onAppear: {
+                    Task {
+                        await bindViewModel.consumeInitialPendingTicketIfNeeded()
+                    }
                 },
                 onMemberCreated: { member in
                     onCreatedMemberCompleted?(member)

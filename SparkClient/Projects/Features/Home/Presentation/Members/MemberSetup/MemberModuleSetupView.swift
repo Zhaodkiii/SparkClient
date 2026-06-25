@@ -7,10 +7,10 @@ struct MemberModuleSetupView: View {
     @ObservedObject var viewModel: MemberSetupFlowViewModel
     /// 点击模块卡片时打开对应维护 Sheet
     let onOpenModule: (MemberSetupModule) -> Void
-    /// 点击底部「完成」按钮执行的异步回调
-    let onDoneAction: MainActorAsyncVoidAction
-    /// 点击底部「暂不完善」按钮执行的异步回调
-    let onSkipAction: MainActorAsyncVoidAction
+    /// 点击底部「完成」按钮执行的回调
+    let onDone: () -> Void
+    /// 点击底部「暂不完善」按钮执行的回调
+    let onSkip: () -> Void
 
     var body: some View {
         ScrollView {
@@ -96,13 +96,9 @@ struct MemberModuleSetupView: View {
             primaryTitle: L10n.text("common.done", fallback: "完成"),
             primaryEnabled: viewModel.canFinish,
             isLoading: viewModel.isPersistingModules,
-            onPrimary: {
-                Task { await onDoneAction.call() }
-            },
+            onPrimary: onDone,
             secondaryTitle: L10n.text("member.module.selection.skip", fallback: "暂不完善"),
-            onSecondary: {
-                Task { await onSkipAction.call() }
-            }
+            onSecondary: onSkip
         )
         // 正在加载模块缓存/读取已有模块时，整页禁用交互
         .disabled(viewModel.isLoadingExistingModules || viewModel.isPreloadingModuleCache)

@@ -3,16 +3,32 @@ import SwiftUI
 /// 随访识别草稿表单：新建、服务端更新或仅本地回写。
 struct FollowUpFormView: View {
     enum Mode {
-        case create
-        case serverEdit(existing: FollowUpRecognitionDraft)
+        case create(CreateContext)
+        case serverEdit(existing: SparkMedicalSyncAPI.RemoteFollowUp)
         case localEdit(existing: FollowUpRecognitionDraft, onSubmit: (FollowUpRecognitionDraft) -> Void)
+    }
+
+    struct CreateContext {
+        let memberID: Int
+        let medicalCaseID: Int?
+        let submissionService: MedicalRecordFormSubmissionService
+
+        init(
+            memberID: Int,
+            medicalCaseID: Int? = nil,
+            submissionService: MedicalRecordFormSubmissionService
+        ) {
+            self.memberID = memberID
+            self.medicalCaseID = medicalCaseID
+            self.submissionService = submissionService
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
-    let onCreateSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>?
-    let onServerSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>?
+    let submissionService: MedicalRecordFormSubmissionService?
+    let memberID: Int?
 
     @State private var plannedAt = ""
     @State private var completedAt = ""
@@ -26,15 +42,23 @@ struct FollowUpFormView: View {
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(mode: Mode, onCreateSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>? = nil, onServerSubmit: MainActorThrowingAction<FollowUpRecognitionDraft>? = nil) {
+    init(
+        mode: Mode,
+        submissionService: MedicalRecordFormSubmissionService? = nil,
+        memberID: Int? = nil
+    ) {
         self.mode = mode
-        self.onCreateSubmit = onCreateSubmit
-        self.onServerSubmit = onServerSubmit
+        self.submissionService = submissionService
+        self.memberID = memberID
 
         let seed: FollowUpRecognitionDraft
         switch mode {
-        case .create: seed = .init(plannedAt: nil, completedAt: nil, status: nil, method: nil, outcome: nil, nextAction: nil)
-        case .serverEdit(let existing), .localEdit(let existing, _): seed = existing
+        case .create:
+            seed = .init(plannedAt: nil, completedAt: nil, status: nil, method: nil, outcome: nil, nextAction: nil)
+        case .serverEdit(let existing):
+            seed = MedicalCaseTimelineRemoteMapping.followUpDraft(from: existing)
+        case .localEdit(let existing, _):
+            seed = existing
         }
         _plannedAt = State(initialValue: seed.plannedAt ?? "")
         _completedAt = State(initialValue: seed.completedAt ?? "")
@@ -65,7 +89,7 @@ struct FollowUpFormView: View {
                 formLog.info("FollowUpFormView: cancel tapped mode=\(modeLogLabel)", module: formLogModule)
                 dismiss()
             },
-            onSave: { saveNow() }
+            onSave: { Task { await saveNow() } }
         )
         .alert(L10n.text("medical_record.forms.error.submit_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button(L10n.text("common.ok"), role: .cancel) {}
@@ -99,52 +123,62 @@ struct FollowUpFormView: View {
     }
 
     private var outputDraft: FollowUpRecognitionDraft {
-        .init(plannedAt: plannedAt.nilIfBlank, completedAt: completedAt.nilIfBlank, status: status.nilIfBlank, method: method.nilIfBlank, outcome: outcome.nilIfBlank, nextAction: nextAction.nilIfBlank)
+        .init(
+            plannedAt: plannedAt.nilIfBlank,
+            completedAt: completedAt.nilIfBlank,
+            status: status.nilIfBlank,
+            method: method.nilIfBlank,
+            outcome: outcome.nilIfBlank,
+            nextAction: nextAction.nilIfBlank
+        )
     }
 
-    private func saveNow() {
+    @MainActor
+    private func saveNow() async {
         formLog.info("FollowUpFormView: save started mode=\(modeLogLabel)", module: formLogModule)
         let draft = outputDraft
+
         switch mode {
         case .localEdit(_, let onSubmit):
             onSubmit(draft)
             formLog.info("FollowUpFormView: local submit finished", module: formLogModule)
             dismiss()
-        case .create:
-            guard let onCreateSubmit else {
-                formLog.warning("FollowUpFormView: create handler missing", module: formLogModule)
-                dismiss()
+
+        case .serverEdit(let existing):
+            guard let submissionService, let memberID else {
+                formLog.warning("FollowUpFormView: server submit config missing", module: formLogModule)
+                errorMessage = L10n.text("medical_record.forms.error.submit_failed")
                 return
             }
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onCreateSubmit.call(draft)
-                    formLog.info("FollowUpFormView: create save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("FollowUpFormView: create save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
-            }
-        case .serverEdit:
-            guard let onServerSubmit else {
-                formLog.warning("FollowUpFormView: server handler missing", module: formLogModule)
+            defer { isSaving = false }
+            do {
+                try await submissionService.submitFollowUpUpdate(
+                    memberID: memberID,
+                    existing: existing,
+                    draft: draft
+                )
+                formLog.info("FollowUpFormView: server save succeeded", module: formLogModule)
                 dismiss()
-                return
+            } catch {
+                formLog.error("FollowUpFormView: server save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
+
+        case .create(let context):
             isSaving = true
-            Task { @MainActor in
-                do {
-                    try await onServerSubmit.call(draft)
-                    formLog.info("FollowUpFormView: server save succeeded", module: formLogModule)
-                    dismiss()
-                } catch {
-                    formLog.error("FollowUpFormView: server save failed \(error.localizedDescription)", module: formLogModule)
-                    errorMessage = error.localizedDescription
-                }
-                isSaving = false
+            defer { isSaving = false }
+            do {
+                _ = try await context.submissionService.submitFollowUpCreate(
+                    memberID: context.memberID,
+                    medicalCaseID: context.medicalCaseID,
+                    draft: draft
+                )
+                formLog.info("FollowUpFormView: create save succeeded", module: formLogModule)
+                dismiss()
+            } catch {
+                formLog.error("FollowUpFormView: create save failed \(error.localizedDescription)", module: formLogModule)
+                errorMessage = error.localizedDescription
             }
         }
     }

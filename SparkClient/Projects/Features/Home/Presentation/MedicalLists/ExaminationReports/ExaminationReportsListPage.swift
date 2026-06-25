@@ -129,18 +129,23 @@ struct ExaminationReportsListPage: View {
         }
         .sheet(isPresented: $isPresentingAddExamSheet) {
             CompatibleNavigationContainer(legacyStackStyle: true) {
-                ExamReportFormView(mode: .create, onCreateSubmit: MainActorThrowingAction { draft in
-                    let service = MedicalRecordFormSubmissionService(workflowAPI: medicalResourceAPI)
-                    let newID = try await service.submitMedicalReportCreate(memberID: memberID, draft: draft, medicalCaseID: nil)
-                    let summary = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.summaryAfterCreate(
-                        id: newID,
-                        memberID: memberID,
-                        draft: draft
+                ExamReportFormView(
+                    mode: .create(
+                        .init(
+                            memberID: memberID,
+                            medicalCaseID: nil,
+                            submissionService: MedicalRecordFormSubmissionService(workflowAPI: medicalResourceAPI),
+                            onCreated: { newID, draft in
+                                let summary = SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.summaryAfterCreate(
+                                    id: newID,
+                                    memberID: memberID,
+                                    draft: draft
+                                )
+                                viewModel.prependReport(summary)
+                            }
+                        )
                     )
-                    await MainActor.run {
-                        viewModel.prependReport(summary)
-                    }
-                })
+                )
             }
         }
         .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
