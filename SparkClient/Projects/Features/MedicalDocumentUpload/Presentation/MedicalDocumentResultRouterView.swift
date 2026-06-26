@@ -1,87 +1,50 @@
 import SwiftUI
 
-/// 分类型结果页路由：作为抽取结果入口，使用 NavigationLink 跳转到对应的结果页面模块。
+/// 医疗文档分类识别结果路由页面：作为各类单据识别结果统一入口，通过视图分发跳转至对应类型的识别结果页面
 struct MedicalDocumentResultRouterView: View {
+    // 绑定上传业务视图模型，监听识别输出数据变化
     @ObservedObject var viewModel: MedicalDocumentUploadViewModel
 
+    /// 成员上下文存储实例，用于表单相关的家庭成员信息读取
     private var memberContextStore: MemberContextStore {
         viewModel.memberContextStoreForLocalForms
     }
 
     var body: some View {
+        // 根据识别结果类型渲染对应页面
         destinationView
     }
 
+    /// 视图分发构建器：根据识别输出的单据类型，匹配并展示对应结果页面
     @ViewBuilder
     private var destinationView: some View {
+        // 存在识别输出结果时再进行页面分发
         if let output = viewModel.typedOutput {
+            // 依据识别文档分类枚举，路由至对应结果视图
             switch output.typedResult {
+            // 病历单识别结果页
             case .caseDocument:
                 CaseRecognitionResultView(viewModel: viewModel)
+            // 体检报告识别结果页
             case .healthExamReport:
                 HealthExamRecognitionResultView(
                     viewModel: viewModel,
                     memberContextStore: memberContextStore
                 )
+            // 普通诊疗报告单识别结果页
             case .medicalReport:
                 MedicalReportRecognitionResultView(viewModel: viewModel)
+            // 处方单识别结果页
             case .prescription:
                 PrescriptionRecognitionResultView(viewModel: viewModel)
+            // 用药方案单识别结果页
             case .medicationPlan:
                 MedicationRecognitionResultView(viewModel: viewModel)
+            // 药盒/药品包装识别结果页
             case .medicineBoxes:
                 MedicineBoxRecognitionResultView(viewModel: viewModel)
             }
         }
     }
 
-    private var headerCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("识别完成")
-                .font(.headline)
-            Text("已识别为\(routeLabel)，点击下方进入对应结果页面。")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.regularMaterial))
-    }
-
-    private var routeCard: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(routeLabel)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("进入\(routeLabel)识别结果")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.regularMaterial))
-    }
-
-    private var routeLabel: String {
-        guard let output = viewModel.typedOutput else { return "" }
-        switch output.typedResult {
-        case .caseDocument:
-            return "病例"
-        case .healthExamReport:
-            return "体检"
-        case .medicalReport:
-            return "医疗报告"
-        case .prescription:
-            return "处方"
-        case .medicationPlan:
-            return "用药"
-        case .medicineBoxes:
-            return "药箱"
-        }
-    }
 }

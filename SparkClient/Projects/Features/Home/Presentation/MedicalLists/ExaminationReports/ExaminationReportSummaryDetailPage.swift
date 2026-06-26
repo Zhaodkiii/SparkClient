@@ -9,6 +9,7 @@ struct ExaminationReportSummaryDetailPage: View {
     var completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     @ObservedObject var memberContextStore: MemberContextStore
     var notificationClient: (any NotificationClient)?
+    var showsMedicalCaseLink: Bool = true
     var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
@@ -93,7 +94,7 @@ struct ExaminationReportSummaryDetailPage: View {
 
     @ViewBuilder
     private var medicalCaseLinkSectionContent: some View {
-        if let workflowAPI, let notificationClient, let fileTransferService {
+        if showsMedicalCaseLink, let workflowAPI, let notificationClient, let fileTransferService {
             MedicalResourceMedicalCaseLinkSection(
                 memberID: report.member,
                 medicalCaseID: report.medicalRecord,

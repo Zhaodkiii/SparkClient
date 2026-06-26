@@ -114,13 +114,11 @@ struct CaseRecognitionResultContentView: View {
                 MedicalReportCardsSectionView(
                     reports: draft.examinationReports ?? [],
                     validationIssues: validationIssues,
-                    expandedSectionIDs: $expandedValidationSections,
                     attachmentsForIDs: matchedAttachments(for:),
                     detailNavigationContext: detailNavigationContext,
-                    onEdit: { index, report in
-                        localEditor = .exam(index: index, draft: report) // 编辑单份检查报告
-                    },
-                    onManageAttachments: { index, _ in
+                    onUpdateReportDraft: updateExamReportDraft(at:draft:),
+                    onDeleteReportDraft: deleteExamReportDraft(at:),
+                    onManageAttachments: { index in
                         attachmentTarget = .exam(index: index)
                     }
                 )
@@ -258,6 +256,22 @@ struct CaseRecognitionResultContentView: View {
     private func submitSave() {
         viewModel.updateTypedResult(.caseDocument(draft))
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func updateExamReportDraft(at index: Int, draft reportDraft: MedicalReportRecognitionDraft) {
+        guard var reports = draft.examinationReports, reports.indices.contains(index) else { return }
+        var resolved = reportDraft
+        if resolved.attachmentFileIds.isEmpty {
+            resolved.attachmentFileIds = reports[index].attachmentFileIds
+        }
+        reports[index] = resolved
+        draft.examinationReports = reports
+    }
+
+    private func deleteExamReportDraft(at index: Int) {
+        guard var reports = draft.examinationReports, reports.indices.contains(index) else { return }
+        reports.remove(at: index)
+        draft.examinationReports = reports
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {

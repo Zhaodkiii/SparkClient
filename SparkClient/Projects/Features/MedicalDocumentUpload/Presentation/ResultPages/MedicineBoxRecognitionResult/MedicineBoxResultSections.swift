@@ -77,9 +77,8 @@ struct MedicineBoxListSectionView: View {
     var validationIssues: [MedicalPreSubmitValidationIssue] = []
     var attachmentsForIDs: (([UUID]) -> [MedicalDocumentLocalAttachmentItem])? = nil
     var detailNavigationContext: MedicalDocumentResultDetailNavigationContext?
-    let onLocalDraftSaved: (Int, MedicineBoxRecognitionDraft) -> Void
-    let onLocalDraftDeleted: (Int) -> Void
-    let onEdit: (Int, MedicineBoxRecognitionDraft) -> Void
+    let onUpdateMedicineBoxDraft: (Int, MedicineBoxRecognitionDraft) -> Void
+    let onDeleteMedicineBoxDraft: (Int) -> Void
     let onManageAttachments: (Int) -> Void
 
     private var badgeText: String {
@@ -214,19 +213,12 @@ struct MedicineBoxListSectionView: View {
 
                 Spacer(minLength: 0)
 
-                VStack(alignment: .trailing, spacing: 8) {
-                    if hasError {
-                        MedicalValidationIssueBadge()
-                    }
-                    Button(L10n.text("common.edit")) {
-                        onEdit(index, item)
-                    }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.borderless)
-                    if detailNavigationContext != nil {
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.gray)
-                    }
+                if hasError {
+                    MedicalValidationIssueBadge()
+                }
+                if detailNavigationContext != nil {
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.gray)
                 }
             }
             .contentShape(Rectangle())
@@ -235,7 +227,7 @@ struct MedicineBoxListSectionView: View {
                 MedicalValidationIssueInlineView(message: issue.message)
             }
 
-            if let attachmentsForIDs {
+            if let attachmentsForIDs, item.attachmentFileIds.isEmpty == false {
                 CaseMatchedAttachmentsGridView(
                     title: "药品附件",
                     attachments: attachmentsForIDs(item.attachmentFileIds),
@@ -273,7 +265,6 @@ struct MedicineBoxListSectionView: View {
         }
     }
 
-    @ViewBuilder
     private func medicineBoxDetailDestination(
         index: Int,
         item: MedicineBoxRecognitionDraft,
@@ -284,7 +275,7 @@ struct MedicineBoxListSectionView: View {
             id: PrescriptionRecognitionDraftMapper.temporaryMedicineBoxRecognitionID(index: index)
         )
 
-        MedicineBoxDetailPage(
+        return MedicineBoxDetailPage(
             mode: .localDraft,
             box: box,
             entryMemberID: context.memberID,
@@ -298,10 +289,10 @@ struct MedicineBoxListSectionView: View {
             onSaved: { _ in },
             onDeleted: { _ in },
             onLocalDraftSaved: { updated in
-                onLocalDraftSaved(index, updated)
+                onUpdateMedicineBoxDraft(index, updated)
             },
             onLocalDraftDeleted: {
-                onLocalDraftDeleted(index)
+                onDeleteMedicineBoxDraft(index)
             }
         )
     }

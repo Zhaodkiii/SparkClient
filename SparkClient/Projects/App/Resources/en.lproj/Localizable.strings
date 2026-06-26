@@ -2178,7 +2178,8 @@
 "medical.upload.presubmit.field.prescription" = "Prescription";
 
 "medical.upload.result.medication.section.title" = "Medication list";
-"medical.upload.result.medication.section.subtitle" = "Supports single and batch local editing";
+"medical.upload.result.medication.section.subtitle" = "Edit recognition results before saving";
+"medical.upload.result.medication.member.subtitle" = "Saved plans will be added to this member's medication schedule";
 "medical.upload.result.medication.count_format" = "%d items";
 "medical.upload.result.medication.batch_edit" = "Batch edit";
 "medical.upload.result.medication.total_count" = "Medication count";
@@ -2187,11 +2188,12 @@
 
 "medical.upload.result.medical_report.nav_title" = "Exam Reports";
 "medical.upload.result.medical_report.total_count" = "Report count";
+"medical.upload.result.medical_report.member.subtitle" = "Saved reports will be added to this member's examination records";
 "medical.upload.result.medical_report.total_format" = "%d reports";
 "medical.upload.result.medical_report.stats.title" = "Overview";
 "medical.upload.result.medical_report.stats.subtitle" = "Distribution across laboratory / imaging / pathology";
 "medical.upload.result.medical_report.cards.title" = "Report cards";
-"medical.upload.result.medical_report.cards.subtitle" = "Browse by category and edit locally";
+"medical.upload.result.medical_report.cards.subtitle" = "Edit recognition results before saving";
 "medical.upload.result.medical_report.empty_category" = "No reports in this category";
 "medical.upload.result.medical_report.detail_count" = "%d detail items";
 

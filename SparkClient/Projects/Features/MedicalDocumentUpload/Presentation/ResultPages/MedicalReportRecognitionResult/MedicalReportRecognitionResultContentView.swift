@@ -7,10 +7,10 @@ struct MedicalReportRecognitionResultContentView: View {
     /// AI 结构化提取结果
     let output: MedicalDocumentTypedExtractionOutput
 
+    /// 当前选中的家庭成员 ID，用于保存归属
+    @State private var selectedMemberID: Int?
     /// 报告列表（一份上传图片可能识别出多份检查报告）
     @State private var reports: [MedicalReportRecognitionDraft]
-    /// 本地编辑弹窗（编辑单份报告）
-    @State private var localEditor: MedicalReportResultLocalEditor?
     @State private var attachmentTarget: MedicalReportAttachmentTarget?
     @State private var expandedValidationSections: Set<String> = []
     @State private var lastAutoRevealedIssueID: UUID?
@@ -23,8 +23,8 @@ struct MedicalReportRecognitionResultContentView: View {
         self.viewModel = viewModel
         let output = viewModel.typedOutput!
         self.output = output
+        _selectedMemberID = State(initialValue: output.envelope.memberID)
 
-        // 从识别结果中取出检查报告列表，无数据则为空数组
         if case .medicalReport(let drafts) = output.typedResult {
             _reports = State(initialValue: drafts)
         } else {
@@ -37,7 +37,7 @@ struct MedicalReportRecognitionResultContentView: View {
     private var validationIssues: [MedicalPreSubmitValidationIssue] { viewModel.preSubmitValidationIssues }
     private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
         MedicalDocumentResultDetailNavigationContext(
-            memberID: output.envelope.memberID,
+            memberID: selectedMemberID,
             viewModel: viewModel,
             logger: logger
         )
@@ -60,88 +60,75 @@ struct MedicalReportRecognitionResultContentView: View {
 
     var body: some View {
         ScrollViewReader { scrollProxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
-                    MedicalPreSubmitValidationNavigation.reveal(
-                        issue: issue,
-                        expandedSectionIDs: $expandedValidationSections,
-                        scrollProxy: scrollProxy
-                    )
-                }
-
-                // MARK: 1. 成员信息区域（报告归属的家庭成员）
-                MedicalReportMemberSectionView(
-                    memberID: output.envelope.memberID,
-                    reports: reports
-                )
-
-                // MARK: 2. 报告统计概览区域
-                MedicalReportStatsSectionView(reports: reports)
-
-                // MARK: 3. 报告卡片列表（核心展示区）
-                /// 展示所有识别出的检查报告
-                /// 支持点击编辑每一份报告
-                MedicalReportCardsSectionView(
-                    reports: reports,
-                    validationIssues: validationIssues,
-                    expandedSectionIDs: $expandedValidationSections,
-                    attachmentsForIDs: matchedAttachments(for:),
-                    detailNavigationContext: detailNavigationContext,
-                    onEdit: { index, draft in
-                        logger.info("Medical report result: open local editor index=\(index)", module: logModule)
-                        localEditor = .report(index: index, draft: draft) // 打开编辑页
-                    },
-                    onManageAttachments: { index, _ in
-                        attachmentTarget = MedicalReportAttachmentTarget(index: index)
-                    }
-                )
-
-                // MARK: 4. 未关联业务的源文件附件
-                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
-
-                // MARK: 5. 保存成功回执（显示记录ID）
-                if let saveReceipt {
-                    MedicalDocumentResultSectionCard(
-                        title: L10n.text("medical.upload.result.common.save_status"),
-                        subtitle: L10n.text("medical.upload.result.common.save_success"),
-                        systemImage: "checkmark.circle",
-            tintColor: Color(uiColor: .systemTeal),
-                        badgeText: L10n.text("medical.upload.result.common.saved")
-                    ) {
-                        MedicalDocumentResultInfoLine(
-                            title: L10n.text("medical.upload.result.common.record_id"),
-                            value: "\(saveReceipt.recordID)"
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                        MedicalPreSubmitValidationNavigation.reveal(
+                            issue: issue,
+                            expandedSectionIDs: $expandedValidationSections,
+                            scrollProxy: scrollProxy
                         )
                     }
+
+                    MedicalReportMemberConfirmSectionView(
+                        memberContextStore: viewModel.memberContextStoreForLocalForms,
+                        selectedMemberID: selectedMemberID,
+                        reports: reports,
+                        onSelectMember: { memberID in
+                            selectedMemberID = memberID
+                            viewModel.updateResultMemberID(memberID)
+                        }
+                    )
+
+                    MedicalReportCardsSectionView(
+                        reports: reports,
+                        validationIssues: validationIssues,
+                        attachmentsForIDs: matchedAttachments(for:),
+                        detailNavigationContext: detailNavigationContext,
+                        onUpdateReportDraft: updateReportDraft(at:draft:),
+                        onDeleteReportDraft: deleteReportDraft(at:),
+                        onManageAttachments: { index in
+                            attachmentTarget = MedicalReportAttachmentTarget(index: index)
+                        }
+                    )
+
+                    MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
+
+                    if let saveReceipt {
+                        MedicalDocumentResultSectionCard(
+                            title: L10n.text("medical.upload.result.common.save_status"),
+                            subtitle: L10n.text("medical.upload.result.common.save_success"),
+                            systemImage: "checkmark.circle",
+                            badgeText: L10n.text("medical.upload.result.common.saved")
+                        ) {
+                            MedicalDocumentResultInfoLine(
+                                title: L10n.text("medical.upload.result.common.record_id"),
+                                value: "\(saveReceipt.recordID)"
+                            )
+                        }
+                    }
                 }
+                .padding(16)
             }
-            .padding(16)
+            .onChange(of: validationIssues.map(\.id)) { _ in
+                MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                    issues: validationIssues,
+                    lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                    expandedSectionIDs: $expandedValidationSections,
+                    scrollProxy: scrollProxy
+                )
+            }
         }
-        .onChange(of: validationIssues.map(\.id)) { _ in
-            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
-                issues: validationIssues,
-                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
-                expandedSectionIDs: $expandedValidationSections,
-                scrollProxy: scrollProxy
-            )
-        }
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        // 底部固定工具栏：返回 + 保存
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
             bottomBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
-        // 报告数量变化时动画
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: reports.count)
-        // 编辑弹窗（全屏）
-        .fullScreenCover(item: $localEditor) { editor in
-            CompatibleNavigationContainer {
-                editorDestination(editor)
-            }
+        .onChange(of: reports) { newValue in
+            syncReportsToViewModel(newValue)
         }
         .sheet(item: $attachmentTarget) { target in
             MedicalDocumentAttachmentAssociationSheet(
@@ -160,33 +147,51 @@ struct MedicalReportRecognitionResultContentView: View {
     // MARK: - 底部工具栏
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            // 返回按钮
             Button(L10n.text("medical.upload.result.common.back")) {
                 viewModel.reset(keepAttachments: true)
             }
-                .buttonStyle(.bordered)
+            .buttonStyle(.bordered)
 
-            // 保存按钮
             Button {
-                logger.info("Medical report result: submit save tapped", module: logModule)
+                logger.info("Medical report result: submit save tapped reports=\(reports.count)", module: logModule)
                 submitSave()
             } label: {
                 Group {
                     if isSaving {
-                        ProgressView().frame(maxWidth: .infinity) // 保存中显示加载动画
+                        ProgressView().frame(maxWidth: .infinity)
                     } else {
                         Text(L10n.text("medical.upload.result.common.submit")).frame(maxWidth: .infinity)
                     }
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isSaving) // 保存中禁用按钮
+            .disabled(isSaving || reports.isEmpty)
         }
     }
 
     private func submitSave() {
-        viewModel.updateTypedResult(.medicalReport(reports))
+        syncReportsToViewModel(reports)
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func syncReportsToViewModel(_ drafts: [MedicalReportRecognitionDraft]) {
+        viewModel.updateTypedResult(.medicalReport(drafts))
+    }
+
+    private func updateReportDraft(at index: Int, draft: MedicalReportRecognitionDraft) {
+        guard reports.indices.contains(index) else { return }
+        var resolved = draft
+        if resolved.attachmentFileIds.isEmpty {
+            resolved.attachmentFileIds = reports[index].attachmentFileIds
+        }
+        reports[index] = resolved
+        logger.info("Medical report result: local item updated index=\(index)", module: logModule)
+    }
+
+    private func deleteReportDraft(at index: Int) {
+        guard reports.indices.contains(index) else { return }
+        reports.remove(at: index)
+        logger.info("Medical report result: local item deleted index=\(index)", module: logModule)
     }
 
     private func removeAttachmentIDs(_ ids: [UUID], except targetIndex: Int) {
@@ -195,23 +200,6 @@ struct MedicalReportRecognitionResultContentView: View {
 
         for index in reports.indices where index != targetIndex {
             reports[index].attachmentFileIds.removeAll { idSet.contains($0) }
-        }
-    }
-
-    // MARK: - 编辑页面路由
-    /// 跳转到检查报告编辑页面
-    @ViewBuilder
-    private func editorDestination(_ editor: MedicalReportResultLocalEditor) -> some View {
-        switch editor {
-        case .report(let index, let draft):
-            ExamReportFormView(
-                mode: .localEdit(existing: draft, onSubmit: { updated in
-                    // 保存编辑后的报告数据
-                    guard reports.indices.contains(index) else { return }
-                    reports[index] = updated
-                    logger.info("Medical report result: local report updated index=\(index)", module: logModule)
-                })
-            )
         }
     }
 }

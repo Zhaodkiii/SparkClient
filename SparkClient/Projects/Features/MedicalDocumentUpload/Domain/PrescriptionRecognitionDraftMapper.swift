@@ -15,6 +15,11 @@ enum MedicineBoxDetailMode: Equatable, Sendable {
     case localDraft
 }
 
+enum ExaminationReportDetailMode: Equatable, Sendable {
+    case server
+    case localDraft
+}
+
 enum PrescriptionRecognitionDraftMapper {
     static let medicineBoxUnlinkedExtraKey = "medicine_box_unlinked"
     static let confirmedMedicineBoxIDExtraKey = "confirmed_medicine_box_id"
@@ -33,6 +38,18 @@ enum PrescriptionRecognitionDraftMapper {
 
     static func temporaryMedicineBoxRecognitionID(index: Int) -> Int {
         -50_000 - index
+    }
+
+    static func temporaryStandaloneMedicineBoxID(index: Int) -> Int {
+        -35_000 - index
+    }
+
+    static func temporaryStandalonePlanID(index: Int) -> Int {
+        -45_000 - index
+    }
+
+    static func temporaryExaminationReportID(index: Int) -> Int {
+        -10_000 - index
     }
 
     static func temporaryPlanID(prescriptionIndex: Int, medicationIndex: Int) -> Int {

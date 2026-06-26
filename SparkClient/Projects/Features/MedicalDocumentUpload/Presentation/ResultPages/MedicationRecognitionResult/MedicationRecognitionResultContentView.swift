@@ -7,10 +7,10 @@ struct MedicationRecognitionResultContentView: View {
     /// AI 结构化提取结果
     let output: MedicalDocumentTypedExtractionOutput
 
+    /// 当前选中的家庭成员 ID，用于保存归属
+    @State private var selectedMemberID: Int?
     /// 用药方案列表（核心：药品 + 怎么吃 + 吃多久）
     @State private var medicationPlans: [MedicationPlanRecognitionDraft]
-    /// 本地编辑弹窗（批量编辑 / 单个药品编辑）
-    @State private var localEditor: MedicationResultLocalEditor?
     @State private var attachmentTarget: MedicationAttachmentTarget?
     @State private var expandedValidationSections: Set<String> = []
     @State private var lastAutoRevealedIssueID: UUID?
@@ -23,8 +23,8 @@ struct MedicationRecognitionResultContentView: View {
         self.viewModel = viewModel
         let output = viewModel.typedOutput!
         self.output = output
+        _selectedMemberID = State(initialValue: output.envelope.memberID)
 
-        // 从识别结果中取出用药计划，无数据则为空数组
         if case .medicationPlan(let meds) = output.typedResult {
             _medicationPlans = State(initialValue: meds)
         } else {
@@ -37,7 +37,7 @@ struct MedicationRecognitionResultContentView: View {
     private var validationIssues: [MedicalPreSubmitValidationIssue] { viewModel.preSubmitValidationIssues }
     private var detailNavigationContext: MedicalDocumentResultDetailNavigationContext? {
         MedicalDocumentResultDetailNavigationContext(
-            memberID: output.envelope.memberID,
+            memberID: selectedMemberID,
             viewModel: viewModel,
             logger: logger
         )
@@ -58,106 +58,77 @@ struct MedicationRecognitionResultContentView: View {
         attachments.excludingAssociatedIDs(medicationPlans.associatedAttachmentFileIDs)
     }
 
-    /// 合成一个虚拟处方（为了复用已有的批量编辑页面）
-    /// 把用药计划包装成 PrescriptionRecognitionDraft，兼容旧的编辑组件
-    private var syntheticBatch: PrescriptionRecognitionDraft {
-        PrescriptionRecognitionDraft(
-            medicalCase: nil,
-            prescriberName: nil,
-            institutionName: nil,
-            prescribedAt: nil,
-            diagnosis: nil,
-            prescriptionNo: nil,
-            status: "active",
-            extra: nil,
-            medicationPlans: medicationPlans
-        )
-    }
-
     var body: some View {
         ScrollViewReader { scrollProxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
-                    MedicalPreSubmitValidationNavigation.reveal(
-                        issue: issue,
-                        expandedSectionIDs: $expandedValidationSections,
-                        scrollProxy: scrollProxy
-                    )
-                }
-
-                // MARK: 1. 成员确认区域（归属哪个家庭成员）
-                MedicationMemberConfirmSectionView(
-                    memberID: output.envelope.memberID,
-                    medications: medicationPlans
-                )
-
-                // MARK: 2. 用药计划列表（核心展示区）
-                /// 展示所有识别出的用药方案
-                /// 支持：批量编辑全部药品 / 编辑单个药品
-                MedicationListSectionView(
-                    medications: medicationPlans,
-                    validationIssues: validationIssues,
-                    expandedSectionIDs: $expandedValidationSections,
-                    attachmentsForIDs: matchedAttachments(for:),
-                    onBatchEdit: {
-                        logger.info("Medication result: open local batch editor", module: logModule)
-                        localEditor = .batch(syntheticBatch) // 打开批量编辑
-                    },
-                    onEditItem: { index, item in
-                        logger.info("Medication result: open local item editor index=\(index)", module: logModule)
-                        localEditor = .item(index: index, draft: item) // 打开单个编辑
-                    },
-                    onManageAttachments: { index, _ in
-                        attachmentTarget = MedicationAttachmentTarget(index: index)
-                    }
-                )
-
-                // MARK: 3. 未关联业务的源文件附件
-                MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
-
-                // MARK: 4. 保存成功回执（显示记录ID）
-                if let saveReceipt {
-                    MedicalDocumentResultSectionCard(
-                        title: L10n.text("medical.upload.result.common.save_status"),
-                        subtitle: L10n.text("medical.upload.result.common.save_success"),
-                        systemImage: "checkmark.circle",
-            tintColor: Color(uiColor: .systemTeal),
-                        badgeText: L10n.text("medical.upload.result.common.saved")
-                    ) {
-                        MedicalDocumentResultInfoLine(
-                            title: L10n.text("medical.upload.result.common.record_id"),
-                            value: "\(saveReceipt.recordID)"
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    MedicalPreSubmitValidationSummaryBanner(issues: validationIssues) { issue in
+                        MedicalPreSubmitValidationNavigation.reveal(
+                            issue: issue,
+                            expandedSectionIDs: $expandedValidationSections,
+                            scrollProxy: scrollProxy
                         )
                     }
+
+                    MedicationMemberConfirmSectionView(
+                        memberContextStore: viewModel.memberContextStoreForLocalForms,
+                        selectedMemberID: selectedMemberID,
+                        medicationCount: medicationPlans.count,
+                        onSelectMember: { memberID in
+                            selectedMemberID = memberID
+                            viewModel.updateResultMemberID(memberID)
+                        }
+                    )
+
+                    MedicationListSectionView(
+                        medications: medicationPlans,
+                        validationIssues: validationIssues,
+                        attachmentsForIDs: matchedAttachments(for:),
+                        detailNavigationContext: detailNavigationContext,
+                        onUpdateMedicationDraft: updateMedicationDraft(at:draft:),
+                        onDeleteMedicationDraft: deleteMedicationDraft(at:),
+                        onManageAttachments: { index in
+                            attachmentTarget = MedicationAttachmentTarget(index: index)
+                        }
+                    )
+
+                    MedicalDocumentUnlinkedAttachmentsSectionView(attachments: unlinkedAttachments)
+
+                    if let saveReceipt {
+                        MedicalDocumentResultSectionCard(
+                            title: L10n.text("medical.upload.result.common.save_status"),
+                            subtitle: L10n.text("medical.upload.result.common.save_success"),
+                            systemImage: "checkmark.circle",
+                            badgeText: L10n.text("medical.upload.result.common.saved")
+                        ) {
+                            MedicalDocumentResultInfoLine(
+                                title: L10n.text("medical.upload.result.common.record_id"),
+                                value: "\(saveReceipt.recordID)"
+                            )
+                        }
+                    }
                 }
+                .padding(16)
             }
-            .padding(16)
+            .onChange(of: validationIssues.map(\.id)) { _ in
+                MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
+                    issues: validationIssues,
+                    lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
+                    expandedSectionIDs: $expandedValidationSections,
+                    scrollProxy: scrollProxy
+                )
+            }
         }
-        .onChange(of: validationIssues.map(\.id)) { _ in
-            MedicalPreSubmitValidationNavigation.autoRevealFirstBlockingIssueIfNeeded(
-                issues: validationIssues,
-                lastAutoRevealedIssueID: &lastAutoRevealedIssueID,
-                expandedSectionIDs: $expandedValidationSections,
-                scrollProxy: scrollProxy
-            )
-        }
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        // 底部固定工具栏：返回 + 保存
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .safeAreaInset(edge: .bottom) {
             bottomBar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
         }
-        // 药品数量变化动画
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: medicationPlans.count)
-        // 全屏编辑弹窗
-        .fullScreenCover(item: $localEditor) { editor in
-            CompatibleNavigationContainer {
-                editorDestination(editor)
-            }
+        .onChange(of: medicationPlans) { newValue in
+            syncMedicationPlansToViewModel(newValue)
         }
         .sheet(item: $attachmentTarget) { target in
             MedicalDocumentAttachmentAssociationSheet(
@@ -176,15 +147,13 @@ struct MedicationRecognitionResultContentView: View {
     // MARK: - 底部工具栏
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            // 返回按钮
             Button(L10n.text("medical.upload.result.common.back")) {
                 viewModel.reset(keepAttachments: true)
             }
-                .buttonStyle(.bordered)
+            .buttonStyle(.bordered)
 
-            // 保存按钮
             Button {
-                logger.info("Medication result: submit save tapped", module: logModule)
+                logger.info("Medication result: submit save tapped meds=\(medicationPlans.count)", module: logModule)
                 submitSave()
             } label: {
                 Group {
@@ -196,13 +165,29 @@ struct MedicationRecognitionResultContentView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isSaving) // 保存中禁用
+            .disabled(isSaving || medicationPlans.isEmpty)
         }
     }
 
     private func submitSave() {
-        viewModel.updateTypedResult(.medicationPlan(medicationPlans))
+        syncMedicationPlansToViewModel(medicationPlans)
         Task { _ = await viewModel.saveResult() }
+    }
+
+    private func syncMedicationPlansToViewModel(_ plans: [MedicationPlanRecognitionDraft]) {
+        viewModel.updateTypedResult(.medicationPlan(plans))
+    }
+
+    private func updateMedicationDraft(at index: Int, draft: MedicationPlanRecognitionDraft) {
+        guard medicationPlans.indices.contains(index) else { return }
+        medicationPlans[index] = draft
+        logger.info("Medication result: local item updated index=\(index)", module: logModule)
+    }
+
+    private func deleteMedicationDraft(at index: Int) {
+        guard medicationPlans.indices.contains(index) else { return }
+        medicationPlans.remove(at: index)
+        logger.info("Medication result: local item deleted index=\(index)", module: logModule)
     }
 
     private func removeAttachmentIDs(_ ids: [UUID], except targetIndex: Int) {
@@ -211,44 +196,6 @@ struct MedicationRecognitionResultContentView: View {
 
         for index in medicationPlans.indices where index != targetIndex {
             medicationPlans[index].attachmentFileIds.removeAll { idSet.contains($0) }
-        }
-    }
-
-    // MARK: - 编辑页面路由
-    @ViewBuilder
-    private func editorDestination(_ editor: MedicationResultLocalEditor) -> some View {
-        switch editor {
-        // 批量编辑（复用处方编辑页）
-        case .batch(let batch):
-            if let detailNavigationContext {
-                MedicationPrescriptionEditPage(
-                    mode: .localEdit(existing: batch, onSubmit: { updated in
-                        medicationPlans = updated.medicationPlans ?? []
-                        logger.info("Medication result: local batch updated meds=\(medicationPlans.count)", module: logModule)
-                    }),
-                    workflowAPI: detailNavigationContext.workflowAPI,
-                    fileTransferService: detailNavigationContext.fileTransferService,
-                    notificationClient: detailNavigationContext.notificationClient
-                )
-            }
-
-        // 编辑单个用药计划
-        case .item(let index, let item):
-            if let detailNavigationContext {
-                MedicationPlanFormView(
-                    mode: .localEdit(existing: MedicationPlanDraft(recognition: item), onSubmit: { updatedDraft in
-                        guard medicationPlans.indices.contains(index) else { return }
-                        medicationPlans[index] = updatedDraft.recognitionDraft(preserving: item)
-                        logger.info("Medication result: local item updated index=\(index)", module: logModule)
-                    }),
-                    memberID: detailNavigationContext.memberID,
-                    medicineBoxes: [item.remoteMedicineBox(memberID: detailNavigationContext.memberID, id: -30_000 - index)],
-                    workflowAPI: detailNavigationContext.workflowAPI,
-                    fileTransferService: detailNavigationContext.fileTransferService,
-                    notificationClient: detailNavigationContext.notificationClient,
-                    onMedicineBoxSaved: { _ in }
-                )
-            }
         }
     }
 }

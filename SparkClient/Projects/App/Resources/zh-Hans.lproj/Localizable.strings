@@ -2178,7 +2178,8 @@
 "medical.upload.presubmit.field.prescription" = "处方";
 
 "medical.upload.result.medication.section.title" = "药品列表";
-"medical.upload.result.medication.section.subtitle" = "支持单条与批量本地编辑";
+"medical.upload.result.medication.section.subtitle" = "可逐条编辑识别结果后保存";
+"medical.upload.result.medication.member.subtitle" = "确认保存到该成员的服药计划";
 "medical.upload.result.medication.count_format" = "%d项";
 "medical.upload.result.medication.batch_edit" = "批量编辑";
 "medical.upload.result.medication.total_count" = "药品总数";
@@ -2187,11 +2188,12 @@
 
 "medical.upload.result.medical_report.nav_title" = "检查报告";
 "medical.upload.result.medical_report.total_count" = "报告总数";
+"medical.upload.result.medical_report.member.subtitle" = "确认保存到该成员的检查报告";
 "medical.upload.result.medical_report.total_format" = "%d份";
 "medical.upload.result.medical_report.stats.title" = "统计概览";
 "medical.upload.result.medical_report.stats.subtitle" = "实验室 / 影像 / 病理分布";
 "medical.upload.result.medical_report.cards.title" = "报告卡片";
-"medical.upload.result.medical_report.cards.subtitle" = "可按分类查看并本地编辑";
+"medical.upload.result.medical_report.cards.subtitle" = "可逐条编辑识别结果后保存";
 "medical.upload.result.medical_report.empty_category" = "暂无该分类报告";
 "medical.upload.result.medical_report.detail_count" = "明细 %d 项";
 
