@@ -5,7 +5,13 @@ protocol MedicalPromptBuilding: Sendable {
     /// 根据 OCR 全文生成分类提示（输出 kind / confidence / reason 的 JSON）。
     func typeRecognitionPrompt(ocrText: String) -> String
     /// 按用户选定或解析得到的 `MedicalDocumentKind` 选择抽取模板（结构化 JSON 指令）。
-    func extractionPrompt(for input: MedicalPromptInput) -> String
+    func extractionPrompt(for input: MedicalPromptInput, source: MedicalExtractionPromptSource) -> String
+}
+
+extension MedicalPromptBuilding {
+    func extractionPrompt(for input: MedicalPromptInput) -> String {
+        extractionPrompt(for: input, source: .ocrText)
+    }
 }
 
 /// 构造 `MedicalPromptBuilding.extractionPrompt(for:)` 的输入：文书类型、合并后的 OCR 文本与可选的重试纠错反馈。
@@ -37,19 +43,29 @@ struct MedicalPromptFactory: MedicalPromptBuilding {
         localizer.medicalDocumentTypeRecognitionPrompt(ocrText: ocrText)
     }
 
-    func extractionPrompt(for input: MedicalPromptInput) -> String {
-        let base = baseExtractionPrompt(for: input)
+    func extractionPrompt(for input: MedicalPromptInput, source: MedicalExtractionPromptSource) -> String {
+        let base = baseExtractionPrompt(for: input, source: source)
         guard let feedback = input.retryFeedback else { return base }
         let correction = localizer.medicalExtractionRetryCorrectionPrompt(
             kind: input.kind,
-            feedback: feedback
+            feedback: feedback,
+            source: source
         )
         return [base, correction]
             .filter { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
             .joined(separator: "\n\n---\n\n")
     }
 
-    private func baseExtractionPrompt(for input: MedicalPromptInput) -> String {
+    private func baseExtractionPrompt(for input: MedicalPromptInput, source: MedicalExtractionPromptSource) -> String {
+        switch source {
+        case .ocrText:
+            return ocrExtractionPrompt(for: input)
+        case .visionImage:
+            return visionExtractionPrompt(for: input.kind)
+        }
+    }
+
+    private func ocrExtractionPrompt(for input: MedicalPromptInput) -> String {
         switch input.kind {
         case .auto:
             return localizer.medicalDocumentExtractionPrompt(ocrText: input.mergedOCRText)
@@ -65,6 +81,25 @@ struct MedicalPromptFactory: MedicalPromptBuilding {
             return localizer.medicationExtractionPrompt(ocrText: input.mergedOCRText)
         case .medicineBox:
             return localizer.medicineBoxExtractionPrompt(ocrText: input.mergedOCRText)
+        }
+    }
+
+    private func visionExtractionPrompt(for kind: MedicalDocumentKind) -> String {
+        switch kind {
+        case .auto:
+            return localizer.medicalDocumentVisionExtractionPrompt()
+        case .caseDocument:
+            return localizer.medicalCaseVisionExtractionPrompt()
+        case .healthExamReport:
+            return localizer.healthExamVisionExtractionPrompt()
+        case .medicalReport:
+            return localizer.medicalReportVisionExtractionPrompt()
+        case .prescription:
+            return localizer.prescriptionVisionExtractionPrompt()
+        case .medicationPlan:
+            return localizer.medicationVisionExtractionPrompt()
+        case .medicineBox:
+            return localizer.medicineBoxVisionExtractionPrompt()
         }
     }
 }

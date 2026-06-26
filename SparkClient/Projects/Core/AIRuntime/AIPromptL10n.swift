@@ -24,6 +24,21 @@ struct AIPromptL10n: Sendable {
         return String(format: template, locale: locale, arguments: arguments)
     }
 
+    /// 若当前 locale 资源中存在该 key 则返回值，否则返回 `nil`（不触发 fallback）。
+    func promptIfExists(_ key: String) -> String? {
+        for localization in preferredLocalizations() {
+            guard let bundlePath = Bundle.main.path(forResource: localization, ofType: "lproj"),
+                  let bundle = Bundle(path: bundlePath) else {
+                continue
+            }
+            let value = bundle.localizedString(forKey: key, value: "__MISSING__", table: "Prompts")
+            if value != "__MISSING__" {
+                return value
+            }
+        }
+        return nil
+    }
+
     private func localizedString(key: String, table: String, fallback: String) -> String {
         for localization in preferredLocalizations() {
             guard let bundlePath = Bundle.main.path(forResource: localization, ofType: "lproj"),

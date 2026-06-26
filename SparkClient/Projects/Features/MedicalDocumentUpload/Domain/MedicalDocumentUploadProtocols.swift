@@ -40,6 +40,7 @@ protocol TypedMedicalDocumentExtracting: Sendable {
         memberID: Int,
         files: [MedicalUploadLocalFile],
         mergedOCRText: String,
+        extractionInputSource: MedicalExtractionInputSource,
         resolution: MedicalDocumentTypeResolution,
         preferredModelName: String?,
         retryFeedback: MedicalExtractionRetryFeedback?,

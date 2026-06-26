@@ -125,7 +125,7 @@ struct ExamReportFormView: View {
         _title = State(initialValue: seed.title)
         _hospital = State(initialValue: seed.hospital ?? "")
         _doctor = State(initialValue: seed.doctor ?? "")
-        _content = State(initialValue: seed.content)
+        _content = State(initialValue: seed.content ?? "")
         let rawDate = (seed.date ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedDate = rawDate.isEmpty ? Self.formatExamDayString(Date()) : rawDate
         _date = State(initialValue: resolvedDate)

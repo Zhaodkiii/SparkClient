@@ -154,6 +154,9 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
     /// 医疗抽取自动重试本地配置
     private let extractionRetrySettingsStore: MedicalExtractionRetrySettingsStore
 
+    /// 抽取输入源决策（OCR 文本 vs 图片多模态）
+    private let extractionInputSourceResolver: MedicalExtractionInputSourceResolver
+
     /// 保存前本地字段预校验
     private let preSubmitValidator: any MedicalPreSubmitValidating
 
@@ -205,6 +208,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         self.extractionRetrySettingsStore = extractionRetrySettingsStore
         self.preSubmitValidator = preSubmitValidator
         self.logger = logger
+        self.extractionInputSourceResolver = MedicalExtractionInputSourceResolver(logger: logger)
         self.selectedMemberName = memberContextStore.context.selectedMember?.name
     }
 
@@ -362,51 +366,54 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             module: .medical
         )
 
-        // MARK: 4. 执行核心识别流程，统一捕获所有异常
-        // 当前执行到的步骤
+        // MARK: 4. 执行完整医疗单据识别流水线主流程，统一捕获全流程所有异常
+        // 记录当前正在执行的流水线步骤，用于失败时定位报错环节
         var currentStep: MedicalDocumentUploadFlowStep.Kind = requestedStartStep
         do {
-            // ====================== 步骤1：文件上传 ======================
+            // ====================== 步骤1：文件云端上传 ======================
+            // 判断当前流程是否需要执行上传环节（断点续跑可跳过）
             if shouldRun(.upload, from: requestedStartStep) {
                 currentStep = .upload
-                // 标记步骤开始
+                // 标记上传步骤开始，更新界面进度状态
                 start(.upload)
-                // 执行文件上传（断点续跑时沿用已有 remoteFile，全新运行则全部重新上传）
+                // 执行文件上传逻辑；断点续跑复用已有远端文件，全新流程全部重传
                 let uploadedFiles = try await uploadFilesUseCase.execute(
                     memberID: member.id,
                     files: selectedFiles,
                     reuploadAll: false
                 )
+                // 更新本地文件列表，回填远端文件信息
                 selectedFiles = uploadedFiles
-                // 检查是否触发了任务取消
+                // 校验任务是否被手动取消，取消则抛出终止异常
                 try cancellationToken.checkCancellation()
                 logger.info("文件上传完成，远端文件数=\(uploadedFiles.count)", module: .medical)
-                // 标记步骤完成
+                // 标记上传步骤执行成功，写入步骤摘要用于UI展示
                 complete(.upload, outcome: .success, resultSummary: "已上传 \(uploadedFiles.count) 个文件")
             } else if selectedFiles.contains(where: { $0.remoteFile != nil }) {
-                // 已有上传文件，直接沿用
+                // 断点续跑场景：存在已上传完成的远端文件，直接跳过上传步骤
                 let uploadedCount = selectedFiles.filter { $0.remoteFile != nil }.count
                 complete(.upload, outcome: .skipped, resultSummary: "沿用 \(uploadedCount) 个已上传文件")
             }
 
-            // ====================== 步骤2：OCR 文字提取 ======================
+            // ====================== 步骤2：OCR全文文字识别与合并 ======================
             if shouldRun(.ocr, from: requestedStartStep) {
                 currentStep = .ocr
                 start(.ocr)
-                // 执行 OCR 识别，写回每个本地文件后再合并文本（断点续跑时沿用已有 ocrText）
+                // 对所有文件执行OCR识别，断点续跑复用已有识别文本，无需重复识别
                 let ocrFiles = try await extractUseCase.recognizeOCRFiles(
                     files: selectedFiles,
                     reRecognizeAll: false,
                     cancellationToken: cancellationToken
                 )
                 selectedFiles = ocrFiles
+                // 将多份文件的OCR文本合并为一整段文本，供后续AI分析使用
                 let ocrText = try await extractUseCase.mergeOCRText(
                     files: ocrFiles,
                     reRecognizeAll: false,
                     cancellationToken: cancellationToken
                 )
                 try cancellationToken.checkCancellation()
-                // 缓存 OCR 结果
+                // 全局缓存合并后的OCR文本，作为流水线断点缓存
                 pipelineOCRText = ocrText
                 complete(
                     .ocr,
@@ -414,7 +421,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                     resultSummary: "约 \(ocrText.count) 字"
                 )
             } else if let ocrText = pipelineOCRText {
-                // 已有 OCR 结果，直接沿用
+                // 断点续跑：已缓存OCR文本，跳过识别步骤
                 complete(
                     .ocr,
                     outcome: .skipped,
@@ -422,30 +429,31 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 )
             }
 
-            // 校验 OCR 结果不能为空
+            // 合法性校验：无OCR文本无法继续后续识别流程，抛出断点缺失异常
             guard let mergedOCRText = pipelineOCRText else {
                 throw RecognitionPipelineError.missingCheckpoint("OCR")
             }
 
-            // ====================== 步骤3：单据类型识别 ======================
+            // ====================== 步骤3：AI自动识别单据分类（病历/体检/处方等） ======================
             if shouldRun(.typeRecognition, from: requestedStartStep) {
                 currentStep = .typeRecognition
                 start(.typeRecognition)
-                // 获取识别类型（重试时使用指定类型，否则使用用户选择类型）
+                // 重试流程优先使用重试指定单据类型；正常流程使用用户手动选择类型
                 let kindForRetry = overrideDocumentKindForRetry ?? selectedKind
-                // 执行 AI 类型识别
+                // AI根据OCR文本自动判定单据类型
                 let resolution = try await extractUseCase.resolveType(
                     selectedKind: kindForRetry,
                     mergedOCRText: mergedOCRText,
                     cancellationToken: cancellationToken
                 )
                 try cancellationToken.checkCancellation()
-                // 缓存识别结果
+                // 缓存单据分类识别结果，用于断点续跑
                 typeResolution = resolution
-                // 如果不是自动识别，则更新为用户指定的类型
+                // 若非自动识别模式，同步更新用户选择单据类型
                 if kindForRetry != .auto {
                     selectedKind = kindForRetry
                 }
+                // 记录本次识别出的单据类型，供重试流程复用
                 overrideDocumentKindForRetry = resolution.kind
                 complete(
                     .typeRecognition,
@@ -453,7 +461,7 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                     resultSummary: "\(resolution.kind.localizedUploadLabel) · \(resolution.source.localizedUploadLabel)"
                 )
             } else if let resolution = typeResolution {
-                // 已有类型识别结果，直接沿用
+                // 断点续跑：已有单据分类结果，跳过类型识别
                 complete(
                     .typeRecognition,
                     outcome: .skipped,
@@ -461,20 +469,19 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 )
             }
 
-            // 校验类型识别结果不能为空
+            // 合法性校验：无单据分类结果无法执行结构化抽取
             guard let resolution = typeResolution else {
                 throw RecognitionPipelineError.missingCheckpoint("类型识别")
             }
 
-            // ====================== 步骤4：结构化信息提取 ======================
+            // ====================== 步骤4：AI结构化医疗信息抽取（核心解析逻辑） ======================
             currentStep = .extract
-            // 根据单据类型获取对应的提取场景
+            // 根据单据分类匹配对应AI抽取业务场景
             let extractScenario = scenario(for: resolution.kind)
-            // 刷新当前场景可用的模型选项
+            // 刷新当前场景支持的AI模型列表，更新可选模型
             await refreshExtractModelOptions(for: extractScenario)
-            let modelSummary = modelDisplayName(for: preferredExtractModelName) ?? "默认模型"
-            
-            preferredExtractModelName = modelSummary
+            let preferredModelNameForRequest = preferredExtractModelName
+            let modelSummary = modelDisplayName(for: preferredModelNameForRequest) ?? "默认模型"
 
             let manualRetryFeedback = extractionRetryFeedbackForCurrentRun(startingAt: requestedStartStep)
             start(.extract)
@@ -484,18 +491,31 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 manualRetryFeedback: manualRetryFeedback
             )
 
+            let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+            let extractionInputSource = extractionInputSourceResolver.resolve(
+                files: selectedFiles,
+                mergedOCRText: mergedOCRText,
+                kind: resolution.kind,
+                scenario: extractScenario,
+                preferredModelName: preferredModelNameForRequest,
+                bundles: bundles
+            )
+
             let output = try await runExtractWithOptionalAutoRetry(
                 memberID: member.id,
                 files: selectedFiles,
                 mergedOCRText: mergedOCRText,
+                extractionInputSource: extractionInputSource,
                 resolution: resolution,
                 extractScenario: extractScenario,
+                preferredModelNameForRequest: preferredModelNameForRequest,
                 modelSummary: modelSummary,
                 manualRetryFeedback: manualRetryFeedback,
                 cancellationToken: cancellationToken
             )
             try cancellationToken.checkCancellation()
 
+            // 抽取成功，清空所有重试状态标记
             clearExtractionRetryState()
             complete(
                 .extract,
@@ -503,9 +523,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 resultSummary: "\(scenarioLabel(for: extractScenario)) · \(modelSummary)"
             )
 
-            // ====================== 步骤5：业务附件匹配 ======================
+            // ====================== 步骤5：结构化结果与上传附件业务绑定匹配 ======================
             currentStep = .attachmentBinding
             start(.attachmentBinding)
+            // 将远端附件ID与AI抽取结果进行关联绑定，完善业务信封数据
             let matchedOutput = MedicalDocumentAttachmentBusinessMatcher.matchAndUpdate(
                 files: selectedFiles,
                 output: output
@@ -516,11 +537,11 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
                 resultSummary: "已匹配 \(selectedFiles.compactMap { $0.remoteFile?.id }.count) 个附件"
             )
 
-            // 保存最终识别结果
+            // 存储最终完整识别输出，跳转结果路由页面使用
             typedOutput = matchedOutput
-            // 停止进度条动画
+            // 关闭顶部进度加载动画
             stopProgressTimer()
-            // 切换到结果展示状态
+            // 切换页面状态至结果展示页
             stage = .result
             logger.info(
                 "Typed 识别流程完成，resolvedKind=\(matchedOutput.envelope.typeResolution.kind.rawValue)",
@@ -528,37 +549,44 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             )
 
         } catch is CancellationError {
-            // 处理用户主动取消任务的情况
+            // 捕获用户手动取消任务异常
+            // 仅处理当前有效任务的取消，过期任务忽略
             if recognitionCancellationToken === cancellationToken {
-                // 重置识别状态，返回选择页面
+                // 重置全部识别流水线缓存与状态，退回文件选择页面
                 resetRecognitionState()
                 stage = .picking
             }
             logger.info("Typed 识别流程已取消", module: .medical)
             
         } catch {
-            // 处理其他所有异常错误
-            // 忽略已过期的旧任务错误
+            // 捕获上传/OCR/类型识别/抽取全流程所有业务异常
+            // 过滤过期旧任务报错，不更新UI
             if recognitionCancellationToken !== cancellationToken {
                 logger.debug("忽略过期识别任务错误：\(error.localizedDescription)", module: .medical)
                 return
             }
-            // 记录失败步骤并更新 UI 错误信息
+            // 记录失败步骤，触发UI失败状态展示
             failedStep = currentStep
             fail(currentStep)
             if currentStep == .extract {
+                // 若抽取环节失败：区分解码失败与普通异常
                 if MedicalExtractionFailureClassifier.isDecodingFailure(error) {
+                    // 解码解析失败，记录失败日志供自动重试使用
                     recordExtractionFailure(error: error, resolution: typeResolution)
                 } else {
+                    // 非解码类错误，清空所有重试缓存
                     clearExtractionRetryFeedback()
                     clearAutoRetryState()
                 }
             } else {
+                // 上传/OCR/类型识别等前置步骤报错，直接清空重试状态
                 clearExtractionRetryFeedback()
                 clearAutoRetryState()
             }
+            // 关闭所有重试标记
             isRetryingExtraction = false
             isAutoRetryingExtraction = false
+            // 判断是否为模型缺失错误，弹窗提示下载模型；否则生成本地化错误文案
             if let scenario = missingModelScenario(from: error) {
                 missingModelScenarioForAlert = scenario
                 errorMessage = nil
@@ -865,29 +893,52 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         isRetryingExtraction = false
     }
 
+    /// 执行结构化抽取，内置可选自动重试逻辑
+    /// - Parameters:
+    ///   - memberID: 当前家庭成员ID
+    ///   - files: 待上传的本地医疗文件数组
+    ///   - mergedOCRText: 多文件合并后的OCR识别全文
+    ///   - resolution: 文档类型判定结果
+    ///   - extractScenario: AI抽取业务场景枚举
+    ///   - modelSummary: 当前选用模型描述文案，用于界面步骤展示
+    ///   - manualRetryFeedback: 手动重试时携带的用户反馈修正信息，首次正常抽取为nil
+    ///   - cancellationToken: AI任务取消令牌，支持中途终止请求
+    /// - Returns: 带文档分类的结构化抽取输出结果
+    /// - Throws: 抽取异常、任务取消异常、达到最大重试次数后的解码失败异常
     private func runExtractWithOptionalAutoRetry(
         memberID: Int,
         files: [MedicalUploadLocalFile],
         mergedOCRText: String,
+        extractionInputSource: MedicalExtractionInputSource,
         resolution: MedicalDocumentTypeResolution,
         extractScenario: AIScenario,
+        preferredModelNameForRequest: String?,
         modelSummary: String,
         manualRetryFeedback: MedicalExtractionRetryFeedback?,
         cancellationToken: AIRuntimeCancellationToken
     ) async throws -> MedicalDocumentTypedExtractionOutput {
+        // 读取本地存储的抽取自动重试配置
         let settings = extractionRetrySettingsStore.load()
+        // 根据配置获取最大自动重试次数，关闭自动重试则次数置0
         let maxAutoRetry = settings.autoRetryOnDecodingFailureEnabled
             ? settings.maxDecodingFailureAutoRetryCount
             : 0
+        // 赋值全局最大自动重试上限
         maxAutoRetryAttempts = maxAutoRetry
+        // 重置当前自动重试计数
         autoRetryAttempt = 0
+        // 重置自动重试标记
         isAutoRetryingExtraction = false
 
         var attempt = 0
+        // 初始化重试反馈信息，优先使用传入的手动重试反馈
         var retryFeedback = manualRetryFeedback
+        // 存在手动反馈则标记当前处于重试流程
         isRetryingExtraction = retryFeedback != nil
 
+        // 无限循环执行抽取，成功返回或超限抛异常才退出
         while true {
+            // 更新界面抽取步骤展示文案
             updateExtractStepSummary(
                 extractScenario: extractScenario,
                 modelSummary: modelSummary,
@@ -895,36 +946,47 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
             )
 
             do {
+                // 调用核心用例执行AI结构化抽取
                 let output = try await extractUseCase.extractStructured(
                     memberID: memberID,
                     files: files,
                     mergedOCRText: mergedOCRText,
+                    extractionInputSource: extractionInputSource,
                     resolution: resolution,
-                    preferredModelName: preferredExtractModelName,
+                    preferredModelName: preferredModelNameForRequest,
                     retryFeedback: retryFeedback,
                     cancellationToken: cancellationToken
                 )
+                // 抽取成功，直接返回结构化结果
                 return output
             } catch {
+                // 校验任务是否已被取消，取消则直接抛出取消异常
                 try cancellationToken.checkCancellation()
 
+                // 判断异常是否为解码失败；非解码失败不进入自动重试，清理状态并向上抛出
                 guard MedicalExtractionFailureClassifier.isDecodingFailure(error) else {
                     clearExtractionRetryState()
                     throw error
                 }
 
+                // 记录本次解码失败日志与异常信息
                 recordExtractionFailure(error: error, resolution: resolution)
 
+                // 校验开关是否开启、当前重试次数未达上限，不满足则终止重试抛异常
                 guard settings.autoRetryOnDecodingFailureEnabled, attempt < maxAutoRetry else {
                     isAutoRetryingExtraction = false
                     throw error
                 }
 
+                // 重试计数自增
                 attempt += 1
                 autoRetryAttempt = attempt
+                // 标记当前进入自动重试流程
                 isAutoRetryingExtraction = true
                 isRetryingExtraction = true
+                // 复用上一次失败的重试反馈进行重试
                 retryFeedback = lastExtractionRetryFeedback
+                // 打印自动重试日志，记录当前轮次与最大重试次数
                 logger.info(
                     "结构化抽取解码失败，自动重试 attempt=\(attempt)/\(maxAutoRetry)",
                     module: .medical

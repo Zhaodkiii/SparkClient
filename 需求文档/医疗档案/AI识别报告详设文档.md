@@ -16,6 +16,7 @@
 | `MEDICAL-AI-OCR-000008` | 草稿模式删除关联药箱未清理用药计划草稿 | 修复需求/待实现 | 用药计划详情进入药箱详情后删除药箱，清理本页草稿、父级草稿与最终保存 payload |
 | `MEDICAL-AI-OCR-000009` | 处方识别药箱候选确认与批量保存 | 已实现 | 识别概览、加载家庭药箱、药品候选匹配、确认后由处方批量保存绑定已有药品或新建药箱、未确认剥离 medicineBox |
 | `MEDICAL-AI-OCR-000010` | 处方识别保存前检查点补全 | 修复需求/待实现 | 补全处方/用药计划枚举、日期、频次、剂量、提醒时间、药箱表达等保存前检查点；处方状态只保留服务端合法值 |
+| `MEDICAL-AI-OCR-000011` | 图片类医疗单据结构化抽取支持多模态原图识别 | 新需求/待实现 | 图片文件在模型支持视觉时跳过“把 OCR 文本发给 AI 抽取”，改为压缩图片直发 AI；PDF/非图片/非视觉模型继续走 OCR 文本抽取 |
 
 ## 工单 `MEDICAL-AI-OCR-000001`：结构化抽取失败后继续识别需携带上次失败原因
 
@@ -4772,3 +4773,512 @@ prescriptions[n].medicationPlans[m].medicineBox
 5. 检查点规则需要和服务端模型/Serializer 同步维护，新增服务端约束时要补客户端规则。
 6. 客户端不能继续把 `paid`、`普通` 发送到 `status`，也不能通过新增临时字段绕过服务端模型边界。
 7. 客户端不要为了展示方便再增加本地专用状态枚举；处方生命周期状态必须以服务端 `Prescription.Status` 为唯一来源。
+
+---
+
+## 工单 `MEDICAL-AI-OCR-000011`：图片类医疗单据结构化抽取支持多模态原图识别
+
+### 工单状态
+
+新需求/待实现。
+
+### 1. 背景
+
+当前医疗单据识别流水线固定为：
+
+```text
+upload -> ocr -> type_recognition -> extract -> attachment_binding -> save
+```
+
+其中 `extract` 阶段会把本地 OCR 合并文本作为 Prompt 输入给 AI。该方案对 PDF、扫描件、普通图片都能工作，但图片类单据存在一个明显问题：OCR 会丢失排版、表格层级、字段左右对应关系、检查指标单位和值的相对位置。AI 只能看到 OCR 文本，无法看到原始视觉布局，因此容易出现：
+
+1. 检验项目、结果值、单位、参考范围错位。
+2. 多列指标被合并成一列，导致数值挂到错误项目上。
+3. 处方药名、规格、用法用量、频次跨行后被错误拼接。
+4. 体检报告、检验报告中的异常标记、箭头、阴阳性符号丢失。
+5. 病历文书中标题、段落、表格边界丢失，摘要和诊断字段不稳定。
+
+现在需要在当前抽取模型支持多模态视觉识别、且本次上传文件全是图片时，结构化抽取阶段不再把 OCR 文本发给 AI，而是把压缩后的图片直接发给 AI，让模型基于图片视觉内容完成结构化抽取。
+
+### 2. 目标
+
+1. 保留现有上传、OCR、类型识别、附件绑定、保存流程。
+2. OCR 仍必须执行并缓存，后续 AI 自动识别单据分类、业务附件绑定匹配、审计溯源、断点续跑仍依赖 OCR 文本。
+3. 只改造 `extract` 阶段的 AI 输入源：支持 `ocrText` 与 `visionImages` 两种抽取输入。
+4. 当本次文件全是图片，且当前抽取场景选择的模型支持 `supportsMultimodal = true` 时，使用压缩图片直发 AI 抽取。
+5. 当存在 PDF 或其他非图片文件时，必须继续使用 OCR 文本抽取。
+6. 当当前模型不支持视觉多模态时，必须继续使用 OCR 文本抽取。
+7. 多模态抽取 Prompt 只保留结构化抽取规则，不再包含“OCR text:”或“根据 OCR 文本”的说明。
+8. 关键决策点必须有日志，便于定位为什么走图片抽取或为什么回退 OCR。
+
+### 3. 非目标与边界
+
+1. 不取消 OCR 步骤。
+2. 不改变 PDF、Word、Excel、TXT 等非图片文件的识别策略。
+3. 不把 PDF 转图片后走多模态，本工单第一期只支持用户上传的图片文件。
+4. 不改服务端保存接口、业务模型和附件绑定协议。
+5. 不改 `type_recognition` 的输入，类型识别仍使用合并 OCR 文本。
+6. 不在本工单内新增 UI 模式选择开关，默认由文件类型和模型能力自动决策。
+7. 不把图片远端 URL 直接发给 AI，第一期参考对话实现，从本地文件读取图片字节，压缩后以内联 JPEG base64 发送。
+8. 不向日志输出完整 OCR 文本、完整 base64、完整病历隐私内容。
+
+### 4. 当前代码参考
+
+| 位置 | 当前职责 | 本工单关注点 |
+| --- | --- | --- |
+| `MedicalDocumentUploadViewModel.swift:300-588` | 串联上传、OCR、类型识别、结构化抽取、附件绑定 | 在抽取前完成输入源决策，日志记录 OCR/图片路径选择原因 |
+| `DefaultTypedMedicalDocumentExtractor.swift:154-219` | `extractStructured` 生成 Prompt 并调用 typed 抽取 | 需要支持传入抽取输入源，而不是固定 `mergedOCRText` |
+| `DefaultTypedMedicalDocumentExtractor.swift:279-394` | 按文档类型调用不同抽取场景 | 每个场景都要能接收文本 Prompt 或多模态 Prompt + 图片 parts |
+| `DefaultTypedMedicalDocumentExtractor.swift:414-459` | 通用 AI 流式结构化抽取 | 需要支持 `AIRuntimeMessage(contentParts:)` |
+| `PromptLocalizer.swift:1-382` | 医疗抽取 Prompt 本地化 | 增加或拆分“只含抽取规则”的图片版 Prompt |
+| `AIRuntimeService.swift:39-185` | 解析模型配置、模型能力、路由本地/云端 | 需要能给调用方判断抽取模型是否支持多模态 |
+| `AIConfigModels.swift:208-285` | `AIScenarioRemoteModelRow.supportsMultimodal` 等能力字段 | 作为模型视觉能力判断来源 |
+| `AIConfigModels.swift:544-582` | 医疗抽取场景集合 | 各医疗抽取场景均需按当前场景模型能力判断 |
+| `ChatAIImageCompressor.swift` | 对话发送 AI 前压缩图片 | 医疗抽取复用同等压缩策略：目标约 1MB，多尺寸多质量降级 |
+| `ChatOrchestrator.swift:658-790` | 对话多模态消息组装 | 参考 `imageInlineJPEGBase64` parts 组装方式 |
+| `AIRuntimeModels.swift` | `AIRuntimeContentPart.imageInlineJPEGBase64` | 医疗抽取直接使用该 content part |
+| `OpenAICompatibleTextGateway.swift:524-562` | 内联 JPEG base64 按厂商转成 `image_url` | 医疗抽取复用现有网关编码逻辑 |
+
+### 5. 识别策略设计
+
+#### 5.1 抽取输入源枚举
+
+建议新增一个医疗抽取内部输入源模型：
+
+```swift
+enum MedicalExtractionInputSource: Sendable {
+    case ocrText(String)
+    case visionImages([MedicalExtractionVisionImage])
+}
+
+struct MedicalExtractionVisionImage: Sendable {
+    let fileID: UUID
+    let displayName: String
+    let mimeType: String
+    let originalByteCount: Int
+    let compressedJPEGData: Data
+}
+```
+
+该模型只用于客户端抽取调用，不改变 `MedicalDocumentRecognitionEnvelope.rawOCRText`。即使走图片抽取，信封仍保留 `rawOCRText`，因为后续业务和审计仍需要 OCR。
+
+#### 5.2 决策规则
+
+抽取阶段按以下顺序决策：
+
+```text
+1. selectedFiles 是否全部为图片
+   - 否：使用 OCR 文本抽取
+   - 是：继续
+
+2. 当前 extractScenario + preferredExtractModelName 解析出的模型是否 supportsMultimodal
+   - 否：使用 OCR 文本抽取
+   - 是：继续
+
+3. 是否能从所有图片文件读取本地字节并压缩出 JPEG
+   - 否：使用 OCR 文本抽取
+   - 是：使用图片多模态抽取
+```
+
+文件类型判定建议：
+
+1. 优先使用 `MedicalUploadLocalFile` 已有 MIME / UTType / file extension 信息。
+2. 图片白名单：`image/jpeg`、`image/png`、`image/heic`、`image/heif`、`public.image` 可识别类型。
+3. 非图片黑名单必须包含：`application/pdf`、Office 文档、纯文本、未知 MIME。
+4. 混合上传只要包含任意非图片文件，整次抽取使用 OCR 文本，避免部分图片、部分 PDF 的上下文不一致。
+
+### 6. 流程改造
+
+#### 6.1 `MedicalDocumentUploadViewModel`
+
+在现有流程中，OCR 和类型识别继续保持：
+
+```text
+upload -> ocr -> type_recognition
+```
+
+在进入 `extract` 前增加抽取输入源准备：
+
+```text
+type_recognition
+  -> resolve extractScenario
+  -> refreshExtractModelOptions
+  -> resolve selected extract model capability
+  -> build MedicalExtractionInputSource
+  -> extractStructured(inputSource:)
+```
+
+需要注意当前代码中：
+
+```swift
+let modelSummary = modelDisplayName(for: preferredExtractModelName) ?? "默认模型"
+preferredExtractModelName = modelSummary
+```
+
+这里 `preferredExtractModelName` 可能被写成展示名，后续做能力判断时必须确认使用的是模型 `name` 而不是 `displayName`。工单实现时建议拆分：
+
+```swift
+let preferredModelNameForRequest: String?
+let modelSummaryForUI: String
+```
+
+避免能力判断和请求路由拿到 UI 文案。
+
+#### 6.2 `DefaultTypedMedicalDocumentExtractor`
+
+当前公开方法固定接收：
+
+```swift
+mergedOCRText: String
+```
+
+建议保留该参数用于信封和兼容，同时新增抽取输入参数：
+
+```swift
+func extractStructured(
+    memberID: Int,
+    files: [MedicalUploadLocalFile],
+    mergedOCRText: String,
+    extractionInputSource: MedicalExtractionInputSource,
+    resolution: MedicalDocumentTypeResolution,
+    preferredModelName: String? = nil,
+    retryFeedback: MedicalExtractionRetryFeedback? = nil,
+    cancellationToken: AIRuntimeCancellationToken? = nil
+) async throws -> MedicalDocumentTypedExtractionOutput
+```
+
+兼容策略：
+
+1. 旧调用方可默认 `extractionInputSource = .ocrText(mergedOCRText)`。
+2. `MedicalDocumentRecognitionEnvelope.rawOCRText` 继续写入 `mergedOCRText`。
+3. `payloadPreview` 可增加 `extractionInputSource: "ocr_text|vision_images"`，便于结果排查。
+
+#### 6.3 `extractTypedResult` 与通用抽取方法
+
+将通用抽取从固定 Prompt 改为消息数组：
+
+```swift
+private func extractStructured<T: Decodable>(
+    messages: [AIRuntimeMessage],
+    scenario: AIScenario,
+    kindLabel: String,
+    as type: T.Type,
+    preferredModelName: String? = nil,
+    cancellationToken: AIRuntimeCancellationToken?
+) async throws -> StructuredJSONStreamFinal<T>
+```
+
+OCR 文本路径：
+
+```swift
+messages = [
+    AIRuntimeMessage(role: .user, content: prompt)
+]
+```
+
+图片路径：
+
+```swift
+messages = [
+    AIRuntimeMessage(
+        role: .user,
+        content: nil,
+        contentParts: [
+            .textPart(visionPrompt),
+            .imageInlineJPEGBase64(image1Base64),
+            .imageInlineJPEGBase64(image2Base64)
+        ]
+    )
+]
+```
+
+### 7. Prompt 改造
+
+#### 7.1 OCR 文本 Prompt 保持现状
+
+现有 `PromptLocalizer` 中的医疗抽取方法继续保留，例如：
+
+```swift
+medicalCaseExtractionPrompt(ocrText:)
+medicalReportExtractionPrompt(ocrText:)
+prescriptionExtractionPrompt(ocrText:)
+medicineBoxExtractionPrompt(ocrText:)
+```
+
+它们仍用于：
+
+1. PDF。
+2. 非图片文件。
+3. 混合文件。
+4. 模型不支持多模态。
+5. 图片压缩/读取失败后的回退。
+
+#### 7.2 新增图片版 Prompt
+
+图片版 Prompt 只包含抽取规则，不包含 OCR 输入段落。建议新增：
+
+```swift
+medicalCaseVisionExtractionPrompt()
+healthExamVisionExtractionPrompt()
+medicalReportVisionExtractionPrompt()
+prescriptionVisionExtractionPrompt()
+medicationVisionExtractionPrompt()
+medicineBoxVisionExtractionPrompt()
+```
+
+规则：
+
+1. 禁止出现 `OCR text:`、`OCR 文本如下`、`from OCR text` 等描述。
+2. 明确要求“根据图片中可见内容抽取，不要编造图片中看不到的信息”。
+3. 明确要求“保留表格行列对应关系，指标名、结果、单位、参考范围必须来自同一行或明确关联区域”。
+4. 多张图片时，要求按图片顺序综合抽取；如果一张图片是续页，需要合并同一份报告。
+5. 返回格式和 OCR 版完全一致，确保后续解码器、预校验、结果页不分叉。
+6. `retryFeedback` 仍可追加，但文案要从“without changing OCR facts”调整为“without changing visible facts in the image”。
+
+#### 7.3 Prompt 工厂建议
+
+建议让 `MedicalPromptFactory` 根据输入源选择 Prompt：
+
+```swift
+func extractionPrompt(for input: MedicalPromptInput, source: MedicalExtractionPromptSource) -> String
+```
+
+其中：
+
+```swift
+enum MedicalExtractionPromptSource {
+    case ocrText
+    case visionImage
+}
+```
+
+### 8. 图片压缩与发送
+
+#### 8.1 压缩策略
+
+复用对话内 `ChatAIImageCompressor.compressForAI`：
+
+1. 默认目标大小：`1_048_576` bytes。
+2. 最大边逐级尝试：`2048, 1600, 1280, 1024, 768`。
+3. JPEG 质量逐级尝试：`0.82, 0.72, 0.62, 0.52, 0.45`。
+4. 若无法压到目标大小，使用最小候选。
+5. 若图片无法解码或 JPEG 无法生成，记录日志并回退 OCR 文本抽取。
+
+建议后续把 `ChatAIImageCompressor` 提升为 Core 级工具，例如：
+
+```text
+Projects/Core/AIRuntime/AIImageCompressor.swift
+```
+
+避免医疗模块直接依赖 Chat feature。
+
+#### 8.2 图片发送策略
+
+复用现有运行时多模态结构：
+
+```swift
+AIRuntimeContentPart.imageInlineJPEGBase64(jpegData.base64EncodedString())
+```
+
+由 `OpenAICompatibleTextGateway` 继续负责将内部前缀：
+
+```text
+spark:inline-jpeg-base64:
+```
+
+转换为不同厂商需要的 `image_url` 形式。医疗抽取不新增厂商分支。
+
+#### 8.3 图片数量与大小限制
+
+第一期建议：
+
+1. 最多直发 6 张图片，超过则回退 OCR 文本抽取，或待产品确认是否只发送前 6 张。
+2. 单张压缩后目标约 1MB。
+3. 总 base64 体积建议控制在 8MB 以内。
+4. 超限时必须记录日志，说明 `imageCount`、`totalCompressedBytes`、`limit` 和回退原因。
+
+待确认：超过限制时是整体回退 OCR，还是分批调用 AI 后合并结果。第一期建议整体回退 OCR，行为最稳定。
+
+### 9. 模型能力判断
+
+需要基于抽取场景解析当前模型，而不是只看聊天场景。
+
+能力来源：
+
+```swift
+AIScenarioRemoteModelRow.supportsMultimodal
+```
+
+判断要求：
+
+1. 使用 `extractScenario` 对应 bundle 中的当前模型。
+2. 如果用户选择了特定抽取模型，按该模型判断。
+3. 如果未选择，按场景默认模型判断。
+4. 如果模型是 agent，能力建议参考 `AIRuntimeService.modelSupportsTools` 的代理模型逻辑，判断 agent 自身或 base model 是否支持多模态。
+5. 本地 GGUF 模型第一期默认视为不支持图片抽取，除非后续本地视觉模型链路明确支持。
+
+建议新增公共查询方法，避免 ViewModel 复制 configCenter 逻辑：
+
+```swift
+protocol AIRuntimeCapabilityResolving {
+    func modelSupportsMultimodal(
+        scenario: AIScenario,
+        preferredModelName: String?
+    ) async throws -> Bool
+}
+```
+
+或在现有 `AISettingsRuntimeCapabilities` 扩展医疗场景能力查询。
+
+### 10. 日志要求
+
+必须增加关键日志，日志不能包含完整图片 base64、完整 OCR 文本、完整患者隐私。
+
+#### 10.1 抽取输入源决策日志
+
+开始决策：
+
+```text
+医疗抽取输入源决策开始 kind=medical_report scenario=medicalReportExtraction files=2 preferredModel=<name|nil>
+```
+
+走图片多模态：
+
+```text
+医疗抽取使用图片多模态 kind=medical_report model=<model> imageCount=2 totalOriginalBytes=5242880 totalCompressedBytes=1456789
+```
+
+模型不支持多模态回退：
+
+```text
+医疗抽取回退 OCR：当前模型不支持多模态 kind=prescription scenario=prescriptionExtraction model=<model>
+```
+
+包含 PDF 或非图片回退：
+
+```text
+医疗抽取回退 OCR：包含非图片文件 kind=health_exam_report nonImageCount=1 firstNonImageMime=application/pdf
+```
+
+图片读取/压缩失败回退：
+
+```text
+医疗抽取回退 OCR：图片压缩失败 file=<safeName> mime=image/heic
+```
+
+图片数量或体积超限回退：
+
+```text
+医疗抽取回退 OCR：图片数量或体积超过限制 imageCount=9 totalCompressedBytes=10485760
+```
+
+#### 10.2 AI 请求日志
+
+OCR 文本路径：
+
+```text
+开始 AI 结构化抽取，kind=medical_report input=ocr_text promptLength=12345
+```
+
+图片路径：
+
+```text
+开始 AI 结构化抽取，kind=medical_report input=vision_images imageCount=2 promptLength=4321
+```
+
+#### 10.3 失败日志
+
+如果图片路径 AI 调用失败，第一期建议不要自动二次 OCR 重试，避免用户等待时间不可控；但必须保留错误日志：
+
+```text
+图片多模态结构化抽取失败 kind=medical_report model=<model> error=<summary>
+```
+
+待确认：是否需要在图片路径 AI 调用失败后自动回退 OCR 文本抽取一次。
+
+### 11. 兼容与断点续跑
+
+1. `pipelineOCRText` 继续作为必要 checkpoint。
+2. `typeResolution` 继续来自 OCR 类型识别。
+3. 抽取 checkpoint 不需要持久化压缩图片 base64，断点重试时重新从本地文件读取并压缩。
+4. 如果用户从 `.extract` 继续识别，仍重新执行输入源决策；模型能力或文件状态可能已经变化。
+5. 如果文件本地缓存丢失导致图片无法读取，回退 OCR 文本抽取。
+6. `MedicalDocumentRecognitionEnvelope.rawOCRText` 不为空时继续用于溯源；图片抽取路径可额外记录 `extractionInputSource` 元数据，但不影响服务端。
+
+### 12. 验收标准
+
+1. 上传 1 张 JPG，抽取模型支持多模态时，日志显示使用图片多模态，AI 请求消息包含 `contentParts` 和 `image_url` part，不把合并 OCR 文本作为用户正文发给抽取模型。
+2. 上传 2 张 PNG，抽取模型支持多模态时，两张图片均压缩后发送，结构化返回仍能进入现有结果页。
+3. 上传 PDF 时，无论模型是否支持多模态，都走 OCR 文本抽取。
+4. 上传图片 + PDF 混合文件时，整次走 OCR 文本抽取。
+5. 抽取模型不支持多模态时，图片文件仍走 OCR 文本抽取，并有“模型不支持多模态”的日志。
+6. 图片读取失败或压缩失败时，回退 OCR 文本抽取，并有失败文件安全名称和 MIME 日志。
+7. 图片多模态 Prompt 中不出现 `OCR text:` 或要求模型根据 OCR 文本抽取的语句。
+8. OCR 文本 Prompt 保持兼容，PDF 和非视觉模型识别结果不因本工单变化而回归。
+9. 类型识别仍使用 OCR 文本，自动分类结果不受图片抽取路径影响。
+10. 附件绑定匹配仍使用现有 `selectedFiles` / `remoteFile` / envelope，不因图片抽取路径丢失附件 ID。
+11. 自动重试或手动继续识别时，`retryFeedback` 能同时适配 OCR 文本 Prompt 和图片 Prompt。
+12. 日志中不出现完整 base64、不出现完整 OCR 正文、不出现大段患者隐私。
+
+### 13. 测试建议
+
+#### 13.1 单元测试
+
+1. `allFilesAreImages`：JPG/PNG/HEIC 返回 true。
+2. `allFilesAreImages`：PDF 返回 false。
+3. `allFilesAreImages`：图片 + PDF 返回 false。
+4. `resolveExtractionInputSource`：模型支持多模态 + 全图片 -> `.visionImages`。
+5. `resolveExtractionInputSource`：模型不支持多模态 -> `.ocrText`。
+6. `resolveExtractionInputSource`：压缩失败 -> `.ocrText`。
+7. `PromptLocalizer`：vision Prompt 不包含 OCR 占位符。
+8. `PromptLocalizer`：OCR Prompt 仍包含传入 OCR 文本。
+
+#### 13.2 集成测试
+
+1. Mock `AIRuntimeServing` 验证图片路径请求 `AIRuntimeMessage.content == nil` 且 `contentParts` 包含 text + image。
+2. Mock `AIRuntimeServing` 验证 OCR 路径请求仍为纯文本。
+3. Mock 不同模型能力，验证日志和路径选择。
+4. 验证 `MedicalDocumentTypedExtractionOutput.envelope.rawOCRText` 在图片路径仍保留 OCR 文本。
+
+#### 13.3 手工验收用例
+
+1. 单张化验单图片：检查项目、结果、单位、参考范围对应关系准确。
+2. 多页体检报告图片：多张图片合并为同一份体检报告。
+3. 处方图片：药名、规格、用法、频次、天数不要错位。
+4. 药盒图片：药品名、规格、有效期从包装可见内容抽取。
+5. 同一图片分别用视觉模型和非视觉模型识别，对比日志确认路径不同。
+6. 同一 PDF 用视觉模型识别，确认仍走 OCR。
+
+### 14. 风险点
+
+1. 多模态模型虽然标记 `supportsMultimodal = true`，但具体厂商接口可能不接受当前 `image_url` 编码，需要依赖现有网关兼容能力和能力探测结果。
+2. 图片 token/费用可能高于 OCR 文本，尤其多页报告。
+3. 图片压缩过度可能导致小字、单位、参考范围不可读。
+4. 图片过大或数量过多可能触发厂商请求体限制。
+5. 医疗报告表格复杂时，视觉模型也可能跨行错配，需要结果页预校验继续兜底。
+6. OCR 与图片抽取可能得到不一致结果，后续如果业务要展示“识别依据”，需要明确展示 OCR 依据还是图片依据。
+7. 当前类型识别仍依赖 OCR，如果 OCR 对图片识别很差，可能在进入图片抽取前已经分错类型。
+8. 如果 `preferredExtractModelName` 被 UI 展示名覆盖，会导致能力判断、请求路由或日志不准确。
+9. 本地模型或 agent 模型能力继承规则不清晰时，可能误判支持多模态。
+10. 多张图片顺序错误会影响跨页合并，需要保证 `selectedFiles` 顺序稳定。
+
+### 15. 待确认问题
+
+1. 图片数量上限是否定为 6 张？超过后是整体回退 OCR，还是分批视觉抽取再合并？
+2. 图片多模态调用失败后，是否自动回退 OCR 文本抽取一次？
+3. 是否需要在结果页或 debug 面板展示本次抽取输入源：`OCR 文本` / `图片识别`？
+4. HEIC 是否必须先统一转 JPEG？如果 `UIImage(data:)` 可读但颜色方向异常，是否需要额外处理 EXIF orientation？
+5. 多模态抽取是否允许发送用户拍摄原图，还是必须永远发送压缩图？当前建议永远发送压缩图。
+6. OCR 与图片抽取结果冲突时，是否需要在重试 Prompt 中允许模型参考 OCR 文本？当前工单要求图片路径不把 OCR 发给 AI。
+7. 能力判断是否只看本地配置 `supportsMultimodal`，还是每次调用前需要做在线探测？当前建议只看配置和已有探测结果。
+8. 是否需要为不同单据类型配置不同图片压缩目标，例如体检报告保留 1600/2048，药盒可更小？
+
+### 16. 建议拆分任务
+
+1. 抽取输入源模型与文件类型判断。
+2. 医疗抽取模型多模态能力查询。
+3. 图片压缩工具从 Chat 下沉到 Core，或建立医疗侧复用包装。
+4. `DefaultTypedMedicalDocumentExtractor` 支持 `AIRuntimeMessage.contentParts`。
+5. `PromptLocalizer` / `MedicalPromptFactory` 增加图片版抽取 Prompt。
+6. `MedicalDocumentUploadViewModel` 接入输入源决策与日志。
+7. 单元测试、Mock Runtime 集成测试、手工验收日志模板补齐。

@@ -82,7 +82,7 @@ struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
     let title: String       // 报告标题
     let hospital: String?   // 医院名称
     let doctor: String?     // 检查医生
-    let content: String     // 报告详情/描述内容
+    let content: String?    // 报告详情/描述内容；实验室检验报告可能无正文（AI 须填"见详情"兜底）
     let date: String?         // 检查日期
     let details: [MedicalReportItem] // 指标明细
     @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []

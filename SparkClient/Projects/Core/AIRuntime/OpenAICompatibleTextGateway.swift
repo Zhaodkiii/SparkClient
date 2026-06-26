@@ -124,11 +124,12 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         
         // 日志：打印请求信息（截断超长报文）
         let requestBodyText = String(data: requestBodyData, encoding: .utf8) ?? "<non-utf8>"
+        let redactedRequestBodyText = AIRuntimeRequestLogRedactor.redact(requestBodyText)
         logger.debug(
             "AI 流式网关请求开始，model=\(client.model), endpoint=\(client.endpoint.absoluteString), messages=\(runtimeRequest.messages.count), tools=\(runtimeRequest.tools.count), apiKeyPresent=\(client.apiKey?.isEmpty == false)",
             module: .aiConfig
         )
-        logger.debug("AI 流式网关请求报文=\(truncate(requestBodyText, limit: 20000))", module: .aiConfig)
+        logger.debug("AI 流式网关请求报文=\(truncate(redactedRequestBodyText, limit: 20000))", module: .aiConfig)
 
         // 返回异步抛出流，处理流式响应
         return AsyncThrowingStream { continuation in

@@ -288,16 +288,19 @@ OCR文本：
     'title': '报告标题',
     'hospital': '医院名称',
     'doctor': '检查医生',
-    'content': '报告全文描述/所见/结论/印象',
+    'content': '报告全文描述/所见/结论/印象（检验报告若无全文，固定填'见详情'）',
     'date': 'yyyy-MM-dd',
     'details': [
       {
-        'category': '科目名称（必填，影像/病理统一填：内镜检查/影像学检查）',
-        'subCategory': '子类别（检查方法，如无痛电子胃镜）',
+        'category': '血常规（实验室按实际科目填写；影像/病理固定填'内镜检查'或'影像学检查'）',
+        'subCategory': '子类别/检查方法（无则删除）',
         'itemName': '项目名称（无则删除）',
         'resultValue': '结果数值或描述（必填）',
+        'unit': '单位（无则删除）',
+        'referenceRange': '参考范围（无则删除）',
+        'flag': 'H | L | 阳性 | 阴性（无异常则删除）',
         'bodyPart': '检查部位（无则删除）',
-        'diagnosis': '医生诊断（必填）'
+        'diagnosis': '单项提示：正常填'正常'，偏高填'偏高'，偏低填'偏低'（检验报告必填；影像/病理无单项诊断可删除）'
       }
     ]
   }
@@ -308,9 +311,10 @@ OCR文本：
 日期字段必须采用 yyyy-MM-dd 格式。严禁包含时间、时区、T、Z等字符。
 
 2. 字段处理原则（零错误核心）：
-- 严禁出现 null、空字符串、空数组。无内容的字段【直接删除】，不保留键名。
-- details 数组内的对象：category、resultValue、diagnosis 为【必填字段】，绝对不允许缺失！
-- 其他字段无内容直接删除。
+- 严禁出现 null、空字符串、空数组。无内容的【可选字段】直接删除，不保留键名。
+- content 字段【绝对必填】：影像/病理报告填写检查所见与诊断结论；检验报告若无全文描述，content 固定填'见详情'，严禁删除 content 键。
+- details 数组内：category、resultValue 为【必填字段】，绝对不允许缺失。
+- 实验室检验报告：details 内 diagnosis【必填】，参见规则第4条。
 
 3. 报告拆分与合并逻辑（核心）：
 - 影像（imaging）及病理（pathology）报告：一份报告仅允许生成一条 details 记录！
@@ -321,11 +325,23 @@ OCR文本：
   ✅ 严禁按部位拆分多条 detail
 - 实验室检验（laboratory）报告：按指标行拆分，一行对应一条 details 记录。
 
-4. 异常标记映射：
-升高/↑/H -> 'H'；降低/↓/L -> 'L'；阳性 -> '阳性'；阴性 -> '阴性'。
+4. 实验室检验 diagnosis 填写规则（必须执行）：
+- 指标在参考范围内 -> diagnosis 填'正常'
+- 指标异常升高（H/↑/偏高等标注）-> diagnosis 填'偏高'
+- 指标异常降低（L/↓/偏低等标注）-> diagnosis 填'偏低'
+- 阳性结果 -> diagnosis 填'阳性'；阴性结果 -> 填'阴性'
 
-5. 内容清洗：
-忽略水印、页码等无关文本。content 字段必须包含“内镜所见/检查所见”和“诊断结果”。
+5. flag 字段（异常标记）：
+升高/↑/H -> 'H'；降低/↓/L -> 'L'；阳性 -> '阳性'；阴性 -> '阴性'。
+无异常时删除 flag 键，不填'正常'。
+
+6. 内容清洗：
+忽略水印、页码等无关文本。
+
+【负向约束（严禁）】
+1. 严禁在 details 中输出 schema 未定义的字段（如 abnormality 等）。
+2. 严禁将本 Prompt 中的说明文字（如括号内的描述）直接作为字段值输出；category 字段只能填写实际科目名称，不能填说明语句。
+3. 严禁省略 content 字段：检验报告无全文时，content 必须填'见详情'而非删除该键。
 
 【最终输出要求】
 只输出纯净 JSON，不要任何 Markdown、解释、说明、多余文字、标点符号、换行外的格式。
@@ -616,6 +632,7 @@ OCR文本：
 "ai.prompt.medical_extraction.retry.suggestion.generic_type" = "请严格匹配 schema 中的字段类型。";
 "ai.prompt.medical_extraction.retry.suggestion.generic" = "请返回符合原 schema 的 JSON 结构。";
 "ai.prompt.medical_extraction.retry.suggestion.type_mismatch" = "字段期望类型为 %@，上次实际为 %@，请输出与 schema 兼容的类型。";
+"ai.prompt.medical_extraction.vision.retry_correction.template" = "【重试修正要求】\n上一次结构化抽取失败，失败原因如下：\n- 文档类型：%@\n- 错误字段：%@\n- 期望类型：%@\n- 上次实际类型：%@\n- 失败说明：%@\n- 修正建议：%@\n\n请在不改变图片中可见事实的前提下，重新输出符合原 schema 的纯 JSON。\n不要输出 Markdown，不要输出解释文字。\n如果字段未知，请使用该 schema 允许的空值；例如 extra 未知时使用 {}，数组未知时使用 []。";
 "ai.prompt.nutrition.food_description.template" = "你是食物图片描述助手。请用自然语言描述图片中的可见食物、估算份量、烹饪方式和配料，使用用户语言回复。不要输出 JSON 或 Markdown。\n餐次上下文：%@";
 "ai.prompt.nutrition.intake_extraction.template" = "你是营养摄入结构化抽取助手。仅输出一个合法 JSON 对象，不要 Markdown、解释文字或代码块。\n仅使用 camelCase 键：title、mealType、confidence、overview、items、intakes、uncertainNotes。\noverview 必须包含 energyKcal、proteinG、carbohydrateG、fatG。\nitems[] 可含 foodItemId（可选）、name、servingRatio、servingDescription、confidence。\nintakes[] 必须含 nutrientType、value、unit，可选 confidence。\nuncertainNotes 必须是字符串。\n不要输出 null；数值未知时使用 0，并把不确定原因写入 uncertainNotes。\n不确定的份量或食物请写入 uncertainNotes，不要编造精确值。\n无法判断餐次时默认 mealType：%@\n\n输入：\n%@";
 "ai.prompt.nutrition.extraction.retry_correction.template" = "【重试修正要求】\n上一次营养抽取 JSON 解码失败。\n- 错误：%@\n- 上次输出摘要：%@\n\n请仅返回 camelCase 纯 JSON，不要使用 Markdown、代码块或解释文字。";

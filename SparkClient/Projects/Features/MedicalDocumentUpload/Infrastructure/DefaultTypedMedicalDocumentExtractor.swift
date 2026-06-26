@@ -87,6 +87,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             memberID: memberID,
             files: files,
             mergedOCRText: mergedOCR,
+            extractionInputSource: .ocrText(mergedOCR),
             resolution: resolution,
             preferredModelName: nil,
             retryFeedback: nil,
@@ -156,6 +157,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         memberID: Int,
         files: [MedicalUploadLocalFile],
         mergedOCRText: String,
+        extractionInputSource: MedicalExtractionInputSource,
         resolution: MedicalDocumentTypeResolution,
         preferredModelName: String? = nil,
         retryFeedback: MedicalExtractionRetryFeedback? = nil,
@@ -167,54 +169,76 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 //        logger.info("使用本地 Debug 假装抽取病例数据（跳过 OCR/AI）", module: .medical)
 //        return try makeDebugPretendCaseOutput(memberID: memberID, files: files, selectedKind: kind)
 //#endif
-        
-        // 3. 根据文档类型，生成对应的AI抽取提示词（Prompt）
+
+        let promptSource: MedicalExtractionPromptSource
+        switch extractionInputSource {
+        case .ocrText:
+            promptSource = .ocrText
+        case .visionImages:
+            promptSource = .visionImage
+        }
+
         let prompt = promptFactory.extractionPrompt(
             for: MedicalPromptInput(
                 kind: kind,
                 mergedOCRText: mergedOCRText,
                 retryFeedback: retryFeedback
-            )
+            ),
+            source: promptSource
         )
-        
-        // 4. 调用AI，执行结构化抽取，得到类型化结果 + 标准JSON
+        let messages = Self.runtimeMessages(for: extractionInputSource, prompt: prompt)
+
         let extraction = try await extractTypedResult(
             kind: kind,
-            prompt: prompt,
+            messages: messages,
+            inputSourceLabel: extractionInputSource.logLabel,
             preferredModelName: preferredModelName,
             cancellationToken: cancellationToken
         )
         let extractedJSON = extraction.json
-        
-        // 5. 构建识别信封：保存本次抽取的所有原始信息（用于溯源、审计、重试）
+
         let envelope = MedicalDocumentRecognitionEnvelope(
             memberID: memberID,
             sourceFiles: files,
             rawOCRText: mergedOCRText,
             typeResolution: resolution
         )
-        
-        // 6. 构建日志/预览用的JSON字符串（方便查看结果）
+
         let preview = """
         {
           "memberID": \(memberID),
           "kind": "\(kind.rawValue)",
           "resolutionSource": "\(resolution.source.rawValue)",
           "confidence": \(String(format: "%.2f", resolution.confidence)),
+          "extractionInputSource": "\(extractionInputSource.logLabel)",
           "payload": \(extractedJSON)
         }
         """
-        
-        // 7. 打印日志：标记类型抽取完成
-        logger.info("typed 抽取完成，kind=\(kind.rawValue)", module: .medical)
-        
-        // 8. 返回最终标准化输出对象
+
+        logger.info("typed 抽取完成，kind=\(kind.rawValue) input=\(extractionInputSource.logLabel)", module: .medical)
+
         return MedicalDocumentTypedExtractionOutput(
             envelope: envelope,
             typedResult: extraction.typed,
             extractedJSON: extractedJSON,
             payloadPreview: preview
         )
+    }
+
+    private static func runtimeMessages(
+        for inputSource: MedicalExtractionInputSource,
+        prompt: String
+    ) -> [AIRuntimeMessage] {
+        switch inputSource {
+        case .ocrText:
+            return [AIRuntimeMessage(role: .user, content: prompt)]
+        case .visionImages(let images):
+            var parts: [AIRuntimeContentPart] = [.textPart(prompt)]
+            for image in images {
+                parts.append(.imageInlineJPEGBase64(image.compressedJPEGData.base64EncodedString()))
+            }
+            return [AIRuntimeMessage(role: .user, content: nil, contentParts: parts)]
+        }
     }
 
     // MARK: - 对话工具：从提炼文本抽取（与上传共用 `extractTypedResult` / Prompt / 场景）
@@ -243,7 +267,12 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             typeResolution: resolution
         )
         let prompt = promptFactory.extractionPrompt(for: MedicalPromptInput(kind: kind, mergedOCRText: trimmed))
-        let extraction = try await extractTypedResult(kind: kind, prompt: prompt, cancellationToken: nil)
+        let extraction = try await extractTypedResult(
+            kind: kind,
+            messages: [AIRuntimeMessage(role: .user, content: prompt)],
+            inputSourceLabel: "ocr_text",
+            cancellationToken: nil
+        )
         let extractedJSON = Self.normalizedExtractedJSON(for: extraction.typed, fallback: extraction.json)
         let preview = """
         {
@@ -283,7 +312,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     /// - Throws: AI调用失败、解析失败
     private func extractTypedResult(
         kind: MedicalDocumentKind,
-        prompt: String,
+        messages: [AIRuntimeMessage],
+        inputSourceLabel: String,
         preferredModelName: String? = nil,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> (typed: MedicalDocumentTypedResult, json: String) {
@@ -292,13 +322,12 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 //        logger.info("使用本地 Debug 假装结构化抽取（跳过 AI），kind=\(kind.rawValue)", module: .medical)
 //        return try makeDebugPretendTypedResult(kind: kind)
 //#endif
-//        
-        // 根据不同文档类型，走不同的抽取&解析流程
+//
         switch kind {
-        // 病例文档
         case .caseDocument:
             let final = try await extractStructured(
-                prompt: prompt,
+                messages: messages,
+                inputSourceLabel: inputSourceLabel,
                 scenario: .medicalCaseExtraction,
                 kindLabel: "case_document",
                 as: CaseRecognitionDraft.self,
@@ -311,10 +340,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             let normalized = Self.normalizedCaseDraft(draft)
             return (.caseDocument(normalized), Self.normalizedExtractedJSON(for: .caseDocument(normalized), fallback: final.normalizedJSON))
 
-        // 体检报告
         case .healthExamReport:
             let final = try await extractStructured(
-                prompt: prompt,
+                messages: messages,
+                inputSourceLabel: inputSourceLabel,
                 scenario: .healthExamExtraction,
                 kindLabel: "health_exam_report",
                 as: HealthExamRecognitionDraft.self,
@@ -326,10 +355,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             }
             return (.healthExamReport(draft), final.normalizedJSON)
 
-        // 医疗报告 / 自动识别
         case .medicalReport, .auto:
             let final = try await extractStructured(
-                prompt: prompt,
+                messages: messages,
+                inputSourceLabel: inputSourceLabel,
                 scenario: .medicalReportExtraction,
                 kindLabel: "medical_report",
                 as: [MedicalReportRecognitionDraft].self,
@@ -341,10 +370,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
             }
             return (.medicalReport(draft), final.normalizedJSON)
 
-        // 处方单（JSON array；兼容单对象包装为数组）
         case .prescription:
             let final = try await extractStructured(
-                prompt: prompt,
+                messages: messages,
+                inputSourceLabel: inputSourceLabel,
                 scenario: .prescriptionExtraction,
                 kindLabel: "prescription",
                 as: PrescriptionDraftsPayload.self,
@@ -360,10 +389,10 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
                 Self.normalizedExtractedJSON(for: .prescription(normalized), fallback: final.normalizedJSON)
             )
 
-        // 用药单
         case .medicationPlan:
             let final = try await extractStructured(
-                prompt: prompt,
+                messages: messages,
+                inputSourceLabel: inputSourceLabel,
                 scenario: .medicationExtraction,
                 kindLabel: "medication",
                 as: [MedicationPlanRecognitionDraft].self,
@@ -378,7 +407,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 
         case .medicineBox:
             let final = try await extractStructured(
-                prompt: prompt,
+                messages: messages,
+                inputSourceLabel: inputSourceLabel,
                 scenario: .medicineBoxExtraction,
                 kindLabel: "medicine_box",
                 as: [MedicineBoxRecognitionDraft].self,
@@ -422,7 +452,8 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
     /// - Returns: 流式解析最终结果（包含解码对象+标准化JSON）
     /// - Throws: AI调用异常、解析异常
     private func extractStructured<T: Decodable>(
-        prompt: String,
+        messages: [AIRuntimeMessage],
+        inputSourceLabel: String,
         scenario: AIScenario,
         kindLabel: String,
         as type: T.Type,
@@ -430,13 +461,30 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> StructuredJSONStreamFinal<T> {
         try cancellationToken?.checkCancellation()
-        logger.info("开始 AI 结构化抽取，kind=\(kindLabel)", module: .medical)
-        // 1. 调用AI运行时，获取流式输出流
+        let promptLength = messages.reduce(0) { partial, message in
+            partial + (message.normalizedTextContent?.count ?? 0)
+        }
+        switch inputSourceLabel {
+        case "vision_images":
+            let imageCount = messages.flatMap { $0.contentParts ?? [] }
+                .filter { $0.imageURL != nil }
+                .count
+            logger.info(
+                "开始 AI 结构化抽取，kind=\(kindLabel) input=\(inputSourceLabel) imageCount=\(imageCount) promptLength=\(promptLength)",
+                module: .medical
+            )
+        default:
+            logger.info(
+                "开始 AI 结构化抽取，kind=\(kindLabel) input=\(inputSourceLabel) promptLength=\(promptLength)",
+                module: .medical
+            )
+        }
+
         let stream = try await runtimeService.generateTextStream(
             request: AIRuntimeTextRequest(
                 scenario: scenario,
-                messages: [AIRuntimeMessage(role: .user, content: prompt)],
-                reasoning: .disabled, // 关闭推理加速，保证输出稳定JSON
+                messages: messages,
+                reasoning: .disabled,
                 preferredModelName: preferredModelName,
                 cancellationToken: cancellationToken
             )

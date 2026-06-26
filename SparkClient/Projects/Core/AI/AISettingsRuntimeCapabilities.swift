@@ -22,6 +22,19 @@ extension AIScenarioRemoteBundlesCollection {
         }
         return (row.supportsMultimodal, row.providerID.isEmpty ? nil : row.providerID)
     }
+
+    /// 医疗结构化抽取场景的多模态能力（用于图片直发 AI 抽取决策）。
+    func medicalMultimodalCapabilities(
+        for scenario: AIScenario,
+        preferredModelName: String?
+    ) -> (supportsMultimodal: Bool, modelName: String?) {
+        let preferred = preferredModelName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard let row = resolveRow(for: scenario, preferredModelName: preferred) else {
+            return (false, nil)
+        }
+        let supportsMultimodal = row.supportsMultimodal && row.localFilename == nil
+        return (supportsMultimodal, row.name)
+    }
 }
 
 private extension String {

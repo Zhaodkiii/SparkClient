@@ -268,7 +268,7 @@ struct MedicalReportCardsSectionView: View {
                     .foregroundStyle(.secondary)
             }
             
-            Text(report.content.isEmpty ? "-" : report.content)
+            Text(report.content?.nonEmpty ?? "-")
                 .font(.callout)
                 .foregroundStyle(.primary)
                 .lineLimit(3)

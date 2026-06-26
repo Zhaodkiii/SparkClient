@@ -87,10 +87,10 @@ struct ExaminationReportServerMutationService: Sendable {
             organizationName: draft.hospital,
             departmentName: report.departmentName ?? "",
             doctorName: draft.doctor ?? "",
-            findings: draft.content,
-            impression: draft.content,
+            findings: draft.content ?? "",
+            impression: draft.content ?? "",
             source: report.source ?? 2,
-            rawOCR: ["text": draft.content],
+            rawOCR: ["text": draft.content ?? ""],
             status: report.status ?? 1,
             extra: report.extra ?? [:]
         )

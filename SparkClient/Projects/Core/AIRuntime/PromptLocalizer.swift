@@ -183,6 +183,19 @@ struct PromptLocalizer: Sendable {
 
     func medicalExtractionRetryCorrectionPrompt(
         kind: MedicalDocumentKind,
+        feedback: MedicalExtractionRetryFeedback,
+        source: MedicalExtractionPromptSource = .ocrText
+    ) -> String {
+        switch source {
+        case .ocrText:
+            return medicalExtractionOCRRetryCorrectionPrompt(kind: kind, feedback: feedback)
+        case .visionImage:
+            return medicalExtractionVisionRetryCorrectionPrompt(kind: kind, feedback: feedback)
+        }
+    }
+
+    private func medicalExtractionOCRRetryCorrectionPrompt(
+        kind: MedicalDocumentKind,
         feedback: MedicalExtractionRetryFeedback
     ) -> String {
         let kindLabel = localizedMedicalDocumentKindLabel(kind)
@@ -219,6 +232,222 @@ struct PromptLocalizer: Sendable {
             suggestion
         )
         return truncatedCorrectionBlock(body, limit: 2500)
+    }
+
+    private func medicalExtractionVisionRetryCorrectionPrompt(
+        kind: MedicalDocumentKind,
+        feedback: MedicalExtractionRetryFeedback
+    ) -> String {
+        let kindLabel = localizedMedicalDocumentKindLabel(kind)
+        let fieldPath = feedback.fieldPath ?? notAvailableLabel()
+        let expectedType = feedback.expectedType ?? notAvailableLabel()
+        let actualType = feedback.actualType ?? notAvailableLabel()
+        let rawMessage = feedback.rawMessage.isEmpty ? notAvailableLabel() : feedback.rawMessage
+        let suggestion = feedback.suggestion ?? notAvailableLabel()
+
+        let template: String
+        if let dedicated = l10n.promptIfExists("ai.prompt.medical_extraction.vision.retry_correction.template") {
+            template = dedicated
+        } else {
+            let ocrTemplate = l10n.prompt(
+                "ai.prompt.medical_extraction.retry_correction.template",
+                fallback: """
+                [Retry correction]
+                The previous structured extraction failed:
+                - Document type: %@
+                - Invalid field: %@
+                - Expected type: %@
+                - Previous actual type: %@
+                - Error: %@
+                - Fix suggestion: %@
+
+                Please return pure JSON that follows the original schema, without changing OCR facts.
+                Do not return Markdown or explanatory text.
+                Use schema-compatible empty values when unknown; for example, use {} for unknown extra and [] for unknown arrays.
+                """
+            )
+            template = adaptOCRRetryTemplateToVision(ocrTemplate)
+        }
+
+        let body = String(
+            format: template,
+            kindLabel,
+            fieldPath,
+            expectedType,
+            actualType,
+            rawMessage,
+            suggestion
+        )
+        return truncatedCorrectionBlock(body, limit: 2500)
+    }
+
+    func medicalCaseVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.medical_case.vision.extraction.template",
+            ocrKey: "ai.prompt.medical_case.extraction.template",
+            englishOCRFallback: """
+            You are a medical case extraction assistant. Output a single JSON object only (no markdown).
+            Top-level fields: title (required string), summary, diagnosis, hospitalName, ageAtVisit (string like "28"), occurredAt (ISO or yyyy-MM-dd).
+            Optional single objects (omit if unknown): symptom, visit, surgery; optional arrays: followUps, prescriptions, examinationReports.
+            Use camelCase keys.
+            OCR text:
+            %@
+            """
+        )
+    }
+
+    func healthExamVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.health_exam.vision.extraction.template",
+            ocrKey: "ai.prompt.health_exam.extraction.template",
+            englishOCRFallback: medicalDocumentExtractionPrompt(ocrText: "%@")
+        )
+    }
+
+    func medicalReportVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.medical_report.vision.extraction.template",
+            ocrKey: "ai.prompt.medical_report.extraction.template",
+            englishOCRFallback: medicalDocumentExtractionPrompt(ocrText: "%@")
+        )
+    }
+
+    func prescriptionVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.prescription.vision.extraction.template",
+            ocrKey: "ai.prompt.prescription.extraction.template",
+            englishOCRFallback: medicalDocumentExtractionPrompt(ocrText: "%@")
+        )
+    }
+
+    func medicationVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.medication.vision.extraction.template",
+            ocrKey: "ai.prompt.medication.extraction.template",
+            englishOCRFallback: medicalDocumentExtractionPrompt(ocrText: "%@")
+        )
+    }
+
+    func medicineBoxVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.medicine_box.vision.extraction.template",
+            ocrKey: "ai.prompt.medicine_box.extraction.template",
+            englishOCRFallback: """
+            You are a medication box extraction assistant. Extract an array of medicine box inventory items from OCR text.
+            Return JSON array only.
+            OCR text:
+            %@
+            """
+        )
+    }
+
+    func medicalDocumentVisionExtractionPrompt() -> String {
+        visionExtractionPrompt(
+            dedicatedKey: "ai.prompt.medical_document.vision.extraction.template",
+            ocrKey: "ai.prompt.medical_document.extraction.template",
+            englishOCRFallback: """
+            You are a medical document extraction assistant. Extract a structured JSON object from OCR text.
+            Return JSON only and include keys:
+            {"title":"...","summary":"...","diagnosis":"...","occurredAt":"yyyy-MM-dd","rawType":"...","items":[]}
+
+            OCR text:
+            %@
+            """
+        )
+    }
+
+    private func visionExtractionPrompt(
+        dedicatedKey: String,
+        ocrKey: String,
+        englishOCRFallback: String
+    ) -> String {
+        if let dedicated = l10n.promptIfExists(dedicatedKey) {
+            return dedicated
+        }
+        let ocrTemplate = l10n.prompt(ocrKey, fallback: englishOCRFallback)
+        return adaptOCRTemplateToVisionPrompt(ocrTemplate)
+    }
+
+    private func adaptOCRTemplateToVisionPrompt(_ template: String) -> String {
+        var text = stripOCRInputSection(from: template)
+        text = replaceOCRSourcePhrases(in: text)
+        return "\(visionExtractionHeader())\n\n\(text.trimmingCharacters(in: .whitespacesAndNewlines))"
+    }
+
+    private func adaptOCRRetryTemplateToVision(_ template: String) -> String {
+        var text = template
+        switch language {
+        case .zh:
+            text = text
+                .replacingOccurrences(of: "原始 OCR 事实", with: "图片中可见事实")
+                .replacingOccurrences(of: "OCR 事实", with: "图片中可见事实")
+                .replacingOccurrences(of: "OCR事实", with: "图片中可见事实")
+        default:
+            text = text
+                .replacingOccurrences(of: "OCR facts", with: "visible facts in the image(s)")
+                .replacingOccurrences(of: "without changing OCR facts", with: "without changing visible facts in the image(s)")
+        }
+        return text
+    }
+
+    private func stripOCRInputSection(from template: String) -> String {
+        var text = template
+        let tailPatterns = [
+            "\n\nOCR文本：\n%@",
+            "\nOCR文本：\n%@",
+            "\n\nOCR text:\n%@",
+            "\nOCR text:\n%@",
+            "OCR文本：\n%@",
+            "OCR text:\n%@",
+            "\nOCR文本：\n",
+            "\nOCR text:\n",
+        ]
+        for pattern in tailPatterns {
+            text = text.replacingOccurrences(of: pattern, with: "")
+        }
+        if text.hasSuffix("\n%@") {
+            text = String(text.dropLast(3))
+        }
+        return text
+    }
+
+    private func replaceOCRSourcePhrases(in text: String) -> String {
+        switch language {
+        case .zh:
+            return text
+                .replacingOccurrences(of: "纸质病历OCR文本", with: "纸质病历图片")
+                .replacingOccurrences(of: "体检报告/OCR文本", with: "体检报告图片")
+                .replacingOccurrences(of: "中文OCR文本", with: "中文医疗单据图片")
+                .replacingOccurrences(of: "处方 / 医嘱 / OCR 文本", with: "处方/医嘱图片")
+                .replacingOccurrences(of: "处方/医嘱/药品说明/OCR文本", with: "处方/医嘱/药品说明图片")
+                .replacingOccurrences(of: "药盒、药瓶、泡罩、标签、说明书 OCR 文本", with: "药盒、药瓶、泡罩、标签、说明书图片")
+                .replacingOccurrences(of: "从 OCR 文本中", with: "从图片中可见内容")
+                .replacingOccurrences(of: "OCR 文本", with: "图片中可见内容")
+                .replacingOccurrences(of: "OCR文本", with: "图片中可见内容")
+        default:
+            return text
+                .replacingOccurrences(of: "from OCR text", with: "from visible image content")
+                .replacingOccurrences(of: "OCR text", with: "visible image content")
+        }
+    }
+
+    private func visionExtractionHeader() -> String {
+        switch language {
+        case .zh:
+            return """
+            【图片视觉抽取】
+            请根据提供的医疗单据图片中可见内容抽取结构化信息，不要编造图片中看不到的内容。
+            请保留表格行列对应关系：项目名、结果值、单位、参考范围必须来自同一行或明确关联区域。
+            若提供多张图片，请按顺序视为同一份文档的续页并合并抽取。
+            """
+        default:
+            return """
+            [Vision extraction]
+            Extract structured data only from visible content in the provided medical document image(s). Do not invent hidden facts.
+            Preserve table row/column alignment for names, values, units, and reference ranges.
+            If multiple images are provided, treat them in order as pages of the same document.
+            """
+        }
     }
 
     func medicalExtractionRetrySuggestion(forField field: String) -> String {

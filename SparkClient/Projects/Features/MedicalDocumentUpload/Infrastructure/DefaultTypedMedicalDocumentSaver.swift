@@ -494,7 +494,7 @@ private extension DefaultTypedMedicalDocumentSaver {
             // 报告分类
             let category = draft.category ?? "medical_report"
             // 报告内容（优先详情，兜底标题）
-            let findingsText = draft.content.isEmpty ? draft.title : draft.content
+            let findingsText = draft.content?.nonEmpty ?? draft.title
             
             // 构建报告明细
             let detailRows: [SparkMedicalWorkflowAPI.MedicalReportDetailPayload] = draft.details.enumerated().map { index, row in
