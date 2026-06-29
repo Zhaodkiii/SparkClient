@@ -5,107 +5,96 @@ import SwiftUI
 struct KnowledgeLibraryView: View {
     let dependencies: KnowledgeFeatureDependencies
     @ObservedObject var viewModel: KnowledgeLibraryViewModel
-    /// 编程式导航目标（`NavigationLink(isActive:)`，兼容 `NavigationView` + iOS 15）。
+    /// 编程式导航目标（新建文档后 push 到详情页）。
     @State private var pendingDetailDocumentID: UUID?
 
     var body: some View {
-        ZStack {
-            List {
-                if viewModel.documents.isEmpty, viewModel.isLoading == false {
-                    emptyState
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                } else {
-                    ForEach(viewModel.documents) { document in
-                        MainNavigationLink {
-                            KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: document.id)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(document.title)
-                                    .font(.headline)
-                                    .lineLimit(1)
-                                Text(document.listSubtitle)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                                HStack(spacing: 12) {
-                                    Text(document.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                                    Text("\(document.chunkCount) chunks")
-                                }
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task {
-                                    await viewModel.deleteDocument(id: document.id)
-                                }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .navigationTitle(L10n.text("knowledge.library.title"))
-            .toolbar {
-                ToolbarItemGroup(placement: .navigationBarTrailing) {
+        List {
+            if viewModel.documents.isEmpty, viewModel.isLoading == false {
+                emptyState
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            } else {
+                ForEach(viewModel.documents) { document in
                     MainNavigationLink {
-                        KnowledgeSearchView(dependencies: dependencies, viewModel: viewModel)
+                        KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: document.id)
                     } label: {
-                        Image(systemName: "magnifyingglass")
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(document.title)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(document.listSubtitle)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                            HStack(spacing: 12) {
+                                Text(document.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                                Text("\(document.chunkCount) chunks")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 4)
                     }
-
-                    Button {
-                        Task { await createDocumentAndNavigate() }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .task {
-                await viewModel.loadIfNeeded()
-            }
-            .refreshable {
-                await viewModel.refresh()
-            }
-            .alert(L10n.text("common.error"), isPresented: Binding(
-                get: { viewModel.errorMessage != nil },
-                set: { newValue in
-                    if newValue == false {
-                        viewModel.clearError()
-                    }
-                }
-            )) {
-                Button(L10n.text("common.ok")) {}
-            } message: {
-                Text(viewModel.errorMessage ?? "")
-            }
-
-            // 隐藏链接触发 push，避免单独 Sheet 编辑页。
-            NavigationLink(
-                destination: Group {
-                    if let id = pendingDetailDocumentID {
-                        KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: id)
-                            .hidesMainTabBarWhenPushed()
-                    }
-                },
-                isActive: Binding(
-                    get: { pendingDetailDocumentID != nil },
-                    set: { active in
-                        if active == false {
-                            pendingDetailDocumentID = nil
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            Task {
+                                await viewModel.deleteDocument(id: document.id)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
                     }
-                )
-            ) {
-                EmptyView()
+                }
             }
-            .frame(width: 0, height: 0)
-            .hidden()
+        }
+        .listStyle(.plain)
+        .navigationTitle(L10n.text("knowledge.library.title"))
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                MainNavigationLink {
+                    KnowledgeSearchView(dependencies: dependencies, viewModel: viewModel)
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+
+                Button {
+                    Task { await createDocumentAndNavigate() }
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .task {
+            await viewModel.loadIfNeeded()
+        }
+        .refreshable {
+            await viewModel.refresh()
+        }
+        .alert(L10n.text("common.error"), isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { newValue in
+                if newValue == false {
+                    viewModel.clearError()
+                }
+            }
+        )) {
+            Button(L10n.text("common.ok")) {}
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { pendingDetailDocumentID != nil },
+            set: { active in
+                if active == false {
+                    pendingDetailDocumentID = nil
+                }
+            }
+        )) {
+            if let id = pendingDetailDocumentID {
+                KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: id)
+                    .hidesMainTabBarWhenPushed()
+            }
         }
     }
 

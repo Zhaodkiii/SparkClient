@@ -10,7 +10,7 @@ struct ChatConversationListPage: View {
     let pushAdapter: PushAdapter
 
     @State private var searchText = ""
-    @State private var navigationSelection: UUID?
+    @State private var pendingThreadNavigation: UUID?
     @State private var hasLoaded = false
     @State private var showNoAvailableChatModelAlert = false
     @State private var showAPIKeysSettingsSheet = false
@@ -114,6 +114,27 @@ struct ChatConversationListPage: View {
                 onCancel: {}
             )
         }
+        .navigationDestination(isPresented: Binding(
+            get: { pendingThreadNavigation != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    pendingThreadNavigation = nil
+                }
+            }
+        )) {
+            if let threadID = pendingThreadNavigation {
+                ChatView(
+                    threadID: threadID,
+                    stateStore: stateStore,
+                    listViewModel: listViewModel,
+                    detailViewModel: detailViewModel,
+                    taskManager: taskManager,
+                    homeViewModel: homeViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
+                .hidesMainTabBarWhenPushed()
+            }
+        }
     }
 
     @ViewBuilder
@@ -147,8 +168,8 @@ struct ChatConversationListPage: View {
 
     @ViewBuilder
     private func threadRow(_ item: ChatThreadListItem) -> some View {
-        NavigationLink(
-            destination: ChatView(
+        MainNavigationLink {
+            ChatView(
                 threadID: item.id,
                 stateStore: stateStore,
                 listViewModel: listViewModel,
@@ -157,10 +178,7 @@ struct ChatConversationListPage: View {
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel
             )
-            .hidesMainTabBarWhenPushed(),
-            tag: item.id,
-            selection: $navigationSelection
-        ) {
+        } label: {
             HStack(alignment: .center, spacing: 10) {
                 threadIcon(item.thread)
                 VStack(alignment: .leading, spacing: 6) {
@@ -279,7 +297,7 @@ struct ChatConversationListPage: View {
         await listViewModel.createThread()
         guard let threadID = stateStore.selectedThreadID else { return }
         await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
-        navigationSelection = threadID
+        pendingThreadNavigation = threadID
     }
 
     private func formattedDate(_ date: Date) -> String {

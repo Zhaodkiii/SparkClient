@@ -8,7 +8,6 @@ struct PhoneRegion: Identifiable, Equatable {
     let countryCode: String
 }
 
-
 struct PhoneLoginView: View {
     @ObservedObject var viewModel: LoginViewModel
 
@@ -36,27 +35,18 @@ struct PhoneLoginView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: otpId)
-        .background(
-            NavigationLink(
-                isActive: Binding(
-                    get: { otpId != nil },
-                    set: { isPresented in
-                        if isPresented == false {
-                            otpId = nil
-                        }
-                    }
-                )
-            ) {
-                if let otpId {
-                    OTPVerifyView(viewModel: viewModel, region: chosenRegion, phone: phone, otpId: otpId)
-                } else {
-                    EmptyView()
+        .navigationDestination(isPresented: Binding(
+            get: { otpId != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    otpId = nil
                 }
-            } label: {
-                EmptyView()
             }
-            .hidden()
-        )
+        )) {
+            if let otpId {
+                OTPVerifyView(viewModel: viewModel, region: chosenRegion, phone: phone, otpId: otpId)
+            }
+        }
     }
 
     private var headerHero: some View {

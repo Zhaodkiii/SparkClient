@@ -150,34 +150,23 @@ struct NutritionMealFoodEditListView: View {
                 .disabled(viewModel.items.isEmpty)
             }
         }
-        .background {
-            NavigationLink(
-                destination: NutritionMealFoodCopyView(
-                    items: viewModel.selectedItems,
-                    memberID: viewModel.memberID,
-                    sourceDate: viewModel.date,
-                    sourceMealType: viewModel.mealType,
-                    dependencies: dependencies
-                )
-                .hidesMainTabBarWhenPushed(),
-                isActive: $showsCopy
-            ) {
-                EmptyView()
-            }
-            .hidden()
-
-            NavigationLink(
-                destination: NutritionRecipeCreateView(
-                    initialFoods: viewModel.selectedItems.map(NutritionViewDataMapper.recipeDraftFood),
-                    dependencies: dependencies,
-                    memberID: viewModel.memberID
-                )
-                .hidesMainTabBarWhenPushed(),
-                isActive: $showsCreateRecipe
-            ) {
-                EmptyView()
-            }
-            .hidden()
+        .navigationDestination(isPresented: $showsCopy) {
+            NutritionMealFoodCopyView(
+                items: viewModel.selectedItems,
+                memberID: viewModel.memberID,
+                sourceDate: viewModel.date,
+                sourceMealType: viewModel.mealType,
+                dependencies: dependencies
+            )
+            .hidesMainTabBarWhenPushed()
+        }
+        .navigationDestination(isPresented: $showsCreateRecipe) {
+            NutritionRecipeCreateView(
+                initialFoods: viewModel.selectedItems.map(NutritionViewDataMapper.recipeDraftFood),
+                dependencies: dependencies,
+                memberID: viewModel.memberID
+            )
+            .hidesMainTabBarWhenPushed()
         }
         .alert(
             L10n.text("nutrition.meal_food_edit.delete_confirm.title"),

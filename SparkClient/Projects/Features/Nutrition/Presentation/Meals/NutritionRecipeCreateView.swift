@@ -115,22 +115,16 @@ struct NutritionRecipeCreateView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("nutrition.recipe_create.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .background {
-            NavigationLink(
-                destination: NutritionRecipeFoodPickerView(
-                    memberID: memberID > 0 ? memberID : dependencies.memberContextStore.context.selectedMemberID ?? 0,
-                    searchUseCase: dependencies.searchUseCase,
-                    notificationStore: dependencies.notificationStore,
-                    existingFoodIDs: Set(viewModel.foods.map(\.foodItemID))
-                ) { food in
-                    viewModel.addFood(food)
-                }
-                .hidesMainTabBarWhenPushed(),
-                isActive: $showsPicker
-            ) {
-                EmptyView()
+        .navigationDestination(isPresented: $showsPicker) {
+            NutritionRecipeFoodPickerView(
+                memberID: memberID > 0 ? memberID : dependencies.memberContextStore.context.selectedMemberID ?? 0,
+                searchUseCase: dependencies.searchUseCase,
+                notificationStore: dependencies.notificationStore,
+                existingFoodIDs: Set(viewModel.foods.map(\.foodItemID))
+            ) { food in
+                viewModel.addFood(food)
             }
-            .hidden()
+            .hidesMainTabBarWhenPushed()
         }
         .alert(
             L10n.text("nutrition.confirm.save_failed.title"),
