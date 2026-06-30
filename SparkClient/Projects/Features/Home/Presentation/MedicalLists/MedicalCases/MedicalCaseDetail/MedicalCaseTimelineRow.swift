@@ -558,7 +558,11 @@ struct MedicalCaseTimelineExaminationDetailHost: View {
                 patchCompleteDataCacheIfPossible(merged: merged)
             },
             onMedicalCaseUpdated: nil,
-            onMedicalCaseDeleted: nil
+            onMedicalCaseDeleted: nil,
+            onAttachmentsUpdated: { merged in
+                report = merged
+                patchCompleteDataCacheIfPossible(merged: merged)
+            }
         )
     }
 

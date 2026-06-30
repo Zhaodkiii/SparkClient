@@ -77,6 +77,27 @@ struct SparkFileAPI {
         return try APIResponseDecoder.decodeWrappedData(ManagedFileRecord.self, from: response)
     }
 
+    func delete(fileID: Int) async throws {
+        let operation = CacheableSparkNetworkOperation(
+            name: "File.Delete",
+            apiName: "FileAPI",
+            request: SparkNetworkRequest(
+                method: .delete,
+                path: "/api/v1/files/\(fileID)/",
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "file.delete.\(fileID)",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .normal
+                )
+            )
+        )
+
+        _ = try await configuration.execute(operation)
+    }
+
     func registerFile(_ requestBody: FileRegistrationRequest) async throws -> ManagedFileRecord {
         let operation = CacheableSparkNetworkOperation(
             name: "File.Register",

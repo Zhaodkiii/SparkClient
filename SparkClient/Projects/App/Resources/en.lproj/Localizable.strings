@@ -411,6 +411,12 @@
 "home.medical.list.examination.summary.subitem.unnamed" = "Unnamed item";
 "home.medical.list.examination.summary.subitem.tap_for_detail" = "Tap to view details";
 "home.medical.list.examination.summary.reference_format" = "Ref. %@";
+"home.medical.attachment.delete_confirm_title" = "Delete this attachment?";
+"home.medical.attachment.delete_confirm_message" = "This action cannot be undone.";
+"home.medical.attachment.uploading" = "Uploading…";
+"home.medical.attachment.deleting" = "Deleting…";
+"home.medical.attachment.upload_failed" = "Upload Failed";
+"common.dismiss" = "Dismiss";
 "home.medical.list.details.loading" = "Loading details…";
 "home.medical.list.details.section" = "Detail items";
 "home.medical.family_cabinet.title" = "Family medicine cabinet";
@@ -1561,6 +1567,7 @@
 "common.add" = "Add";
 "common.description" = "Description";
 "common.done" = "Done";
+"common.manage" = "Manage";
 "common.back" = "Back";
 "common.next" = "Next";
 "common.save" = "Save";

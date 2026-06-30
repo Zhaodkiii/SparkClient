@@ -235,6 +235,10 @@ actor FileTransferService {
         )
     }
 
+    func delete(fileID: Int) async throws {
+        try await api.delete(fileID: fileID)
+    }
+
     private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")

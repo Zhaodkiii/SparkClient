@@ -79,7 +79,11 @@ struct ExaminationReportDetailPage: View {
                 onSaved(merged)
             },
             onMedicalCaseUpdated: nil,
-            onMedicalCaseDeleted: nil
+            onMedicalCaseDeleted: nil,
+            onAttachmentsUpdated: mode == .localDraft ? nil : { merged in
+                report = merged
+                onSaved(merged)
+            }
         )
         .overlay {
             if isLoadingDetails {

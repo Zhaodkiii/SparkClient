@@ -411,6 +411,12 @@
 "home.medical.list.examination.summary.subitem.unnamed" = "未命名项目";
 "home.medical.list.examination.summary.subitem.tap_for_detail" = "点击查看详情";
 "home.medical.list.examination.summary.reference_format" = "参考 %@";
+"home.medical.attachment.delete_confirm_title" = "确认删除此附件？";
+"home.medical.attachment.delete_confirm_message" = "删除后无法恢复。";
+"home.medical.attachment.uploading" = "上传中…";
+"home.medical.attachment.deleting" = "删除中…";
+"home.medical.attachment.upload_failed" = "上传失败";
+"common.dismiss" = "关闭";
 "home.medical.list.details.loading" = "正在加载明细…";
 "home.medical.list.details.section" = "明细项目";
 "home.medical.family_cabinet.title" = "家庭药箱";
@@ -1562,6 +1568,7 @@
 "common.description" = "描述";
 "common.cancel" = "取消";
 "common.done" = "完成";
+"common.manage" = "管理";
 "common.back" = "返回";
 "common.next" = "下一步";
 "common.save" = "保存";

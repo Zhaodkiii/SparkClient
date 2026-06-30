@@ -83,6 +83,8 @@ struct LocalFileImageThumbnail: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .clipped()
+
             } else {
                 ZStack {
                     Color(uiColor: .tertiarySystemFill)

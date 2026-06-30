@@ -191,7 +191,10 @@ struct ExaminationReportsListPage: View {
                                 viewModel.upsertReport(updated)
                             },
                             onMedicalCaseUpdated: handleMedicalCaseUpdated,
-                            onMedicalCaseDeleted: handleMedicalCaseDeleted
+                            onMedicalCaseDeleted: handleMedicalCaseDeleted,
+                            onAttachmentsUpdated: { updated in
+                                viewModel.upsertReport(updated)
+                            }
                         )
                     }
                 }
@@ -357,6 +360,7 @@ private struct ExaminationReportCategorySection: View {
     let onMedicalCaseLinked: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
     let onMedicalCaseUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
     let onMedicalCaseDeleted: (Int) -> Void
+    let onAttachmentsUpdated: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -404,6 +408,9 @@ private struct ExaminationReportCategorySection: View {
                         },
                         onMedicalCaseDeleted: { deletedID in
                             onMedicalCaseDeleted(deletedID)
+                        },
+                        onAttachmentsUpdated: { updated in
+                            onAttachmentsUpdated(updated)
                         }
                     )
                     .task {

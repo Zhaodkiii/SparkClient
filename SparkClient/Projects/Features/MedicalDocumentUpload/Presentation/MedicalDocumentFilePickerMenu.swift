@@ -8,6 +8,7 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
     let buttonContent: () -> ButtonContent
     let onFilesSelected: ([MedicalUploadLocalFile]) -> Void
     private let logger: Logger
+    private let maxPhotoSelectionCount: Int
 
     @State private var showDocPicker = false
     @State private var showCameraPicker = false
@@ -17,10 +18,12 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
 
     init(
         logger: Logger = ConsoleLogger(),
+        maxPhotoSelectionCount: Int = 10,
         @ViewBuilder buttonContent: @escaping () -> ButtonContent,
         onFilesSelected: @escaping ([MedicalUploadLocalFile]) -> Void
     ) {
         self.logger = logger
+        self.maxPhotoSelectionCount = max(1, maxPhotoSelectionCount)
         self.buttonContent = buttonContent
         self.onFilesSelected = onFilesSelected
     }
@@ -50,15 +53,16 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $photoItems,
-            maxSelectionCount: 10,
+            maxSelectionCount: maxPhotoSelectionCount,
             matching: .images
         )
         .onChange(of: photoItems) { items in
             Task {
-                let files = await convertPhotoItems(items)
+                let limitedItems = Array(items.prefix(maxPhotoSelectionCount))
+                let files = await convertPhotoItems(limitedItems)
                 if files.isEmpty == false {
                     logger.info("相册导入成功，数量=\(files.count)", module: .medical)
-                    onFilesSelected(files)
+                    onFilesSelected(Array(files.prefix(maxPhotoSelectionCount)))
                 } else {
                     logger.warning("相册导入完成，但未获取到可用文件。", module: .medical)
                 }
@@ -68,13 +72,13 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
         .fileImporter(
             isPresented: $showDocPicker,
             allowedContentTypes: [.image, .pdf],
-            allowsMultipleSelection: true
+            allowsMultipleSelection: maxPhotoSelectionCount > 1
         ) { result in
             guard case .success(let urls) = result else {
                 logger.warning("文件选择器取消或失败。", module: .medical)
                 return
             }
-            let files = urls.compactMap { url in
+            let files = urls.prefix(maxPhotoSelectionCount).compactMap { url in
                 MedicalUploadLocalFileImportSupport.copyToTempFile(from: url, logger: logger)
             }
             if files.isEmpty == false {

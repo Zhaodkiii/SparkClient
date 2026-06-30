@@ -14,6 +14,11 @@ struct ExaminationReportSummaryDetailPage: View {
     var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
+    var onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
+
+    @State private var isEditingAttachments = false
+    @State private var attachmentsDirty = false
+    @State private var attachmentErrorMessage: String?
 
     private var sortedDetails: [SparkMedicalSyncAPI.RemoteMedExamDetail] {
         (report.medExamDetails ?? []).sorted { lhs, rhs in
@@ -51,6 +56,14 @@ struct ExaminationReportSummaryDetailPage: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
+        .alert(L10n.text("common.operation_failed"), isPresented: Binding(
+            get: { attachmentErrorMessage != nil },
+            set: { if !$0 { attachmentErrorMessage = nil } }
+        )) {
+            Button(L10n.text("common.got_it"), role: .cancel) {}
+        } message: {
+            Text(attachmentErrorMessage ?? "")
+        }
     }
 
     private var headerCard: some View {
@@ -233,33 +246,113 @@ struct ExaminationReportSummaryDetailPage: View {
 
     @ViewBuilder
     private var attachmentsSection: some View {
+        if localAttachments.isEmpty == false || fileTransferService != nil {
+            attachmentsSectionCard
+        }
+    }
+
+    private var attachmentsSectionCard: some View {
         let remoteAttachments = report.attachments ?? []
-        let hasRemote = fileTransferService != nil && remoteAttachments.isEmpty == false
-        let hasLocal = localAttachments.isEmpty == false
+        let showsRemoteGrid = fileTransferService != nil
+            && (remoteAttachments.isEmpty == false || isEditingAttachments)
 
-        if hasRemote || hasLocal {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack{
-                    Label(L10n.text("common.attachments"), systemImage: "paperclip")
-                        .font(.headline)
-                
-                    // 管理按钮
+        return VStack(alignment: .leading, spacing: 12) {
+            attachmentsSectionHeader
+
+            if localAttachments.isEmpty == false {
+                CaseMatchedAttachmentsGridView(
+                    title: nil,
+                    attachments: localAttachments
+                )
+            }
+
+            if showsRemoteGrid, let fileTransferService {
+                remoteAttachmentsGrid(
+                    attachments: remoteAttachments,
+                    fileTransferService: fileTransferService
+                )
+            }
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        }
+    }
+
+    private var attachmentsSectionHeader: some View {
+        HStack {
+            Label(L10n.text("common.attachments"), systemImage: "paperclip")
+                .font(.headline)
+
+            Spacer()
+
+            if fileTransferService != nil {
+                Button(isEditingAttachments
+                    ? L10n.text("common.done")
+                    : L10n.text("common.manage", fallback: "管理")) {
+                    if isEditingAttachments {
+                        finishAttachmentEditing()
+                    } else {
+                        isEditingAttachments = true
+                    }
                 }
-  
+                .font(.subheadline.weight(.medium))
+            }
+        }
+    }
 
-                if hasLocal {
-                    CaseMatchedAttachmentsGridView(
-                        title: nil,
-                        attachments: localAttachments
-                    )
+    private func remoteAttachmentsGrid(
+        attachments: [SparkMedicalSyncAPI.RemoteManagedFile],
+        fileTransferService: FileTransferService
+    ) -> some View {
+        MedicalAttachmentGridPreview(
+            attachments: attachments,
+            fileTransferService: fileTransferService,
+            isEditing: isEditingAttachments,
+            onDeleted: { handleAttachmentDeleted(fileID: $0) },
+            onFileUploaded: { handleFileUploaded($0) }
+        )
+    }
+
+    private func handleAttachmentDeleted(fileID: Int) {
+        var updated = report
+        updated.attachments = (updated.attachments ?? []).filter { $0.id != fileID }
+        report = updated
+        attachmentsDirty = true
+    }
+
+    private func finishAttachmentEditing() {
+        isEditingAttachments = false
+        guard attachmentsDirty else { return }
+        attachmentsDirty = false
+        onAttachmentsUpdated?(report)
+    }
+
+    private func handleFileUploaded(_ record: ManagedFileRecord) {
+        guard let fileTransferService else { return }
+        Task {
+            do {
+                _ = try await fileTransferService.updateBusinessBinding(
+                    fileID: record.id,
+                    businessType: "examination_report",
+                    businessID: "\(report.id)"
+                )
+                let newFile = record.remoteManagedFile(
+                    businessType: "examination_report",
+                    businessId: "\(report.id)"
+                )
+                await MainActor.run {
+                    var updated = report
+                    updated.attachments = (updated.attachments ?? []) + [newFile]
+                    report = updated
+                    attachmentsDirty = true
                 }
-
-                if hasRemote, let fileTransferService {
-                    MedicalAttachmentGridPreview(attachments: remoteAttachments, fileTransferService: fileTransferService)
+            } catch {
+                await MainActor.run {
+                    attachmentErrorMessage = error.localizedDescription
                 }
             }
-            .padding(16)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 

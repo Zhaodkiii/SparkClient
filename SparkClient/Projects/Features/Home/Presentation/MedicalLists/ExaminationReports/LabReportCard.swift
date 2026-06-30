@@ -14,6 +14,7 @@ struct LabReportCard: View {
     var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)? = nil
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil
     var onMedicalCaseDeleted: ((Int) -> Void)? = nil
+    var onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)? = nil
 
     @State private var isExpanded = false
     @State private var isShowingAttachments = false
@@ -180,6 +181,7 @@ struct LabReportCard: View {
             onMedicalCaseLinked: onMedicalCaseLinked,
             onMedicalCaseUpdated: onMedicalCaseUpdated,
             onMedicalCaseDeleted: onMedicalCaseDeleted,
+            onAttachmentsUpdated: onAttachmentsUpdated,
             onDeleted: onDeleted
         )
     }
@@ -466,6 +468,7 @@ private struct ExaminationReportDetailHostPage: View {
     var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
+    var onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
     var onDeleted: ((Int) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
@@ -489,6 +492,7 @@ private struct ExaminationReportDetailHostPage: View {
         onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?,
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?,
         onMedicalCaseDeleted: ((Int) -> Void)?,
+        onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)? = nil,
         onDeleted: ((Int) -> Void)? = nil
     ) {
         _report = State(initialValue: report)
@@ -501,6 +505,7 @@ private struct ExaminationReportDetailHostPage: View {
         self.onMedicalCaseLinked = onMedicalCaseLinked
         self.onMedicalCaseUpdated = onMedicalCaseUpdated
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
+        self.onAttachmentsUpdated = onAttachmentsUpdated
         self.onDeleted = onDeleted
     }
 
@@ -544,7 +549,11 @@ private struct ExaminationReportDetailHostPage: View {
             notificationClient: notificationClient,
             onMedicalCaseLinked: onMedicalCaseLinked,
             onMedicalCaseUpdated: onMedicalCaseUpdated,
-            onMedicalCaseDeleted: onMedicalCaseDeleted
+            onMedicalCaseDeleted: onMedicalCaseDeleted,
+            onAttachmentsUpdated: { merged in
+                report = merged
+                onAttachmentsUpdated?(merged)
+            }
         )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
