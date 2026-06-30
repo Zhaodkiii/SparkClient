@@ -493,35 +493,32 @@ private extension DefaultTypedMedicalDocumentSaver {
             let dateText = date.toISO8601()
             // 报告分类
             let category = draft.category ?? "medical_report"
-            // 报告内容（优先详情，兜底标题）
-            let findingsText = draft.content?.nonEmpty ?? draft.title
+            // 报告内容（所见 / 印象与后端 workflow 对齐）
+            let findingsText = draft.resolvedFindingsText ?? draft.title
+            let impressionText = draft.resolvedImpressionText ?? findingsText
             
             // 构建报告明细
             let detailRows: [SparkMedicalWorkflowAPI.MedicalReportDetailPayload] = draft.details.enumerated().map { index, row in
-                let sortOrder: Int = {
-                    guard let s = row.sortOrder.parsedAsSortOrderInt() else { return index }
-                    return s == 0 ? index : s
-                }()
-
+                let apiItem = row.toMedicalReportItem(fallbackCategory: draft.category, sortOrder: index)
+                let sortOrder = apiItem.sortOrder.parsedAsSortOrderInt() ?? index
                 let defaultResultAt = Date.parseOrNow(dateText)
-                let resultAt = Date.parseOrNow(row.resultAt, defaultDate: defaultResultAt).toISO8601()
-                let payload = SparkMedicalWorkflowAPI.MedicalReportDetailPayload(
-                    category: row.category,
-                    subCategory: row.subCategory ?? "",
-                    itemName: row.itemName ?? "",
-                    itemCode: row.itemCode ?? "",
-                    resultValue: row.resultValue ?? "",
-                    unit: row.unit ?? "",
-                    referenceRange: row.referenceRange ?? "",
-                    flag: row.flag ?? "",
+                let resultAt = Date.parseOrNow(apiItem.resultAt, defaultDate: defaultResultAt).toISO8601()
+                return SparkMedicalWorkflowAPI.MedicalReportDetailPayload(
+                    category: apiItem.category,
+                    subCategory: apiItem.subCategory ?? "",
+                    itemName: apiItem.itemName ?? "",
+                    itemCode: apiItem.itemCode ?? "",
+                    resultValue: apiItem.resultValue ?? "",
+                    unit: apiItem.unit ?? "",
+                    referenceRange: apiItem.referenceRange ?? "",
+                    flag: apiItem.flag ?? "",
                     resultAt: resultAt,
-                    modality: row.modality ?? "",
-                    bodyPart: row.bodyPart ?? "",
-                    diagnosis: row.diagnosis ?? "",
-                    extra: row.extra ?? [:],
-                    sortOrder: sortOrder
+                    modality: apiItem.modality ?? "",
+                    bodyPart: apiItem.bodyPart ?? "",
+                    diagnosis: apiItem.diagnosis ?? "",
+                    extra: apiItem.extra ?? [:],
+                    sortOrder: sortOrder == 0 ? index : sortOrder
                 )
-                return payload
             }
             
             // 返回最终构建的报告提交结构体
@@ -537,7 +534,7 @@ private extension DefaultTypedMedicalDocumentSaver {
                 departmentName: "",
                 doctorName: draft.doctor ?? "",
                 findings: findingsText,
-                impression: findingsText,
+                impression: impressionText,
                 modality: "",
                 bodyPart: "",
                 diagnosis: "",

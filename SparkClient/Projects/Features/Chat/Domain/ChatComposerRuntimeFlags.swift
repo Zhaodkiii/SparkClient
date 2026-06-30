@@ -2,7 +2,7 @@ import Foundation
 
 /// 每会话输入栏上的推理与模型选择状态（持久在 `ChatComposerDraft` 中）。
 struct ChatComposerRuntimeFlags: Equatable, Sendable {
-    var useTools: Bool = true
+    var useTools: Bool = false
     var useKnowledgeBag: Bool = true
     var useWebSearch: Bool = true
     var reasoningEnabled: Bool = false

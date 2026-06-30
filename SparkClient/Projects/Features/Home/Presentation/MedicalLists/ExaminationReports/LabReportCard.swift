@@ -298,9 +298,13 @@ struct LabReportCard: View {
         VStack(alignment: .leading, spacing: 12) {
             infoRow(label: L10n.text("home.medical.list.examination.card.department"), value: item.departmentName?.nonEmpty ?? "")
             infoRow(label: L10n.text("home.medical.list.examination.card.doctor"), value: item.doctorName?.nonEmpty ?? "")
-            multilineInfoBlock(label: L10n.text("home.medical.list.examination.card.findings"), value: item.findings?.nonEmpty ?? "")
+            
+            // 临时隐藏
+//            multilineInfoBlock(label: L10n.text("home.medical.list.examination.card.findings"), value: item.findings?.nonEmpty ?? "")
             multilineInfoBlock(label: L10n.text("home.medical.list.examination.card.impression"), value: item.impression?.nonEmpty ?? "")
-            detailItemsSection
+            
+            // 临时隐藏
+//            detailItemsSection
         }
         .padding(16)
     }
@@ -509,7 +513,7 @@ private struct ExaminationReportDetailHostPage: View {
             content: report.impression?.nonEmpty ?? report.findings?.nonEmpty ?? "",
             date: MedicalDateCoding.encodeISO8601(report.reportedAt ?? report.performedAt ?? Date()),
             details: (report.medExamDetails ?? []).map {
-                MedicalReportItem(
+                ItemDraft(medicalReportItem: MedicalReportItem(
                     category: $0.category,
                     subCategory: $0.subCategory,
                     itemName: $0.itemName,
@@ -524,7 +528,7 @@ private struct ExaminationReportDetailHostPage: View {
                     diagnosis: $0.diagnosis,
                     extra: $0.extra,
                     sortOrder: "\($0.sortOrder)"
-                )
+                ))
             }
         )
     }
@@ -608,8 +612,8 @@ extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
         updated.itemName = draft.title
         updated.organizationName = draft.hospital
         updated.doctorName = draft.doctor
-        updated.findings = draft.content
-        updated.impression = draft.content
+        updated.findings = draft.resolvedFindingsText
+        updated.impression = draft.resolvedImpressionText
         updated.reportedAt = Date.parseOrNow(draft.date, defaultDate: reportedAt ?? performedAt ?? Date())
         updated.performedAt = updated.reportedAt
         updated.medExamDetails = draft.details.enumerated().map { index, row in
@@ -618,22 +622,22 @@ extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
                 businessType: "examination_report",
                 businessId: id,
                 member: member,
-                category: row.category,
+                category: row.category ?? "",
                 subCategory: row.subCategory ?? "",
-                itemName: row.itemName ?? "",
-                itemCode: row.itemCode ?? "",
-                resultValue: row.resultValue,
+                itemName: row.itemName?.nilIfBlank ?? "",
+                itemCode: "",
+                resultValue: row.resultValue?.nilIfBlank,
                 unit: row.unit ?? "",
                 referenceRange: row.referenceRange ?? "",
                 flag: row.flag ?? "",
-                resultAt: row.resultAt.flatMap { value in
+                resultAt: row.resultAt?.nilIfBlank.flatMap { value in
                     value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : Date.parseOrNow(value)
                 },
                 modality: row.modality ?? "",
                 bodyPart: row.bodyPart ?? "",
-                diagnosis: row.diagnosis,
-                extra: row.extra,
-                sortOrder: row.sortOrder.parsedAsSortOrderInt() ?? index,
+                diagnosis: row.diagnosis?.nilIfBlank,
+                extra: nil,
+                sortOrder: index,
                 updatedAt: Date()
             )
         }

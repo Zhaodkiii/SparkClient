@@ -285,22 +285,24 @@ OCR文本：
 [
   {
     'category': 'laboratory | imaging | pathology',
-    'title': '报告标题',
+    'title': '报告标题（必填）',
     'hospital': '医院名称',
     'doctor': '检查医生',
-    'content': '报告全文描述/所见/结论/印象（检验报告若无全文，固定填'见详情'）',
+    'content': '报告全文描述/所见/结论/印象（无则删除）',
     'date': 'yyyy-MM-dd',
     'details': [
       {
-        'category': '血常规（实验室按实际科目填写；影像/病理固定填'内镜检查'或'影像学检查'）',
+        'category': '检查科目/大类（如：血常规、肝功能、影像学检查等）',
         'subCategory': '子类别/检查方法（无则删除）',
-        'itemName': '项目名称（无则删除）',
-        'resultValue': '结果数值或描述（必填）',
-        'unit': '单位（无则删除）',
+        'itemName': '项目名称（必填）',
+        'resultValue': '结果数值或描述',
+        'unit': '单位',
         'referenceRange': '参考范围（无则删除）',
-        'flag': 'H | L | 阳性 | 阴性（无异常则删除）',
+        'flag': 'H | L | 阳性 | 阴性',
+        'modality': '检查方式/模态（如：CT、MRI、超声、病理）',
         'bodyPart': '检查部位（无则删除）',
-        'diagnosis': '单项提示：正常填'正常'，偏高填'偏高'，偏低填'偏低'（检验报告必填；影像/病理无单项诊断可删除）'
+        'resultAt': '采样/检查日期（yyyy-MM-dd）',
+        'diagnosis': '单项诊断/结论描述'
       }
     ]
   }
@@ -308,40 +310,40 @@ OCR文本：
 
 【抽取规则（必须100%严格遵守）】
 1. 日期格式硬性要求：
-日期字段必须采用 yyyy-MM-dd 格式。严禁包含时间、时区、T、Z等字符。
+date/resultAt 字段必须采用 yyyy-MM-dd 格式。严禁包含时间、时区、T、Z等字符。
 
-2. 字段处理原则（零错误核心）：
+2. 字段处理原则（零错误核心，按数据库+页面必填口径）：
 - 严禁出现 null、空字符串、空数组。无内容的【可选字段】直接删除，不保留键名。
-- content 字段【绝对必填】：影像/病理报告填写检查所见与诊断结论；检验报告若无全文描述，content 固定填'见详情'，严禁删除 content 键。
-- details 数组内：category、resultValue 为【必填字段】，绝对不允许缺失。
-- 实验室检验报告：details 内 diagnosis【必填】，参见规则第4条。
+- 顶层每条报告：category、title 必填；details 必须为非空数组。
+- details 通用硬性必填：itemName。
+- laboratory 明细必填：itemName、resultValue、unit、flag。
+- imaging/pathology 明细必填：category、itemName、modality、bodyPart、diagnosis。
+- content 不是强制字段；有则保留，无则删除。
 
 3. 报告拆分与合并逻辑（核心）：
-- 影像（imaging）及病理（pathology）报告：一份报告仅允许生成一条 details 记录！
-  ✅ 检查方法填入 subCategory
-  ✅ 所有部位描述合并填入 resultValue
-  ✅ 最终诊断结果存入 diagnosis
-  ✅ details 内 category 固定填写：内镜检查/影像学检查
-  ✅ 严禁按部位拆分多条 detail
-- 实验室检验（laboratory）报告：按指标行拆分，一行对应一条 details 记录。
+- laboratory：按指标行拆分，一行对应一条 details 记录。
+- imaging/pathology：可按“独立项目”拆分为多条 details；不要机械按词语切碎。每条都必须满足该类型必填字段。
+- 当影像/病理文本只描述单个检查结论时，输出 1 条 details 即可。
 
-4. 实验室检验 diagnosis 填写规则（必须执行）：
-- 指标在参考范围内 -> diagnosis 填'正常'
-- 指标异常升高（H/↑/偏高等标注）-> diagnosis 填'偏高'
-- 指标异常降低（L/↓/偏低等标注）-> diagnosis 填'偏低'
-- 阳性结果 -> diagnosis 填'阳性'；阴性结果 -> 填'阴性'
+4. laboratory 的 flag 归一化规则（必须执行）：
+- 升高/↑/H/偏高 -> 'H'
+- 降低/↓/L/偏低 -> 'L'
+- 阳性 -> '阳性'
+- 阴性 -> '阴性'
+- 若 laboratory 明细无法判断异常标记，flag 统一填 '阴性' 作为默认值，禁止缺失。
 
-5. flag 字段（异常标记）：
-升高/↑/H -> 'H'；降低/↓/L -> 'L'；阳性 -> '阳性'；阴性 -> '阴性'。
-无异常时删除 flag 键，不填'正常'。
+5. 字段映射建议：
+- 检查方法优先放 subCategory；检查方式（CT/MRI/超声/病理等）放 modality。
+- 采样/检查日期优先写 resultAt；报告级日期写 date。
+- 无明确 resultValue 时可删除该键（仅 laboratory 不可删除）。
 
 6. 内容清洗：
 忽略水印、页码等无关文本。
 
 【负向约束（严禁）】
 1. 严禁在 details 中输出 schema 未定义的字段（如 abnormality 等）。
-2. 严禁将本 Prompt 中的说明文字（如括号内的描述）直接作为字段值输出；category 字段只能填写实际科目名称，不能填说明语句。
-3. 严禁省略 content 字段：检验报告无全文时，content 必须填'见详情'而非删除该键。
+2. 严禁将本 Prompt 中的说明文字（如括号内描述）直接作为字段值输出。
+3. 严禁产出不满足对应类型必填字段的 details；无法满足时应放弃该条 detail，而不是输出残缺对象。
 
 【最终输出要求】
 只输出纯净 JSON，不要任何 Markdown、解释、说明、多余文字、标点符号、换行外的格式。

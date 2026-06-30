@@ -87,21 +87,22 @@ struct MedicalRecordFormSubmissionService: Sendable {
 
     func submitMedicalReportCreate(memberID: Int, draft: MedicalReportRecognitionDraft, medicalCaseID: Int? = nil) async throws -> Int {
         let details = draft.details.enumerated().map { index, row in
-            SparkMedicalWorkflowAPI.MedicalReportDetailPayload(
-                category: row.category,
-                subCategory: row.subCategory ?? "",
-                itemName: row.itemName ?? "",
-                itemCode: row.itemCode ?? "",
-                resultValue: row.resultValue ?? "",
-                unit: row.unit ?? "",
-                referenceRange: row.referenceRange ?? "",
-                flag: row.flag ?? "",
-                resultAt: row.resultAt,
-                modality: row.modality ?? "",
-                bodyPart: row.bodyPart ?? "",
-                diagnosis: row.diagnosis ?? "",
-                extra: row.extra ?? [:],
-                sortOrder: row.sortOrder.parsedAsSortOrderInt() ?? index
+            let apiItem = row.toMedicalReportItem(fallbackCategory: draft.category, sortOrder: index)
+            return SparkMedicalWorkflowAPI.MedicalReportDetailPayload(
+                category: apiItem.category,
+                subCategory: apiItem.subCategory ?? "",
+                itemName: apiItem.itemName ?? "",
+                itemCode: apiItem.itemCode ?? "",
+                resultValue: apiItem.resultValue ?? "",
+                unit: apiItem.unit ?? "",
+                referenceRange: apiItem.referenceRange ?? "",
+                flag: apiItem.flag ?? "",
+                resultAt: apiItem.resultAt,
+                modality: apiItem.modality ?? "",
+                bodyPart: apiItem.bodyPart ?? "",
+                diagnosis: apiItem.diagnosis ?? "",
+                extra: apiItem.extra ?? [:],
+                sortOrder: apiItem.sortOrder.parsedAsSortOrderInt() ?? index
             )
         }
 
@@ -116,8 +117,8 @@ struct MedicalRecordFormSubmissionService: Sendable {
             organizationName: draft.hospital,
             departmentName: "",
             doctorName: draft.doctor ?? "",
-            findings: draft.content ?? "",
-            impression: draft.content ?? "",
+            findings: draft.resolvedFindingsText ?? "",
+            impression: draft.resolvedImpressionText ?? "",
             modality: "",
             bodyPart: "",
             diagnosis: "",

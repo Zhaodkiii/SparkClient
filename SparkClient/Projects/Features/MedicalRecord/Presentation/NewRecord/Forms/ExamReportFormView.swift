@@ -27,53 +27,6 @@ struct ExamReportFormView: View {
         }
     }
 
-    struct ItemDraft: Identifiable, Equatable {
-        var id: UUID
-        var category: String
-        var subCategory: String
-        var itemName: String
-        var resultValue: String
-        var unit: String
-        var referenceRange: String
-        var flag: String
-        /// 影像 / 病理等：`MedicalReportItem.modality`
-        var modality: String
-        /// `MedicalReportItem.bodyPart`
-        var bodyPart: String
-        /// `MedicalReportItem.resultAt`（检查或报告日期）
-        var resultAt: String
-        /// `MedicalReportItem.diagnosis`（所见+结论等长文本）
-        var diagnosis: String
-
-        init(
-            id: UUID = UUID(),
-            category: String = "",
-            subCategory: String = "",
-            itemName: String = "",
-            resultValue: String = "",
-            unit: String = "",
-            referenceRange: String = "",
-            flag: String = "",
-            modality: String = "",
-            bodyPart: String = "",
-            resultAt: String = "",
-            diagnosis: String = ""
-        ) {
-            self.id = id
-            self.category = category
-            self.subCategory = subCategory
-            self.itemName = itemName
-            self.resultValue = resultValue
-            self.unit = unit
-            self.referenceRange = referenceRange
-            self.flag = flag
-            self.modality = modality
-            self.bodyPart = bodyPart
-            self.resultAt = resultAt
-            self.diagnosis = diagnosis
-        }
-    }
-
     @Environment(\.dismiss) private var dismiss
 
     let mode: Mode
@@ -133,21 +86,7 @@ struct ExamReportFormView: View {
         let labSeed = pageType == .laboratory ? seed.details.first : nil
         _labPrimaryCategory = State(initialValue: labSeed?.category ?? "")
         _labSubCategory = State(initialValue: labSeed?.subCategory ?? "")
-        _items = State(initialValue: seed.details.map {
-            ItemDraft(
-                category: $0.category,
-                subCategory: $0.subCategory ?? "",
-                itemName: $0.itemName ?? "",
-                resultValue: $0.resultValue ?? "",
-                unit: $0.unit ?? "",
-                referenceRange: $0.referenceRange ?? "",
-                flag: $0.flag ?? "",
-                modality: $0.modality ?? "",
-                bodyPart: $0.bodyPart ?? "",
-                resultAt: $0.resultAt ?? "",
-                diagnosis: $0.diagnosis ?? ""
-            )
-        })
+        _items = State(initialValue: seed.details)
     }
 
     var body: some View {
@@ -274,7 +213,7 @@ struct ExamReportFormView: View {
         }
     }
 
-    // MARK: - 检查类型内模块（对齐 Health：Picker 下方按类型展开；数据仍用 `items` / `MedicalReportItem`）
+    // MARK: - 检查类型内模块（对齐 Health：Picker 下方按类型展开；数据仍用 `items` / `ItemDraft`）
 
     @ViewBuilder
     private var examTypeModuleContent: some View {
@@ -372,7 +311,7 @@ struct ExamReportFormView: View {
     private var itemChipList: some View {
         ForEach(items) { item in
             VStack(alignment: .leading, spacing: 6) {
-                Text(item.itemName.isEmpty ? L10n.text("medical_record.forms.exam_report.unnamed_item") : item.itemName)
+                Text((item.itemName ?? "").isEmpty ? L10n.text("medical_record.forms.exam_report.unnamed_item") : (item.itemName ?? ""))
                     .font(.subheadline.weight(.semibold))
                 Text(chipSubtitle(for: item))
                     .font(.caption)
@@ -388,13 +327,8 @@ struct ExamReportFormView: View {
 
     private func presentNewLabItem() {
         editingItem = ItemDraft(
-            category: labPrimaryCategory,
-            subCategory: labSubCategory,
-            itemName: "",
-            resultValue: "",
-            unit: "",
-            referenceRange: "",
-            flag: ""
+            category: labPrimaryCategory.nilIfBlank,
+            subCategory: labSubCategory.nilIfBlank
         )
     }
 
@@ -405,15 +339,16 @@ struct ExamReportFormView: View {
     private func chipSubtitle(for item: ItemDraft) -> String {
         switch pageType {
         case .laboratory:
-            return L10n.format("medical_record.forms.exam_report.result_line", item.resultValue)
+            return L10n.format("medical_record.forms.exam_report.result_line", item.resultValue ?? "")
         case .imaging, .pathology:
-            let diag = item.diagnosis.trimmingCharacters(in: .whitespacesAndNewlines)
+            let diag = (item.diagnosis ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if diag.isEmpty == false {
                 return diag.count > 80 ? String(diag.prefix(80)) + "…" : diag
             }
-            let part = item.bodyPart.trimmingCharacters(in: .whitespacesAndNewlines)
+            let part = (item.bodyPart ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if part.isEmpty == false { return part }
-            return item.resultValue.isEmpty ? "—" : item.resultValue
+            let value = item.resultValue ?? ""
+            return value.isEmpty ? "—" : value
         }
     }
 
@@ -453,23 +388,13 @@ struct ExamReportFormView: View {
     private func saveNow() async {
         formLog.info("ExamReportFormView: save started mode=\(modeLogLabel) items=\(items.count)", module: formLogModule)
 
-        let details = items.enumerated().map { index, row in
-            MedicalReportItem(
-                category: row.category.nilIfBlank ?? category,
-                subCategory: row.subCategory.nilIfBlank,
-                itemName: row.itemName.nilIfBlank,
-                itemCode: nil,
-                resultValue: row.resultValue.nilIfBlank,
-                unit: row.unit.nilIfBlank,
-                referenceRange: row.referenceRange.nilIfBlank,
-                flag: row.flag.nilIfBlank,
-                resultAt: row.resultAt.nilIfBlank,
-                modality: row.modality.nilIfBlank,
-                bodyPart: row.bodyPart.nilIfBlank,
-                diagnosis: row.diagnosis.nilIfBlank,
-                extra: nil,
-                sortOrder: "\(index)"
-            )
+        let fallbackCategory = category.nilIfBlank ?? pageType.rawValue
+        let details = items.map { row in
+            var normalized = row
+            if (normalized.category ?? "").nilIfBlank == nil {
+                normalized.category = fallbackCategory
+            }
+            return normalized
         }
         let draft = MedicalReportRecognitionDraft(
             category: category.nilIfBlank ?? pageType.rawValue,

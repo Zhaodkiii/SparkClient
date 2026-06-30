@@ -65,6 +65,22 @@ struct MedicalReportItem: Sendable, Equatable, Codable {
 
 }
 
+/// 医疗报告明细编辑草稿（表单 / 识别结果共用）
+struct ItemDraft: Identifiable, Sendable, Equatable, Codable {
+    @DefaultUUID var id: UUID = UUID()
+    var category: String?       // 科目类别（如：血常规）
+    var subCategory: String?    // 子类别
+    var itemName: String?       // 项目名称（如：白细胞计数）
+    var resultValue: String?    // 结果数值
+    var unit: String?          // 单位
+    var referenceRange: String? // 参考范围
+    var flag: String?          // 异常标记（↑, ↓, H, L, 异常）
+    var modality: String?      // 检测方法
+    var bodyPart: String?      // 检测部位
+    var resultAt: String?        // 采样/检查日期
+    var diagnosis: String?     // 医生对该项的诊断（所见+结论等长文本）
+}
+
 /// 体检报告抽取草稿
 struct HealthExamRecognitionDraft: Sendable, Equatable, Codable {
     let institutionName: String? // 体检机构名称
@@ -84,7 +100,7 @@ struct MedicalReportRecognitionDraft: Sendable, Equatable, Codable {
     let doctor: String?     // 检查医生
     let content: String?    // 报告详情/描述内容；实验室检验报告可能无正文（AI 须填"见详情"兜底）
     let date: String?         // 检查日期
-    let details: [MedicalReportItem] // 指标明细
+    let details: [ItemDraft] // 指标明细
     @DefaultEmptyUUIDArray var attachmentFileIds: [UUID] = []
 }
 

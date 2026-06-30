@@ -87,10 +87,10 @@ struct ExaminationReportServerMutationService: Sendable {
             organizationName: draft.hospital,
             departmentName: report.departmentName ?? "",
             doctorName: draft.doctor ?? "",
-            findings: draft.content ?? "",
-            impression: draft.content ?? "",
+            findings: draft.resolvedFindingsText ?? "",
+            impression: draft.resolvedImpressionText ?? "",
             source: report.source ?? 2,
-            rawOCR: ["text": draft.content ?? ""],
+            rawOCR: ["text": draft.resolvedFindingsText ?? draft.resolvedImpressionText ?? ""],
             status: report.status ?? 1,
             extra: report.extra ?? [:]
         )
@@ -116,24 +116,25 @@ struct ExaminationReportServerMutationService: Sendable {
         }
 
         for (index, row) in draft.details.enumerated() {
+            let apiItem = row.toMedicalReportItem(fallbackCategory: draft.category, sortOrder: index)
             let detailPayload = MedExamDetailCreatePayload(
                 businessType: "examination_report",
                 businessID: report.id,
                 member: report.member,
-                category: row.category,
-                subCategory: row.subCategory ?? "",
-                itemName: row.itemName ?? "",
-                itemCode: row.itemCode ?? "",
-                resultValue: row.resultValue ?? "",
-                unit: row.unit ?? "",
-                referenceRange: row.referenceRange ?? "",
-                flag: row.flag ?? "",
-                resultAt: row.resultAt,
-                modality: row.modality ?? "",
-                bodyPart: row.bodyPart ?? "",
-                diagnosis: row.diagnosis ?? "",
-                extra: row.extra ?? [:],
-                sortOrder: row.sortOrder.parsedAsSortOrderInt() ?? index
+                category: apiItem.category,
+                subCategory: apiItem.subCategory ?? "",
+                itemName: apiItem.itemName ?? "",
+                itemCode: apiItem.itemCode ?? "",
+                resultValue: apiItem.resultValue ?? "",
+                unit: apiItem.unit ?? "",
+                referenceRange: apiItem.referenceRange ?? "",
+                flag: apiItem.flag ?? "",
+                resultAt: apiItem.resultAt,
+                modality: apiItem.modality ?? "",
+                bodyPart: apiItem.bodyPart ?? "",
+                diagnosis: apiItem.diagnosis ?? "",
+                extra: apiItem.extra ?? [:],
+                sortOrder: apiItem.sortOrder.parsedAsSortOrderInt() ?? index
             )
             _ = try await resources.create(
                 SparkMedicalSyncAPI.RemoteMedExamDetail.self,

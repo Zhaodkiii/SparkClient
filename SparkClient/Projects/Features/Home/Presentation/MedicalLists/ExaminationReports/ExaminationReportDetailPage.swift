@@ -10,6 +10,7 @@ struct ExaminationReportDetailPage: View {
     @ObservedObject var memberContextStore: MemberContextStore
     var notificationClient: (any NotificationClient)?
     var medicalQueryAPI: SparkMedicalQueryAPI?
+    var localAttachments: [MedicalDocumentLocalAttachmentItem] = []
     let onSaved: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
     let onDeleted: (Int) -> Void
     var onLocalDraftSaved: ((MedicalReportRecognitionDraft) -> Void)?
@@ -34,6 +35,7 @@ struct ExaminationReportDetailPage: View {
         memberContextStore: MemberContextStore,
         notificationClient: (any NotificationClient)? = nil,
         medicalQueryAPI: SparkMedicalQueryAPI? = nil,
+        localAttachments: [MedicalDocumentLocalAttachmentItem] = [],
         sourceReportDraft: MedicalReportRecognitionDraft? = nil,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void,
         onDeleted: @escaping (Int) -> Void,
@@ -48,6 +50,7 @@ struct ExaminationReportDetailPage: View {
         _memberContextStore = ObservedObject(wrappedValue: memberContextStore)
         self.notificationClient = notificationClient
         self.medicalQueryAPI = medicalQueryAPI
+        self.localAttachments = localAttachments
         self.onSaved = onSaved
         self.onDeleted = onDeleted
         self.onLocalDraftSaved = onLocalDraftSaved
@@ -69,6 +72,7 @@ struct ExaminationReportDetailPage: View {
             completeData: completeData,
             memberContextStore: memberContextStore,
             notificationClient: mode == .localDraft ? nil : notificationClient,
+            localAttachments: mode == .localDraft ? localAttachments : [],
             showsMedicalCaseLink: mode != .localDraft,
             onMedicalCaseLinked: { merged in
                 report = merged

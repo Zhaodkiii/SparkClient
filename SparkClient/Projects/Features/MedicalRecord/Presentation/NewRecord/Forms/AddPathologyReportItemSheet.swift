@@ -5,7 +5,7 @@ struct AddPathologyReportItemSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let itemID: UUID
-    let onSubmit: (ExamReportFormView.ItemDraft) -> Void
+    let onSubmit: (ItemDraft) -> Void
 
     @State private var category: String
     @State private var subCategory: String
@@ -29,22 +29,22 @@ struct AddPathologyReportItemSheet: View {
         return f
     }()
 
-    init(draft: ExamReportFormView.ItemDraft, onSubmit: @escaping (ExamReportFormView.ItemDraft) -> Void) {
+    init(draft: ItemDraft, onSubmit: @escaping (ItemDraft) -> Void) {
         self.itemID = draft.id
         self.onSubmit = onSubmit
-        _category = State(initialValue: draft.category)
-        _subCategory = State(initialValue: draft.subCategory)
-        _itemName = State(initialValue: draft.itemName)
-        _modality = State(initialValue: draft.modality.isEmpty
+        _category = State(initialValue: draft.category ?? "")
+        _subCategory = State(initialValue: draft.subCategory ?? "")
+        _itemName = State(initialValue: draft.itemName ?? "")
+        _modality = State(initialValue: (draft.modality ?? "").isEmpty
             ? L10n.text("medical_record.forms.exam_report.pathology.default_modality", fallback: "病理")
-            : draft.modality)
-        _bodyPart = State(initialValue: draft.bodyPart)
-        let rawAt = draft.resultAt.trimmingCharacters(in: .whitespacesAndNewlines)
+            : draft.modality ?? "")
+        _bodyPart = State(initialValue: draft.bodyPart ?? "")
+        let rawAt = (draft.resultAt ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let day = Self.dayFormatter.date(from: rawAt) ?? Date()
         let resolvedAt = rawAt.isEmpty ? Self.dayFormatter.string(from: day) : rawAt
         _resultAt = State(initialValue: resolvedAt)
-        _diagnosis = State(initialValue: draft.diagnosis)
-        _flag = State(initialValue: draft.flag)
+        _diagnosis = State(initialValue: draft.diagnosis ?? "")
+        _flag = State(initialValue: draft.flag ?? "")
         _reportDay = State(initialValue: day)
     }
 
@@ -181,19 +181,19 @@ struct AddPathologyReportItemSheet: View {
         let at = resultAt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.dayFormatter.string(from: reportDay)
             : resultAt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let out = ExamReportFormView.ItemDraft(
+        let out = ItemDraft(
             id: itemID,
-            category: category,
-            subCategory: subCategory,
-            itemName: itemName,
-            resultValue: "",
-            unit: "",
-            referenceRange: "",
-            flag: flag,
-            modality: modality,
-            bodyPart: bodyPart,
-            resultAt: at,
-            diagnosis: diagnosis
+            category: category.nilIfBlank,
+            subCategory: subCategory.nilIfBlank,
+            itemName: itemName.nilIfBlank,
+            resultValue: nil,
+            unit: nil,
+            referenceRange: nil,
+            flag: flag.nilIfBlank,
+            modality: modality.nilIfBlank,
+            bodyPart: bodyPart.nilIfBlank,
+            resultAt: at.nilIfBlank,
+            diagnosis: diagnosis.nilIfBlank
         )
         formLog.info("AddPathologyReportItemSheet: submit item=\(itemName.prefix(40))", module: formLogModule)
         onSubmit(out)

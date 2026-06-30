@@ -80,21 +80,21 @@ private enum SparkLabResultFlag: String, CaseIterable, Identifiable {
 struct AddLabItemSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var draft: ExamReportFormView.ItemDraft
-    let onSubmit: (ExamReportFormView.ItemDraft) -> Void
+    @State private var draft: ItemDraft
+    let onSubmit: (ItemDraft) -> Void
 
     @State private var sheetKeyboardVisible = false
 
     private let formLog: Logger = ConsoleLogger()
     private let formLogModule: LogModule = .medical
 
-    init(draft: ExamReportFormView.ItemDraft, onSubmit: @escaping (ExamReportFormView.ItemDraft) -> Void) {
+    init(draft: ItemDraft, onSubmit: @escaping (ItemDraft) -> Void) {
         _draft = State(initialValue: draft)
         self.onSubmit = onSubmit
     }
 
     private var canSubmit: Bool {
-        let t: (String) -> Bool = { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let t: (String?) -> Bool = { ($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
         return t(draft.itemName)
             && t(draft.resultValue)
             && t(draft.unit)
@@ -139,14 +139,14 @@ struct AddLabItemSheet: View {
                 HStack(alignment: .top, spacing: 12) {
                     SparkFormTextRow(
                         title: L10n.text("medical_record.forms.field.item_name"),
-                        text: $draft.itemName,
+                        text: $draft.optionalField(\.itemName),
                         placeholder: L10n.text("medical_record.forms.lab_item.placeholder.item_name"),
                         required: true,
                         keyboardVisible: $sheetKeyboardVisible
                     )
                     SparkFormTextRow(
                         title: L10n.text("common.result"),
-                        text: $draft.resultValue,
+                        text: $draft.optionalField(\.resultValue),
                         placeholder: L10n.text("medical_record.forms.lab_item.placeholder.result"),
                         required: true,
                         keyboardVisible: $sheetKeyboardVisible
@@ -157,7 +157,7 @@ struct AddLabItemSheet: View {
 
                 SparkFormTextRow(
                     title: L10n.text("medical_record.forms.field.reference_range"),
-                    text: $draft.referenceRange,
+                    text: $draft.optionalField(\.referenceRange),
                     placeholder: L10n.text("medical_record.forms.lab_item.placeholder.reference"),
                     keyboardVisible: $sheetKeyboardVisible
                 )
@@ -177,8 +177,8 @@ struct AddLabItemSheet: View {
                     secondaryPlaceholder: L10n.text("medical_record.forms.exam_report.lab.placeholder.subcategory"),
                     primaryRequired: false,
                     secondaryRequired: false,
-                    primary: $draft.category,
-                    secondary: $draft.subCategory,
+                    primary: $draft.optionalField(\.category),
+                    secondary: $draft.optionalField(\.subCategory),
                     keyboardVisible: $sheetKeyboardVisible
                 )
             }
@@ -205,25 +205,25 @@ struct AddLabItemSheet: View {
     private var labFlagText: Binding<String> {
         Binding(
             get: {
-                let t = draft.flag.trimmingCharacters(in: .whitespacesAndNewlines)
+                let t = (draft.flag ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 guard t.isEmpty == false else { return SparkLabResultFlag.normal.storageString }
                 return SparkLabResultFlag.isPredefinedStoredValue(t)
                     ? SparkLabResultFlag.fromStoredFlag(t).storageString
-                    : draft.flag
+                    : draft.flag ?? ""
             },
-            set: { draft.flag = $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            set: { draft.flag = $0.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank }
         )
     }
 
     private func seedLabUnitIfNeeded() {
-        let u = draft.unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        let u = (draft.unit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if u.isEmpty {
             draft.unit = sparkLabCommonUnits.first ?? "g/L"
         }
     }
 
     private func seedLabFlagIfNeeded() {
-        let t = draft.flag.trimmingCharacters(in: .whitespacesAndNewlines)
+        let t = (draft.flag ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty {
             draft.flag = SparkLabResultFlag.normal.storageString
         }
@@ -234,7 +234,7 @@ struct AddLabItemSheet: View {
             title: L10n.text("medical_record.forms.field.unit"),
             required: true,
             sections: labUnitSections,
-            text: $draft.unit,
+            text: $draft.optionalField(\.unit),
             customMenuTitle: L10n.text("medical_record.forms.lab_item.unit_custom_menu"),
             customPlaceholder: L10n.text("medical_record.forms.lab_item.unit_custom_placeholder"),
             keyboardVisible: $sheetKeyboardVisible,
@@ -260,10 +260,10 @@ struct AddLabItemSheet: View {
 
     /// 表单顶部已选一级、二级时带入子项；子项空则填该一级下第一个预设（可改）。
     private func reconcileDraftCategoryDefaultsIfNeeded() {
-        let p = draft.category.trimmingCharacters(in: .whitespacesAndNewlines)
+        let p = (draft.category ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard let pCN = LabExamCategoryTaxonomy.resolvedCatalogPrimaryCN(p) else { return }
         let kids = LabExamCategoryTaxonomy.subcategories(for: pCN)
-        let s = draft.subCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let s = (draft.subCategory ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty, let first = kids.first {
             draft.subCategory = first
             return
@@ -275,7 +275,7 @@ struct AddLabItemSheet: View {
     }
 
     private func submitDraft() {
-        formLog.info("AddLabItemSheet: submit item=\(draft.itemName.prefix(60))", module: formLogModule)
+        formLog.info("AddLabItemSheet: submit item=\((draft.itemName ?? "").prefix(60))", module: formLogModule)
         onSubmit(draft)
     }
 }

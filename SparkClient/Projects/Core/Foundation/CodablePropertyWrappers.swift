@@ -229,6 +229,27 @@ struct OptionalCodableReminderTimesList: Codable, Equatable, Sendable {
     }
 }
 
+/// UUID 自动生成包装器
+/// 解码时字段缺失或 null 则自动生成新 UUID，适用于 AI 流式 JSON 输出不携带 id 的场景
+@propertyWrapper
+struct DefaultUUID: Codable, Sendable, Equatable, Hashable {
+    var wrappedValue: UUID
+
+    init(wrappedValue: UUID = UUID()) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        wrappedValue = container.decodeNil() ? UUID() : (try? container.decode(UUID.self)) ?? UUID()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+}
+
 // MARK: - KeyedDecodingContainer 扩展：缺失字段自动兜底兼容
 extension KeyedDecodingContainer {
     /// EmptyObjectAsNil 键缺失兜底：字段不存在时返回 nil 包装对象
@@ -262,5 +283,10 @@ extension KeyedDecodingContainer {
     /// OptionalCodableReminderTimesList 键缺失返回 nil
     func decode(_ type: OptionalCodableReminderTimesList.Type, forKey key: Key) throws -> OptionalCodableReminderTimesList {
         try decodeIfPresent(type, forKey: key) ?? OptionalCodableReminderTimesList(wrappedValue: nil)
+    }
+
+    /// DefaultUUID 键缺失自动生成新 UUID
+    func decode(_ type: DefaultUUID.Type, forKey key: Key) throws -> DefaultUUID {
+        try decodeIfPresent(type, forKey: key) ?? DefaultUUID()
     }
 }

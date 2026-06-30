@@ -4,8 +4,8 @@ import Foundation
 
 enum MedicalCaseTimelineRemoteMapping {
     static func examinationDraft(from report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> MedicalReportRecognitionDraft {
-        let details = (report.medExamDetails ?? []).enumerated().map { index, detail in
-            MedicalReportItem(
+        let details = (report.medExamDetails ?? []).map { detail in
+            ItemDraft(medicalReportItem: MedicalReportItem(
                 category: detail.category ?? "",
                 subCategory: detail.subCategory,
                 itemName: detail.itemName,
@@ -19,8 +19,8 @@ enum MedicalCaseTimelineRemoteMapping {
                 bodyPart: detail.bodyPart,
                 diagnosis: detail.diagnosis,
                 extra: detail.extra,
-                sortOrder: String(detail.sortOrder ?? index)
-            )
+                sortOrder: String(detail.sortOrder ?? 0)
+            ))
         }
 
         return MedicalReportRecognitionDraft(

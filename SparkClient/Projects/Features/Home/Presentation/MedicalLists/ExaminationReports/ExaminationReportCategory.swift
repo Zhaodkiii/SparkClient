@@ -65,6 +65,17 @@ enum ExaminationReportCategory: String, CaseIterable, Identifiable, Hashable {
         Self.category(for: report) == self
     }
 
+    /// 详情页「大类」展示：能识别为标准分类时用本地化文案，否则保留后端原文。
+    static func displayPrimaryCategory(from raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), trimmed.isEmpty == false else {
+            return nil
+        }
+        if let matched = directCategory(from: [trimmed]) {
+            return L10n.text(matched.titleKey)
+        }
+        return trimmed
+    }
+
     private static func directCategory(from values: [String?]) -> ExaminationReportCategory? {
         let candidates = values
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }

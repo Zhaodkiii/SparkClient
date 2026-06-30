@@ -740,3 +740,17 @@ extension String {
         return trimmed.isEmpty ? nil : trimmed
     }
 }
+
+extension Binding where Value == ItemDraft {
+    /// 将 `ItemDraft` 的可选字符串字段绑定为表单用的非可选 `String`。
+    func optionalField(_ keyPath: WritableKeyPath<ItemDraft, String?>) -> Binding<String> {
+        Binding<String>(
+            get: { self.wrappedValue[keyPath: keyPath] ?? "" },
+            set: { (newValue: String) in
+                var draft = self.wrappedValue
+                draft[keyPath: keyPath] = newValue.nilIfBlank
+                self.wrappedValue = draft
+            }
+        )
+    }
+}

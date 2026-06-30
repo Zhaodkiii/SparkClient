@@ -267,11 +267,8 @@ struct MedicalReportCardsSectionView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
-            Text(report.content?.nonEmpty ?? "-")
-                .font(.callout)
-                .foregroundStyle(.primary)
-                .lineLimit(3)
+
+            draftClinicalTextBlocks(for: report, category: category)
             
             if report.details.isEmpty == false {
                 Text(
@@ -307,6 +304,51 @@ struct MedicalReportCardsSectionView: View {
             scrollTargetID: "preSubmitValidation.card.examinationReport.\(index)"
         )
     }
+
+    @ViewBuilder
+    private func draftClinicalTextBlocks(
+        for report: MedicalReportRecognitionDraft,
+        category: ExaminationReportCategory
+    ) -> some View {
+        switch category {
+        case .imaging, .pathology:
+            if let findings = report.resolvedFindingsText {
+                draftClinicalTextBlock(
+                    title: L10n.text("home.medical.list.examination.card.findings"),
+                    body: findings
+                )
+            }
+            if let impression = report.resolvedImpressionText,
+               impression != report.resolvedFindingsText {
+                draftClinicalTextBlock(
+                    title: L10n.text("home.medical.list.examination.card.impression"),
+                    body: impression
+                )
+            }
+            if report.resolvedFindingsText == nil, report.resolvedImpressionText == nil {
+                Text("-")
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+            }
+        case .laboratory:
+            Text(report.content?.nonEmpty ?? "-")
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .lineLimit(3)
+        }
+    }
+
+    private func draftClinicalTextBlock(title: String, body: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(body)
+                .font(.callout)
+                .foregroundStyle(.primary)
+                .lineLimit(4)
+        }
+    }
     
     private func reportDetailDestination(
         index: Int,
@@ -314,7 +356,8 @@ struct MedicalReportCardsSectionView: View {
         category: ExaminationReportCategory,
         context: MedicalDocumentResultDetailNavigationContext
     ) -> some View {
-        ExaminationReportDetailPage(
+        let matched = attachmentsForIDs?(report.attachmentFileIds) ?? []
+        return ExaminationReportDetailPage(
             mode: .localDraft,
             report: report.remoteExaminationReport(
                 memberID: context.memberID,
@@ -323,6 +366,7 @@ struct MedicalReportCardsSectionView: View {
             category: category,
             fileTransferService: context.fileTransferService,
             memberContextStore: context.memberContextStore,
+            localAttachments: matched,
             sourceReportDraft: report,
             onSaved: { _ in },
             onDeleted: { _ in },

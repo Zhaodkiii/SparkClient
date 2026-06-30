@@ -15,7 +15,15 @@ struct MedicalDocumentModelJSONNormalizer: Sendable {
         }
 
         // Fallback: some responses are plain JSON without extra wrappers.
-        return isValidJSON(sanitized) ? sanitized : nil
+        if isValidJSON(sanitized) { return sanitized }
+
+        // Last-resort: try to repair mismatched braces/brackets caused by model
+        // over-generating closing delimiters (e.g. `}}}` instead of `}`).
+        if let repaired = repairUnbalancedDelimiters(sanitized), isValidJSON(repaired) {
+            return repaired
+        }
+
+        return nil
     }
 
     private func sanitizeModelJSONText(_ text: String) -> String {
@@ -206,5 +214,57 @@ struct MedicalDocumentModelJSONNormalizer: Sendable {
     private func isValidJSON(_ text: String) -> Bool {
         guard let data = text.data(using: .utf8) else { return false }
         return (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) != nil
+    }
+
+    /// Removes extra (unbalanced) `}` / `]` characters that a model occasionally
+    /// appends to an otherwise valid JSON payload. Characters inside strings are
+    /// left untouched; only out-of-string closing delimiters that would push the
+    /// depth counter below zero are dropped.
+    private func repairUnbalancedDelimiters(_ text: String) -> String? {
+        var result = ""
+        result.reserveCapacity(text.count)
+        var inString = false
+        var isEscaped = false
+        var braceDepth = 0
+        var bracketDepth = 0
+
+        for char in text {
+            if inString {
+                result.append(char)
+                if isEscaped {
+                    isEscaped = false
+                } else if char == "\\" {
+                    isEscaped = true
+                } else if char == "\"" {
+                    inString = false
+                }
+                continue
+            }
+
+            switch char {
+            case "\"":
+                inString = true
+                result.append(char)
+            case "{":
+                braceDepth += 1
+                result.append(char)
+            case "}":
+                guard braceDepth > 0 else { continue } // drop extra `}`
+                braceDepth -= 1
+                result.append(char)
+            case "[":
+                bracketDepth += 1
+                result.append(char)
+            case "]":
+                guard bracketDepth > 0 else { continue } // drop extra `]`
+                bracketDepth -= 1
+                result.append(char)
+            default:
+                result.append(char)
+            }
+        }
+
+        let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

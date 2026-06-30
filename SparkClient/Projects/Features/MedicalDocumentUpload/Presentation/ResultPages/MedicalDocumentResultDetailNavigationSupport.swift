@@ -51,8 +51,8 @@ extension MedicalReportRecognitionDraft {
             organizationName: hospital,
             departmentName: nil,
             doctorName: doctor,
-            findings: content,
-            impression: nil,
+            findings: resolvedFindingsText,
+            impression: resolvedImpressionText,
             source: nil,
             status: nil,
             extra: nil,
@@ -60,8 +60,39 @@ extension MedicalReportRecognitionDraft {
             updatedAt: Date(),
             attachments: [],
             medExamDetails: details.enumerated().map { pair in
-                pair.element.remoteMedExamDetail(memberID: memberID, businessID: id, id: id * 1000 + pair.offset)
+                pair.element.remoteMedExamDetail(
+                    memberID: memberID,
+                    businessID: id,
+                    id: id * 1000 + pair.offset,
+                    sortOrder: pair.offset
+                )
             }
+        )
+    }
+}
+
+extension ItemDraft {
+    func remoteMedExamDetail(memberID: Int, businessID: Int, id: Int, sortOrder: Int) -> SparkMedicalSyncAPI.RemoteMedExamDetail {
+        SparkMedicalSyncAPI.RemoteMedExamDetail(
+            id: id,
+            businessType: "examination",
+            businessId: businessID,
+            member: memberID,
+            category: category ?? "",
+            subCategory: subCategory ?? "",
+            itemName: itemName?.nilIfBlank ?? category ?? "",
+            itemCode: "",
+            resultValue: resultValue?.nilIfBlank,
+            unit: unit ?? "",
+            referenceRange: referenceRange ?? "",
+            flag: flag ?? "",
+            resultAt: MedicalDateCoding.decodeDateOnlyOrDefaultNow(resultAt?.nilIfBlank, defaultDate: Date()),
+            modality: modality ?? "",
+            bodyPart: bodyPart ?? "",
+            diagnosis: diagnosis?.nilIfBlank,
+            extra: nil,
+            sortOrder: sortOrder,
+            updatedAt: Date()
         )
     }
 }

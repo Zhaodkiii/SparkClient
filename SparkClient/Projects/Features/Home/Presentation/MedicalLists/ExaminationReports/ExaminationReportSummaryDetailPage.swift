@@ -9,6 +9,7 @@ struct ExaminationReportSummaryDetailPage: View {
     var completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     @ObservedObject var memberContextStore: MemberContextStore
     var notificationClient: (any NotificationClient)?
+    var localAttachments: [MedicalDocumentLocalAttachmentItem] = []
     var showsMedicalCaseLink: Bool = true
     var onMedicalCaseLinked: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
@@ -123,28 +124,67 @@ struct ExaminationReportSummaryDetailPage: View {
         }
     }
 
+    @ViewBuilder
     private var detailGrid: some View {
         VStack(spacing: 10) {
-            ExaminationReportSummaryInfoRow(title: "报告类型", value: L10n.text(category.titleKey))
-            ExaminationReportSummaryInfoRow(title: "大类", value: report.category?.nonEmpty ?? "未填写")
-            ExaminationReportSummaryInfoRow(title: "细类", value: report.subCategory?.nonEmpty ?? "未填写")
             ExaminationReportSummaryInfoRow(
-                title: "检查日期",
-                value: report.performedAt.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "未填写"
+                title: L10n.text("home.medical.list.examination.summary.field.report_type"),
+                value: L10n.text(category.titleKey)
             )
-            ExaminationReportSummaryInfoRow(
-                title: "报告日期",
-                value: report.reportedAt.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "未填写"
-            )
-            ExaminationReportSummaryInfoRow(title: "机构", value: report.organizationName?.nonEmpty ?? "未填写")
-            ExaminationReportSummaryInfoRow(title: "科室", value: report.departmentName?.nonEmpty ?? "未填写")
-            ExaminationReportSummaryInfoRow(title: "医生", value: report.doctorName?.nonEmpty ?? "未填写")
-            if let source = report.source {
-                ExaminationReportSummaryInfoRow(title: "来源", value: "\(source)")
+//            if let categoryText = ExaminationReportCategory.displayPrimaryCategory(from: report.category) {
+//                ExaminationReportSummaryInfoRow(
+//                    title: L10n.text("home.medical.list.examination.summary.field.primary_category"),
+//                    value: categoryText
+//                )
+//            }
+            if let subCategoryText = report.subCategory?.nonEmpty {
+                ExaminationReportSummaryInfoRow(
+                    title: L10n.text("home.medical.list.examination.summary.field.subcategory"),
+                    value: subCategoryText
+                )
             }
-            if let status = report.status {
-                ExaminationReportSummaryInfoRow(title: "状态", value: "\(status)")
+            if let performedAt = report.performedAt {
+                ExaminationReportSummaryInfoRow(
+                    title: L10n.text("home.medical.list.examination.summary.field.performed_at"),
+                    value: performedAt.formatted(date: .abbreviated, time: .omitted)
+                )
             }
+            if let reportedAt = report.reportedAt {
+                ExaminationReportSummaryInfoRow(
+                    title: L10n.text("home.medical.list.examination.summary.field.reported_at"),
+                    value: reportedAt.formatted(date: .abbreviated, time: .omitted)
+                )
+            }
+            if let organizationName = report.organizationName?.nonEmpty {
+                ExaminationReportSummaryInfoRow(
+                    title: L10n.text("home.medical.list.examination.summary.field.institution"),
+                    value: organizationName
+                )
+            }
+            if let departmentName = report.departmentName?.nonEmpty {
+                ExaminationReportSummaryInfoRow(
+                    title: L10n.text("home.medical.list.examination.card.department"),
+                    value: departmentName
+                )
+            }
+            if let doctorName = report.doctorName?.nonEmpty {
+                ExaminationReportSummaryInfoRow(
+                    title: L10n.text("home.medical.list.examination.card.doctor"),
+                    value: doctorName
+                )
+            }
+//            if let source = report.source {
+//                ExaminationReportSummaryInfoRow(
+//                    title: L10n.text("home.medical.list.examination.summary.field.source"),
+//                    value: "\(source)"
+//                )
+//            }
+//            if let status = report.status {
+//                ExaminationReportSummaryInfoRow(
+//                    title: L10n.text("home.medical.list.examination.summary.field.status"),
+//                    value: "\(status)"
+//                )
+//            }
         }
     }
 
@@ -155,7 +195,7 @@ struct ExaminationReportSummaryDetailPage: View {
 
         if findings.isEmpty == false {
             narrativeCard(
-                title: "所见",
+                title: L10n.text("home.medical.list.examination.summary.findings"),
                 systemImage: "text.alignleft",
                 tint: Color(uiColor: .systemTeal),
                 text: findings
@@ -164,7 +204,7 @@ struct ExaminationReportSummaryDetailPage: View {
 
         if impression.isEmpty == false, impression != findings {
             narrativeCard(
-                title: "印象",
+                title: L10n.text("home.medical.list.examination.summary.impression"),
                 systemImage: "text.quote",
                 tint: Color(uiColor: .systemIndigo),
                 text: impression
@@ -193,13 +233,30 @@ struct ExaminationReportSummaryDetailPage: View {
 
     @ViewBuilder
     private var attachmentsSection: some View {
-        let attachments = report.attachments ?? []
-        if let fileTransferService, attachments.isEmpty == false {
-            VStack(alignment: .leading, spacing: 10) {
-                Label(L10n.text("common.attachments"), systemImage: "paperclip")
-                    .font(.headline)
-                MedicalAttachmentGridPreview(attachments: attachments, fileTransferService: fileTransferService)
-//                MedicalAttachmentListView(attachments: attachments, fileTransferService: fileTransferService)
+        let remoteAttachments = report.attachments ?? []
+        let hasRemote = fileTransferService != nil && remoteAttachments.isEmpty == false
+        let hasLocal = localAttachments.isEmpty == false
+
+        if hasRemote || hasLocal {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack{
+                    Label(L10n.text("common.attachments"), systemImage: "paperclip")
+                        .font(.headline)
+                
+                    // 管理按钮
+                }
+  
+
+                if hasLocal {
+                    CaseMatchedAttachmentsGridView(
+                        title: nil,
+                        attachments: localAttachments
+                    )
+                }
+
+                if hasRemote, let fileTransferService {
+                    MedicalAttachmentGridPreview(attachments: remoteAttachments, fileTransferService: fileTransferService)
+                }
             }
             .padding(16)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -209,10 +266,16 @@ struct ExaminationReportSummaryDetailPage: View {
     private var subitemsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("检查明细", systemImage: "list.bullet.rectangle")
+                Label(L10n.text("home.medical.list.examination.summary.details_section"), systemImage: "list.bullet.rectangle")
                     .font(.headline)
                 Spacer()
-                Text("\(sortedDetails.count) 项")
+                Text(
+                    String(
+                        format: L10n.text("home.medical.list.examination.summary.details_count_format"),
+                        locale: .current,
+                        sortedDetails.count
+                    )
+                )
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 if category == .laboratory {
@@ -223,7 +286,7 @@ struct ExaminationReportSummaryDetailPage: View {
                         )
                     } label: {
                         HStack {
-                            Text("查看完整检验表")
+                            Text(L10n.text("home.medical.list.examination.summary.view_full_lab_table"))
                                 .font(.caption.weight(.semibold))
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.semibold))
@@ -236,7 +299,7 @@ struct ExaminationReportSummaryDetailPage: View {
                 }
             }
             if sortedDetails.isEmpty {
-                Text("暂无检查细项")
+                Text(L10n.text("home.medical.list.examination.summary.details_empty"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -309,7 +372,9 @@ private struct ExaminationReportSubitemSummaryRow: View {
         case .laboratory:
             return [
                 [item.resultValue ?? "", item.unit].filter { $0.isEmpty == false }.joined(),
-                item.referenceRange.nonEmpty.map { "参考 \($0)" },
+                item.referenceRange.nonEmpty.map {
+                    L10n.format("home.medical.list.examination.summary.reference_format", $0)
+                },
                 item.flag.nonEmpty
             ]
             .compactMap { $0 }
@@ -344,12 +409,16 @@ private struct ExaminationReportSubitemSummaryRow: View {
             .frame(width: 38, height: 38)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.itemName.isEmpty ? "未命名项目" : item.itemName)
+                Text(item.itemName.isEmpty
+                    ? L10n.text("home.medical.list.examination.summary.subitem.unnamed")
+                    : item.itemName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                Text(subtitle.isEmpty ? "点击查看详情" : subtitle)
+                Text(subtitle.isEmpty
+                    ? L10n.text("home.medical.list.examination.summary.subitem.tap_for_detail")
+                    : subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

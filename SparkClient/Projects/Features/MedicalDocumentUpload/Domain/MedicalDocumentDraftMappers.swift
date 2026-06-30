@@ -99,6 +99,52 @@ extension CaseRecognitionDraft {
     }
 }
 
+// MARK: - Medical Report Item Draft Mappers
+
+extension ItemDraft {
+    init(medicalReportItem item: MedicalReportItem) {
+        self.init(
+            category: item.category,
+            subCategory: item.subCategory,
+            itemName: item.itemName,
+            resultValue: item.resultValue,
+            unit: item.unit,
+            referenceRange: item.referenceRange,
+            flag: item.flag,
+            modality: item.modality,
+            bodyPart: item.bodyPart,
+            resultAt: item.resultAt,
+            diagnosis: item.diagnosis
+        )
+    }
+
+    /// 转换为 API 落库用的 `MedicalReportItem`（保留排序序号等元数据）
+    func toMedicalReportItem(fallbackCategory: String? = nil, sortOrder: Int) -> MedicalReportItem {
+        MedicalReportItem(
+            category: (category ?? "").nilIfBlank ?? (fallbackCategory ?? "").nilIfBlank ?? fallbackCategory ?? "",
+            subCategory: subCategory?.nilIfBlank,
+            itemName: itemName?.nilIfBlank,
+            itemCode: nil,
+            resultValue: resultValue?.nilIfBlank,
+            unit: unit?.nilIfBlank,
+            referenceRange: referenceRange?.nilIfBlank,
+            flag: flag?.nilIfBlank,
+            resultAt: resultAt?.nilIfBlank,
+            modality: modality?.nilIfBlank,
+            bodyPart: bodyPart?.nilIfBlank,
+            diagnosis: diagnosis?.nilIfBlank,
+            extra: nil,
+            sortOrder: "\(sortOrder)"
+        )
+    }
+
+    /// 转换为检查报告明细创建请求
+    func toExaminationReportDetailRequest(fallbackCategory: String? = nil, sortOrder: Int) -> ExaminationReportDetailRequest {
+        toMedicalReportItem(fallbackCategory: fallbackCategory, sortOrder: sortOrder)
+            .toExaminationReportDetailRequest()
+    }
+}
+
 // MARK: - Medical Report Item Mappers
 
 extension MedicalReportItem {
@@ -126,17 +172,44 @@ extension MedicalReportItem {
 // MARK: - Medical Report Recognition Draft Mappers
 
 extension MedicalReportRecognitionDraft {
+    private var isImagingOrPathologyCategory: Bool {
+        switch (category ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "imaging", "pathology":
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// 报告头「所见」：优先 `content`。
+    var resolvedFindingsText: String? {
+        content?.nilIfBlank
+    }
+
+    /// 报告头「印象/结论」：影像/病理拼接全部 `details.diagnosis`；其他类型与 `content` 一致。
+    var resolvedImpressionText: String? {
+        if isImagingOrPathologyCategory {
+            let joined = details.compactMap(\.diagnosis?.nilIfBlank).joined(separator: "\n")
+            if joined.isEmpty == false {
+                return joined
+            }
+        }
+        return content?.nilIfBlank
+    }
+
     /// 转换为检查报告创建请求
     func toExaminationReportCreateRequest(sourceFileIds: [Int] = []) -> ExaminationReportCreateRequest {
         ExaminationReportCreateRequest(
             category: category ?? "unknown",
             itemName: title,
-            findings: content,
-            impression: nil,
+            findings: resolvedFindingsText,
+            impression: resolvedImpressionText,
             performedAt: date,
             organizationName: hospital,
             doctorName: doctor,
-            details: details.map { $0.toExaminationReportDetailRequest() },
+            details: details.enumerated().map { index, row in
+                row.toExaminationReportDetailRequest(fallbackCategory: category, sortOrder: index)
+            },
             sourceFileIds: sourceFileIds
         )
     }
