@@ -289,6 +289,38 @@ private final class AttachmentUploadCoordinator: ObservableObject, @unchecked Se
     }
 }
 
+/// 医疗附件操作失败提示：优先使用服务端 `msg`/`code` 对应的中文文案。
+enum MedicalAttachmentErrorMessage {
+    static func deleteFailed(from error: Error) -> String {
+        formatted(
+            templateKey: "home.medical.attachment.delete_failed",
+            templateFallback: "删除附件失败：%@",
+            error: error
+        )
+    }
+
+    static func uploadFailed(from error: Error) -> String {
+        formatted(
+            templateKey: "home.medical.attachment.upload_failed_with_reason",
+            templateFallback: "上传附件失败：%@",
+            error: error
+        )
+    }
+
+    private static func formatted(templateKey: String, templateFallback: String, error: Error) -> String {
+        let reason = backendMessage(from: error)
+        return String(format: L10n.text(templateKey, fallback: templateFallback), reason)
+    }
+
+    private static func backendMessage(from error: Error) -> String {
+        if let networkError = error as? SparkNetworkError,
+           case let .httpError(statusCode, backend, _) = networkError {
+            return BackendErrorLocalizer.message(for: backend, statusCode: statusCode)
+        }
+        return error.localizedDescription
+    }
+}
+
 /// 医疗附件网格预览：自动下载 + 网格展示 + 点击预览。
 /// 编辑模式下支持删除附件（内部调用服务端）与上传新附件（单卡片上传进度）。
 struct MedicalAttachmentGridPreview: View {
@@ -631,7 +663,7 @@ extension MedicalAttachmentGridPreview {
                 onDeleted?(fileID)
             } catch {
                 deletingIDs.remove(fileID)
-                deleteErrorMessage = error.localizedDescription
+                deleteErrorMessage = MedicalAttachmentErrorMessage.deleteFailed(from: error)
                 logger.warning("附件删除失败 fileID=\(fileID) error=\(error.localizedDescription)", module: logModule)
             }
         }
@@ -665,7 +697,7 @@ extension MedicalAttachmentGridPreview {
                 cachedFileURLs[record.id] = file.url
                 onFileUploaded?(record)
             } catch {
-                coordinator.markError(id: cardID, message: error.localizedDescription)
+                coordinator.markError(id: cardID, message: MedicalAttachmentErrorMessage.uploadFailed(from: error))
                 logger.warning("附件上传失败 error=\(error.localizedDescription)", module: logModule)
             }
         }

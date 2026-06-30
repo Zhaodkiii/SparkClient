@@ -41,6 +41,8 @@ struct MedicationPrescriptionDetailPage: View {
     @State private var deleteLinkedPlans = false
     @State private var isDeleting = false
     @State private var alertMessage: String?
+    @State private var isEditingAttachments = false
+    @State private var attachmentsDirty = false
 
     init(
         mode: MedicationPrescriptionDetailMode = .server,
@@ -308,18 +310,46 @@ struct MedicationPrescriptionDetailPage: View {
     // MARK: 附件预览区域
     @ViewBuilder
     private var attachmentsSection: some View {
-        if let attachments = currentPrescription?.attachments, attachments.isEmpty == false {
+        if let currentPrescription, mode == .server || currentPrescription.attachments?.isEmpty == false {
             VStack(alignment: .leading, spacing: 12) {
-                Label(L10n.text("common.attachments"), systemImage: "paperclip")
-                    .font(.headline)
-                MedicalAttachmentGridPreview(
-                    attachments: attachments,
-                    fileTransferService: fileTransferService
-                )
+                attachmentsSectionHeader
+                prescriptionAttachmentsGrid(prescription: currentPrescription)
             }
             .padding(16)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+    }
+
+    private var attachmentsSectionHeader: some View {
+        HStack {
+            Label(L10n.text("common.attachments"), systemImage: "paperclip")
+                .font(.headline)
+            Spacer()
+            if mode == .server {
+                Button(isEditingAttachments
+                    ? L10n.text("common.done")
+                    : L10n.text("common.manage", fallback: "管理")) {
+                    if isEditingAttachments {
+                        finishAttachmentEditing()
+                    } else {
+                        isEditingAttachments = true
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+            }
+        }
+    }
+
+    private func prescriptionAttachmentsGrid(
+        prescription: SparkMedicalSyncAPI.RemotePrescription
+    ) -> some View {
+        MedicalAttachmentGridPreview(
+            attachments: prescription.attachments ?? [],
+            fileTransferService: fileTransferService,
+            isEditing: mode == .server && isEditingAttachments,
+            onDeleted: mode == .server ? { handleAttachmentDeleted(fileID: $0) } : nil,
+            onFileUploaded: mode == .server ? { handleFileUploaded($0) } : nil
+        )
     }
 
     // MARK: 诊断内容卡片
@@ -565,6 +595,47 @@ struct MedicationPrescriptionDetailPage: View {
             medicineBoxes: boxes
         )
         onLocalDraftPrescriptionUpdated?(updated)
+    }
+
+    private func handleAttachmentDeleted(fileID: Int) {
+        guard var updated = currentPrescription else { return }
+        updated.attachments = (updated.attachments ?? []).filter { $0.id != fileID }
+        currentPrescription = updated
+        attachmentsDirty = true
+    }
+
+    private func finishAttachmentEditing() {
+        isEditingAttachments = false
+        guard attachmentsDirty, let currentPrescription else { return }
+        attachmentsDirty = false
+        onPrescriptionSaved(currentPrescription)
+    }
+
+    private func handleFileUploaded(_ record: ManagedFileRecord) {
+        guard let prescriptionID = currentPrescription?.id else { return }
+        Task {
+            do {
+                _ = try await fileTransferService.updateBusinessBinding(
+                    fileID: record.id,
+                    businessType: "prescription_batch",
+                    businessID: "\(prescriptionID)"
+                )
+                let newFile = record.remoteManagedFile(
+                    businessType: "prescription_batch",
+                    businessId: "\(prescriptionID)"
+                )
+                await MainActor.run {
+                    guard var updated = currentPrescription, updated.id == prescriptionID else { return }
+                    updated.attachments = (updated.attachments ?? []) + [newFile]
+                    currentPrescription = updated
+                    attachmentsDirty = true
+                }
+            } catch {
+                await MainActor.run {
+                    alertMessage = error.localizedDescription
+                }
+            }
+        }
     }
 
     private func handleLocalDraftPlanSaved(medicationIndex: Int, updatedDraft: MedicationPlanRecognitionDraft) {

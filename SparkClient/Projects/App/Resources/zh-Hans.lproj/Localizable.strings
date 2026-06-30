@@ -567,6 +567,9 @@
 "medical.upload.case_document.sheet.subtitle" = "可一次选择最多 5 个门诊病历、出院小结或相关附件，确认后开始识别。";
 "medical.upload.case_document.sheet.empty.title" = "尚未选择文件";
 "medical.upload.case_document.sheet.empty.subtitle" = "可拍照、从相册选择或上传 PDF/图片";
+"medical.upload.file_picker.action.camera" = "拍摄";
+"medical.upload.file_picker.action.photos" = "照片";
+"medical.upload.file_picker.action.files" = "文件";
 "medical.upload.medicine_box.sheet.camera_unavailable_title" = "无法打开相机";
 "medical.upload.medicine_box.sheet.camera_unavailable_message" = "当前设备不支持相机。";
 "medical.upload.medicine_box.sheet.file_limit_title" = "文件数量已达上限";
@@ -1319,6 +1322,13 @@
 "api_error.timeout" = "请求超时，请检查网络后重试。";
 "api_error.http.generic" = "请求失败（HTTP %@），请稍后重试。";
 "api_error.msg.token_not_valid" = "登录状态失效，请重新登录。";
+"api_error.msg.file_not_found" = "文件不存在或已删除。";
+"api_error.msg.file_permission_denied" = "仅上传者可删除此附件。";
+"api_error.code.4030" = "仅上传者可删除此附件。";
+"api_error.code.4040" = "文件不存在或已删除。";
+"api_error.code.4042" = "文件存储信息缺失，暂时无法访问。";
+"home.medical.attachment.delete_failed" = "删除附件失败：%@";
+"home.medical.attachment.upload_failed_with_reason" = "上传附件失败：%@";
 "auth.session.device_replaced" = "账号已在另一台设备登录，请重新登录";
 "auth.session.device_mismatch" = "当前设备验证失败，请重新登录";
 "auth.session.device_not_found" = "设备会话已失效，请重新登录";

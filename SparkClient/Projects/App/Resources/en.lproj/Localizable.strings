@@ -567,6 +567,9 @@
 "medical.upload.case_document.sheet.subtitle" = "Select up to 5 outpatient records, discharge summaries, or related attachments, then start recognition.";
 "medical.upload.case_document.sheet.empty.title" = "No files selected";
 "medical.upload.case_document.sheet.empty.subtitle" = "Take a photo, pick from album, or upload PDF/images";
+"medical.upload.file_picker.action.camera" = "Take photo";
+"medical.upload.file_picker.action.photos" = "Photos";
+"medical.upload.file_picker.action.files" = "Files";
 "medical.upload.medicine_box.sheet.camera_unavailable_title" = "Camera unavailable";
 "medical.upload.medicine_box.sheet.camera_unavailable_message" = "This device does not support the camera.";
 "medical.upload.medicine_box.sheet.file_limit_title" = "File limit reached";
@@ -1319,6 +1322,13 @@
 "api_error.timeout" = "The request timed out. Please check your connection and try again.";
 "api_error.http.generic" = "Request failed (HTTP %@). Please try again later.";
 "api_error.msg.token_not_valid" = "Your session has expired. Please sign in again.";
+"api_error.msg.file_not_found" = "The file does not exist or has been deleted.";
+"api_error.msg.file_permission_denied" = "Only the uploader can delete this attachment.";
+"api_error.code.4030" = "Only the uploader can delete this attachment.";
+"api_error.code.4040" = "The file does not exist or has been deleted.";
+"api_error.code.4042" = "File storage information is missing and cannot be accessed.";
+"home.medical.attachment.delete_failed" = "Failed to delete attachment: %@";
+"home.medical.attachment.upload_failed_with_reason" = "Failed to upload attachment: %@";
 "auth.session.device_replaced" = "Your account was signed in on another device. Please sign in again.";
 "auth.session.device_mismatch" = "This device could not be verified. Please sign in again.";
 "auth.session.device_not_found" = "Your device session is no longer valid. Please sign in again.";

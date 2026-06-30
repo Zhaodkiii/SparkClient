@@ -350,7 +350,7 @@ struct ExaminationReportSummaryDetailPage: View {
                 }
             } catch {
                 await MainActor.run {
-                    attachmentErrorMessage = error.localizedDescription
+                    attachmentErrorMessage = MedicalAttachmentErrorMessage.uploadFailed(from: error)
                 }
             }
         }

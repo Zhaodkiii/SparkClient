@@ -22,6 +22,8 @@ struct MedicineBoxDetailPage: View {
     @State private var showingDeleteConfirm = false
     @State private var alertMessage: String?
     @State private var isDeleting = false
+    @State private var isEditingAttachments = false
+    @State private var attachmentsDirty = false
 
     init(
         mode: MedicineBoxDetailMode = .server,
@@ -105,13 +107,12 @@ struct MedicineBoxDetailPage: View {
                 }
             }
 
-            if let attachments = currentBox.attachments, attachments.isEmpty == false {
-                Section(L10n.text("common.attachments")) {
-                    MedicalAttachmentGridPreview(
-                        attachments: attachments,
-                        fileTransferService: fileTransferService
-                    )
+            if mode == .server || currentBox.attachments?.isEmpty == false {
+                Section {
+                    medicineBoxAttachmentsGrid
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                } header: {
+                    attachmentsSectionHeader
                 }
             }
         }
@@ -227,5 +228,74 @@ struct MedicineBoxDetailPage: View {
         guard let memberID = entryMemberID ?? currentBox.member else { return }
         currentBox = updated.remoteMedicineBox(memberID: memberID, id: currentBox.id)
         onLocalDraftSaved?(updated)
+    }
+
+    private var attachmentsSectionHeader: some View {
+        HStack {
+            Label(L10n.text("common.attachments"), systemImage: "paperclip")
+            Spacer()
+            if mode == .server {
+                Button(isEditingAttachments
+                    ? L10n.text("common.done")
+                    : L10n.text("common.manage", fallback: "管理")) {
+                    if isEditingAttachments {
+                        finishAttachmentEditing()
+                    } else {
+                        isEditingAttachments = true
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+            }
+        }
+    }
+
+    private var medicineBoxAttachmentsGrid: some View {
+        MedicalAttachmentGridPreview(
+            attachments: currentBox.attachments ?? [],
+            fileTransferService: fileTransferService,
+            isEditing: mode == .server && isEditingAttachments,
+            onDeleted: mode == .server ? { handleAttachmentDeleted(fileID: $0) } : nil,
+            onFileUploaded: mode == .server ? { handleFileUploaded($0) } : nil
+        )
+    }
+
+    private func handleAttachmentDeleted(fileID: Int) {
+        var updated = currentBox
+        updated.attachments = (updated.attachments ?? []).filter { $0.id != fileID }
+        currentBox = updated
+        attachmentsDirty = true
+    }
+
+    private func finishAttachmentEditing() {
+        isEditingAttachments = false
+        guard attachmentsDirty else { return }
+        attachmentsDirty = false
+        onSaved(currentBox)
+    }
+
+    private func handleFileUploaded(_ record: ManagedFileRecord) {
+        Task {
+            do {
+                _ = try await fileTransferService.updateBusinessBinding(
+                    fileID: record.id,
+                    businessType: "medicine_box",
+                    businessID: "\(currentBox.id)"
+                )
+                let newFile = record.remoteManagedFile(
+                    businessType: "medicine_box",
+                    businessId: "\(currentBox.id)"
+                )
+                await MainActor.run {
+                    var updated = currentBox
+                    updated.attachments = (updated.attachments ?? []) + [newFile]
+                    currentBox = updated
+                    attachmentsDirty = true
+                }
+            } catch {
+                await MainActor.run {
+                    alertMessage = error.localizedDescription
+                }
+            }
+        }
     }
 }

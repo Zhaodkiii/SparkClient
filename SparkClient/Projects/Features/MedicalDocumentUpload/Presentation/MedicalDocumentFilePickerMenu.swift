@@ -33,19 +33,19 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
             Button {
                 presentCamera()
             } label: {
-                Label("拍摄", systemImage: "camera.fill")
+                Label(L10n.text("medical.upload.file_picker.action.camera"), systemImage: "camera.fill")
             }
 
             Button {
                 showPhotoPicker = true
             } label: {
-                Label("照片", systemImage: "photo.on.rectangle")
+                Label(L10n.text("medical.upload.file_picker.action.photos"), systemImage: "photo.on.rectangle")
             }
 
             Button {
                 showDocPicker = true
             } label: {
-                Label("文件", systemImage: "doc.text.fill")
+                Label(L10n.text("medical.upload.file_picker.action.files"), systemImage: "doc.text.fill")
             }
         } label: {
             buttonContent()
@@ -103,10 +103,10 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                 }
             )
         }
-        .alert("无法打开相机", isPresented: $showCameraUnavailableAlert) {
-            Button("好", role: .cancel) {}
+        .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCameraUnavailableAlert) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
-            Text("当前设备不支持相机。")
+            Text(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_message"))
         }
     }
 

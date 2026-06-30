@@ -33,6 +33,8 @@ struct MedicationPlanDetailPage: View {
     @State private var planRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] = []
     @State private var isLoadingPlanRecords = false
     @State private var planRecordsLoadError: String?
+    @State private var isEditingAttachments = false
+    @State private var attachmentsDirty = false
 
     init(
         mode: MedicationPlanDetailMode = .server,
@@ -228,13 +230,12 @@ struct MedicationPlanDetailPage: View {
                 }
             }
             
-            if let attachments = currentPlan.attachments, attachments.isEmpty == false {
-                Section(L10n.text("common.attachments")) {
-                    MedicalAttachmentGridPreview(
-                        attachments: attachments,
-                        fileTransferService: fileTransferService
-                    )
+            if mode == .server || currentPlan.attachments?.isEmpty == false {
+                Section {
+                    medicationPlanAttachmentsGrid
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                } header: {
+                    attachmentsSectionHeader
                 }
             }
 
@@ -544,6 +545,75 @@ struct MedicationPlanDetailPage: View {
 
         onLocalDraftMedicineBoxDeleted?()
         onLocalDraftSaved?(clearedDraft)
+    }
+
+    private var attachmentsSectionHeader: some View {
+        HStack {
+            Label(L10n.text("common.attachments"), systemImage: "paperclip")
+            Spacer()
+            if mode == .server {
+                Button(isEditingAttachments
+                    ? L10n.text("common.done")
+                    : L10n.text("common.manage", fallback: "管理")) {
+                    if isEditingAttachments {
+                        finishAttachmentEditing()
+                    } else {
+                        isEditingAttachments = true
+                    }
+                }
+                .font(.subheadline.weight(.medium))
+            }
+        }
+    }
+
+    private var medicationPlanAttachmentsGrid: some View {
+        MedicalAttachmentGridPreview(
+            attachments: currentPlan.attachments ?? [],
+            fileTransferService: fileTransferService,
+            isEditing: mode == .server && isEditingAttachments,
+            onDeleted: mode == .server ? { handleAttachmentDeleted(fileID: $0) } : nil,
+            onFileUploaded: mode == .server ? { handleFileUploaded($0) } : nil
+        )
+    }
+
+    private func handleAttachmentDeleted(fileID: Int) {
+        var updated = currentPlan
+        updated.attachments = (updated.attachments ?? []).filter { $0.id != fileID }
+        currentPlan = updated
+        attachmentsDirty = true
+    }
+
+    private func finishAttachmentEditing() {
+        isEditingAttachments = false
+        guard attachmentsDirty else { return }
+        attachmentsDirty = false
+        onSaved(currentPlan)
+    }
+
+    private func handleFileUploaded(_ record: ManagedFileRecord) {
+        Task {
+            do {
+                _ = try await fileTransferService.updateBusinessBinding(
+                    fileID: record.id,
+                    businessType: "medication_plan",
+                    businessID: "\(currentPlan.id)"
+                )
+                let newFile = record.remoteManagedFile(
+                    businessType: "medication_plan",
+                    businessId: "\(currentPlan.id)"
+                )
+                await MainActor.run {
+                    var updated = currentPlan
+                    updated.attachments = (updated.attachments ?? []) + [newFile]
+                    currentPlan = updated
+                    attachmentsDirty = true
+                }
+            } catch {
+                await MainActor.run {
+                    alertMessage = error.localizedDescription
+                }
+            }
+        }
     }
 }
 
