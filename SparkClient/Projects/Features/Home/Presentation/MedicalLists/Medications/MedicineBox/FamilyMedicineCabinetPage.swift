@@ -166,6 +166,7 @@ struct FamilyMedicineCabinetPage: View {
                 onUploadConfirmed: { files in startMedicineBoxRecognition(files: files) }
             )
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .sheet(item: $sheetDestination) { destination in
             MedicineBoxFormView(
                 mode: destination.formMode,

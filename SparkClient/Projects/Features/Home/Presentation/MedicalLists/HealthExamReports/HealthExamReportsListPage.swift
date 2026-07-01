@@ -13,7 +13,6 @@ struct HealthExamReportsListPage: View {
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
     private let notificationClient: any NotificationClient
 
-    @State private var query = ""
     @State private var selectedFilter: HealthExamFilter = .all
     /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
     private static let uploadDocumentKind: MedicalDocumentKind = .healthExamReport
@@ -67,7 +66,7 @@ struct HealthExamReportsListPage: View {
             }
         }
 
-        let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keyword = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard keyword.isEmpty == false else { return filtered }
 
         return filtered.filter { report in
@@ -82,32 +81,31 @@ struct HealthExamReportsListPage: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 12) {
-                HealthExamSearchBar(text: $query)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+        ScrollView {
+            VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    HealthExamFilterBar(selectedFilter: $selectedFilter)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                }
+                .padding(.bottom, 8)
+                .background(Color(uiColor: .systemGroupedBackground))
 
-                HealthExamFilterBar(selectedFilter: $selectedFilter)
-                    .padding(.horizontal, 16)
-            }
-            .padding(.bottom, 8)
-            .background(Color(uiColor: .systemGroupedBackground))
-
-            Divider()
-                .opacity(0.35)
-
-            ScrollView {
+                Divider()
+                    .opacity(0.35)
+                
+                
                 examContent
                     .padding(.top, 8)
             }
-            .refreshable {
-                await refreshReports()
-            }
+        }
+        .refreshable {
+            await refreshReports()
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.health_exam_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $viewModel.searchText, prompt: L10n.text("home.medical.family_cabinet.search_prompt"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(
                 documentKind: Self.uploadDocumentKind,
@@ -115,6 +113,8 @@ struct HealthExamReportsListPage: View {
                 onUploadConfirmed: { files in startHealthExamReportRecognition(files: files) }
             )
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+
 //        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
 //            CompatibleNavigationContainer {
 //                MedicalDocumentUploadHostView(
@@ -240,41 +240,6 @@ private enum HealthExamFilter: CaseIterable, Identifiable {
         case .withAttachments:
             return (report.attachments?.isEmpty == false)
         }
-    }
-}
-
-private struct HealthExamSearchBar: View {
-    @Binding var text: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.body)
-                .foregroundStyle(.secondary)
-
-            TextField(L10n.text("home.medical.list.health_exam.search.placeholder"), text: $text)
-                .textFieldStyle(.plain)
-                .font(.body)
-
-            if text.isEmpty == false {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(uiColor: .secondarySystemBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color(uiColor: .separator).opacity(0.6), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

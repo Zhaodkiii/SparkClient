@@ -82,6 +82,8 @@ struct MedicalCasesListPage: View {
                 onUploadConfirmed: { files in startCaseDocumentRecognition(files: files) }
             )
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+
         .onChange(of: completeData?.medicalCases ?? []) { newValue in
             rows = newValue
         }

@@ -201,6 +201,7 @@ struct MedicationsListPage: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
             .navigationBarTitleDisplayMode(.inline)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if let homeDependencies {

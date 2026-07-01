@@ -440,8 +440,10 @@ struct MedicalAttachmentUploadListSheet: View {
                     presentDefaultUploadEntry()
                 }
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -699,6 +701,7 @@ struct MedicalAttachmentUploadListSheet: View {
             .disabled(localFiles.isEmpty)
         }
         .padding(10)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     private var remainingFileSlots: Int {

@@ -86,6 +86,7 @@ struct MedicineBoxListPage: View {
                 onUploadConfirmed: { files in startMedicineBoxRecognition(files: files) }
             )
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {

@@ -29,6 +29,7 @@ extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments: MedExamDet
 final class MedExamDetailLazyLoadViewModel<Report: MedExamDetailLoadableReport>: ObservableObject {
     @Published private(set) var reports: [Report]
     @Published private(set) var loadingIDs: Set<Int> = []
+    @Published var searchText: String = ""
 
     private let medicalQueryAPI: SparkMedicalQueryAPI
     private let logger: Logger

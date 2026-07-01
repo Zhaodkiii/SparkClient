@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 医疗检查列表页：顶部固定搜索与分类，正文按分组展示检查卡片。
+/// 医疗检查列表页：顶部固定搜索与分类，正文按时间排序并按连续分类段落展示检查卡片。
 struct ExaminationReportsListPage: View {
     @StateObject private var viewModel: MedExamDetailLazyLoadViewModel<SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments>
     private let completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
@@ -16,7 +16,6 @@ struct ExaminationReportsListPage: View {
     /// 当前成员 ID；`complete-data` 缺失时为 0，此时不展示新增入口。
     private let memberID: Int
 
-    @State private var query = ""
     @State private var selectedCategory: ExaminationReportCategory?
     @State private var isPresentingAddExamSheet = false
     /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
@@ -68,7 +67,7 @@ struct ExaminationReportsListPage: View {
             filtered = filtered.filter { selectedCategory.matches($0) }
         }
 
-        let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keyword = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard keyword.isEmpty == false else { return filtered }
 
         return filtered.filter { report in
@@ -87,39 +86,37 @@ struct ExaminationReportsListPage: View {
         }
     }
 
-    private var groupedReports: [ExaminationReportCategory: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]] {
-        Dictionary(grouping: filteredReports) { report in
-            ExaminationReportCategory.allCases.first(where: { $0.matches(report) }) ?? .laboratory
-        }
+    private var timelineSections: [ExaminationReportTimelineSection] {
+        ExaminationReportTimelineSection.makeSections(from: filteredReports)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 12) {
-                ExaminationReportSearchBar(text: $query)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+        ScrollView {
+            VStack(spacing: 0) {
+                VStack(spacing: 0){
+                    VStack(spacing: 12) {
+                        ExaminationReportFilterBar(selectedCategory: $selectedCategory)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                    }
+                    .padding(.bottom, 8)
+                    .background(Color(uiColor: .systemGroupedBackground))
 
-                ExaminationReportFilterBar(selectedCategory: $selectedCategory)
-                    .padding(.horizontal, 16)
-            }
-            .padding(.bottom, 8)
-            .background(Color(uiColor: .systemGroupedBackground))
-
-            Divider()
-                .opacity(0.35)
-
-            ScrollView {
+                    Divider()
+                        .opacity(0.35)
+                }
+                
                 examinationContent
                     .padding(.top, 8)
             }
-            .refreshable {
-                await refreshReports()
-            }
+        }
+        .refreshable {
+            await refreshReports()
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.examination_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $viewModel.searchText, prompt: L10n.text("home.medical.family_cabinet.search_prompt"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if memberID > 0 {
                 MedicalListBottomActionBar(
@@ -129,6 +126,7 @@ struct ExaminationReportsListPage: View {
                 )
             }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .sheet(isPresented: $isPresentingAddExamSheet) {
             CompatibleNavigationContainer(legacyStackStyle: true) {
                 ExamReportFormView(
@@ -168,35 +166,33 @@ struct ExaminationReportsListPage: View {
                 .padding(.vertical, 24)
         } else {
             LazyVStack(spacing: 16) {
-                ForEach(ExaminationReportCategory.allCases) { category in
-                    if let reports = groupedReports[category], reports.isEmpty == false {
-                        ExaminationReportCategorySection(
-                            category: category,
-                            reports: reports,
-                            fileTransferService: fileTransferService,
-                            medicalResourceAPI: medicalResourceAPI,
-                            completeData: completeData,
-                            memberContextStore: memberContextStore,
-                            notificationClient: notificationClient,
-                            isLoading: { viewModel.isLoading(reportID: $0) },
-                            onLoadDetails: { reportID in
-                                Task {
-                                    await viewModel.loadDetailsIfNeeded(for: reportID)
-                                }
-                            },
-                            onDeleted: { deletedID in
-                                viewModel.removeReport(reportID: deletedID)
-                            },
-                            onMedicalCaseLinked: { updated in
-                                viewModel.upsertReport(updated)
-                            },
-                            onMedicalCaseUpdated: handleMedicalCaseUpdated,
-                            onMedicalCaseDeleted: handleMedicalCaseDeleted,
-                            onAttachmentsUpdated: { updated in
-                                viewModel.upsertReport(updated)
+                ForEach(timelineSections) { section in
+                    ExaminationReportCategorySection(
+                        category: section.category,
+                        reports: section.reports,
+                        fileTransferService: fileTransferService,
+                        medicalResourceAPI: medicalResourceAPI,
+                        completeData: completeData,
+                        memberContextStore: memberContextStore,
+                        notificationClient: notificationClient,
+                        isLoading: { viewModel.isLoading(reportID: $0) },
+                        onLoadDetails: { reportID in
+                            Task {
+                                await viewModel.loadDetailsIfNeeded(for: reportID)
                             }
-                        )
-                    }
+                        },
+                        onDeleted: { deletedID in
+                            viewModel.removeReport(reportID: deletedID)
+                        },
+                        onMedicalCaseLinked: { updated in
+                            viewModel.upsertReport(updated)
+                        },
+                        onMedicalCaseUpdated: handleMedicalCaseUpdated,
+                        onMedicalCaseDeleted: handleMedicalCaseDeleted,
+                        onAttachmentsUpdated: { updated in
+                            viewModel.upsertReport(updated)
+                        }
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -246,41 +242,6 @@ struct ExaminationReportsListPage: View {
     @MainActor
     private func startExaminationReportRecognition(files: [MedicalUploadLocalFile]) {
         medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
-    }
-}
-
-private struct ExaminationReportSearchBar: View {
-    @Binding var text: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.body)
-                .foregroundStyle(.secondary)
-
-            TextField(L10n.text("home.medical.list.examination.search.placeholder"), text: $text)
-                .textFieldStyle(.plain)
-                .font(.body)
-
-            if text.isEmpty == false {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(uiColor: .secondarySystemBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color(uiColor: .separator).opacity(0.6), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -343,6 +304,66 @@ private struct ExaminationReportFilterChip: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct ExaminationReportTimelineSection: Identifiable, Equatable {
+    let category: ExaminationReportCategory
+    var reports: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]
+
+    var id: String {
+        let firstID = reports.first?.id ?? -1
+        let lastID = reports.last?.id ?? -1
+        return "\(category.rawValue)-\(firstID)-\(lastID)-\(reports.count)"
+    }
+
+    static func makeSections(
+        from reports: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]
+    ) -> [ExaminationReportTimelineSection] {
+        let sortedReports = reports.enumerated().sorted { lhs, rhs in
+            let lhsDate = lhs.element.timelineSortDate
+            let rhsDate = rhs.element.timelineSortDate
+
+            switch (lhsDate, rhsDate) {
+            case let (left?, right?):
+                if left == right {
+                    return lhs.offset < rhs.offset
+                }
+                return left > right
+            case (nil, nil):
+                return lhs.offset < rhs.offset
+            case (nil, _?):
+                return false
+            case (_?, nil):
+                return true
+            }
+        }
+
+        var sections: [ExaminationReportTimelineSection] = []
+
+        for indexedReport in sortedReports {
+            let report = indexedReport.element
+            let category = ExaminationReportCategory.category(for: report)
+
+            if sections.last?.category == category {
+                sections[sections.count - 1].reports.append(report)
+            } else {
+                sections.append(
+                    ExaminationReportTimelineSection(
+                        category: category,
+                        reports: [report]
+                    )
+                )
+            }
+        }
+
+        return sections
+    }
+}
+
+private extension SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments {
+    var timelineSortDate: Date? {
+        reportedAt ?? performedAt
     }
 }
 
