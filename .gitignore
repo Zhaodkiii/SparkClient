@@ -5,6 +5,9 @@
 # macOS
 .DS_Store
 
+# Local App Store cover exports
+AppStoreCovers/
+
 # Build
 DerivedData/
 build/

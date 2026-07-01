@@ -82,21 +82,13 @@ struct HealthExamReportsListPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                VStack(spacing: 12) {
-                    HealthExamFilterBar(selectedFilter: $selectedFilter)
-                        .padding(.horizontal, 16)
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    examContent
                         .padding(.top, 8)
+                } header: {
+                    HealthExamFilterHeader(selectedFilter: $selectedFilter)
                 }
-                .padding(.bottom, 8)
-                .background(Color(uiColor: .systemGroupedBackground))
-
-                Divider()
-                    .opacity(0.35)
-                
-                
-                examContent
-                    .padding(.top, 8)
             }
         }
         .refreshable {
@@ -105,6 +97,9 @@ struct HealthExamReportsListPage: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.health_exam_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
+        // 👇 添加这两行，强制导航栏背景可见并且不透明
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar) // 你也可以换成 .white 等你想要的颜色
         .searchable(text: $viewModel.searchText, prompt: L10n.text("home.medical.family_cabinet.search_prompt"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(
@@ -182,6 +177,25 @@ struct HealthExamReportsListPage: View {
     @MainActor
     private func startHealthExamReportRecognition(files: [MedicalUploadLocalFile]) {
         medicalDocumentUploadViewModel.prepareAndStart(files: files, kind: Self.uploadDocumentKind)
+    }
+}
+
+private struct HealthExamFilterHeader: View {
+    @Binding var selectedFilter: HealthExamFilter
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                HealthExamFilterBar(selectedFilter: $selectedFilter)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+            .padding(.bottom, 8)
+            .background(Color(uiColor: .systemGroupedBackground))
+
+            Divider()
+                .opacity(0.35)
+        }
     }
 }
 

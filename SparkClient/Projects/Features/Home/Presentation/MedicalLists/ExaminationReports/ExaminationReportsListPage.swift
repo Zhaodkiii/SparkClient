@@ -92,30 +92,24 @@ struct ExaminationReportsListPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                VStack(spacing: 0){
-                    VStack(spacing: 12) {
-                        ExaminationReportFilterBar(selectedCategory: $selectedCategory)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                    }
-                    .padding(.bottom, 8)
-                    .background(Color(uiColor: .systemGroupedBackground))
-
-                    Divider()
-                        .opacity(0.35)
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                Section {
+                    examinationContent
+                        .padding(.top, 8)
+                } header: {
+                    ExaminationReportFilterHeader(selectedCategory: $selectedCategory)
                 }
-                
-                examinationContent
-                    .padding(.top, 8)
             }
         }
         .refreshable {
             await refreshReports()
         }
-        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(L10n.text("home.medical.list.examination_reports.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(uiColor: .systemGroupedBackground))
+        // 👇 添加这两行，强制导航栏背景可见并且不透明
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar) // 你也可以换成 .white 等你想要的颜色
         .searchable(text: $viewModel.searchText, prompt: L10n.text("home.medical.family_cabinet.search_prompt"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if memberID > 0 {
@@ -165,42 +159,133 @@ struct ExaminationReportsListPage: View {
                 .frame(maxWidth: .infinity, minHeight: 320)
                 .padding(.vertical, 24)
         } else {
-            LazyVStack(spacing: 16) {
+            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                 ForEach(timelineSections) { section in
-                    ExaminationReportCategorySection(
-                        category: section.category,
-                        reports: section.reports,
-                        fileTransferService: fileTransferService,
-                        medicalResourceAPI: medicalResourceAPI,
-                        completeData: completeData,
-                        memberContextStore: memberContextStore,
-                        notificationClient: notificationClient,
-                        isLoading: { viewModel.isLoading(reportID: $0) },
-                        onLoadDetails: { reportID in
-                            Task {
-                                await viewModel.loadDetailsIfNeeded(for: reportID)
+//                    ExaminationReportCategorySection(
+//                        category: section.category,
+//                        reports: section.reports,
+//                        fileTransferService: fileTransferService,
+//                        medicalResourceAPI: medicalResourceAPI,
+//                        completeData: completeData,
+//                        memberContextStore: memberContextStore,
+//                        notificationClient: notificationClient,
+//                        isLoading: { viewModel.isLoading(reportID: $0) },
+//                        onLoadDetails: { reportID in
+//                            Task {
+//                                await viewModel.loadDetailsIfNeeded(for: reportID)
+//                            }
+//                        },
+//                        onDeleted: { deletedID in
+//                            viewModel.removeReport(reportID: deletedID)
+//                        },
+//                        onMedicalCaseLinked: { updated in
+//                            viewModel.upsertReport(updated)
+//                        },
+//                        onMedicalCaseUpdated: handleMedicalCaseUpdated,
+//                        onMedicalCaseDeleted: handleMedicalCaseDeleted,
+//                        onAttachmentsUpdated: { updated in
+//                            viewModel.upsertReport(updated)
+//                        }
+//                    )
+                    Section {
+                        ExaminationReportCategorySection(
+                            category: section.category,
+                            reports: section.reports,
+                            fileTransferService: fileTransferService,
+                            medicalResourceAPI: medicalResourceAPI,
+                            completeData: completeData,
+                            memberContextStore: memberContextStore,
+                            notificationClient: notificationClient,
+                            isLoading: { viewModel.isLoading(reportID: $0) },
+                            onLoadDetails: { reportID in
+                                Task {
+                                    await viewModel.loadDetailsIfNeeded(for: reportID)
+                                }
+                            },
+                            onDeleted: { deletedID in
+                                viewModel.removeReport(reportID: deletedID)
+                            },
+                            onMedicalCaseLinked: { updated in
+                                viewModel.upsertReport(updated)
+                            },
+                            onMedicalCaseUpdated: handleMedicalCaseUpdated,
+                            onMedicalCaseDeleted: handleMedicalCaseDeleted,
+                            onAttachmentsUpdated: { updated in
+                                viewModel.upsertReport(updated)
                             }
-                        },
-                        onDeleted: { deletedID in
-                            viewModel.removeReport(reportID: deletedID)
-                        },
-                        onMedicalCaseLinked: { updated in
-                            viewModel.upsertReport(updated)
-                        },
-                        onMedicalCaseUpdated: handleMedicalCaseUpdated,
-                        onMedicalCaseDeleted: handleMedicalCaseDeleted,
-                        onAttachmentsUpdated: { updated in
-                            viewModel.upsertReport(updated)
-                        }
-                    )
+                        )
+                    } header: {
+                        ExaminationReportTimelineSectionHeader(
+                            category: section.category,
+                            count: section.reports.count
+                        )
+                    }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
         }
-    }
+}
 
-    private func handleMedicalCaseUpdated(_ updated: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) {
+private struct ExaminationReportFilterHeader: View {
+    @Binding var selectedCategory: ExaminationReportCategory?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                ExaminationReportFilterBar(selectedCategory: $selectedCategory)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+            .padding(.bottom, 8)
+            .background(Color(uiColor: .systemGroupedBackground))
+
+            Divider()
+                .opacity(0.35)
+        }
+    }
+}
+
+private struct ExaminationReportTimelineSectionHeader: View {
+    let category: ExaminationReportCategory
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: category.icon)
+                        .font(.title3)
+                        .foregroundStyle(category.color)
+
+                    Text(L10n.text(category.titleKey))
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Text("\(count)")
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .padding(.horizontal, 4)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+            .background(Color(uiColor: .systemGroupedBackground))
+
+            Divider()
+                .opacity(0.35)
+        }
+    }
+}
+
+private func handleMedicalCaseUpdated(_ updated: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) {
         var cases = completeData?.medicalCases ?? []
         if let index = cases.firstIndex(where: { $0.id == updated.id }) {
             cases[index] = updated
@@ -385,27 +470,27 @@ private struct ExaminationReportCategorySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: category.icon)
-                    .font(.title3)
-                    .foregroundStyle(category.color)
-
-                Text(L10n.text(category.titleKey))
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-
-                Spacer()
-
-                Text("\(reports.count)")
-                    .font(.subheadline)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .padding(.horizontal, 4)
+//            HStack(spacing: 8) {
+//                Image(systemName: category.icon)
+//                    .font(.title3)
+//                    .foregroundStyle(category.color)
+//
+//                Text(L10n.text(category.titleKey))
+//                    .font(.headline)
+//                    .fontWeight(.semibold)
+//                    .foregroundStyle(.primary)
+//
+//                Spacer()
+//
+//                Text("\(reports.count)")
+//                    .font(.subheadline)
+//                    .monospacedDigit()
+//                    .foregroundStyle(.secondary)
+//                    .padding(.horizontal, 8)
+//                    .padding(.vertical, 4)
+//                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+//            }
+//            .padding(.horizontal, 4)
 
             LazyVStack(spacing: 12) {
                 ForEach(reports, id: \.id) { report in
