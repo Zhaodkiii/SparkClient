@@ -8,6 +8,9 @@
 # Local App Store cover exports
 AppStoreCovers/
 
+# Local runtime data
+dump.rdb
+
 # Build
 DerivedData/
 build/

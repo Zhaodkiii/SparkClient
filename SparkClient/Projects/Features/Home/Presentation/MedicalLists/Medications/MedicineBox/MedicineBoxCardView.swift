@@ -25,7 +25,7 @@ struct MedicineBoxCardView: View {
                             attachment: imageAttachment,
                             fileTransferService: fileTransferService
                         )
-                        .frame(width: 72, height: 72)
+                        .frame(width: 120, height: 120)
                     }
 
                 if let statusBadge {
