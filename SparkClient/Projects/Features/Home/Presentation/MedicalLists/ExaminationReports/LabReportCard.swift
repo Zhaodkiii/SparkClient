@@ -476,6 +476,9 @@ private struct ExaminationReportDetailHostPage: View {
     @State private var isShowingDeleteAlert = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
+    @State private var shareContext: MedicalShareContext?
+    @State private var shareErrorMessage: String?
+    @State private var isPreparingShare = false
 
     private var mutationService: ExaminationReportServerMutationService {
         .init(resources: resources)
@@ -558,15 +561,27 @@ private struct ExaminationReportDetailHostPage: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("编辑") {
-                            isShowingEditSheet = true
+                        Button {
+                            Task { await prepareShareSheet() }
+                        } label: {
+                            Label(L10n.text("common.share"), systemImage: "square.and.arrow.up")
                         }
-                        Button("删除", role: .destructive) {
+
+                        Button {
+                            isShowingEditSheet = true
+                        } label: {
+                            Label(L10n.text("common.edit"), systemImage: "pencil")
+                        }
+
+                        Button(role: .destructive) {
                             isShowingDeleteAlert = true
+                        } label: {
+                            Label(L10n.text("common.delete"), systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .disabled(isDeleting || isPreparingShare)
                 }
             }
             .sheet(isPresented: $isShowingEditSheet) {
@@ -580,9 +595,14 @@ private struct ExaminationReportDetailHostPage: View {
                     )
                 }
             }
-            .alert("确认删除该检查报告？", isPresented: $isShowingDeleteAlert) {
-                Button("取消", role: .cancel) {}
-                Button("确认删除", role: .destructive) {
+            .sheet(item: $shareContext) { context in
+                MedicalShareSheet(context: context) {
+                    shareContext = nil
+                }
+            }
+            .alert(L10n.text("home.medical.examination.delete.confirm_title", fallback: "确认删除该检查报告？"), isPresented: $isShowingDeleteAlert) {
+                Button(L10n.text("common.cancel"), role: .cancel) {}
+                Button(L10n.text("common.delete"), role: .destructive) {
                     guard isDeleting == false else { return }
                     isDeleting = true
                     Task {
@@ -603,13 +623,43 @@ private struct ExaminationReportDetailHostPage: View {
                     }
                 }
             } message: {
-                Text("删除后无法恢复。")
+                Text(L10n.text("home.medical.examination.delete.message", fallback: "删除后无法恢复。"))
             }
-            .alert("操作失败", isPresented: Binding(get: { errorMessage != nil }, set: { if $0 == false { errorMessage = nil } })) {
-                Button("好", role: .cancel) {}
+            .alert(L10n.text("home.medical.share.error", fallback: "分享失败"), isPresented: Binding(get: { shareErrorMessage != nil }, set: { if $0 == false { shareErrorMessage = nil } })) {
+                Button(L10n.text("common.got_it"), role: .cancel) {
+                    shareErrorMessage = nil
+                }
+            } message: {
+                Text(shareErrorMessage ?? L10n.text("home.medical.share.retry", fallback: "请稍后重试"))
+            }
+            .alert(L10n.text("common.operation_failed"), isPresented: Binding(get: { errorMessage != nil }, set: { if $0 == false { errorMessage = nil } })) {
+                Button(L10n.text("common.got_it"), role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
             }
+    }
+
+    @MainActor
+    private func prepareShareSheet() async {
+        guard isPreparingShare == false else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let shareAPI = SparkMedicalShareAPI(configuration: resources.configuration)
+            let response = try await shareAPI.createShare(businessType: "examination_report", businessID: report.id)
+            let shareURL = AppEnvironment.current.shareWebBaseURL
+                .appendingPathComponent("s")
+                .appendingPathComponent(response.shareCode)
+            shareContext = MedicalShareContext(
+                itemTitle: report.itemName?.nonEmpty ?? report.category?.nonEmpty ?? L10n.text("home.medical.list.examination_reports.title"),
+                memberName: completeData?.member.name ?? memberContextStore.context.members.first(where: { $0.id == report.member })?.name ?? L10n.text("common.member", fallback: "成员"),
+                shareURL: shareURL,
+                expiresAt: response.expiresAt
+            )
+        } catch {
+            shareErrorMessage = error.localizedDescription.isEmpty ? L10n.text("home.medical.share.retry", fallback: "请稍后重试") : error.localizedDescription
+        }
     }
 }
 

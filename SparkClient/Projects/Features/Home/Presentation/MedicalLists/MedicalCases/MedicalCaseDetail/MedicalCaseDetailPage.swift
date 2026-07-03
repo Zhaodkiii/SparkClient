@@ -428,7 +428,7 @@ struct MedicalCaseDetailPage: View {
                 .appendingPathComponent("s")
                 .appendingPathComponent(response.shareCode)
             shareContext = MedicalCaseShareContext(
-                caseTitle: currentItem.title?.nonEmpty ?? "病例详情",
+                itemTitle: currentItem.title?.nonEmpty ?? "病例详情",
                 memberName: completeData?.member.name ?? memberContextStore.context.members.first(where: { $0.id == currentItem.member })?.name ?? "成员",
                 shareURL: shareURL,
                 expiresAt: response.expiresAt

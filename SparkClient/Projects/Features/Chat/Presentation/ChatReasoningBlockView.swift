@@ -6,6 +6,7 @@ struct ChatReasoningBlockView: View {
     let timeText: String?
     let isStreaming: Bool
     let isLastAssistantMessage: Bool
+    let onHeightChangingUpdate: (@escaping () -> Void) -> Void
     @State private var expanded = false
 
     var body: some View {
@@ -13,7 +14,8 @@ struct ChatReasoningBlockView: View {
             ToggleButton(
                 title: L10n.text("chat.bubble.reasoning.title"),
                 timeText: timeText ?? "",
-                isExpanded: $expanded
+                isExpanded: $expanded,
+                onHeightChangingUpdate: onHeightChangingUpdate
             )
 
             if expanded {
@@ -79,11 +81,14 @@ private struct ToggleButton: View {
     let title: String
     let timeText: String
     @Binding var isExpanded: Bool
+    let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     var body: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isExpanded.toggle()
+            onHeightChangingUpdate {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
             }
         } label: {
             HStack(spacing: 6) {

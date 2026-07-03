@@ -47,6 +47,7 @@ struct ChatMessageBubbleContentView: View {
     let cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let onHealthResourceUnavailableTap: () -> Void
     let healthResourceDestinationFactory: (HealthResourceReference) -> AnyView
+    let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -85,7 +86,8 @@ struct ChatMessageBubbleContentView: View {
             cachedMemberCompleteData: cachedMemberCompleteData,
             healthResourceReferenceCount: healthResourceReferenceCount,
             onHealthResourceUnavailableTap: onHealthResourceUnavailableTap,
-            healthResourceDestinationFactory: healthResourceDestinationFactory
+            healthResourceDestinationFactory: healthResourceDestinationFactory,
+            onHeightChangingUpdate: onHeightChangingUpdate
         )
     }
 

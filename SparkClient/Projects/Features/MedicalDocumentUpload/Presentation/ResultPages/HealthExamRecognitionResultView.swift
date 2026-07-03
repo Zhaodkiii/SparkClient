@@ -11,10 +11,15 @@ struct HealthExamRecognitionResultView: View {
     private let workflowAPI: SparkMedicalWorkflowAPI?
     private let notificationClient: (any NotificationClient)?
     private let onDeleted: ((Int) -> Void)?
+    private let detailShareTitle: String?
+    private let detailShareMemberName: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingDeleteConfirm = false
     @State private var isDeleting = false
+    @State private var shareContext: MedicalShareContext?
+    @State private var shareErrorMessage: String?
+    @State private var isPreparingShare = false
 
     init(
         viewModel: MedicalDocumentUploadViewModel,
@@ -29,6 +34,8 @@ struct HealthExamRecognitionResultView: View {
         self.workflowAPI = nil
         self.notificationClient = nil
         self.onDeleted = nil
+        self.detailShareTitle = nil
+        self.detailShareMemberName = "成员"
     }
 
     init(
@@ -52,17 +59,19 @@ struct HealthExamRecognitionResultView: View {
         self.workflowAPI = workflowAPI
         self.notificationClient = notificationClient
         self.onDeleted = onDeleted
+        self.detailShareTitle = item.institutionName?.nonEmpty ?? L10n.text("home.medical.list.health_exam_reports.title")
+        self.detailShareMemberName = "成员"
     }
 
     var body: some View {
         content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    toolbarActionMenu
-                }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                toolbarActionMenu
             }
+        }
             .alert(
                 L10n.text("home.medical.list.health_exam.delete.confirm_title", fallback: "删除体检报告？"),
                 isPresented: $isShowingDeleteConfirm
@@ -73,6 +82,21 @@ struct HealthExamRecognitionResultView: View {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
             } message: {
                 Text(L10n.text("home.medical.list.health_exam.delete.confirm_message", fallback: "删除后该报告将从列表中移除。"))
+            }
+            .sheet(item: $shareContext) { context in
+                MedicalShareSheet(context: context) {
+                    shareContext = nil
+                }
+            }
+            .alert("分享失败", isPresented: Binding(
+                get: { shareErrorMessage != nil },
+                set: { if $0 == false { shareErrorMessage = nil } }
+            )) {
+                Button("确定", role: .cancel) {
+                    shareErrorMessage = nil
+                }
+            } message: {
+                Text(shareErrorMessage ?? "请稍后重试")
             }
     }
 
@@ -93,13 +117,14 @@ struct HealthExamRecognitionResultView: View {
         if mode == .detail {
             Menu {
                 Button {
+                    Task { await prepareShareSheet() }
                 } label: {
-                    Label(L10n.text("common.export", fallback: "导出"), systemImage: "square.and.arrow.up.on.square")
+                    Label(L10n.text("common.share", fallback: "分享"), systemImage: "square.and.arrow.up")
                 }
 
                 Button {
                 } label: {
-                    Label(L10n.text("common.share", fallback: "分享"), systemImage: "square.and.arrow.up")
+                    Label(L10n.text("common.export", fallback: "导出"), systemImage: "square.and.arrow.up.on.square")
                 }
 
                 Button {
@@ -114,7 +139,7 @@ struct HealthExamRecognitionResultView: View {
                 } label: {
                     Label(L10n.text("common.delete"), systemImage: "trash")
                 }
-                .disabled(isDeleting)
+                .disabled(isDeleting || isPreparingShare)
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -136,6 +161,29 @@ struct HealthExamRecognitionResultView: View {
             dismiss()
         } catch {
             notificationClient?.error(error.localizedDescription, title: L10n.text("home.medical.list.health_exam.delete.failed", fallback: "删除失败"), source: "health.exam.detail")
+        }
+    }
+
+    @MainActor
+    private func prepareShareSheet() async {
+        guard isPreparingShare == false, let workflowAPI, let detailReportID else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
+            let response = try await shareAPI.createShare(businessType: "health_exam_report", businessID: detailReportID)
+            let shareURL = AppEnvironment.current.shareWebBaseURL
+                .appendingPathComponent("s")
+                .appendingPathComponent(response.shareCode)
+            shareContext = MedicalShareContext(
+                itemTitle: detailShareTitle ?? title,
+                memberName: detailShareMemberName,
+                shareURL: shareURL,
+                expiresAt: response.expiresAt
+            )
+        } catch {
+            shareErrorMessage = error.localizedDescription.isEmpty ? "生成分享失败" : error.localizedDescription
         }
     }
 }

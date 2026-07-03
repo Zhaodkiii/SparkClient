@@ -1,12 +1,14 @@
 import SwiftUI
 import UIKit
 
-struct MedicalCaseShareContext: Identifiable, Equatable {
+struct MedicalShareContext: Identifiable, Equatable {
     let id = UUID()
-    let caseTitle: String
+    let itemTitle: String
     let memberName: String
     let shareURL: URL
     let expiresAt: Date
+
+    var caseTitle: String { itemTitle }
 }
 
 private enum MedicalCaseShareChannel: String, CaseIterable, Identifiable {
@@ -18,9 +20,12 @@ private enum MedicalCaseShareChannel: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .wechat: return "微信好友"
-        case .xiaohongshu: return "小红书"
-        case .copyLink: return "复制链接"
+        case .wechat:
+            return L10n.text("home.medical.share.sheet.wechat", fallback: "微信好友")
+        case .xiaohongshu:
+            return L10n.text("home.medical.share.sheet.xiaohongshu", fallback: "小红书")
+        case .copyLink:
+            return L10n.text("home.medical.share.sheet.copy_link", fallback: "复制链接")
         }
     }
 
@@ -41,8 +46,8 @@ private enum MedicalCaseShareChannel: String, CaseIterable, Identifiable {
     }
 }
 
-struct MedicalCaseShareSheet: View {
-    let context: MedicalCaseShareContext
+struct MedicalShareSheet: View {
+    let context: MedicalShareContext
     let onDismiss: () -> Void
 
     @State private var statusText: String?
@@ -53,7 +58,7 @@ struct MedicalCaseShareSheet: View {
         VStack(spacing: 18) {
             HStack {
                 Spacer()
-                Text("分享到")
+                Text(L10n.text("home.medical.share.sheet.title", fallback: "分享到"))
                     .font(.headline)
                     .foregroundStyle(.primary)
                 Spacer()
@@ -103,7 +108,7 @@ struct MedicalCaseShareSheet: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
 
-            Text("链接 10 天内有效")
+            Text(L10n.format("home.medical.share.sheet.valid_days", fallback: "链接 %d 天内有效", 10))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -115,7 +120,7 @@ struct MedicalCaseShareSheet: View {
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Button(action: onDismiss) {
-                Text("取消")
+                Text(L10n.text("common.cancel"))
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -133,14 +138,14 @@ struct MedicalCaseShareSheet: View {
 
     private var sharePreviewCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(context.caseTitle)
+            Text(context.itemTitle)
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
             Text(context.memberName)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("有效期至 \(Self.dateFormatter.string(from: context.expiresAt))")
+            Text(L10n.format("home.members.invite.expires", fallback: "有效期至 %@", Self.dateFormatter.string(from: context.expiresAt)))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -187,11 +192,14 @@ struct MedicalCaseShareSheet: View {
         switch channel {
         case .wechat:
             copyShareLink()
-            openTargetApp(url: wechatScheme, fallbackStatus: "已复制链接，可在微信中粘贴发送")
+            openTargetApp(
+                url: wechatScheme,
+                fallbackStatus: L10n.text("home.medical.share.sheet.copied_wechat", fallback: "已复制链接，可在微信中粘贴发送")
+            )
         case .xiaohongshu:
             copyShareLink()
             guard var components = URLComponents(string: "xhsdiscover://extweb") else {
-                statusText = "已复制链接"
+                statusText = L10n.text("home.medical.share.sheet.copied", fallback: "链接已复制")
                 return
             }
             components.queryItems = [
@@ -201,18 +209,20 @@ struct MedicalCaseShareSheet: View {
                 )
             ]
             guard let url = components.url else {
-                statusText = "已复制链接"
+                statusText = L10n.text("home.medical.share.sheet.copied", fallback: "链接已复制")
                 return
             }
-            openTargetApp(url: url, fallbackStatus: "已复制链接，可在小红书中粘贴或继续编辑")
+            openTargetApp(
+                url: url,
+                fallbackStatus: L10n.text("home.medical.share.sheet.copied_xiaohongshu", fallback: "已复制链接，可在小红书中粘贴或继续编辑")
+            )
         case .copyLink:
             copyShareLink()
-            statusText = "链接已复制"
+            statusText = L10n.text("home.medical.share.sheet.copied", fallback: "链接已复制")
         }
     }
 
     private func copyShareLink() {
-//        UIPasteboard.general.string = "\(context.caseTitle)\n\(context.shareURL.absoluteString)"
         UIPasteboard.general.string = context.shareURL.absoluteString
     }
 
@@ -234,10 +244,13 @@ struct MedicalCaseShareSheet: View {
     }()
 }
 
+typealias MedicalCaseShareContext = MedicalShareContext
+typealias MedicalCaseShareSheet = MedicalShareSheet
+
 #Preview("MedicalCaseShareSheet") {
-    MedicalCaseShareSheet(
-        context: MedicalCaseShareContext(
-            caseTitle: "发现乳腺结节 1天",
+    MedicalShareSheet(
+        context: MedicalShareContext(
+            itemTitle: "发现乳腺结节 1天",
             memberName: "张**",
             shareURL: URL(string: "https://share.dreamwhale.top/s/AbC123xYz789")!,
             expiresAt: .now.addingTimeInterval(60 * 60 * 24 * 10)

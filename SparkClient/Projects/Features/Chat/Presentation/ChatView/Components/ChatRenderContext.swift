@@ -45,6 +45,7 @@ struct ChatRenderContext {
     let healthResourceReferenceCount: Int
     let onHealthResourceUnavailableTap: () -> Void
     let healthResourceDestinationFactory: (HealthResourceReference) -> AnyView
+    let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 }
 
 extension ChatRenderContext {
@@ -76,7 +77,8 @@ extension ChatRenderContext {
             cachedMemberCompleteData: cachedMemberCompleteData,
             healthResourceReferenceCount: healthResourceReferenceCount,
             onHealthResourceUnavailableTap: onHealthResourceUnavailableTap,
-            healthResourceDestinationFactory: healthResourceDestinationFactory
+            healthResourceDestinationFactory: healthResourceDestinationFactory,
+            onHeightChangingUpdate: onHeightChangingUpdate
         )
     }
 }

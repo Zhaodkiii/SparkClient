@@ -24,6 +24,9 @@ struct ExaminationReportDetailPage: View {
     @State private var isDeleting = false
     @State private var isLoadingDetails = false
     @State private var alertMessage: String?
+    @State private var shareContext: MedicalShareContext?
+    @State private var shareErrorMessage: String?
+    @State private var isPreparingShare = false
 
     init(
         mode: ExaminationReportDetailMode = .server,
@@ -102,6 +105,12 @@ struct ExaminationReportDetailPage: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
+                        Task { await prepareShareSheet() }
+                    } label: {
+                        Label(L10n.text("common.share", fallback: "分享"), systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
                         showingEditSheet = true
                     } label: {
                         Label(L10n.text("common.edit"), systemImage: "pencil")
@@ -115,7 +124,7 @@ struct ExaminationReportDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting)
+                .disabled(isDeleting || isPreparingShare)
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -138,6 +147,21 @@ struct ExaminationReportDetailPage: View {
             Button(L10n.text("common.got_it"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
+        }
+        .sheet(item: $shareContext) { context in
+            MedicalShareSheet(context: context) {
+                shareContext = nil
+            }
+        }
+        .alert("分享失败", isPresented: Binding(
+            get: { shareErrorMessage != nil },
+            set: { if $0 == false { shareErrorMessage = nil } }
+        )) {
+            Button("确定", role: .cancel) {
+                shareErrorMessage = nil
+            }
+        } message: {
+            Text(shareErrorMessage ?? "请稍后重试")
         }
         .task(id: report.id) {
             guard mode == .server else { return }
@@ -245,6 +269,30 @@ struct ExaminationReportDetailPage: View {
             medicalCaseID: report.medicalRecord
         )
         onLocalDraftSaved?(resolved)
+    }
+
+    @MainActor
+    private func prepareShareSheet() async {
+        guard isPreparingShare == false, mode == .server else { return }
+        guard let workflowAPI else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
+            let response = try await shareAPI.createShare(businessType: "examination_report", businessID: report.id)
+            let shareURL = AppEnvironment.current.shareWebBaseURL
+                .appendingPathComponent("s")
+                .appendingPathComponent(response.shareCode)
+            shareContext = MedicalShareContext(
+                itemTitle: report.itemName?.nonEmpty ?? report.category?.nonEmpty ?? L10n.text("home.medical.list.examination_reports.title"),
+                memberName: completeData?.member.name ?? memberContextStore.context.members.first(where: { $0.id == report.member })?.name ?? "成员",
+                shareURL: shareURL,
+                expiresAt: response.expiresAt
+            )
+        } catch {
+            shareErrorMessage = error.localizedDescription.isEmpty ? "生成分享失败" : error.localizedDescription
+        }
     }
 
     private static func filterMedExamRows(

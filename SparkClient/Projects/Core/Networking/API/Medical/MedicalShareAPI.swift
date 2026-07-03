@@ -22,13 +22,17 @@ struct SparkMedicalShareAPI {
         let status: String
     }
 
-    func createMedicalCaseShare(caseID: Int) async throws -> CreateShareResponse {
+    func createShare(businessType: String, businessID: Int) async throws -> CreateShareResponse {
         try await postRequest(
             method: .post,
             path: "/api/v1/medical/shares/",
-            body: CreateSharePayload(businessType: "medical_case", businessId: caseID),
+            body: CreateSharePayload(businessType: businessType, businessId: businessID),
             responseType: CreateShareResponse.self
         )
+    }
+
+    func createMedicalCaseShare(caseID: Int) async throws -> CreateShareResponse {
+        try await createShare(businessType: "medical_case", businessID: caseID)
     }
 
     private func postRequest<T: Decodable, B: Encodable>(

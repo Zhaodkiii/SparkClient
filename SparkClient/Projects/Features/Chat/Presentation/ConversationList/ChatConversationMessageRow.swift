@@ -19,6 +19,7 @@ struct ChatConversationMessageRow: View {
     let taskManager: TaskManager
     let logger: Logger
     let onCaptureOpenFiles: () -> Void
+    let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     private var messageActionUseCase: any ChatMessageActionUseCase {
         DefaultChatMessageActionUseCase(taskManager: taskManager, logger: logger)
@@ -188,7 +189,8 @@ struct ChatConversationMessageRow: View {
             medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
             cachedMemberCompleteData: detailViewModel.cachedMemberCompleteData,
             onHealthResourceUnavailableTap: {},
-            healthResourceDestinationFactory: { _ in AnyView(EmptyView()) }
+            healthResourceDestinationFactory: { _ in AnyView(EmptyView()) },
+            onHeightChangingUpdate: onHeightChangingUpdate
         )
         .allowsHitTesting(false)
     }
@@ -293,7 +295,8 @@ struct ChatConversationMessageRow: View {
                         logger: detailViewModel.chatLogger
                     )
                 )
-            }
+            },
+            onHeightChangingUpdate: onHeightChangingUpdate
         )
     }
 

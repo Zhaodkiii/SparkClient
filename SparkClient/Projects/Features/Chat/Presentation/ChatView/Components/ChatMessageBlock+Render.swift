@@ -44,8 +44,10 @@ extension ChatMessageBlock {
                 text: card.reasoningContent ?? "",
                 timeText: formatDeepThoughtDuration(card.reasoningDurationMs),
                 isStreaming: context.message.deliveryState == .sending, // 是否正在流式输出
-                isLastAssistantMessage: context.isLastAssistantMessage
+                isLastAssistantMessage: context.isLastAssistantMessage,
+                onHeightChangingUpdate: context.onHeightChangingUpdate
             )
+            .id(id)
             
             // 4. 工具调用块（联网、文件、插件等）
         case .tool(let tool):

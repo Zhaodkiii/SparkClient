@@ -3276,3 +3276,16 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "company_XAI" = "xAI";
 "company_YI" = "01.AI";
 "company_ZHIPUAI" = "Z.AI";
+"common.member" = "Member";
+"home.medical.examination.delete.confirm_title" = "Delete this report?";
+"home.medical.examination.delete.message" = "This cannot be undone.";
+"home.medical.share.error" = "Share failed";
+"home.medical.share.retry" = "Please try again later";
+"home.medical.share.sheet.copy_link" = "Copy link";
+"home.medical.share.sheet.copied" = "Link copied";
+"home.medical.share.sheet.copied_wechat" = "Link copied. Paste it into WeChat to send.";
+"home.medical.share.sheet.copied_xiaohongshu" = "Link copied. Paste it into Xiaohongshu or continue editing.";
+"home.medical.share.sheet.title" = "Share to";
+"home.medical.share.sheet.valid_days" = "Link valid for %d days";
+"home.medical.share.sheet.wechat" = "WeChat friends";
+"home.medical.share.sheet.xiaohongshu" = "Xiaohongshu";

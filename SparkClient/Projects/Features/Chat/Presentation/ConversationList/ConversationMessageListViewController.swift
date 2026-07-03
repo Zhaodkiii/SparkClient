@@ -261,7 +261,111 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
             return
         }
         let targetY = attributes.frame.minY - anchor.offsetFromTop
-        collectionView.setContentOffset(CGPoint(x: 0, y: targetY), animated: false)
+        setContentOffsetYClamped(targetY)
+    }
+
+    /// 单个 SwiftUI hosting cell 内部高度变化时，保持用户当前阅读位置。
+    private func performHeightChangingUpdate(affectedItemID: UUID, _ update: @escaping () -> Void) {
+        guard let collectionView else {
+            update()
+            return
+        }
+
+        let anchor = captureTopAnchor()
+        let wasPinnedToBottom = ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView)
+        let wasBottomLocked = bottomViewportLockActive
+        let oldContentHeight = collectionView.collectionViewLayout.collectionViewContentSize.height
+        let oldContentOffsetY = collectionView.contentOffset.y
+
+        update()
+        collectionView.collectionViewLayout.invalidateLayout()
+
+        UIView.performWithoutAnimation {
+            collectionView.performBatchUpdates(nil) { [weak self] _ in
+                self?.restoreViewportAfterHeightChange(
+                    affectedItemID: affectedItemID,
+                    anchor: anchor,
+                    wasPinnedToBottom: wasPinnedToBottom,
+                    wasBottomLocked: wasBottomLocked,
+                    oldContentHeight: oldContentHeight,
+                    oldContentOffsetY: oldContentOffsetY
+                )
+            }
+            collectionView.layoutIfNeeded()
+        }
+
+        restoreViewportAfterHeightChange(
+            affectedItemID: affectedItemID,
+            anchor: anchor,
+            wasPinnedToBottom: wasPinnedToBottom,
+            wasBottomLocked: wasBottomLocked,
+            oldContentHeight: oldContentHeight,
+            oldContentOffsetY: oldContentOffsetY
+        )
+
+        DispatchQueue.main.async { [weak self] in
+            self?.restoreViewportAfterHeightChange(
+                affectedItemID: affectedItemID,
+                anchor: anchor,
+                wasPinnedToBottom: wasPinnedToBottom,
+                wasBottomLocked: wasBottomLocked,
+                oldContentHeight: oldContentHeight,
+                oldContentOffsetY: oldContentOffsetY
+            )
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { [weak self] in
+            self?.restoreViewportAfterHeightChange(
+                affectedItemID: affectedItemID,
+                anchor: anchor,
+                wasPinnedToBottom: wasPinnedToBottom,
+                wasBottomLocked: wasBottomLocked,
+                oldContentHeight: oldContentHeight,
+                oldContentOffsetY: oldContentOffsetY
+            )
+        }
+    }
+
+    private func restoreViewportAfterHeightChange(
+        affectedItemID: UUID,
+        anchor: ScrollAnchor?,
+        wasPinnedToBottom: Bool,
+        wasBottomLocked: Bool,
+        oldContentHeight: CGFloat,
+        oldContentOffsetY: CGFloat
+    ) {
+        collectionView.collectionViewLayout.invalidateLayout()
+        collectionView.layoutIfNeeded()
+
+        if wasBottomLocked {
+            maintainBottomViewportLockIfNeeded(force: true)
+            return
+        }
+
+        if wasPinnedToBottom {
+            scrollToBottom(animated: false, force: true)
+            return
+        }
+
+        guard let anchor else { return }
+        let newContentHeight = collectionView.collectionViewLayout.collectionViewContentSize.height
+        let heightDelta = newContentHeight - oldContentHeight
+        if anchor.itemID == affectedItemID, anchor.offsetFromTop < -1 {
+            setContentOffsetYClamped(oldContentOffsetY + heightDelta)
+        } else {
+            restoreTopAnchor(anchor)
+        }
+    }
+
+    private func setContentOffsetYClamped(_ y: CGFloat) {
+        let minY = -collectionView.adjustedContentInset.top
+        let maxY = max(
+            minY,
+            collectionView.collectionViewLayout.collectionViewContentSize.height
+                - collectionView.bounds.height
+                + collectionView.adjustedContentInset.bottom
+        )
+        collectionView.setContentOffset(CGPoint(x: 0, y: min(max(y, minY), maxY)), animated: false)
     }
 
     // MARK: - 滚动到底部
@@ -456,8 +560,12 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     logger: logger,
                     onCaptureOpenFiles: { [weak self] in
                         self?.onCommand?(.captureOpenFiles)
+                    },
+                    onHeightChangingUpdate: { [weak self] update in
+                        self?.performHeightChangingUpdate(affectedItemID: msg.clientMessageID, update)
                     }
                 )
+                .id(msg.clientMessageID)
             } else {
                 Color.clear.frame(height: 1)
             }

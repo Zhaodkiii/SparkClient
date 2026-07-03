@@ -24,6 +24,9 @@ struct MedicineBoxDetailPage: View {
     @State private var isDeleting = false
     @State private var isEditingAttachments = false
     @State private var attachmentsDirty = false
+    @State private var shareContext: MedicalShareContext?
+    @State private var shareErrorMessage: String?
+    @State private var isPreparingShare = false
 
     init(
         mode: MedicineBoxDetailMode = .server,
@@ -122,6 +125,12 @@ struct MedicineBoxDetailPage: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
+                        Task { await prepareShareSheet() }
+                    } label: {
+                        Label(L10n.text("common.share", fallback: "分享"), systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
                         showingEditSheet = true
                     } label: {
                         Label(L10n.text("common.edit"), systemImage: "pencil")
@@ -135,7 +144,7 @@ struct MedicineBoxDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting)
+                .disabled(isDeleting || isPreparingShare)
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -192,6 +201,21 @@ struct MedicineBoxDetailPage: View {
         } message: {
             Text(alertMessage ?? "")
         }
+        .sheet(item: $shareContext) { context in
+            MedicalShareSheet(context: context) {
+                shareContext = nil
+            }
+        }
+        .alert("分享失败", isPresented: Binding(
+            get: { shareErrorMessage != nil },
+            set: { if $0 == false { shareErrorMessage = nil } }
+        )) {
+            Button("确定", role: .cancel) {
+                shareErrorMessage = nil
+            }
+        } message: {
+            Text(shareErrorMessage ?? "请稍后重试")
+        }
         .onChange(of: box) { newValue in
             currentBox = newValue
         }
@@ -216,6 +240,33 @@ struct MedicineBoxDetailPage: View {
             dismiss()
         } catch {
             alertMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func prepareShareSheet() async {
+        guard isPreparingShare == false, mode == .server else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
+            let response = try await shareAPI.createShare(businessType: "medicine_box", businessID: currentBox.id)
+            let shareURL = AppEnvironment.current.shareWebBaseURL
+                .appendingPathComponent("s")
+                .appendingPathComponent(response.shareCode)
+            shareContext = MedicalShareContext(
+                itemTitle: currentBox.medicineName.nonEmpty ?? L10n.text("home.medical.medicine_box.detail_title"),
+                memberName: currentBox.member.flatMap { memberID in
+                    memberOptions.first(where: { $0.id == memberID })?.name
+                } ?? entryMemberID.flatMap { memberID in
+                    memberOptions.first(where: { $0.id == memberID })?.name
+                } ?? ownershipDisplay,
+                shareURL: shareURL,
+                expiresAt: response.expiresAt
+            )
+        } catch {
+            shareErrorMessage = error.localizedDescription.isEmpty ? "生成分享失败" : error.localizedDescription
         }
     }
 

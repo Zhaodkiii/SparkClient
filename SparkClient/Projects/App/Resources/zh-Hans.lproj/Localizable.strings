@@ -3277,3 +3277,16 @@
 "company_XAI" = "xAI";
 "company_YI" = "零一万物";
 "company_ZHIPUAI" = "智谱华章";
+"common.member" = "成员";
+"home.medical.examination.delete.confirm_title" = "确认删除该检查报告？";
+"home.medical.examination.delete.message" = "删除后无法恢复。";
+"home.medical.share.error" = "分享失败";
+"home.medical.share.retry" = "请稍后重试";
+"home.medical.share.sheet.copy_link" = "复制链接";
+"home.medical.share.sheet.copied" = "链接已复制";
+"home.medical.share.sheet.copied_wechat" = "已复制链接，可在微信中粘贴发送";
+"home.medical.share.sheet.copied_xiaohongshu" = "已复制链接，可在小红书中粘贴或继续编辑";
+"home.medical.share.sheet.title" = "分享到";
+"home.medical.share.sheet.valid_days" = "链接 %d 天内有效";
+"home.medical.share.sheet.wechat" = "微信好友";
+"home.medical.share.sheet.xiaohongshu" = "小红书";
