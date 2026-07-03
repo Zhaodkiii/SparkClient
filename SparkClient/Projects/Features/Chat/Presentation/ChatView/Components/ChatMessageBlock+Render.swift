@@ -150,10 +150,9 @@ extension ChatMessageBlock {
         case .text(let text):
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                 if context.isMathMode {
-                    // 数学模式：等宽文本
+                    // 数学模式：等宽文本（文本选择由气泡长按菜单统一处理）
                     Text(text)
                         .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     // 普通模式：Markdown渲染

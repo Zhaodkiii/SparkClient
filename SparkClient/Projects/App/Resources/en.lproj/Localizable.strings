@@ -1134,6 +1134,12 @@
 "chat.bubble.map.navigate" = "Navigate";
 "chat.bubble.web.source" = "Source Code";
 "chat.bubble.action.copy" = "Copy";
+"chat.bubble.menu.translate" = "Translate";
+"chat.bubble.menu.remove_translation" = "Remove Translation";
+"chat.bubble.menu.speech" = "Read Aloud";
+"chat.bubble.menu.stop_speech" = "Stop Reading";
+"chat.bubble.menu.copied" = "Copied";
+"chat.bubble.menu.select_text" = "Select Text";
 "chat.bubble.image.copy" = "Copy Image";
 "chat.bubble.image.save" = "Save Image";
 "chat.bubble.image.loading" = "Loading…";

@@ -4,6 +4,8 @@ import UIKit
 /// 单条会话消息行（从 ``ChatView`` 抽出），供 `UICollectionView` + `UIHostingController` 复用。
 struct ChatConversationMessageRow: View {
     @State private var rowWidth: CGFloat = 0
+    @State private var bubbleMenuConfig: ChatBubbleMenuConfig?
+    @State private var textSelectionPayload: ChatSelectableTextPayload?
 
     let threadID: UUID
     let message: ChatMessage
@@ -37,12 +39,16 @@ struct ChatConversationMessageRow: View {
     var body: some View {
         HStack {
             if message.role == .assistant || message.role == .system {
-                bubbleContent
+                longPressableBubble
                     .frame(maxWidth: bubbleMaxWidth, alignment: .leading)
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 40)
-                bubbleContent
+                longPressableBubble
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.accentColor)
+                    )
                     .frame(maxWidth: bubbleMaxWidth, alignment: .trailing)
             }
         }
@@ -58,6 +64,133 @@ struct ChatConversationMessageRow: View {
                 rowWidth = width
             }
         }
+        .transparentFullScreenCover(
+            isPresented: Binding(
+                get: { bubbleMenuConfig != nil },
+                set: { if !$0 { bubbleMenuConfig = nil } }
+            )
+        ) {
+            if let config = bubbleMenuConfig {
+                ChatBubbleMenuView(config: config) {
+                    bubbleMenuConfig = nil
+                }
+            }
+        }
+        .sheet(item: $textSelectionPayload) { payload in
+            NavigationStack {
+                ChatTextSelectionView(
+                    text: payload.text,
+                    onSaveToKnowledge: message.role == .assistant
+                        ? { saveMessageToKnowledge(message) }
+                        : nil
+                )
+                .navigationTitle(payload.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(L10n.text("common.done")) {
+                            textSelectionPayload = nil
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 带长按手势的气泡，替代系统 contextMenu
+    private var longPressableBubble: some View {
+        bubbleContent
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .onEnded { _ in
+                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        bubbleMenuConfig = makeBubbleMenuConfig()
+                    }
+            )
+    }
+
+    private func makeBubbleMenuConfig() -> ChatBubbleMenuConfig {
+        let metadata = ChatMessageMetadata(message: message)
+        let isAssistant = message.role == .assistant
+        let plain = messagePlainText(message)
+        let hasText = plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        return ChatBubbleMenuConfig(
+            message: message,
+            isAssistant: isAssistant,
+            isSpeaking: speechHelper.isSpeaking(message.id),
+            isTranslated: translatedText(for: message, metadata: metadata) != nil,
+            plainText: plain,
+            bubbleView: AnyView(previewBubble),
+            hasSelectableText: hasText,
+            onCopy: { UIPasteboard.general.string = plain },
+            onSelectText: hasText ? {
+                textSelectionPayload = ChatSelectableTextPayload(
+                    title: L10n.text("chat.bubble.menu.select_text"),
+                    text: plain
+                )
+            } : nil,
+            onDelete: { uiStateStore.markDeleted(message.id) },
+            onToggleSpeech: isAssistant
+                ? { speechHelper.toggle(text: plain, id: message.id) }
+                : nil,
+            onToggleTranslate: isAssistant
+                ? { toggleTranslate(message) }
+                : nil,
+            onSaveToKnowledge: isAssistant
+                ? { saveMessageToKnowledge(message) }
+                : nil
+        )
+    }
+
+    /// 原始气泡的只读预览版：内容与 bubbleContent 完全一致，
+    /// showActions=false 隐藏操作栏，allowsHitTesting=false 禁止交互。
+    private var previewBubble: some View {
+        let metadata = ChatMessageMetadata(message: message)
+        return ChatMessageBubbleContentView(
+            message: message,
+            metadata: metadata,
+            isLastAssistantMessage: false,
+            translatedText: translatedText(for: message, metadata: metadata),
+            combinedKnowledgeCards: combinedKnowledgeCards(for: message, metadata: metadata),
+            isMathMode: uiStateStore.isMathMode(message.id),
+            isTranslating: false,
+            isSavingMessage: false,
+            isSavedMessage: false,
+            isSpeaking: false,
+            taskCardLoadingIDs: uiStateStore.taskCardLoadingIDs,
+            ignoredTaskCardIDs: uiStateStore.ignoredTaskCardIDs,
+            createdTaskCardIDs: uiStateStore.createdTaskCardIDs,
+            savingKnowledgeCardIDs: [],
+            savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
+            showActions: false,
+            memberContextStore: memberContextStore,
+            onRetry: {},
+            onCopy: {},
+            onDelete: {},
+            onToggleSpeech: {},
+            onToggleTranslate: {},
+            onOpenNetworkSearch: {},
+            onSaveMessageToKnowledge: {},
+            onGenerateKnowledgeCardsPreview: {},
+            onSaveKnowledgeCard: { _ in },
+            onTaskCardAction: { _ in },
+            onPendingMemberToolSelect: { _, _ in },
+            savingStructuredHealthCardIDs: [],
+            savingNutritionCardIDs: [],
+            onStructuredHealthCardAction: { _ in },
+            onNutritionCardAction: { _ in },
+            onCaptureOpenCamera: {},
+            onCaptureOpenPhotoLibrary: {},
+            onCaptureOpenFiles: {},
+            onPresentToolPreview: { _, _ in },
+            fileTransferService: detailViewModel.attachmentFileTransferService,
+            medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
+            cachedMemberCompleteData: detailViewModel.cachedMemberCompleteData,
+            onHealthResourceUnavailableTap: {},
+            healthResourceDestinationFactory: { _ in AnyView(EmptyView()) }
+        )
+        .allowsHitTesting(false)
     }
 
     private var bubbleContent: some View {

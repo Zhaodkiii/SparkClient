@@ -1134,6 +1134,12 @@
 "chat.bubble.map.navigate" = "导航";
 "chat.bubble.web.source" = "源码";
 "chat.bubble.action.copy" = "复制";
+"chat.bubble.menu.translate" = "翻译";
+"chat.bubble.menu.remove_translation" = "移除译文";
+"chat.bubble.menu.speech" = "朗读";
+"chat.bubble.menu.stop_speech" = "停止朗读";
+"chat.bubble.menu.copied" = "已复制";
+"chat.bubble.menu.select_text" = "选择文本";
 "chat.bubble.image.copy" = "复制图片";
 "chat.bubble.image.save" = "保存图片";
 "chat.bubble.image.loading" = "加载中…";

@@ -56,10 +56,6 @@ struct ChatMessageBubbleContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(message.role == .user ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
-        )
     }
 
     private var renderContext: ChatRenderContext {
