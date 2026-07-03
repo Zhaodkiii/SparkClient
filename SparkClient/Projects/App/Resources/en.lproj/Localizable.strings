@@ -1121,6 +1121,9 @@
 "chat.composer.reasoning.builtin" = "Reasoning";
 "chat.composer.reasoning.effort.high" = "High";
 "chat.composer.reasoning.effort.max" = "Max";
+"chat.composer.reasoning.tier.1" = "Low";
+"chat.composer.reasoning.tier.2" = "Medium";
+"chat.composer.reasoning.tier.3" = "High";
 "chat.bubble.reasoning.title" = "Reasoning";
 "chat.bubble.tool.title" = "Tool Calls";
 "chat.bubble.tool.default_name" = "Tool";

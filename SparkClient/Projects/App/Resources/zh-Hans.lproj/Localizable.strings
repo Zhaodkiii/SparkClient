@@ -1121,6 +1121,9 @@
 "chat.composer.reasoning.builtin" = "模型思考";
 "chat.composer.reasoning.effort.high" = "高";
 "chat.composer.reasoning.effort.max" = "最高";
+"chat.composer.reasoning.tier.1" = "低";
+"chat.composer.reasoning.tier.2" = "中";
+"chat.composer.reasoning.tier.3" = "高";
 "chat.bubble.reasoning.title" = "思考过程";
 "chat.bubble.tool.title" = "工具调用";
 "chat.bubble.tool.default_name" = "工具";

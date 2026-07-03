@@ -29,6 +29,9 @@ struct MedicalCaseDetailPage: View {
     @State private var exportFileURL: URL?
     @State private var isExporting = false
     @State private var isDeleting = false
+    @State private var shareContext: MedicalCaseShareContext?
+    @State private var isPreparingShare = false
+    @State private var shareErrorMessage: String?
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -135,6 +138,12 @@ struct MedicalCaseDetailPage: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
+                        Task { await prepareShareSheet() }
+                    } label: {
+                        Label("分享", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
                         exportMedicalCasePDF()
                     } label: {
                         Label(L10n.text("home.medical.case_detail.action.export", fallback: "导出"), systemImage: "square.and.arrow.up")
@@ -148,7 +157,7 @@ struct MedicalCaseDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting || isExporting)
+                .disabled(isDeleting || isExporting || isPreparingShare)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingAttachments)
@@ -182,6 +191,21 @@ struct MedicalCaseDetailPage: View {
             CompatibleNavigationContainer {
                 medicalCaseAddRecordDestination(kind)
             }
+        }
+        .sheet(item: $shareContext) { context in
+            MedicalCaseShareSheet(context: context) {
+                shareContext = nil
+            }
+        }
+        .alert("分享失败", isPresented: Binding(
+            get: { shareErrorMessage != nil },
+            set: { if $0 == false { shareErrorMessage = nil } }
+        )) {
+            Button("确定", role: .cancel) {
+                shareErrorMessage = nil
+            }
+        } message: {
+            Text(shareErrorMessage ?? "请稍后重试")
         }
     }
 
@@ -387,6 +411,29 @@ struct MedicalCaseDetailPage: View {
             dismiss()
         } catch {
             notificationClient.error(error.localizedDescription, title: L10n.text("home.medical.case_detail.delete.failed", fallback: "删除失败"), source: "medical.case.detail")
+        }
+    }
+
+    @MainActor
+    private func prepareShareSheet() async {
+        guard isPreparingShare == false else { return }
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+
+        do {
+            let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
+            let response = try await shareAPI.createMedicalCaseShare(caseID: currentItem.id)
+            let shareURL = AppEnvironment.current.shareWebBaseURL
+                .appendingPathComponent("s")
+                .appendingPathComponent(response.shareCode)
+            shareContext = MedicalCaseShareContext(
+                caseTitle: currentItem.title?.nonEmpty ?? "病例详情",
+                memberName: completeData?.member.name ?? memberContextStore.context.members.first(where: { $0.id == currentItem.member })?.name ?? "成员",
+                shareURL: shareURL,
+                expiresAt: response.expiresAt
+            )
+        } catch {
+            shareErrorMessage = error.localizedDescription.isEmpty ? "生成分享失败" : error.localizedDescription
         }
     }
 
