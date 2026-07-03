@@ -3,6 +3,7 @@ import SwiftUI
 /// 时间轴卡片内的附件胶囊按钮：点击后走与 `MedicalAttachmentListView` 相同的缓存/下载预览流程。
 struct MedicalCaseAttachmentPill: View {
     let attachment: SparkMedicalSyncAPI.RemoteManagedFile
+    let displayIndex: Int
     let fileTransferService: FileTransferService
 
     var logger: Logger = ConsoleLogger()
@@ -11,6 +12,10 @@ struct MedicalCaseAttachmentPill: View {
     @State private var isBusy = false
 
     private let logModule = LogModule.home
+
+    private var displayTitle: String {
+        SparkMedicalSyncAPI.RemoteManagedFile.numberedDisplayName(at: displayIndex)
+    }
 
     var body: some View {
         Button {
@@ -21,7 +26,7 @@ struct MedicalCaseAttachmentPill: View {
                     .font(.caption2)
                     .symbolRenderingMode(.hierarchical)
 
-                Text(attachment.displayName)
+                Text(displayTitle)
                     .font(.caption)
                     .lineLimit(1)
             }
@@ -65,7 +70,7 @@ struct MedicalCaseAttachmentPill: View {
         if let cachedURL = await fileTransferService.cachedURL(file: managedFile) {
             previewInput = FilePreviewInput(
                 fileURL: cachedURL,
-                displayName: attachment.displayName,
+                displayName: displayTitle,
                 mimeType: attachment.mimeType
             )
             return
@@ -78,7 +83,7 @@ struct MedicalCaseAttachmentPill: View {
             let localURL = try await fileTransferService.download(file: managedFile)
             previewInput = FilePreviewInput(
                 fileURL: localURL,
-                displayName: attachment.displayName,
+                displayName: displayTitle,
                 mimeType: attachment.mimeType
             )
         } catch {
@@ -102,7 +107,7 @@ struct MedicalCaseAttachmentPill: View {
         createdAt: Date(),
         fileUrl: nil
     )
-    MedicalCaseAttachmentPill(attachment: sample, fileTransferService: AppContainer.preview.fileTransferService)
+    MedicalCaseAttachmentPill(attachment: sample, displayIndex: 0, fileTransferService: AppContainer.preview.fileTransferService)
         .padding()
         .preferredColorScheme(.light)
 }
@@ -122,7 +127,7 @@ struct MedicalCaseAttachmentPill: View {
         createdAt: Date(),
         fileUrl: nil
     )
-    MedicalCaseAttachmentPill(attachment: sample, fileTransferService: AppContainer.preview.fileTransferService)
+    MedicalCaseAttachmentPill(attachment: sample, displayIndex: 0, fileTransferService: AppContainer.preview.fileTransferService)
         .padding()
         .preferredColorScheme(.dark)
 }

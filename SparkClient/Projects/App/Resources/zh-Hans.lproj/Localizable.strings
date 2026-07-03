@@ -1571,6 +1571,7 @@
 "common.retry_later" = "请稍后重试";
 "common.all" = "全部";
 "common.attachments" = "附件";
+"common.attachment_numbered" = "附件%lld";
 "common.status" = "状态";
 "common.normal" = "正常";
 "common.prescription" = "处方";

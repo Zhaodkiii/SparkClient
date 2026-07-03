@@ -51,13 +51,13 @@ struct MedicalAttachmentListView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            ForEach(attachments, id: \.id) { attachment in
+            ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
                 Button {
                     Task {
-                        await openAttachment(attachment)
+                        await openAttachment(attachment, at: index)
                     }
                 } label: {
-                    attachmentRow(attachment)
+                    attachmentRow(attachment, at: index)
                 }
                 .buttonStyle(.plain)
                 .disabled(downloadingIDs.contains(attachment.id))
@@ -76,8 +76,9 @@ struct MedicalAttachmentListView: View {
         )
     }
 
-    private func attachmentRow(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile) -> some View {
-        HStack(spacing: 12) {
+    private func attachmentRow(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile, at index: Int) -> some View {
+        let title = SparkMedicalSyncAPI.RemoteManagedFile.numberedDisplayName(at: index)
+        return HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Color(uiColor: .secondarySystemBackground))
@@ -88,7 +89,7 @@ struct MedicalAttachmentListView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(attachment.displayName)
+                Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -129,16 +130,18 @@ struct MedicalAttachmentListView: View {
     }
 
     @MainActor
-    private func openAttachment(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile) async {
+    private func openAttachment(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile, at index: Int) async {
         guard let managedFile = attachment.managedFileRecord else {
             logger.warning("附件打开失败，缺少必要字段 attachmentID=\(attachment.id)", module: logModule)
             return
         }
 
+        let previewTitle = SparkMedicalSyncAPI.RemoteManagedFile.numberedDisplayName(at: index)
+
         if let cachedURL = await fileTransferService.cachedURL(file: managedFile) {
             previewInput = FilePreviewInput(
                 fileURL: cachedURL,
-                displayName: attachment.displayName,
+                displayName: previewTitle,
                 mimeType: attachment.mimeType
             )
             return
@@ -151,7 +154,7 @@ struct MedicalAttachmentListView: View {
             let localURL = try await fileTransferService.download(file: managedFile)
             previewInput = FilePreviewInput(
                 fileURL: localURL,
-                displayName: attachment.displayName,
+                displayName: previewTitle,
                 mimeType: attachment.mimeType
             )
             logger.info("附件预览已打开 attachmentID=\(attachment.id)", module: logModule)
@@ -168,7 +171,7 @@ extension SparkMedicalSyncAPI.RemoteManagedFile {
             id: id,
             fileUuid: fileUUID,
             filePath: fileUrl?.nonEmpty ?? objectKey?.nonEmpty,
-            originalName: displayName,
+            originalName: originalName?.nonEmpty ?? "Attachment-\(id)",
             fileSize: fileSize ?? 0,
             mimeType: mimeType?.nonEmpty ?? "application/octet-stream",
             fileMd5: fileMd5?.nonEmpty,
@@ -183,6 +186,10 @@ extension SparkMedicalSyncAPI.RemoteManagedFile {
 
     var displayName: String {
         originalName?.nonEmpty ?? "Attachment-\(id)"
+    }
+
+    static func numberedDisplayName(at index: Int) -> String {
+        L10n.format("common.attachment_numbered", Int64(index + 1))
     }
 
     var fileSizeText: String? {
@@ -348,8 +355,8 @@ struct MedicalAttachmentGridPreview: View {
             columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
             spacing: 12
         ) {
-            ForEach(attachments, id: \.id) { attachment in
-                attachmentGridCard(attachment)
+            ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
+                attachmentGridCard(attachment, at: index)
                     .onTapGesture {
                         guard isEditing == false else { return }
                         Task { await openAttachment(attachment) }
@@ -417,11 +424,11 @@ private extension MedicalAttachmentGridPreview {
     }
 
     var previewInputs: [FilePreviewInput] {
-        attachments.compactMap { attachment in
+        attachments.enumerated().compactMap { index, attachment in
             guard let localURL = cachedFileURLs[attachment.id] else { return nil }
             return FilePreviewInput(
                 fileURL: localURL,
-                displayName: attachment.displayName,
+                displayName: SparkMedicalSyncAPI.RemoteManagedFile.numberedDisplayName(at: index),
                 mimeType: attachment.mimeType
             )
         }
@@ -546,8 +553,9 @@ extension MedicalAttachmentGridPreview {
     }
 
     /// 网格正方形卡片（已有附件 · 下载/删除状态 + 编辑删除按钮）
-    private func attachmentGridCard(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile) -> some View {
-        GeometryReader { geometry in
+    private func attachmentGridCard(_ attachment: SparkMedicalSyncAPI.RemoteManagedFile, at index: Int) -> some View {
+        let title = SparkMedicalSyncAPI.RemoteManagedFile.numberedDisplayName(at: index)
+        return GeometryReader { geometry in
             let cardSize = geometry.size.width
 
             ZStack(alignment: .topTrailing) {
@@ -579,7 +587,7 @@ extension MedicalAttachmentGridPreview {
                 else if let localURL = cachedFileURLs[attachment.id] {
                     let previewItem = FilePreviewInput(
                         fileURL: localURL,
-                        displayName: attachment.displayName,
+                        displayName: title,
                         mimeType: attachment.mimeType
                     )
                     if previewItem.isImage {
@@ -593,7 +601,7 @@ extension MedicalAttachmentGridPreview {
                             Image(systemName: attachment.symbolName)
                                 .font(.system(size: min(cardSize * 0.3, 32)))
                                 .foregroundStyle(attachment.tintColor)
-                            Text(attachment.displayName)
+                            Text(title)
                                 .font(.system(size: min(cardSize * 0.11, 11)))
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
@@ -615,7 +623,7 @@ extension MedicalAttachmentGridPreview {
                         Image(systemName: attachment.symbolName)
                             .font(.system(size: min(cardSize * 0.3, 32)))
                             .foregroundStyle(attachment.tintColor)
-                        Text(attachment.displayName)
+                        Text(title)
                             .font(.system(size: min(cardSize * 0.11, 11)))
                             .lineLimit(2)
                             .multilineTextAlignment(.center)

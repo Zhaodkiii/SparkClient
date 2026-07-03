@@ -408,12 +408,7 @@ struct MedicalResourceAssociateMedicalCaseView<UpdatedResource: Decodable>: View
         errorMessage = nil
         do {
             let payload = MedicalCaseLinkPatch(field: patchField, medicalCaseID: selectedCaseID)
-            let updated = try await workflowAPI.update(
-                UpdatedResource.self,
-                kind: resourceKind,
-                id: resourceID,
-                body: payload
-            )
+            let updated = try await updateResource(payload)
             await MainActor.run {
                 onFinished(updated, selectedCase)
                 isSubmitting = false
@@ -425,6 +420,30 @@ struct MedicalResourceAssociateMedicalCaseView<UpdatedResource: Decodable>: View
                 isSubmitting = false
             }
         }
+    }
+
+    private func updateResource<B: Encodable>(_ body: B) async throws -> UpdatedResource {
+        if resourceKind == .medicationPlans,
+           UpdatedResource.self == SparkMedicalSyncAPI.RemoteMedicationPlan.self {
+            let mutation = try await workflowAPI.updateMedicationPlan(id: resourceID, body: body)
+            guard let updated = mutation.medicationPlan as? UpdatedResource else {
+                throw SparkNetworkError.decoding(
+                    NSError(
+                        domain: "MedicalResourceAssociateMedicalCaseView",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "用药计划更新响应缺少 medication_plan"]
+                    )
+                )
+            }
+            return updated
+        }
+
+        return try await workflowAPI.update(
+            UpdatedResource.self,
+            kind: resourceKind,
+            id: resourceID,
+            body: body
+        )
     }
 
     private var dateFormatter: DateFormatter {

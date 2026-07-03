@@ -393,9 +393,10 @@ struct MedicalCaseTimelineRow: View {
                 Divider()
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(attachments, id: \.id) { attachment in
+                        ForEach(Array(attachments.enumerated()), id: \.element.id) { index, attachment in
                             MedicalCaseAttachmentPill(
                                 attachment: attachment,
+                                displayIndex: index,
                                 fileTransferService: fileTransferService
                             )
                         }

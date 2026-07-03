@@ -1571,6 +1571,7 @@
 "common.retry_later" = "Please try again later";
 "common.all" = "All";
 "common.attachments" = "Attachments";
+"common.attachment_numbered" = "Attachment %lld";
 "common.status" = "Status";
 "common.normal" = "Normal";
 "common.prescription" = "Prescription";

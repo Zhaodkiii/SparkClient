@@ -84,12 +84,7 @@ struct MedicalResourceMedicalCaseLinkSection<UpdatedResource: Decodable>: View {
         defer { isUpdatingMedicalCaseLink = false }
 
         do {
-            let updated = try await workflowAPI.update(
-                UpdatedResource.self,
-                kind: resourceKind,
-                id: resourceID,
-                body: MedicalCaseLinkPatch(field: patchField, medicalCaseID: nil)
-            )
+            let updated = try await updateResource(MedicalCaseLinkPatch(field: patchField, medicalCaseID: nil))
             onResourceUpdated(updated)
         } catch {
             notificationClient.error(
@@ -98,5 +93,29 @@ struct MedicalResourceMedicalCaseLinkSection<UpdatedResource: Decodable>: View {
                 source: "medical.case.link"
             )
         }
+    }
+
+    private func updateResource<B: Encodable>(_ body: B) async throws -> UpdatedResource {
+        if resourceKind == .medicationPlans,
+           UpdatedResource.self == SparkMedicalSyncAPI.RemoteMedicationPlan.self {
+            let mutation = try await workflowAPI.updateMedicationPlan(id: resourceID, body: body)
+            guard let updated = mutation.medicationPlan as? UpdatedResource else {
+                throw SparkNetworkError.decoding(
+                    NSError(
+                        domain: "MedicalResourceMedicalCaseLinkSection",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "用药计划更新响应缺少 medication_plan"]
+                    )
+                )
+            }
+            return updated
+        }
+
+        return try await workflowAPI.update(
+            UpdatedResource.self,
+            kind: resourceKind,
+            id: resourceID,
+            body: body
+        )
     }
 }

@@ -315,12 +315,19 @@ struct MedicationPrescriptionEditPage: View {
         defer { unlinkingPlanIDs.remove(plan.id) }
 
         do {
-            let updated = try await workflowAPI.update(
-                SparkMedicalSyncAPI.RemoteMedicationPlan.self,
-                kind: .medicationPlans,
+            let mutation = try await workflowAPI.updateMedicationPlan(
                 id: plan.id,
                 body: MedicationPlanPrescriptionUpdatePayload(prescription: nil)
             )
+            guard let updated = mutation.medicationPlan else {
+                throw SparkNetworkError.decoding(
+                    NSError(
+                        domain: "MedicationPrescriptionEditPage",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "用药计划更新响应缺少 medication_plan"]
+                    )
+                )
+            }
             plans.removeAll { $0.id == plan.id }
             onPlanUnlinked(updated)
         } catch {
