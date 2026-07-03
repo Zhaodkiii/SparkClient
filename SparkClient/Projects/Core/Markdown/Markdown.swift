@@ -22,26 +22,32 @@ public struct Markdown: View {
     }
 
     public var body: some View {
-        _ = baseURL
-        _ = imageBaseURL
         return MarkdownDocumentView(
             text: content.markdown,
-            style: makeDocumentStyle(from: theme)
+            style: makeDocumentStyle(from: theme),
+            baseURL: baseURL,
+            imageBaseURL: imageBaseURL
         )
     }
 
     private func makeDocumentStyle(from theme: Theme) -> MarkdownDocumentStyle {
         MarkdownDocumentStyle(
             textColor: theme.textColor,
-            secondaryTextColor: theme.textColor.opacity(0.78),
+            secondaryTextColor: theme.secondaryTextColor,
             headingColor: theme.textColor,
             linkColor: theme.linkColor,
+            backgroundColor: theme.backgroundColor,
             codeBackgroundColor: theme.codeBackgroundColor,
-            quoteBarColor: theme.linkColor.opacity(0.75),
-            quoteBackgroundColor: theme.codeBackgroundColor.opacity(0.55),
-            tableBorderColor: theme.textColor.opacity(0.3),
-            tableHeaderBackgroundColor: theme.codeBackgroundColor.opacity(0.7),
-            paragraphSpacing: 8,
+            codeForegroundColor: theme.codeForegroundColor,
+            quoteBarColor: theme.quoteBarColor,
+            quoteBackgroundColor: theme.quoteBackgroundColor,
+            tableBorderColor: theme.borderColor,
+            tableHeaderBackgroundColor: theme.tableHeaderBackgroundColor,
+            tableAlternateBackgroundColor: theme.tableAlternateBackgroundColor,
+            dividerColor: theme.dividerColor,
+            bodyFont: theme.bodyFont,
+            codeFont: theme.codeFont,
+            paragraphSpacing: theme.paragraphSpacing,
             blockSpacing: theme.blockSpacing
         )
     }
