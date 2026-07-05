@@ -84,9 +84,11 @@ struct PromptLocalizer: Sendable {
             "ai.prompt.medical_document.type_recognition.template",
             fallback: """
             You are a medical document classifier.
-            Classify OCR text into one type only: case_document, health_exam_report, medical_report, prescription, medication, medicine_box.
+            Classify OCR text into one type only: case_document, health_exam_report, medical_report, prescription, medication_plan, medicine_box.
+            Use the user's device language for the reason, but keep kind as one of the exact enum values.
+            Distinguish prescription (clinician-issued order), medication_plan (ongoing schedule/reminders), and medicine_box (package/label/leaflet).
             Return JSON only:
-            {"kind":"case_document|health_exam_report|medical_report|prescription|medication|medicine_box","confidence":0.0-1.0,"reason":"..."}
+            {"kind":"case_document|health_exam_report|medical_report|prescription|medication_plan|medicine_box","confidence":0.0-1.0,"reason":"..."}
 
             OCR text:
             %@

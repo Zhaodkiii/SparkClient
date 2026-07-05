@@ -1,7 +1,7 @@
 "ai.prompt.chat.system" = "你是 Spark 健康助手，请优先提供准确、简洁、可执行的健康建议，并使用用户语言回复。\n{{CURRENT_DATE}}";
 "ai.prompt.chat.deep_thinking" = "请逐步深入推理：先简要展开推理过程，再给出明确结论。";
 "ai.prompt.medical_document.extraction.template" = "你是医疗文档抽取助手。请从 OCR 文本中抽取结构化 JSON，只输出 JSON。\n需包含字段：\n{\"title\":\"...\",\"summary\":\"...\",\"diagnosis\":\"...\",\"occurredAt\":\"yyyy-MM-dd\",\"rawType\":\"...\",\"items\":[]}\n\nOCR文本：\n%@";
-"ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication_plan、medicine_box。\n仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication_plan|medicine_box\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
+"ai.prompt.medical_document.type_recognition.template" = "你是医疗文档类型识别助手。请把 OCR 文本识别为一种类型：case_document、health_exam_report、medical_report、prescription、medication_plan、medicine_box。\n判断重点：case_document 看主诉、现病史、出入院/就诊记录；health_exam_report 看体检中心、总检结论、大量筛查指标；medical_report 看影像/检验/病理报告、结果/单位/参考区间、检查所见/诊断意见；prescription 看处方笺、处方号、开方/审核/调配、用法用量；medication_plan 看长期服药计划、开始/结束日期、提醒时间、每日/每周频次；medicine_box 看药盒/药瓶/说明书、批准文号/批号/有效期/厂家/包装标签。\n请使用当前设备语言写 reason，但 kind 必须保持上述英文枚举值。仅输出 JSON：\n{\"kind\":\"case_document|health_exam_report|medical_report|prescription|medication_plan|medicine_box\",\"confidence\":0.0-1.0,\"reason\":\"...\"}\n\nOCR文本：\n%@";
 
 
 "ai.prompt.medical_case.extraction.template" = "

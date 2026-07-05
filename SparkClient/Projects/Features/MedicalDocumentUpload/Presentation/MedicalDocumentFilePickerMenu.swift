@@ -88,7 +88,8 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                 logger.warning("文档导入完成，但未生成临时文件。", module: .medical)
             }
         }
-        .sheet(isPresented: $showCameraPicker) {
+        .fullScreenCover(isPresented: $showCameraPicker) {
+//        .sheet(isPresented: $showCameraPicker) {
             SystemImagePicker(
                 source: .camera,
                 onCancel: { showCameraPicker = false },
@@ -102,6 +103,7 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
                     }
                 }
             )
+            .ignoresSafeArea()
         }
         .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCameraUnavailableAlert) {
             Button(L10n.text("common.ok"), role: .cancel) {}

@@ -3,6 +3,16 @@ import Foundation
 // MARK: - 本地医疗文档分类引擎（统一模块）
 
 private struct LocalMedicalDocumentClassifier {
+    private struct WeightedFeature {
+        let terms: [String]
+        let weight: Int
+
+        init(_ terms: [String], weight: Int) {
+            self.terms = terms
+            self.weight = weight
+        }
+    }
+
     struct MatchResult {
         let kind: MedicalDocumentKind
         let isMatch: Bool
@@ -16,20 +26,22 @@ private struct LocalMedicalDocumentClassifier {
         let prescriptionResult = Prescription.detect(text: input)
         let healthExamResult = HealthExam.detect(text: input)
         let medicalReportResult = MedicalReport.detect(text: input)
+        let medicationPlanResult = MedicationPlan.detect(text: input)
+        let medicineBoxResult = MedicineBox.detect(text: input)
 
         return [
             MatchResult(kind: .caseDocument, isMatch: caseResult.isMatch, confidence: caseResult.confidence),
             MatchResult(kind: .prescription, isMatch: prescriptionResult.isMatch, confidence: prescriptionResult.confidence),
             MatchResult(kind: .healthExamReport, isMatch: healthExamResult.isMatch, confidence: healthExamResult.confidence),
-            MatchResult(kind: .medicalReport, isMatch: medicalReportResult.isMatch, confidence: medicalReportResult.confidence)
+            MatchResult(kind: .medicalReport, isMatch: medicalReportResult.isMatch, confidence: medicalReportResult.confidence),
+            MatchResult(kind: .medicationPlan, isMatch: medicationPlanResult.isMatch, confidence: medicationPlanResult.confidence),
+            MatchResult(kind: .medicineBox, isMatch: medicineBoxResult.isMatch, confidence: medicineBoxResult.confidence)
         ]
     }
 
     // MARK: - 内部协议定义
     private protocol Detector {
-        static var highKeywords: [String] { get }
-        static var mediumKeywords: [String] { get }
-        static var lowKeywords: [String] { get }
+        static var weightedFeatures: [WeightedFeature] { get }
         static var threshold: Int { get }
         static func detect(text: String) -> (isMatch: Bool, confidence: Int)
         static func additionalScoring(on text: String) -> Int
@@ -41,20 +53,14 @@ private struct LocalMedicalDocumentClassifier {
     ) -> (isMatch: Bool, confidence: Int) {
         var score = 0
 
-        // A. 高权重匹配 (15分/个)
-        for word in detectorType.highKeywords where text.contains(word.lowercased()) {
-            score += 15
+        // A. 显式权重特征：标题/结构性字段权重大，普通医学词权重小，避免靠词数硬凑。
+        for feature in detectorType.weightedFeatures {
+            let matchedCount = feature.terms.filter { text.contains($0.lowercased()) }.count
+            guard matchedCount > 0 else { continue }
+            score += min(matchedCount, 3) * feature.weight
         }
 
-        // B. 中权重匹配 (2分/个，最高10分)
-        let mediumMatchCount = detectorType.mediumKeywords.filter { text.contains($0.lowercased()) }.count
-        score += min(mediumMatchCount, 5) * 2
-
-        // C. 低权重匹配 (1分/个，最高8分)
-        let lowMatchCount = detectorType.lowKeywords.filter { text.contains($0.lowercased()) }.count
-        score += min(lowMatchCount, 8) * 1
-
-        // D. 结构化加分
+        // B. 结构化加分/互斥扣分
         score += detectorType.additionalScoring(on: text)
 
         let confidence = min(100, max(0, score))
@@ -65,17 +71,34 @@ private struct LocalMedicalDocumentClassifier {
     private struct MedicalReport: Detector {
         static let threshold = 30
 
-        static let highKeywords = [
-            "诊断报告单", "检查报告单", "影像表现", "诊断意见", "影像诊断",
-            "病理诊断", "彩超检查", "检验报告单", "检验报告", "检测报告"
-        ]
-        static let mediumKeywords = [
-            "检查项目", "检测项目", "检查部位", "报告医生", "审核医生", "超声描述",
-            "超声提示", "检查号", "影像号", "标本类型", "标本号", "条码号",
-            "检验者", "申请医生", "送检医生", "临床检验"
-        ]
-        static let lowKeywords = [
-            "ct", "mri", "b超", "回声", "结节", "肿块", "占位", "病灶"
+        static let weightedFeatures = [
+            // 权重 18：报告标题和明确类型词，通常直接决定路由。
+            WeightedFeature([
+                "诊断报告单", "检查报告单", "检验报告单", "检验报告", "检测报告",
+                "影像诊断", "病理诊断", "彩超检查", "radiology report", "diagnostic report",
+                "imaging report", "ultrasound report", "ct report", "mri report",
+                "pathology report", "laboratory report", "lab report", "test report"
+            ], weight: 18),
+            // 权重 10：影像/病理/检验报告的独有结构字段。
+            WeightedFeature([
+                "影像表现", "诊断意见", "检查所见", "超声描述", "超声提示",
+                "镜下所见", "肉眼所见", "标本类型", "标本号", "条码号",
+                "findings", "impression", "conclusion", "specimen type", "specimen id",
+                "accession number", "clinical indication", "technique"
+            ], weight: 10),
+            // 权重 6：报告流程字段。
+            WeightedFeature([
+                "检查项目", "检测项目", "检查部位", "报告医生", "审核医生",
+                "检验者", "申请医生", "送检医生", "临床检验",
+                "exam", "procedure", "body part", "reported by", "verified by",
+                "ordering physician", "referring physician", "collected", "resulted"
+            ], weight: 6),
+            // 权重 3：检查方式和异常发现词，单独出现不足以定类。
+            WeightedFeature([
+                "ct", "mri", "b超", "超声", "x-ray", "xray", "ultrasound", "radiograph",
+                "回声", "结节", "肿块", "占位", "病灶", "nodule", "mass", "lesion",
+                "opacity", "density", "calcification"
+            ], weight: 3)
         ]
 
         static func detect(text: String) -> (isMatch: Bool, confidence: Int) {
@@ -96,15 +119,18 @@ private struct LocalMedicalDocumentClassifier {
             if text.contains("结果") && text.contains("参考区间") && text.contains("单位") {
                 extra += 25
             }
+            if text.contains("result") && (text.contains("reference range") || text.contains("normal range")) && text.contains("unit") {
+                extra += 25
+            }
             if text.contains("检验互认项目") || text.contains("质评合格") {
                 extra += 15
             }
 
             // 排除逻辑
-            if text.contains("处方笺") || text.contains("处方单") {
-                if !text.contains("检查") && !text.contains("诊断") { extra -= 15 }
+            if text.contains("处方笺") || text.contains("处方单") || text.contains("prescription") || text.contains("rx") {
+                if !text.contains("检查") && !text.contains("诊断") && !text.contains("report") { extra -= 15 }
             }
-            if text.contains("主诉") && text.contains("现病史") { extra -= 20 }
+            if hasCaseHistoryStructure(text) { extra -= 20 }
 
             return extra
         }
@@ -113,9 +139,33 @@ private struct LocalMedicalDocumentClassifier {
     // MARK: - 2) 病历
     private struct CaseDocument: Detector {
         static let threshold = 30
-        static let highKeywords = ["门诊病历", "住院病历", "急诊病历", "主诉", "现病史", "既往史", "体格检查", "初步诊断", "处理意见"]
-        static let mediumKeywords = ["辅助检查", "过敏史", "个人史", "入院日期", "出院日期", "住院号", "医师签名", "门诊号"]
-        static let lowKeywords = ["症状", "体征", "随访", "医嘱", "复诊", "诊断", "治疗"]
+        static let weightedFeatures = [
+            // 权重 18：病历/记录类标题。
+            WeightedFeature([
+                "门诊病历", "住院病历", "急诊病历", "入院记录", "出院记录", "出院小结",
+                "病程记录", "medical record", "clinical record", "visit note",
+                "progress note", "discharge summary", "admission note", "emergency record"
+            ], weight: 18),
+            // 权重 12：病史叙事结构，是病历最稳定的特征。
+            WeightedFeature([
+                "主诉", "现病史", "既往史", "个人史", "家族史", "体格检查",
+                "chief complaint", "history of present illness", "hpi", "past medical history",
+                "pmh", "review of systems", "physical examination", "family history"
+            ], weight: 12),
+            // 权重 8：诊疗过程字段。
+            WeightedFeature([
+                "初步诊断", "处理意见", "出院诊断", "入院诊断", "治疗经过", "出院医嘱",
+                "assessment and plan", "assessment/plan", "plan", "hospital course",
+                "discharge diagnosis", "admission diagnosis"
+            ], weight: 8),
+            // 权重 4：就诊身份与普通临床词。
+            WeightedFeature([
+                "辅助检查", "过敏史", "入院日期", "出院日期", "住院号", "医师签名", "门诊号",
+                "症状", "体征", "随访", "医嘱", "复诊", "诊断", "治疗",
+                "allergies", "mrn", "medical record number", "encounter", "follow-up",
+                "symptom", "diagnosis", "treatment"
+            ], weight: 4)
+        ]
 
         static func detect(text: String) -> (isMatch: Bool, confidence: Int) {
             LocalMedicalDocumentClassifier.baseDetect(text: text, detectorType: Self.self)
@@ -124,7 +174,8 @@ private struct LocalMedicalDocumentClassifier {
         static func additionalScoring(on text: String) -> Int {
             var extra = 0
             if text.contains("病历") && (text.contains("门诊") || text.contains("急诊")) { extra += 50 }
-            if text.contains("主诉") && text.contains("现病史") { extra += 20 }
+            if text.contains("medical record") && (text.contains("visit") || text.contains("encounter")) { extra += 30 }
+            if hasCaseHistoryStructure(text) { extra += 20 }
             if text.contains("影像诊断") || text.contains("诊断意见") {
                 if !text.contains("初步诊断") && !text.contains("处理意见") { extra -= 15 }
             }
@@ -135,9 +186,29 @@ private struct LocalMedicalDocumentClassifier {
     // MARK: - 3) 处方
     private struct Prescription: Detector {
         static let threshold = 30
-        static let highKeywords = ["处方笺", "处方单", "处方", "rp", "国药准字", "批准文号", "用法", "用量", "sig"]
-        static let mediumKeywords = ["药品名称", "发药清单", "医师签名", "审核", "调配", "tid", "bid", "qd", "qn", "ivgtt"]
-        static let lowKeywords = ["片", "粒", "支", "瓶", "盒", "mg", "ml", "每次", "每日"]
+        static let weightedFeatures = [
+            // 权重 18：处方标题/处方符号。
+            WeightedFeature([
+                "处方笺", "处方单", "门诊处方", "电子处方", "prescription", "prescription form",
+                "rx", "℞", "e-prescription", "outpatient prescription"
+            ], weight: 18),
+            // 权重 12：处方流转和开具字段。
+            WeightedFeature([
+                "处方号", "处方编号", "开方日期", "发药清单", "审核", "调配", "发药",
+                "医师签名", "药师签名", "prescription no", "rx number", "date prescribed",
+                "dispense", "dispensed", "pharmacist", "prescriber", "refills"
+            ], weight: 12),
+            // 权重 8：用法剂量字段。
+            WeightedFeature([
+                "药品名称", "用法", "用量", "频次", "每次", "每日", "sig", "directions",
+                "dosage", "dose", "route", "frequency", "take", "inject", "apply"
+            ], weight: 8),
+            // 权重 4：常见频次/单位，单独出现容易与药盒混淆。
+            WeightedFeature([
+                "tid", "bid", "qd", "qn", "qhs", "prn", "po", "iv", "ivgtt", "im",
+                "片", "粒", "支", "瓶", "盒", "mg", "ml", "tablet", "capsule", "cap", "tab"
+            ], weight: 4)
+        ]
 
         static func detect(text: String) -> (isMatch: Bool, confidence: Int) {
             LocalMedicalDocumentClassifier.baseDetect(text: text, detectorType: Self.self)
@@ -145,12 +216,16 @@ private struct LocalMedicalDocumentClassifier {
 
         static func additionalScoring(on text: String) -> Int {
             var extra = 0
-            if (text.contains("处方") || text.contains("rp")) && (text.contains("用法") || text.contains("sig")) {
+            if (text.contains("处方") || text.contains("rp") || text.contains("rx") || text.contains("prescription"))
+                && (text.contains("用法") || text.contains("sig") || text.contains("directions")) {
                 extra += 20
             }
-            if text.contains("主诉") && text.contains("现病史") { extra -= 20 }
+            if hasCaseHistoryStructure(text) { extra -= 20 }
             if text.contains("检查所见") || text.contains("影像诊断") {
                 if !text.contains("处方") && !text.contains("用药") { extra -= 15 }
+            }
+            if hasMedicinePackageStructure(text) && !text.contains("处方") && !text.contains("prescription") {
+                extra -= 20
             }
             return extra
         }
@@ -159,9 +234,31 @@ private struct LocalMedicalDocumentClassifier {
     // MARK: - 4) 体检报告
     private struct HealthExam: Detector {
         static let threshold = 30
-        static let highKeywords = ["体检报告", "健康体检", "体检中心", "体检结论", "体检建议", "体检日期", "体检编号", "报告日期"]
-        static let mediumKeywords = ["参考范围", "正常范围", "总胆固醇", "甘油三酯", "血红蛋白", "尿素氮", "体检套餐", "体检项目表"]
-        static let lowKeywords = ["偏高", "偏低", "建议", "复查", "进一步检查", "定期体检"]
+        static let weightedFeatures = [
+            // 权重 18：体检/筛查类标题。
+            WeightedFeature([
+                "体检报告", "健康体检", "体检中心", "体检结论", "体检建议", "体检日期", "体检编号",
+                "health examination report", "health check report", "annual physical",
+                "executive health check", "wellness report", "preventive screening"
+            ], weight: 18),
+            // 权重 10：体检汇总结构。
+            WeightedFeature([
+                "总检结论", "总结建议", "体检套餐", "体检项目表", "一般检查", "内科检查", "外科检查",
+                "summary recommendation", "health summary", "exam package", "screening package",
+                "general examination", "physical examination"
+            ], weight: 10),
+            // 权重 5：大量指标型体检常见项目。
+            WeightedFeature([
+                "参考范围", "正常范围", "总胆固醇", "甘油三酯", "血红蛋白", "尿素氮",
+                "身高", "体重", "血压", "bmi", "reference range", "normal range",
+                "cholesterol", "triglycerides", "hemoglobin", "blood pressure", "body mass index"
+            ], weight: 5),
+            // 权重 3：体检建议/异常标记，普通报告也可能出现。
+            WeightedFeature([
+                "偏高", "偏低", "建议", "复查", "进一步检查", "定期体检",
+                "high", "low", "abnormal", "follow up", "recheck", "recommendation"
+            ], weight: 3)
+        ]
 
         static func detect(text: String) -> (isMatch: Bool, confidence: Int) {
             LocalMedicalDocumentClassifier.baseDetect(text: text, detectorType: Self.self)
@@ -171,10 +268,123 @@ private struct LocalMedicalDocumentClassifier {
             var extra = 0
             if text.count > 5000 { extra += 10 } else if text.count > 2000 { extra += 5 }
             if text.contains("总结建议") && text.contains("体检中心") { extra += 20 }
+            if text.contains("summary recommendation") && (text.contains("health check") || text.contains("physical exam")) { extra += 20 }
             if text.contains("健康体检") || text.contains("导读") { extra += 10 }
-            if text.contains("主诉") || text.contains("现病史") { extra -= 20 }
+            if text.contains("health check") || text.contains("annual physical") { extra += 10 }
+            if text.contains("主诉") || text.contains("现病史") || text.contains("chief complaint") { extra -= 20 }
+            if text.contains("影像表现") && text.contains("诊断意见") { extra -= 15 }
             return extra
         }
+    }
+
+    // MARK: - 5) 用药计划
+    private struct MedicationPlan: Detector {
+        static let threshold = 32
+        static let weightedFeatures = [
+            // 权重 18：计划/方案标题，不等同于处方原件。
+            WeightedFeature([
+                "用药计划", "服药计划", "用药方案", "服药提醒", "药物治疗方案",
+                "medication plan", "medicine schedule", "drug schedule", "medication schedule",
+                "treatment plan", "medication regimen"
+            ], weight: 18),
+            // 权重 12：计划型时间字段。
+            WeightedFeature([
+                "开始日期", "结束日期", "长期服用", "提醒时间", "服药时间", "疗程",
+                "start date", "end date", "duration", "course", "reminder time",
+                "take at", "morning", "evening", "bedtime"
+            ], weight: 12),
+            // 权重 8：频次和剂量执行字段。
+            WeightedFeature([
+                "每日", "每周", "每隔", "饭前", "饭后", "睡前", "每次", "一次",
+                "daily", "weekly", "every other day", "before meals", "after meals",
+                "with food", "at bedtime", "once daily", "twice daily"
+            ], weight: 8),
+            // 权重 4：药品字段，需与时间/计划字段组合才可靠。
+            WeightedFeature([
+                "药品名称", "剂型", "规格", "剂量", "mg", "ml", "tablet", "capsule",
+                "strength", "dose", "dosage form", "instructions"
+            ], weight: 4)
+        ]
+
+        static func detect(text: String) -> (isMatch: Bool, confidence: Int) {
+            LocalMedicalDocumentClassifier.baseDetect(text: text, detectorType: Self.self)
+        }
+
+        static func additionalScoring(on text: String) -> Int {
+            var extra = 0
+            if (text.contains("用药计划") || text.contains("medication plan") || text.contains("medication schedule"))
+                && (text.contains("开始") || text.contains("start date") || text.contains("reminder")) {
+                extra += 25
+            }
+            if (text.contains("reminder") || text.contains("提醒")) && (text.contains("daily") || text.contains("每日")) {
+                extra += 15
+            }
+            if text.contains("处方笺") || text.contains("处方单") || text.contains("prescription no") || text.contains("rx number") {
+                extra -= 18
+            }
+            if hasMedicinePackageStructure(text) { extra -= 15 }
+            return extra
+        }
+    }
+
+    // MARK: - 6) 药品/药盒包装
+    private struct MedicineBox: Detector {
+        static let threshold = 32
+        static let weightedFeatures = [
+            // 权重 18：包装和标签类标题。
+            WeightedFeature([
+                "药盒", "药品包装", "药瓶", "药品标签", "说明书", "外包装",
+                "medicine box", "drug package", "medication package", "pill bottle",
+                "package label", "drug label", "patient information leaflet"
+            ], weight: 18),
+            // 权重 12：监管/包装独有标识。
+            WeightedFeature([
+                "国药准字", "批准文号", "生产批号", "产品批号", "有效期至", "生产日期",
+                "manufacturer", "lot number", "batch number", "expiry date", "expiration date",
+                "exp.", "ndc", "rx only", "store at"
+            ], weight: 12),
+            // 权重 8：包装说明结构。
+            WeightedFeature([
+                "通用名称", "商品名称", "成份", "性状", "适应症", "禁忌", "不良反应",
+                "generic name", "brand name", "active ingredient", "indications",
+                "contraindications", "side effects", "warnings"
+            ], weight: 8),
+            // 权重 4：规格/数量/剂型，处方和计划也会出现。
+            WeightedFeature([
+                "规格", "剂型", "贮藏", "每盒", "片/盒", "粒/盒", "capsules", "tablets",
+                "strength", "dosage form", "storage", "keep out of reach"
+            ], weight: 4)
+        ]
+
+        static func detect(text: String) -> (isMatch: Bool, confidence: Int) {
+            LocalMedicalDocumentClassifier.baseDetect(text: text, detectorType: Self.self)
+        }
+
+        static func additionalScoring(on text: String) -> Int {
+            var extra = 0
+            if hasMedicinePackageStructure(text) { extra += 25 }
+            if (text.contains("国药准字") || text.contains("ndc")) && (text.contains("有效期") || text.contains("expiration")) {
+                extra += 20
+            }
+            if text.contains("处方号") || text.contains("prescription no") || text.contains("rx number") {
+                extra -= 25
+            }
+            if text.contains("开始日期") || text.contains("reminder time") || text.contains("服药提醒") {
+                extra -= 18
+            }
+            return extra
+        }
+    }
+
+    private static func hasCaseHistoryStructure(_ text: String) -> Bool {
+        (text.contains("主诉") && text.contains("现病史"))
+            || (text.contains("chief complaint") && text.contains("history of present illness"))
+            || (text.contains("chief complaint") && text.contains("assessment and plan"))
+    }
+
+    private static func hasMedicinePackageStructure(_ text: String) -> Bool {
+        (text.contains("批准文号") || text.contains("国药准字") || text.contains("生产批号") || text.contains("有效期至"))
+            || (text.contains("lot number") || text.contains("batch number") || text.contains("ndc") || text.contains("expiration date"))
     }
 }
 
