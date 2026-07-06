@@ -66,11 +66,22 @@ struct MarkdownDocumentStyle: Sendable {
     }
 }
 
+private struct MarkdownImageReference: Equatable {
+    let url: URL
+    let alt: String
+    let source: String
+}
+
 struct MarkdownDocumentView: View {
     @Environment(\.markdownCodeSyntaxHighlighter) private var codeSyntaxHighlighter
     @Environment(\.markdownSoftBreakMode) private var softBreakMode
+    @State private var activeWebURL: IdentifiableURL?
+    @State private var activeImagePreviewInputs: [FilePreviewInput] = []
+    @State private var activeImagePreviewStartIndex = 0
+    @State private var isImagePreviewPresented = false
 
     private let segments: [MarkdownSegment]
+    private let imageReferences: [MarkdownImageReference]
     private let style: MarkdownDocumentStyle
     private let baseURL: URL?
     private let imageBaseURL: URL?
@@ -81,10 +92,13 @@ struct MarkdownDocumentView: View {
         baseURL: URL? = nil,
         imageBaseURL: URL? = nil
     ) {
-        self.segments = MarkdownSegmentParser.parse(text)
+        let segments = MarkdownSegmentParser.parse(text)
+        let imageBaseURL = imageBaseURL ?? baseURL
+        self.segments = segments
+        self.imageReferences = Self.collectImageReferences(in: segments, imageBaseURL: imageBaseURL)
         self.style = style
         self.baseURL = baseURL
-        self.imageBaseURL = imageBaseURL ?? baseURL
+        self.imageBaseURL = imageBaseURL
     }
 
     init(
@@ -93,10 +107,12 @@ struct MarkdownDocumentView: View {
         baseURL: URL? = nil,
         imageBaseURL: URL? = nil
     ) {
+        let imageBaseURL = imageBaseURL ?? baseURL
         self.segments = segments
+        self.imageReferences = Self.collectImageReferences(in: segments, imageBaseURL: imageBaseURL)
         self.style = style
         self.baseURL = baseURL
-        self.imageBaseURL = imageBaseURL ?? baseURL
+        self.imageBaseURL = imageBaseURL
     }
 
     var body: some View {
@@ -107,6 +123,23 @@ struct MarkdownDocumentView: View {
         }
         .foregroundStyle(style.textColor)
         .background(style.backgroundColor)
+        .environment(\.openURL, OpenURLAction { url in
+            guard url.isWebURL else {
+                return .systemAction
+            }
+            activeWebURL = IdentifiableURL(url: url)
+            return .handled
+        })
+        .sheet(item: $activeWebURL) { item in
+            SafariWebViewSheet(url: item.url)
+                .ignoresSafeArea()
+        }
+    
+        .sheet(isPresented: $isImagePreviewPresented) {
+            UnifiedFilePreview(inputs: activeImagePreviewInputs, startIndex: activeImagePreviewStartIndex) {
+                isImagePreviewPresented = false
+            }
+        }
     }
 
     private func render(_ segment: MarkdownSegment) -> AnyView {
@@ -585,25 +618,14 @@ struct MarkdownDocumentView: View {
     @ViewBuilder
     private func inlineImage(alt: String, source: String) -> some View {
         if let url = resolvedURL(source, relativeTo: imageBaseURL) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 18)
-                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                case .failure:
-                    Text(alt.isEmpty ? "Image" : alt)
-                        .font(.caption)
-                        .foregroundStyle(style.secondaryTextColor)
-                case .empty:
-                    ProgressView()
-                        .controlSize(.mini)
-                @unknown default:
-                    EmptyView()
-                }
-            }
+            MarkdownRemoteImageView(
+                url: url,
+                alt: alt,
+                maxHeight: 18,
+                cornerRadius: 3,
+                style: style,
+                onPreview: presentImagePreview
+            )
         } else {
             Text(alt.isEmpty ? "Image" : alt)
                 .font(.caption)
@@ -614,28 +636,155 @@ struct MarkdownDocumentView: View {
     @ViewBuilder
     private func markdownImage(alt: String, source: String) -> some View {
         if let url = resolvedURL(source, relativeTo: imageBaseURL) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                case .failure:
-                    imageFallback(alt: alt)
-                case .empty:
-                    ProgressView()
-                        .frame(maxWidth: .infinity, minHeight: 96)
-                @unknown default:
-                    imageFallback(alt: alt)
-                }
-            }
+            MarkdownRemoteImageView(
+                url: url,
+                alt: alt,
+                maxHeight: nil,
+                cornerRadius: 6,
+                style: style,
+                onPreview: presentImagePreview
+            )
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 8)
         } else {
             imageFallback(alt: alt)
                 .padding(.bottom, 8)
         }
+    }
+
+    @MainActor
+    private func presentImagePreview(_ cachedImage: MarkdownCachedRemoteImage) async {
+        let window = previewWindow(around: cachedImage.sourceURL)
+        var inputs: [FilePreviewInput] = []
+        inputs.reserveCapacity(window.references.count)
+        var selectedIndex = 0
+
+        for (offset, reference) in window.references.enumerated() {
+            do {
+                let previewImage = offset == window.startIndex
+                    ? cachedImage
+                    : try await MarkdownRemoteImageCache.shared.image(for: reference.url)
+                if offset == window.startIndex {
+                    selectedIndex = inputs.count
+                }
+                inputs.append(FilePreviewInput(
+                    fileURL: previewImage.fileURL,
+                    displayName: reference.alt.isEmpty ? previewImage.displayName : reference.alt,
+                    mimeType: previewImage.mimeType
+                ))
+            } catch {
+                continue
+            }
+        }
+
+        if inputs.isEmpty {
+            inputs = [
+                FilePreviewInput(
+                    fileURL: cachedImage.fileURL,
+                    displayName: cachedImage.displayName,
+                    mimeType: cachedImage.mimeType
+                )
+            ]
+            selectedIndex = 0
+        }
+
+        activeImagePreviewInputs = inputs
+        activeImagePreviewStartIndex = min(selectedIndex, max(inputs.count - 1, 0))
+        isImagePreviewPresented = true
+    }
+
+    private func previewWindow(around url: URL) -> (references: [MarkdownImageReference], startIndex: Int) {
+        guard let imageIndex = imageReferences.firstIndex(where: { $0.url == url }) else {
+            return ([MarkdownImageReference(url: url, alt: "", source: url.absoluteString)], 0)
+        }
+
+        let lowerBound = max(0, imageIndex - 2)
+        let upperBound = min(imageReferences.count - 1, imageIndex + 2)
+        return (Array(imageReferences[lowerBound ... upperBound]), imageIndex - lowerBound)
+    }
+
+    private static func collectImageReferences(in segments: [MarkdownSegment], imageBaseURL: URL?) -> [MarkdownImageReference] {
+        var result: [MarkdownImageReference] = []
+        appendImageReferences(in: segments, imageBaseURL: imageBaseURL, into: &result)
+        return result
+    }
+
+    private static func appendImageReferences(
+        in segments: [MarkdownSegment],
+        imageBaseURL: URL?,
+        into result: inout [MarkdownImageReference]
+    ) {
+        for segment in segments {
+            switch segment {
+            case .heading(_, let text), .paragraph(let text):
+                appendImageReferences(
+                    in: MarkdownInlineParser.parse(text),
+                    imageBaseURL: imageBaseURL,
+                    into: &result
+                )
+
+            case .image(let alt, let source):
+                if let url = resolvedImageURL(source, relativeTo: imageBaseURL) {
+                    result.append(MarkdownImageReference(url: url, alt: alt, source: source))
+                }
+
+            case .unorderedList(let items), .orderedList(let items, _):
+                for item in items {
+                    appendImageReferences(in: item.content, imageBaseURL: imageBaseURL, into: &result)
+                }
+
+            case .taskList(let items):
+                for item in items {
+                    appendImageReferences(in: item.content, imageBaseURL: imageBaseURL, into: &result)
+                }
+
+            case .blockquote(let children):
+                appendImageReferences(in: children, imageBaseURL: imageBaseURL, into: &result)
+
+            case .table(let header, _, let rows):
+                for cell in header + rows.flatMap({ $0 }) {
+                    appendImageReferences(
+                        in: MarkdownInlineParser.parse(cell),
+                        imageBaseURL: imageBaseURL,
+                        into: &result
+                    )
+                }
+
+            case .codeBlock, .htmlBlock, .thematicBreak:
+                break
+            }
+        }
+    }
+
+    private static func appendImageReferences(
+        in inlines: [MarkdownSegment.Inline],
+        imageBaseURL: URL?,
+        into result: inout [MarkdownImageReference]
+    ) {
+        for inline in inlines {
+            switch inline {
+            case .image(let alt, let source):
+                if let url = resolvedImageURL(source, relativeTo: imageBaseURL) {
+                    result.append(MarkdownImageReference(url: url, alt: alt, source: source))
+                }
+
+            case .emphasis(let children),
+                 .strong(let children),
+                 .strikethrough(let children),
+                 .link(let children, _):
+                appendImageReferences(in: children, imageBaseURL: imageBaseURL, into: &result)
+
+            case .text, .softBreak, .lineBreak, .code, .html:
+                break
+            }
+        }
+    }
+
+    private static func resolvedImageURL(_ source: String, relativeTo baseURL: URL?) -> URL? {
+        if let url = URL(string: source), url.scheme != nil {
+            return url
+        }
+        return URL(string: source, relativeTo: baseURL)
     }
 
     private func imageFallback(alt: String) -> some View {
@@ -698,6 +847,13 @@ private extension Array where Element == MarkdownSegment.Inline {
                 return false
             }
         }
+    }
+}
+
+private extension URL {
+    var isWebURL: Bool {
+        guard let scheme = scheme?.lowercased() else { return false }
+        return scheme == "http" || scheme == "https"
     }
 }
 
