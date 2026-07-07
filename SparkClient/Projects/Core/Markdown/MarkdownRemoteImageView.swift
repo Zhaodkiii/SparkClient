@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -176,11 +177,9 @@ actor MarkdownRemoteImageCache {
     }
 
     private func cacheKey(for url: URL) -> String {
-        Data(url.absoluteString.utf8)
-            .base64EncodedString()
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "=", with: "")
+        SHA256.hash(data: Data(url.absoluteString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private func displayName(for url: URL, fileURL: URL) -> String {

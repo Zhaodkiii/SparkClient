@@ -253,7 +253,7 @@ struct MedicineBoxDetailPage: View {
             let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
             let response = try await shareAPI.createShare(businessType: "medicine_box", businessID: currentBox.id)
             let shareURL = AppEnvironment.current.shareWebBaseURL
-                .appendingPathComponent("s")
+                .appendingPathComponent("share")
                 .appendingPathComponent(response.shareCode)
             shareContext = MedicalShareContext(
                 itemTitle: currentBox.medicineName.nonEmpty ?? L10n.text("home.medical.medicine_box.detail_title"),

@@ -72,13 +72,18 @@ private struct MarkdownImageReference: Equatable {
     let source: String
 }
 
+private struct MarkdownImagePreviewSheet: Identifiable {
+    let id = UUID()
+    let inputs: [FilePreviewInput]
+    let startIndex: Int
+}
+
 struct MarkdownDocumentView: View {
     @Environment(\.markdownCodeSyntaxHighlighter) private var codeSyntaxHighlighter
     @Environment(\.markdownSoftBreakMode) private var softBreakMode
     @State private var activeWebURL: IdentifiableURL?
-    @State private var activeImagePreviewInputs: [FilePreviewInput] = []
-    @State private var activeImagePreviewStartIndex = 0
-    @State private var isImagePreviewPresented = false
+    @State private var activeImagePreviewSheet: MarkdownImagePreviewSheet?
+    @State private var tableHeights: [Int: CGFloat] = [:]
 
     private let segments: [MarkdownSegment]
     private let imageReferences: [MarkdownImageReference]
@@ -117,8 +122,8 @@ struct MarkdownDocumentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: style.blockSpacing) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                render(segment)
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                render(segment, tableID: index)
             }
         }
         .foregroundStyle(style.textColor)
@@ -135,14 +140,14 @@ struct MarkdownDocumentView: View {
                 .ignoresSafeArea()
         }
     
-        .sheet(isPresented: $isImagePreviewPresented) {
-            UnifiedFilePreview(inputs: activeImagePreviewInputs, startIndex: activeImagePreviewStartIndex) {
-                isImagePreviewPresented = false
+        .sheet(item: $activeImagePreviewSheet) { preview in
+            UnifiedFilePreview(inputs: preview.inputs, startIndex: preview.startIndex) {
+                activeImagePreviewSheet = nil
             }
         }
     }
 
-    private func render(_ segment: MarkdownSegment) -> AnyView {
+    private func render(_ segment: MarkdownSegment, tableID: Int? = nil) -> AnyView {
         switch segment {
         case .heading(let level, let text):
             return AnyView(heading(text, level: level))
@@ -231,28 +236,7 @@ struct MarkdownDocumentView: View {
             .padding(.bottom, 8))
 
         case .table(let header, let alignments, let rows):
-            return AnyView(ScrollView(.horizontal, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    tableRow(cells: header, alignments: alignments, row: 0)
-                    ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                        tableRow(cells: row, alignments: alignments, row: rowIndex + 1)
-                    }
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 0, style: .continuous)
-                        .stroke(style.tableBorderColor, lineWidth: 1)
-                )
-            }
-            .overlay(alignment: .trailing) {
-                LinearGradient(
-                    colors: [Color.clear, style.backgroundColor.opacity(0.65)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: 14)
-                .allowsHitTesting(false)
-            }
-            .padding(.bottom, 8))
+            return AnyView(table(header: header, alignments: alignments, rows: rows, id: tableID))
 
         case .htmlBlock(let html):
             return AnyView(Text(html.strippingHTMLTags())
@@ -314,31 +298,117 @@ struct MarkdownDocumentView: View {
         }
     }
 
-    private func tableRow(cells: [String], alignments: [MarkdownSegment.TableAlignment], row: Int) -> some View {
-        HStack(spacing: 0) {
-            ForEach(Array(cells.enumerated()), id: \.offset) { column, cell in
-                let alignment = tableCellAlignment(alignments[safe: column] ?? .leading)
-                markdownInlineFlow(
-                    cell,
-                    font: row == 0 ? style.bodyFont.weight(.semibold) : style.bodyFont,
-                    color: style.textColor
-                )
-                .frame(minWidth: 120, maxWidth: 260, alignment: alignment)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 6)
-                .overlay(alignment: .trailing) {
-                    Rectangle()
-                        .fill(style.tableBorderColor)
-                        .frame(width: 1)
+    private func table(header: [String], alignments: [MarkdownSegment.TableAlignment], rows: [[String]], id: Int?) -> some View {
+        let tableID = id ?? -1
+        let allRows = [header] + rows
+        let columnCount = max(allRows.map(\.count).max() ?? 0, alignments.count)
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                ForEach(Array(allRows.enumerated()), id: \.offset) { rowIndex, row in
+                    GridRow {
+                        ForEach(0..<columnCount, id: \.self) { column in
+                            tableCell(
+                                row[safe: column] ?? "",
+                                alignment: alignments[safe: column] ?? .leading,
+                                row: rowIndex,
+                                column: column,
+                                columnCount: columnCount
+                            )
+                        }
+                    }
                 }
             }
+            .overlay(
+                RoundedRectangle(cornerRadius: 0, style: .continuous)
+                    .stroke(style.tableBorderColor, lineWidth: 1)
+            )
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: MarkdownTableHeightPreferenceKey.self,
+                        value: [tableID: proxy.size.height]
+                    )
+                }
+            )
         }
-        .background(row == 0 ? style.tableHeaderBackgroundColor : row.isMultiple(of: 2) ? style.tableAlternateBackgroundColor : Color.clear)
+        .frame(height: tableHeights[tableID])
+        .onPreferenceChange(MarkdownTableHeightPreferenceKey.self) { heights in
+            guard let height = heights[tableID], height > 0 else { return }
+            if abs((tableHeights[tableID] ?? 0) - height) > 0.5 {
+                tableHeights[tableID] = height
+            }
+        }
+        .overlay(alignment: .trailing) {
+            LinearGradient(
+                colors: [Color.clear, style.backgroundColor.opacity(0.65)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 14)
+            .allowsHitTesting(false)
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func tableCell(
+        _ cell: String,
+        alignment: MarkdownSegment.TableAlignment,
+        row: Int,
+        column: Int,
+        columnCount: Int
+    ) -> some View {
+        let horizontalPadding: CGFloat = 13
+        let columnWidth = tableColumnWidth(column: column, columnCount: columnCount)
+        let contentWidth = max(columnWidth - horizontalPadding * 2, 1)
+
+        return ZStack(alignment: tableCellAlignment(alignment)) {
+            tableCellBackground(row: row)
+            markdownInlineFlow(
+                cell,
+                font: row == 0 ? style.bodyFont.weight(.semibold) : style.bodyFont,
+                color: style.textColor
+            )
+            .frame(width: contentWidth, alignment: tableCellAlignment(alignment))
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, 6)
+        }
+        .frame(width: columnWidth)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(style.tableBorderColor)
+                .frame(width: 1)
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(style.tableBorderColor)
                 .frame(height: 1)
         }
+    }
+
+    private func tableColumnWidth(column: Int, columnCount: Int) -> CGFloat {
+        if columnCount >= 4 {
+            switch column {
+            case 0: return 132
+            case 1: return 240
+            case 2: return 170
+            default: return 320
+            }
+        }
+        if column == columnCount - 1 {
+            return 320
+        }
+        return 180
+    }
+
+    private func tableCellBackground(row: Int) -> Color {
+        if row == 0 {
+            return style.tableHeaderBackgroundColor
+        }
+        if row.isMultiple(of: 2) {
+            return style.tableAlternateBackgroundColor
+        }
+        return .clear
     }
 
     private func tableCellAlignment(_ alignment: MarkdownSegment.TableAlignment) -> Alignment {
@@ -688,9 +758,10 @@ struct MarkdownDocumentView: View {
             selectedIndex = 0
         }
 
-        activeImagePreviewInputs = inputs
-        activeImagePreviewStartIndex = min(selectedIndex, max(inputs.count - 1, 0))
-        isImagePreviewPresented = true
+        activeImagePreviewSheet = MarkdownImagePreviewSheet(
+            inputs: inputs,
+            startIndex: min(selectedIndex, max(inputs.count - 1, 0))
+        )
     }
 
     private func previewWindow(around url: URL) -> (references: [MarkdownImageReference], startIndex: Int) {
@@ -920,6 +991,14 @@ private struct MarkdownInlineFlowLayout: Layout {
 
 private struct MarkdownInlineLineBreakKey: LayoutValueKey {
     static let defaultValue = false
+}
+
+private struct MarkdownTableHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: [Int: CGFloat] = [:]
+
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
 }
 
 private struct MarkdownInlineAttributes: Equatable {

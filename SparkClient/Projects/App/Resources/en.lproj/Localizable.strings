@@ -10,7 +10,25 @@
 "tab.home" = "Home";
 "tab.health" = "Health";
 "tab.chat" = "Chat";
+"tab.popular_science" = "Learn";
 "tab.settings" = "Settings";
+
+"popular_science.title" = "Learn";
+"popular_science.empty.title" = "No articles yet";
+"popular_science.empty.subtitle" = "Check back later for health guides and tips.";
+"popular_science.retry" = "Retry";
+"popular_science.share" = "Share";
+"popular_science.references" = "References";
+"popular_science.medical_disclaimer" = "This content is for reference only and does not replace medical advice.";
+"popular_science.offline_cached" = "Showing cached content. It may not be the latest version.";
+"popular_science.category.all" = "All";
+"popular_science.badge.top" = "Top";
+"popular_science.badge.recommended" = "Recommended";
+"popular_science.error.not_found" = "This content is unavailable.";
+"popular_science.error.cache_miss" = "No cached content is available.";
+"popular_science.error.invalid_share_url" = "Unable to share right now.";
+"popular_science.error.unsupported_format" = "This content format is not supported.";
+"popular_science.error.load_failed" = "Unable to load content. Try again later.";
 
 "chat.thread.edit" = "Edit";
 "chat.thread.pin" = "Pin";

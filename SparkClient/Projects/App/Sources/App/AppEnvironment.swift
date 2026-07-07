@@ -51,17 +51,20 @@ enum AppEnvironment: String, CaseIterable, Sendable {
         return components.url ?? productionFallback
     }
 
-    /// 公开病例分享站点根地址。
-    var shareWebBaseURL: URL {
+    /// 开放端综合站点根地址（文章详情、病例分享等）。
+    var openWebBaseURL: URL {
         switch self {
         case .debug:
-            return URL(string: "http://39.106.39.110:1998")!
+            return URL(string: "http://39.106.39.110:2028")!
         case .staging:
             return URL(string: "https://share.dreamwhale.top")!
         case .production:
             return URL(string: "https://share.dreamwhale.top")!
         }
     }
+
+    /// 公开病例分享站点根地址（保留兼容旧代码，内部指向 openWebBaseURL）。
+    var shareWebBaseURL: URL { openWebBaseURL }
 
     /// 应用隐私政策页面。
     var privacyPolicyURL: URL {

@@ -282,7 +282,7 @@ struct ExaminationReportDetailPage: View {
             let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
             let response = try await shareAPI.createShare(businessType: "examination_report", businessID: report.id)
             let shareURL = AppEnvironment.current.shareWebBaseURL
-                .appendingPathComponent("s")
+                .appendingPathComponent("share")
                 .appendingPathComponent(response.shareCode)
             shareContext = MedicalShareContext(
                 itemTitle: report.itemName?.nonEmpty ?? report.category?.nonEmpty ?? L10n.text("home.medical.list.examination_reports.title"),

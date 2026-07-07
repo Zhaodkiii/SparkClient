@@ -102,6 +102,8 @@ final class AppContainer {
     let memoryRepository: any MemoryRepository
     /// 本地知识库持久化（Core Data：`KnowledgeDocumentEntity` / `KnowledgeChunkEntity`）。
     let knowledgeRepository: any KnowledgeRepository
+    /// 服务端科普内容仓储：远端文档系统 + JSON 文件缓存。
+    let popularScienceRepository: any PopularScienceRepository
     /// 本机 GGUF 等小模型加载与推理入口（与云端网关并列供 `AIRuntimeService` 选择）。
     let localModelService: LocalModelService
 
@@ -232,6 +234,8 @@ final class AppContainer {
     let chatStateStore: ChatStateStore
     /// 知识库列表/搜索/增删改 UI 状态（单例）。
     let knowledgeViewModel: KnowledgeLibraryViewModel
+    /// 科普列表 UI 状态（单例）。
+    let popularScienceViewModel: PopularScienceHomeViewModel
     /// 会话列表 UI（单例）。
     let chatListViewModel: ChatListViewModel
     /// 单会话消息与发送 UI（单例）。
@@ -431,6 +435,12 @@ final class AppContainer {
         self.autoFillAgentPromptUseCase = ai.autoFillAgentPromptUseCase
 
         self.knowledgeRepository = knowledge.knowledgeRepository
+        let popularScienceRepository = RemotePopularScienceRepository(
+            api: backend.popularScience,
+            cacheStore: PopularScienceCacheStore(),
+            logger: logger
+        )
+        self.popularScienceRepository = popularScienceRepository
         self.loadKnowledgeListUseCase = knowledge.loadKnowledgeListUseCase
         self.loadKnowledgeDocumentUseCase = knowledge.loadKnowledgeDocumentUseCase
         self.createKnowledgeDocumentUseCase = knowledge.createKnowledgeDocumentUseCase
@@ -511,6 +521,11 @@ final class AppContainer {
             deleteUseCase: knowledge.deleteKnowledgeDocumentUseCase,
             searchUseCase: knowledge.searchKnowledgeUseCase,
             reindexUseCase: knowledge.reindexKnowledgeDocumentUseCase
+        )
+        self.popularScienceViewModel = PopularScienceHomeViewModel(
+            loadArticlesUseCase: LoadPopularScienceArticlesUseCase(repository: popularScienceRepository),
+            loadCategoriesUseCase: LoadPopularScienceCategoriesUseCase(repository: popularScienceRepository),
+            routeStore: routeStore
         )
         self.chatListViewModel = ChatListViewModel(
             stateStore: chatStateStore,
@@ -798,10 +813,16 @@ final class AppContainer {
                     makeKnowledgeDocumentEditorViewModel(documentID: documentID)
                 }
             ),
+            popularScienceDependencies: PopularScienceFeatureDependencies(
+                makeDetailViewModel: { [self] articleID in
+                    makePopularScienceArticleDetailViewModel(articleID: articleID)
+                }
+            ),
             taskManager: taskManager,
             homeViewModel: homeViewModel,
             medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
             knowledgeViewModel: makeKnowledgeLibraryViewModel(),
+            popularScienceViewModel: makePopularScienceHomeViewModel(),
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
@@ -861,6 +882,20 @@ final class AppContainer {
     /// 知识库主列表（共享 `knowledgeViewModel`）。
     func makeKnowledgeLibraryViewModel() -> KnowledgeLibraryViewModel {
         knowledgeViewModel
+    }
+
+    /// 科普主列表（共享 `popularScienceViewModel`）。
+    func makePopularScienceHomeViewModel() -> PopularScienceHomeViewModel {
+        popularScienceViewModel
+    }
+
+    /// 科普详情页 ViewModel（按文章 ID 创建，详情页持有自己的阅读计时生命周期）。
+    func makePopularScienceArticleDetailViewModel(articleID: Int) -> PopularScienceArticleDetailViewModel {
+        PopularScienceArticleDetailViewModel(
+            articleID: articleID,
+            loadDetailUseCase: LoadPopularScienceArticleDetailUseCase(repository: popularScienceRepository),
+            reportReadingUseCase: ReportPopularScienceReadingUseCase(repository: popularScienceRepository)
+        )
     }
 
     /// 知识文档「写作页」专用 ViewModel（按文档 ID 注入用例）。

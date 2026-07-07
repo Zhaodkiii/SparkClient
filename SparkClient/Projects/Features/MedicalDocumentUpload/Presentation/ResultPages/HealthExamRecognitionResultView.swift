@@ -174,7 +174,7 @@ struct HealthExamRecognitionResultView: View {
             let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
             let response = try await shareAPI.createShare(businessType: "health_exam_report", businessID: detailReportID)
             let shareURL = AppEnvironment.current.shareWebBaseURL
-                .appendingPathComponent("s")
+                .appendingPathComponent("share")
                 .appendingPathComponent(response.shareCode)
             shareContext = MedicalShareContext(
                 itemTitle: detailShareTitle ?? title,

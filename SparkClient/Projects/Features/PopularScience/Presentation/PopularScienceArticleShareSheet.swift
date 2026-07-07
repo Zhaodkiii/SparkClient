@@ -1,0 +1,224 @@
+import SwiftUI
+import UIKit
+
+private enum ArticleShareChannel: String, CaseIterable, Identifiable {
+    case wechat
+    case xiaohongshu
+    case copyLink
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wechat:
+            return L10n.text("home.medical.share.sheet.wechat", fallback: "微信好友")
+        case .xiaohongshu:
+            return L10n.text("home.medical.share.sheet.xiaohongshu", fallback: "小红书")
+        case .copyLink:
+            return L10n.text("home.medical.share.sheet.copy_link", fallback: "复制链接")
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .wechat: return "wechat"
+        case .xiaohongshu: return "xiaohongshu"
+        case .copyLink: return "link"
+        }
+    }
+}
+
+struct PopularScienceArticleShareSheet: View {
+    let context: PopularScienceArticleShareContext
+    let onDismiss: () -> Void
+
+    @State private var statusText: String?
+
+    private let wechatScheme = URL(string: "weixin://")!
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Spacer()
+                Text(L10n.text("home.medical.share.sheet.title", fallback: "分享到"))
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+
+            articlePreviewCard
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12),
+                ],
+                spacing: 12
+            ) {
+                ForEach(ArticleShareChannel.allCases) { channel in
+                    Button {
+                        handle(channel: channel)
+                    } label: {
+                        VStack(spacing: 10) {
+                            channelIcon(for: channel)
+                            Text(channel.title)
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 118)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let statusText {
+                Text(statusText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button(action: onDismiss) {
+                Text(L10n.text("common.cancel"))
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color(uiColor: .tertiarySystemBackground))
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+        .shareSheetPresentation()
+    }
+
+    private var articlePreviewCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(context.title)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+            if let summary = context.summary, summary.isEmpty == false {
+                Text(summary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private func channelIcon(for channel: ArticleShareChannel) -> some View {
+        switch channel {
+        case .wechat:
+            Image(channel.iconName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 46, height: 46)
+                .clipShape(Circle())
+        case .xiaohongshu:
+            Image(channel.iconName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 46, height: 46)
+                .clipShape(Circle())
+        case .copyLink:
+            Image(systemName: channel.iconName)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 46, height: 46)
+                .background(
+                    Circle()
+                        .fill(Color(uiColor: .systemBackground))
+                )
+        }
+    }
+
+    private func handle(channel: ArticleShareChannel) {
+        switch channel {
+        case .wechat:
+            copyShareLink()
+            openTargetApp(
+                url: wechatScheme,
+                fallbackStatus: L10n.text("home.medical.share.sheet.copied_wechat", fallback: "已复制链接，可在微信中粘贴发送")
+            )
+        case .xiaohongshu:
+            copyShareLink()
+            guard var components = URLComponents(string: "xhsdiscover://extweb") else {
+                statusText = L10n.text("home.medical.share.sheet.copied", fallback: "链接已复制")
+                return
+            }
+            components.queryItems = [
+                URLQueryItem(name: "link", value: context.shareURL.absoluteString)
+            ]
+            guard let url = components.url else {
+                statusText = L10n.text("home.medical.share.sheet.copied", fallback: "链接已复制")
+                return
+            }
+            openTargetApp(
+                url: url,
+                fallbackStatus: L10n.text("home.medical.share.sheet.copied_xiaohongshu", fallback: "已复制链接，可在小红书中粘贴或继续编辑")
+            )
+        case .copyLink:
+            copyShareLink()
+            statusText = L10n.text("home.medical.share.sheet.copied", fallback: "链接已复制")
+        }
+    }
+
+    private func copyShareLink() {
+        UIPasteboard.general.string = context.shareURL.absoluteString
+    }
+
+    private func openTargetApp(url: URL, fallbackStatus: String) {
+        guard UIApplication.shared.canOpenURL(url) else {
+            statusText = fallbackStatus
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { _ in
+            statusText = fallbackStatus
+        }
+    }
+}
+
+#Preview("PopularScienceArticleShareSheet") {
+    PopularScienceArticleShareSheet(
+        context: PopularScienceArticleShareContext(
+            title: "高血压患者如何科学控压？",
+            summary: "了解生活方式干预、药物配合与长期管理策略，帮助血压平稳达标。",
+            shareURL: URL(string: "https://share.dreamwhale.top/share/AbC123xYz789")!
+        ),
+        onDismiss: {}
+    )
+    .preferredColorScheme(.light)
+}

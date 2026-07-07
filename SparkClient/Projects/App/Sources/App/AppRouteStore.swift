@@ -8,6 +8,8 @@ enum AppRoute: Hashable, Sendable {
     case knowledge
     case chatList
     case chatThread(UUID)
+    case popularScience
+    case popularScienceArticle(id: Int)
     case settings
     case aiSettings
     /// 首页医疗卡片对应的列表/执行中心页。
@@ -23,6 +25,8 @@ enum AppRoute: Hashable, Sendable {
             return .knowledge
         case .chatList, .chatThread:
             return .chat
+        case .popularScience, .popularScienceArticle:
+            return .popularScience
         case .settings, .aiSettings:
             return .settings
         }
@@ -30,9 +34,9 @@ enum AppRoute: Hashable, Sendable {
 
     var isRootDestination: Bool {
         switch self {
-        case .home, .knowledge, .chatList, .settings:
+        case .home, .knowledge, .chatList, .popularScience, .settings:
             return true
-        case .chatThread, .aiSettings, .homeMedicalList, .homeFamilyMedicineCabinet:
+        case .chatThread, .popularScienceArticle, .aiSettings, .homeMedicalList, .homeFamilyMedicineCabinet:
             return false
         }
     }
@@ -46,6 +50,8 @@ final class AppRouteStore: ObservableObject {
         case knowledge = 2
         case chat = 3
         case settings = 4
+        /// 科普 Tab 使用新 raw value，避免影响历史 settings 选中态。
+        case popularScience = 5
     }
 
     @Published var selectedTab: RootTab = .home

@@ -425,7 +425,7 @@ struct MedicalCaseDetailPage: View {
             let shareAPI = SparkMedicalShareAPI(configuration: workflowAPI.configuration)
             let response = try await shareAPI.createMedicalCaseShare(caseID: currentItem.id)
             let shareURL = AppEnvironment.current.shareWebBaseURL
-                .appendingPathComponent("s")
+                .appendingPathComponent("share")
                 .appendingPathComponent(response.shareCode)
             shareContext = MedicalCaseShareContext(
                 itemTitle: currentItem.title?.nonEmpty ?? "病例详情",

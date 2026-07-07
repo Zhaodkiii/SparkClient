@@ -6,10 +6,12 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var routeStore: AppRouteStore
     let homeDependencies: HomeFeatureDependencies
     let knowledgeDependencies: KnowledgeFeatureDependencies
+    let popularScienceDependencies: PopularScienceFeatureDependencies
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
+    @ObservedObject var popularScienceViewModel: PopularScienceHomeViewModel
     @ObservedObject var chatStateStore: ChatStateStore
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
@@ -39,16 +41,16 @@ struct MainTabCoordinatorView: View {
                 Label(L10n.text("tab.home"), systemImage: "house.fill")
             }
             .tag(AppRouteStore.RootTab.home)
-
-            CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
-                KnowledgeLibraryView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
-            } destination: { route in
-                routeDestination(route)
-            }
-            .tabItem {
-                Label("Knowledge", systemImage: "books.vertical.fill")
-            }
-            .tag(AppRouteStore.RootTab.knowledge)
+            // 知识库当前版本 暂时关闭
+//            CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
+//                KnowledgeLibraryView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
+//            } destination: { route in
+//                routeDestination(route)
+//            }
+//            .tabItem {
+//                Label("Knowledge", systemImage: "books.vertical.fill")
+//            }
+//            .tag(AppRouteStore.RootTab.knowledge)
 
             CompatibleRouteNavigationContainer(path: routePath(.chat)) {
                 ChatConversationListPage(
@@ -67,6 +69,16 @@ struct MainTabCoordinatorView: View {
                 Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
             }
             .tag(AppRouteStore.RootTab.chat)
+
+            CompatibleRouteNavigationContainer(path: routePath(.popularScience)) {
+                PopularScienceHomeView(viewModel: popularScienceViewModel)
+            } destination: { route in
+                routeDestination(route)
+            }
+            .tabItem {
+                Label(L10n.text("tab.popular_science"), systemImage: "book.pages.fill")
+            }
+            .tag(AppRouteStore.RootTab.popularScience)
 
             CompatibleRouteNavigationContainer(path: routePath(.settings)) {
                 SettingsView(
@@ -136,7 +148,11 @@ struct MainTabCoordinatorView: View {
                 homeViewModel: homeViewModel,
                 dependencies: homeDependencies
             )
-        case .home, .knowledge, .chatList, .settings:
+        case .popularScienceArticle(let articleID):
+            PopularScienceArticleDetailView(
+                viewModel: popularScienceDependencies.makeDetailViewModel(articleID)
+            )
+        case .home, .knowledge, .chatList, .popularScience, .settings:
             EmptyView()
         }
     }

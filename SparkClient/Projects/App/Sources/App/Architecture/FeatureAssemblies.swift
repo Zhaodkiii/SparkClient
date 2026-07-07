@@ -61,6 +61,10 @@ struct KnowledgeFeatureDependencies {
     let makeEditorViewModel: @MainActor (_ documentID: UUID) -> KnowledgeDocumentEditorViewModel
 }
 
+struct PopularScienceFeatureDependencies {
+    let makeDetailViewModel: @MainActor (_ articleID: Int) -> PopularScienceArticleDetailViewModel
+}
+
 extension HomeFeatureDependencies {
     @MainActor
     static func makeNutritionDependencies(
@@ -201,10 +205,12 @@ struct MainTabDependencies {
     let routeStore: AppRouteStore
     let homeDependencies: HomeFeatureDependencies
     let knowledgeDependencies: KnowledgeFeatureDependencies
+    let popularScienceDependencies: PopularScienceFeatureDependencies
     let taskManager: TaskManager
     let homeViewModel: HomeViewModel
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let knowledgeViewModel: KnowledgeLibraryViewModel
+    let popularScienceViewModel: PopularScienceHomeViewModel
     let chatStateStore: ChatStateStore
     let chatListViewModel: ChatListViewModel
     let chatDetailViewModel: ChatDetailViewModel

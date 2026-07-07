@@ -22,6 +22,7 @@ final class Backend {
     let ocr: SparkOCRAPI
     let version: SparkVersionAPI
     let nutrition: NutritionAPI
+    let popularScience: PopularScienceRemoteAPI
     let deviceCache: DeviceCache
 
     init(
@@ -68,6 +69,7 @@ final class Backend {
         self.ocr = SparkOCRAPI(configuration: configuration)
         self.version = SparkVersionAPI(configuration: configuration)
         self.nutrition = NutritionAPI(configuration: configuration)
+        self.popularScience = PopularScienceRemoteAPI(configuration: configuration)
 
         logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
@@ -92,6 +94,7 @@ final class Backend {
         self.ocr = SparkOCRAPI(configuration: configuration)
         self.version = SparkVersionAPI(configuration: configuration)
         self.nutrition = NutritionAPI(configuration: configuration)
+        self.popularScience = PopularScienceRemoteAPI(configuration: configuration)
 
         configuration.logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
