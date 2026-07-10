@@ -209,6 +209,95 @@ final class SparkNetworkEngineTests: XCTestCase {
         XCTAssertEqual(payload, ETagPayload(value: 2))
     }
 
+    func testETagRequestUploadsCacheMaxAge() async throws {
+        URLProtocolStub.reset()
+
+        let baseURL = URL(string: "http://localhost")!
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let session = URLSession(configuration: config)
+        let transport = URLSessionNetworkTransport(session: session, logger: ConsoleLogger())
+        let engine = SparkNetworkEngine(
+            baseURL: baseURL,
+            transport: transport,
+            gate: SerialRequestGate(),
+            etagInterceptor: ETagHTTPInterceptor(store: FileETagStore(baseDirectory: tmpDir)),
+            retryPolicy: RetryPolicy(config: .default, scheduler: DefaultRetryScheduler()),
+            authProvider: AuthTokenProvider(transport: transport, baseURL: baseURL, logger: ConsoleLogger())
+        )
+
+        URLProtocolStub.requestHandler = { req in
+            XCTAssertEqual(req.value(forHTTPHeaderField: "X-Cache-Max-Age"), "86400")
+            let data = try! self.makeBackendWrappedJSON(data: ETagPayload(value: 3))
+            return StubHTTPResponse(statusCode: 200, headers: ["ETag": "fresh"], body: data)
+        }
+
+        let request = SparkNetworkRequest(
+            method: .get,
+            path: "/etag/cache-max-age",
+            strategy: NetworkStrategy(
+                requiresAuth: false,
+                allowETag: true,
+                serialKey: "etag.cache_max_age",
+                retryConfig: .default,
+                isIdempotent: true,
+                queuePriority: .normal,
+                etagTTL: 86400
+            )
+        )
+
+        let payload: ETagPayload = try await engine.send(request, decodingMode: .backendWrapped)
+        XCTAssertEqual(payload, ETagPayload(value: 3))
+    }
+
+    func testETagRequestDoesNotOverrideCustomCacheMaxAgeHeader() async throws {
+        URLProtocolStub.reset()
+
+        let baseURL = URL(string: "http://localhost")!
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [URLProtocolStub.self]
+        let session = URLSession(configuration: config)
+        let transport = URLSessionNetworkTransport(session: session, logger: ConsoleLogger())
+        let engine = SparkNetworkEngine(
+            baseURL: baseURL,
+            transport: transport,
+            gate: SerialRequestGate(),
+            etagInterceptor: ETagHTTPInterceptor(store: FileETagStore(baseDirectory: tmpDir)),
+            retryPolicy: RetryPolicy(config: .default, scheduler: DefaultRetryScheduler()),
+            authProvider: AuthTokenProvider(transport: transport, baseURL: baseURL, logger: ConsoleLogger())
+        )
+
+        URLProtocolStub.requestHandler = { req in
+            XCTAssertEqual(req.value(forHTTPHeaderField: "X-Cache-Max-Age"), "3600")
+            let data = try! self.makeBackendWrappedJSON(data: ETagPayload(value: 4))
+            return StubHTTPResponse(statusCode: 200, headers: ["ETag": "fresh"], body: data)
+        }
+
+        let request = SparkNetworkRequest(
+            method: .get,
+            path: "/etag/custom-cache-max-age",
+            headers: ["X-Cache-Max-Age": "3600"],
+            strategy: NetworkStrategy(
+                requiresAuth: false,
+                allowETag: true,
+                serialKey: "etag.custom_cache_max_age",
+                retryConfig: .default,
+                isIdempotent: true,
+                queuePriority: .normal,
+                etagTTL: 86400
+            )
+        )
+
+        let payload: ETagPayload = try await engine.send(request, decodingMode: .backendWrapped)
+        XCTAssertEqual(payload, ETagPayload(value: 4))
+    }
+
     actor SleepRecorder {
         var slept: [TimeInterval] = []
         func record(_ seconds: TimeInterval) {

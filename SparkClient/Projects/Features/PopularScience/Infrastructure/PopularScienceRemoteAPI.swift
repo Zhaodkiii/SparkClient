@@ -1,6 +1,8 @@
 import Foundation
 
 struct PopularScienceRemoteAPI: Sendable {
+    private static let defaultETagTTL: TimeInterval = 24 * 60 * 60
+
     let configuration: SparkBackendConfiguration
 
     init(configuration: SparkBackendConfiguration) {
@@ -57,7 +59,7 @@ struct PopularScienceRemoteAPI: Sendable {
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .normal,
-                    etagTTL: 300
+                    etagTTL: Self.defaultETagTTL
                 )
             )
         )
@@ -111,7 +113,7 @@ struct PopularScienceRemoteAPI: Sendable {
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .low,
-                    etagTTL: 600
+                    etagTTL: Self.defaultETagTTL
                 )
             )
         )
@@ -135,7 +137,7 @@ struct PopularScienceRemoteAPI: Sendable {
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .low,
-                    etagTTL: 600
+                    etagTTL: Self.defaultETagTTL
                 )
             )
         )
@@ -190,7 +192,7 @@ struct PopularScienceRemoteAPI: Sendable {
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .normal,
-                    etagTTL: 3600
+                    etagTTL: Self.defaultETagTTL
                 )
             )
         )
@@ -223,7 +225,7 @@ struct PopularScienceRemoteAPI: Sendable {
                     retryConfig: .default,
                     isIdempotent: true,
                     queuePriority: .normal,
-                    etagTTL: 600
+                    etagTTL: Self.defaultETagTTL
                 )
             )
         )

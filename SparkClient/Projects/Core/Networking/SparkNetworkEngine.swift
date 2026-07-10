@@ -258,7 +258,7 @@ final class SparkNetworkEngine {
         // 条件请求：在 transport 前附加 If-None-Match。
         let cacheKey: String? = request.strategy.allowETag ? etagInterceptor.cacheKey(for: urlRequest) : nil
         if let cacheKey, request.strategy.allowETag {
-            urlRequest = etagInterceptor.applyIfNoneMatch(to: urlRequest, cacheKey: cacheKey)
+            urlRequest = etagInterceptor.applyIfNoneMatch(to: urlRequest, cacheKey: cacheKey, request: request)
         }
 
         let transportResponse = try await transport.send(urlRequest)

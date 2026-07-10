@@ -119,8 +119,14 @@ struct ETagHTTPInterceptor: Sendable {
     }
 
     /// 未过期则设置 `If-None-Match`；已过期则删除本地条目，避免错误复用。
-    func applyIfNoneMatch(to urlRequest: URLRequest, cacheKey: String) -> URLRequest {
+    /// 同时把客户端期望的 ETag 缓存秒数上送给服务端，用于服务端返回匹配的 `Cache-Control`。
+    func applyIfNoneMatch(to urlRequest: URLRequest, cacheKey: String, request: SparkNetworkRequest) -> URLRequest {
         var req = urlRequest
+        if req.value(forHTTPHeaderField: "X-Cache-Max-Age") == nil,
+           let ttl = request.strategy.etagTTL,
+           ttl > 0 {
+            req.setValue(String(Int(ttl)), forHTTPHeaderField: "X-Cache-Max-Age")
+        }
         if let record = store.record(forKey: cacheKey) {
             if record.isExpired() {
                 store.removeCache(forKey: cacheKey)
