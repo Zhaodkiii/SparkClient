@@ -5,7 +5,8 @@ import UIKit
 
 struct SecondCameraHomeView: View {
     @State private var isPresentingCamera = false
-    @State private var selectedPreview: SecondCameraPreview?
+    @State private var previewItems: [SecondCameraHomePreviewItem] = []
+    @State private var selectedPreviewID: UUID?
 
     var body: some View {
         ZStack {
@@ -13,6 +14,10 @@ struct SecondCameraHomeView: View {
 
             VStack(spacing: 18) {
                 previewPane
+
+                if previewItems.count > 1 {
+                    previewThumbnailRail
+                }
 
                 VStack(spacing: 10) {
                     Button {
@@ -40,14 +45,7 @@ struct SecondCameraHomeView: View {
                         module: .camera,
                         message: "SecondCameraHomeView onMediaBatchCaptured closing camera count=\(mediaItems.count)"
                     )
-                    if let firstImage = mediaItems.compactMap({ $0.getImage() }).first {
-                        selectedPreview = .photo(firstImage)
-                    } else if let firstVideo = mediaItems.compactMap({ $0.getVideo() }).first {
-                        selectedPreview = .video(
-                            url: firstVideo,
-                            thumbnail: CustomCameraHostViewController.makeVideoThumbnail(from: firstVideo)
-                        )
-                    }
+                    applyBatchPreview(from: mediaItems)
                     isPresentingCamera = false
                 },
                 onImageCaptured: { image in
@@ -56,7 +54,7 @@ struct SecondCameraHomeView: View {
                         module: .camera,
                         message: "SecondCameraHomeView onImageCaptured closing camera"
                     )
-                    selectedPreview = .photo(image)
+                    replacePreview(with: [.photo(image)])
                     isPresentingCamera = false
                 },
                 onVideoCaptured: { url, thumbnail in
@@ -65,7 +63,7 @@ struct SecondCameraHomeView: View {
                         module: .camera,
                         message: "SecondCameraHomeView onVideoCaptured closing camera"
                     )
-                    selectedPreview = .video(url: url, thumbnail: thumbnail)
+                    replacePreview(with: [.video(url: url, thumbnail: thumbnail)])
                     isPresentingCamera = false
                 },
                 onDismiss: {
@@ -83,8 +81,8 @@ struct SecondCameraHomeView: View {
 
     @ViewBuilder
     private var previewPane: some View {
-        if let selectedPreview {
-            switch selectedPreview {
+        if let selectedItem {
+            switch selectedItem.kind {
             case .photo(let image):
                 Image(uiImage: image)
                     .resizable()
@@ -121,11 +119,98 @@ struct SecondCameraHomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+
+    private var previewThumbnailRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(previewItems.enumerated()), id: \.element.id) { index, item in
+                    Button {
+                        selectedPreviewID = item.id
+                    } label: {
+                        Image(uiImage: item.thumbnail)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 52, height: 52)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(
+                                        item.id == selectedPreviewID ? Color.white : Color.white.opacity(0.25),
+                                        lineWidth: item.id == selectedPreviewID ? 2 : 1
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        SecondCameraEditorL10n.PublicPreview.thumbnailAccessibility(
+                            index: index + 1,
+                            total: previewItems.count
+                        )
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .frame(height: 60)
+    }
+
+    private var selectedItem: SecondCameraHomePreviewItem? {
+        if let selectedPreviewID,
+           let matched = previewItems.first(where: { $0.id == selectedPreviewID }) {
+            return matched
+        }
+        return previewItems.first
+    }
+
+    private func applyBatchPreview(from mediaItems: [CustomCameraMedia]) {
+        var items: [SecondCameraHomePreviewItem] = []
+        items.reserveCapacity(mediaItems.count)
+        for media in mediaItems {
+            if let image = media.getImage() {
+                items.append(.photo(image))
+            } else if let video = media.getVideo() {
+                items.append(
+                    .video(
+                        url: video,
+                        thumbnail: CustomCameraHostViewController.makeVideoThumbnail(from: video)
+                    )
+                )
+            }
+        }
+        replacePreview(with: items)
+    }
+
+    private func replacePreview(with items: [SecondCameraHomePreviewItem]) {
+        previewItems = items
+        selectedPreviewID = items.first?.id
+    }
 }
 
-private enum SecondCameraPreview {
-    case photo(UIImage)
-    case video(url: URL, thumbnail: UIImage)
+private struct SecondCameraHomePreviewItem: Identifiable {
+    let id: UUID
+    let kind: Kind
+
+    enum Kind {
+        case photo(UIImage)
+        case video(url: URL, thumbnail: UIImage)
+    }
+
+    var thumbnail: UIImage {
+        switch kind {
+        case .photo(let image):
+            return image
+        case .video(_, let thumbnail):
+            return thumbnail
+        }
+    }
+
+    static func photo(_ image: UIImage) -> SecondCameraHomePreviewItem {
+        SecondCameraHomePreviewItem(id: UUID(), kind: .photo(image))
+    }
+
+    static func video(url: URL, thumbnail: UIImage) -> SecondCameraHomePreviewItem {
+        SecondCameraHomePreviewItem(id: UUID(), kind: .video(url: url, thumbnail: thumbnail))
+    }
 }
 
 struct CustomCameraFullScreenView: UIViewControllerRepresentable {

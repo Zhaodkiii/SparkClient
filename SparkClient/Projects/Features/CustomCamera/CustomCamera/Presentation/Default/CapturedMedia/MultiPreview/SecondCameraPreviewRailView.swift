@@ -14,11 +14,15 @@ struct SecondCameraPreviewRailView: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(store.items) { item in
+                    ForEach(Array(store.items.enumerated()), id: \.element.id) { index, item in
                         SecondCameraPreviewRailCellView(
                             thumbnail: item.thumbnail ?? item.displayImage,
                             isSelected: item.id == store.selectedID,
                             canDelete: store.canRemoveSelected,
+                            accessibilityLabelText: SecondCameraEditorL10n.PublicPreview.thumbnailAccessibility(
+                                index: index + 1,
+                                total: store.items.count
+                            ),
                             onSelect: {
                                 store.select(id: item.id)
                             },

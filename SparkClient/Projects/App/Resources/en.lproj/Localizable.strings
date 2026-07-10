@@ -3332,3 +3332,9 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_MP4" = "Unable to process video.";
 "ATTACHMENT_ERROR_COULD_NOT_REMOVE_METADATA" = "Unable to remove metadata from image.";
 "ATTACHMENT_ERROR_COULD_NOT_RESIZE_IMAGE" = "Unable to resize image.";
+"second_camera.public_preview.close" = "Close";
+"second_camera.public_preview.image_load_failed" = "Unable to load image";
+"second_camera.public_preview.empty" = "No images to preview";
+"second_camera.public_preview.file_missing" = "This file is no longer available";
+"second_camera.public_preview.thumbnail_a11y" = "Image %d of %d";
+"second_camera.multi.thumbnail_fallback" = "Preview thumbnail";

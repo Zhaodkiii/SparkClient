@@ -151,9 +151,12 @@ struct DefaultCustomCapturedMediaScreen: CustomCapturedMediaScreen {
 private extension DefaultCustomCapturedMediaScreen {
     @ViewBuilder func createContentView() -> some View {
         if isInitialized, let item = previewStore.selectedItem {
-            if let image = item.displayImage {
-                createImageView(image, imageID: item.previewImageIdentity)
-                    .id(item.id)
+            if item.displayImage != nil {
+                SecondCameraMediaPreviewViewport(
+                    item: item.asMediaPreviewDisplayItem,
+                    contentInsets: previewContentInsets
+                )
+                .id(item.id)
             } else if let video = item.media.getVideo() {
                 createVideoView(video)
                     .id(item.id)
@@ -180,18 +183,6 @@ private extension DefaultCustomCapturedMediaScreen {
             showsPreviewRail: showsRail,
             toolbarReservedBySafeAreaInset: true
         )
-    }
-
-    func createImageView(_ image: UIImage, imageID: AnyHashable) -> some View {
-        SecondCameraUIKitImagePreviewRepresentable(
-            imageID: imageID,
-            image: image,
-            contentInsets: previewContentInsets,
-            cornerRadius: SecondCameraImagePreviewLayout.signalPreviewCornerRadius,
-            maximumZoomScaleMultiplier: SecondCameraImagePreviewLayout.maximumZoomScaleMultiplier
-        )
-        .ignoresSafeArea()
-        .transition(.scale(scale: 1.1))
     }
 
     func createVideoView(_ video: URL) -> some View {

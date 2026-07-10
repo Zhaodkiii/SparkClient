@@ -25,8 +25,7 @@ struct HanlinChatInputView: View {
 
     @State private var inputHeight: CGFloat = 24
     @State private var voiceInputSheet = false
-    @State private var showUnifiedFilePreview = false
-    @State private var unifiedFilePreviewStartIndex = 0
+    @State private var attachmentPreviewRoute: ChatAttachmentPreviewRoute?
     @State private var healthResourcePreviewRef: HealthResourceRef?
 
     private var composerDraft: ChatComposerDraft {
@@ -91,10 +90,7 @@ struct HanlinChatInputView: View {
                             module: .camera,
                             message: "HanlinChatInputView onMediaBatchCaptured closing camera count=\(mediaItems.count)"
                         )
-                        if let image = mediaItems.compactMap({ $0.getImage() }).first,
-                           let attachment = makeCameraAttachment(from: image) {
-                            onAttachmentsPicked([attachment])
-                        }
+                        handleCameraMediaBatch(mediaItems)
                         stateStore.setCameraPresented(false, for: threadID)
                     },
                     onImageCaptured: { image in
@@ -104,7 +100,16 @@ struct HanlinChatInputView: View {
                             message: "HanlinChatInputView onImageCaptured closing camera"
                         )
                         if let attachment = makeCameraAttachment(from: image) {
-                            onAttachmentsPicked([attachment])
+                            let remaining = remainingComposerAttachmentCapacity
+                            if remaining > 0 {
+                                onAttachmentsPicked([attachment])
+                            } else {
+                                SparkLogger.log(
+                                    level: .warning,
+                                    module: .camera,
+                                    message: "HanlinChatInputView onImageCaptured skipped: attachment limit reached"
+                                )
+                            }
                         }
                         stateStore.setCameraPresented(false, for: threadID)
                     },
@@ -112,7 +117,7 @@ struct HanlinChatInputView: View {
                         SparkLogger.log(
                             level: .info,
                             module: .camera,
-                            message: "HanlinChatInputView onVideoCaptured closing camera"
+                            message: "HanlinChatInputView onVideoCaptured closing camera; chat attachments do not import video yet"
                         )
                         stateStore.setCameraPresented(false, for: threadID)
                     },
@@ -134,11 +139,21 @@ struct HanlinChatInputView: View {
                 )
                 .sparkInputPresentationChromeIfAvailable()
             }
-            .unifiedFilePreview(
-                isPresented: $showUnifiedFilePreview,
-                inputs: composerDraft.attachments.map(\.previewInput),
-                startIndex: unifiedFilePreviewStartIndex
-            )
+            .fullScreenCover(item: imagePreviewRequestBinding) { request in
+                SecondCameraPublicMediaPreview(
+                    inputs: request.inputs,
+                    selectedID: request.selectedID,
+                    mode: .readOnly,
+                    onClose: { attachmentPreviewRoute = nil }
+                )
+            }
+            .sheet(item: quickLookRequestBinding) { request in
+                UnifiedFilePreview(
+                    inputs: request.inputs,
+                    startIndex: request.startIndex,
+                    onClose: { attachmentPreviewRoute = nil }
+                )
+            }
             .sheet(item: $healthResourcePreviewRef) { ref in
                 ChatHealthResourcePreviewSheet(
                     ref: ref,
@@ -274,10 +289,10 @@ struct HanlinChatInputView: View {
                         isSelected: composerDraft.previewSelection == attachment.id,
                         onTap: {
                             stateStore.setPreviewSelection(attachment.id, for: threadID)
-                            if let index = composerDraft.attachments.firstIndex(where: { $0.id == attachment.id }) {
-                                unifiedFilePreviewStartIndex = index
-                                showUnifiedFilePreview = true
-                            }
+                            openAttachmentPreview(
+                                attachmentID: attachment.id,
+                                attachments: composerDraft.attachments
+                            )
                         },
                         onRemove: {
                             onRemoveAttachment(attachment.id)
@@ -368,8 +383,102 @@ struct HanlinChatInputView: View {
         )
     }
 
+    private var imagePreviewRequestBinding: Binding<ChatAttachmentPreviewRoute.ImageRequest?> {
+        Binding(
+            get: {
+                guard case .images(let request) = attachmentPreviewRoute else { return nil }
+                return request
+            },
+            set: { request in
+                if request == nil {
+                    attachmentPreviewRoute = nil
+                }
+            }
+        )
+    }
+
+    private var quickLookRequestBinding: Binding<ChatAttachmentPreviewRoute.QuickLookRequest?> {
+        Binding(
+            get: {
+                guard case .quickLook(let request) = attachmentPreviewRoute else { return nil }
+                return request
+            },
+            set: { request in
+                if request == nil {
+                    attachmentPreviewRoute = nil
+                }
+            }
+        )
+    }
+
+    private func openAttachmentPreview(
+        attachmentID: UUID,
+        attachments: [ChatComposerAttachmentPreview]
+    ) {
+        guard attachmentPreviewRoute == nil else { return }
+        attachmentPreviewRoute = ChatAttachmentPreviewRequestFactory.makeRoute(
+            attachments: attachments,
+            tappedID: attachmentID
+        )
+    }
+
+    /// 与加号按钮禁用条件 `attachments.count > 4` 对齐：最多 5 个附件。
+    private var maxComposerAttachments: Int { 5 }
+
+    private var remainingComposerAttachmentCapacity: Int {
+        max(0, maxComposerAttachments - composerDraft.attachments.count)
+    }
+
+    private func handleCameraMediaBatch(_ mediaItems: [CustomCameraMedia]) {
+        let videoCount = mediaItems.filter { $0.getVideo() != nil }.count
+        if videoCount > 0 {
+            SparkLogger.log(
+                level: .info,
+                module: .camera,
+                message: "HanlinChatInputView batch contains \(videoCount) video(s); chat attachments do not import video yet"
+            )
+        }
+
+        let attachments = makeCameraAttachments(from: mediaItems)
+        if attachments.isEmpty {
+            let imageCount = mediaItems.compactMap { $0.getImage() }.count
+            if imageCount > 0 {
+                SparkLogger.log(
+                    level: .error,
+                    module: .camera,
+                    message: "HanlinChatInputView onMediaBatchCaptured produced no attachments from \(imageCount) image(s)"
+                )
+            }
+            return
+        }
+        onAttachmentsPicked(attachments)
+    }
+
+    private func makeCameraAttachments(from mediaItems: [CustomCameraMedia]) -> [ChatComposerAttachmentPreview] {
+        let remaining = remainingComposerAttachmentCapacity
+        guard remaining > 0 else {
+            SparkLogger.log(
+                level: .warning,
+                module: .camera,
+                message: "HanlinChatInputView batch skipped: attachment limit reached"
+            )
+            return []
+        }
+        return Array(
+            mediaItems
+                .compactMap { $0.getImage() }
+                .compactMap { makeCameraAttachment(from: $0) }
+                .prefix(remaining)
+        )
+    }
+
     private func makeCameraAttachment(from image: UIImage) -> ChatComposerAttachmentPreview? {
         guard let imageData = image.jpegData(compressionQuality: 0.88) ?? image.pngData() else {
+            SparkLogger.log(
+                level: .error,
+                module: .camera,
+                message: "HanlinChatInputView failed to encode camera image"
+            )
             return nil
         }
         return ChatComposerAttachmentPreview(

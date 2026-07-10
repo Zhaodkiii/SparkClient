@@ -3333,3 +3333,9 @@
 "ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_MP4" = "无法处理该视频。";
 "ATTACHMENT_ERROR_COULD_NOT_REMOVE_METADATA" = "无法删除图片的元数据。";
 "ATTACHMENT_ERROR_COULD_NOT_RESIZE_IMAGE" = "无法调整图像大小。";
+"second_camera.public_preview.close" = "关闭";
+"second_camera.public_preview.image_load_failed" = "图片无法加载";
+"second_camera.public_preview.empty" = "没有可预览的图片";
+"second_camera.public_preview.file_missing" = "文件已失效";
+"second_camera.public_preview.thumbnail_a11y" = "第 %d 张，共 %d 张";
+"second_camera.multi.thumbnail_fallback" = "预览缩略图";

@@ -31,6 +31,33 @@ enum SecondCameraEditorL10n {
         static var saveFailed: String { tr("second_camera.preview.save_failed", fallback: "保存失败") }
     }
 
+    enum PublicPreview {
+        static var close: String {
+            L10n.text("second_camera.public_preview.close", fallback: "关闭")
+        }
+
+        static var imageLoadFailed: String {
+            L10n.text("second_camera.public_preview.image_load_failed", fallback: "图片无法加载")
+        }
+
+        static var empty: String {
+            L10n.text("second_camera.public_preview.empty", fallback: "没有可预览的图片")
+        }
+
+        static var fileMissing: String {
+            L10n.text("second_camera.public_preview.file_missing", fallback: "文件已失效")
+        }
+
+        static func thumbnailAccessibility(index: Int, total: Int) -> String {
+            L10n.format(
+                "second_camera.public_preview.thumbnail_a11y",
+                fallback: "第 %d 张，共 %d 张",
+                index,
+                total
+            )
+        }
+    }
+
     enum Editor {
         static var draw: String { tr("second_camera.editor.draw", fallback: "画笔") }
         static var crop: String { tr("second_camera.editor.crop", fallback: "裁剪") }
@@ -74,5 +101,8 @@ enum SecondCameraEditorL10n {
         static var discardAllTitle: String { tr("second_camera.multi.discard_all_title", fallback: "放弃所有照片？") }
         static var discardAllMessage: String { tr("second_camera.multi.discard_all_message", fallback: "已拍摄的照片不会保存。") }
         static var discardAction: String { tr("second_camera.multi.discard_action", fallback: "放弃") }
+        static var thumbnailFallback: String {
+            L10n.text("second_camera.multi.thumbnail_fallback", fallback: "预览缩略图")
+        }
     }
 }

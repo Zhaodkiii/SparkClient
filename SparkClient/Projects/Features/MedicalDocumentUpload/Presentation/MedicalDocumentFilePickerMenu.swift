@@ -93,9 +93,7 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
             CustomCameraFullScreenView(
                 onMediaBatchCaptured: { mediaItems in
                     logger.info("自定义相机批量拍摄完成，数量=\(mediaItems.count)。", module: .medical)
-                    if let image = mediaItems.compactMap({ $0.getImage() }).first {
-                        handleCameraImage(image)
-                    }
+                    handleCameraMediaBatch(mediaItems)
                     showCameraPicker = false
                 },
                 onImageCaptured: { image in
@@ -126,6 +124,31 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
         } else {
             logger.warning("设备不支持相机。", module: .medical)
             showCameraUnavailableAlert = true
+        }
+    }
+
+    private func handleCameraMediaBatch(_ mediaItems: [CustomCameraMedia]) {
+        let videoCount = mediaItems.filter { $0.getVideo() != nil }.count
+        if videoCount > 0 {
+            logger.info("自定义相机批量结果含视频 \(videoCount) 个，医疗文档上传暂不导入视频。", module: .medical)
+        }
+
+        let files = mediaItems
+            .compactMap { $0.getImage() }
+            .prefix(maxPhotoSelectionCount)
+            .compactMap { image -> MedicalUploadLocalFile? in
+                if let file = saveUIImageToTemp(image: image, namePrefix: "camera") {
+                    return file
+                }
+                logger.error("相机批量拍摄中单张保存临时文件失败。", module: .medical)
+                return nil
+            }
+
+        if files.isEmpty == false {
+            logger.info("相机批量拍照导入成功，数量=\(files.count)。", module: .medical)
+            onFilesSelected(Array(files))
+        } else if mediaItems.compactMap({ $0.getImage() }).isEmpty == false {
+            logger.error("自定义相机批量拍摄后未生成可用临时文件。", module: .medical)
         }
     }
 

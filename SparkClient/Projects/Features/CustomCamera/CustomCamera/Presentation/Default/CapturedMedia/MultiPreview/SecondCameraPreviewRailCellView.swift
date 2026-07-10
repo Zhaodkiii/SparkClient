@@ -3,9 +3,10 @@ import SwiftUI
 struct SecondCameraPreviewRailCellView: View {
     let thumbnail: UIImage?
     let isSelected: Bool
-    let canDelete: Bool
+    var canDelete: Bool = false
+    var accessibilityLabelText: String? = nil
     let onSelect: () -> Void
-    let onDelete: () -> Void
+    var onDelete: (() -> Void)? = nil
 
     private let size: CGFloat = 44
     private let cornerRadius: CGFloat = 10
@@ -30,8 +31,10 @@ struct SecondCameraPreviewRailCellView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabelText ?? SecondCameraEditorL10n.Multi.thumbnailFallback)
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
 
-            if isSelected && canDelete {
+            if isSelected, canDelete, let onDelete {
                 Button(action: onDelete) {
                     Image(systemName: "trash.fill")
                         .font(.system(size: 17, weight: .semibold))
