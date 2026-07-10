@@ -3308,3 +3308,28 @@
 "home.medical.share.sheet.valid_days" = "链接 %d 天内有效";
 "home.medical.share.sheet.wechat" = "微信好友";
 "home.medical.share.sheet.xiaohongshu" = "小红书";
+
+/* SecondCamera 媒体编辑器（SecondCameraEditorLocalizedString） */
+"MEDIA_EDITOR_CLEAR_ALL" = "全部清除";
+"MEDIA_EDITOR_RESET" = "重置";
+"MEDIA_EDITOR_TAP_FOR_MORE" = "点击查看更多";
+"MEDIA_EDITOR_DISCARD_ALL_BUTTON" = "放弃更改";
+"MEDIA_EDITOR_DISCARD_ALL_CONFIRMATION_MESSAGE" = "您将会丢失对这张照片所做的任何更改";
+"MEDIA_EDITOR_DISCARD_ALL_CONFIRMATION_TITLE" = "要放弃更改吗？";
+"IMAGE_EDITOR_BLUR_SETTING" = "面部模糊";
+"IMAGE_EDITOR_BLUR_HINT" = "任意位置涂抹实现模糊效果";
+"IMAGE_EDITOR_BLUR_TOAST" = "涂抹更多脸部或区域进行模糊";
+"ASPECT_RATIO_ORIGINAL" = "原始";
+"ASPECT_RATIO_SQUARE" = "方形";
+"ASPECT_RATIO_X_BY_Y" = "%1$@:%2$@";
+"SENT_MEDIA_QUALITY_HIGH" = "高";
+"SENT_MEDIA_QUALITY_STANDARD" = "标准";
+"ATTACHMENT_ERROR_MISSING_DATA" = "附件为空。";
+"ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE" = "附件过大。";
+"ATTACHMENT_ERROR_INVALID_DATA" = "附件中存在无效内容。";
+"ATTACHMENT_ERROR_COULD_NOT_PARSE_IMAGE" = "无法解析图片。";
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_JPEG" = "无法转换图片。";
+"ATTACHMENT_ERROR_INVALID_FILE_FORMAT" = "附件的文件格式无效。";
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_MP4" = "无法处理该视频。";
+"ATTACHMENT_ERROR_COULD_NOT_REMOVE_METADATA" = "无法删除图片的元数据。";
+"ATTACHMENT_ERROR_COULD_NOT_RESIZE_IMAGE" = "无法调整图像大小。";

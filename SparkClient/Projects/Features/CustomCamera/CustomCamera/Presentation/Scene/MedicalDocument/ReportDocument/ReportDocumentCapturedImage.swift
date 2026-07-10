@@ -1,8 +1,8 @@
 import Foundation
 import UIKit
 
-/// 病例档案连续拍摄的单张已确认图片（按拍摄顺序编号）。
-struct CaseDocumentCapturedImage: Identifiable, Equatable {
+/// 报告类医疗文档连续拍摄的单张已确认图片（按拍摄顺序编号）。
+struct ReportDocumentCapturedImage: Identifiable, Equatable {
     let id: UUID
     /// 从 1 开始的展示序号，删除中间项后会重新编号。
     let index: Int
@@ -14,7 +14,7 @@ struct CaseDocumentCapturedImage: Identifiable, Equatable {
         self.image = image
     }
 
-    static func == (lhs: CaseDocumentCapturedImage, rhs: CaseDocumentCapturedImage) -> Bool {
+    static func == (lhs: ReportDocumentCapturedImage, rhs: ReportDocumentCapturedImage) -> Bool {
         lhs.id == rhs.id && lhs.index == rhs.index
     }
 }

@@ -1,3 +1,4 @@
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -37,7 +38,7 @@ struct HanlinChatInputView: View {
     }
 
     private var canOpenCamera: Bool {
-        UIImagePickerController.isSourceTypeAvailable(.camera)
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil
     }
 
     private var canSendPayload: Bool {
@@ -83,23 +84,43 @@ struct HanlinChatInputView: View {
                 )
             }
             .fullScreenCover(isPresented: cameraBinding) {
-                HanlinCameraPicker(
-                    onCancel: {
+                CustomCameraFullScreenView(
+                    onMediaBatchCaptured: { mediaItems in
+                        SparkLogger.log(
+                            level: .info,
+                            module: .camera,
+                            message: "HanlinChatInputView onMediaBatchCaptured closing camera count=\(mediaItems.count)"
+                        )
+                        if let image = mediaItems.compactMap({ $0.getImage() }).first,
+                           let attachment = makeCameraAttachment(from: image) {
+                            onAttachmentsPicked([attachment])
+                        }
                         stateStore.setCameraPresented(false, for: threadID)
                     },
-                    onImagePicked: { image in
-                        guard let imageData = image.jpegData(compressionQuality: 0.88) ?? image.pngData() else {
-                            stateStore.setCameraPresented(false, for: threadID)
-                            return
+                    onImageCaptured: { image in
+                        SparkLogger.log(
+                            level: .info,
+                            module: .camera,
+                            message: "HanlinChatInputView onImageCaptured closing camera"
+                        )
+                        if let attachment = makeCameraAttachment(from: image) {
+                            onAttachmentsPicked([attachment])
                         }
-                        onAttachmentsPicked(
-                            [
-                                ChatComposerAttachmentPreview(
-                                    source: .camera,
-                                    data: imageData,
-                                    displayName: L10n.text("chat.attachments.camera.result")
-                                )
-                            ]
+                        stateStore.setCameraPresented(false, for: threadID)
+                    },
+                    onVideoCaptured: { _, _ in
+                        SparkLogger.log(
+                            level: .info,
+                            module: .camera,
+                            message: "HanlinChatInputView onVideoCaptured closing camera"
+                        )
+                        stateStore.setCameraPresented(false, for: threadID)
+                    },
+                    onDismiss: {
+                        SparkLogger.log(
+                            level: .info,
+                            module: .camera,
+                            message: "HanlinChatInputView onDismiss closing camera"
                         )
                         stateStore.setCameraPresented(false, for: threadID)
                     }
@@ -344,6 +365,19 @@ struct HanlinChatInputView: View {
         Binding(
             get: { composerDraft.isShowingCamera },
             set: { stateStore.setCameraPresented($0, for: threadID) }
+        )
+    }
+
+    private func makeCameraAttachment(from image: UIImage) -> ChatComposerAttachmentPreview? {
+        guard let imageData = image.jpegData(compressionQuality: 0.88) ?? image.pngData() else {
+            return nil
+        }
+        return ChatComposerAttachmentPreview(
+            source: .camera,
+            data: imageData,
+            displayName: L10n.text("chat.attachments.camera.result"),
+            mimeType: "image/jpeg",
+            utTypeIdentifier: "public.jpeg"
         )
     }
 
@@ -655,49 +689,6 @@ private struct HanlinPhotoLibraryPicker: UIViewControllerRepresentable {
 
             ChatComposerPhotoLibraryLoader.load(from: results) { photos in
                 self.parent.onPhotosPicked(photos)
-            }
-        }
-    }
-}
-
-private struct HanlinCameraPicker: UIViewControllerRepresentable {
-    let onCancel: () -> Void
-    let onImagePicked: (UIImage) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.sourceType = .camera
-        picker.cameraCaptureMode = .photo
-        picker.allowsEditing = false
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
-        private let parent: HanlinCameraPicker
-
-        init(_ parent: HanlinCameraPicker) {
-            self.parent = parent
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.onCancel()
-        }
-
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
-        ) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.onImagePicked(image)
-            } else {
-                parent.onCancel()
             }
         }
     }

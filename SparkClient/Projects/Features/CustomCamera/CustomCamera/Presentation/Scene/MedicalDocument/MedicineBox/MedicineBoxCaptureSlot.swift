@@ -76,9 +76,9 @@ enum MedicineBoxCaptureSlot: String, CaseIterable, Identifiable, Hashable {
     /// 必拍项缺失时的完成提示文案。
     static func missingRequiredMessage(
         frontCaptured: Bool,
-        instructionCaptured: Bool
+        expiryCaptured: Bool
     ) -> String? {
-        switch (frontCaptured, instructionCaptured) {
+        switch (frontCaptured, expiryCaptured) {
         case (false, false):
             return L10n.text(
                 "home.medical.medicine_box.camera.validation.missing_both",
@@ -100,6 +100,7 @@ enum MedicineBoxCaptureSlot: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
+/// 药盒槽位拍摄结果，必须保留 `slot` 业务语义。
 struct MedicineBoxCapturedImage: Identifiable, Equatable {
     let id: UUID
     let slot: MedicineBoxCaptureSlot

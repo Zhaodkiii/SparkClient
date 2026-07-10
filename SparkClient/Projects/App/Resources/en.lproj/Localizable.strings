@@ -3307,3 +3307,28 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "home.medical.share.sheet.valid_days" = "Link valid for %d days";
 "home.medical.share.sheet.wechat" = "WeChat friends";
 "home.medical.share.sheet.xiaohongshu" = "Xiaohongshu";
+
+/* SecondCamera media editor (SecondCameraEditorLocalizedString) */
+"MEDIA_EDITOR_CLEAR_ALL" = "Clear All";
+"MEDIA_EDITOR_RESET" = "Reset";
+"MEDIA_EDITOR_TAP_FOR_MORE" = "Tap for more";
+"MEDIA_EDITOR_DISCARD_ALL_BUTTON" = "Discard Changes";
+"MEDIA_EDITOR_DISCARD_ALL_CONFIRMATION_MESSAGE" = "You will lose any changes you have made to this photo";
+"MEDIA_EDITOR_DISCARD_ALL_CONFIRMATION_TITLE" = "Discard Changes?";
+"IMAGE_EDITOR_BLUR_SETTING" = "Blur faces";
+"IMAGE_EDITOR_BLUR_HINT" = "Draw anywhere to blur";
+"IMAGE_EDITOR_BLUR_TOAST" = "Draw to blur additional faces or areas";
+"ASPECT_RATIO_ORIGINAL" = "Original";
+"ASPECT_RATIO_SQUARE" = "Square";
+"ASPECT_RATIO_X_BY_Y" = "%1$@:%2$@";
+"SENT_MEDIA_QUALITY_HIGH" = "High";
+"SENT_MEDIA_QUALITY_STANDARD" = "Standard";
+"ATTACHMENT_ERROR_MISSING_DATA" = "Attachment is empty.";
+"ATTACHMENT_ERROR_FILE_SIZE_TOO_LARGE" = "Attachment is too large.";
+"ATTACHMENT_ERROR_INVALID_DATA" = "Attachment includes invalid content.";
+"ATTACHMENT_ERROR_COULD_NOT_PARSE_IMAGE" = "Unable to parse image.";
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_JPEG" = "Unable to convert image.";
+"ATTACHMENT_ERROR_INVALID_FILE_FORMAT" = "Attachment has an invalid file format.";
+"ATTACHMENT_ERROR_COULD_NOT_CONVERT_TO_MP4" = "Unable to process video.";
+"ATTACHMENT_ERROR_COULD_NOT_REMOVE_METADATA" = "Unable to remove metadata from image.";
+"ATTACHMENT_ERROR_COULD_NOT_RESIZE_IMAGE" = "Unable to resize image.";

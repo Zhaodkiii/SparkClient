@@ -58,26 +58,22 @@ extension MedicalDocumentKind {
         }
     }
 
-    /// 报告相机业务上下文，区分检查/体检报告拍摄页面，非报告类返回 nil
-    var attachmentUploadExaminationReportCameraContext: ExaminationReportCameraContext? {
+    /// 医疗文档定制相机业务上下文；`.auto` 等未定制场景返回 `nil`。
+    var attachmentUploadMedicalDocumentCameraContext: MedicalDocumentCameraContext? {
         switch self {
+        case .caseDocument:
+            return .caseDocument
         case .medicalReport:
             return .examinationReport
         case .healthExamReport:
             return .healthExamReport
-        default:
-            return nil
-        }
-    }
-
-    /// 处方/服药计划相机业务上下文，非对应类型返回 nil
-    var attachmentUploadPrescriptionMedicationCameraContext: PrescriptionMedicationCameraContext? {
-        switch self {
-        case .prescription:
-            return .prescription
         case .medicationPlan:
             return .medicationPlan
-        default:
+        case .prescription:
+            return .prescription
+        case .medicineBox:
+            return .medicineBox
+        case .auto:
             return nil
         }
     }
@@ -179,14 +175,11 @@ extension MedicalDocumentKind {
         switch self {
         case .medicineBox:
             return .medicineBoxCustomCamera
-        case .medicalReport, .healthExamReport:
-            return .examinationReportCustomCamera
-        case .prescription:
-            return .prescriptionMedicationCustomCamera(.prescription)
-        case .medicationPlan:
-            return .prescriptionMedicationCustomCamera(.medicationPlan)
-        case .caseDocument:
-            return .caseDocumentCustomCamera
+        case .medicalReport, .healthExamReport, .prescription, .medicationPlan, .caseDocument:
+            guard let context = attachmentUploadMedicalDocumentCameraContext else {
+                return .systemCamera
+            }
+            return .reportDocumentCustomCamera(context)
         case .auto:
             return .systemCamera
         }
@@ -360,21 +353,15 @@ struct MedicalListBottomActionBar: View {
 
 enum MedicalAttachmentUploadCameraCover: Identifiable {
     case medicineBoxCustomCamera
-    case examinationReportCustomCamera
-    case prescriptionMedicationCustomCamera(PrescriptionMedicationCameraContext)
-    case caseDocumentCustomCamera
+    case reportDocumentCustomCamera(MedicalDocumentCameraContext)
     case systemCamera
 
     var id: String {
         switch self {
         case .medicineBoxCustomCamera:
             return "medicineBoxCustomCamera"
-        case .examinationReportCustomCamera:
-            return "examinationReportCustomCamera"
-        case .prescriptionMedicationCustomCamera(let context):
-            return "prescriptionMedicationCustomCamera:\(context)"
-        case .caseDocumentCustomCamera:
-            return "caseDocumentCustomCamera"
+        case .reportDocumentCustomCamera(let context):
+            return "reportDocumentCustomCamera:\(context.logContext)"
         case .systemCamera:
             return "systemCamera"
         }
@@ -469,54 +456,15 @@ struct MedicalAttachmentUploadListSheet: View {
                         appendFiles(files)
                     }
                 )
-            case .examinationReportCustomCamera:
-                if let context = documentKind.attachmentUploadExaminationReportCameraContext {
-                    ExaminationReportCameraSceneView(
-                        context: context,
-                        maxCaptureCount: min(documentKind.attachmentUploadReportCameraMaxCaptureCount, remainingFileSlots),
-                        onCancel: { presentedCameraCover = nil },
-                        onImagesCaptured: { images in
-                            presentedCameraCover = nil
-                            let files = images.compactMap { captured in
-                                saveUIImageToTemp(
-                                    image: captured.image,
-                                    namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
-                                )
-                            }
-                            appendFiles(files)
-                        }
-                    )
-                }
-            case .prescriptionMedicationCustomCamera(let context):
-                PrescriptionMedicationCameraSceneView(
+            case .reportDocumentCustomCamera(let context):
+                ReportDocumentCameraSceneView(
                     context: context,
-                    maxCaptureCount: min(documentKind.attachmentUploadReportCameraMaxCaptureCount, remainingFileSlots),
+                    maxCaptureCount: min(
+                        documentKind.attachmentUploadReportCameraMaxCaptureCount,
+                        remainingFileSlots
+                    ),
                     onCancel: { presentedCameraCover = nil },
-                    onImagesCaptured: { images in
-                        presentedCameraCover = nil
-                        let files = images.compactMap { captured in
-                            saveUIImageToTemp(
-                                image: captured.image,
-                                namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
-                            )
-                        }
-                        appendFiles(files)
-                    }
-                )
-            case .caseDocumentCustomCamera:
-                CaseDocumentCameraSceneView(
-                    maxCaptureCount: min(documentKind.attachmentUploadReportCameraMaxCaptureCount, remainingFileSlots),
-                    onCancel: { presentedCameraCover = nil },
-                    onImagesCaptured: { images in
-                        presentedCameraCover = nil
-                        let files = images.compactMap { captured in
-                            saveUIImageToTemp(
-                                image: captured.image,
-                                namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
-                            )
-                        }
-                        appendFiles(files)
-                    }
+                    onImagesCaptured: handleReportDocumentImages
                 )
             case .systemCamera:
                 SystemImagePicker(
@@ -757,6 +705,17 @@ struct MedicalAttachmentUploadListSheet: View {
     private func presentFileImporter() {
         guard ensureCanAddMoreFiles() else { return }
         showingFileImporter = true
+    }
+
+    private func handleReportDocumentImages(_ images: [ReportDocumentCapturedImage]) {
+        presentedCameraCover = nil
+        let files = images.compactMap { captured in
+            saveUIImageToTemp(
+                image: captured.image,
+                namePrefix: "\(fileNamePrefix)_camera_page_\(captured.index)"
+            )
+        }
+        appendFiles(files)
     }
 
     private func presentCamera() {

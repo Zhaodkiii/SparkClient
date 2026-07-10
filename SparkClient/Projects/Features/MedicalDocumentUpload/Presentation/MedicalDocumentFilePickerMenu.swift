@@ -1,3 +1,4 @@
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -89,18 +90,24 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
             }
         }
         .fullScreenCover(isPresented: $showCameraPicker) {
-//        .sheet(isPresented: $showCameraPicker) {
-            SystemImagePicker(
-                source: .camera,
-                onCancel: { showCameraPicker = false },
-                onImagePicked: { image in
-                    showCameraPicker = false
-                    if let file = saveUIImageToTemp(image: image, namePrefix: "camera") {
-                        logger.info("相机拍照导入成功。", module: .medical)
-                        onFilesSelected([file])
-                    } else {
-                        logger.error("相机拍照后保存临时文件失败。", module: .medical)
+            CustomCameraFullScreenView(
+                onMediaBatchCaptured: { mediaItems in
+                    logger.info("自定义相机批量拍摄完成，数量=\(mediaItems.count)。", module: .medical)
+                    if let image = mediaItems.compactMap({ $0.getImage() }).first {
+                        handleCameraImage(image)
                     }
+                    showCameraPicker = false
+                },
+                onImageCaptured: { image in
+                    handleCameraImage(image)
+                    showCameraPicker = false
+                },
+                onVideoCaptured: { _, _ in
+                    logger.info("自定义相机视频拍摄完成，医疗文档上传暂不导入视频。", module: .medical)
+                    showCameraPicker = false
+                },
+                onDismiss: {
+                    showCameraPicker = false
                 }
             )
             .ignoresSafeArea()
@@ -113,12 +120,21 @@ struct MedicalDocumentFilePickerMenu<ButtonContent: View>: View {
     }
 
     private func presentCamera() {
-        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+        if AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil {
             logger.info("准备打开相机。", module: .medical)
             showCameraPicker = true
         } else {
             logger.warning("设备不支持相机。", module: .medical)
             showCameraUnavailableAlert = true
+        }
+    }
+
+    private func handleCameraImage(_ image: UIImage) {
+        if let file = saveUIImageToTemp(image: image, namePrefix: "camera") {
+            logger.info("相机拍照导入成功。", module: .medical)
+            onFilesSelected([file])
+        } else {
+            logger.error("相机拍照后保存临时文件失败。", module: .medical)
         }
     }
 

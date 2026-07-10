@@ -128,7 +128,7 @@ private enum SecondCameraPreview {
     case video(url: URL, thumbnail: UIImage)
 }
 
-private struct CustomCameraFullScreenView: UIViewControllerRepresentable {
+struct CustomCameraFullScreenView: UIViewControllerRepresentable {
     var onMediaBatchCaptured: ([CustomCameraMedia]) -> Void
     var onImageCaptured: (UIImage) -> Void
     var onVideoCaptured: (URL, UIImage) -> Void
