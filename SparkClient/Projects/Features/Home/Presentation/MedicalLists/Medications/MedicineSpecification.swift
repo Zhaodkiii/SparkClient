@@ -1,7 +1,7 @@
 import Foundation
 
 /// Structured medicine package / strength line (per-unit dose, pack count, outer pack). Serialized to API `strength` as a Chinese-style string, e.g. `5mg×28片/盒`.
-struct MedicineSpecification: Codable, Hashable, Sendable {
+nonisolated struct MedicineSpecification: Codable, Hashable, Sendable {
     var doseValue: String = ""
     var doseUnit: String = ""
     var packageCount: String = ""
@@ -90,7 +90,7 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
     }
 
     /// Leading numeric (optional one `.`) prefix vs remainder, for API `dose_unit` like `5mg` / `0.5g`.
-    static func splitLeadingDoseNumericPrefix(_ s: String) -> (String, String)? {
+    nonisolated static func splitLeadingDoseNumericPrefix(_ s: String) -> (String, String)? {
         let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.isEmpty == false else { return nil }
         var i = t.startIndex
@@ -115,7 +115,7 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
     }
 
     /// Parses a compact backend `dose_unit` string (e.g. `5mg`, `10片`, or unit-only `片`) into an editable numeric prefix and stored unit token.
-    static func doseValueAndStoredUnit(fromBackendDoseUnitField combined: String) -> (value: String, unit: String) {
+    nonisolated static func doseValueAndStoredUnit(fromBackendDoseUnitField combined: String) -> (value: String, unit: String) {
         let t = combined.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.isEmpty == false else { return ("", "") }
         if let parts = splitLeadingDoseNumericPrefix(t) {
@@ -126,7 +126,7 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
     }
 
     /// Fills structured dose fields from OCR/API `dose_unit` when value or unit is still missing.
-    static func mergeDoseUnitFromAPI(_ raw: String?, into spec: inout MedicineSpecification) {
+    nonisolated static func mergeDoseUnitFromAPI(_ raw: String?, into spec: inout MedicineSpecification) {
         guard let raw else { return }
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.isEmpty == false else { return }
@@ -144,7 +144,7 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
     }
 
     /// Localized display for lists / previews (spaces in English where helpful).
-    func displayString(prefersEnglish: Bool) -> String {
+    nonisolated func displayString(prefersEnglish: Bool) -> String {
         if let legacy = rawLegacyStrength?.trimmingCharacters(in: .whitespacesAndNewlines), legacy.isEmpty == false {
             return legacy
         }
@@ -194,7 +194,7 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
     }
 
     /// Best-effort parse of API `strength` into structured fields.
-    static func parse(fromAPIStrength raw: String) -> MedicineSpecification {
+    nonisolated static func parse(fromAPIStrength raw: String) -> MedicineSpecification {
         var s = MedicineSpecification()
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.isEmpty == false else { return s }
@@ -223,7 +223,7 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
         return s
     }
 
-    private static func parseCore(_ core: String, into s: inout MedicineSpecification) {
+    nonisolated private static func parseCore(_ core: String, into s: inout MedicineSpecification) {
         let separators = CharacterSet(charactersIn: "×＊*xX")
         let parts = core
             .components(separatedBy: separators)
@@ -238,20 +238,20 @@ struct MedicineSpecification: Codable, Hashable, Sendable {
         }
     }
 
-    private static func fillDoseSegment(_ segment: String, into s: inout MedicineSpecification) {
+    nonisolated private static func fillDoseSegment(_ segment: String, into s: inout MedicineSpecification) {
         let (num, unit) = splitLeadingNumber(from: segment)
         s.doseValue = num
         s.doseUnit = MedicineSpecificationCatalog.storedDoseUnit(fromAny: unit)
     }
 
-    private static func fillPackageSegment(_ segment: String, into s: inout MedicineSpecification) {
+    nonisolated private static func fillPackageSegment(_ segment: String, into s: inout MedicineSpecification) {
         let (num, unit) = splitLeadingNumber(from: segment)
         s.packageCount = num
         s.packageUnit = MedicineSpecificationCatalog.storedInnerOrOuter(fromAny: unit)
     }
 
     /// Splits `"5mg"` → `("5", "mg")`, `"28片"` → `("28", "片")`.
-    private static func splitLeadingNumber(from segment: String) -> (String, String) {
+    nonisolated private static func splitLeadingNumber(from segment: String) -> (String, String) {
         let t = segment.trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.isEmpty == false else { return ("", "") }
         var idx = t.startIndex
@@ -316,7 +316,7 @@ enum MedicineSpecificationCatalog {
     ]
 
     nonisolated private static var prefersEnglish: Bool {
-        SparkFormCatalogMenuLocale.prefersEnglish
+        (Locale.current.language.languageCode?.identifier ?? "").hasPrefix("zh") == false
     }
 
     nonisolated static var defaultDoseStoredOptions: [String] { doseUnitItems.map(\.cn) }

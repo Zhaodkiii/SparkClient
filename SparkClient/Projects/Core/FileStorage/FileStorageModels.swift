@@ -26,13 +26,13 @@ struct ManagedFileUploadPayload: Sendable {
     let onUploadProgress: (@Sendable (Double) -> Void)?
 }
 
-struct ManagedFileBusinessUpdateItem: Codable, Sendable {
+nonisolated struct ManagedFileBusinessUpdateItem: Codable, Sendable {
     let fileId: Int
     let businessType: String
     let businessId: String
 }
 
-struct FileRegistrationRequest: Codable, Sendable {
+nonisolated struct FileRegistrationRequest: Codable, Sendable {
     let fileUuid: String
     let originalName: String
     let fileSize: Int

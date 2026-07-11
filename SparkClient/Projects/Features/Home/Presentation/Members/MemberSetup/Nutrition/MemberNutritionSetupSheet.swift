@@ -27,7 +27,7 @@ struct MemberNutritionSetupSheetView: View {
     }
 
     var body: some View {
-        CompatibleRouteNavigationContainer(path: $path, legacyStackStyle: true) {
+        CompatibleRouteNavigationContainer(path: $path, legacyStackStyle: true, hidesMainTabBarOnPush: false) {
             heightStep
         } destination: { route in
             switch route {

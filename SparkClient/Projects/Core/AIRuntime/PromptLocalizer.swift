@@ -12,16 +12,16 @@ enum PromptLanguage: Sendable {
     case ar
 }
 
-struct PromptLocalizer: Sendable {
-    let locale: Locale
-    private let l10n: AIPromptL10n
+nonisolated struct PromptLocalizer: Sendable {
+    nonisolated let locale: Locale
+    nonisolated private let l10n: AIPromptL10n
 
-    init(locale: Locale = .current) {
+    nonisolated init(locale: Locale = .current) {
         self.locale = locale
         self.l10n = AIPromptL10n(locale: locale)
     }
 
-    var language: PromptLanguage {
+    nonisolated var language: PromptLanguage {
         let languageCode = locale.languageCode?.lowercased() ?? "en"
         let regionCode = locale.regionCode?.uppercased() ?? ""
 
@@ -49,7 +49,7 @@ struct PromptLocalizer: Sendable {
         }
     }
 
-    func chatSystemPrompt() -> String {
+    nonisolated func chatSystemPrompt() -> String {
         l10n.prompt(
             "ai.prompt.chat.system",
             fallback: "You are Spark Health Assistant. Provide accurate, concise, actionable health guidance and respond in the user's language."
@@ -57,14 +57,14 @@ struct PromptLocalizer: Sendable {
     }
 
     /// 深度思考：在系统层追加一条简短指令（网关未单独暴露 reasoning 参数时的折中方案）。
-    func deepThinkingInstruction() -> String {
+    nonisolated func deepThinkingInstruction() -> String {
         l10n.prompt(
             "ai.prompt.chat.deep_thinking",
             fallback: "Think step by step: briefly outline your reasoning, then give a clear final answer."
         )
     }
 
-    func medicalDocumentExtractionPrompt(ocrText: String) -> String {
+    nonisolated func medicalDocumentExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medical_document.extraction.template",
             fallback: """
@@ -79,7 +79,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func medicalDocumentTypeRecognitionPrompt(ocrText: String) -> String {
+    nonisolated func medicalDocumentTypeRecognitionPrompt(ocrText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medical_document.type_recognition.template",
             fallback: """
@@ -97,7 +97,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func medicalCaseExtractionPrompt(ocrText: String) -> String {
+    nonisolated func medicalCaseExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medical_case.extraction.template",
             fallback: """
@@ -113,23 +113,23 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func healthExamExtractionPrompt(ocrText: String) -> String {
+    nonisolated func healthExamExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat("ai.prompt.health_exam.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
-    func medicalReportExtractionPrompt(ocrText: String) -> String {
+    nonisolated func medicalReportExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat("ai.prompt.medical_report.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
-    func prescriptionExtractionPrompt(ocrText: String) -> String {
+    nonisolated func prescriptionExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat("ai.prompt.prescription.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
-    func medicationExtractionPrompt(ocrText: String) -> String {
+    nonisolated func medicationExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat("ai.prompt.medication.extraction.template", fallback: medicalDocumentExtractionPrompt(ocrText: "%@"), ocrText)
     }
 
-    func nutritionFoodDescriptionPrompt(mealType: NutritionMealType) -> String {
+    nonisolated func nutritionFoodDescriptionPrompt(mealType: NutritionMealType) -> String {
         l10n.promptFormat(
             "ai.prompt.nutrition.food_description.template",
             fallback: """
@@ -141,7 +141,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func nutritionIntakeExtractionPrompt(mealType: NutritionMealType, sourceText: String) -> String {
+    nonisolated func nutritionIntakeExtractionPrompt(mealType: NutritionMealType, sourceText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.nutrition.intake_extraction.template",
             fallback: """
@@ -159,7 +159,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func nutritionExtractionRetryCorrectionPrompt(errorSummary: String, outputPreview: String) -> String {
+    nonisolated func nutritionExtractionRetryCorrectionPrompt(errorSummary: String, outputPreview: String) -> String {
         let notAvailable = nutritionExtractionNotAvailableLabel()
         let template = l10n.prompt(
             "ai.prompt.nutrition.extraction.retry_correction.template",
@@ -179,11 +179,11 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func nutritionExtractionNotAvailableLabel() -> String {
+    nonisolated func nutritionExtractionNotAvailableLabel() -> String {
         l10n.prompt("ai.prompt.nutrition.extraction.not_available", fallback: "N/A")
     }
 
-    func medicalExtractionRetryCorrectionPrompt(
+    nonisolated func medicalExtractionRetryCorrectionPrompt(
         kind: MedicalDocumentKind,
         feedback: MedicalExtractionRetryFeedback,
         source: MedicalExtractionPromptSource = .ocrText
@@ -196,7 +196,7 @@ struct PromptLocalizer: Sendable {
         }
     }
 
-    private func medicalExtractionOCRRetryCorrectionPrompt(
+    nonisolated private func medicalExtractionOCRRetryCorrectionPrompt(
         kind: MedicalDocumentKind,
         feedback: MedicalExtractionRetryFeedback
     ) -> String {
@@ -236,7 +236,7 @@ struct PromptLocalizer: Sendable {
         return truncatedCorrectionBlock(body, limit: 2500)
     }
 
-    private func medicalExtractionVisionRetryCorrectionPrompt(
+    nonisolated private func medicalExtractionVisionRetryCorrectionPrompt(
         kind: MedicalDocumentKind,
         feedback: MedicalExtractionRetryFeedback
     ) -> String {
@@ -283,7 +283,7 @@ struct PromptLocalizer: Sendable {
         return truncatedCorrectionBlock(body, limit: 2500)
     }
 
-    func medicalCaseVisionExtractionPrompt() -> String {
+    nonisolated func medicalCaseVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.medical_case.vision.extraction.template",
             ocrKey: "ai.prompt.medical_case.extraction.template",
@@ -298,7 +298,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func healthExamVisionExtractionPrompt() -> String {
+    nonisolated func healthExamVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.health_exam.vision.extraction.template",
             ocrKey: "ai.prompt.health_exam.extraction.template",
@@ -306,7 +306,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func medicalReportVisionExtractionPrompt() -> String {
+    nonisolated func medicalReportVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.medical_report.vision.extraction.template",
             ocrKey: "ai.prompt.medical_report.extraction.template",
@@ -314,7 +314,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func prescriptionVisionExtractionPrompt() -> String {
+    nonisolated func prescriptionVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.prescription.vision.extraction.template",
             ocrKey: "ai.prompt.prescription.extraction.template",
@@ -322,7 +322,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func medicationVisionExtractionPrompt() -> String {
+    nonisolated func medicationVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.medication.vision.extraction.template",
             ocrKey: "ai.prompt.medication.extraction.template",
@@ -330,7 +330,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func medicineBoxVisionExtractionPrompt() -> String {
+    nonisolated func medicineBoxVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.medicine_box.vision.extraction.template",
             ocrKey: "ai.prompt.medicine_box.extraction.template",
@@ -343,7 +343,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func medicalDocumentVisionExtractionPrompt() -> String {
+    nonisolated func medicalDocumentVisionExtractionPrompt() -> String {
         visionExtractionPrompt(
             dedicatedKey: "ai.prompt.medical_document.vision.extraction.template",
             ocrKey: "ai.prompt.medical_document.extraction.template",
@@ -358,7 +358,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    private func visionExtractionPrompt(
+    nonisolated private func visionExtractionPrompt(
         dedicatedKey: String,
         ocrKey: String,
         englishOCRFallback: String
@@ -370,13 +370,13 @@ struct PromptLocalizer: Sendable {
         return adaptOCRTemplateToVisionPrompt(ocrTemplate)
     }
 
-    private func adaptOCRTemplateToVisionPrompt(_ template: String) -> String {
+    nonisolated private func adaptOCRTemplateToVisionPrompt(_ template: String) -> String {
         var text = stripOCRInputSection(from: template)
         text = replaceOCRSourcePhrases(in: text)
         return "\(visionExtractionHeader())\n\n\(text.trimmingCharacters(in: .whitespacesAndNewlines))"
     }
 
-    private func adaptOCRRetryTemplateToVision(_ template: String) -> String {
+    nonisolated private func adaptOCRRetryTemplateToVision(_ template: String) -> String {
         var text = template
         switch language {
         case .zh:
@@ -392,7 +392,7 @@ struct PromptLocalizer: Sendable {
         return text
     }
 
-    private func stripOCRInputSection(from template: String) -> String {
+    nonisolated private func stripOCRInputSection(from template: String) -> String {
         var text = template
         let tailPatterns = [
             "\n\nOCR文本：\n%@",
@@ -413,7 +413,7 @@ struct PromptLocalizer: Sendable {
         return text
     }
 
-    private func replaceOCRSourcePhrases(in text: String) -> String {
+    nonisolated private func replaceOCRSourcePhrases(in text: String) -> String {
         switch language {
         case .zh:
             return text
@@ -433,7 +433,7 @@ struct PromptLocalizer: Sendable {
         }
     }
 
-    private func visionExtractionHeader() -> String {
+    nonisolated private func visionExtractionHeader() -> String {
         switch language {
         case .zh:
             return """
@@ -452,12 +452,12 @@ struct PromptLocalizer: Sendable {
         }
     }
 
-    func medicalExtractionRetrySuggestion(forField field: String) -> String {
+    nonisolated func medicalExtractionRetrySuggestion(forField field: String) -> String {
         let key = "ai.prompt.medical_extraction.retry.suggestion.\(field)"
         return l10n.prompt(key, fallback: fallbackRetrySuggestion(forField: field))
     }
 
-    func medicalExtractionRetrySuggestionTypeMismatch(expected: String, actual: String) -> String {
+    nonisolated func medicalExtractionRetrySuggestionTypeMismatch(expected: String, actual: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medical_extraction.retry.suggestion.type_mismatch",
             fallback: "Expected type %@ but got %@. Return schema-compatible JSON types.",
@@ -466,7 +466,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    private func localizedMedicalDocumentKindLabel(_ kind: MedicalDocumentKind) -> String {
+    nonisolated private func localizedMedicalDocumentKindLabel(_ kind: MedicalDocumentKind) -> String {
         switch kind {
         case .auto:
             return l10n.prompt("ai.prompt.medical_extraction.retry.kind.auto", fallback: "auto")
@@ -485,11 +485,11 @@ struct PromptLocalizer: Sendable {
         }
     }
 
-    private func notAvailableLabel() -> String {
+    nonisolated private func notAvailableLabel() -> String {
         l10n.prompt("ai.prompt.medical_extraction.retry.not_available", fallback: "N/A")
     }
 
-    private func fallbackRetrySuggestion(forField field: String) -> String {
+    nonisolated private func fallbackRetrySuggestion(forField field: String) -> String {
         switch field {
         case "extra":
             return "`extra` must be a JSON object. Use `{}` when unknown. Do not use `\"\"`."
@@ -512,14 +512,14 @@ struct PromptLocalizer: Sendable {
         }
     }
 
-    private func truncatedCorrectionBlock(_ text: String, limit: Int) -> String {
+    nonisolated private func truncatedCorrectionBlock(_ text: String, limit: Int) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count > limit else { return trimmed }
         let end = trimmed.index(trimmed.startIndex, offsetBy: limit)
         return String(trimmed[..<end])
     }
 
-    func medicineBoxExtractionPrompt(ocrText: String) -> String {
+    nonisolated func medicineBoxExtractionPrompt(ocrText: String) -> String {
         l10n.promptFormat(
             "ai.prompt.medicine_box.extraction.template",
             fallback: """
@@ -548,7 +548,7 @@ struct PromptLocalizer: Sendable {
     }
 
     /// 通用任务抽取提示：用于把自然语言整理为“任务生成前的结构化依据”。
-    func taskExtractionPrompt(userInput: String) -> String {
+    nonisolated func taskExtractionPrompt(userInput: String) -> String {
         l10n.promptFormat(
             "ai.prompt.task.extraction.template",
             fallback: """
@@ -569,7 +569,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func contextSummaryHeader(recordCount: Int) -> String {
+    nonisolated func contextSummaryHeader(recordCount: Int) -> String {
         l10n.promptFormat(
             "ai.prompt.context.header",
             fallback: "Recent medical context for member (latest %d records):",
@@ -577,7 +577,7 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func contextLine(dateText: String, title: String, summary: String) -> String {
+    nonisolated func contextLine(dateText: String, title: String, summary: String) -> String {
         l10n.promptFormat(
             "ai.prompt.context.line",
             fallback: "- [%@] %@: %@",
@@ -587,18 +587,18 @@ struct PromptLocalizer: Sendable {
         )
     }
 
-    func fallbackAssistantText() -> String {
+    nonisolated func fallbackAssistantText() -> String {
         l10n.prompt(
             "ai.prompt.fallback.assistant",
             fallback: "I can't provide a valid response right now. Please try again shortly."
         )
     }
 
-    func newThreadTitle() -> String {
+    nonisolated func newThreadTitle() -> String {
         l10n.prompt("ai.prompt.thread.new_title", fallback: "New Chat")
     }
 
-    func consentBlockedHint(reason: String?) -> String {
+    nonisolated func consentBlockedHint(reason: String?) -> String {
         let defaultReason = l10n.prompt(
             "ai.prompt.consent.blocked.default_reason",
             fallback: "Sensitive information was not forwarded to the model."

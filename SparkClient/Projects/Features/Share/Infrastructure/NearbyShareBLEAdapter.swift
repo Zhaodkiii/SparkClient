@@ -4,7 +4,27 @@ import Foundation
 import UIKit
 #endif
 
-struct NearbySharePeerSnapshot: Equatable {
+nonisolated final class NearbyShareObserverTokenBag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tokens: [NSObjectProtocol] = []
+
+    func append(_ token: NSObjectProtocol) {
+        lock.lock()
+        tokens.append(token)
+        lock.unlock()
+    }
+
+    func removeAll(from notificationCenter: NotificationCenter = .default) {
+        lock.lock()
+        let registeredTokens = tokens
+        tokens.removeAll()
+        lock.unlock()
+
+        registeredTokens.forEach(notificationCenter.removeObserver)
+    }
+}
+
+nonisolated struct NearbySharePeerSnapshot: Equatable, Sendable {
     let id: String
     let displayName: String
     let lastSeen: Date
@@ -55,7 +75,7 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
     private var payloadCharacteristic: CBMutableCharacteristic?
     private var pruneTimer: DispatchSourceTimer?
     private var isAppActive = true
-    private var lifecycleObservers: [NSObjectProtocol] = []
+    private let lifecycleObserverTokens = NearbyShareObserverTokenBag()
 
     private var links: [UUID: PeripheralLink] = [:]
     private var sessionLinks: [String: UUID] = [:]
@@ -76,7 +96,7 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
     }
 
     deinit {
-        lifecycleObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        lifecycleObserverTokens.removeAll()
     }
 
     func configureShare(outbound: NearbyShareOutboundPayload) {
@@ -206,7 +226,7 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
     private func registerLifecycleObservers() {
         #if canImport(UIKit)
         let center = NotificationCenter.default
-        lifecycleObservers.append(
+        lifecycleObserverTokens.append(
             center.addObserver(
                 forName: UIApplication.didEnterBackgroundNotification,
                 object: nil,
@@ -215,7 +235,7 @@ final class NearbyShareBLEAdapter: NSObject, @unchecked Sendable {
                 self?.queue.async { self?.handleEnterBackground() }
             }
         )
-        lifecycleObservers.append(
+        lifecycleObserverTokens.append(
             center.addObserver(
                 forName: UIApplication.willEnterForegroundNotification,
                 object: nil,

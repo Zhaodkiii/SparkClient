@@ -1,7 +1,7 @@
 import Foundation
 
 /// 睡眠可视化模型（对齐 HealthClient 的结构语义，裁剪为聊天卡片渲染所需字段）。
-struct ChatHealthSleepModel: Codable, Equatable, Sendable {
+nonisolated struct ChatHealthSleepModel: Codable, Equatable, Sendable {
     static let schema = "health_sleep_v1"
 
     var schemaVersion: String = schema

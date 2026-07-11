@@ -32,11 +32,11 @@ public enum SecondCameraAttachmentError: Error {
 // MARK: -
 
 extension SecondCameraAttachmentError: LocalizedError, SecondCameraEditorUserErrorDescriptionProvider {
-    public var errorDescription: String? {
+    nonisolated public var errorDescription: String? {
         localizedDescription
     }
 
-    public var localizedDescription: String {
+    nonisolated public var localizedDescription: String {
         switch self {
         case .missingData:
             return SecondCameraEditorLocalizedString("ATTACHMENT_ERROR_MISSING_DATA", comment: "Attachment error message for attachments without any data")

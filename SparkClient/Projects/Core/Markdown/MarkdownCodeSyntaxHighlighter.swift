@@ -33,8 +33,8 @@ public extension View {
     }
 }
 
-private enum SimpleMarkdownCodeSyntaxHighlighter {
-    static func highlight(_ code: String, language: String?) -> AttributedString {
+nonisolated private enum SimpleMarkdownCodeSyntaxHighlighter {
+    nonisolated static func highlight(_ code: String, language: String?) -> AttributedString {
         var attributed = AttributedString(code)
         attributed.foregroundColor = .primary
 
@@ -61,7 +61,7 @@ private enum SimpleMarkdownCodeSyntaxHighlighter {
         return attributed
     }
 
-    private static func colorWords(_ attributed: inout AttributedString, words: Set<String>, color: Color) {
+    nonisolated private static func colorWords(_ attributed: inout AttributedString, words: Set<String>, color: Color) {
         let string = String(attributed.characters)
         for word in words {
             var searchStart = string.startIndex
@@ -77,7 +77,7 @@ private enum SimpleMarkdownCodeSyntaxHighlighter {
         }
     }
 
-    private static func colorStrings(_ attributed: inout AttributedString, color: Color) {
+    nonisolated private static func colorStrings(_ attributed: inout AttributedString, color: Color) {
         let string = String(attributed.characters)
         var index = string.startIndex
         while index < string.endIndex {
@@ -107,7 +107,7 @@ private enum SimpleMarkdownCodeSyntaxHighlighter {
         }
     }
 
-    private static func colorLineComments(_ attributed: inout AttributedString, color: Color) {
+    nonisolated private static func colorLineComments(_ attributed: inout AttributedString, color: Color) {
         let string = String(attributed.characters)
         for lineRange in string.lineRanges {
             guard let commentRange = string[lineRange].range(of: "//") else { continue }
@@ -117,13 +117,13 @@ private enum SimpleMarkdownCodeSyntaxHighlighter {
         }
     }
 
-    private static func colorJSON(_ attributed: inout AttributedString) {
+    nonisolated private static func colorJSON(_ attributed: inout AttributedString) {
         colorStrings(&attributed, color: .red)
         colorWords(&attributed, words: ["true", "false", "null"], color: .purple)
         colorCharacters(&attributed, characters: "{}[]:,", color: .blue)
     }
 
-    private static func colorCharacters(_ attributed: inout AttributedString, characters: String, color: Color) {
+    nonisolated private static func colorCharacters(_ attributed: inout AttributedString, characters: String, color: Color) {
         let string = String(attributed.characters)
         for index in string.indices where characters.contains(string[index]) {
             if let attributedRange = Range(index..<string.index(after: index), in: attributed) {
@@ -132,7 +132,7 @@ private enum SimpleMarkdownCodeSyntaxHighlighter {
         }
     }
 
-    private static func colorLinePrefixes(_ attributed: inout AttributedString, prefixes: [Character], color: Color) {
+    nonisolated private static func colorLinePrefixes(_ attributed: inout AttributedString, prefixes: [Character], color: Color) {
         let string = String(attributed.characters)
         for lineRange in string.lineRanges {
             guard let first = string[lineRange].first, prefixes.contains(first) else { continue }
@@ -144,13 +144,13 @@ private enum SimpleMarkdownCodeSyntaxHighlighter {
 }
 
 private extension Character {
-    var isIdentifierBoundary: Bool {
+    nonisolated var isIdentifierBoundary: Bool {
         isLetter == false && isNumber == false && self != "_"
     }
 }
 
 private extension String {
-    var lineRanges: [Range<String.Index>] {
+    nonisolated var lineRanges: [Range<String.Index>] {
         var result: [Range<String.Index>] = []
         var start = startIndex
         while start < endIndex {

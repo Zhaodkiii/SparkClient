@@ -142,18 +142,20 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
                 }
                 // 家庭模式：按入口成员汇总创建者名下全部成员药品与公共药品
                 let boxes = try await medicalQueryAPI.listFamilyMedicineCabinet(memberID: requestMemberID)
+                guard Task.isCancelled == false else { return false }
                 guard requestMemberID == entryMemberID else { return false }
                 allBoxes = boxes
                 logger.info("家庭药箱加载完成 entryMemberID=\(requestMemberID) count=\(allBoxes.count)", module: .home)
             case .personal:
                 // 个人模式：后台刷新成员药箱；失败时保留首页缓存 allBoxes 不清空
-                allBoxes = Self.sortedByUpdatedAt(
-                    try await medicalQueryAPI.listMedicineBoxes(memberID: entryMemberID)
-                )
+                let boxes = try await medicalQueryAPI.listMedicineBoxes(memberID: entryMemberID)
+                guard Task.isCancelled == false else { return false }
+                allBoxes = Self.sortedByUpdatedAt(boxes)
                 logger.info("个人药箱加载完成 entryMemberID=\(entryMemberID) count=\(allBoxes.count)", module: .home)
             }
             return true
         } catch {
+            guard Task.isCancelled == false else { return false }
             errorMessage = error.localizedDescription
             let modeLabel = mode == .family ? "家庭" : "个人"
             logger.warning("\(modeLabel)药箱加载失败 entryMemberID=\(entryMemberID) error=\(error.localizedDescription)", module: .home)

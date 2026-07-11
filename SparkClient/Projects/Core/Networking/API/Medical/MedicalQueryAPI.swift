@@ -466,7 +466,7 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         enabled: Bool,
         source: String
     ) async throws -> SparkMedicalSyncAPI.RemoteMedicationReminderLocalAuthorization {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let enabled: Bool
             let source: String
         }
@@ -530,7 +530,7 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
     }
 
-    func write<T: Decodable, B: Encodable>(
+    func write<T: Decodable, B: Encodable & Sendable>(
         method: SparkHTTPMethod,
         path: String,
         body: B,
@@ -546,7 +546,7 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         )
     }
 
-    func writeOptional<T: Decodable, B: Encodable>(
+    func writeOptional<T: Decodable, B: Encodable & Sendable>(
         method: SparkHTTPMethod,
         path: String,
         body: B?,
@@ -574,5 +574,5 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         return try APIResponseDecoder.decodeWrappedData(responseType, from: response, decoder: .medicalAPI)
     }
 
-    private struct EmptyPayload: Encodable {}
+    nonisolated private struct EmptyPayload: Encodable {}
 }

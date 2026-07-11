@@ -1,12 +1,12 @@
 import Foundation
 
-enum ChatMedicalRiskLevel: String, Codable, Sendable, CaseIterable, Comparable {
+nonisolated enum ChatMedicalRiskLevel: String, Codable, Sendable, CaseIterable, Comparable {
     case low
     case medium
     case high
     case emergency
 
-    var sortOrder: Int {
+    nonisolated var sortOrder: Int {
         switch self {
         case .low: return 0
         case .medium: return 1
@@ -15,12 +15,12 @@ enum ChatMedicalRiskLevel: String, Codable, Sendable, CaseIterable, Comparable {
         }
     }
 
-    static func < (lhs: Self, rhs: Self) -> Bool {
+    nonisolated static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.sortOrder < rhs.sortOrder
     }
 }
 
-struct ChatMedicalRiskNoticePayload: Codable, Equatable, Sendable {
+nonisolated struct ChatMedicalRiskNoticePayload: Codable, Equatable, Sendable {
     var riskLevel: ChatMedicalRiskLevel
     var title: String?
     var message: String

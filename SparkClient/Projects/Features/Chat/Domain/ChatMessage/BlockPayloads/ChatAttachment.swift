@@ -37,7 +37,7 @@ enum ChatAttachmentType: String, Equatable, Sendable, CaseIterable {
 /// 单条聊天消息的结构化附件。
 /// - 用户上传图片：`type == .image`，`url` 为可访问地址，`text` 存 OCR 纯文本（无 OCR 则为 `nil`）。
 /// - 工具/知识卡等：`text` 存 JSON 或展示用字符串。
-struct ChatAttachment: Equatable, Sendable {
+nonisolated struct ChatAttachment: Equatable, Sendable {
     let id: UUID
     let type: ChatAttachmentType
     let url: URL?
@@ -136,7 +136,7 @@ struct ChatAttachment: Equatable, Sendable {
 
 // MARK: - `ChatAttachmentType` Codable（兼容历史 `image_base64` / `image_url`，写入时仅使用 `image`）
 
-extension ChatAttachmentType: Codable {
+nonisolated extension ChatAttachmentType: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         let raw = try c.decode(String.self)
@@ -162,7 +162,7 @@ extension ChatAttachmentType: Codable {
 
 // MARK: - Codable（解码兼容 `file_id` / `full_cache_key` / `file_md5` 与驼峰本地存储）
 
-extension ChatAttachment: Codable {
+nonisolated extension ChatAttachment: Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodableKey.self)

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 通用编码键：自定义灵活的 Codable 编码/解码键
-struct CodableKey: CodingKey {
+nonisolated struct CodableKey: CodingKey {
     let stringValue: String
     let intValue: Int?
 
@@ -112,21 +112,21 @@ extension JSONEncoder {
 
 extension ISO8601DateFormatter {
     /// 与 Django `DateTimeField` 及聊天同步 API 对齐（含毫秒）。
-    nonisolated static let chatFractional: ISO8601DateFormatter = {
+    nonisolated static var chatFractional: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
-    }()
+    }
 
-    nonisolated static let chatBasic: ISO8601DateFormatter = {
+    nonisolated static var chatBasic: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
-    }()
+    }
 }
 
 /// 聊天相关 JSON 日期编解码（同步 API / Core Data block payload 共用）。
-enum ChatCodableDateCodec: Sendable {
+nonisolated enum ChatCodableDateCodec: Sendable {
     /// 聊天同步与 block payload：毫秒 ISO8601 + Unix 时间戳回退。
     nonisolated static func decodeRemoteSyncDate(from serializer: any Decoder) throws -> Date {
         let container = try serializer.singleValueContainer()

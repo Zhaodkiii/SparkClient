@@ -42,7 +42,7 @@ enum AIProviderAdapterRegistry {
 
 /// 单个场景下“可序列化/可存储”的原始配置快照。
 /// 该结构用于承载字符串型 endpoint，并在使用前转为 `AIResolvedConfig`。
-struct AIScenarioConfig: Codable, Equatable, Sendable {
+nonisolated struct AIScenarioConfig: Codable, Equatable, Sendable {
     /// 接口地址字符串（尚未校验为 `URL`）。
     var endpoint: String
     /// 模型名（通常与服务端可识别模型标识一致）。
@@ -56,7 +56,7 @@ struct AIScenarioConfig: Codable, Equatable, Sendable {
 
     /// 构造场景配置。
     /// 默认参数适合保守稳定策略：低温度 + 中等 token 上限。
-    init(
+    nonisolated init(
         endpoint: String,
         model: String,
         apiKey: String? = nil,
@@ -74,7 +74,7 @@ struct AIScenarioConfig: Codable, Equatable, Sendable {
     /// 1) 校验 `endpoint` 是否能构造 URL 且包含 scheme；
     /// 2) 挂载来源 `source`，便于后续审计和调试；
     /// 3) 失败时抛出 `AIConfigError.invalidEndpoint`。
-    func toResolvedConfig(source: AIConfigSource) throws -> AIResolvedConfig {
+    nonisolated func toResolvedConfig(source: AIConfigSource) throws -> AIResolvedConfig {
         guard let url = URL(string: endpoint), url.scheme != nil else {
             throw AIConfigError.invalidEndpoint(endpoint)
         }
@@ -136,7 +136,7 @@ enum AIConfigError: LocalizedError {
 
 /// 试用态信息快照。
 /// 用于表达“当前用户是否在 AI 试用窗口内”及剩余时长等信息。
-struct AITrialState: Codable, Equatable, Sendable {
+nonisolated struct AITrialState: Codable, Equatable, Sendable {
     /// 试用状态标识（如 none/active/expired，具体由服务端约定）。
     var status: String
     /// 是否当前有效。
@@ -151,7 +151,7 @@ struct AITrialState: Codable, Equatable, Sendable {
     var remainingSeconds: Int
 
     /// 非激活默认态，作为本地兜底初始值。
-    static let inactive = AITrialState(
+    nonisolated static let inactive = AITrialState(
         status: "none",
         isActive: false,
         grantSource: "auto",
@@ -171,7 +171,7 @@ struct AITrialApplicationSubmission: Codable, Equatable, Sendable {
 }
 
 /// 试用策略中“场景 -> 模型配置”的一条映射记录。
-struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
+nonisolated struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
     /// 目标场景。
     var scenario: AIScenario
     /// 该场景对应配置。
@@ -179,7 +179,7 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
     /// 对应服务端 `is_default`；当同一场景有多条模型配置时，应仅有一条为 true。
     var isDefault: Bool
 
-    init(scenario: AIScenario, config: AIScenarioConfig, isDefault: Bool = false) {
+    nonisolated init(scenario: AIScenario, config: AIScenarioConfig, isDefault: Bool = false) {
         self.scenario = scenario
         self.config = config
         self.isDefault = isDefault
@@ -188,7 +188,7 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
 
     /// 自定义解码：
     /// - 兼容历史数据中缺失 `isDefault` 的情况，默认回退为 `false`。
-    init(from decoder: Decoder) throws {
+    nonisolated init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodableKey.self)
         scenario = try c.decode(AIScenario.self, forKey: .key("scenario"))
         config = try c.decode(AIScenarioConfig.self, forKey: .key("config"))
@@ -196,7 +196,7 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
     }
 
     /// 自定义编码：显式输出全部字段，避免策略透传时语义丢失。
-    func encode(to encoder: Encoder) throws {
+    nonisolated func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodableKey.self)
         try c.encode(scenario, forKey: .key("scenario"))
         try c.encode(config, forKey: .key("config"))
@@ -207,7 +207,7 @@ struct AITrialModelPolicyItem: Codable, Equatable, Sendable {
 // MARK: - 多模型场景启动配置（对应 `/api/v1/ai/config/bootstrap/` 的 `scenarios` 对象）
 
 /// 场景下的一条模型配置（由 bootstrap 的 `default_model` 与 `models[]` 组成）。
-struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
+nonisolated struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
     var name: String
     var displayName: String
     var identity: String
@@ -392,7 +392,7 @@ struct AIScenarioRemoteModelRow: Codable, Equatable, Sendable, Identifiable {
 }
 
 /// 单个场景的远端模型集合（包含默认模型名与候选模型列表）。
-struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
+nonisolated struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     /// 场景下默认模型名称。
     var defaultModelName: String
     /// 候选模型行列表。
@@ -475,7 +475,7 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
     /// 2) 否则返回 `isDefault == true` 的行；
     /// 3) 再否则返回第一行；
     /// 4) 若 `models` 为空则返回 `nil`。
-    func resolveRow(preferredModelName: String?) -> AIScenarioRemoteModelRow? {
+    nonisolated func resolveRow(preferredModelName: String?) -> AIScenarioRemoteModelRow? {
         if let name = preferredModelName, name.isEmpty == false,
            let row = models.first(where: { $0.name == name })
         {
@@ -492,13 +492,13 @@ struct AIScenarioRemoteBundle: Codable, Equatable, Sendable {
         return models.first
     }
 
-    func resolveConfig(preferredModelName: String?) -> AIScenarioConfig? {
+    nonisolated func resolveConfig(preferredModelName: String?) -> AIScenarioConfig? {
         resolveRow(preferredModelName: preferredModelName)?.asScenarioConfig()
     }
 }
 
 extension AIScenarioRemoteBundlesCollection {
-    mutating func setBundle(_ bundle: AIScenarioRemoteBundle, for scenario: AIScenario) {
+    nonisolated mutating func setBundle(_ bundle: AIScenarioRemoteBundle, for scenario: AIScenario) {
         switch scenario {
         case .chat:
             chat = bundle
@@ -543,7 +543,7 @@ extension AIScenarioRemoteBundlesCollection {
 }
 
 /// bootstrap `scenarios` JSON 中的场景模型配置集合。
-struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
+nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     /// 对话场景模型集合。
     var chat: AIScenarioRemoteBundle
     /// 向量场景模型集合。
@@ -651,7 +651,7 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
     }
 
     /// 根据业务场景取对应 bundle。
-    func bundle(for scenario: AIScenario) -> AIScenarioRemoteBundle {
+    nonisolated func bundle(for scenario: AIScenario) -> AIScenarioRemoteBundle {
         switch scenario {
         case .chat:
             return chat
@@ -694,15 +694,15 @@ struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendable {
         }
     }
 
-    func resolveRow(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioRemoteModelRow? {
+    nonisolated func resolveRow(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioRemoteModelRow? {
         bundle(for: scenario).resolveRow(preferredModelName: preferredModelName)
     }
 
-    func resolveConfig(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioConfig? {
+    nonisolated func resolveConfig(for scenario: AIScenario, preferredModelName: String?) -> AIScenarioConfig? {
         bundle(for: scenario).resolveConfig(preferredModelName: preferredModelName)
     }
 
-    var allRows: [AIScenarioRemoteModelRow] {
+    nonisolated var allRows: [AIScenarioRemoteModelRow] {
         let bundles = [
             chat,
             embedding,

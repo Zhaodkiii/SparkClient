@@ -255,7 +255,7 @@ struct ToolDefinition: Sendable {
 /// 4. `Projects/App/Resources/en.lproj/ToolPrompts.strings`（及 zh-Hans、zh-Hant）— `tool.summary.*` / `tool.param.*`
 /// 5. `Projects/App/Resources/en.lproj/Localizable.strings`（及 zh-Hans）— `ai_settings.tools.*`
 /// 6. `OnboardingAgentSetupViewModel.healthTools` 等默认工具白名单（按需）
-enum SparkToolName: String, CaseIterable {
+nonisolated enum SparkToolName: String, CaseIterable {
     // MARK: 健康类（Apple Health / 结构化卡片 / 问报告 M11）
     case fetchStepDetails            = "fetch_step_details"             // 获取步数详情
     case fetchEnergyDetails          = "fetch_energy_details"           // 获取能量详情
@@ -432,15 +432,15 @@ func ~=(pattern: SparkToolName, value: String) -> Bool {
 
 // MARK: - 工具本地化与存储工具方法
 extension SparkToolName {
-    static let noSelectionSentinel = "__spark_tools_none__" // 无选择标记
+    nonisolated static let noSelectionSentinel = "__spark_tools_none__" // 无选择标记
 
     /// 获取工具本地化显示名称
-    static func displayName(for toolName: String) -> String {
+    nonisolated static func displayName(for toolName: String) -> String {
         L10n.text("ai_settings.tools.\(toolName)")
     }
 
     /// 从存储的工具名解析选中集合
-    static func selectedSet(fromStoredToolNames toolNames: [String]) -> Set<String> {
+    nonisolated static func selectedSet(fromStoredToolNames toolNames: [String]) -> Set<String> {
         if toolNames.contains(noSelectionSentinel) {
             return []
         }
@@ -449,7 +449,7 @@ extension SparkToolName {
     }
 
     /// 转换为存储格式
-    static func storageValues(forSelectedToolNames selectedToolNames: Set<String>) -> [String] {
+    nonisolated static func storageValues(forSelectedToolNames selectedToolNames: Set<String>) -> [String] {
         let normalized = selectedToolNames.intersection(Set(all))
         return normalized.isEmpty ? [noSelectionSentinel] : normalized.sorted()
     }

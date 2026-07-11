@@ -4,7 +4,7 @@
 
 import UIKit
 
-public final class SecondCameraEditorActionSheetAction {
+nonisolated public final class SecondCameraEditorActionSheetAction {
     public enum Style { case `default`, cancel, destructive }
     public let title: String
     public let style: Style
@@ -16,9 +16,9 @@ public final class SecondCameraEditorActionSheetAction {
     }
 }
 
-public class SecondCameraEditorActionSheetController: UIViewController {
-    public private(set) var actions = [SecondCameraEditorActionSheetAction]()
-    public var isCancelable = true
+nonisolated public final class SecondCameraEditorActionSheetController: UIViewController {
+    nonisolated(unsafe) public private(set) var actions = [SecondCameraEditorActionSheetAction]()
+    nonisolated(unsafe) public var isCancelable = true
     public let actionSheetTitle: String?
     public let actionSheetMessage: String?
 
@@ -38,7 +38,7 @@ public class SecondCameraEditorActionSheetController: UIViewController {
     }
 }
 
-public enum SecondCameraEditorCommonStrings {
+nonisolated public enum SecondCameraEditorCommonStrings {
     public static let cancelButton = "取消"
     public static let continueButton = "继续"
     public static let deleteButton = "删除"
@@ -47,16 +47,16 @@ public enum SecondCameraEditorCommonStrings {
     public static let doneButton = "完成"
 }
 
-public enum SecondCameraEditorMessageStrings {}
+nonisolated public enum SecondCameraEditorMessageStrings {}
 
-public class SecondCameraEditorActivityIndicatorViewController: UIViewController {
+nonisolated public final class SecondCameraEditorActivityIndicatorViewController: UIViewController {
     public enum Constants {
         public static let defaultPresentationDelay: TimeInterval = 0.05
     }
 
     private let canCancel: Bool
     private let presentationDelay: TimeInterval
-    private var wasDismissed = false
+    nonisolated(unsafe) private var wasDismissed = false
 
     public init(canCancel: Bool = false, presentationDelay: TimeInterval = Constants.defaultPresentationDelay) {
         self.canCancel = canCancel
@@ -86,19 +86,18 @@ public class SecondCameraEditorActivityIndicatorViewController: UIViewController
         }
     }
 
+    @MainActor
     public func dismiss(completion: (() -> Void)? = nil) {
-        DispatchQueue.main.async {
-            guard !self.wasDismissed else {
-                completion?()
-                return
-            }
-            self.wasDismissed = true
-            self.dismiss(animated: false, completion: completion)
+        guard !wasDismissed else {
+            completion?()
+            return
         }
+        wasDismissed = true
+        dismiss(animated: false, completion: completion)
     }
 }
 
-public final class SecondCameraEditorToastController {
+nonisolated public final class SecondCameraEditorToastController: @unchecked Sendable {
     private let text: String
 
     public init(text: String) {
@@ -135,9 +134,9 @@ public final class SecondCameraEditorToastController {
     }
 }
 
-public class SecondCameraEditorSelectionButton: UIButton {}
-public class SecondCameraEditorViewOnceTooltip: UIView {}
-public struct SecondCameraStickerInfo: Hashable {
+nonisolated public final class SecondCameraEditorSelectionButton: UIButton, @unchecked Sendable {}
+nonisolated public final class SecondCameraEditorViewOnceTooltip: UIView, @unchecked Sendable {}
+nonisolated public struct SecondCameraStickerInfo: Hashable, Sendable {
     public var packId: String = ""
     public var stickerId: String = ""
 
@@ -155,9 +154,9 @@ public protocol SecondCameraStickerPickerDelegate: AnyObject {
 
 public protocol SecondCameraStoryStickerPickerDelegate: AnyObject {}
 
-public class SecondCameraStickerPickerSheet: UIViewController {
-    public weak var sheetDelegate: SecondCameraStickerPickerSheetDelegate?
-    private weak var pickerDelegate: SecondCameraStickerPickerDelegate?
+nonisolated public final class SecondCameraStickerPickerSheet: UIViewController {
+    nonisolated(unsafe) public weak var sheetDelegate: SecondCameraStickerPickerSheetDelegate?
+    nonisolated(unsafe) private weak var pickerDelegate: SecondCameraStickerPickerDelegate?
 
     public init(pickerDelegate: SecondCameraStickerPickerDelegate) {
         self.pickerDelegate = pickerDelegate
@@ -198,12 +197,12 @@ extension SecondCameraStickerPickerSheet: SecondCameraStickerPickerDelegate {
     }
 }
 public typealias SecondCameraEditorAci = String
-public class SecondCameraEditorBodyRangesTextView: UITextView {}
+nonisolated public final class SecondCameraEditorBodyRangesTextView: UITextView, @unchecked Sendable {}
 public protocol SecondCameraEditorBodyRangesTextViewDelegate: AnyObject {}
-public class SecondCameraEditorEditableMessageBodyTextStorage: NSTextStorage {}
-public struct SecondCameraEditorHydratedMessageBody { public var text: String = "" }
-public struct SecondCameraEditorMentionPickerStyle {}
-public class SecondCameraEditorTableViewController: UIViewController {}
+nonisolated public final class SecondCameraEditorEditableMessageBodyTextStorage: NSTextStorage, @unchecked Sendable {}
+nonisolated public struct SecondCameraEditorHydratedMessageBody { public var text: String = "" }
+nonisolated public struct SecondCameraEditorMentionPickerStyle {}
+nonisolated public final class SecondCameraEditorTableViewController: UIViewController, @unchecked Sendable {}
 
 public extension SecondCameraEditorCommonStrings {
     static let attachmentTypeVideo = "视频"
@@ -301,10 +300,9 @@ public final class SecondCameraEditorExpandableContactListView: UIView {
 public struct SecondCameraEditorDBReadTransaction {}
 public struct SecondCameraEditorDBWriteTransaction {}
 
-public struct SecondCameraEditorKeyValueStore {
-    public init(collection: String) {}
-    public func getUInt(_ key: String, transaction: SecondCameraEditorDBReadTransaction) -> UInt? { nil }
-    public func setUInt(_ value: UInt, key: String, transaction: SecondCameraEditorDBWriteTransaction) {}
-    public func removeValue(forKey key: String, transaction: SecondCameraEditorDBWriteTransaction) {}
+nonisolated public struct SecondCameraEditorKeyValueStore {
+    nonisolated public init(collection: String) {}
+    nonisolated public func getUInt(_ key: String, transaction: SecondCameraEditorDBReadTransaction) -> UInt? { nil }
+    nonisolated public func setUInt(_ value: UInt, key: String, transaction: SecondCameraEditorDBWriteTransaction) {}
+    nonisolated public func removeValue(forKey key: String, transaction: SecondCameraEditorDBWriteTransaction) {}
 }
-

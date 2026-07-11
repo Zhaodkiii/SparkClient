@@ -149,7 +149,7 @@ extension SparkMedicalMemberAPI {
     }
 
     /// 生成分享票据请求入参
-    struct GenerateShareTicketPayload: Encodable, Sendable {
+    nonisolated struct GenerateShareTicketPayload: Encodable, Sendable {
         /// 分享渠道标识（二维码/链接等）
         let channel: String
         /// 分享授予权限：edit / view
@@ -157,13 +157,13 @@ extension SparkMedicalMemberAPI {
     }
 
     /// 解析票据接口请求体
-    struct ShareTicketPayload: Encodable, Sendable {
+    nonisolated struct ShareTicketPayload: Encodable, Sendable {
         /// 需要解析的分享票据
         let shareTicket: String
     }
 
     /// 接受分享、绑定成员接口入参
-    struct AcceptSharePayload: Encodable, Sendable {
+    nonisolated struct AcceptSharePayload: Encodable, Sendable {
         /// 分享票据凭证
         let shareTicket: String
         /// 标准亲属关系编码
@@ -173,7 +173,7 @@ extension SparkMedicalMemberAPI {
     }
 
     /// 修改绑定亲属关系请求体
-    struct UpdateBindingPayload: Encodable, Sendable {
+    nonisolated struct UpdateBindingPayload: Encodable, Sendable {
         /// 新的亲属关系编码
         let relationship: String
     }
@@ -280,7 +280,7 @@ extension SparkMedicalMemberAPI {
     ///   - body: 请求JSON体，nil代表无请求体
     ///   - responseType: 需要解码的返回模型类型
     /// - Returns: 解码后的业务模型
-    private func postRequest<T: Decodable, B: Encodable>(
+    private func postRequest<T: Decodable, B: Encodable & Sendable>(
         method: SparkHTTPMethod,
         path: String,
         body: B?,

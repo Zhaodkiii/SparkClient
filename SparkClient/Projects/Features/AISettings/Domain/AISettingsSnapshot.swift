@@ -2,7 +2,7 @@ import Foundation
 
 /// 按账号存于 Core Data 的 AI 设置快照（含 `allModels` / `apiKeys` / `smallTasks` / `promptRepo`）。
 /// 已登录冷启动：`AppBootstrapper.bootstrapIfNeeded(for:)` 以 `UserSession.accountID` 调用 `AIConfigCenter.prewarm` 写入运行时缓存；设置页 `AISettingsViewModel` 应传入同一 `ownerAccountID` 加载目录，避免依赖会话快照解析顺序。
-struct AISettingsSnapshot: Codable, Equatable, Sendable {
+nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var allModels: [AllModels]
     var scenarioBindings: [AIScenarioModelBinding]
     var apiKeys: [APIKeys]
@@ -158,10 +158,10 @@ struct AISettingsSnapshot: Codable, Equatable, Sendable {
 
 // MARK: - 偏好持久化载荷（与快照轻量偏好字段一致）
 
-extension AISettingsSnapshot {
+nonisolated extension AISettingsSnapshot {
     /// 供账号级 UserDefaults 序列化；模型目录、小任务、提示词库等可维护数据以 Core Data 为准。
     /// 仓储层只对该类型做 `JSONEncoder` / `JSONDecoder`，避免重复结构体与手写映射。
-    struct PreferencesPayload: Codable, Equatable, Sendable {
+    nonisolated struct PreferencesPayload: Codable, Equatable, Sendable {
         var searchToolPreferences: AISearchToolPreferences
         var searchConfigRevision: SearchRuntimeConfigRevision
         var scenarioModelSources: [String: AIModelSelectionSource]

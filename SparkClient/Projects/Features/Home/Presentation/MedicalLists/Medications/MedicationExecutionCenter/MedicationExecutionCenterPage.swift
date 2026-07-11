@@ -25,7 +25,7 @@ struct MedicationExecutionCenterPage: View {
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedDate = Date()
+    @State private var selectedDate: Date
     @State private var recordsByDayID: [String: [SparkMedicalSyncAPI.RemoteMedicationRecord]] = [:]
     @State private var loadedWindow: MedicationExecutionRecordWindow?
     @State private var loadingWindowID: String?
@@ -35,6 +35,8 @@ struct MedicationExecutionCenterPage: View {
     @State private var dateStripScrollID: String?
     @State private var didApplyInitialFocus = false
     @State private var legacyDateStripDefersServerLoad = false
+    @State private var legacyDateLoadTask: Task<Void, Never>?
+    @State private var activeRecordLoadToken: UUID?
     @State private var createdAsNeededPlansByBoxID: [Int: SparkMedicalSyncAPI.RemoteMedicationPlan] = [:]
     private let calendar = Calendar.current
     private let logModule = LogModule.home
@@ -77,6 +79,7 @@ struct MedicationExecutionCenterPage: View {
         self.onMedicationPlansChanged = onMedicationPlansChanged
         self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
+        _selectedDate = State(initialValue: initialFocus?.scheduledAt ?? Date())
     }
 
     private var selectedDayStart: Date {
@@ -191,19 +194,24 @@ struct MedicationExecutionCenterPage: View {
                 }
             )
         }
-        .task {
-            if let initialFocus {
-                selectedDate = initialFocus.scheduledAt
-            }
-            await loadRecordWindow(centeredAt: selectedDayStart, preferInitialRecords: true)
+        .task(id: selectedDayStart) {
+            await loadRecordWindow(
+                centeredAt: selectedDayStart,
+                preferInitialRecords: initialFocus != nil,
+                force: false
+            )
             await applyInitialFocusIfNeeded()
         }
-        .onChange(of: selectedDayStart) { newValue in
-            guard legacyDateStripDefersServerLoad == false else { return }
-            Task {
-                await loadRecordWindow(centeredAt: newValue, preferInitialRecords: false)
-                await applyInitialFocusIfNeeded()
-            }
+        .refreshable {
+            await loadRecordWindow(
+                centeredAt: selectedDayStart,
+                preferInitialRecords: false,
+                force: true
+            )
+            await applyInitialFocusIfNeeded()
+        }
+        .onDisappear {
+            legacyDateLoadTask?.cancel()
         }
     }
 
@@ -448,9 +456,15 @@ struct MedicationExecutionCenterPage: View {
 
     private func commitLegacyDateStripDate(_ date: Date) {
         legacyDateStripDefersServerLoad = true
-        Task {
-            await loadRecordWindow(centeredAt: calendar.startOfDay(for: date), preferInitialRecords: false)
+        legacyDateLoadTask?.cancel()
+        legacyDateLoadTask = Task { @MainActor in
+            await loadRecordWindow(
+                centeredAt: calendar.startOfDay(for: date),
+                preferInitialRecords: false,
+                force: false
+            )
             await applyInitialFocusIfNeeded()
+            guard Task.isCancelled == false else { return }
             await MainActor.run {
                 legacyDateStripDefersServerLoad = false
             }
@@ -532,8 +546,22 @@ struct MedicationExecutionCenterPage: View {
     }
 
     @MainActor
-    private func loadRecordWindow(centeredAt day: Date, preferInitialRecords: Bool) async {
+    private func loadRecordWindow(
+        centeredAt day: Date,
+        preferInitialRecords: Bool,
+        force: Bool
+    ) async {
         guard let memberID else { return }
+
+        let loadToken = UUID()
+        activeRecordLoadToken = loadToken
+
+        defer {
+            if activeRecordLoadToken == loadToken {
+                activeRecordLoadToken = nil
+                isLoading = false
+            }
+        }
 
         let shouldShowBlockingLoader = MedicationExecutionRecordCache.needsWindowFetch(
             for: day,
@@ -544,7 +572,6 @@ struct MedicationExecutionCenterPage: View {
         if shouldShowBlockingLoader {
             isLoading = true
         }
-        defer { isLoading = false }
 
         guard let request = MedicationExecutionRecordCache.prepareWindowLoad(
             centeredAt: day,
@@ -553,6 +580,7 @@ struct MedicationExecutionCenterPage: View {
             recordsByDayID: recordsByDayID,
             initialRecords: initialRecords,
             preferSeedInitialRecords: preferInitialRecords && calendar.isDateInToday(day),
+            force: force,
             calendar: calendar
         ) else {
             return
@@ -568,6 +596,7 @@ struct MedicationExecutionCenterPage: View {
                 memberID: memberID,
                 scheduledRange: request.window.scheduledQueryRange
             )
+            guard Task.isCancelled == false else { return }
             guard loadingWindowID == request.requestID else { return }
 
             let result = MedicationExecutionRecordCache.finishWindowLoad(
@@ -579,6 +608,7 @@ struct MedicationExecutionCenterPage: View {
             loadedWindow = result.loadedWindow
             recordsByDayID = result.recordsByDayID
         } catch {
+            guard Task.isCancelled == false else { return }
             guard loadingWindowID == request.requestID else { return }
             notificationClient.error(
                 error.localizedDescription,

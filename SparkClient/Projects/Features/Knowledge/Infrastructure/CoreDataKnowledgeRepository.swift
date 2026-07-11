@@ -9,7 +9,7 @@ import Foundation
 
 /// CoreData 知识库仓库实现
 /// 实现 KnowledgeRepository 协议，负责所有知识库数据的 CRUD、检索、向量存储
-final class CoreDataKnowledgeRepository: KnowledgeRepository {
+nonisolated final class CoreDataKnowledgeRepository: KnowledgeRepository, @unchecked Sendable {
 
     // MARK: - 常量定义
     private enum Field {
@@ -564,11 +564,11 @@ final class CoreDataKnowledgeRepository: KnowledgeRepository {
 // MARK: - Entity 与 Domain 模型转换
 // Core Data 实体 → 业务领域模型 转换扩展
 
-private extension KnowledgeDocumentEntity {
+nonisolated private extension KnowledgeDocumentEntity {
 
     /// 将 Core Data 实体对象 转换为 业务层领域模型（KnowledgeDocument）
     /// - 返回值：若必填字段缺失，返回 nil；否则返回转换后的领域模型
-    func toDomain() -> KnowledgeDocument? {
+    nonisolated func toDomain() -> KnowledgeDocument? {
         // 校验所有**必填字段**是否存在，任一缺失则转换失败
         guard
             let id,

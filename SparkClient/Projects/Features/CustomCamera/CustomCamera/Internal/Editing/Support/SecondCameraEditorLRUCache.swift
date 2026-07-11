@@ -6,15 +6,15 @@
 import Foundation
 
 // A simple LRU cache bounded by the number of entries.
-public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType> {
+nonisolated public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType>: @unchecked Sendable {
 
     private let cache = NSCache<AnyObject, AnyObject>()
     private let _resetCount = SecondCameraEditorAtomicUInt(0, lock: .sharedGlobal)
-    public var resetCount: UInt {
+    nonisolated public var resetCount: UInt {
         _resetCount.get()
     }
 
-    public var maxSize: Int {
+    nonisolated public var maxSize: Int {
         get {
             return cache.countLimit
         }
@@ -23,7 +23,7 @@ public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType
         }
     }
 
-    public init(
+    nonisolated public init(
         maxSize: Int,
         nseMaxSize: Int = 0,
         shouldEvacuateInBackground: Bool = false,
@@ -44,13 +44,13 @@ public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType
     }
 
     @objc
-    private func didEnterBackground() {
+    nonisolated private func didEnterBackground() {
         SecondCameraEditorAssertIsOnMainThread()
 
         clear()
     }
 
-    public func get(key: KeyType) -> ValueType? {
+    nonisolated public func get(key: KeyType) -> ValueType? {
         // ValueType might be AnyObject, so we need to check
         // rawValue for nil; value might be NSNull.
         let rawValue = cache.object(forKey: wrapKeyIfNeeded(key))
@@ -61,7 +61,7 @@ public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType
         return value
     }
 
-    public func set(key: KeyType, value: ValueType) {
+    nonisolated public func set(key: KeyType, value: ValueType) {
         if value is NSNull {
             secondCameraEditorFailDebug("Nil value.")
             remove(key: key)
@@ -73,12 +73,12 @@ public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType
         cache.setObject(value as AnyObject, forKey: wrapKeyIfNeeded(key))
     }
 
-    public func remove(key: KeyType) {
+    nonisolated public func remove(key: KeyType) {
         cache.removeObject(forKey: wrapKeyIfNeeded(key))
     }
 
     @objc
-    public func clear() {
+    nonisolated public func clear() {
         _resetCount.increment()
 
         autoreleasepool {
@@ -101,19 +101,19 @@ public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType
 
     // MARK: - NSCache Compatibility
 
-    public func setObject(_ value: ValueType, forKey key: KeyType) {
+    nonisolated public func setObject(_ value: ValueType, forKey key: KeyType) {
         set(key: key, value: value)
     }
 
-    public func object(forKey key: KeyType) -> ValueType? {
+    nonisolated public func object(forKey key: KeyType) -> ValueType? {
         self.get(key: key)
     }
 
-    public func removeObject(forKey key: KeyType) {
+    nonisolated public func removeObject(forKey key: KeyType) {
         remove(key: key)
     }
 
-    public func removeAllObjects() {
+    nonisolated public func removeAllObjects() {
         clear()
     }
 
@@ -154,7 +154,7 @@ public class SecondCameraEditorLRUCache<KeyType: Hashable & Equatable, ValueType
 // on the main thread.
 public class SecondCameraEditorThreadSafeCacheHandle<T: AnyObject> {
 
-    public let value: T
+    nonisolated(unsafe) public let value: T
 
     public init(_ value: T) {
         self.value = value
@@ -177,10 +177,10 @@ public class SecondCameraEditorThreadSafeCacheHandle<T: AnyObject> {
 // each value. This class buffers the values and releases them in
 // batches.
 private class SecondCameraEditorThreadSafeCacheReleaser {
-    private static let unfairLock = SecondCameraEditorUnfairLock()
+    nonisolated(unsafe) private static let unfairLock = SecondCameraEditorUnfairLock()
     private nonisolated(unsafe) static var valuesToRelease = [AnyObject]()
 
-    fileprivate static func releaseOnMainThread(_ value: AnyObject) {
+    nonisolated fileprivate static func releaseOnMainThread(_ value: AnyObject) {
         unfairLock.withLock {
             let shouldSchedule = valuesToRelease.isEmpty
             valuesToRelease.append(value)
@@ -192,7 +192,7 @@ private class SecondCameraEditorThreadSafeCacheReleaser {
         }
     }
 
-    private static func releaseValues() {
+    nonisolated private static func releaseValues() {
         SecondCameraEditorAssertIsOnMainThread()
 
         autoreleasepool {

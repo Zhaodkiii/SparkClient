@@ -151,9 +151,10 @@ enum MedicationExecutionRecordCache {
         recordsByDayID: [String: [SparkMedicalSyncAPI.RemoteMedicationRecord]],
         initialRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord],
         preferSeedInitialRecords: Bool,
+        force: Bool = false,
         calendar: Calendar
     ) -> WindowLoadRequest? {
-        guard needsWindowFetch(for: day, loadedWindow: loadedWindow, calendar: calendar) else {
+        guard force || needsWindowFetch(for: day, loadedWindow: loadedWindow, calendar: calendar) else {
             return nil
         }
 

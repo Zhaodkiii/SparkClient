@@ -42,7 +42,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     private var lastRenderedMessages: [ChatMessage] = [] // 上次渲染的消息
     
     // MARK: - 键盘 & 手势
-    private var keyboardObservers: [NSObjectProtocol] = [] // 键盘监听
+    private nonisolated(unsafe) var keyboardObservers: [NSObjectProtocol] = [] // 键盘监听
     private weak var backgroundTapGestureRecognizer: UITapGestureRecognizer? // 空白点击收起键盘
 
     // MARK: - 依赖注入（ViewModel / Store / 工具）

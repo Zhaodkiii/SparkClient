@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatSyncCursor: Codable, Equatable, Sendable {
+nonisolated struct ChatSyncCursor: Codable, Equatable, Sendable {
     let value: String
     let updatedAt: Date
 

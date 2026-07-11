@@ -14,8 +14,8 @@ enum MedicalCaseLinkRoute: Identifiable, Equatable {
     }
 }
 
-struct MedicalCaseLinkPatch: Encodable, Sendable {
-    enum Field: Sendable {
+nonisolated struct MedicalCaseLinkPatch: Encodable, Sendable {
+    nonisolated enum Field: Sendable {
         case medicalCase
         case medicalRecord
     }
@@ -24,7 +24,7 @@ struct MedicalCaseLinkPatch: Encodable, Sendable {
     let medicalCaseID: Int?
 
 
-    func encode(to encoder: Encoder) throws {
+    nonisolated func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodableKey.self)
         switch field {
         case .medicalCase:
@@ -36,7 +36,7 @@ struct MedicalCaseLinkPatch: Encodable, Sendable {
 }
 
 private extension KeyedEncodingContainer {
-    mutating func encodeNilOrValue(_ value: Int?, forKey key: Key) throws {
+    nonisolated mutating func encodeNilOrValue(_ value: Int?, forKey key: Key) throws {
         if let value {
             try encode(value, forKey: key)
         } else {
@@ -422,7 +422,7 @@ struct MedicalResourceAssociateMedicalCaseView<UpdatedResource: Decodable>: View
         }
     }
 
-    private func updateResource<B: Encodable>(_ body: B) async throws -> UpdatedResource {
+    private func updateResource<B: Encodable & Sendable>(_ body: B) async throws -> UpdatedResource {
         if resourceKind == .medicationPlans,
            UpdatedResource.self == SparkMedicalSyncAPI.RemoteMedicationPlan.self {
             let mutation = try await workflowAPI.updateMedicationPlan(id: resourceID, body: body)

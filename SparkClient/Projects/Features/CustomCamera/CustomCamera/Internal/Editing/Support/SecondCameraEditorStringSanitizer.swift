@@ -5,14 +5,14 @@
 
 import Foundation
 
-public enum StringSanitizer {
-    private static let maxCodePoints = 16
+nonisolated public enum StringSanitizer {
+    nonisolated private static let maxCodePoints = 16
 
-    public static func isExtremelyLongGraphemeCluster(_ character: Character) -> Bool {
+    nonisolated public static func isExtremelyLongGraphemeCluster(_ character: Character) -> Bool {
         character.unicodeScalars.count > Self.maxCodePoints
     }
 
-    public static func sanitize(
+    nonisolated public static func sanitize(
         _ original: String,
         shouldRemove: (Character) -> Bool = isExtremelyLongGraphemeCluster
     ) -> String {

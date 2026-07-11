@@ -1,12 +1,12 @@
 import Foundation
 
-enum NutritionMealType: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+nonisolated enum NutritionMealType: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
     case breakfast
     case lunch
     case dinner
     case snack
 
-    var localizationKey: String {
+    nonisolated var localizationKey: String {
         switch self {
         case .breakfast:
             return "nutrition.meal.breakfast"
@@ -20,7 +20,7 @@ enum NutritionMealType: String, CaseIterable, Codable, Sendable, Equatable, Hash
     }
 }
 
-enum NutritionRecordSource: String, Codable, Sendable, Equatable {
+nonisolated enum NutritionRecordSource: String, Codable, Sendable, Equatable {
     case manual
     case photoAI = "photo_ai"
     case textAI = "text_ai"

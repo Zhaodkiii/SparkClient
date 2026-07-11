@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import Vision
 
-struct VisionOCREngine: OCRTextEngine {
+nonisolated struct VisionOCREngine: OCRTextEngine {
     let name: String = "vision"
 
     func recognize(imageData: Data, hints: OCRRecognitionHints) async throws -> OCRTextOutput {

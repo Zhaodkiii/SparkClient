@@ -145,7 +145,7 @@ struct ExaminationReportServerMutationService: Sendable {
     }
 }
 
-private struct ExaminationReportUpdatePayload: Encodable {
+private nonisolated struct ExaminationReportUpdatePayload: Encodable {
     let member: Int
     let medicalRecord: Int?
     let category: String
@@ -165,7 +165,7 @@ private struct ExaminationReportUpdatePayload: Encodable {
 
 }
 
-private struct MedExamDetailCreatePayload: Encodable {
+private nonisolated struct MedExamDetailCreatePayload: Encodable {
     let businessType: String
     let businessID: Int
     let member: Int

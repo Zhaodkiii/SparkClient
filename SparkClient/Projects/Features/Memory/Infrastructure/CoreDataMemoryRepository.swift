@@ -1,7 +1,7 @@
 import CoreData
 import Foundation
 
-final class CoreDataMemoryRepository: MemoryRepository, @unchecked Sendable {
+nonisolated final class CoreDataMemoryRepository: MemoryRepository, @unchecked Sendable {
     private enum EntityName {
         static let memory = "MemoryRecordEntity"
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatHealthCardPayload: Codable, Identifiable, Equatable, Sendable {
+nonisolated struct ChatHealthCardPayload: Codable, Identifiable, Equatable, Sendable {
     let id: UUID
     let title: String
     let energyKilocalories: Double?

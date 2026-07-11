@@ -1,11 +1,11 @@
 import Foundation
 
-struct ChatMedicalDisclaimerCardPayload: Codable, Equatable, Sendable {
+nonisolated struct ChatMedicalDisclaimerCardPayload: Codable, Equatable, Sendable {
     var id: UUID
     var message: String
     var reason: String?
 
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         message: String,
         reason: String? = nil

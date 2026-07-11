@@ -118,8 +118,9 @@ struct MedicineBoxListPage: View {
         .onChange(of: medicineBoxes) { newValue in
             localMedicineBoxes = newValue
         }
-        .onChange(of: viewModel.saveSucceededRevision) { _ in
-            Task { await refreshMedicineBoxes() }
+        .task(id: viewModel.saveSucceededRevision) {
+            guard viewModel.saveSucceededRevision > 0 else { return }
+            await refreshMedicineBoxes()
         }
 //        .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
 //            CompatibleNavigationContainer {

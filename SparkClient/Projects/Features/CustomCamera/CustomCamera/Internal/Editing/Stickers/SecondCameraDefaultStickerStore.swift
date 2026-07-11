@@ -1,21 +1,21 @@
 import UIKit
 
-struct SecondCameraStickerItem: Identifiable, Hashable {
+nonisolated struct SecondCameraStickerItem: Identifiable, Hashable, Sendable {
     let id: String
     let displayName: String
     let resourceName: String
     let fileExtension: String
 }
 
-struct SecondCameraStickerPack {
+nonisolated struct SecondCameraStickerPack: Sendable {
     let id: String
     let title: String
     let author: String?
     let stickers: [SecondCameraStickerItem]
 }
 
-private struct SecondCameraEditorPackManifest: Decodable {
-    struct Item: Decodable {
+nonisolated private struct SecondCameraEditorPackManifest: Decodable, Sendable {
+    nonisolated struct Item: Decodable, Sendable {
         let id: String
         let name: String
         let file: String
@@ -27,9 +27,10 @@ private struct SecondCameraEditorPackManifest: Decodable {
     let items: [Item]
 }
 
+@MainActor
 final class SecondCameraDefaultStickerStore: @unchecked Sendable {
 
-    nonisolated(unsafe) static let shared = SecondCameraDefaultStickerStore()
+    @MainActor static let shared = SecondCameraDefaultStickerStore()
 
     private(set) var packs: [SecondCameraStickerPack] = []
     private var imageCache: [String: UIImage] = [:]

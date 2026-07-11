@@ -7,7 +7,7 @@
 import UIKit
 class SecondCameraImageEditorStrokeItem: SecondCameraImageEditorItem {
 
-    enum StrokeType: Equatable {
+    nonisolated enum StrokeType: Equatable {
         case pen
         case highlighter
         case blur

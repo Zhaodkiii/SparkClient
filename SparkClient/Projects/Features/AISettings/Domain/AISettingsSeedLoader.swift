@@ -1,7 +1,7 @@
 import Foundation
 
-enum AISettingsSeedLoader {
-    static func loadAPIKeys(bundle: Bundle = .main) -> [APIKeys]? {
+nonisolated enum AISettingsSeedLoader {
+    nonisolated static func loadAPIKeys(bundle: Bundle = .main) -> [APIKeys]? {
         guard let data = data(named: "APIKeys", bundle: bundle) else {
             return nil
         }
@@ -14,7 +14,7 @@ enum AISettingsSeedLoader {
         }
     }
 
-    static func loadAllModels(bundle: Bundle = .main) -> [AllModels]? {
+    nonisolated static func loadAllModels(bundle: Bundle = .main) -> [AllModels]? {
         guard let data = data(named: "AllModels", bundle: bundle) else {
             return nil
         }
@@ -29,12 +29,12 @@ enum AISettingsSeedLoader {
         }
     }
 
-    static func loadScenarioBindings(bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
+    nonisolated static func loadScenarioBindings(bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
         guard let models = loadAllModels(bundle: bundle) else { return nil }
         return loadScenarioBindings(for: models, bundle: bundle)
     }
 
-    static func loadScenarioBindings(for models: [AllModels], bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
+    nonisolated static func loadScenarioBindings(for models: [AllModels], bundle: Bundle = .main) -> [AIScenarioModelBinding]? {
         guard let data = data(named: "AllModels", bundle: bundle) else {
             return nil
         }
@@ -72,7 +72,7 @@ enum AISettingsSeedLoader {
         }
     }
 
-    private static func data(named resource: String, bundle: Bundle) -> Data? {
+    nonisolated private static func data(named resource: String, bundle: Bundle) -> Data? {
         if let url = bundle.url(forResource: resource, withExtension: "json", subdirectory: "AISettings") {
             return try? Data(contentsOf: url)
         }
@@ -82,7 +82,7 @@ enum AISettingsSeedLoader {
         return nil
     }
 
-    private static func logDecodeFailure(_ scope: String, error: Error) {
+    nonisolated private static func logDecodeFailure(_ scope: String, error: Error) {
         #if DEBUG
         print("AISettingsSeedLoader.\(scope) decode failed: \(error)")
         #endif
@@ -101,7 +101,7 @@ private struct APIKeySeedRow: Decodable {
     let isEnabled: Bool?
     let source: String?
 
-    var model: APIKeys {
+    nonisolated var model: APIKeys {
         APIKeys(
             providerID: providerID,
             name: name,
@@ -141,7 +141,7 @@ private struct AllModelSeedRow: Decodable {
     let aiToolScenarios: [String]
     let source: String?
 
-    func model(position: Int) -> AllModels {
+    nonisolated func model(position: Int) -> AllModels {
         AllModels(
             name: name,
             displayName: displayName,

@@ -1,8 +1,8 @@
 import Foundation
 
 /// 将工具副作用映射为可落库的 `ChatMessageBlock`（`MessageRunActor` 仅负责 revision/orderKey）。
-enum ToolSideEffectBlockMapper {
-    static func blocks(
+nonisolated enum ToolSideEffectBlockMapper {
+    nonisolated static func blocks(
         for effect: ToolSideEffect,
         assistantClientMessageID: UUID,
         normalizedAnchor: String?,
@@ -119,7 +119,7 @@ enum ToolSideEffectBlockMapper {
         }
     }
 
-    private static func isEncodable<T: Encodable>(_ value: T) -> Bool {
+    nonisolated private static func isEncodable<T: Encodable>(_ value: T) -> Bool {
         (try? JSONEncoder().encode(value)) != nil
     }
 }

@@ -6,7 +6,7 @@ import Foundation
 // MARK: - 持久化 Blob（单附件内多类数组，增量 merge）
 
 /// 单条助手消息上挂载的全部结构化医疗卡片（多次 tool call 追加合并）。
-struct StructuredHealthCardsBlob: Codable, Equatable, Sendable {
+nonisolated struct StructuredHealthCardsBlob: Codable, Equatable, Sendable {
     var extractionFailed: Bool
     var failureMessage: String?
     var medicationPlans: [MedicationChatCardPayload]
@@ -159,14 +159,14 @@ struct StructuredHealthCardsBlob: Codable, Equatable, Sendable {
 }
 
 private extension String {
-    var nilIfEmpty: String? {
+    nonisolated var nilIfEmpty: String? {
         isEmpty ? nil : self
     }
 }
 
 // MARK: - 各类卡片载荷（含 draftJson 供保存管线复用）
 
-struct MedicationChatCardPayload: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct MedicationChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJson: String
     var isSaved: Bool
@@ -197,7 +197,7 @@ struct MedicationChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MedicineBoxChatCardPayload: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct MedicineBoxChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJson: String
     var isSaved: Bool
@@ -225,7 +225,7 @@ struct MedicineBoxChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct PrescriptionChatCardPayload: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct PrescriptionChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJson: String
     var isSaved: Bool
@@ -253,7 +253,7 @@ struct PrescriptionChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct ExamReportChatCardPayload: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct ExamReportChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJson: String
     var isSaved: Bool
@@ -284,7 +284,7 @@ struct ExamReportChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-struct MedicalCaseChatCardPayload: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct MedicalCaseChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let draftJson: String
     var isSaved: Bool
@@ -312,7 +312,7 @@ struct MedicalCaseChatCardPayload: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-enum ChatStructuredHealthCardItem: Equatable, Identifiable, Sendable {
+nonisolated enum ChatStructuredHealthCardItem: Equatable, Identifiable, Sendable {
     case medicationPlan(MedicationChatCardPayload)
     case medicineBox(MedicineBoxChatCardPayload)
     case prescription(PrescriptionChatCardPayload)
@@ -380,14 +380,14 @@ enum ChatStructuredHealthCardItem: Equatable, Identifiable, Sendable {
     }
 }
 
-enum ChatStructuredHealthCardAction: Equatable, Sendable {
+nonisolated enum ChatStructuredHealthCardAction: Equatable, Sendable {
     case save(blockID: UUID, item: ChatStructuredHealthCardItem)
     case setMember(blockID: UUID, item: ChatStructuredHealthCardItem, Int?)
 }
 
 // MARK: - 从抽取输出构建卡片载荷
 
-enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
+nonisolated enum ChatStructuredHealthCardsPayloadBuilder: Sendable {
     private static func nonEmptyTrimmed(_ text: String?) -> String? {
         guard let text else { return nil }
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)

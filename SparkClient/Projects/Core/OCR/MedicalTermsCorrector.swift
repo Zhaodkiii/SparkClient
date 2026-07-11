@@ -1,6 +1,6 @@
 import Foundation
 
-final class SparkMedicalTermsCorrector {
+nonisolated final class SparkMedicalTermsCorrector: @unchecked Sendable {
     static let shared = SparkMedicalTermsCorrector()
 
     private let terms: [String] = [

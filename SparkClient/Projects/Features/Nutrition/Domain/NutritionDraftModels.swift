@@ -1,6 +1,6 @@
 import Foundation
 
-enum NutritionServingRatio: Double, CaseIterable, Sendable, Equatable, Hashable {
+nonisolated enum NutritionServingRatio: Double, CaseIterable, Sendable, Equatable, Hashable {
     case oneFifth = 0.2
     case twoFifth = 0.4
     case threeFifth = 0.6
@@ -11,7 +11,7 @@ enum NutritionServingRatio: Double, CaseIterable, Sendable, Equatable, Hashable 
         allCases.min { abs($0.rawValue - value) < abs($1.rawValue - value) } ?? .full
     }
 
-    var localizationKey: String {
+    nonisolated var localizationKey: String {
         switch self {
         case .oneFifth: return "nutrition.serving_ratio.one_fifth"
         case .twoFifth: return "nutrition.serving_ratio.two_fifth"
@@ -108,7 +108,7 @@ struct NutritionMealDraft: Equatable, Sendable {
     var uncertainNotes: [String]
 }
 
-enum NutritionFoodAddContentFilter: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum NutritionFoodAddContentFilter: String, CaseIterable, Identifiable, Sendable {
     case food
     case recipe
     case frequent
@@ -116,7 +116,7 @@ enum NutritionFoodAddContentFilter: String, CaseIterable, Identifiable, Sendable
 
     var id: String { rawValue }
 
-    var localizationKey: String {
+    nonisolated var localizationKey: String {
         switch self {
         case .food: return "nutrition.add.filter.food"
         case .recipe: return "nutrition.add.filter.recipe"

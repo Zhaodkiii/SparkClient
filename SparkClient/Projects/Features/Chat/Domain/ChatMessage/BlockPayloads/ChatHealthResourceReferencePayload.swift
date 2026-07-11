@@ -1,7 +1,7 @@
 import Foundation
 
 /// 消息块持久化载荷：identity 三元组 + 展示顺序索引（JSON key 使用 snake_case）。
-struct ChatHealthResourceReferencePayload: Codable, Equatable, Sendable {
+nonisolated struct ChatHealthResourceReferencePayload: Codable, Equatable, Sendable {
     static let blockType = "health_resource_reference"
 
     let type: String

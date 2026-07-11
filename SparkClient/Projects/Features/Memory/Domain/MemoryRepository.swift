@@ -1,6 +1,6 @@
 import Foundation
 
-protocol MemoryRepository: Sendable {
+nonisolated protocol MemoryRepository: Sendable {
     func loadPreferences() async -> MemoryPreferences
     func savePreferences(_ preferences: MemoryPreferences) async throws
 
@@ -12,4 +12,3 @@ protocol MemoryRepository: Sendable {
     func deleteAll() async throws
     func retrieve(keyword: String, limit: Int) async throws -> [MemorySearchResult]
 }
-

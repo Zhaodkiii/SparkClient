@@ -41,7 +41,7 @@ struct SparkAuthAPI {
         bundleId: String = "",
         deviceId: String = ""
     ) async throws -> AuthTokens {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let identifier: String
             let password: String
             let bundle_id: String
@@ -118,7 +118,7 @@ struct SparkAuthAPI {
         bundleId: String = "",
         deviceId: String = ""
     ) async throws -> AuthenticatedUserContext {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let identity_token: String
             let authorization_code: String?
             let nonce: String?
@@ -195,7 +195,7 @@ struct SparkAuthAPI {
     }
 
     func refresh(refreshToken: String) async throws -> AuthTokens {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let refresh_token: String
             let refresh: String
             let device_id: String

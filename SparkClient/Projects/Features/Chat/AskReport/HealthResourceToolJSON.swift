@@ -19,7 +19,7 @@ struct ListMemberHealthSourcesQuery: Codable, Equatable, Sendable {
     let limit: Int
 }
 
-struct HealthResourceToolCandidateDTO: Codable, Equatable, Sendable, Identifiable {
+nonisolated struct HealthResourceToolCandidateDTO: Codable, Equatable, Sendable, Identifiable {
     let resourceType: String
     let resourceId: Int
     let memberId: Int

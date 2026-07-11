@@ -20,7 +20,7 @@ struct SparkVersionAPI {
         let message: String?
     }
 
-    private struct ActionPayload: Encodable {
+    nonisolated private struct ActionPayload: Encodable {
         let action: String
         let check_log_id: Int?
         let device_id: String

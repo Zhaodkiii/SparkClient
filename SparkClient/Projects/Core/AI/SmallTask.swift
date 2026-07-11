@@ -8,7 +8,7 @@ enum TaskSource: String, Codable, Sendable {
 
 /// 小任务模型（客户端核心数据结构）
 /// 与后端 Django SmallTask 模型字段一一对应
-struct SmallTask: Codable, Identifiable, Equatable, Sendable {
+nonisolated struct SmallTask: Codable, Identifiable, Equatable, Sendable {
     // MARK: - 模型属性
     /// 后端主键 id
     var id: Int
@@ -36,7 +36,7 @@ struct SmallTask: Codable, Identifiable, Equatable, Sendable {
 
     // MARK: - 便捷创建方法
     /// 快速创建【本地任务】（自动生成 code）
-    static func createLocalTask(
+    nonisolated static func createLocalTask(
         id: Int,
         name: String,
         brief: String,

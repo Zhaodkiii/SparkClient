@@ -12,7 +12,7 @@ import Foundation
 /// or "two" (depending on a remote config); the latter always corresponds
 /// to level "three". Most callers should use SecondCameraEditorImageQuality; typically only
 /// the compression logic needs access to SecondCameraEditorImageQualityLevel.
-public enum SecondCameraEditorImageQuality {
+nonisolated public enum SecondCameraEditorImageQuality {
     /// Indirectly translates to SecondCameraEditorImageQualityLevel.one or SecondCameraEditorImageQualityLevel.two.
     case standard
 
@@ -20,16 +20,16 @@ public enum SecondCameraEditorImageQuality {
     case high
 
     private nonisolated(unsafe) static let keyValueStore = SecondCameraEditorKeyValueStore(collection: "SecondCameraEditorImageQualityLevel")
-    private static let userSelectedHighQualityKey = "defaultQuality"
-    private static let userSelectedHighQualityValue = 3 as UInt
+    nonisolated private static let userSelectedHighQualityKey = "defaultQuality"
+    nonisolated private static let userSelectedHighQualityValue = 3 as UInt
 
-    public static func fetchValue(tx: SecondCameraEditorDBReadTransaction) -> Self {
+    nonisolated public static func fetchValue(tx: SecondCameraEditorDBReadTransaction) -> Self {
         .standard
     }
 
-    public static func setValue(_ imageQuality: Self, tx: SecondCameraEditorDBWriteTransaction) {}
+    nonisolated public static func setValue(_ imageQuality: Self, tx: SecondCameraEditorDBWriteTransaction) {}
 
-    public var localizedString: String {
+    nonisolated public var localizedString: String {
         switch self {
         case .standard:
             return SecondCameraEditorLocalizedString("SENT_MEDIA_QUALITY_STANDARD", comment: "String describing standard quality sent media")
@@ -39,7 +39,7 @@ public enum SecondCameraEditorImageQuality {
     }
 }
 
-public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
+nonisolated public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
     case one = 1
     case two = 2
     case three = 3
@@ -48,14 +48,14 @@ public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
     // code. For some regions, we use a lower "standard" quality than others.
     // High quality is always level three. If not remotely specified, standard
     // uses quality level two.
-    public static func standardQualityLevel(
+    nonisolated public static func standardQualityLevel(
         remoteConfig: SecondCameraEditorRemoteConfig,
         callingCode: Int?,
     ) -> SecondCameraEditorImageQualityLevel {
         return remoteConfig.standardMediaQualityLevel(callingCode: callingCode) ?? .two
     }
 
-    public var startingTier: SecondCameraEditorImageQualityTier {
+    nonisolated public var startingTier: SecondCameraEditorImageQualityTier {
         switch self {
         case .one: return .four
         case .two: return .five
@@ -63,7 +63,7 @@ public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
         }
     }
 
-    public var maxFileSize: UInt {
+    nonisolated public var maxFileSize: UInt {
         switch self {
         case .one: // 1MiB
             return 1024 * 1024
@@ -74,7 +74,7 @@ public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
         }
     }
 
-    public var maxOriginalFileSize: UInt {
+    nonisolated public var maxOriginalFileSize: UInt {
         switch self {
         case .one: // 200KiB
             return 200 * 1024
@@ -85,7 +85,7 @@ public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
         }
     }
 
-    public static func maximumForSecondCameraEditorCurrentAppContext(
+    nonisolated public static func maximumForSecondCameraEditorCurrentAppContext(
         _ currentSecondCameraEditorAppContext: any SecondCameraEditorAppContext
     ) -> Self {
         if currentSecondCameraEditorAppContext.isMainApp {
@@ -100,14 +100,14 @@ public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
 
     /// Safe quality lookup that never force-unwraps a missing AppContext.
     /// Falls back to `.three` because SecondCamera editing runs in the main app.
-    public static func maximumForSecondCameraEditorCurrentRuntime() -> Self {
+    nonisolated public static func maximumForSecondCameraEditorCurrentRuntime() -> Self {
         guard let context = SecondCameraEditorCurrentAppContextIfAvailable() else {
             return .three
         }
         return maximumForSecondCameraEditorCurrentAppContext(context)
     }
 
-    public static func resolvedValue(
+    nonisolated public static func resolvedValue(
         imageQuality: SecondCameraEditorImageQuality,
         standardQualityLevel: Self,
         maximumForSecondCameraEditorCurrentAppContext: Self = .maximumForSecondCameraEditorCurrentRuntime(),
@@ -124,12 +124,12 @@ public enum SecondCameraEditorImageQualityLevel: UInt, Comparable {
         return min(targetQualityLevel, maximumForSecondCameraEditorCurrentAppContext)
     }
 
-    public static func <(lhs: SecondCameraEditorImageQualityLevel, rhs: SecondCameraEditorImageQualityLevel) -> Bool {
+    nonisolated public static func <(lhs: SecondCameraEditorImageQualityLevel, rhs: SecondCameraEditorImageQualityLevel) -> Bool {
         return lhs.rawValue < rhs.rawValue
     }
 }
 
-public enum SecondCameraEditorImageQualityTier: UInt {
+nonisolated public enum SecondCameraEditorImageQualityTier: UInt {
     case one = 1
     case two = 2
     case three = 3
@@ -138,7 +138,7 @@ public enum SecondCameraEditorImageQualityTier: UInt {
     case six = 6
     case seven = 7
 
-    public var maxEdgeSize: CGFloat {
+    nonisolated public var maxEdgeSize: CGFloat {
         switch self {
         case .one: return 512
         case .two: return 768
@@ -150,6 +150,6 @@ public enum SecondCameraEditorImageQualityTier: UInt {
         }
     }
 
-    public var reduced: SecondCameraEditorImageQualityTier? { .init(rawValue: rawValue - 1) }
-    public var increased: SecondCameraEditorImageQualityTier? { .init(rawValue: rawValue + 1) }
+    nonisolated public var reduced: SecondCameraEditorImageQualityTier? { .init(rawValue: rawValue - 1) }
+    nonisolated public var increased: SecondCameraEditorImageQualityTier? { .init(rawValue: rawValue + 1) }
 }

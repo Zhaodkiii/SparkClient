@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatNutritionCardsPayload: Codable, Equatable, Sendable {
+nonisolated struct ChatNutritionCardsPayload: Codable, Equatable, Sendable {
     var cards: [ChatNutritionCardPayload]
 
     init(cards: [ChatNutritionCardPayload]) {
@@ -8,7 +8,7 @@ struct ChatNutritionCardsPayload: Codable, Equatable, Sendable {
     }
 }
 
-struct ChatNutritionCardPayload: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct ChatNutritionCardPayload: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var date: Date
     var proteinGrams: Double?

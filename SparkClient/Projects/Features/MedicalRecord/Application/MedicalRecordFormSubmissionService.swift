@@ -399,7 +399,7 @@ struct MedicalRecordFormSubmissionService: Sendable {
     }
 }
 
-private struct SymptomUpdatePayload: Encodable {
+nonisolated private struct SymptomUpdatePayload: Encodable {
     let member: Int
     let medicalCase: Int?
     let name: String
@@ -414,7 +414,7 @@ private struct SymptomUpdatePayload: Encodable {
 
 }
 
-private struct VisitUpdatePayload: Encodable {
+nonisolated private struct VisitUpdatePayload: Encodable {
     let member: Int
     let medicalCase: Int
     let visitType: String
@@ -428,7 +428,7 @@ private struct VisitUpdatePayload: Encodable {
 
 }
 
-private struct SurgeryUpdatePayload: Encodable {
+nonisolated private struct SurgeryUpdatePayload: Encodable {
     let member: Int
     let medicalCase: Int?
     let procedureName: String
@@ -445,7 +445,7 @@ private struct SurgeryUpdatePayload: Encodable {
 
 }
 
-private struct FollowUpUpdatePayload: Encodable {
+nonisolated private struct FollowUpUpdatePayload: Encodable {
     let member: Int
     let medicalCase: Int
     let plannedAt: String?
@@ -458,7 +458,7 @@ private struct FollowUpUpdatePayload: Encodable {
 
 }
 
-private struct PrescriptionUpdatePayload: Encodable {
+nonisolated private struct PrescriptionUpdatePayload: Encodable {
     let medicalCase: Int?
     let prescriberName: String
     let institutionName: String

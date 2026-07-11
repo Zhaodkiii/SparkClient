@@ -23,24 +23,31 @@ struct CompatibleRouteNavigationContainer<Route: Hashable, Content: View, Destin
     @Binding private var path: [Route]
     private let content: () -> Content
     private let destination: (Route) -> Destination
+    private let hidesMainTabBarOnPush: Bool
 
     init(
         path: Binding<[Route]>,
         legacyStackStyle: Bool = false,
+        hidesMainTabBarOnPush: Bool = true,
         @ViewBuilder content: @escaping () -> Content,
         @ViewBuilder destination: @escaping (Route) -> Destination
     ) {
         self._path = path
         self.content = content
         self.destination = destination
+        self.hidesMainTabBarOnPush = hidesMainTabBarOnPush
     }
 
     var body: some View {
         NavigationStack(path: $path) {
             content()
                 .navigationDestination(for: Route.self) { route in
-                    destination(route)
-                        .hidesMainTabBarWhenPushed()
+                    if hidesMainTabBarOnPush {
+                        destination(route)
+                            .hidesMainTabBarWhenPushed()
+                    } else {
+                        destination(route)
+                    }
                 }
         }
     }

@@ -52,7 +52,7 @@ import UIKit
 // SecondCameraImageEditorCanvasView.imageFrame(forViewSize:...).  Transforming between
 // the "image" and "canvas" coordinate systems is done with that image frame.
 
-class SecondCameraImageEditorTransform: NSObject {
+nonisolated class SecondCameraImageEditorTransform: NSObject {
     // The outputSizePixels is used to specify the aspect ratio and size of the
     // output.
     let outputSizePixels: CGSize

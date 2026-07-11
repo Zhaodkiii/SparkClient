@@ -1,6 +1,6 @@
 import Foundation
 
-struct MemoryRecord: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct MemoryRecord: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var title: String
     var content: String
@@ -25,7 +25,7 @@ struct MemoryRecord: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct MemoryPreferences: Codable, Equatable, Sendable {
+nonisolated struct MemoryPreferences: Codable, Equatable, Sendable {
     var isEnabled: Bool
     var allowToolWrite: Bool
     var allowCrossThreadRecall: Bool
@@ -46,12 +46,12 @@ struct MemoryPreferences: Codable, Equatable, Sendable {
     nonisolated static let `default` = MemoryPreferences()
 }
 
-struct MemorySearchResult: Equatable, Sendable {
+nonisolated struct MemorySearchResult: Equatable, Sendable {
     var record: MemoryRecord
     var score: Int
 }
 
-enum MemoryRepositoryError: Error, LocalizedError {
+nonisolated enum MemoryRepositoryError: Error, LocalizedError {
     case notSignedIn
     case emptyContent
 

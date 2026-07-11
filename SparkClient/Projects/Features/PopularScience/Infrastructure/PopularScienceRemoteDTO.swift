@@ -1,18 +1,18 @@
 import Foundation
 
-struct PopularSciencePaginationDTO: Codable, Sendable {
+nonisolated struct PopularSciencePaginationDTO: Codable, Sendable {
     let page: Int
     let pageSize: Int
     let total: Int
     let totalPages: Int
 }
 
-struct PopularSciencePageDTO<T: Codable>: Codable {
+nonisolated struct PopularSciencePageDTO<T: Codable & Sendable>: Codable, Sendable {
     let items: [T]
     let pagination: PopularSciencePaginationDTO
 }
 
-struct PopularScienceArticleSummaryDTO: Codable, Sendable {
+nonisolated struct PopularScienceArticleSummaryDTO: Codable, Sendable {
     let id: Int
     let title: String
     let slug: String
@@ -28,7 +28,7 @@ struct PopularScienceArticleSummaryDTO: Codable, Sendable {
     let publishedAt: Date?
 }
 
-struct PopularScienceArticleDetailDTO: Codable, Sendable {
+nonisolated struct PopularScienceArticleDetailDTO: Codable, Sendable {
     let id: Int
     let title: String
     let slug: String
@@ -51,7 +51,7 @@ struct PopularScienceArticleDetailDTO: Codable, Sendable {
 }
 
 /// 兼容 references / references_json 返回字符串、单对象或数组。
-struct FlexibleReferencesList: Codable, Sendable {
+nonisolated struct FlexibleReferencesList: Codable, Sendable {
     let items: [PopularScienceReferenceDTO]
 
     init(items: [PopularScienceReferenceDTO] = []) {
@@ -96,40 +96,40 @@ struct FlexibleReferencesList: Codable, Sendable {
     }
 }
 
-struct PopularScienceShareLinksDTO: Codable, Sendable {
+nonisolated struct PopularScienceShareLinksDTO: Codable, Sendable {
     let shareUrl: String?
     let appSchemeUrl: String?
     let universalLinkUrl: String?
 }
 
-struct PopularScienceCategoryDTO: Codable, Sendable {
+nonisolated struct PopularScienceCategoryDTO: Codable, Sendable {
     let id: Int
     let name: String
     let slug: String
 }
 
-struct PopularScienceTagDTO: Codable, Sendable {
+nonisolated struct PopularScienceTagDTO: Codable, Sendable {
     let id: Int
     let name: String
     let slug: String
 }
 
-struct PopularScienceReferenceDTO: Codable, Sendable {
+nonisolated struct PopularScienceReferenceDTO: Codable, Sendable {
     let title: String
     let url: String?
     let source: String?
     let publishedAt: Date?
 }
 
-struct PopularScienceShareLinkDTO: Decodable, Sendable {
+nonisolated struct PopularScienceShareLinkDTO: Decodable, Sendable {
     let shareUrl: String
 }
 
-struct PopularScienceViewPayload: Encodable, Sendable {
+nonisolated struct PopularScienceViewPayload: Encodable, Sendable {
     let clientPlatform: String = "ios"
 }
 
-struct PopularScienceReadingDurationPayload: Encodable, Sendable {
+nonisolated struct PopularScienceReadingDurationPayload: Encodable, Sendable {
     let durationSeconds: Int
     let sessionId: String?
     let clientPlatform: String = "ios"

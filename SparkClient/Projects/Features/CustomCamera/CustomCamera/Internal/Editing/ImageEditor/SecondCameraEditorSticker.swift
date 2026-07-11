@@ -5,7 +5,7 @@
 
 import UIKit
 
-private class SecondCameraEditorLayerContainerView: UIView {
+@MainActor private class SecondCameraEditorLayerContainerView: UIView {
     let contentLayer: CALayer
     init(contentLayer: CALayer) {
         self.contentLayer = contentLayer
@@ -64,14 +64,14 @@ public enum SecondCameraEditorSticker {
 // MARK: DigitalClockStyle
 
 extension SecondCameraEditorSticker.StorySticker {
-    public enum DigitalClockStyle: CaseIterable {
+        public enum DigitalClockStyle: CaseIterable {
         case white
         case black
         case light
         case dark
         case amber
 
-        private var foregroundColor: UIColor {
+        nonisolated private var foregroundColor: UIColor {
             switch self {
             case .white, .light, .dark:
                 return .secondCameraEditor_white
@@ -82,7 +82,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var backgroundColor: UIColor? {
+        nonisolated var backgroundColor: UIColor? {
             switch self {
             case .white, .black:
                 return nil
@@ -95,7 +95,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        func attributedString(
+        nonisolated func attributedString(
             date: Date,
             scaleFactor: CGFloat = 1.0,
         ) -> NSAttributedString {
@@ -133,7 +133,7 @@ extension SecondCameraEditorSticker.StorySticker {
             return timeAttributedString
         }
 
-        func nextStyle() -> DigitalClockStyle {
+        nonisolated func nextStyle() -> DigitalClockStyle {
             switch self {
             case .white:
                 return .black
@@ -148,7 +148,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        func stickerWithNextStyle() -> SecondCameraEditorSticker {
+        nonisolated func stickerWithNextStyle() -> SecondCameraEditorSticker {
             return .story(.clockDigital(self.nextStyle()))
         }
     }
@@ -157,13 +157,13 @@ extension SecondCameraEditorSticker.StorySticker {
 // MARK: AnalogClockStyle
 
 extension SecondCameraEditorSticker.StorySticker {
-    public enum AnalogClockStyle: CaseIterable {
+        public enum AnalogClockStyle: CaseIterable {
         case arabic
         case baton
         case explorer
         case diver
 
-        var backgroundImage: UIImage {
+        nonisolated var backgroundImage: UIImage {
             switch self {
             case .arabic:
                 return #imageLiteral(resourceName: "clock-arabic.pdf")
@@ -176,12 +176,11 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        @MainActor
-        func drawClock(date: Date) -> CALayer {
+        nonisolated func drawClock(date: Date) -> CALayer {
             return SecondCameraEditorAnalogClockLayer(style: self, date: date)
         }
 
-        var hourHandImage: UIImage {
+        nonisolated var hourHandImage: UIImage {
             switch self {
             case .arabic:
                 return #imageLiteral(resourceName: "clock-arabic-hour.pdf")
@@ -194,7 +193,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var hourHandHeight: CGFloat {
+        nonisolated var hourHandHeight: CGFloat {
             switch self {
             case .arabic:
                 return 1 / 3
@@ -207,7 +206,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var hourHandOffset: CGFloat {
+        nonisolated var hourHandOffset: CGFloat {
             switch self {
             case .arabic:
                 return 0.72
@@ -220,7 +219,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var minuteHandImage: UIImage {
+        nonisolated var minuteHandImage: UIImage {
             switch self {
             case .arabic:
                 return #imageLiteral(resourceName: "clock-arabic-minute.pdf")
@@ -233,7 +232,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var minuteHandHeight: CGFloat {
+        nonisolated var minuteHandHeight: CGFloat {
             switch self {
             case .arabic:
                 return 280 / 600
@@ -246,7 +245,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var minuteHandOffset: CGFloat {
+        nonisolated var minuteHandOffset: CGFloat {
             switch self {
             case .arabic:
                 return 4 / 5
@@ -259,7 +258,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        var centerImage: UIImage? {
+        nonisolated var centerImage: UIImage? {
             switch self {
             case .diver:
                 return #imageLiteral(resourceName: "clock-diver-center.pdf")
@@ -268,7 +267,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        func nextStyle() -> AnalogClockStyle {
+        nonisolated func nextStyle() -> AnalogClockStyle {
             switch self {
             case .arabic:
                 return .baton
@@ -281,7 +280,7 @@ extension SecondCameraEditorSticker.StorySticker {
             }
         }
 
-        func stickerWithNextStyle() -> SecondCameraEditorSticker {
+        nonisolated func stickerWithNextStyle() -> SecondCameraEditorSticker {
             return .story(.clockAnalog(self.nextStyle()))
         }
     }
@@ -292,35 +291,41 @@ extension SecondCameraEditorSticker.StorySticker {
 private class SecondCameraEditorAnalogClockLayer: CALayer {
     typealias Style = SecondCameraEditorSticker.StorySticker.AnalogClockStyle
 
-    private let clockStyle: Style
-    private let date: Date
-    private let background: CALayer
-    private let hourHand: CALayer
-    private let minuteHand: CALayer
-    private let center: CALayer?
+    nonisolated(unsafe) private let clockStyle: Style
+    nonisolated(unsafe) private let date: Date
+    nonisolated(unsafe) private let background: CALayer
+    nonisolated(unsafe) private let hourHand: CALayer
+    nonisolated(unsafe) private let minuteHand: CALayer
+    nonisolated(unsafe) private let center: CALayer?
 
-    override var frame: CGRect {
+    nonisolated override var frame: CGRect {
         didSet {
             updateSublayerFrames()
         }
     }
 
-    @MainActor
-    init(style: Style, date: Date) {
+    nonisolated init(style: Style, date: Date) {
         self.clockStyle = style
         self.date = date
 
-        background = UIImageView(image: style.backgroundImage).layer
+        background = CALayer()
+        background.contents = style.backgroundImage.cgImage
+        background.contentsGravity = .resizeAspectFill
 
-        let hourHandImageView = UIImageView(image: style.hourHandImage)
-        hourHandImageView.contentMode = .scaleAspectFit
-        hourHand = hourHandImageView.layer
+        hourHand = CALayer()
+        hourHand.contents = style.hourHandImage.cgImage
+        hourHand.contentsGravity = .resizeAspect
 
-        let minuteHandImageView = UIImageView(image: style.minuteHandImage)
-        minuteHandImageView.contentMode = .scaleAspectFit
-        minuteHand = minuteHandImageView.layer
+        minuteHand = CALayer()
+        minuteHand.contents = style.minuteHandImage.cgImage
+        minuteHand.contentsGravity = .resizeAspect
 
-        center = style.centerImage.map(UIImageView.init(image:))?.layer
+        center = style.centerImage.map { image in
+            let layer = CALayer()
+            layer.contents = image.cgImage
+            layer.contentsGravity = .resizeAspectFill
+            return layer
+        }
 
         super.init()
         addSublayer(background)
@@ -331,11 +336,21 @@ private class SecondCameraEditorAnalogClockLayer: CALayer {
         }
     }
 
-    required init?(coder: NSCoder) {
+    @available(*, unavailable, message: "use init(style:date:) instead.")
+    nonisolated override init() {
+        fatalError("init() has not been implemented")
+    }
+
+    @available(*, unavailable, message: "use init(style:date:) instead.")
+    nonisolated override init(layer: Any) {
+        fatalError("init(layer:) has not been implemented")
+    }
+
+    nonisolated required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func updateSublayerFrames() {
+    nonisolated private func updateSublayerFrames() {
         let dateComponents = Calendar.current.dateComponents([.hour, .minute], from: date)
         let minutes = CGFloat(dateComponents.minute ?? 0)
         let hours = CGFloat(dateComponents.hour ?? 0) + minutes / 60
@@ -367,7 +382,7 @@ private class SecondCameraEditorAnalogClockLayer: CALayer {
         }
     }
 
-    private func transfrom(
+    nonisolated private func transfrom(
         clockHandLayer hand: CALayer,
         time: CGFloat,
         height: CGFloat,

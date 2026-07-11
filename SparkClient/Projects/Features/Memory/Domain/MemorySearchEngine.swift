@@ -1,6 +1,6 @@
 import Foundation
 
-struct MemorySearchEngine: Sendable {
+nonisolated struct MemorySearchEngine: Sendable {
     private let stopWords: Set<String> = [
         "a", "an", "the", "and", "or", "to", "of", "in", "on", "for", "with",
         "我", "你", "他", "她", "它", "的", "了", "是", "在", "和", "或", "吗", "呢"

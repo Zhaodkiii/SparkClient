@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatEventPayload: Codable, Identifiable, Equatable, Sendable {
+nonisolated struct ChatEventPayload: Codable, Identifiable, Equatable, Sendable {
     let id: UUID
     let type: String
     let title: String

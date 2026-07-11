@@ -6,7 +6,7 @@
 import Foundation
 
 public extension Bundle {
-    var secondCameraEditor_app: Bundle {
+    nonisolated var secondCameraEditor_app: Bundle {
         if self.bundleURL.pathExtension == "appex" {
             let url = self.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
             if let otherBundle = Bundle(url: url) {
@@ -19,6 +19,6 @@ public extension Bundle {
 }
 
 @inlinable
-public func SecondCameraEditorLocalizedString(_ key: String, tableName: String? = nil, value: String = "", comment: String) -> String {
+nonisolated public func SecondCameraEditorLocalizedString(_ key: String, tableName: String? = nil, value: String = "", comment: String) -> String {
     return NSLocalizedString(key, tableName: tableName, bundle: .main.secondCameraEditor_app, value: value, comment: comment)
 }

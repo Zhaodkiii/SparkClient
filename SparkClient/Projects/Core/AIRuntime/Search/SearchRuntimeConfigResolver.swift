@@ -1,7 +1,7 @@
 import Foundation
 
-enum SearchRuntimeConfigResolver {
-    static func resolve(from snapshot: AISettingsSnapshot) throws -> SearchRuntimeConfig {
+nonisolated enum SearchRuntimeConfigResolver {
+    nonisolated static func resolve(from snapshot: AISettingsSnapshot) throws -> SearchRuntimeConfig {
         guard snapshot.searchToolPreferences.useSearch else {
             throw SearchRuntimeError.disabled
         }
@@ -40,7 +40,7 @@ enum SearchRuntimeConfigResolver {
         )
     }
 
-    static func normalizedHash(preferences: AISearchToolPreferences, searchKeys: [SearchKeys]) -> String {
+    nonisolated static func normalizedHash(preferences: AISearchToolPreferences, searchKeys: [SearchKeys]) -> String {
         let keyRows = searchKeys
             .sorted { $0.id.uuidString < $1.id.uuidString }
             .map {
@@ -68,7 +68,7 @@ enum SearchRuntimeConfigResolver {
         return stableHash(source)
     }
 
-    private static func stableHash(_ text: String) -> String {
+    nonisolated private static func stableHash(_ text: String) -> String {
         var hash: UInt64 = 14695981039346656037
         for byte in text.utf8 {
             hash ^= UInt64(byte)

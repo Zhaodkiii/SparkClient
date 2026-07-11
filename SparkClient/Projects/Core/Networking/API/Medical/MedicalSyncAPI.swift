@@ -563,7 +563,7 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 体检报告 + 附件（首页不含明细行）。
-    struct RemoteHealthExamReportWithAttachments: Codable, Sendable, Equatable {
+    nonisolated struct RemoteHealthExamReportWithAttachments: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
         var institutionName: String?
@@ -583,7 +583,7 @@ enum SparkMedicalSyncAPI {
     }
 
     /// 检查报告 + 附件（首页不含明细行）。
-    struct RemoteExaminationReportWithAttachments: Codable, Sendable, Equatable {
+    nonisolated struct RemoteExaminationReportWithAttachments: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
         var medicalRecord: Int?

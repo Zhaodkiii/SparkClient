@@ -1,7 +1,7 @@
 import Foundation
 
 
-enum AIRuntimeConfigAssembler {
+nonisolated enum AIRuntimeConfigAssembler {
     /// 按场景合并本地与 Pro bundle：【本地模型绝对优先】
     /// - 若 Pro `models` 为空：保留本地场景包；
     /// - 若 Pro `models` 非空：只保留本地模型 + Pro 里**不重名**的新增模型

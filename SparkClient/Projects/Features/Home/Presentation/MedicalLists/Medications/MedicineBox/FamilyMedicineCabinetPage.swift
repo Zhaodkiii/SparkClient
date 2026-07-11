@@ -153,12 +153,9 @@ struct FamilyMedicineCabinetPage: View {
         .refreshable {
             await reloadAndNotifyParent()
         }
-        .task {
-            guard shouldAutoLoadOnAppear else { return }
+        .task(id: dependencies.medicalDocumentUploadViewModel.saveSucceededRevision) {
+            guard shouldAutoLoadOnAppear || dependencies.medicalDocumentUploadViewModel.saveSucceededRevision > 0 else { return }
             await reloadAndNotifyParent()
-        }
-        .onChange(of: dependencies.medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
-            Task { await reloadAndNotifyParent() }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             MedicalListBottomActionBar(

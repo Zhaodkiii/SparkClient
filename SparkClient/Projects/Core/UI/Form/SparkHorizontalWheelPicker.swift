@@ -43,26 +43,12 @@ struct SparkHorizontalWheelPicker: View {
         GeometryReader { proxy in
             let size = proxy.size
             let horizontalPadding = size.width / 2
+            let tickWidth = max(config.spacing, 1)
 
             ScrollView(.horizontal) {
-                HStack(spacing: config.spacing) {
+                HStack(spacing: 0) {
                     ForEach(0...config.totalSteps, id: \.self) { index in
-                        let isMajor = config.isMajorStep(index)
-
-                        Divider()
-                            .background(isMajor ? Color.primary : .gray)
-                            .frame(width: 0, height: isMajor ? 20 : 10, alignment: .center)
-                            .frame(maxHeight: 20, alignment: .bottom)
-                            .overlay(alignment: .bottom) {
-                                if isMajor && config.showsText {
-                                    Text(labelText(for: config.value(for: index)))
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .textScale(.secondary)
-                                        .fixedSize()
-                                        .offset(y: 20)
-                                }
-                            }
+                        tickMarkView(for: index, tickWidth: tickWidth)
                     }
                 }
                 .frame(height: size.height)
@@ -70,21 +56,7 @@ struct SparkHorizontalWheelPicker: View {
             }
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: Binding<Int?>(
-                get: {
-                    scrollPosition
-                },
-                set: { newValue in
-                    guard let newValue else {
-                        scrollPosition = nil
-                        return
-                    }
-
-                    let resolvedIndex = min(max(newValue, 0), config.totalSteps)
-                    scrollPosition = resolvedIndex
-                    updateValue(for: resolvedIndex)
-                }
-            ))
+            .scrollPosition(id: $scrollPosition)
             .overlay(alignment: .center) {
                 Rectangle()
                     .frame(width: 1, height: 40)
@@ -94,21 +66,43 @@ struct SparkHorizontalWheelPicker: View {
             .onAppear {
                 applyInitialPositionIfNeeded()
             }
-            .task(id: config) {
-                await applyInitialPositionAfterLayout()
-            }
             .onChange(of: value) { _, newValue in
                 guard didApplyInitialPosition else { return }
 
                 let resolvedIndex = config.index(for: newValue)
+                let normalizedValue = config.value(for: resolvedIndex)
+
+                if abs(value - normalizedValue) > 0.0001 {
+                    value = normalizedValue
+                }
                 if scrollPosition != resolvedIndex {
                     scrollPosition = resolvedIndex
                 }
             }
-            .onChange(of: config) { _, newValue in
-                let resolvedIndex = newValue.index(for: newValue.lowerBound)
-                value = newValue.value(for: resolvedIndex)
-                scrollPosition = resolvedIndex
+            .onChange(of: scrollPosition) { _, newPosition in
+                guard didApplyInitialPosition, let newPosition else { return }
+
+                let resolvedIndex = min(max(newPosition, 0), config.totalSteps)
+                if scrollPosition != resolvedIndex {
+                    scrollPosition = resolvedIndex
+                    return
+                }
+
+                updateValue(for: resolvedIndex)
+            }
+            .onChange(of: config) { _, newConfig in
+                didApplyInitialPosition = false
+
+                let resolvedIndex = newConfig.index(for: value)
+                let normalizedValue = newConfig.value(for: resolvedIndex)
+
+                if abs(value - normalizedValue) > 0.0001 {
+                    value = normalizedValue
+                }
+                if scrollPosition != resolvedIndex {
+                    scrollPosition = resolvedIndex
+                }
+                didApplyInitialPosition = true
             }
         }
     }
@@ -117,30 +111,43 @@ struct SparkHorizontalWheelPicker: View {
         guard didApplyInitialPosition == false else { return }
 
         let resolvedIndex = config.index(for: value)
-        value = config.value(for: resolvedIndex)
-        scrollPosition = resolvedIndex
+        let normalizedValue = config.value(for: resolvedIndex)
+
+        if abs(value - normalizedValue) > 0.0001 {
+            value = normalizedValue
+        }
+        if scrollPosition != resolvedIndex {
+            scrollPosition = resolvedIndex
+        }
         didApplyInitialPosition = true
-    }
-
-    private func applyInitialPositionAfterLayout() async {
-        let resolvedIndex = config.index(for: value)
-
-        await Task.yield()
-        guard Task.isCancelled == false else { return }
-
-        scrollPosition = nil
-
-        await Task.yield()
-        guard Task.isCancelled == false else { return }
-
-        value = config.value(for: resolvedIndex)
-        scrollPosition = resolvedIndex
     }
 
     private func updateValue(for index: Int) {
         let resolvedValue = config.value(for: index)
         if abs(resolvedValue - value) > 0.0001 {
             value = resolvedValue
+        }
+    }
+
+    @ViewBuilder
+    private func tickMarkView(for index: Int, tickWidth: CGFloat) -> some View {
+        let isMajor = config.isMajorStep(index)
+
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(isMajor ? Color.primary : .gray)
+                .frame(width: 1, height: isMajor ? 20 : 10)
+        }
+        .frame(width: tickWidth, height: 20, alignment: .bottom)
+        .overlay(alignment: .bottom) {
+            if isMajor && config.showsText {
+                Text(labelText(for: config.value(for: index)))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .textScale(.secondary)
+                    .fixedSize()
+                    .offset(y: 20)
+            }
         }
     }
 

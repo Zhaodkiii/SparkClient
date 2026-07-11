@@ -11,9 +11,9 @@ public enum SecondCameraEditorMediaError: Error {
     case failure(description: String)
 }
 
-public enum SecondCameraEditorMediaUtils {
+nonisolated public enum SecondCameraEditorMediaUtils {
 
-    public static func thumbnail(forImage image: UIImage, maxDimensionPixels: CGFloat) throws -> UIImage {
+    nonisolated public static func thumbnail(forImage image: UIImage, maxDimensionPixels: CGFloat) throws -> UIImage {
         if
             image.pixelSize.width <= maxDimensionPixels,
             image.pixelSize.height <= maxDimensionPixels
@@ -33,7 +33,7 @@ public enum SecondCameraEditorMediaUtils {
 
     public nonisolated(unsafe) static let videoStillFrameSecondCameraEditorMimeType = SecondCameraEditorMimeType.imageJpeg
 
-    public static func generateThumbnail(forVideo asset: AVAsset, maxSizePixels: CGSize) throws -> UIImage {
+    nonisolated public static func generateThumbnail(forVideo asset: AVAsset, maxSizePixels: CGSize) throws -> UIImage {
         try validateVideoAsset(asset)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.maximumSize = maxSizePixels
@@ -43,7 +43,7 @@ public enum SecondCameraEditorMediaUtils {
         return UIImage(cgImage: cgImage, scale: UIScreen.main.scale, orientation: .up)
     }
 
-    public static func validateVideoExtension(ofPath path: String) throws {
+    nonisolated public static func validateVideoExtension(ofPath path: String) throws {
         guard let contentType = SecondCameraEditorMimeTypeUtil.mimeTypeForFileExtension((path as NSString).pathExtension) else {
             throw SecondCameraEditorGenericError("video file has unknown content type")
         }
@@ -52,12 +52,12 @@ public enum SecondCameraEditorMediaUtils {
         }
     }
 
-    public static func validateVideoAsset(atPath path: String) throws {
+    nonisolated public static func validateVideoAsset(atPath path: String) throws {
         let asset = AVURLAsset(url: URL(fileURLWithPath: path), options: nil)
         try validateVideoAsset(asset)
     }
 
-    public static func validateVideoAsset(_ asset: AVAsset) throws {
+    nonisolated public static func validateVideoAsset(_ asset: AVAsset) throws {
         var maxTrackSize = CGSize.zero
         for track: AVAssetTrack in asset.tracks(withMediaType: .video) {
             let trackSize: CGSize = track.naturalSize
@@ -79,19 +79,19 @@ public enum SecondCameraEditorMediaUtils {
      *
      * https://github.com/signalapp/Signal-Android/blob/c4bc2162f23e0fd6bc25941af8fb7454d91a4a35/app/src/main/java/org/thoughtcrime/securesms/mms/PushMediaConstraints.java
      */
-    public static let kMaxFileSizeAnimatedImage: UInt64 = 25 * 1024 * 1024
-    public static let kMaxFileSizeImage: UInt64 = 8 * 1024 * 1024
+    nonisolated public static let kMaxFileSizeAnimatedImage: UInt64 = 25 * 1024 * 1024
+    nonisolated public static let kMaxFileSizeImage: UInt64 = 8 * 1024 * 1024
 
-    public static let kMaxVideoDimensions: CGFloat = 4096 // 4k video width
-    public static let kMaxImageDimensions: CGFloat = 12 * 1024
+    nonisolated public static let kMaxVideoDimensions: CGFloat = 4096 // 4k video width
+    nonisolated public static let kMaxImageDimensions: CGFloat = 12 * 1024
 
     /// Text past this size on send (excluding forwarding) is truncated to this length and the rest
     /// is sent as an oversize text attachment.
     /// Text past this side on receive is considered an invalid message and will be dropped.
-    public static let kOversizeTextMessageSizeThresholdBytes = 2 * 1024
+    nonisolated public static let kOversizeTextMessageSizeThresholdBytes = 2 * 1024
     /// Oversize text attachments past this size will be truncated on send.
-    public static let kMaxOversizeTextMessageSendSizeBytes = 64 * 1024
+    nonisolated public static let kMaxOversizeTextMessageSendSizeBytes = 64 * 1024
     /// Oversize text attachments past this size will be rejected on receive. (Larger than send
     /// to support legacy cases)
-    public static let kMaxOversizeTextMessageReceiveSizeBytes = 128 * 1024
+    nonisolated public static let kMaxOversizeTextMessageReceiveSizeBytes = 128 * 1024
 }

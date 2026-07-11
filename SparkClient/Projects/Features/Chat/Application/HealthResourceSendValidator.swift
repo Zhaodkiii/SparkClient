@@ -1,6 +1,6 @@
 import Foundation
 
-enum HealthResourceSendValidationError: LocalizedError {
+nonisolated enum HealthResourceSendValidationError: LocalizedError {
     case tooManyRefs
     case memberRequired
     case memberMismatch
@@ -20,10 +20,10 @@ enum HealthResourceSendValidationError: LocalizedError {
     }
 }
 
-enum HealthResourceSendValidator {
-    static let maxRefs = 5
+nonisolated enum HealthResourceSendValidator {
+    nonisolated static let maxRefs = 5
 
-    static func validate(
+    nonisolated static func validate(
         refs: [HealthResourceRef],
         threadMemberID: Int?
     ) throws {

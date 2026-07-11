@@ -1,9 +1,9 @@
 import CoreImage
 import UIKit
 
-public extension UIImage {
+nonisolated public extension UIImage {
 
-    func normalized() -> UIImage {
+    nonisolated func normalized() -> UIImage {
         guard imageOrientation != .up else { return self }
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
@@ -15,14 +15,14 @@ public extension UIImage {
     }
 
     @concurrent
-    func cgImageWithGaussianBlurAsync(radius: CGFloat, resizeToMaxPixelDimension: CGFloat) async throws -> CGImage {
+    nonisolated func cgImageWithGaussianBlurAsync(radius: CGFloat, resizeToMaxPixelDimension: CGFloat) async throws -> CGImage {
         guard let resized = self.resized(maxDimensionPixels: resizeToMaxPixelDimension) else {
             throw SecondCameraEditorAssertionError("Failed to downsize image for blur")
         }
         return try resized._scGaussianBlurCGImage(radius: radius)
     }
 
-    private func _scGaussianBlurCGImage(radius: CGFloat) throws -> CGImage {
+    nonisolated private func _scGaussianBlurCGImage(radius: CGFloat) throws -> CGImage {
         guard let cgImage else {
             throw SecondCameraEditorAssertionError("Missing cgImage for blur")
         }
@@ -54,7 +54,7 @@ public extension UIImage {
     }
 }
 
-public extension UIImage {
+nonisolated public extension UIImage {
     var withNativeScale: UIImage {
         let nativeScale = UIScreen.main.scale
         guard scale != nativeScale, let cgImage else {
@@ -89,11 +89,11 @@ public extension UIImage {
         CGSize(width: pixelWidth, height: pixelHeight)
     }
 
-    func resized(maxDimensionPixels: CGFloat) -> UIImage? {
+    nonisolated func resized(maxDimensionPixels: CGFloat) -> UIImage? {
         resized(originalSize: pixelSize, maxDimension: maxDimensionPixels, isPixels: true)
     }
 
-    private func resized(originalSize: CGSize, maxDimension: CGFloat, isPixels: Bool) -> UIImage? {
+    nonisolated private func resized(originalSize: CGSize, maxDimension: CGFloat, isPixels: Bool) -> UIImage? {
         guard originalSize.width >= 1, originalSize.height >= 1 else {
             SecondCameraEditorLogger.error("Invalid original image size: \(originalSize)")
             return nil

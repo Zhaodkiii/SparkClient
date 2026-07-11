@@ -61,11 +61,15 @@ extension SecondCameraImageEditorViewController {
 
         let cgOrientation = CGImagePropertyOrientation(srcImage.imageOrientation)
 
-        // Wrap weak refs in @unchecked Sendable boxes so they can cross isolation
-        // boundaries without triggering Swift 6 "sending risks data races" warnings.
-        // All actual UI access is still dispatched to the main thread.
-        let selfBox = SecondCameraEditorBlurWeakRef(self)
-        let senderBox = SecondCameraEditorBlurWeakRef(sender)
+        // Wrap weak refs in a nonisolated @unchecked Sendable box so they can
+        // cross isolation boundaries without triggering Swift 6 "sending risks
+        // data races" warnings. All actual UI access is still dispatched to the
+        // main thread, and the dedicated non-generic container avoids the
+        // compiler crash seen on the synthesized generic deinit path.
+        let weakReferences = SecondCameraEditorBlurWeakReferences(
+            viewController: self,
+            toggle: sender,
+        )
 
         SecondCameraEditorActivityIndicatorViewController.present(
             fromViewController: self,
@@ -83,15 +87,15 @@ extension SecondCameraImageEditorViewController {
                     switch result {
                     case .failure(let error):
                         print("[ImageEditor] Face Detection Error: \(error)")
-                        senderBox.object?.isOn = false
+                        weakReferences.toggle?.isOn = false
                         modal.dismiss {}
 
                     case .success(let boxes) where boxes.isEmpty:
-                        senderBox.object?.isOn = false
+                        weakReferences.toggle?.isOn = false
                         modal.dismiss {}
 
                     case .success(let boxes):
-                        guard let vc = selfBox.object else {
+                        guard let vc = weakReferences.viewController else {
                             modal.dismiss {}
                             return
                         }
@@ -250,9 +254,17 @@ extension SecondCameraImageEditorViewController {
 
 /// @unchecked Sendable weak-reference box used inside blur detection closures.
 /// Actual object access must only happen on the main thread.
-private final class SecondCameraEditorBlurWeakRef<T: AnyObject>: @unchecked Sendable {
-    weak var object: T?
-    init(_ object: T?) { self.object = object }
+private nonisolated final class SecondCameraEditorBlurWeakReferences: @unchecked Sendable {
+    weak var viewController: SecondCameraImageEditorViewController?
+    weak var toggle: UISwitch?
+
+    init(
+        viewController: SecondCameraImageEditorViewController?,
+        toggle: UISwitch?,
+    ) {
+        self.viewController = viewController
+        self.toggle = toggle
+    }
 }
 
 private extension CGImagePropertyOrientation {

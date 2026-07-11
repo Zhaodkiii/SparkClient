@@ -1,17 +1,17 @@
 import Foundation
 
 /// Composer 草稿与健康资料预览条使用的引用（含 UI 快照；落库时仅三元组进入 block）。
-struct HealthResourceRef: Equatable, Sendable, Identifiable, Codable {
+nonisolated struct HealthResourceRef: Equatable, Sendable, Identifiable, Codable {
     let identity: HealthResourceIdentity
     var displayTitle: String
     var displaySubtitle: String
     var typeBadge: String?
 
-    var resourceType: String { identity.resourceType }
-    var resourceID: Int { identity.resourceID }
-    var memberID: Int { identity.memberID }
+    nonisolated var resourceType: String { identity.resourceType }
+    nonisolated var resourceID: Int { identity.resourceID }
+    nonisolated var memberID: Int { identity.memberID }
 
-    var id: String { identity.cacheKey }
+    nonisolated var id: String { identity.cacheKey }
     init(
         identity: HealthResourceIdentity,
         displayTitle: String,
@@ -56,17 +56,17 @@ struct HealthResourceRef: Equatable, Sendable, Identifiable, Codable {
         )
     }
 
-    var typedResource: HealthResourceType? {
+    nonisolated var typedResource: HealthResourceType? {
         HealthResourceType(rawValue: resourceType)
     }
 
-    func toMessagePayload(refIndex: Int) -> ChatHealthResourceReferencePayload {
+    nonisolated func toMessagePayload(refIndex: Int) -> ChatHealthResourceReferencePayload {
         ChatHealthResourceReferencePayload(identity: identity, refIndex: refIndex)
     }
 }
 
 extension HealthResourceIdentity {
-    init(_ ref: HealthResourceRef) {
+    nonisolated init(_ ref: HealthResourceRef) {
         self = ref.identity
     }
 }

@@ -68,7 +68,7 @@ final class CoreDataStack: @unchecked Sendable {
         return try await withCheckedThrowingContinuation { continuation in
             container.performBackgroundTask { context in
                 // 合并策略：冲突时以内存对象为准
-                context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+                context.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
                 context.name = "backgroundContext"
 
                 do {
@@ -131,7 +131,7 @@ final class CoreDataStack: @unchecked Sendable {
 
         // 配置主上下文：自动合并后台保存的变化
         container.viewContext.automaticallyMergesChangesFromParent = true
-        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        container.viewContext.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
         container.viewContext.name = "viewContext"
 
         return container

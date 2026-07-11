@@ -148,8 +148,9 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     // 校验HTTP状态码（200-299为成功）
                     if (200 ..< 300).contains(httpResponse.statusCode) == false {
                         // 读取错误响应数据
-                        let errorData = try await bytes.reduce(into: Data()) { partialResult, byte in
-                            partialResult.append(byte)
+                        var errorData = Data()
+                        for try await byte in bytes {
+                            errorData.append(byte)
                         }
                         let responseBodyText = String(data: errorData, encoding: .utf8) ?? "<non-utf8>"
                         logger.debug(

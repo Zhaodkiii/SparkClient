@@ -48,8 +48,8 @@ final class OSSClientWrapper {
 
         // 4. 执行异步任务
         do {
-            // 使用辅助方法将 OSSTask 转换为 await
-            _ = try await taskResult(client.putObject(request))
+            // 使用辅助方法等待 OSSTask 完成，不直接跨并发边界传递 SDK result。
+            try await awaitTask(client.putObject(request))
         } catch {
             throw OSSError.uploadFailed(error.localizedDescription)
         }
@@ -79,9 +79,14 @@ final class OSSClientWrapper {
         }
 
         do {
-            let result = try await taskResult(client.getObject(request))
+            let task = client.getObject(request)
+            try await awaitTask(task)
             // 确保下载的数据不为空
-            guard let data = result.downloadedData else {
+            guard let result = task.result as? OSSGetObjectResult else {
+                throw OSSError.downloadFailed("downloaded data is nil")
+            }
+            let data = result.downloadedData
+            guard data.isEmpty == false else {
                 throw OSSError.downloadFailed("downloaded data is nil")
             }
             return data
@@ -113,7 +118,8 @@ final class OSSClientWrapper {
         }
 
         do {
-            _ = try await taskResult(client.getObject(request))
+            let task = client.getObject(request)
+            try await awaitTask(task)
         } catch {
             throw OSSError.downloadFailed(error.localizedDescription)
         }
@@ -142,9 +148,9 @@ final class OSSClientWrapper {
             withExpirationInterval: expires
         )
         
-        let result = try await taskResult(task)
+        try await awaitTask(task)
         // 签名结果通常以字符串形式返回 URL
-        guard let urlString = result as? String, let url = URL(string: urlString) else {
+        guard let urlString = task.result as? String, let url = URL(string: urlString) else {
             throw OSSError.invalidResponse
         }
         return url
@@ -155,20 +161,20 @@ final class OSSClientWrapper {
     /// 核心转换器：将阿里云 SDK 旧款的 `OSSTask` 转换为 Swift 的 `async throws`
     /// - Parameter task: OSS SDK 产生的异步任务对象
     /// - Returns: 任务执行成功后的结果对象
-    private func taskResult<T: AnyObject>(_ task: OSSTask<T>) async throws -> T {
+    /// 只负责桥接 OSS SDK 的后台回调，不读取任何 MainActor 状态。
+    /// 这里必须是 nonisolated，否则在 Swift 6 默认 MainActor 隔离下，
+    /// SDK 从后台队列触发 successBlock 时会命中运行时断言。
+    private nonisolated func awaitTask<T: AnyObject>(_ task: OSSTask<T>) async throws {
         // 使用 CheckedContinuation 将基于回调的代码桥接到异步环境
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             // 调用 SDK 的 continueWith 块（这里使用了 `continue` 关键字，在 Swift 中需加反引号）
             task.`continue`(successBlock: { task in
                 if let error = task.error {
                     // 任务报错，恢复异步函数并抛出异常
                     continuation.resume(throwing: error)
-                } else if let result = task.result {
-                    // 任务成功，返回结果
-                    continuation.resume(returning: result)
                 } else {
-                    // 既无错误也无结果，视为非法响应
-                    continuation.resume(throwing: OSSError.invalidResponse)
+                    // 任务成功，仅表示完成，不直接跨并发边界传递 result。
+                    continuation.resume(returning: ())
                 }
                 return nil
             })

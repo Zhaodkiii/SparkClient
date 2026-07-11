@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-struct ChatKnowledgeCard: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct ChatKnowledgeCard: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let title: String
     let content: String

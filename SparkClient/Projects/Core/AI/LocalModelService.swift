@@ -1,7 +1,7 @@
 import Foundation
 
 
-struct LocalModelCatalogItem: Identifiable, Equatable, Sendable {
+nonisolated struct LocalModelCatalogItem: Identifiable, Equatable, Sendable {
     let id: String
     let displayName: String
     let remoteURL: URL
@@ -23,7 +23,7 @@ struct LocalModelCatalogItem: Identifiable, Equatable, Sendable {
     }
 }
 
-struct LocalModelInstalled: Sendable {
+nonisolated struct LocalModelInstalled: Sendable {
     let modelName: String
     let displayName: String
     let fileName: String

@@ -4,8 +4,8 @@ import Foundation
 /// 账号级 AI 设置仓储：`AllModels` / `APIKeys` / `SearchKeys` / `PromptRepo` 存 Core Data；其余轻量偏好用 `AISettingsSnapshot.PreferencesPayload` 存 UserDefaults。
 /// 种子 JSON 仅在「该账号首次初始化」时写入 Core Data，之后只读本地库，不按版本从 bundle 重灌。
 /// Pro 场景 bundle 等运行时数据不在此持久化。
-final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendable {
-    private enum EntityName {
+nonisolated final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendable {
+    nonisolated private enum EntityName {
         static let provider = "AIProviderEntity"
         static let searchProvider = "AISearchProviderEntity"
         static let model = "AIModelEntity"
@@ -15,7 +15,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         static let seedState = "AISettingsSeedStateEntity"
     }
 
-    private enum Field {
+    nonisolated private enum Field {
         static let id = "id"
         static let ownerAccountID = "ownerAccountID"
         static let providerID = "providerID"
@@ -76,7 +76,7 @@ final class DefaultAISettingsRepository: AISettingsRepository, @unchecked Sendab
         static let updatedAt = "updatedAt"
     }
 
-    private enum UserDefaultsKey {
+    nonisolated private enum UserDefaultsKey {
         /// 按账号隔离：`AISettingsSnapshot.PreferencesPayload` 的 JSON（与快照非目录字段一致）。
         static func aiPreferences(_ accountID: Int64) -> String {
             "spark.ai.prefs.payload.\(accountID)"

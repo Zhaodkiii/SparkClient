@@ -203,7 +203,7 @@ struct TaskService {
 
 // MARK: - 请求/响应模型
 
-struct TaskCreatePayload: Encodable, Sendable {
+nonisolated struct TaskCreatePayload: Encodable, Sendable {
     let member: Int
     let title: String
     let description: String
@@ -223,7 +223,7 @@ struct TaskCreatePayload: Encodable, Sendable {
 
 }
 
-struct TaskUpdatePayload: Encodable, Sendable {
+nonisolated struct TaskUpdatePayload: Encodable, Sendable {
     let title: String?
     let description: String?
     let status: HealthTask.TaskStatus?
@@ -239,7 +239,7 @@ struct TaskUpdatePayload: Encodable, Sendable {
 
 }
 
-struct TaskMedicalPayload: Encodable, Sendable {
+nonisolated struct TaskMedicalPayload: Encodable, Sendable {
     let reminderTime: String?
     let medicalTaskType: String
     let description: String
@@ -248,7 +248,7 @@ struct TaskMedicalPayload: Encodable, Sendable {
 
 }
 
-struct TaskExercisePayload: Encodable, Sendable {
+nonisolated struct TaskExercisePayload: Encodable, Sendable {
     let exerciseType: String
     let durationMin: Int
     let intensity: String
@@ -258,7 +258,7 @@ struct TaskExercisePayload: Encodable, Sendable {
 
 }
 
-struct TaskDietPayload: Encodable, Sendable {
+nonisolated struct TaskDietPayload: Encodable, Sendable {
     let mealType: String
     let calorieTarget: Int
     let foodRecommend: [String]
@@ -268,7 +268,7 @@ struct TaskDietPayload: Encodable, Sendable {
 
 }
 
-struct TaskExecutionPayload: Encodable, Sendable {
+nonisolated struct TaskExecutionPayload: Encodable, Sendable {
     let executedAt: String?
     let value: [String: String]?
     let notes: String?
@@ -291,7 +291,7 @@ struct TaskExecutionPayload: Encodable, Sendable {
 
 }
 
-private struct EmptyPayload: Encodable {}
+nonisolated private struct EmptyPayload: Encodable, Sendable {}
 
 private extension ISO8601DateFormatter {
     static let taskFormatter: ISO8601DateFormatter = {

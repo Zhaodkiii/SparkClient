@@ -4,7 +4,7 @@
 
 import Foundation
 
-public enum SecondCameraEditorFileSystem {
+nonisolated public enum SecondCameraEditorFileSystem {
     public static func temporaryFileUrl(
         fileExtension: String,
         isAvailableWhileDeviceLocked: Bool = true,

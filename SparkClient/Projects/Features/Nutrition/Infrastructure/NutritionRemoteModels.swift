@@ -71,7 +71,7 @@ extension SparkNutritionAPI {
     }
 
     /// 成员营养目标保存请求。
-    struct RemoteNutritionGoalUpsertRequest: Codable, Sendable, Equatable {
+    nonisolated struct RemoteNutritionGoalUpsertRequest: Codable, Sendable, Equatable {
         var memberId: Int
         var goalType: String
         var heightCm: Double?
@@ -100,7 +100,7 @@ extension SparkNutritionAPI {
         var isActive: Bool
     }
 
-    struct RemoteNutritionGoalCalculationRequest: Codable, Sendable, Equatable {
+    nonisolated struct RemoteNutritionGoalCalculationRequest: Codable, Sendable, Equatable {
         var memberId: Int
         var goalType: String
         var activityLevel: String
@@ -112,7 +112,7 @@ extension SparkNutritionAPI {
         var targetWeightKg: Double?
     }
 
-    struct RemoteNutritionCalculationInputs: Codable, Sendable, Equatable {
+    nonisolated struct RemoteNutritionCalculationInputs: Codable, Sendable, Equatable {
         var activityFactor: Double?
         var weeklyWeightEnergyKcalPerKg: Double?
         var minSafeEnergyKcal: Double?
@@ -498,7 +498,7 @@ extension SparkNutritionAPI {
 
 extension SparkNutritionAPI {
     /// 创建/更新用餐记录时，选择的一份食物及其份量
-    struct MealFoodInput: Codable, Sendable, Equatable {
+    nonisolated struct MealFoodInput: Codable, Sendable, Equatable {
         var foodItemId: Int?
         /// 若选的是食谱而非单个食物，则填 recipeId
         var recipeId: Int?
@@ -509,7 +509,7 @@ extension SparkNutritionAPI {
     }
 
     /// 创建/更新用餐记录时，选择的一份食谱及其份量
-    struct RecipeInput: Codable, Sendable, Equatable {
+    nonisolated struct RecipeInput: Codable, Sendable, Equatable {
         var recipeId: Int
         var servingRatio: Double
         var servingQuantity: Double?
@@ -518,7 +518,7 @@ extension SparkNutritionAPI {
     }
 
     /// 手动录入或导入时的单条营养素输入
-    struct NutritionIntakeInput: Codable, Sendable, Equatable {
+    nonisolated struct NutritionIntakeInput: Codable, Sendable, Equatable {
         var nutrientType: String
         var value: Double
         var unit: String
@@ -527,7 +527,7 @@ extension SparkNutritionAPI {
     }
 
     /// 创建用餐记录请求体
-    struct CreateMealRecordRequest: Codable, Sendable, Equatable {
+    nonisolated struct CreateMealRecordRequest: Codable, Sendable, Equatable {
         var memberId: Int
         var mealType: String
         var consumedAt: Date
@@ -545,7 +545,7 @@ extension SparkNutritionAPI {
     }
 
     /// 更新用餐记录请求体（字段均可选，仅传需要修改的项）
-    struct UpdateMealRecordRequest: Codable, Sendable, Equatable {
+    nonisolated struct UpdateMealRecordRequest: Codable, Sendable, Equatable {
         var mealType: String?
         var consumedAt: Date?
         var source: String?
@@ -558,7 +558,7 @@ extension SparkNutritionAPI {
     }
 
     /// 用户自建食物条目请求
-    struct CreateNutritionFoodItemRequest: Codable, Sendable, Equatable {
+    nonisolated struct CreateNutritionFoodItemRequest: Codable, Sendable, Equatable {
         var name: String
         var localizedName: String
         var brandName: String
@@ -572,7 +572,7 @@ extension SparkNutritionAPI {
     }
 
     /// 用户自建食谱请求
-    struct CreateNutritionRecipeRequest: Codable, Sendable, Equatable {
+    nonisolated struct CreateNutritionRecipeRequest: Codable, Sendable, Equatable {
         var name: String
         var localizedName: String
         var category: String
@@ -583,13 +583,13 @@ extension SparkNutritionAPI {
     }
 
     /// 添加/取消收藏请求
-    struct NutritionFavoriteRequest: Codable, Sendable, Equatable {
+    nonisolated struct NutritionFavoriteRequest: Codable, Sendable, Equatable {
         var targetType: String
         var targetId: Int
     }
 
     /// 创建能量消耗记录请求
-    struct CreateEnergyBurnRecordRequest: Codable, Sendable, Equatable {
+    nonisolated struct CreateEnergyBurnRecordRequest: Codable, Sendable, Equatable {
         var memberId: Int
         var burnedAt: Date
         var energyKcal: Double
@@ -599,7 +599,7 @@ extension SparkNutritionAPI {
     }
 
     /// 更新能量消耗记录请求（部分更新）
-    struct UpdateEnergyBurnRecordRequest: Codable, Sendable, Equatable {
+    nonisolated struct UpdateEnergyBurnRecordRequest: Codable, Sendable, Equatable {
         var burnedAt: Date?
         var energyKcal: Double?
         var activityType: String?
@@ -610,7 +610,7 @@ extension SparkNutritionAPI {
 
     /// 从 HealthKit 读取后、准备上传服务端的一条「外部摄入」样本
     /// 以能量样本为主键，同一时刻同来源的蛋白质/碳水/脂肪会合并进 intakes
-    struct AppleHealthIntakeSample: Codable, Sendable, Equatable {
+    nonisolated struct AppleHealthIntakeSample: Codable, Sendable, Equatable {
         /// HealthKit HKQuantitySample.uuid
         var appleHealthId: String
         var occurredAt: Date
@@ -620,13 +620,13 @@ extension SparkNutritionAPI {
     }
 
     /// 批量导入 Apple Health 外部摄入
-    struct AppleHealthIntakeImportRequest: Codable, Sendable, Equatable {
+    nonisolated struct AppleHealthIntakeImportRequest: Codable, Sendable, Equatable {
         var memberId: Int
         var samples: [AppleHealthIntakeSample]
     }
 
     /// 从 HealthKit 读取的一条能量消耗样本
-    struct AppleHealthEnergyBurnSample: Codable, Sendable, Equatable {
+    nonisolated struct AppleHealthEnergyBurnSample: Codable, Sendable, Equatable {
         var appleHealthId: String
         var burnedAt: Date
         var energyKcal: Double
@@ -636,13 +636,13 @@ extension SparkNutritionAPI {
     }
 
     /// 批量导入 Apple Health 能量消耗
-    struct AppleHealthEnergyBurnImportRequest: Codable, Sendable, Equatable {
+    nonisolated struct AppleHealthEnergyBurnImportRequest: Codable, Sendable, Equatable {
         var memberId: Int
         var samples: [AppleHealthEnergyBurnSample]
     }
 
     /// 用餐记录或消耗记录回写 HealthKit 后，将 UUID 同步回服务端的请求
-    struct AppleHealthIDUpdateRequest: Codable, Sendable, Equatable {
+    nonisolated struct AppleHealthIDUpdateRequest: Codable, Sendable, Equatable {
         var appleHealthId: String
     }
 }

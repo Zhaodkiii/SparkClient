@@ -1,22 +1,22 @@
 import UIKit
 
 extension UIColor {
-    static var secondCameraEditor_white: UIColor { .white }
-    static var secondCameraEditor_black: UIColor { .black }
-    static var secondCameraEditor_whiteAlpha40: UIColor { UIColor.white.withAlphaComponent(0.4) }
-    static var secondCameraEditor_whiteAlpha60: UIColor { UIColor.white.withAlphaComponent(0.6) }
-    static var secondCameraEditor_blackAlpha40: UIColor { UIColor.black.withAlphaComponent(0.4) }
-    static var secondCameraEditor_blackAlpha60: UIColor { UIColor.black.withAlphaComponent(0.6) }
-    static var secondCameraEditor_gray80: UIColor { UIColor(white: 0.8, alpha: 1) }
+    nonisolated static var secondCameraEditor_white: UIColor { .white }
+    nonisolated static var secondCameraEditor_black: UIColor { .black }
+    nonisolated static var secondCameraEditor_whiteAlpha40: UIColor { UIColor.white.withAlphaComponent(0.4) }
+    nonisolated static var secondCameraEditor_whiteAlpha60: UIColor { UIColor.white.withAlphaComponent(0.6) }
+    nonisolated static var secondCameraEditor_blackAlpha40: UIColor { UIColor.black.withAlphaComponent(0.4) }
+    nonisolated static var secondCameraEditor_blackAlpha60: UIColor { UIColor.black.withAlphaComponent(0.6) }
+    nonisolated static var secondCameraEditor_gray80: UIColor { UIColor(white: 0.8, alpha: 1) }
 
-    convenience init(rgbHex value: UInt32, alpha: CGFloat = 1) {
+    nonisolated convenience init(rgbHex value: UInt32, alpha: CGFloat = 1) {
         let red = CGFloat((value >> 16) & 0xff) / 255.0
         let green = CGFloat((value >> 8) & 0xff) / 255.0
         let blue = CGFloat((value >> 0) & 0xff) / 255.0
         self.init(red: red, green: green, blue: blue, alpha: alpha)
     }
 
-    func blended(with otherColor: UIColor, alpha alphaParam: CGFloat) -> UIColor {
+    nonisolated func blended(with otherColor: UIColor, alpha alphaParam: CGFloat) -> UIColor {
         var r0: CGFloat = 0
         var g0: CGFloat = 0
         var b0: CGFloat = 0
@@ -38,11 +38,11 @@ extension UIColor {
         )
     }
 
-    func isCloseToColor(_ color: UIColor) -> Bool {
+    nonisolated func isCloseToColor(_ color: UIColor) -> Bool {
         secondCameraEditor_isCloseToColor(color)
     }
 
-    func isEqualToColor(_ color: UIColor, tolerance: CGFloat = 0) -> Bool {
+    nonisolated func isEqualToColor(_ color: UIColor, tolerance: CGFloat = 0) -> Bool {
         var r1: CGFloat = 0
         var g1: CGFloat = 0
         var b1: CGFloat = 0

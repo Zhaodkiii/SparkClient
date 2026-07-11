@@ -735,7 +735,7 @@ private struct SparkFormFieldLabel: View {
 
 extension String {
     /// 空白字符串视为 `nil`，用于草稿字段映射到可选 API 字段。
-    var nilIfBlank: String? {
+    nonisolated var nilIfBlank: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

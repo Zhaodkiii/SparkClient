@@ -3,7 +3,7 @@ import Foundation
 // MARK: - 模型推理上下文（用于记录AI模型是否支持思考、深度推理能力）
 /// 模型推理能力上下文（从内置模型列表 + 用户选择中解析得出）
 /// 用于统一判断模型是否支持深度思考、是否可控制思考强度
-struct ChatModelReasoningContext: Equatable, Sendable {
+nonisolated struct ChatModelReasoningContext: Equatable, Sendable {
     /// 模型所属 provider id，例如 OPENAI、QWEN、LOCAL。
     var providerCompany: String?
     /// 是否支持推理/深度思考功能
@@ -21,7 +21,7 @@ struct ChatModelReasoningContext: Equatable, Sendable {
 
 // MARK: - AI 消息角色枚举
 /// AI 对话消息角色（对应大模型API标准角色）
-enum AIRuntimeRole: String, Codable, Sendable {
+nonisolated enum AIRuntimeRole: String, Codable, Sendable {
     case system      // 系统角色（设定AI行为）
     case user        // 用户角色
     case assistant   // AI助手角色
@@ -30,7 +30,7 @@ enum AIRuntimeRole: String, Codable, Sendable {
 
 // MARK: - 多模态 content parts（OpenAI Chat Completions 兼容）
 /// 单条 `image_url` 载荷（OpenAI Chat Completions 兼容；`detail` 仅部分厂商使用，如 XAI `high`）。
-struct AIRuntimeImageURLPayload: Codable, Equatable, Sendable {
+nonisolated struct AIRuntimeImageURLPayload: Codable, Equatable, Sendable {
     let url: String
     /// 例如 `high`（XAI 多模态）；`nil` 时不编码该字段。
     let detail: String?
@@ -42,7 +42,7 @@ struct AIRuntimeImageURLPayload: Codable, Equatable, Sendable {
 }
 
 /// 用户消息多模态片段（`type` + `text` 或 `image_url`）。
-struct AIRuntimeContentPart: Codable, Equatable, Sendable {
+nonisolated struct AIRuntimeContentPart: Codable, Equatable, Sendable {
     let type: String
     let text: String?
     let imageURL: AIRuntimeImageURLPayload?
@@ -70,7 +70,7 @@ struct AIRuntimeContentPart: Codable, Equatable, Sendable {
 
 // MARK: - AI 对话消息结构体
 /// AI 运行时单条消息体（请求/响应通用）
-struct AIRuntimeMessage: Codable, Equatable, Sendable {
+nonisolated struct AIRuntimeMessage: Codable, Equatable, Sendable {
     let role: AIRuntimeRole          // 消息角色
     let content: String?             // 消息文本内容
     /// 与 `content` 二选一：非 `nil` 时网关编码为 JSON 数组（多模态）。
@@ -186,7 +186,7 @@ extension AIRuntimeToolProperty: Equatable {
 
 // MARK: - AI 工具定义
 /// AI可调用的工具完整定义
-struct AIRuntimeToolDefinition: Codable, Equatable, Sendable {
+nonisolated struct AIRuntimeToolDefinition: Codable, Equatable, Sendable {
     let name: String                              // 工具名称
     let summary: String                           // 工具描述/简介
     let properties: [String: AIRuntimeToolProperty]  // 入参结构
@@ -195,14 +195,14 @@ struct AIRuntimeToolDefinition: Codable, Equatable, Sendable {
 
 // MARK: - AI 工具调用策略
 /// 工具调用选择策略
-enum AIRuntimeToolChoice: String, Codable, Sendable {
+nonisolated enum AIRuntimeToolChoice: String, Codable, Sendable {
     case auto      // 自动判断是否调用
     case none      // 不使用任何工具
 }
 
 // MARK: - AI 工具调用记录
 /// AI 实际发起的工具调用
-struct AIRuntimeToolCall: Codable, Equatable, Sendable {
+nonisolated struct AIRuntimeToolCall: Codable, Equatable, Sendable {
     let id: String            // 调用唯一ID
     let name: String          // 工具名称
     let arguments: String     // JSON格式的参数字符串
@@ -210,7 +210,7 @@ struct AIRuntimeToolCall: Codable, Equatable, Sendable {
 
 // MARK: - 推理控制选项
 /// 统一的AI深度思考/推理控制配置（对接不同厂商模型）
-struct AIRuntimeReasoningOptions: Equatable, Sendable {
+nonisolated struct AIRuntimeReasoningOptions: Equatable, Sendable {
     /// 是否启用推理思考
     var isEnabled: Bool
     /// 思考强度档位：0=不思考，1=低，2=中，3=高（与客户端UI档位一致）
@@ -231,7 +231,7 @@ struct AIRuntimeReasoningOptions: Equatable, Sendable {
 
 // MARK: - AI 文本请求体
 /// AI运行时 文本对话/推理请求结构体
-struct AIRuntimeTextRequest: Sendable {
+nonisolated struct AIRuntimeTextRequest: Sendable {
     let scenario: AIScenario                     // 业务场景
     let messages: [AIRuntimeMessage]             // 对话消息列表
     let tools: [AIRuntimeToolDefinition]         // 可用工具列表
@@ -274,7 +274,7 @@ struct AIRuntimeTextRequest: Sendable {
 
 // MARK: - AI 文本响应体
 /// AI 文本对话完整响应
-struct AIRuntimeTextResponse: Equatable, Sendable {
+nonisolated struct AIRuntimeTextResponse: Equatable, Sendable {
     let text: String                              // 最终回复文本（给用户看）
     let reasoningText: String?                    // 思考过程/推理链（部分模型返回）
     let model: String                             // 实际使用的模型名
@@ -310,7 +310,7 @@ struct AIRuntimeTextResponse: Equatable, Sendable {
 
 // MARK: - 工具调用增量数据
 /// 流式返回时的工具调用增量片段
-struct AIRuntimeToolCallDelta: Equatable, Sendable {
+nonisolated struct AIRuntimeToolCallDelta: Equatable, Sendable {
     let index: Int                // 第几个工具调用
     let id: String?               // 调用ID
     let name: String?             // 工具名
@@ -319,7 +319,7 @@ struct AIRuntimeToolCallDelta: Equatable, Sendable {
 
 // MARK: - AI 流式事件枚举
 /// AI流式响应的事件类型（用于实时接收文字/思考/工具调用）
-enum AIRuntimeStreamEvent: Equatable, Sendable {
+nonisolated enum AIRuntimeStreamEvent: Equatable, Sendable {
     case textDelta(String)            // 文本增量
     case reasoningDelta(String)       // 思考过程增量
     case toolCallDelta(AIRuntimeToolCallDelta)  // 工具调用增量
@@ -328,7 +328,7 @@ enum AIRuntimeStreamEvent: Equatable, Sendable {
 
 // MARK: - AI 运行时错误
 /// AI模块统一错误类型（遵守LocalizedError）
-enum AIRuntimeError: LocalizedError {
+nonisolated enum AIRuntimeError: LocalizedError {
     case emptyMessages                // 消息列表为空
     case invalidResponse             // 响应格式非法无法解析
     case transport(URLError)          // 网络传输错误

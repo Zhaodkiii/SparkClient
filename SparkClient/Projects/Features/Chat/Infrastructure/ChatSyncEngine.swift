@@ -21,11 +21,11 @@ actor ChatSyncEngine {
     private let logger: Logger
     private var inflightSyncTasks: [SyncScope: Task<Void, Error>] = [:]
 
-    private static let syncCursorFormatter: ISO8601DateFormatter = {
+    private static var syncCursorFormatter: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
-    }()
+    }
 
     init(
         repository: any ChatRepository,

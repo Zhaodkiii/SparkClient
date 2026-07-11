@@ -16,8 +16,8 @@ enum AIModelSelectionSource: String, Codable, CaseIterable, Sendable {
     case trial
 }
 
-enum AIProviderIdentifier {
-    static func normalize(_ value: String) -> String {
+nonisolated enum AIProviderIdentifier {
+    nonisolated static func normalize(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
@@ -26,7 +26,7 @@ enum AIProviderIdentifier {
     }
 }
 
-struct APIKeys: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var providerID: String
     var name: String
@@ -134,7 +134,7 @@ struct APIKeys: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct SearchKeys: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct SearchKeys: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var name: String
     var company: String
@@ -209,8 +209,8 @@ enum SearchProviderAuthType: String, Codable, Equatable, Sendable {
     case none
 }
 
-struct SearchRuntimeConfigRevision: Codable, Equatable, Sendable {
-    static let schemaVersion = 1
+nonisolated struct SearchRuntimeConfigRevision: Codable, Equatable, Sendable {
+    nonisolated static let schemaVersion = 1
 
     var schemaVersion: Int
     var localRevision: Int
@@ -233,7 +233,7 @@ struct SearchRuntimeConfigRevision: Codable, Equatable, Sendable {
     }
 }
 
-struct ToolKeys: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct ToolKeys: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var name: String
     var company: String
@@ -246,7 +246,7 @@ struct ToolKeys: Identifiable, Codable, Equatable, Sendable {
     var timestamp: Date
 }
 
-struct AllModels: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct AllModels: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var name: String
     var displayName: String
@@ -474,7 +474,7 @@ struct AllModels: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct AIScenarioModelBinding: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct AIScenarioModelBinding: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var ownerAccountID: Int64
     var scenario: String
@@ -529,16 +529,16 @@ struct AIScenarioModelBinding: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-extension AIScenarioModelBinding {
-    static let defaultTemperature: Double = 0.68
-    static let defaultMaxTokens: Int = 12_800
+nonisolated extension AIScenarioModelBinding {
+    nonisolated static let defaultTemperature: Double = 0.68
+    nonisolated static let defaultMaxTokens: Int = 12_800
 
     var scenarioKey: AIScenario? {
         AIScenario(rawValue: scenario)
     }
 }
 
-struct AISearchToolPreferences: Codable, Equatable, Sendable {
+nonisolated struct AISearchToolPreferences: Codable, Equatable, Sendable {
     var useKnowledge: Bool
     var knowledgeCount: Int
     var knowledgeSimilarity: Double
@@ -577,7 +577,7 @@ struct AISearchToolPreferences: Codable, Equatable, Sendable {
 
 /// 提示词仓库模型（用于存储、管理 AI 系统提示词）
 /// 支持：自定义提示词 + 内置预设提示词（多语言本地化）
-struct PromptRepo: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct PromptRepo: Identifiable, Codable, Equatable, Sendable {
     /// 唯一标识 ID
     var id: UUID = UUID()
     /// 提示词标题（原始文本）
@@ -646,7 +646,7 @@ struct PromptRepo: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
-struct MemoryArchive: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct MemoryArchive: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var title: String
     var content: String
@@ -654,7 +654,7 @@ struct MemoryArchive: Identifiable, Codable, Equatable, Sendable {
     var timestamp: Date
 }
 
-struct TranslationDic: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct TranslationDic: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var sourceText: String
     var targetText: String
@@ -662,8 +662,8 @@ struct TranslationDic: Identifiable, Codable, Equatable, Sendable {
     var timestamp: Date
 }
 
-enum AISettingsDefaults {
-    static var apiKeys: [APIKeys] {
+nonisolated enum AISettingsDefaults {
+    nonisolated static var apiKeys: [APIKeys] {
         let timestamp = Date()
         return [
             APIKeys(
@@ -759,7 +759,7 @@ enum AISettingsDefaults {
         ]
     }
 
-    static var searchKeys: [SearchKeys] {
+    nonisolated static var searchKeys: [SearchKeys] {
         let timestamp = Date()
         return [
             SearchKeys(
@@ -853,7 +853,7 @@ enum AISettingsDefaults {
         ]
     }
 
-    static var toolKeys: [ToolKeys] {
+    nonisolated static var toolKeys: [ToolKeys] {
         let timestamp = Date()
         return [
             ToolKeys(
@@ -914,7 +914,7 @@ enum AISettingsDefaults {
         ]
     }
 
-    static var allModels: [AllModels] {
+    nonisolated static var allModels: [AllModels] {
         let timestamp = Date()
         return [
             AllModels(
@@ -1256,7 +1256,7 @@ enum AISettingsDefaults {
         ]
     }
 
-    static var searchToolPreferences: AISearchToolPreferences {
+    nonisolated static var searchToolPreferences: AISearchToolPreferences {
         AISearchToolPreferences(
             useKnowledge: true,
             knowledgeCount: 12,
@@ -1267,7 +1267,7 @@ enum AISettingsDefaults {
         )
     }
 
-    static var promptRepo: [PromptRepo] {
+    nonisolated static var promptRepo: [PromptRepo] {
         let timestamp = Date()
         return [
             PromptRepo(
@@ -1301,11 +1301,11 @@ enum AISettingsDefaults {
         ]
     }
 
-    static var memoryArchive: [MemoryArchive] {
+    nonisolated static var memoryArchive: [MemoryArchive] {
         []
     }
 
-    static var translationDic: [TranslationDic] {
+    nonisolated static var translationDic: [TranslationDic] {
         let timestamp = Date()
         return [
             TranslationDic(

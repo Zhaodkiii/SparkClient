@@ -4,25 +4,25 @@
 
 import Foundation
 
-public final class SecondCameraEditorAtomicValue<T>: @unchecked Sendable {
+nonisolated public final class SecondCameraEditorAtomicValue<T>: @unchecked Sendable {
     private let lock: SecondCameraEditorUnfairLock
     private nonisolated(unsafe) var value: T
 
-    public init(_ value: T, lock: SecondCameraEditorUnfairLock) {
+    nonisolated public init(_ value: T, lock: SecondCameraEditorUnfairLock) {
         self.value = value
         self.lock = lock
     }
 
-    public func get() -> T {
+    nonisolated public func get() -> T {
         lock.withLock { value }
     }
 
-    public func set(_ newValue: T) {
+    nonisolated public func set(_ newValue: T) {
         lock.withLock { value = newValue }
     }
 
     @discardableResult
-    public func swap(_ newValue: T) -> T {
+    nonisolated public func swap(_ newValue: T) -> T {
         lock.withLock {
             let oldValue = value
             value = newValue
@@ -31,7 +31,7 @@ public final class SecondCameraEditorAtomicValue<T>: @unchecked Sendable {
     }
 
     @discardableResult
-    public func map(_ block: (T) -> T) -> T {
+    nonisolated public func map(_ block: (T) -> T) -> T {
         lock.withLock {
             let newValue = block(value)
             value = newValue
@@ -40,7 +40,7 @@ public final class SecondCameraEditorAtomicValue<T>: @unchecked Sendable {
     }
 
     @discardableResult
-    public func update<Result>(block: (inout T) -> Result) -> Result {
+    nonisolated public func update<Result>(block: (inout T) -> Result) -> Result {
         lock.withLock {
             block(&value)
         }

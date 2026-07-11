@@ -3,10 +3,10 @@ import UIKit
 
 /// SparkMedicalImagePreprocessor 是一个专门用于医疗单据图像预处理的工具类。
 /// 它通过调整对比度、降噪和锐化，使模糊或光线不佳的病历照片变得更易于识别。
-final class SparkMedicalImagePreprocessor {
+nonisolated final class SparkMedicalImagePreprocessor: @unchecked Sendable {
     
     /// 预处理配置参数
-    struct Config: Sendable {
+    nonisolated struct Config: Sendable {
         var contrastFactor: Double = 1.1      // 对比度系数（1.0 为原始值）
         var brightnessFactor: Double = 0.02   // 亮度偏移（稍微增加亮度有助于区分纸张和文字）
         var sharpnessFactor: Double = 0.3    // 锐化强度

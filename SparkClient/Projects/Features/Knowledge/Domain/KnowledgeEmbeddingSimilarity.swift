@@ -2,8 +2,8 @@ import Accelerate
 import Foundation
 
 /// 余弦相似度（用于查询向量与切块向量的对齐打分）。
-enum KnowledgeEmbeddingSimilarity {
-    static func cosine(_ a: [Float], _ b: [Float]) -> Float {
+nonisolated enum KnowledgeEmbeddingSimilarity {
+    nonisolated static func cosine(_ a: [Float], _ b: [Float]) -> Float {
         guard a.count == b.count, a.isEmpty == false else { return 0 }
 
         var dot: Float = 0

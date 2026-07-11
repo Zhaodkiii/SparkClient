@@ -8,7 +8,7 @@ import UIKit
 
 // MARK: - SecondCameraImageEditorItemBackground
 
-struct SecondCameraImageEditorItemBackground {
+nonisolated struct SecondCameraImageEditorItemBackground {
     enum CornerRadius: CGFloat {
         case small = 8
         case large = 18
@@ -29,15 +29,15 @@ struct SecondCameraImageEditorItemBackground {
     }
 
     // Margins between text and edges of the colored background.
-    var horizontalMargin: CGFloat {
+    nonisolated var horizontalMargin: CGFloat {
         6 * scaleFactor
     }
 
-    var verticalMargin: CGFloat {
+    nonisolated var verticalMargin: CGFloat {
         2 * scaleFactor
     }
 
-    var cornerRadius: CGFloat {
+    nonisolated var cornerRadius: CGFloat {
         corners.rawValue * scaleFactor
     }
 }
@@ -48,23 +48,33 @@ class SecondCameraEditorEditorTextLayer: CATextLayer {
 
     let itemId: String
 
-    private var contentLayer: SecondCameraEditorEditorTextLayer?
+    nonisolated(unsafe) private var contentLayer: SecondCameraEditorEditorTextLayer?
 
-    init(itemId: String) {
+    nonisolated init(itemId: String) {
         self.itemId = itemId
         super.init()
         self.name = itemId
     }
 
+    @available(*, unavailable, message: "use init(itemId:) instead.")
+    nonisolated override init() {
+        fatalError("init() has not been implemented")
+    }
+
+    @available(*, unavailable, message: "use init(itemId:) instead.")
+    nonisolated override init(layer: Any) {
+        fatalError("init(layer:) has not been implemented")
+    }
+
     @available(*, unavailable, message: "use other init() instead.")
-    required init?(coder aDecoder: NSCoder) {
+    nonisolated required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
     // Creates a new layer that is larger than `self` by amount specified in `Margins`.
     // The resulting layer has background color and rounded corners set.
     // `self` is added as a sublayer and is centered vertically and horizontally.
-    fileprivate func withRoundedRectBackground(_ background: SecondCameraImageEditorItemBackground) -> SecondCameraEditorEditorTextLayer {
+    nonisolated fileprivate func withRoundedRectBackground(_ background: SecondCameraImageEditorItemBackground) -> SecondCameraEditorEditorTextLayer {
         guard background.color.alpha > 0 else { return self }
 
         let rootLayer = SecondCameraEditorEditorTextLayer(itemId: itemId)
@@ -83,7 +93,7 @@ class SecondCameraEditorEditorTextLayer: CATextLayer {
         return rootLayer
     }
 
-    override var contentsScale: CGFloat {
+    nonisolated override var contentsScale: CGFloat {
         get { super.contentsScale }
         set {
             super.contentsScale = newValue
@@ -98,44 +108,44 @@ class SecondCameraEditorEditorTextLayer: CATextLayer {
 
 private class SecondCameraEditorTextFrameLayer: CAShapeLayer {
 
-    override init() {
+    nonisolated override init() {
         super.init()
         commonInit()
     }
 
-    override init(layer: Any) {
+    nonisolated override init(layer: Any) {
         super.init(layer: layer)
         commonInit()
     }
 
     @available(*, unavailable, message: "use other init() instead.")
-    required init?(coder: NSCoder) {
+    nonisolated required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var bounds: CGRect {
+    nonisolated override var bounds: CGRect {
         didSet {
             updatePath()
         }
     }
 
-    override var frame: CGRect {
+    nonisolated override var frame: CGRect {
         didSet {
             updatePath()
         }
     }
 
-    private static let circleRadius: CGFloat = 5
+    nonisolated(unsafe) private static let circleRadius: CGFloat = 5
 
     // Visible frame is a little smaller than layer's bounds in order
     // to make room for little circles in the middle of left and right frame sides.
-    private var frameRect: CGRect {
+    nonisolated private var frameRect: CGRect {
         bounds.insetBy(dx: SecondCameraEditorTextFrameLayer.circleRadius, dy: 0)
     }
 
-    private lazy var leftCircleLayer = SecondCameraEditorTextFrameLayer.createCircleLayer()
-    private lazy var rightCircleLayer = SecondCameraEditorTextFrameLayer.createCircleLayer()
-    private static func createCircleLayer() -> CAShapeLayer {
+    nonisolated(unsafe) private lazy var leftCircleLayer = SecondCameraEditorTextFrameLayer.createCircleLayer()
+    nonisolated(unsafe) private lazy var rightCircleLayer = SecondCameraEditorTextFrameLayer.createCircleLayer()
+    nonisolated private static func createCircleLayer() -> CAShapeLayer {
         let layer = CAShapeLayer()
         layer.bounds = CGRect(origin: .zero, size: CGSize(square: circleRadius * 2))
         layer.fillColor = UIColor.white.cgColor
@@ -143,7 +153,7 @@ private class SecondCameraEditorTextFrameLayer: CAShapeLayer {
         return layer
     }
 
-    private func commonInit() {
+    nonisolated private func commonInit() {
         fillColor = UIColor.clear.cgColor
         lineWidth = .hairlineWidthFraction(3)
         strokeColor = UIColor.white.cgColor
@@ -152,11 +162,11 @@ private class SecondCameraEditorTextFrameLayer: CAShapeLayer {
         addSublayer(rightCircleLayer)
     }
 
-    private func updatePath() {
+    nonisolated private func updatePath() {
         path = UIBezierPath(rect: frameRect).cgPath
     }
 
-    override func layoutSublayers() {
+    nonisolated override func layoutSublayers() {
         super.layoutSublayers()
         let frameRect = frameRect
         leftCircleLayer.position = CGPoint(x: frameRect.minX, y: frameRect.midY)
@@ -629,7 +639,7 @@ class SecondCameraImageEditorCanvasView: UIView {
         )
     }
 
-    class func updateImageLayer(imageLayer: CALayer, viewSize: CGSize, imageSize: CGSize, transform: SecondCameraImageEditorTransform) {
+    nonisolated class func updateImageLayer(imageLayer: CALayer, viewSize: CGSize, imageSize: CGSize, transform: SecondCameraImageEditorTransform) {
         imageLayer.frame = imageFrame(forViewSize: viewSize, imageSize: imageSize, transform: transform)
 
         // This is the only place the isFlipped flag is consulted.
@@ -642,7 +652,7 @@ class SecondCameraImageEditorCanvasView: UIView {
         imageLayer.setAffineTransform(transform)
     }
 
-    class func imageFrame(forViewSize viewSize: CGSize, imageSize: CGSize, transform: SecondCameraImageEditorTransform) -> CGRect {
+    nonisolated class func imageFrame(forViewSize viewSize: CGSize, imageSize: CGSize, transform: SecondCameraImageEditorTransform) -> CGRect {
         guard viewSize.width > 0, viewSize.height > 0 else {
             secondCameraEditorFailDebug("Invalid viewSize")
             return .zero

@@ -1,7 +1,7 @@
 import Foundation
 
-enum SecondCameraEditorL10n {
-    static func tr(_ key: String, fallback: String) -> String {
+nonisolated enum SecondCameraEditorL10n {
+    nonisolated static func tr(_ key: String, fallback: String) -> String {
         NSLocalizedString(
             key,
             tableName: "SecondCamera",
@@ -11,7 +11,7 @@ enum SecondCameraEditorL10n {
         )
     }
 
-    enum Home {
+    nonisolated enum Home {
         static var title: String { tr("second_camera.home.title", fallback: "相机") }
         static var open: String { tr("second_camera.home.open", fallback: "打开相机") }
         static var subtitle: String {
@@ -23,7 +23,7 @@ enum SecondCameraEditorL10n {
         static var tabTitle: String { tr("second_camera.tab.title", fallback: "相机") }
     }
 
-    enum Preview {
+    nonisolated enum Preview {
         static var back: String { tr("second_camera.preview.back", fallback: "返回") }
         static var done: String { tr("second_camera.preview.done", fallback: "完成") }
         static var save: String { tr("second_camera.preview.save", fallback: "保存") }
@@ -31,7 +31,7 @@ enum SecondCameraEditorL10n {
         static var saveFailed: String { tr("second_camera.preview.save_failed", fallback: "保存失败") }
     }
 
-    enum PublicPreview {
+    nonisolated enum PublicPreview {
         static var close: String {
             L10n.text("second_camera.public_preview.close", fallback: "关闭")
         }
@@ -58,7 +58,7 @@ enum SecondCameraEditorL10n {
         }
     }
 
-    enum Editor {
+    nonisolated enum Editor {
         static var draw: String { tr("second_camera.editor.draw", fallback: "画笔") }
         static var crop: String { tr("second_camera.editor.crop", fallback: "裁剪") }
         static var cancel: String { tr("second_camera.editor.cancel", fallback: "取消") }
@@ -69,7 +69,7 @@ enum SecondCameraEditorL10n {
         static var sticker: String { tr("second_camera.sticker.title", fallback: "贴纸") }
     }
 
-    enum Quality {
+    nonisolated enum Quality {
         static var title: String { tr("second_camera.quality.title", fallback: "图片质量") }
         static var original: String { tr("second_camera.quality.original", fallback: "原图") }
         static var high: String { tr("second_camera.quality.high", fallback: "高清") }
@@ -77,7 +77,7 @@ enum SecondCameraEditorL10n {
         static var compressed: String { tr("second_camera.quality.compressed", fallback: "压缩") }
     }
 
-    enum Error {
+    nonisolated enum Error {
         static var noMedia: String { tr("second_camera.error.no_media", fallback: "没有可用的媒体内容") }
         static var loadFailed: String { tr("second_camera.error.load_failed", fallback: "无法读取媒体内容") }
         static var editorInitFailed: String { tr("second_camera.error.editor_init_failed", fallback: "无法初始化图片编辑器") }
@@ -86,7 +86,7 @@ enum SecondCameraEditorL10n {
         static var ok: String { tr("second_camera.error.ok", fallback: "好") }
     }
 
-    enum Multi {
+    nonisolated enum Multi {
         static var addMore: String { tr("second_camera.multi.add_more", fallback: "添加") }
         static var continueCapture: String { tr("second_camera.multi.continue_capture", fallback: "继续拍摄") }
         static var pickFromLibrary: String { tr("second_camera.multi.pick_from_library", fallback: "从相册选择") }

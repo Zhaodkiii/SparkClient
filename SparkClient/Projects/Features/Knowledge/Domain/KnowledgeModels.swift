@@ -7,14 +7,14 @@ import Foundation
 
 // MARK: - 文档作用域（个人 / 绑定智能体）
 /// 知识库文档的作用域：个人私有 / 绑定到某个智能体
-enum KnowledgeDocumentScope: String, Codable, CaseIterable, Sendable {
+nonisolated enum KnowledgeDocumentScope: String, Codable, CaseIterable, Sendable {
     case personal       // 个人私有文档
     case agentBound     // 绑定到智能体的文档
 }
 
 // MARK: - 文档来源
 /// 文档来源：用户手动创建 / 聊天工具自动创建
-enum KnowledgeDocumentSource: String, Codable, CaseIterable, Sendable {
+nonisolated enum KnowledgeDocumentSource: String, Codable, CaseIterable, Sendable {
     case user    // 用户手动创建
     case tool    // 工具/自动化流程创建
 }
@@ -22,7 +22,7 @@ enum KnowledgeDocumentSource: String, Codable, CaseIterable, Sendable {
 // MARK: - 知识库文档（主模型）
 /// 知识库文档（对应 Core Data 文档实体）
 /// 代表一篇完整的用户上传/创建的文档
-struct KnowledgeDocument: Identifiable, Equatable, Sendable {
+nonisolated struct KnowledgeDocument: Identifiable, Equatable, Sendable {
     let id: UUID                          // 文档唯一ID
     let title: String                     // 文档标题
     let content: String                   // 文档完整内容
@@ -45,7 +45,7 @@ struct KnowledgeDocument: Identifiable, Equatable, Sendable {
 // MARK: - 文档切块（向量检索最小单元）
 /// 文档切块（对应 Core Data 切块实体）
 /// 文档会被切分成多个块，用于向量检索
-struct KnowledgeChunk: Identifiable, Equatable, Sendable {
+nonisolated struct KnowledgeChunk: Identifiable, Equatable, Sendable {
     let id: UUID              // 切块唯一ID
     let documentID: UUID      // 所属文档ID
     let sequence: Int         // 切块顺序序号
@@ -58,7 +58,7 @@ struct KnowledgeChunk: Identifiable, Equatable, Sendable {
 // MARK: - 检索结果模型
 /// 知识库搜索/检索结果
 /// 用于 UI 展示匹配到的文档和相关性得分
-struct KnowledgeSearchResult: Identifiable, Equatable, Sendable {
+nonisolated struct KnowledgeSearchResult: Identifiable, Equatable, Sendable {
     let documentID: UUID              // 匹配到的文档ID
     let title: String                 // 文档标题
     let excerpt: String                // 文档摘要
@@ -74,7 +74,7 @@ struct KnowledgeSearchResult: Identifiable, Equatable, Sendable {
 // MARK: - 文档草稿（创建/编辑时使用）
 /// 文档草稿模型
 /// 用于新建/编辑文档时临时存储数据，未持久化到数据库
-struct KnowledgeDocumentDraft: Equatable, Sendable {
+nonisolated struct KnowledgeDocumentDraft: Equatable, Sendable {
     var title: String                     // 标题
     var content: String                   // 内容
     var scope: KnowledgeDocumentScope     // 作用域
@@ -98,9 +98,9 @@ struct KnowledgeDocumentDraft: Equatable, Sendable {
 }
 
 // MARK: - 字符串预览扩展
-private extension String {
+nonisolated private extension String {
     /// 生成列表预览文本：替换换行/制表符 → 去空白 → 超长截取+省略号
-    func previewText(limit: Int) -> String {
+    nonisolated func previewText(limit: Int) -> String {
         // 替换换行、制表符为空格，清除首尾空白
         let normalized = replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\t", with: " ")

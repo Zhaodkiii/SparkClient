@@ -1,7 +1,7 @@
 import Foundation
 
-struct UserSession: Codable, Equatable, Sendable {
-    enum SignInMethod: String, Codable, Sendable {
+nonisolated struct UserSession: Codable, Equatable, Sendable {
+    nonisolated enum SignInMethod: String, Codable, Sendable {
         case apple
         case phone
     }

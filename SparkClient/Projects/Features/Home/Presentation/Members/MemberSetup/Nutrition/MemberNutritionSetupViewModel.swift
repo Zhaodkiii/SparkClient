@@ -16,6 +16,7 @@ final class MemberNutritionSetupViewModel: ObservableObject {
     @Published var note: String = ""
     @Published var calculationResult: SparkNutritionAPI.RemoteNutritionBodyMetricsCalculationResponse?
     @Published var isLoading = false
+    @Published var hasLoaded = false
     @Published var isSaving = false
     @Published var errorMessage: String?
 
@@ -32,7 +33,7 @@ final class MemberNutritionSetupViewModel: ObservableObject {
 
     func loadIfNeeded() async {
         guard let member else { return }
-        guard isLoading == false else { return }
+        guard isLoading == false, hasLoaded == false else { return }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -43,6 +44,7 @@ final class MemberNutritionSetupViewModel: ObservableObject {
                 applyDefaults(state.defaults)
             }
             await refreshCalculationIfPossible()
+            hasLoaded = true
         } catch {
             errorMessage = error.localizedDescription
         }

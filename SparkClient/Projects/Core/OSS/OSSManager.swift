@@ -1,82 +1,96 @@
 import Foundation
 // import AliyunOSSiOS
 
-final class OSSManager {
+nonisolated final class OSSManager: @unchecked Sendable {
     static let shared = OSSManager()
 
     private(set) var client: OSSClient?
     private var currentCredentials: OSSCredentials?
-    var credentialsProvider: (() async throws -> OSSCredentials)?
+    var credentialsProvider: (@Sendable () async throws -> OSSCredentials)?
 
     private let lock = NSRecursiveLock()
     private var refreshingTask: Task<OSSCredentials, Error>?
 
     private init() {}
 
-    func updateConfiguration(endpoint: String, bucket: String, region: String) {
+    private func withLock<T>(_ body: () throws -> T) rethrows -> T {
         lock.lock()
-        OSSConfiguration.endpoint = endpoint
-        OSSConfiguration.bucket = bucket
-        OSSConfiguration.region = region
-        lock.unlock()
+        defer { lock.unlock() }
+        return try body()
+    }
+
+    func updateConfiguration(endpoint: String, bucket: String, region: String) {
+        withLock {
+            OSSConfiguration.endpoint = endpoint
+            OSSConfiguration.bucket = bucket
+            OSSConfiguration.region = region
+        }
     }
 
     func updateCredentials(_ credentials: OSSCredentials) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard credentials.isValid else { return }
+        withLock {
+            guard credentials.isValid else { return }
 
-        currentCredentials = credentials
-        let credentialProvider = OSSStsTokenCredentialProvider(
-            accessKeyId: credentials.accessKeyId,
-            secretKeyId: credentials.accessKeySecret,
-            securityToken: credentials.securityToken ?? ""
-        )
-        client = OSSClient(endpoint: OSSConfiguration.endpoint, credentialProvider: credentialProvider)
+            currentCredentials = credentials
+            let credentialProvider = OSSStsTokenCredentialProvider(
+                accessKeyId: credentials.accessKeyId,
+                secretKeyId: credentials.accessKeySecret,
+                securityToken: credentials.securityToken ?? ""
+            )
+            client = OSSClient(endpoint: OSSConfiguration.endpoint, credentialProvider: credentialProvider)
+        }
     }
 
     func resetRuntimeCredentials() {
-        lock.lock()
-        currentCredentials = nil
-        client = nil
-        refreshingTask?.cancel()
-        refreshingTask = nil
-        lock.unlock()
+        withLock {
+            currentCredentials = nil
+            client = nil
+            refreshingTask?.cancel()
+            refreshingTask = nil
+        }
     }
 
     func getValidCredentials() async throws -> OSSCredentials {
-        lock.lock()
-        if let credentials = currentCredentials, !credentials.isExpired {
-            lock.unlock()
-            return credentials
-        }
-        if let existingTask = refreshingTask {
-            lock.unlock()
-            return try await existingTask.value
-        }
-        guard let provider = credentialsProvider else {
-            lock.unlock()
-            throw OSSError.credentialsProviderNotSet
+        enum CredentialResolution {
+            case ready(OSSCredentials)
+            case refresh(Task<OSSCredentials, Error>)
         }
 
-        let refreshTask = Task {
-            let newCredentials = try await provider()
-            updateCredentials(newCredentials)
-            lock.lock()
-            refreshingTask = nil
-            lock.unlock()
-            return newCredentials
+        let resolution = try withLock { () throws -> CredentialResolution in
+            if let credentials = currentCredentials, !credentials.isExpired {
+                return .ready(credentials)
+            }
+            if let existingTask = refreshingTask {
+                return .refresh(existingTask)
+            }
+            guard let provider = credentialsProvider else {
+                throw OSSError.credentialsProviderNotSet
+            }
+
+            let refreshTask = Task { [weak self] in
+                let newCredentials = try await provider()
+                self?.updateCredentials(newCredentials)
+                self?.withLock {
+                    self?.refreshingTask = nil
+                }
+                return newCredentials
+            }
+            refreshingTask = refreshTask
+            return .refresh(refreshTask)
         }
-        refreshingTask = refreshTask
-        lock.unlock()
-        return try await refreshTask.value
+
+        switch resolution {
+        case let .ready(credentials):
+            return credentials
+        case let .refresh(task):
+            return try await task.value
+        }
     }
 
     func ensureInitialized() async throws {
-        lock.lock()
-        let hasClient = client != nil
-        let needsRefresh = currentCredentials?.isExpired ?? true
-        lock.unlock()
+        let (hasClient, needsRefresh) = withLock {
+            (client != nil, currentCredentials?.isExpired ?? true)
+        }
 
         if hasClient && !needsRefresh { return }
         _ = try await getValidCredentials()

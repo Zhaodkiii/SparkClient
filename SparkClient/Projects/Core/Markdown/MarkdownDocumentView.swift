@@ -989,7 +989,7 @@ private struct MarkdownInlineFlowLayout: Layout {
     }
 }
 
-private struct MarkdownInlineLineBreakKey: LayoutValueKey {
+nonisolated private struct MarkdownInlineLineBreakKey: LayoutValueKey {
     static let defaultValue = false
 }
 

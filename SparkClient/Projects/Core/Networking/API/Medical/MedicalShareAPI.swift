@@ -8,7 +8,7 @@ struct SparkMedicalShareAPI {
         self.configuration = configuration
     }
 
-    struct CreateSharePayload: Encodable, Sendable {
+    nonisolated struct CreateSharePayload: Encodable, Sendable {
         let businessType: String
         let businessId: Int
     }
@@ -35,7 +35,7 @@ struct SparkMedicalShareAPI {
         try await createShare(businessType: "medical_case", businessID: caseID)
     }
 
-    private func postRequest<T: Decodable, B: Encodable>(
+    private func postRequest<T: Decodable, B: Encodable & Sendable>(
         method: SparkHTTPMethod,
         path: String,
         body: B?,

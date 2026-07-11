@@ -68,7 +68,7 @@ struct SparkMedicalMemberAPI {
     /// 创建或更新成员时的请求体（PUT/POST 共用形状）。
     ///
     /// 对 `birthDate` 使用自定义 `encode`：有值则按「仅日期」规则编码（与医疗模块其它日期字段一致），无值则显式编码为 JSON `null`。
-    struct UpsertMemberPayload: Encodable, Sendable {
+    nonisolated struct UpsertMemberPayload: Encodable, Sendable {
         let name: String
         let relationship: String
         let gender: String

@@ -7,7 +7,7 @@ import UIKit
 
 // MARK: - Logger
 
-public enum SecondCameraEditorLogger {
+nonisolated public enum SecondCameraEditorLogger {
     public static func verbose(_ logString: @autoclosure () -> String, file: String = #fileID, function: String = #function, line: Int = #line) {
         #if DEBUG
         print("[VERBOSE] \(logString())")
@@ -29,7 +29,7 @@ public enum SecondCameraEditorLogger {
     }
 }
 
-public struct SecondCameraEditorPrefixedLogger {
+nonisolated public struct SecondCameraEditorPrefixedLogger: Sendable {
     private let prefix: String
     public static func empty() -> SecondCameraEditorPrefixedLogger { SecondCameraEditorPrefixedLogger(prefix: "") }
     public init(prefix: String) { self.prefix = prefix }
@@ -49,7 +49,7 @@ public struct SecondCameraEditorRemoteConfig: Sendable {
     public var videoAttachmentMaxEncryptedBytes: UInt64 { 100 * 1024 * 1024 }
     public var attachmentMaxEncryptedReceiveBytes: UInt64 { 100 * 1024 * 1024 }
 
-    public func standardMediaQualityLevel(callingCode: Int?) -> SecondCameraEditorImageQualityLevel? {
+    nonisolated public func standardMediaQualityLevel(callingCode: Int?) -> SecondCameraEditorImageQualityLevel? {
         .two
     }
 }
@@ -107,14 +107,14 @@ public struct SecondCameraEditorPhoneNumberUtilStub: Sendable {
 
 // MARK: - Preferences
 
-public enum SecondCameraEditorPreferences {
+nonisolated public enum SecondCameraEditorPreferences {
     nonisolated(unsafe) public static var isFailDebugEnabled: Bool = false
     public static func setIsFailDebugEnabled(_ value: Bool) { isFailDebugEnabled = value }
 }
 
 // MARK: - Debugger
 
-public func SecondCameraEditorIsDebuggerAttached() -> Bool {
+nonisolated public func SecondCameraEditorIsDebuggerAttached() -> Bool {
     #if DEBUG
     return true
     #else
@@ -122,7 +122,7 @@ public func SecondCameraEditorIsDebuggerAttached() -> Bool {
     #endif
 }
 
-public func SecondCameraEditorTrapDebugger() {}
+nonisolated public func SecondCameraEditorTrapDebugger() {}
 
 // MARK: - Database stubs
 
@@ -139,7 +139,7 @@ public enum SecondCameraEditorDatabaseCorruptionState {
 
 // MARK: - Atomic types
 
-public final class SecondCameraEditorAtomicBool: @unchecked Sendable {
+nonisolated public final class SecondCameraEditorAtomicBool: @unchecked Sendable {
     private var value: Bool
     private let lock = NSLock()
 
@@ -170,7 +170,7 @@ public final class SecondCameraEditorAtomicBool: @unchecked Sendable {
 
 // MARK: - Dispatch helpers
 
-public func SecondCameraEditorDispatchMainThreadSafe(_ block: @escaping () -> Void) {
+nonisolated public func SecondCameraEditorDispatchMainThreadSafe(_ block: @escaping () -> Void) {
     if Thread.isMainThread {
         block()
     } else {

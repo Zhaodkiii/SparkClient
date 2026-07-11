@@ -11,6 +11,7 @@ final class NutritionRecipeFoodPickerViewModel: ObservableObject {
     private let memberID: Int
     private let searchUseCase: NutritionSearchUseCase
     private let notificationStore: NotificationStore
+    private var reloadGeneration = 0
 
     init(
         memberID: Int,
@@ -28,9 +29,15 @@ final class NutritionRecipeFoodPickerViewModel: ObservableObject {
     }
 
     func reload() async {
+        reloadGeneration += 1
+        let generation = reloadGeneration
         isLoading = true
         errorMessageKey = nil
-        defer { isLoading = false }
+        defer {
+            if generation == reloadGeneration {
+                isLoading = false
+            }
+        }
 
         let filters = NutritionFoodSearchFilterState(
             mode: .text,
@@ -41,17 +48,16 @@ final class NutritionRecipeFoodPickerViewModel: ObservableObject {
         )
 
         do {
-            results = try await searchUseCase.search(memberID: memberID, filters: filters)
+            let nextResults = try await searchUseCase.search(memberID: memberID, filters: filters)
+            guard Task.isCancelled == false, generation == reloadGeneration else { return }
+            results = nextResults
         } catch {
+            guard Task.isCancelled == false, generation == reloadGeneration else { return }
             results = []
             errorMessageKey = NutritionErrorMapper.messageKey(for: error)
         }
     }
 
-    func contentFilterChanged() {
-        results = []
-        Task { await reload() }
-    }
 }
 
 struct NutritionRecipeFoodPickerView: View {
@@ -94,9 +100,8 @@ struct NutritionRecipeFoodPickerView: View {
                 }
             }
         }
-        .task { await viewModel.loadIfNeeded() }
-        .onChange(of: viewModel.contentFilter) { _ in
-            viewModel.contentFilterChanged()
+        .task(id: viewModel.contentFilter) {
+            await viewModel.reload()
         }
     }
 

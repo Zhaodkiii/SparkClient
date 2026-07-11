@@ -419,7 +419,7 @@ actor MessageRunActor: ChatSideEffectSink {
         return block.orderKey
     }
 
-    private static func presentationOrderKey(forToolOrderKey toolOrderKey: Double) -> Double {
+    nonisolated private static func presentationOrderKey(forToolOrderKey toolOrderKey: Double) -> Double {
         toolOrderKey + 100
     }
 
@@ -848,16 +848,16 @@ actor MessageRunActor: ChatSideEffectSink {
         return didApplyAny
     }
 
-    private static func isEncodable<T: Encodable>(_ value: T) -> Bool {
+    nonisolated private static func isEncodable<T: Encodable>(_ value: T) -> Bool {
         (try? JSONEncoder.default.encode(value)) != nil
     }
 
-    private static func normalizedToolCallID(_ raw: String?) -> String? {
+    nonisolated private static func normalizedToolCallID(_ raw: String?) -> String? {
         let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    static func databaseRichBlock(
+    nonisolated static func databaseRichBlock(
         _ block: ChatMessageBlock,
         assistantClientMessageID: UUID,
         nextRevision: Int64,
@@ -899,7 +899,7 @@ actor MessageRunActor: ChatSideEffectSink {
         )
     }
 
-    private static func defaultOrderKey(for kind: ChatMessageBlockKind) -> Double {
+    nonisolated private static func defaultOrderKey(for kind: ChatMessageBlockKind) -> Double {
         switch kind {
         case .deepThought:
             return 900
@@ -923,7 +923,7 @@ actor MessageRunActor: ChatSideEffectSink {
         }
     }
 
-    private static func revision(_ date: Date) -> Int64 {
+    nonisolated private static func revision(_ date: Date) -> Int64 {
         Int64(date.timeIntervalSince1970 * 1_000_000)
     }
 

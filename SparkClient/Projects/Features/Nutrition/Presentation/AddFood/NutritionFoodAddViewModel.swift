@@ -54,6 +54,7 @@ final class NutritionFoodAddViewModel: ObservableObject {
     private let memberContextStore: MemberContextStore
     private let notificationStore: NotificationStore
     private let logger: Logger
+    private var reloadGeneration = 0
 
     init(
         memberID: Int,
@@ -100,9 +101,15 @@ final class NutritionFoodAddViewModel: ObservableObject {
     }
 
     func reloadRecommended() async {
+        reloadGeneration += 1
+        let generation = reloadGeneration
         isLoadingRecommended = true
         recommendedErrorKey = nil
-        defer { isLoadingRecommended = false }
+        defer {
+            if generation == reloadGeneration {
+                isLoadingRecommended = false
+            }
+        }
 
         let filters = NutritionFoodSearchFilterState(
             mode: .text,
@@ -113,8 +120,11 @@ final class NutritionFoodAddViewModel: ObservableObject {
         )
 
         do {
-            recommendedFoods = try await searchUseCase.search(memberID: memberID, filters: filters)
+            let foods = try await searchUseCase.search(memberID: memberID, filters: filters)
+            guard Task.isCancelled == false, generation == reloadGeneration else { return }
+            recommendedFoods = foods
         } catch {
+            guard Task.isCancelled == false, generation == reloadGeneration else { return }
             recommendedFoods = []
             let messageKey = NutritionErrorMapper.messageKey(for: error)
             recommendedErrorKey = messageKey
@@ -124,11 +134,6 @@ final class NutritionFoodAddViewModel: ObservableObject {
                 source: "nutrition.food_add.recommended"
             )
         }
-    }
-
-    func contentFilterChanged() {
-        recommendedFoods = []
-        Task { await reloadRecommended() }
     }
 
     func addSelection(_ result: NutritionFoodSearchResultViewData) {

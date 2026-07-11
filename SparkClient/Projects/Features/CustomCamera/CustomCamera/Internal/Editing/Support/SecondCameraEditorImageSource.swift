@@ -9,7 +9,7 @@ import UIKit
 
 //import SDWebImage
 
-public protocol SecondCameraEditorImageSource {
+nonisolated public protocol SecondCameraEditorImageSource {
 
     var byteLength: Int { get }
 
@@ -18,14 +18,14 @@ public protocol SecondCameraEditorImageSource {
     func cgImageSource() throws -> CGImageSource?
 }
 
-public struct SecondCameraEditorDataImageSource: SecondCameraEditorImageSource {
+nonisolated public struct SecondCameraEditorDataImageSource: SecondCameraEditorImageSource, Sendable {
     public let rawValue: Data
 
     public init(_ rawValue: Data) {
         self.rawValue = rawValue
     }
 
-    public static func forPath(_ filePath: String) throws -> Self {
+    nonisolated public static func forPath(_ filePath: String) throws -> Self {
         do {
             // Use memory-mapped Data instead of a URL-based CGImageSource because we
             // may only need to read from a small portion of the file header.
@@ -36,23 +36,23 @@ public struct SecondCameraEditorDataImageSource: SecondCameraEditorImageSource {
         }
     }
 
-    public var byteLength: Int { self.rawValue.count }
+    nonisolated public var byteLength: Int { self.rawValue.count }
 
-    public func readData(byteOffset: Int, byteLength: Int) throws -> Data {
+    nonisolated public func readData(byteOffset: Int, byteLength: Int) throws -> Data {
         return self.rawValue.dropFirst(byteOffset).prefix(byteLength)
     }
 
-    public func cgImageSource() throws -> CGImageSource? {
+    nonisolated public func cgImageSource() throws -> CGImageSource? {
         return CGImageSourceCreateWithData(self.rawValue as CFData, nil)
     }
 }
 
-extension SecondCameraEditorImageSource {
-    public var ows_isValidImage: Bool {
+nonisolated extension SecondCameraEditorImageSource {
+    nonisolated public var ows_isValidImage: Bool {
         return imageMetadata() != nil
     }
 
-    private func ows_guessHighEfficiencySecondCameraEditorImageFormat() -> SecondCameraEditorImageFormat? {
+    nonisolated private func ows_guessHighEfficiencySecondCameraEditorImageFormat() -> SecondCameraEditorImageFormat? {
         // A HEIF image file has the first 16 bytes like
         // 0000 0018 6674 7970 6865 6963 0000 0000
         // so in this case the 5th to 12th bytes shall make a string of "ftypheic"
@@ -85,7 +85,7 @@ extension SecondCameraEditorImageSource {
         }
     }
 
-    private func ows_guessSecondCameraEditorImageFormat() -> SecondCameraEditorImageFormat? {
+    nonisolated private func ows_guessSecondCameraEditorImageFormat() -> SecondCameraEditorImageFormat? {
         guard byteLength >= 2 else {
             return nil
         }
@@ -113,7 +113,7 @@ extension SecondCameraEditorImageSource {
     // MARK: - Image Metadata
 
     /// load image metadata about the current object
-    public func imageMetadata() -> SecondCameraEditorImageMetadata? {
+    nonisolated public func imageMetadata() -> SecondCameraEditorImageMetadata? {
         // The largest image we should be able to handle in most places. This must
         // be larger than the largest animated image (so that we can check if it's
         // animated); it must also be larger than the largest image we support in
@@ -141,7 +141,7 @@ extension SecondCameraEditorImageSource {
     }
 }
 
-private func applyImageOrientation(_ orientation: CGImagePropertyOrientation, to imageSize: CGSize) -> CGSize {
+nonisolated private func applyImageOrientation(_ orientation: CGImagePropertyOrientation, to imageSize: CGSize) -> CGSize {
     // NOTE: UIImageOrientation and CGImagePropertyOrientation values
     //       DO NOT match.
     switch orientation {
@@ -152,7 +152,7 @@ private func applyImageOrientation(_ orientation: CGImagePropertyOrientation, to
     }
 }
 
-private func isImageSizeValid(_ imageSize: CGSize, depthBytes: CGFloat) -> Bool {
+nonisolated private func isImageSizeValid(_ imageSize: CGSize, depthBytes: CGFloat) -> Bool {
     if imageSize.width < 1 || imageSize.height < 1 || depthBytes < 1 {
         // Invalid metadata.
         return false
@@ -175,7 +175,7 @@ private func isImageSizeValid(_ imageSize: CGSize, depthBytes: CGFloat) -> Bool 
     return true
 }
 
-private func imageMetadataWithImageSource(_ imageSource: CGImageSource, imageFormat: SecondCameraEditorImageFormat) -> SecondCameraEditorImageMetadata? {
+nonisolated private func imageMetadataWithImageSource(_ imageSource: CGImageSource, imageFormat: SecondCameraEditorImageFormat) -> SecondCameraEditorImageMetadata? {
     let options = [kCGImageSourceShouldCache as String: false]
     guard let imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, options as CFDictionary) as? [String: AnyObject] else {
         SecondCameraEditorLogger.warn("Missing imageProperties.")

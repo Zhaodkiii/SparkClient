@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - AI 任务卡片（仅客户端消息内展示，不落服务端 TaskCard 表）
 
-struct TaskCard: Identifiable, Codable, Equatable, Sendable {
+nonisolated struct TaskCard: Identifiable, Codable, Equatable, Sendable {
     enum CardStatus: Int, Codable, Sendable {
         case pending = 0
         case confirmed = 1

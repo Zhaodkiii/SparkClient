@@ -383,7 +383,7 @@ struct NutritionAPI: @unchecked Sendable {
     }
 
     /// POST 写操作：高优先级队列，不缓存，非幂等
-    private func post<T: Encodable, R: Decodable>(
+    private func post<T: Encodable & Sendable, R: Decodable>(
         path: String,
         body: T,
         name: String,
@@ -411,7 +411,7 @@ struct NutritionAPI: @unchecked Sendable {
     }
 
     /// PATCH 部分更新：策略同 POST
-    private func patch<T: Encodable, R: Decodable>(
+    private func patch<T: Encodable & Sendable, R: Decodable>(
         path: String,
         body: T,
         name: String,

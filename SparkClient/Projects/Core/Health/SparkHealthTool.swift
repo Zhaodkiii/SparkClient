@@ -482,7 +482,6 @@ final class SparkHealthTool: @unchecked Sendable {
         do {
             try await requestAuthorization()
             let predicateEnd = inclusivePredicateEnd(for: endDate)
-            let predicate = HKQuery.predicateForSamples(withStart: startDate, end: predicateEnd)
             let anchorDate = calendar.startOfDay(for: startDate)
             let interval: DateComponents = {
                 var value = DateComponents()
@@ -490,8 +489,8 @@ final class SparkHealthTool: @unchecked Sendable {
                 return value
             }()
 
-            async let leftStats = statisticsCollection(type: leftType, predicate: predicate, anchorDate: anchorDate, interval: interval)
-            async let rightStats = statisticsCollection(type: rightType, predicate: predicate, anchorDate: anchorDate, interval: interval)
+            async let leftStats = statisticsCollection(type: leftType, start: startDate, end: predicateEnd, anchorDate: anchorDate, interval: interval)
+            async let rightStats = statisticsCollection(type: rightType, start: startDate, end: predicateEnd, anchorDate: anchorDate, interval: interval)
             let (leftCollection, rightCollection) = try await (leftStats, rightStats)
 
             let dayFormatter = Self.displayDayFormatter(calendar: calendar)
@@ -580,11 +579,13 @@ final class SparkHealthTool: @unchecked Sendable {
 
     private func statisticsCollection(
         type: HKQuantityType,
-        predicate: NSPredicate,
+        start: Date,
+        end: Date,
         anchorDate: Date,
         interval: DateComponents
     ) async throws -> HKStatisticsCollection {
-        try await withCheckedThrowingContinuation { continuation in
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HKStatisticsCollection, Error>) in
             let query = HKStatisticsCollectionQuery(
                 quantityType: type,
                 quantitySamplePredicate: predicate,
@@ -828,7 +829,7 @@ final class SparkHealthTool: @unchecked Sendable {
         Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: endDate)) ?? endDate
     }
 
-    private static func text(_ key: String) -> String {
+    nonisolated private static func text(_ key: String) -> String {
         L10n.text(key)
     }
 

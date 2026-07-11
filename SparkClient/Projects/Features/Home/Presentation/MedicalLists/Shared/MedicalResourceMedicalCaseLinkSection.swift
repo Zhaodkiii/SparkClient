@@ -95,7 +95,7 @@ struct MedicalResourceMedicalCaseLinkSection<UpdatedResource: Decodable>: View {
         }
     }
 
-    private func updateResource<B: Encodable>(_ body: B) async throws -> UpdatedResource {
+    private func updateResource<B: Encodable & Sendable>(_ body: B) async throws -> UpdatedResource {
         if resourceKind == .medicationPlans,
            UpdatedResource.self == SparkMedicalSyncAPI.RemoteMedicationPlan.self {
             let mutation = try await workflowAPI.updateMedicationPlan(id: resourceID, body: body)

@@ -5,7 +5,7 @@
 
 import Foundation
 
-public enum SecondCameraEditorFormat {
+nonisolated public enum SecondCameraEditorFormat {
 
     // We evacuate this cache in the background in case the
     // user changes a system setting that would affect
@@ -46,7 +46,7 @@ public enum SecondCameraEditorFormat {
 
 public extension SecondCameraEditorFormat {
 
-    private static let defaultNumberFormatter: NumberFormatter = {
+    private nonisolated(unsafe) static let defaultNumberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .none
         return formatter
@@ -123,7 +123,7 @@ public extension SecondCameraEditorFormat {
 
 public extension SecondCameraEditorFormat {
 
-    private static let decimalNumberFormatter: NumberFormatter = {
+    private nonisolated(unsafe) static let decimalNumberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter
@@ -151,7 +151,7 @@ public extension SecondCameraEditorFormat {
 
 public extension SecondCameraEditorFormat {
 
-    private static let durationFormatterS: DateComponentsFormatter = {
+    private nonisolated(unsafe) static let durationFormatterS: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         // `dropTrailing` produces a single leading zero: "0:ss".
         formatter.zeroFormattingBehavior = .dropTrailing
@@ -160,14 +160,14 @@ public extension SecondCameraEditorFormat {
         return formatter
     }()
 
-    private static let durationFormatterMS: DateComponentsFormatter = {
+    private nonisolated(unsafe) static let durationFormatterMS: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.formattingContext = .standalone
         formatter.allowedUnits = [.minute, .second]
         return formatter
     }()
 
-    private static let durationFormatterHMS: DateComponentsFormatter = {
+    private nonisolated(unsafe) static let durationFormatterHMS: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.formattingContext = .standalone
         formatter.allowedUnits = [.hour, .minute, .second]
@@ -179,7 +179,7 @@ public extension SecondCameraEditorFormat {
      * As a workaround, we make the full "00:00" string and take last N characters from it,
      * where N is the length of "0:01".
      */
-    private nonisolated(unsafe) static var zeroDurationString: String? = {
+    private nonisolated(unsafe) static let zeroDurationString: String? = {
         let formatter = DateComponentsFormatter()
         formatter.formattingContext = .standalone
         formatter.zeroFormattingBehavior = .pad
@@ -191,7 +191,7 @@ public extension SecondCameraEditorFormat {
         return String(longString.suffix(resultStringLength))
     }()
 
-    static func localizedDurationString(from timeInterval: TimeInterval) -> String {
+    nonisolated static func localizedDurationString(from timeInterval: TimeInterval) -> String {
         var result: String?
         switch timeInterval {
         case 0..<1:

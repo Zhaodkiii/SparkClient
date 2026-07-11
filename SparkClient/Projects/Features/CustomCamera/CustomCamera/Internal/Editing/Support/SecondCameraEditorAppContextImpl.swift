@@ -5,7 +5,7 @@
 import Foundation
 import UIKit
 
-public final class SecondCameraEditorAppContextImpl: SecondCameraEditorAppContext {
+nonisolated public final class SecondCameraEditorAppContextImpl: SecondCameraEditorAppContext {
     public let type: SecondCameraEditorAppContextType = .main
     public var isMainAppAndActive: Bool { UIApplication.shared.applicationState == .active }
     @MainActor

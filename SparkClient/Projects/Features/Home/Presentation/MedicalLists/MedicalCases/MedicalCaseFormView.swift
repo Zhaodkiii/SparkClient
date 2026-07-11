@@ -12,7 +12,7 @@ import Foundation
 /// 3. 编辑已有病历
 /// 4. 上传到服务器前的临时数据结构
 ///
-struct MedicalCaseFormDraft: Equatable, Sendable {
+nonisolated struct MedicalCaseFormDraft: Equatable, Sendable {
     /// 草稿ID（nil = 新建）
     var id: Int?
     
@@ -94,7 +94,7 @@ struct MedicalCaseFormDraft: Equatable, Sendable {
     }
 }
 
-extension MedicalCaseFormDraft {
+nonisolated extension MedicalCaseFormDraft {
     init(item: SparkMedicalSyncAPI.RemoteMedicalCaseSummary) {
         let extra = item.extra ?? [:]
         self.init(
@@ -146,12 +146,12 @@ extension MedicalCaseFormDraft {
         )
     }
 
-    private static func decodeVisitDate(from extra: [String: String]) -> Date? {
+    nonisolated private static func decodeVisitDate(from extra: [String: String]) -> Date? {
         guard let raw = extra["visit_date"], raw.isEmpty == false else { return nil }
         return Self.dateOnlyFormatter.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
     }
 
-    private static let dateOnlyFormatter: DateFormatter = {
+    nonisolated private static let dateOnlyFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -160,7 +160,7 @@ extension MedicalCaseFormDraft {
     }()
 }
 
-private struct MedicalCaseResourcePayload: Encodable, Sendable {
+nonisolated private struct MedicalCaseResourcePayload: Encodable, Sendable {
     let member: Int
     let recordType: String
     let status: Int
@@ -529,7 +529,7 @@ private struct StatusPickerRow: View {
     }
 }
 
-private enum MedicalCaseFormOptionCatalog {
+nonisolated private enum MedicalCaseFormOptionCatalog {
     static var severityOptions: [(value: String, label: String)] {
         [
             ("low", "🙂 \(L10n.text("medical_record.forms.medical_case.severity.low", fallback: "轻度"))"),
@@ -538,7 +538,7 @@ private enum MedicalCaseFormOptionCatalog {
         ]
     }
 
-    static var statusOptions: [(value: String, label: String)] {
+    nonisolated static var statusOptions: [(value: String, label: String)] {
         [
             ("in_treatment", L10n.text("medical_record.forms.medical_case.status.in_treatment", fallback: "治疗中")),
             ("cured", L10n.text("medical_record.forms.medical_case.status.cured", fallback: "已治愈")),
@@ -548,7 +548,7 @@ private enum MedicalCaseFormOptionCatalog {
         ]
     }
 
-    static func normalizedStatusValue(_ value: String?) -> String? {
+    nonisolated static func normalizedStatusValue(_ value: String?) -> String? {
         guard let value = value?.nilIfBlank else { return nil }
         switch value {
         case "治疗中":

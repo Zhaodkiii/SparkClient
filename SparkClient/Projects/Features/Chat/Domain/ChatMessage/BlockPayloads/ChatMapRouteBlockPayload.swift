@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatMapLocationPayload: Codable, Identifiable, Equatable, Sendable {
+nonisolated struct ChatMapLocationPayload: Codable, Identifiable, Equatable, Sendable {
     let id: UUID
     let name: String
     let latitude: Double
@@ -14,7 +14,7 @@ struct ChatMapLocationPayload: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
-struct ChatRoutePayload: Codable, Identifiable, Equatable, Sendable {
+nonisolated struct ChatRoutePayload: Codable, Identifiable, Equatable, Sendable {
     let id: UUID
     let summary: String
     let distance: String?

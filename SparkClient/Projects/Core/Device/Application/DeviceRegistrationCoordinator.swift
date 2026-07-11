@@ -63,7 +63,7 @@ final class DeviceRegistrationCoordinator {
     private var bootstrapSubmittedAccountIDs: Set<Int> = []
     private var didSubmitAnonymousBootstrapThisLaunch = false
 
-    private var authInvalidationObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var authInvalidationObserver: NSObjectProtocol?
 
     /// 冷启动/登录引导等待 APNs token（纳秒）。
     private let bootstrapApnsWaitWindowNs: UInt64

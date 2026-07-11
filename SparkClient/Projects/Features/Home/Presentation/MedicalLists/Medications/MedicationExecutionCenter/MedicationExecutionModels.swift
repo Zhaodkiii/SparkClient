@@ -208,7 +208,7 @@ struct MedicationExecutionTimeGroup: Equatable {
     let doses: [MedicationExecutionDose]
 }
 
-struct MedicationRecordCreatePayload: Encodable {
+nonisolated struct MedicationRecordCreatePayload: Encodable {
     let member: Int
     let plan: Int
     let scheduledAt: String
@@ -222,7 +222,7 @@ struct MedicationRecordCreatePayload: Encodable {
     let extra: [String: String]
 }
 
-struct MedicationRecordUpdatePayload: Encodable {
+nonisolated struct MedicationRecordUpdatePayload: Encodable {
     let scheduledAt: String?
     let takenAt: String?
     let status: String

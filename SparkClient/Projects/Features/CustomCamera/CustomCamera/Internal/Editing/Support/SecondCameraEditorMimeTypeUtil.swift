@@ -30,12 +30,12 @@ public enum SecondCameraEditorMimeType: String {
     case textXSignalPlain = "text/x-signal-plain"
 }
 
-public enum SecondCameraEditorMimeTypeUtil {
+nonisolated public enum SecondCameraEditorMimeTypeUtil {
 
     // MARK: - Constants
 
-    public static let oversizeSecondCameraTextAttachmentFileExtension = "txt"
-    public static let syncMessageFileExtension = "bin"
+    nonisolated public static let oversizeSecondCameraTextAttachmentFileExtension = "txt"
+    nonisolated public static let syncMessageFileExtension = "bin"
 
     // MARK: - Supported Mime Types
 

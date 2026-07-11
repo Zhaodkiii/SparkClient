@@ -31,7 +31,7 @@ struct SparkDeactivationAPI {
         let countdownHours: Int?
     }
 
-    struct AccountDeactivationSubmitRequest: Encodable {
+    nonisolated struct AccountDeactivationSubmitRequest: Encodable {
         let reason: String?
         let immediateDeactivation: Bool
         let countdownHours: Int?
@@ -42,7 +42,7 @@ struct SparkDeactivationAPI {
 
     }
 
-    enum AccountDeactivationVerification: Encodable {
+    nonisolated enum AccountDeactivationVerification: Encodable {
         case apple(identityToken: String, authorizationCode: String?, userIdentifier: String)
         case phone(otpId: String, code: String)
         case email(otpId: String, code: String)
@@ -99,7 +99,7 @@ struct SparkDeactivationAPI {
         immediateDeactivation: Bool = true,
         countdownHours: Int = 24
     ) async throws -> DeactivationRequestResult {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let reason: String
             let immediate_deactivation: Bool
             let countdown_hours: Int
@@ -161,7 +161,7 @@ struct SparkDeactivationAPI {
     }
 
     func cancelDeactivation(deactivationId: Int, reason: String = "") async throws -> DeactivationRequestResult {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let reason: String
         }
 

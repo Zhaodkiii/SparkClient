@@ -397,7 +397,7 @@ private struct EditablePrescriptionMedicationRow: View {
     }
 }
 
-private struct PrescriptionResourceUpdatePayload: Encodable {
+nonisolated private struct PrescriptionResourceUpdatePayload: Encodable {
     let medicalCase: Int?
     let prescriberName: String?
     let institutionName: String?

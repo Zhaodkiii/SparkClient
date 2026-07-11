@@ -14,7 +14,7 @@ struct SparkMedicalWorkflowAPI {
 
     /// 病历类文档（case document）保存请求体，对应「病例/就诊记录」维度的摘要信息。
     /// 字段与 `MedicalCase` / `MedicalCaseSerializer` 对齐。
-    struct CaseSavePayload: Encodable, Sendable {
+    nonisolated struct CaseSavePayload: Encodable, Sendable {
         /// 关联的家庭成员服务端 ID（`MedicalMember`）。
         let member: Int
         /// 记录类型编码，与后端 `record_type` 约定一致（如门诊、住院等）。
@@ -35,7 +35,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 体检报告保存请求体。
-    struct HealthExamSavePayload: Encodable, Sendable {
+    nonisolated struct HealthExamSavePayload: Encodable, Sendable {
         /// 关联成员 ID。
         let member: Int
         /// 体检机构名称。
@@ -64,7 +64,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 检查/检验报告中的「明细行」：单项结果（如血常规某一指标、影像所见子项等）。
-    struct MedicalReportDetailPayload: Encodable, Sendable {
+    nonisolated struct MedicalReportDetailPayload: Encodable, Sendable {
         /// 大类（如检验、影像）。
         let category: String
         /// 子类（如血常规、CT）。
@@ -97,7 +97,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 检查/检验报告主记录保存请求体（含多条 `details`）。
-    struct MedicalReportSavePayload: Encodable, Sendable {
+    nonisolated struct MedicalReportSavePayload: Encodable, Sendable {
         /// 关联成员 ID。
         let member: Int
         /// 若报告挂在某次就诊/病历下，传服务端病历 ID；独立报告可传 `nil`。
@@ -136,7 +136,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 症状新建请求体（表单创建专用）。
-    struct SymptomCreatePayload: Encodable, Sendable {
+    nonisolated struct SymptomCreatePayload: Encodable, Sendable {
         let member: Int
         let medicalCase: Int?
         let name: String
@@ -152,7 +152,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 就诊新建请求体（表单创建专用）。
-    struct VisitCreatePayload: Encodable, Sendable {
+    nonisolated struct VisitCreatePayload: Encodable, Sendable {
         let member: Int
         let medicalCase: Int?
         let visitType: String?
@@ -166,7 +166,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 手术新建请求体（表单创建专用）。
-    struct SurgeryCreatePayload: Encodable, Sendable {
+    nonisolated struct SurgeryCreatePayload: Encodable, Sendable {
         let member: Int
         let medicalCase: Int?
         let procedureName: String
@@ -184,7 +184,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 随访新建请求体（表单创建专用）。
-    struct FollowUpCreatePayload: Encodable, Sendable {
+    nonisolated struct FollowUpCreatePayload: Encodable, Sendable {
         let member: Int
         let medicalCase: Int?
         let plannedAt: String?
@@ -197,7 +197,7 @@ struct SparkMedicalWorkflowAPI {
 
     }
 
-    struct MemberMedicalProfileSavePayload: Encodable, Sendable {
+    nonisolated struct MemberMedicalProfileSavePayload: Encodable, Sendable {
         let member: Int
         let chronicConditions: [String]
         let allergies: [String]
@@ -214,7 +214,7 @@ struct SparkMedicalWorkflowAPI {
         let extra: [String: String]
     }
 
-    struct MemberModuleSettingSavePayload: Encodable, Sendable {
+    nonisolated struct MemberModuleSettingSavePayload: Encodable, Sendable {
         let member: Int
         let moduleCode: String
         let isEnabled: Bool
@@ -226,7 +226,7 @@ struct SparkMedicalWorkflowAPI {
         let extra: [String: String]
     }
 
-    struct MemberMedicalKeyIndicatorDetailSavePayload: Encodable, Sendable {
+    nonisolated struct MemberMedicalKeyIndicatorDetailSavePayload: Encodable, Sendable {
         let category: String
         let subCategory: String
         let itemName: String
@@ -243,7 +243,7 @@ struct SparkMedicalWorkflowAPI {
         let sortOrder: Int
     }
 
-    struct MemberMedicalKeyIndicatorRecordSavePayload: Encodable, Sendable {
+    nonisolated struct MemberMedicalKeyIndicatorRecordSavePayload: Encodable, Sendable {
         let member: Int
         let source: String
         let scenario: String
@@ -255,7 +255,7 @@ struct SparkMedicalWorkflowAPI {
         let details: [MemberMedicalKeyIndicatorDetailSavePayload]
     }
 
-    struct MedicationPlanBundleSavePayload: Encodable, Sendable {
+    nonisolated struct MedicationPlanBundleSavePayload: Encodable, Sendable {
         let member: Int
         let medicalCase: Int?
         let prescriptionID: Int?
@@ -265,7 +265,7 @@ struct SparkMedicalWorkflowAPI {
 
     }
 
-    struct PrescriptionPayload: Encodable, Sendable {
+    nonisolated struct PrescriptionPayload: Encodable, Sendable {
         let medicalCase: Int?
         let prescriberName: String?
         let institutionName: String?
@@ -277,7 +277,7 @@ struct SparkMedicalWorkflowAPI {
 
     }
 
-    struct MedicationPlanBundleItemPayload: Encodable, Sendable {
+    nonisolated struct MedicationPlanBundleItemPayload: Encodable, Sendable {
         let medicineBoxID: Int?
         let medicineBox: MedicineBoxPayload?
         let drugName: String
@@ -342,7 +342,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 药箱创建/更新请求体（与 ``MedicineBoxSerializer`` 对齐；编码使用 ``JSONEncoder.medicalAPI`` → snake_case）。
-    struct MedicineBoxWritePayload: Encodable, Sendable {
+    nonisolated struct MedicineBoxWritePayload: Encodable, Sendable {
         let member: Int?
         let entryMemberID: Int
         let medicineName: String
@@ -359,7 +359,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 用药计划 bundle 内嵌药箱字段（无 member / entryMemberID）。
-    struct MedicineBoxPayload: Encodable, Sendable {
+    nonisolated struct MedicineBoxPayload: Encodable, Sendable {
         let medicineType: String?
         let medicineName: String
         let brandName: String
@@ -380,7 +380,7 @@ struct SparkMedicalWorkflowAPI {
         let prescriptionId: Int?
     }
 
-    struct PrescriptionBatchSavePayload: Encodable, Sendable {
+    nonisolated struct PrescriptionBatchSavePayload: Encodable, Sendable {
         let member: Int
         let prescriptions: [PrescriptionCreateRequest]
     }
@@ -419,7 +419,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 更新症状；成功返回症状明细与重算后的成员画像摘要。
-    func updateSymptom<B: Encodable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
+    func updateSymptom<B: Encodable & Sendable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.SymptomMutationResponse {
         let q = kindQueryItems(.symptoms, extra: [])
         return try await request(
             method: .patch,
@@ -435,7 +435,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 新建用药计划；成功返回计划明细与重算后的成员画像摘要。
-    func createMedicationPlan<B: Encodable>(_ body: B) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
+    func createMedicationPlan<B: Encodable & Sendable>(_ body: B) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
         let q = kindQueryItems(.medicationPlans, extra: [])
         return try await request(
             method: .post,
@@ -451,7 +451,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 更新用药计划；成功返回计划明细与重算后的成员画像摘要。
-    func updateMedicationPlan<B: Encodable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
+    func updateMedicationPlan<B: Encodable & Sendable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.MedicationMutationResponse {
         let q = kindQueryItems(.medicationPlans, extra: [])
         return try await request(
             method: .patch,
@@ -493,7 +493,7 @@ struct SparkMedicalWorkflowAPI {
     }
 
     /// 更新手术；成功返回手术明细与重算后的成员画像摘要。
-    func updateSurgery<B: Encodable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
+    func updateSurgery<B: Encodable & Sendable>(id: Int, body: B) async throws -> SparkMedicalSyncAPI.SurgeryMutationResponse {
         let q = kindQueryItems(.surgeries, extra: [])
         return try await request(
             method: .patch,
@@ -606,7 +606,7 @@ struct SparkMedicalWorkflowAPI {
         )
     }
 
-    func create<T: Decodable, B: Encodable>(
+    func create<T: Decodable, B: Encodable & Sendable>(
         _ type: T.Type,
         kind: SparkMedicalResourceKind,
         body: B,
@@ -626,7 +626,7 @@ struct SparkMedicalWorkflowAPI {
         )
     }
 
-    func update<T: Decodable, B: Encodable>(
+    func update<T: Decodable, B: Encodable & Sendable>(
         _ type: T.Type,
         kind: SparkMedicalResourceKind,
         id: Int,
@@ -647,7 +647,7 @@ struct SparkMedicalWorkflowAPI {
         )
     }
 
-    func replace<T: Decodable, B: Encodable>(
+    func replace<T: Decodable, B: Encodable & Sendable>(
         _ type: T.Type,
         kind: SparkMedicalResourceKind,
         id: Int,
@@ -690,7 +690,7 @@ struct SparkMedicalWorkflowAPI {
     ///   - body: 已 `Encodable` 的请求体。
     ///   - decode: 响应 `data` 内层类型的 `Decodable` 类型。
     /// - Returns: 解码后的 `R`。
-    private func post<T: Encodable, R: Decodable>(path: String, body: T, decode: R.Type) async throws -> R {
+    private func post<T: Encodable & Sendable, R: Decodable>(path: String, body: T, decode: R.Type) async throws -> R {
         let op = CacheableSparkNetworkOperation(
             name: "Medical.Workflow.\(path)",
             apiName: "MedicalWorkflowAPI",

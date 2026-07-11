@@ -9,7 +9,7 @@ enum SparkFormCatalogMenuLocale {
     }()
 }
 
-public struct SparkBilingualItem: Equatable, Hashable, Sendable {
+nonisolated public struct SparkBilingualItem: Equatable, Hashable, Sendable {
     public let cn: String
     public let en: String
 
@@ -19,7 +19,7 @@ public struct SparkBilingualItem: Equatable, Hashable, Sendable {
     }
 }
 
-public struct SparkBilingualCategory: Equatable, Hashable, Sendable {
+nonisolated public struct SparkBilingualCategory: Equatable, Hashable, Sendable {
     public let primary: SparkBilingualItem
     public let subcategories: [SparkBilingualItem]
 

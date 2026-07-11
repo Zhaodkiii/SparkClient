@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 /// 支持明细懒加载的报告头协议：首页先拿摘要，列表页再按需补齐 `MedExamDetail`。
-protocol MedExamDetailLoadableReport: Identifiable, Equatable {
+nonisolated protocol MedExamDetailLoadableReport: Identifiable, Equatable {
     var id: Int { get }
     var member: Int { get }
     var medExamDetails: [SparkMedicalSyncAPI.RemoteMedExamDetail]? { get set }

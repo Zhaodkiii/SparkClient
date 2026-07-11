@@ -1,7 +1,7 @@
 import Foundation
 
 extension SparkMedicalMemberAPI {
-    struct InvitePayload: Encodable, Sendable {
+    nonisolated struct InvitePayload: Encodable, Sendable {
         let channel: String
         let targetContact: String
         let permission: String
@@ -17,7 +17,7 @@ extension SparkMedicalMemberAPI {
         }
     }
 
-    struct ChangeBindingPermissionPayload: Encodable, Sendable {
+    nonisolated struct ChangeBindingPermissionPayload: Encodable, Sendable {
         let permission: String
     }
 
@@ -45,12 +45,12 @@ extension SparkMedicalMemberAPI {
         let expiresAt: Date
     }
 
-    struct AcceptInvitePayload: Encodable, Sendable {
+    nonisolated struct AcceptInvitePayload: Encodable, Sendable {
         let relationship: String
         let customRelationship: String
     }
 
-    struct ChangeBindingRolePayload: Encodable, Sendable {
+    nonisolated struct ChangeBindingRolePayload: Encodable, Sendable {
         let role: String
     }
 
@@ -146,7 +146,7 @@ extension SparkMedicalMemberAPI {
 
     private struct EmptyMemberResponse: Decodable {}
 
-    private func memberRequest<T: Decodable, B: Encodable>(
+    private func memberRequest<T: Decodable, B: Encodable & Sendable>(
         method: SparkHTTPMethod,
         path: String,
         body: B?,

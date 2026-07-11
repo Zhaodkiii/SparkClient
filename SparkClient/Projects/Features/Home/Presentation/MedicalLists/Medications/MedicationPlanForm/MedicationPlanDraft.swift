@@ -247,7 +247,7 @@ extension MedicationPlanDraft {
     }
 }
 
-struct MedicationPlanPayload: Encodable {
+nonisolated struct MedicationPlanPayload: Encodable {
     let member: Int
     let medicalCase: Int?
     let medicineBox: Int?
@@ -269,7 +269,7 @@ struct MedicationPlanPayload: Encodable {
     let extra: [String: String]
 
 
-    func encode(to encoder: Encoder) throws {
+    nonisolated func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodableKey.self)
         try container.encode(member, forKey: .key("member"))
         try container.encodeNullable(medicalCase, forKey: .key("medicalCase"))
@@ -311,7 +311,7 @@ private extension String {
 }
 
 private extension KeyedEncodingContainer {
-    mutating func encodeNullable<T: Encodable>(_ value: T?, forKey key: Key) throws {
+    nonisolated mutating func encodeNullable<T: Encodable>(_ value: T?, forKey key: Key) throws {
         if let value {
             try encode(value, forKey: key)
         } else {

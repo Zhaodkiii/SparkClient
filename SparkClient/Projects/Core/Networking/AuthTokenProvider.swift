@@ -1,14 +1,14 @@
 import Foundation
 import Security
 
-struct AuthTokens: Sendable {
+nonisolated struct AuthTokens: Sendable {
     var accessToken: String
     var refreshToken: String
     var expiresAt: Date
     var tokenType: String
 }
 
-enum AuthTokenProviderError: Error, LocalizedError, Sendable {
+nonisolated enum AuthTokenProviderError: Error, LocalizedError, Sendable {
     case missingTokens
     case refreshFailed(message: String, code: Int?)
     case refreshTemporarilyUnavailable
@@ -29,7 +29,7 @@ enum AuthTokenProviderError: Error, LocalizedError, Sendable {
 }
 
 /// 兼容多种刷新成功 JSON：`access`/`refresh` 与 `access_token`/`refresh_token`/`token_type`。
-private struct TokenRefreshSuccessEnvelope: Decodable {
+nonisolated private struct TokenRefreshSuccessEnvelope: Decodable, Sendable {
     let access: String?
     let refresh: String?
     let accessToken: String?
@@ -37,7 +37,7 @@ private struct TokenRefreshSuccessEnvelope: Decodable {
     let tokenType: String?
 
 
-    func resolvedTokens(fallbackRefreshToken: String) -> (access: String, refresh: String, tokenType: String)? {
+    nonisolated func resolvedTokens(fallbackRefreshToken: String) -> (access: String, refresh: String, tokenType: String)? {
         let accessString = access ?? accessToken
         guard let accessString else { return nil }
         let refreshString = refresh ?? refreshToken ?? fallbackRefreshToken

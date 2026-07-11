@@ -1,7 +1,7 @@
 import Foundation
 
 /// 聊天图片加载链路日志。
-enum ChatAttachmentImageDiagnostics {
+nonisolated enum ChatAttachmentImageDiagnostics {
     private static let logModule = LogModule.general
     private static let logger: Logger = ConsoleLogger()
 

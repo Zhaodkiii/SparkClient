@@ -30,12 +30,12 @@ public enum SecondCameraEditorAppContextType: CaseIterable, CustomStringConverti
 }
 
 public protocol SecondCameraEditorAppContext {
-    var type: SecondCameraEditorAppContextType { get }
+    nonisolated var type: SecondCameraEditorAppContextType { get }
     var isMainAppAndActive: Bool { get }
     @MainActor
     var isMainAppAndActiveIsolated: Bool { get }
     /// Whether the user is using a right-to-left language like Arabic.
-    var isRTL: Bool { get }
+    nonisolated var isRTL: Bool { get }
     var isRunningTests: Bool { get }
     var mainWindow: UIWindow? { get set }
     var frame: CGRect { get }
@@ -98,21 +98,21 @@ public protocol SecondCameraEditorAppContext {
 }
 
 extension SecondCameraEditorAppContext {
-    public var isMainApp: Bool {
+    nonisolated public var isMainApp: Bool {
         return switch type {
         case .main: true
         case .nse, .share: false
         }
     }
 
-    public var isNSE: Bool {
+    nonisolated public var isNSE: Bool {
         switch type {
         case .nse: true
         case .main, .share: false
         }
     }
 
-    public var isShareExtension: Bool {
+    nonisolated public var isShareExtension: Bool {
         switch type {
         case .share: true
         case .main, .nse: false
@@ -149,21 +149,21 @@ public final class SecondCameraEditorAppContextObjCBridge: NSObject, @unchecked 
 //    databases) has been done before app re-enters foreground, etc.
 public extension Notification.Name {
     // TODO: Rename this to a more swift style name
-    static let SecondCameraEditorApplicationDidEnterBackground = Notification.Name("SecondCameraEditorApplicationDidEnterBackgroundNotification")
-    static let SecondCameraEditorApplicationWillEnterForeground = Notification.Name("SecondCameraEditorApplicationWillEnterForegroundNotification")
-    static let SecondCameraEditorApplicationWillResignActive = Notification.Name("SecondCameraEditorApplicationWillResignActiveNotification")
-    static let SecondCameraEditorApplicationDidBecomeActive = Notification.Name("SecondCameraEditorApplicationDidBecomeActiveNotification")
+    nonisolated static let SecondCameraEditorApplicationDidEnterBackground = Notification.Name("SecondCameraEditorApplicationDidEnterBackgroundNotification")
+    nonisolated static let SecondCameraEditorApplicationWillEnterForeground = Notification.Name("SecondCameraEditorApplicationWillEnterForegroundNotification")
+    nonisolated static let SecondCameraEditorApplicationWillResignActive = Notification.Name("SecondCameraEditorApplicationWillResignActiveNotification")
+    nonisolated static let SecondCameraEditorApplicationDidBecomeActive = Notification.Name("SecondCameraEditorApplicationDidBecomeActiveNotification")
 }
 
 // MARK: -
 
 private nonisolated(unsafe) var currentSecondCameraEditorAppContext: (any SecondCameraEditorAppContext)?
 
-public func SecondCameraEditorCurrentAppContextIfAvailable() -> (any SecondCameraEditorAppContext)? {
+nonisolated public func SecondCameraEditorCurrentAppContextIfAvailable() -> (any SecondCameraEditorAppContext)? {
     currentSecondCameraEditorAppContext
 }
 
-public func SecondCameraEditorCurrentAppContext() -> any SecondCameraEditorAppContext {
+nonisolated public func SecondCameraEditorCurrentAppContext() -> any SecondCameraEditorAppContext {
     guard let currentSecondCameraEditorAppContext else {
         preconditionFailure(
             "SecondCameraEditorAppContext is nil. Call SecondCameraEditorAppContextImplBootstrap.bootstrapIfNeeded() before using SecondCamera editing APIs."
@@ -172,7 +172,7 @@ public func SecondCameraEditorCurrentAppContext() -> any SecondCameraEditorAppCo
     return currentSecondCameraEditorAppContext
 }
 
-public func SetSecondCameraEditorCurrentAppContext(_ appContext: any SecondCameraEditorAppContext, isRunningTests: Bool) {
+nonisolated public func SetSecondCameraEditorCurrentAppContext(_ appContext: any SecondCameraEditorAppContext, isRunningTests: Bool) {
     secondCameraEditorPrecondition(currentSecondCameraEditorAppContext == nil || isRunningTests)
     currentSecondCameraEditorAppContext = appContext
 }

@@ -3,13 +3,13 @@ import ImageIO
 import UIKit
 
 /// 公共预览图片加载协议，便于测试注入 fake loader。
-protocol SecondCameraPreviewImageLoading {
+nonisolated protocol SecondCameraPreviewImageLoading {
     func loadPreviewImage(from url: URL, maxPixelSize: CGFloat) async throws -> UIImage
     func loadThumbnail(from url: URL, maxPixelSize: CGFloat) async throws -> UIImage
 }
 
 /// ImageIO 降采样加载器：后台解码、保留 EXIF 方向，并带内存缓存。
-final class SecondCameraPreviewImageIOLoader: SecondCameraPreviewImageLoading {
+nonisolated final class SecondCameraPreviewImageIOLoader: SecondCameraPreviewImageLoading, @unchecked Sendable {
     static let shared = SecondCameraPreviewImageIOLoader()
 
     private let previewCache = NSCache<NSString, UIImage>()
@@ -112,7 +112,7 @@ final class SecondCameraPreviewImageIOLoader: SecondCameraPreviewImageLoading {
     }
 }
 
-enum SecondCameraPreviewImageSizePolicy {
+nonisolated enum SecondCameraPreviewImageSizePolicy {
     static var thumbnailMaxPixelSize: CGFloat {
         160 * UIScreen.main.scale
     }

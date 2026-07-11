@@ -12,7 +12,7 @@ actor SerialRequestGate {
     private struct QueuedJob {
         let priority: Priority
         let sequence: UInt64
-        let job: () async -> Void
+        let job: @Sendable () async -> Void
     }
 
     private struct QueueState {
@@ -26,11 +26,11 @@ actor SerialRequestGate {
     func enqueue<T>(
         serialKey: String,
         priority: Priority = .normal,
-        operation: @escaping () async throws -> T
+        operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
             // Each job resumes its own continuation; job closure stays in actor isolation.
-            let job: () async -> Void = {
+            let job: @Sendable () async -> Void = {
                 if Task.isCancelled {
                     continuation.resume(throwing: CancellationError())
                     return

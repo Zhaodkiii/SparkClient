@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-protocol OSSRuntimeConfiguring: AnyObject {
+protocol OSSRuntimeConfiguring: AnyObject, Sendable {
     func updateConfiguration(endpoint: String, bucket: String, region: String)
     func resetRuntimeCredentials()
 }

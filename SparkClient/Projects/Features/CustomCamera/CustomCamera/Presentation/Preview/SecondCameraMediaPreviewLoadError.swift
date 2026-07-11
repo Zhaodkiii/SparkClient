@@ -1,7 +1,7 @@
 import Foundation
 
 /// 公共图片预览加载失败原因（展示层需映射为本地化文案）。
-enum SecondCameraMediaPreviewLoadError: Error, Equatable, Sendable {
+nonisolated enum SecondCameraMediaPreviewLoadError: Error, Equatable, Sendable {
     case fileMissing
     case unsupportedType
     case cannotCreateImageSource

@@ -17,7 +17,7 @@ nonisolated enum SparkHTTPMethod: String, Sendable {
 nonisolated struct AnyEncodable: Encodable, Sendable {
     private let _encode: @Sendable (Encoder) throws -> Void
 
-    init<E: Encodable>(_ wrapped: E) {
+    init<E: Encodable & Sendable>(_ wrapped: E) {
         self._encode = { encoder in
             try wrapped.encode(to: encoder)
         }
@@ -246,7 +246,7 @@ nonisolated enum JSONValue: Decodable, Sendable, Equatable {
 }
 
 /// 医疗接口日期的编解码：ISO8601、`yyyy-MM-dd`、或历史时间戳数字。
-enum MedicalDateCoding {
+nonisolated enum MedicalDateCoding {
     /// 解码：字符串（ISO8601 / 仅日期）或数字（legacy 参考时间戳，含毫秒推断）。
     static func decodeFlexibleDate(from decoder: Decoder) throws -> Date {
         let container = try decoder.singleValueContainer()
@@ -315,7 +315,7 @@ enum MedicalDateCoding {
 
 extension Date {
     /// 将可选字符串自动按多种格式解析为 `Date`；为空或解析失败时返回默认日期（默认当前时间）。
-    static func parseOrNow(
+    nonisolated static func parseOrNow(
         _ value: String?,
         defaultDate: Date = Date()
     ) -> Date {
@@ -369,18 +369,18 @@ extension Date {
 /// `MedicalDateCoding` 使用的 ISO8601 解析器缓存。
 private extension ISO8601DateFormatter {
     /// 带小数秒的互联网日期时间。
-    static let medicalWithFractionalSeconds: ISO8601DateFormatter = {
+    nonisolated static var medicalWithFractionalSeconds: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
-    }()
+    }
 
     /// 无小数秒的基础 ISO8601。
-    static let medicalBasic: ISO8601DateFormatter = {
+    nonisolated static var medicalBasic: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
-    }()
+    }
 }
 
 /// 后端业务错误载荷（与 HTTP 状态码配合使用）。
@@ -470,7 +470,7 @@ extension SparkNetworkError: LocalizedError {
 }
 
 /// 认证失效事件：仅用于“服务端明确判定鉴权失败”后，通知 App 层回到登录页。
-enum AuthSessionInvalidation {
+nonisolated enum AuthSessionInvalidation {
     static let notificationName = Notification.Name("Spark.Auth.SessionInvalidatedByServer")
 
     static func shouldInvalidate(statusCode: Int, backendCode: Int?, message: String) -> Bool {

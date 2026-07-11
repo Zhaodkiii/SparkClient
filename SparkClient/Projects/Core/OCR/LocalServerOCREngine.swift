@@ -1,7 +1,7 @@
 import Foundation
 import UIKit
 
-struct LocalServerOCREngine: OCRTextEngine {
+nonisolated struct LocalServerOCREngine: OCRTextEngine {
     let name: String = "local_server"
 
     private let baseURL: String
@@ -58,7 +58,7 @@ struct LocalServerOCREngine: OCRTextEngine {
         }
     }
 
-    private func buildMultipartBody(boundary: String, imageData: Data) -> Data {
+    nonisolated private func buildMultipartBody(boundary: String, imageData: Data) -> Data {
         var body = Data()
         body.append("--\(boundary)\r\n")
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"ocr.jpg\"\r\n")
@@ -78,7 +78,7 @@ struct LocalServerOCREngine: OCRTextEngine {
         return body
     }
 
-    private func decodeText(_ data: Data) throws -> String {
+    nonisolated private func decodeText(_ data: Data) throws -> String {
         struct Response: Decodable {
             let success: Bool
             let text: String?
@@ -99,8 +99,8 @@ struct LocalServerOCREngine: OCRTextEngine {
     }
 }
 
-private extension Data {
-    mutating func append(_ string: String) {
+nonisolated private extension Data {
+    nonisolated mutating func append(_ string: String) {
         guard let data = string.data(using: .utf8) else { return }
         append(data)
     }

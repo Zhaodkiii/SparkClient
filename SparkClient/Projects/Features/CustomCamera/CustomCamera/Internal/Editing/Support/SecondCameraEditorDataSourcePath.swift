@@ -5,8 +5,8 @@
 
 import Foundation
 
-public class SecondCameraEditorDataSourcePath: @unchecked Sendable {
-    public enum Ownership {
+nonisolated public class SecondCameraEditorDataSourcePath: @unchecked Sendable {
+    nonisolated public enum Ownership: Sendable {
         /// The `SecondCameraEditorDataSourcePath` owns this URL and may consume it.
         case owned
 

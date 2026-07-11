@@ -49,7 +49,7 @@ struct SparkOTPAPI {
         bundleId: String = "",
         deviceId: String = ""
     ) async throws -> OTPRequestResult {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let email: String
             let provider_uid: String
             let bundle_id: String
@@ -95,7 +95,7 @@ struct SparkOTPAPI {
         bundleId: String = "",
         deviceId: String = ""
     ) async throws -> AuthTokens {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let otp_id: String
             let email: String
             let code: String
@@ -153,7 +153,7 @@ struct SparkOTPAPI {
         bundleId: String = "",
         deviceId: String = ""
     ) async throws -> OTPRequestResult {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let phone_number: String
             let provider_uid: String
             let bundle_id: String
@@ -199,7 +199,7 @@ struct SparkOTPAPI {
         bundleId: String = "",
         deviceId: String = ""
     ) async throws -> PhoneOTPVerifyResult {
-        struct Payload: Encodable {
+        nonisolated struct Payload: Encodable {
             let otp_id: String
             let phone_number: String
             let code: String

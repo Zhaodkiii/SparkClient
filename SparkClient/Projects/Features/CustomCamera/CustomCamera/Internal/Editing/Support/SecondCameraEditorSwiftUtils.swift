@@ -5,12 +5,12 @@
 
 import Foundation
 
-public func secondCameraEditorAssertOnQueue(_ queue: DispatchQueue) {
+nonisolated public func secondCameraEditorAssertOnQueue(_ queue: DispatchQueue) {
     dispatchPrecondition(condition: .onQueue(queue))
 }
 
 @inlinable
-public func SecondCameraEditorAssertIsOnMainThread(
+nonisolated public func SecondCameraEditorAssertIsOnMainThread(
     logger: SecondCameraEditorPrefixedLogger = .empty(),
     file: String = #fileID,
     function: String = #function,
@@ -22,7 +22,7 @@ public func SecondCameraEditorAssertIsOnMainThread(
 }
 
 @inlinable
-public func SecondCameraEditorAssertNotOnMainThread(
+nonisolated public func SecondCameraEditorAssertNotOnMainThread(
     logger: SecondCameraEditorPrefixedLogger = .empty(),
     file: String = #fileID,
     function: String = #function,
@@ -34,7 +34,7 @@ public func SecondCameraEditorAssertNotOnMainThread(
 }
 
 @inlinable
-public func secondCameraEditorFailDebug(
+nonisolated public func secondCameraEditorFailDebug(
     _ logMessage: String,
     logger: SecondCameraEditorPrefixedLogger = .empty(),
     file: String = #fileID,
@@ -54,12 +54,12 @@ public func secondCameraEditorFailDebug(
 }
 
 @inlinable
-public func secondCameraEditorAssertBeta(_ condition: @autoclosure () -> Bool, _ message: @autoclosure () -> String = "") {
+nonisolated public func secondCameraEditorAssertBeta(_ condition: @autoclosure () -> Bool, _ message: @autoclosure () -> String = "") {
     assert(condition(), message())
 }
 
 @inlinable
-public func secondCameraEditorFail(
+nonisolated public func secondCameraEditorFail(
     _ logMessage: String,
     logger: SecondCameraEditorPrefixedLogger = .empty(),
     file: String = #fileID,
@@ -72,7 +72,7 @@ public func secondCameraEditorFail(
 }
 
 @discardableResult
-public func secondCameraEditorFailIfThrows<T>(
+nonisolated public func secondCameraEditorFailIfThrows<T>(
     block: () throws -> T,
     file: String = #fileID,
     function: String = #function,
@@ -86,7 +86,7 @@ public func secondCameraEditorFailIfThrows<T>(
 }
 
 @inlinable
-public func secondCameraEditorAssertDebug(
+nonisolated public func secondCameraEditorAssertDebug(
     _ condition: Bool,
     _ message: @autoclosure () -> String = String(),
     logger: SecondCameraEditorPrefixedLogger = .empty(),
@@ -101,7 +101,7 @@ public func secondCameraEditorAssertDebug(
 }
 
 @inlinable
-public func secondCameraEditorPrecondition(
+nonisolated public func secondCameraEditorPrecondition(
     _ condition: @autoclosure () -> Bool,
     _ message: @autoclosure () -> String = String(),
     logger: SecondCameraEditorPrefixedLogger = .empty(),
@@ -116,7 +116,7 @@ public func secondCameraEditorPrecondition(
 }
 
 @inlinable
-public func secondCameraEditorFailBeta(
+nonisolated public func secondCameraEditorFailBeta(
     _ logMessage: String,
     logger: SecondCameraEditorPrefixedLogger = .empty(),
     file: String = #fileID,

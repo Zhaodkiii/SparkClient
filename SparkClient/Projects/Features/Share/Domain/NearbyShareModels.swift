@@ -1,26 +1,26 @@
 import Foundation
 
-enum NearbyShareAuthorizationState: Equatable {
+nonisolated enum NearbyShareAuthorizationState: Equatable, Sendable {
     case unknown
     case unauthorized
     case poweredOff
     case ready
 }
 
-enum NearbyShareConnectionState: Equatable {
+nonisolated enum NearbyShareConnectionState: Equatable, Sendable {
     case discovered
     case connecting
     case connected
     case failed
 }
 
-enum NearbyShareSendState: Equatable {
+nonisolated enum NearbyShareSendState: Equatable, Sendable {
     case sending
     case sent
     case failed(String)
 }
 
-enum NearbyShareReceiveState: Equatable {
+nonisolated enum NearbyShareReceiveState: Equatable, Sendable {
     case idle
     case advertising
     case received
@@ -28,7 +28,7 @@ enum NearbyShareReceiveState: Equatable {
 }
 
 /// 广播包：仅会话信息，不含成员/票据。
-struct NearbyShareBeacon: Codable, Equatable {
+nonisolated struct NearbyShareBeacon: Codable, Equatable, Sendable {
     let v: Int
     let mode: String
     let sessionId: String
@@ -42,7 +42,7 @@ struct NearbyShareBeacon: Codable, Equatable {
     }
 }
 
-struct NearbyShareMemberSnippet: Codable, Equatable {
+nonisolated struct NearbyShareMemberSnippet: Codable, Equatable, Sendable {
     let id: Int
     let name: String
     let gender: String
@@ -56,7 +56,7 @@ struct NearbyShareMemberSnippet: Codable, Equatable {
     }
 }
 
-struct NearbyShareInviterSnippet: Codable, Equatable {
+nonisolated struct NearbyShareInviterSnippet: Codable, Equatable, Sendable {
     let displayName: String
 
     enum CodingKeys: String, CodingKey {
@@ -65,7 +65,7 @@ struct NearbyShareInviterSnippet: Codable, Equatable {
 }
 
 /// BLE 写入的分享载荷。
-struct NearbyShareOutboundPayload: Codable, Equatable {
+nonisolated struct NearbyShareOutboundPayload: Codable, Equatable, Sendable {
     let v: Int
     let type: String
     let ticket: String
@@ -85,7 +85,7 @@ struct NearbyShareOutboundPayload: Codable, Equatable {
     }
 }
 
-struct NearbyShareInboundPayload: Equatable {
+nonisolated struct NearbyShareInboundPayload: Equatable, Sendable {
     let ticket: String
     let member: NearbyShareMemberSnippet
     let inviter: NearbyShareInviterSnippet

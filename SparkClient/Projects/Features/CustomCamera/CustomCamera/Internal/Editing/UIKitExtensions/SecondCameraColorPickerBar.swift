@@ -391,7 +391,7 @@ public class SecondCameraColorPickerBarView: UIView {
 
 public extension UIColor {
 
-    func secondCameraEditor_isCloseToColor(_ color: UIColor) -> Bool {
+    nonisolated func secondCameraEditor_isCloseToColor(_ color: UIColor) -> Bool {
         return isEqualToColor(color, tolerance: 0.1)
     }
 }

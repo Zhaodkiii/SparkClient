@@ -1,7 +1,7 @@
 import Foundation
 
 /// 知识库持久化抽象：由 `CoreDataKnowledgeRepository` 实现，供各用例注入。
-protocol KnowledgeRepository: Sendable {
+nonisolated protocol KnowledgeRepository: Sendable {
     func loadDocuments(matching query: String?) async throws -> [KnowledgeDocument]
     func loadDocument(id: UUID) async throws -> KnowledgeDocument?
     func createDocument(_ draft: KnowledgeDocumentDraft) async throws -> KnowledgeDocument

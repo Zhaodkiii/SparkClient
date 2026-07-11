@@ -800,7 +800,7 @@ private func prescriptionStatusText(_ status: String) -> String {
 
 // MARK: 用药方案解绑处方专用请求体
 /// 用于PATCH接口，将用药方案的prescription字段置空（解绑处方）
-struct MedicationPlanPrescriptionUpdatePayload: Encodable {
+nonisolated struct MedicationPlanPrescriptionUpdatePayload: Encodable {
     let prescription: Int?
 
     // 自定义编码：字段存在则传ID，不存在显式传null

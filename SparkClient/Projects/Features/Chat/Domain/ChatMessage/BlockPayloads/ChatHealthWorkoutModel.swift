@@ -8,7 +8,7 @@ import Foundation
 /// 3. 前端渲染运动卡片、心率图表、路线地图
 /// 4. 可序列化、可传输、可持久化
 ///
-struct ChatHealthWorkoutModel: Codable, Equatable, Sendable {
+nonisolated struct ChatHealthWorkoutModel: Codable, Equatable, Sendable {
     /// 数据结构版本（用于向后兼容）
     static let schema = "health_workout_v1"
 

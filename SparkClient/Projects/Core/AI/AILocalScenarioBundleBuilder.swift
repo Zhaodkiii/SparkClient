@@ -1,7 +1,7 @@
 import Foundation
 
 /// 由本地目录 `AllModels` + `APIKeys` 生成各业务场景的 `AIScenarioRemoteBundlesCollection`。
-enum AILocalScenarioBundleBuilder {
+nonisolated enum AILocalScenarioBundleBuilder {
     /// - Parameters:
     ///   - allModels: 用户模型目录（已启用条目参与组合）。
     ///   - apiKeys: 厂商密钥（按稳定 `providerID` 匹配）。

@@ -134,7 +134,7 @@ enum SparkMedicalExamArchiveAPI {
         }
     }
 
-    struct PreviewAbnormalItemsRequest: Encodable, Sendable {
+    nonisolated struct PreviewAbnormalItemsRequest: Encodable, Sendable {
         let healthExamReportID: Int
 
         enum CodingKeys: String, CodingKey {
@@ -142,7 +142,7 @@ enum SparkMedicalExamArchiveAPI {
         }
     }
 
-    struct ConfirmedAbnormalItemPayload: Encodable, Sendable {
+    nonisolated struct ConfirmedAbnormalItemPayload: Encodable, Sendable {
         let code: String?
         let name: String
         let value: String?
@@ -150,7 +150,7 @@ enum SparkMedicalExamArchiveAPI {
         let severity: String?
     }
 
-    struct ConfirmedAbnormalItemsRequest: Encodable, Sendable {
+    nonisolated struct ConfirmedAbnormalItemsRequest: Encodable, Sendable {
         let healthExamReportID: Int?
         let selectedAbnormalItems: [ConfirmedAbnormalItemPayload]
 
@@ -160,7 +160,7 @@ enum SparkMedicalExamArchiveAPI {
         }
     }
 
-    struct AIPlanRequest: Encodable, Sendable {
+    nonisolated struct AIPlanRequest: Encodable, Sendable {
         let mode: String
         let healthExamReportID: Int?
         let selectedAbnormalItems: [ConfirmedAbnormalItemPayload]?

@@ -144,7 +144,7 @@ struct PrescriptionCreateRequest: Encodable, Sendable {
 
 /// 组合创建请求（一次性创建所有医疗信息）
 /// 参考 HealthClient 的 SeverMedicalCreateRequest 模式
-struct CombinedMedicalCreateRequest: Encodable, Sendable {
+nonisolated struct CombinedMedicalCreateRequest: Encodable, Sendable {
     /// 成员信息（必填）
     /// - 若带 id 则校验存在与归属；否则创建新成员
     let member: MemberCreateRequestWithId

@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import UIKit
 
-struct AliyunOCREngine: OCRTextEngine {
+nonisolated struct AliyunOCREngine: OCRTextEngine {
     let name: String = "aliyun"
 
     private let endpoint: String
@@ -76,7 +76,7 @@ struct AliyunOCREngine: OCRTextEngine {
         }
     }
 
-    private func compressImageData(_ data: Data) throws -> Data {
+    nonisolated private func compressImageData(_ data: Data) throws -> Data {
         guard let image = UIImage(data: data) else { throw OCRError.invalidImage }
 
         var quality: CGFloat = 0.9
@@ -93,7 +93,7 @@ struct AliyunOCREngine: OCRTextEngine {
         return fallback
     }
 
-    private func buildSignedURL(base: String, params: [String: String]) -> URL? {
+    nonisolated private func buildSignedURL(base: String, params: [String: String]) -> URL? {
         let query = params.keys.sorted().compactMap { key -> String? in
             guard let value = params[key] else { return nil }
             return "\(key.percentEncodedRFC3986())=\(value.percentEncodedRFC3986())"
@@ -101,7 +101,7 @@ struct AliyunOCREngine: OCRTextEngine {
         return URL(string: "\(base)?\(query)")
     }
 
-    private func decodeAliyunText(from data: Data) throws -> String {
+    nonisolated private func decodeAliyunText(from data: Data) throws -> String {
         struct Response: Decodable {
             struct DataField: Decodable {
                 let content: String?
@@ -123,7 +123,7 @@ struct AliyunOCREngine: OCRTextEngine {
         return decoded.data?.content ?? ""
     }
 
-    private func computeSignature(params: [String: String], secret: String) -> String {
+    nonisolated private func computeSignature(params: [String: String], secret: String) -> String {
         let canonical = params.keys.sorted().compactMap { key -> String? in
             guard let value = params[key] else { return nil }
             return "\(key.percentEncodedRFC3986())=\(value.percentEncodedRFC3986())"
@@ -135,7 +135,7 @@ struct AliyunOCREngine: OCRTextEngine {
         return Data(signature).base64EncodedString()
     }
 
-    private func aliyunTimestamp() -> String {
+    nonisolated private func aliyunTimestamp() -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
@@ -144,8 +144,8 @@ struct AliyunOCREngine: OCRTextEngine {
     }
 }
 
-private extension String {
-    func percentEncodedRFC3986() -> String {
+nonisolated private extension String {
+    nonisolated func percentEncodedRFC3986() -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-_.~")
         return addingPercentEncoding(withAllowedCharacters: allowed) ?? self

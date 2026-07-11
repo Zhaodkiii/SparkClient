@@ -83,7 +83,7 @@ final class LegacyTabBarHiddenBridgeViewController: UIViewController {
     private var originalAdditionalSafeAreaInsets: UIEdgeInsets?
     private var originalTabBarControllerAdditionalSafeAreaInsets: UIEdgeInsets?
     private var hasAdjustedBottomSafeArea = false
-    private var pendingRefreshWorkItem: DispatchWorkItem?
+    nonisolated(unsafe) private var pendingRefreshWorkItem: DispatchWorkItem?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -113,14 +113,13 @@ final class LegacyTabBarHiddenBridgeViewController: UIViewController {
     }
 
     deinit {
-        pendingRefreshWorkItem?.cancel()
+        let pendingWorkItem = pendingRefreshWorkItem
+        pendingRefreshWorkItem = nil
+        pendingWorkItem?.cancel()
         let parentViewController = parent
-        if Thread.isMainThread {
-            LegacyTabBarVisibilityCoordinator.shared.release(owner: ownerID)
-        } else {
-            DispatchQueue.main.async { [ownerID] in
-                LegacyTabBarVisibilityCoordinator.shared.release(owner: ownerID)
-            }
+        let releasedOwnerID = ownerID
+        Task { @MainActor in
+            LegacyTabBarVisibilityCoordinator.shared.release(owner: releasedOwnerID)
         }
 
         if let parentViewController {

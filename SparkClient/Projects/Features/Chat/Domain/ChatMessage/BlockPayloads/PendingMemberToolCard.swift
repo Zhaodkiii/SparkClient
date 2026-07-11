@@ -1,6 +1,6 @@
 import Foundation
 
-struct PendingMemberToolCard: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct PendingMemberToolCard: Codable, Equatable, Identifiable, Sendable {
     enum Status: String, Codable, Sendable {
         case pending
         case running

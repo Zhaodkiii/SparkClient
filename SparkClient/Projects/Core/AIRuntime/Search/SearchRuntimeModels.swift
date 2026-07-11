@@ -11,7 +11,7 @@ enum SearchProviderID: String, Codable, Sendable {
     case langSearch = "LANGSEARCH"
     case perplexity = "PERPLEXITY"
 
-    init(company: String) {
+    nonisolated init(company: String) {
         let normalized = company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         self = SearchProviderID(rawValue: normalized) ?? .spark
     }
@@ -107,4 +107,3 @@ enum SearchRuntimeError: LocalizedError {
         }
     }
 }
-

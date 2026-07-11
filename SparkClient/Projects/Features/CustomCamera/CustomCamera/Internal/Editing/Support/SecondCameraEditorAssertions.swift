@@ -5,7 +5,7 @@
 
 import Foundation
 
-public struct SecondCameraEditorAssertionError: Error {
+nonisolated public struct SecondCameraEditorAssertionError: Error, Sendable {
 #if TESTABLE_BUILD
     public static var test_skipAssertions = false
 #endif
@@ -32,7 +32,7 @@ public struct SecondCameraEditorAssertionError: Error {
 }
 
 // An error that won't assert.
-public struct SecondCameraEditorGenericError: Error {
+nonisolated public struct SecondCameraEditorGenericError: Error, Sendable {
     public let description: String
     public init(_ description: String) {
         self.description = description

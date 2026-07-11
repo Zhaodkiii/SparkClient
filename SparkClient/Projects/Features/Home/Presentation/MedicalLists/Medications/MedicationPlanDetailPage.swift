@@ -33,11 +33,13 @@ struct MedicationPlanDetailPage: View {
     @State private var planRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] = []
     @State private var isLoadingPlanRecords = false
     @State private var planRecordsLoadError: String?
+    @State private var activePlanRecordsRequestID: UUID?
     @State private var isEditingAttachments = false
     @State private var attachmentsDirty = false
     @State private var shareContext: MedicalShareContext?
     @State private var shareErrorMessage: String?
     @State private var isPreparingShare = false
+    @State private var attachmentUploadTask: Task<Void, Never>?
 
     init(
         mode: MedicationPlanDetailMode = .server,
@@ -297,6 +299,9 @@ struct MedicationPlanDetailPage: View {
             }
             }
         }
+        .refreshable {
+            await loadPlanRecords()
+        }
         .navigationTitle(currentPlan.drugName.nilIfBlank ?? L10n.text("home.medical.medication_plan.detail.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -410,23 +415,35 @@ struct MedicationPlanDetailPage: View {
             guard mode == .server else { return }
             await loadPlanRecords()
         }
+        .onDisappear {
+            attachmentUploadTask?.cancel()
+        }
     }
 
     @MainActor
     private func loadPlanRecords() async {
         let planID = currentPlan.id
+        let requestID = UUID()
+        activePlanRecordsRequestID = requestID
         isLoadingPlanRecords = true
         planRecordsLoadError = nil
-        defer { isLoadingPlanRecords = false }
+        defer {
+            if activePlanRecordsRequestID == requestID {
+                activePlanRecordsRequestID = nil
+                isLoadingPlanRecords = false
+            }
+        }
 
         do {
             let fetched = try await medicalQueryAPI.listMedicationRecords(
                 memberID: currentPlan.member,
                 planID: planID
             )
+            guard Task.isCancelled == false else { return }
             guard planID == currentPlan.id else { return }
             planRecords = fetched
         } catch {
+            guard Task.isCancelled == false else { return }
             guard planID == currentPlan.id else { return }
             planRecords = []
             planRecordsLoadError = error.localizedDescription
@@ -638,13 +655,15 @@ struct MedicationPlanDetailPage: View {
     }
 
     private func handleFileUploaded(_ record: ManagedFileRecord) {
-        Task {
+        attachmentUploadTask?.cancel()
+        attachmentUploadTask = Task { @MainActor in
             do {
                 _ = try await fileTransferService.updateBusinessBinding(
                     fileID: record.id,
                     businessType: "medication_plan",
                     businessID: "\(currentPlan.id)"
                 )
+                guard Task.isCancelled == false else { return }
                 let newFile = record.remoteManagedFile(
                     businessType: "medication_plan",
                     businessId: "\(currentPlan.id)"
@@ -656,6 +675,7 @@ struct MedicationPlanDetailPage: View {
                     attachmentsDirty = true
                 }
             } catch {
+                guard Task.isCancelled == false else { return }
                 await MainActor.run {
                     alertMessage = error.localizedDescription
                 }

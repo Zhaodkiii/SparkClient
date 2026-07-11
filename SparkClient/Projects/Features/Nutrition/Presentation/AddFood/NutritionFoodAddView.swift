@@ -56,11 +56,8 @@ struct NutritionFoodAddView: View {
         .safeAreaInset(edge: .bottom) {
             finishButton
         }
-        .task {
-            await viewModel.loadRecommendedIfNeeded()
-        }
-        .onChange(of: viewModel.contentFilter) { _ in
-            viewModel.contentFilterChanged()
+        .task(id: viewModel.contentFilter) {
+            await viewModel.reloadRecommended()
         }
         .sheet(item: $viewModel.detailAddContext) { context in
             NutritionFoodDetailAddView(

@@ -5,16 +5,16 @@
 
 import Foundation
 
-private let bidiLeftToRightIsolate: Unicode.Scalar = "\u{2066}"
-private let bidiRightToLeftIsolate: Unicode.Scalar = "\u{2067}"
-private let bidiFirstStrongIsolate: Unicode.Scalar = "\u{2068}"
-private let bidiLeftToRightEmbedding: Unicode.Scalar = "\u{202A}"
-private let bidiRightToLeftEmbedding: Unicode.Scalar = "\u{202B}"
-private let bidiLeftToRightOverride: Unicode.Scalar = "\u{202D}"
-private let bidiRightToLeftOverride: Unicode.Scalar = "\u{202E}"
-private let bidiPopDirectionalFormatting: Unicode.Scalar = "\u{202C}"
-private let bidiPopDirectionalIsolate: Unicode.Scalar = "\u{2069}"
-private let bidiControlCharacterSet: CharacterSet = [
+nonisolated private let bidiLeftToRightIsolate: Unicode.Scalar = "\u{2066}"
+nonisolated private let bidiRightToLeftIsolate: Unicode.Scalar = "\u{2067}"
+nonisolated private let bidiFirstStrongIsolate: Unicode.Scalar = "\u{2068}"
+nonisolated private let bidiLeftToRightEmbedding: Unicode.Scalar = "\u{202A}"
+nonisolated private let bidiRightToLeftEmbedding: Unicode.Scalar = "\u{202B}"
+nonisolated private let bidiLeftToRightOverride: Unicode.Scalar = "\u{202D}"
+nonisolated private let bidiRightToLeftOverride: Unicode.Scalar = "\u{202E}"
+nonisolated private let bidiPopDirectionalFormatting: Unicode.Scalar = "\u{202C}"
+nonisolated private let bidiPopDirectionalIsolate: Unicode.Scalar = "\u{2069}"
+nonisolated private let bidiControlCharacterSet: CharacterSet = [
     bidiLeftToRightIsolate,
     bidiRightToLeftIsolate,
     bidiFirstStrongIsolate,
@@ -26,7 +26,7 @@ private let bidiControlCharacterSet: CharacterSet = [
     bidiPopDirectionalIsolate,
 ]
 
-private let nonPrintingCharacterSet = {
+nonisolated private let nonPrintingCharacterSet = {
     var characterSet = CharacterSet.whitespacesAndNewlines
     characterSet.formUnion(CharacterSet.controlCharacters)
     characterSet.formUnion(bidiControlCharacterSet)
@@ -40,18 +40,18 @@ private let nonPrintingCharacterSet = {
 // They could be used to construct misleading attachment
 // filenames that appear to have a different file extension,
 // for example.
-private let unsafeFilenameCharacterSet: CharacterSet = [bidiLeftToRightOverride, bidiRightToLeftOverride]
+nonisolated private let unsafeFilenameCharacterSet: CharacterSet = [bidiLeftToRightOverride, bidiRightToLeftOverride]
 
-public struct SecondCameraEditorFilteredFilename {
+nonisolated public struct SecondCameraEditorFilteredFilename {
     public let rawValue: String
     public init(rawValue: String) {
         self.rawValue = rawValue.secondCameraEditor_filterFilename()
     }
 }
 
-extension String {
+nonisolated extension String {
 
-    private func sanitized() -> String {
+    nonisolated private func sanitized() -> String {
         // There was a sanitizer cache in the objc code. This should be linear in the length
         // of the string so unless we're calling this over and over and over again for the
         // same strings the cache doesn't seem very useful and the right place to fix things
@@ -60,7 +60,7 @@ extension String {
     }
 
     /// - Warning: Only exposed for testing. Do not use.
-    func secondCameraEditor_filterUnsafeFilenameCharacters() -> String {
+    nonisolated func secondCameraEditor_filterUnsafeFilenameCharacters() -> String {
         StringSanitizer.sanitize(self) { c in
             c.unicodeScalars.contains { s in
                 unsafeFilenameCharacterSet.contains(s)
@@ -68,7 +68,7 @@ extension String {
         }
     }
 
-    public func secondCameraEditor_stripped() -> String {
+    nonisolated public func secondCameraEditor_stripped() -> String {
         if unicodeScalars.allSatisfy(nonPrintingCharacterSet.contains) {
             // If string has no printing characters, consider it empty.
             return ""
@@ -89,35 +89,35 @@ extension String {
     /// "1️⃣23".digitsOnly
     /// // => "123"
     /// ```
-    public func secondCameraEditor_digitsOnly() -> String {
+    nonisolated public func secondCameraEditor_digitsOnly() -> String {
         String(unicodeScalars.filter { CharacterSet.decimalDigits.contains($0) })
     }
 
-    public func secondCameraEditor_hasAnyASCII() -> Bool {
+    nonisolated public func secondCameraEditor_hasAnyASCII() -> Bool {
         contains(where: \.isASCII)
     }
 
-    public func secondCameraEditor_isOnlyASCII() -> Bool {
+    nonisolated public func secondCameraEditor_isOnlyASCII() -> Bool {
         allSatisfy(\.isASCII)
     }
 
     /// Trims and filters a string for display
-    public func secondCameraEditor_filterStringForDisplay() -> String {
+    nonisolated public func secondCameraEditor_filterStringForDisplay() -> String {
         secondCameraEditor_stripped().sanitized().secondCameraEditor_ensureBalancedBidiControlCharacters()
     }
 
-    public var secondCameraEditor_filterForDisplay: String { secondCameraEditor_filterStringForDisplay() }
+    nonisolated public var secondCameraEditor_filterForDisplay: String { secondCameraEditor_filterStringForDisplay() }
 
-    public func secondCameraEditor_filterFilename() -> String {
+    nonisolated public func secondCameraEditor_filterFilename() -> String {
         secondCameraEditor_stripped().sanitized().secondCameraEditor_filterUnsafeFilenameCharacters()
     }
 
-    public func secondCameraEditor_withoutBidiControlCharacters() -> String {
+    nonisolated public func secondCameraEditor_withoutBidiControlCharacters() -> String {
         // TODO: This may not be the right behavior. Investigate if it's supposed to remove all or just trim.
         trimmingCharacters(in: bidiControlCharacterSet)
     }
 
-    public func secondCameraEditor_ensureBalancedBidiControlCharacters() -> String {
+    nonisolated public func secondCameraEditor_ensureBalancedBidiControlCharacters() -> String {
         var isolateStartsCount = 0
         var isolatePopCount = 0
         var formattingStartsCount = 0
@@ -173,7 +173,7 @@ extension String {
         return balancedString
     }
 
-    public func secondCameraEditor_bidirectionallyBalancedAndIsolated() -> String {
+    nonisolated public func secondCameraEditor_bidirectionallyBalancedAndIsolated() -> String {
         // We're already isolated, nothing to do here.
         if let first = unicodeScalars.first, let last = unicodeScalars.last, first == bidiFirstStrongIsolate, last == bidiPopDirectionalIsolate {
             return self
@@ -187,10 +187,10 @@ private enum SecondCameraEditorStringError: Error {
     case invalidCharacterShift
 }
 
-private let selectorOffset: UInt32 = 17
+nonisolated private let selectorOffset: UInt32 = 17
 
-public extension String {
-    func secondCameraEditor_caesar(shift: UInt32) throws -> String {
+nonisolated public extension String {
+    nonisolated func secondCameraEditor_caesar(shift: UInt32) throws -> String {
         let shiftedScalars: [UnicodeScalar] = try unicodeScalars.map { c in
             guard let shiftedScalar = UnicodeScalar((c.value + shift) % 127) else {
                 throw SecondCameraEditorStringError.invalidCharacterShift
@@ -200,12 +200,12 @@ public extension String {
         return String(String.UnicodeScalarView(shiftedScalars))
     }
 
-    var secondCameraEditor_encodedForSelector: String? {
+    nonisolated var secondCameraEditor_encodedForSelector: String? {
         guard let shifted = try? self.secondCameraEditor_caesar(shift: selectorOffset) else { return nil }
         return Data(shifted.utf8).base64EncodedString()
     }
 
-    var secondCameraEditor_decodedForSelector: String? {
+    nonisolated var secondCameraEditor_decodedForSelector: String? {
         guard let data = Data(base64Encoded: self),
               let shifted = String(data: data, encoding: .utf8) else { return nil }
         return try? shifted.secondCameraEditor_caesar(shift: 127 - selectorOffset)

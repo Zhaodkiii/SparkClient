@@ -180,9 +180,10 @@ struct MedicationsListPage: View {
             .onChange(of: completeData?.prescriptions ?? [], perform: handlePrescriptionsChange)
             .onChange(of: completeData?.medicationPlans ?? [], perform: handleMedicationPlansChange)
             .onChange(of: completeData?.todayMedicationRecords ?? [], perform: handleMedicationRecordsChange)
-            // OCR单据保存成功后刷新列表
-            .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
-                Task { await refreshAfterMedicalUploadSave() }
+            // OCR单据保存成功后刷新列表；使用 task(id:) 让页面离开或再次触发时自动取消旧刷新。
+            .task(id: medicalDocumentUploadViewModel.saveSucceededRevision) {
+                guard medicalDocumentUploadViewModel.saveSucceededRevision > 0 else { return }
+                await refreshAfterMedicalUploadSave()
             }
     }
 

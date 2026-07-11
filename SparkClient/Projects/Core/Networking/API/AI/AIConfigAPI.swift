@@ -71,7 +71,7 @@ struct SparkAIConfigAPI {
     }
 
     func applyTrial(note: String = "") async throws -> AITrialApplicationSubmission {
-        struct ApplyTrialBody: Encodable {
+        nonisolated struct ApplyTrialBody: Encodable {
             let note: String
         }
         let operation = CacheableSparkNetworkOperation(
@@ -97,7 +97,7 @@ struct SparkAIConfigAPI {
     }
 
     func testProviderConnection(requestURL: String, apiKey: String, model: String) async throws -> ProviderConnectionTestResult {
-        struct TestProviderBody: Encodable {
+        nonisolated struct TestProviderBody: Encodable {
             let request_url: String
             let api_key: String
             let model: String

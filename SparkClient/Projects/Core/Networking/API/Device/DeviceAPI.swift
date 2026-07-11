@@ -23,7 +23,7 @@ struct SparkDeviceAPI {
         let created: Bool?
     }
 
-    private struct DeviceRegistrationPayload: Encodable {
+    nonisolated private struct DeviceRegistrationPayload: Encodable {
         let device_id: String
         let user_id: Int?
         let push_token: String?

@@ -1,24 +1,24 @@
 import Foundation
 
-enum NotificationLevel: String, Codable, Sendable {
+nonisolated enum NotificationLevel: String, Codable, Sendable {
     case success
     case error
     case warning
     case info
 }
 
-enum NotificationPresentation: String, Codable, Sendable {
+nonisolated enum NotificationPresentation: String, Codable, Sendable {
     case toast
     case banner
     case alert
 }
 
-enum NotificationDropReason: String, Codable, Sendable {
+nonisolated enum NotificationDropReason: String, Codable, Sendable {
     case duplicate
     case queueOverflow
 }
 
-struct NotificationIntent: Sendable {
+nonisolated struct NotificationIntent: Sendable {
     var title: String?
     var message: String
     var level: NotificationLevel
@@ -50,7 +50,7 @@ struct NotificationIntent: Sendable {
     }
 }
 
-struct NotificationMessage: Identifiable, Equatable, Codable, Sendable {
+nonisolated struct NotificationMessage: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
     let title: String?
     let message: String
@@ -83,7 +83,7 @@ struct NotificationMessage: Identifiable, Equatable, Codable, Sendable {
         self.autoDismissAfter = autoDismissAfter
     }
 
-    static func from(intent: NotificationIntent) -> NotificationMessage {
+    nonisolated static func from(intent: NotificationIntent) -> NotificationMessage {
         let normalizedKey = intent.dedupeKey?.trimmingCharacters(in: .whitespacesAndNewlines)
         let fallbackKey = "\(intent.level.rawValue)|\(intent.presentation.rawValue)|\(intent.message.lowercased())"
         return NotificationMessage(
@@ -98,7 +98,7 @@ struct NotificationMessage: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
-struct NotificationInboxItem: Identifiable, Codable, Sendable {
+nonisolated struct NotificationInboxItem: Identifiable, Codable, Sendable {
     let id: UUID
     let title: String?
     let message: String
@@ -111,7 +111,7 @@ struct NotificationInboxItem: Identifiable, Codable, Sendable {
     var droppedReason: NotificationDropReason?
 }
 
-struct NotificationMetricsSnapshot: Codable, Sendable, Equatable {
+nonisolated struct NotificationMetricsSnapshot: Codable, Sendable, Equatable {
     var enqueuedCount: Int
     var displayedCount: Int
     var droppedDuplicateCount: Int

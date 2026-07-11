@@ -4,7 +4,7 @@ import Foundation
 actor ChatSyncSupervisor {
     private let syncEngine: ChatSyncEngine
     private let attachmentPipeline: ChatAttachmentPipeline
-    private var localChangeObserver: NSObjectProtocol?
+    private nonisolated(unsafe) var localChangeObserver: NSObjectProtocol?
     private var debouncedOutboxTask: Task<Void, Never>?
     private var debouncedThreadPushTasks: [UUID: Task<Void, Never>] = [:]
 

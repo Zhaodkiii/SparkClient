@@ -2,7 +2,7 @@ import Foundation
 
 /// OCR 融合选择器
 /// 核心功能：从多个OCR引擎的识别结果中，通过评分算法选出最优的识别文本
-enum OCRFusionSelector {
+nonisolated enum OCRFusionSelector {
     
     /// 选择最优的OCR识别结果
     /// - Parameters:

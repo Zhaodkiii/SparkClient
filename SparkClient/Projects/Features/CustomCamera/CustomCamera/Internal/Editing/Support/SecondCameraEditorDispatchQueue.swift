@@ -7,7 +7,7 @@ import Foundation
 
 extension DispatchQueue {
 
-    public static let secondCameraEditor_sharedUserInteractive: DispatchQueue = {
+    nonisolated public static let secondCameraEditor_sharedUserInteractive: DispatchQueue = {
         return DispatchQueue(
             label: "org.signal.serial-user-interactive",
             qos: .userInteractive,
@@ -15,7 +15,7 @@ extension DispatchQueue {
         )
     }()
 
-    public static let secondCameraEditor_sharedUserInitiated: DispatchQueue = {
+    nonisolated public static let secondCameraEditor_sharedUserInitiated: DispatchQueue = {
         return DispatchQueue(
             label: "org.signal.serial-user-initiated",
             qos: .userInitiated,
@@ -23,7 +23,7 @@ extension DispatchQueue {
         )
     }()
 
-    public static let secondCameraEditor_sharedUtility: DispatchQueue = {
+    nonisolated public static let secondCameraEditor_sharedUtility: DispatchQueue = {
         return DispatchQueue(
             label: "org.signal.serial-utility",
             qos: .utility,
@@ -31,7 +31,7 @@ extension DispatchQueue {
         )
     }()
 
-    public static let secondCameraEditor_sharedBackground: DispatchQueue = {
+    nonisolated public static let secondCameraEditor_sharedBackground: DispatchQueue = {
         return DispatchQueue(
             label: "org.signal.serial-background",
             qos: .background,
@@ -40,7 +40,7 @@ extension DispatchQueue {
     }()
 
     /// Returns the shared serial queue appropriate for the provided QoS
-    public static func secondCameraEditor_sharedQueue(at qos: DispatchQoS) -> DispatchQueue {
+    nonisolated public static func secondCameraEditor_sharedQueue(at qos: DispatchQoS) -> DispatchQueue {
         switch qos {
         case .userInteractive:
             return DispatchQueue.secondCameraEditor_sharedUserInteractive
@@ -63,7 +63,7 @@ extension DispatchQueue {
 extension DispatchQoS.QoSClass {
 
     /// Floors a UInt32-backed qos_class_t to a valid QoSClass enum.
-    init(secondCameraEditor_flooring rawQoS: qos_class_t) {
+    nonisolated init(secondCameraEditor_flooring rawQoS: qos_class_t) {
         switch rawQoS.rawValue {
 
         case QOS_CLASS_BACKGROUND.rawValue..<QOS_CLASS_UTILITY.rawValue:

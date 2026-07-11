@@ -4,20 +4,20 @@
 
 import Foundation
 
-public final class SecondCameraEditorUnfairLock: @unchecked Sendable {
+nonisolated public final class SecondCameraEditorUnfairLock: @unchecked Sendable {
     private let mutex = NSLock()
 
-    public init() {}
+    nonisolated public init() {}
 
-    public func lock() {
+    nonisolated public func lock() {
         mutex.lock()
     }
 
-    public func unlock() {
+    nonisolated public func unlock() {
         mutex.unlock()
     }
 
-    public func withLock<T>(_ body: () throws -> T) rethrows -> T {
+    nonisolated public func withLock<T>(_ body: () throws -> T) rethrows -> T {
         mutex.lock()
         defer { mutex.unlock() }
         return try body()
@@ -25,21 +25,21 @@ public final class SecondCameraEditorUnfairLock: @unchecked Sendable {
 }
 
 public extension SecondCameraEditorUnfairLock {
-    static let sharedGlobal = SecondCameraEditorUnfairLock()
+    nonisolated static let sharedGlobal = SecondCameraEditorUnfairLock()
 }
 
-public final class SecondCameraEditorAtomicUInt: @unchecked Sendable {
+nonisolated public final class SecondCameraEditorAtomicUInt: @unchecked Sendable {
     private let value: SecondCameraEditorAtomicValue<UInt>
 
-    public init(_ value: UInt = 0, lock: SecondCameraEditorUnfairLock) {
+    nonisolated public init(_ value: UInt = 0, lock: SecondCameraEditorUnfairLock) {
         self.value = SecondCameraEditorAtomicValue(value, lock: lock)
     }
 
-    public func get() -> UInt { value.get() }
-    public func set(_ value: UInt) { self.value.set(value) }
+    nonisolated public func get() -> UInt { value.get() }
+    nonisolated public func set(_ value: UInt) { self.value.set(value) }
 
     @discardableResult
-    public func increment() -> UInt { value.map { $0 + 1 } }
+    nonisolated public func increment() -> UInt { value.map { $0 + 1 } }
 }
 
 public enum SecondCameraEditorAttachmentThumbnailQuality {

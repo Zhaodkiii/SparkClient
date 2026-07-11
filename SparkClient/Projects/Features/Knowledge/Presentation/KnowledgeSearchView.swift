@@ -46,15 +46,10 @@ struct KnowledgeSearchView: View {
         .listStyle(.plain)
         .navigationTitle("Search")
         .searchable(text: $query, prompt: "Search knowledge")
-        .onSubmit(of: .search) {
-            Task {
-                await viewModel.search(query: query)
-            }
-        }
-        .onChange(of: query) { newValue in
-            Task {
-                await viewModel.search(query: newValue)
-            }
+        .task(id: query.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard Task.isCancelled == false else { return }
+            await viewModel.search(query: query)
         }
     }
 
