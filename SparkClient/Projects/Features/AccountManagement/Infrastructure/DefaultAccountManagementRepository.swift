@@ -21,23 +21,29 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
         )
     }
 
-    func requestVerification(channel: AccountVerificationChannel) async throws -> AccountVerificationRequestContext {
+    func requestVerification(channel: AccountVerificationChannel, session: UserSession?) async throws -> AccountVerificationRequestContext {
         let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
         let deviceId = SparkKeychain.getOrCreateDeviceID()
 
         switch channel {
         case .phone(let phoneNumber):
+            guard let session else {
+                throw AccountManagementError.missingSession
+            }
             let result = try await backend.otp.requestPhoneOTP(
                 phoneNumber: phoneNumber,
                 bundleId: bundleId,
-                deviceId: deviceId
+                deviceId: deviceId,
+                scene: "account_deactivation",
+                userId: Int(session.accountID)
             )
             return AccountVerificationRequestContext(channel: channel, otpID: result.otpId, expiresIn: result.expiresIn)
         case .email(let email):
             let result = try await backend.otp.requestEmailOTP(
                 email: email,
                 bundleId: bundleId,
-                deviceId: deviceId
+                deviceId: deviceId,
+                scene: "login"
             )
             return AccountVerificationRequestContext(channel: channel, otpID: result.otpId, expiresIn: result.expiresIn)
         case .apple:

@@ -47,13 +47,15 @@ struct SparkOTPAPI {
         email: String,
         providerUID: String = "",
         bundleId: String = "",
-        deviceId: String = ""
+        deviceId: String = "",
+        scene: String = "login"
     ) async throws -> OTPRequestResult {
         nonisolated struct Payload: Encodable {
             let email: String
             let provider_uid: String
             let bundle_id: String
             let device_id: String
+            let scene: String
         }
 
         let operation = CacheableSparkNetworkOperation(
@@ -69,7 +71,8 @@ struct SparkOTPAPI {
                             email: email,
                             provider_uid: providerUID,
                             bundle_id: bundleId,
-                            device_id: deviceId
+                            device_id: deviceId,
+                            scene: scene
                         )
                     )
                 ),
@@ -151,15 +154,20 @@ struct SparkOTPAPI {
         phoneNumber: String,
         providerUID: String = "",
         bundleId: String = "",
-        deviceId: String = ""
+        deviceId: String = "",
+        scene: String = "login",
+        userId: Int? = nil
     ) async throws -> OTPRequestResult {
         nonisolated struct Payload: Encodable {
             let phone_number: String
             let provider_uid: String
             let bundle_id: String
             let device_id: String
+            let scene: String
+            let user_id: Int?
         }
 
+        let requiresAuth = userId != nil || scene == "account_deactivation"
         let operation = CacheableSparkNetworkOperation(
             name: "OTP.RequestPhone",
             apiName: "OTPAPI",
@@ -173,12 +181,14 @@ struct SparkOTPAPI {
                             phone_number: phoneNumber,
                             provider_uid: providerUID,
                             bundle_id: bundleId,
-                            device_id: deviceId
+                            device_id: deviceId,
+                            scene: scene,
+                            user_id: userId
                         )
                     )
                 ),
                 strategy: NetworkStrategy(
-                    requiresAuth: false,
+                    requiresAuth: requiresAuth,
                     allowETag: false,
                     serialKey: "otp.phone.request",
                     retryConfig: .default,

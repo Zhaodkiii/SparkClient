@@ -6,7 +6,7 @@ struct LoginView: View {
     @ObservedObject var viewModel: LoginViewModel
 
     @State private var path: [LoginRoute] = []
-    @State private var showPhoneLogin = false
+    @State private var showPhoneLogin = true
     @State private var tapCount = 0
     @State private var lastTapTime: Date?
     @State private var hasAgreedToLegal = false

@@ -7,8 +7,7 @@ struct RequestAccountVerificationUseCase: Sendable {
         self.repository = repository
     }
 
-    func execute(channel: AccountVerificationChannel) async throws -> AccountVerificationRequestContext {
-        try await repository.requestVerification(channel: channel)
+    func execute(channel: AccountVerificationChannel, session: UserSession?) async throws -> AccountVerificationRequestContext {
+        try await repository.requestVerification(channel: channel, session: session)
     }
 }
-

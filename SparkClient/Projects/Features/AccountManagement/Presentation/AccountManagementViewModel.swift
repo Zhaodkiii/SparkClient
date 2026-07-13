@@ -87,7 +87,13 @@ final class AccountManagementViewModel: ObservableObject {
             flowState = .appleReauth
         case .phone, .email:
             do {
-                let context = try await requestAccountVerificationUseCase.execute(channel: channel)
+                let session: UserSession?
+                if case .signedIn(let currentSession) = sessionStore.state {
+                    session = currentSession
+                } else {
+                    session = nil
+                }
+                let context = try await requestAccountVerificationUseCase.execute(channel: channel, session: session)
                 flowState = .enteringOTP(channel, otpID: context.otpID)
                 startCountdown(seconds: min(max(context.expiresIn, 30), 120))
             } catch {

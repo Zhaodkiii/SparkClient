@@ -19,6 +19,8 @@ enum AppEnvironment: String, CaseIterable, Sendable {
     var apiBaseURL: URL {
         switch self {
         case .debug:
+//            return URL(string: "https://api.dreamwhale.top")!
+
             return URL(string: "http://39.106.39.110:2026")! //192.168.31.140 // localhost //172.20.10.2 //192.168.31.39  //172.169.8.88 // 192.168.31.128  // 192.168.31.38 //192.168.31.210
         case .staging:
             return URL(string: "https://api.dreamwhale.top")!

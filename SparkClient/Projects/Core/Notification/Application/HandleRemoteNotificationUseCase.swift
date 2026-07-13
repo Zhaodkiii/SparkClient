@@ -12,11 +12,14 @@ struct RemoteNotificationPayload: Sendable {
     var route: AppRoute?
     var inviteID: Int?
     var source: String
+    var envelope: NotificationEnvelope?
 
     static func from(userInfo: [AnyHashable: Any], fallbackTitle: String?, fallbackBody: String) -> RemoteNotificationPayload {
-        let type = userInfo["type"] as? String
-        let inviteID = extractInviteID(userInfo)
-        let route = Self.mapRoute(userInfo)
+        let envelope = NotificationEnvelopeDecoder.decode(userInfo: userInfo)
+        let compatibility = Self.compatibilityValues(from: envelope)
+        let type = compatibility.type ?? userInfo["type"] as? String
+        let inviteID = compatibility.inviteID ?? extractInviteID(userInfo)
+        let route = compatibility.route ?? Self.mapRoute(userInfo)
 
         return RemoteNotificationPayload(
             title: fallbackTitle,
@@ -24,8 +27,20 @@ struct RemoteNotificationPayload: Sendable {
             type: type,
             route: route,
             inviteID: inviteID,
-            source: "push"
+            source: "push",
+            envelope: envelope
         )
+    }
+
+    private static func compatibilityValues(from envelope: NotificationEnvelope?) -> (type: String?, inviteID: Int?, route: AppRoute?) {
+        guard let envelope, envelope.canExecuteAction else { return (nil, nil, nil) }
+        switch NotificationActionRouter().destination(for: envelope) {
+        case .proTrial: return ("ai_trial_application_result", nil, .aiSettings)
+        case .memberInvite(let id): return ("member_invite", Int(id), nil)
+        case .medicalResource: return ("health_resource_changed", nil, nil)
+        case .appUpdate: return (nil, nil, .settings)
+        case .notificationCenter, .member, .medicationPlan, .task: return (nil, nil, nil)
+        }
     }
 
     private static func mapRoute(_ userInfo: [AnyHashable: Any]) -> AppRoute? {
@@ -295,12 +310,21 @@ struct HandleRemoteNotificationUseCase {
         notificationRequestID: String?,
         payload: RemoteNotificationPayload
     ) {
-        let memberID = (userInfo["member_id"] as? String).flatMap(Int.init)
+        let envelopeValues: (memberID: Int, resourceType: String, resourceID: Int)? = {
+            guard case let .openMedicalResource(member, resourceType, resource) = payload.envelope?.action,
+                  let memberID = Int(member), let resourceID = Int(resource) else { return nil }
+            return (memberID, resourceType, resourceID)
+        }()
+        let memberID = envelopeValues?.memberID
+            ?? (userInfo["member_id"] as? String).flatMap(Int.init)
             ?? (userInfo["member_id"] as? Int)
         guard let memberID else { return }
 
-        let resourceType = userInfo["resource_type"] as? String ?? "medication_plan"
-        let resourceID = (userInfo["resource_id"] as? String).flatMap(Int.init)
+        let resourceType = envelopeValues?.resourceType
+            ?? userInfo["resource_type"] as? String
+            ?? "medication_plan"
+        let resourceID = envelopeValues?.resourceID
+            ?? (userInfo["resource_id"] as? String).flatMap(Int.init)
             ?? (userInfo["resource_id"] as? Int)
         let action = userInfo["action"] as? String ?? "updated"
 
