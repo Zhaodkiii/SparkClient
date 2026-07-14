@@ -13,6 +13,8 @@ struct ExaminationReportDetailPage: View {
     var localAttachments: [MedicalDocumentLocalAttachmentItem] = []
     let onSaved: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
     let onDeleted: (Int) -> Void
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
     var onLocalDraftSaved: ((MedicalReportRecognitionDraft) -> Void)?
     var onLocalDraftDeleted: (() -> Void)?
 
@@ -21,7 +23,9 @@ struct ExaminationReportDetailPage: View {
     @State private var sourceReportDraft: MedicalReportRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
+    @State private var showingArchiveConfirm = false
     @State private var isDeleting = false
+    @State private var isUpdatingArchiveState = false
     @State private var isLoadingDetails = false
     @State private var alertMessage: String?
     @State private var shareContext: MedicalShareContext?
@@ -42,6 +46,8 @@ struct ExaminationReportDetailPage: View {
         sourceReportDraft: MedicalReportRecognitionDraft? = nil,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void,
         onDeleted: @escaping (Int) -> Void,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active,
         onLocalDraftSaved: ((MedicalReportRecognitionDraft) -> Void)? = nil,
         onLocalDraftDeleted: (() -> Void)? = nil
     ) {
@@ -56,6 +62,8 @@ struct ExaminationReportDetailPage: View {
         self.localAttachments = localAttachments
         self.onSaved = onSaved
         self.onDeleted = onDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
         self.onLocalDraftSaved = onLocalDraftSaved
         self.onLocalDraftDeleted = onLocalDraftDeleted
         _report = State(initialValue: report)
@@ -116,6 +124,20 @@ struct ExaminationReportDetailPage: View {
                         Label(L10n.text("common.edit"), systemImage: "pencil")
                     }
 
+                    if mode == .server {
+                        Button {
+                            showingArchiveConfirm = true
+                        } label: {
+                            Label(
+                                report.isArchived
+                                    ? L10n.text("medical.archive.menu.unarchive")
+                                    : L10n.text("medical.archive.menu.archive"),
+                                systemImage: report.isArchived ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                            )
+                        }
+                        .disabled(isUpdatingArchiveState)
+                    }
+
                     Button(role: .destructive) {
                         showingDeleteConfirm = true
                     } label: {
@@ -124,7 +146,7 @@ struct ExaminationReportDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting || isPreparingShare)
+                .disabled(isDeleting || isPreparingShare || isUpdatingArchiveState)
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -139,6 +161,27 @@ struct ExaminationReportDetailPage: View {
             }
         } message: {
             Text(L10n.text("home.medical.examination.delete.message", fallback: "删除后无法恢复。"))
+        }
+        .alert(
+            report.isArchived
+                ? L10n.text("medical.archive.confirm.unarchive.title")
+                : L10n.text("medical.archive.confirm.archive.title"),
+            isPresented: $showingArchiveConfirm
+        ) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(
+                report.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.action")
+                    : L10n.text("medical.archive.confirm.archive.action")
+            ) {
+                Task { await updateArchiveState(archived: !report.isArchived) }
+            }
+        } message: {
+            Text(
+                report.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.message")
+                    : L10n.text("medical.archive.confirm.archive.message")
+            )
         }
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { alertMessage != nil },
@@ -217,6 +260,41 @@ struct ExaminationReportDetailPage: View {
             try await mutationService.deleteReport(reportID: report.id)
             onDeleted(report.id)
             dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false else { return }
+        guard let workflowAPI else {
+            alertMessage = L10n.text("common.operation_failed")
+            return
+        }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let updated = try await MedicalArchiveMutationService(workflowAPI: workflowAPI).setArchived(
+                SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.self,
+                kind: .examinationReports,
+                id: report.id,
+                archived: archived
+            )
+            report = updated
+            onSaved(updated)
+            onArchiveStateChanged?(updated.id, updated.isArchived)
+            notificationClient?.success(
+                updated.isArchived
+                    ? L10n.text("medical.archive.toast.archived")
+                    : L10n.text("medical.archive.toast.unarchived"),
+                source: "medical.examination.detail.archive"
+            )
+            let belongsInList = archiveMode == .archived ? updated.isArchived : !updated.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
         } catch {
             alertMessage = error.localizedDescription
         }

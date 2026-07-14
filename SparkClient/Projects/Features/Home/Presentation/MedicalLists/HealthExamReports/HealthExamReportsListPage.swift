@@ -12,6 +12,7 @@ struct HealthExamReportsListPage: View {
     @ObservedObject private var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
     private let notificationClient: any NotificationClient
+    var archiveMode: MedicalArchiveListMode = .active
 
     @State private var selectedFilter: HealthExamFilter = .all
     /// 本页拍照上传 Sheet 与 OCR 识别流程共用的文档类型（须保持一致）。
@@ -27,7 +28,8 @@ struct HealthExamReportsListPage: View {
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
         aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
-        onReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)? = nil
+        onReportsUpdated: (([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments]) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         self.completeData = completeData
         self.workflowAPI = workflowAPI
@@ -38,15 +40,22 @@ struct HealthExamReportsListPage: View {
         self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
         self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
+        self.archiveMode = archiveMode
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
-                reports: completeData?.healthExamReports ?? [],
+                reports: archiveMode == .active ? (completeData?.healthExamReports ?? []) : [],
                 medicalQueryAPI: medicalQueryAPI,
                 logger: logger,
                 scene: "health_exam_reports",
-                onReportsUpdated: onReportsUpdated
+                onReportsUpdated: archiveMode == .active ? onReportsUpdated : nil
             )
         )
+    }
+
+    private var navigationTitleText: String {
+        archiveMode == .archived
+            ? L10n.text("medical.archive.list.health_exam_reports.title")
+            : L10n.text("home.medical.list.health_exam_reports.title")
     }
 
     private var reports: [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments] {
@@ -95,20 +104,50 @@ struct HealthExamReportsListPage: View {
             await refreshReports()
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(L10n.text("home.medical.list.health_exam_reports.title"))
+        .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
         // 👇 添加这两行，强制导航栏背景可见并且不透明
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar) // 你也可以换成 .white 等你想要的颜色
         .searchable(text: $viewModel.searchText, prompt: L10n.text("home.medical.family_cabinet.search_prompt"))
+        .toolbar {
+            if archiveMode == .active {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    MainNavigationLink {
+                        HealthExamReportsListPage(
+                            completeData: completeData,
+                            workflowAPI: workflowAPI,
+                            medicalQueryAPI: medicalQueryAPI,
+                            logger: logger,
+                            fileTransferService: fileTransferService,
+                            memberContextStore: memberContextStore,
+                            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                            aiSettingsViewModel: aiSettingsViewModel,
+                            notificationClient: notificationClient,
+                            onReportsUpdated: nil,
+                            archiveMode: .archived
+                        )
+                    } label: {
+                        Text(L10n.text("medical.archive.list.entry"))
+                    }
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            MedicalListBottomActionBar(
-                documentKind: Self.uploadDocumentKind,
-                isEnabled: memberID != nil,
-                onUploadConfirmed: { files in startHealthExamReportRecognition(files: files) }
-            )
+            if archiveMode == .active {
+                MedicalListBottomActionBar(
+                    documentKind: Self.uploadDocumentKind,
+                    isEnabled: memberID != nil,
+                    onUploadConfirmed: { files in startHealthExamReportRecognition(files: files) }
+                )
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .task(id: archiveMode == .archived) {
+            if archiveMode == .archived {
+                await refreshReports()
+            }
+        }
 
 //        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
 //            CompatibleNavigationContainer {
@@ -123,9 +162,15 @@ struct HealthExamReportsListPage: View {
     @ViewBuilder
     private var examContent: some View {
         if filteredReports.isEmpty {
-            HealthExamEmptyStateView()
-                .frame(maxWidth: .infinity, minHeight: 320)
-                .padding(.vertical, 24)
+            if archiveMode == .archived {
+                Text(L10n.text("medical.archive.list.empty"))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 240)
+            } else {
+                HealthExamEmptyStateView()
+                    .frame(maxWidth: .infinity, minHeight: 320)
+                    .padding(.vertical, 24)
+            }
         } else {
             LazyVStack(spacing: 16) {
                 ForEach(filteredReports, id: \.id) { report in
@@ -138,7 +183,9 @@ struct HealthExamReportsListPage: View {
                         notificationClient: notificationClient,
                         onDeleted: { deletedID in
                             viewModel.removeReport(reportID: deletedID)
-                        }
+                        },
+                        onArchiveStateChanged: handleArchiveStateChanged,
+                        archiveMode: archiveMode
                     )
                     .task {
                         await viewModel.loadDetailsIfNeeded(for: report.id)
@@ -150,6 +197,13 @@ struct HealthExamReportsListPage: View {
         }
     }
 
+    private func handleArchiveStateChanged(id: Int, isArchived: Bool) {
+        let belongsInList = archiveMode == .archived ? isArchived : !isArchived
+        if belongsInList == false {
+            viewModel.removeReport(reportID: id)
+        }
+    }
+
     @MainActor
     private func refreshReports() async {
         guard let memberID else {
@@ -158,11 +212,14 @@ struct HealthExamReportsListPage: View {
         }
 
         let startedAt = Date()
-        logger.info("体检列表下拉刷新开始 memberID=\(memberID)", module: .home)
+        logger.info("体检列表下拉刷新开始 memberID=\(memberID) archiveMode=\(archiveMode)", module: .home)
 
         do {
             // 下拉刷新只拉取体检报告列表，并只回写首页 completeData.healthExamReports 缓存字段。
-            let refreshedReports = try await medicalQueryAPI.listHealthExamReportsWithAttachments(memberID: memberID)
+            let refreshedReports = try await medicalQueryAPI.listHealthExamReportsWithAttachments(
+                memberID: memberID,
+                archived: archiveMode.query
+            )
             viewModel.replaceReports(refreshedReports)
             logger.info(
                 "体检列表下拉刷新完成 memberID=\(memberID) count=\(refreshedReports.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",

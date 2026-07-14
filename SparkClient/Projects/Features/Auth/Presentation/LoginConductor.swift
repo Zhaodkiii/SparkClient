@@ -159,6 +159,9 @@ struct PhoneLoginView: View {
     /// 只保留国内号码用于显示（例如 1538...）
     private func applyAutoRegionAndStripPrefixIfNeeded(_ raw: String) {
         guard isApplyingAutoRegion == false else { return }
+        // OTP 发送中或已发出后，禁止自动改写手机号，
+        // 防止 iOS 自动填充等副作用导致号码与已发 OTP 不一致。
+        guard isRequesting == false, otpId == nil else { return }
         isApplyingAutoRegion = true
         defer { isApplyingAutoRegion = false }
 

@@ -8,6 +8,8 @@ struct HealthExamReportDetailPage: View {
     let workflowAPI: SparkMedicalWorkflowAPI
     let notificationClient: any NotificationClient
     var onDeleted: ((Int) -> Void)?
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
 
     var body: some View {
         HealthExamRecognitionResultView(
@@ -16,7 +18,9 @@ struct HealthExamReportDetailPage: View {
             memberContextStore: memberContextStore,
             workflowAPI: workflowAPI,
             notificationClient: notificationClient,
-            onDeleted: onDeleted
+            onDeleted: onDeleted,
+            onArchiveStateChanged: onArchiveStateChanged,
+            archiveMode: archiveMode
         )
     }
 }

@@ -248,6 +248,8 @@ enum SparkMedicalSyncAPI {
         /// 扩展键值，便于后端向前兼容增加字段而不改表结构。
         var extra: [String: String]?
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
@@ -379,6 +381,8 @@ enum SparkMedicalSyncAPI {
         var status: Int
         var extra: [String: String]?
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
@@ -396,6 +400,8 @@ enum SparkMedicalSyncAPI {
         var status: Int
         var extra: [String: String]?
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
@@ -439,6 +445,8 @@ enum SparkMedicalSyncAPI {
         var content: String
         var date: Date
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
@@ -458,6 +466,8 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var attachments: [RemoteManagedFile]?
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
@@ -475,6 +485,8 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var attachments: [RemoteManagedFile]?
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
@@ -502,6 +514,8 @@ enum SparkMedicalSyncAPI {
         var extra: [String: String]?
         var attachments: [RemoteManagedFile]?
         var updatedAt: Date
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
     }
 
     /// 服药记录：计划剂次与实际打卡事实表。
@@ -559,11 +573,13 @@ enum SparkMedicalSyncAPI {
         var symptoms: [String]?
         var medications: [String]?
         var attachments: [RemoteManagedFile]?
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
     /// 体检报告 + 附件（首页不含明细行）。
-    nonisolated struct RemoteHealthExamReportWithAttachments: Codable, Sendable, Equatable {
+    struct RemoteHealthExamReportWithAttachments: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
         var institutionName: String?
@@ -579,11 +595,13 @@ enum SparkMedicalSyncAPI {
         var attachments: [RemoteManagedFile]?
         /// 首页 `/complete-data/` 默认不返回；列表页进入后按需懒加载。
         var medExamDetails: [RemoteMedExamDetail]?
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 
     /// 检查报告 + 附件（首页不含明细行）。
-    nonisolated struct RemoteExaminationReportWithAttachments: Codable, Sendable, Equatable {
+    struct RemoteExaminationReportWithAttachments: Codable, Sendable, Equatable {
         var id: Int
         var member: Int
         var medicalRecord: Int?
@@ -605,6 +623,8 @@ enum SparkMedicalSyncAPI {
         var attachments: [RemoteManagedFile]?
         /// 首页 `/complete-data/` 默认不返回；列表页进入后按需懒加载。
         var medExamDetails: [RemoteMedExamDetail]?
+        @DefaultFalse var isArchived: Bool = false
+        var archivedAt: Date?
 
     }
 

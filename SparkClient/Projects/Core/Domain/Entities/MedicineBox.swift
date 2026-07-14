@@ -14,4 +14,6 @@ struct MedicineBox: Identifiable, Codable, Equatable, Sendable {
     var notes: String
     var extra: [String: String]
     var updatedAt: Date
+    var isArchived: Bool = false
+    var archivedAt: Date?
 }

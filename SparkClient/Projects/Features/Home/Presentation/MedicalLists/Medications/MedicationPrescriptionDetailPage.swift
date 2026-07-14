@@ -20,6 +20,8 @@ struct MedicationPrescriptionDetailPage: View {
     let onPlanDeleted: (Int) -> Void
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
 
     var onLocalDraftPrescriptionUpdated: ((PrescriptionRecognitionDraft) -> Void)?
     var onLocalDraftPrescriptionDeleted: (() -> Void)?
@@ -38,8 +40,10 @@ struct MedicationPrescriptionDetailPage: View {
     @State private var sourceBatchDraft: PrescriptionRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
+    @State private var showingArchiveConfirm = false
     @State private var deleteLinkedPlans = false
     @State private var isDeleting = false
+    @State private var isUpdatingArchiveState = false
     @State private var alertMessage: String?
     @State private var isEditingAttachments = false
     @State private var attachmentsDirty = false
@@ -68,6 +72,8 @@ struct MedicationPrescriptionDetailPage: View {
         onPlanDeleted: @escaping (Int) -> Void,
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil,
         onMedicalCaseDeleted: ((Int) -> Void)? = nil,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active,
         onLocalDraftPrescriptionUpdated: ((PrescriptionRecognitionDraft) -> Void)? = nil,
         onLocalDraftPrescriptionDeleted: (() -> Void)? = nil,
         onLocalDraftMedicationPlanSaved: ((Int, MedicationPlanRecognitionDraft) -> Void)? = nil,
@@ -96,6 +102,8 @@ struct MedicationPrescriptionDetailPage: View {
         self.onPlanDeleted = onPlanDeleted
         self.onMedicalCaseUpdated = onMedicalCaseUpdated
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
         self.onLocalDraftPrescriptionUpdated = onLocalDraftPrescriptionUpdated
         self.onLocalDraftPrescriptionDeleted = onLocalDraftPrescriptionDeleted
         self.onLocalDraftMedicationPlanSaved = onLocalDraftMedicationPlanSaved
@@ -144,6 +152,21 @@ struct MedicationPrescriptionDetailPage: View {
                     }
                     .disabled(memberID == nil || currentPrescription == nil)
 
+                    // 归档/取消归档按钮（仅服务端记录支持）
+                    if mode == .server {
+                        Button {
+                            showingArchiveConfirm = true
+                        } label: {
+                            Label(
+                                (currentPrescription?.isArchived ?? false)
+                                    ? L10n.text("medical.archive.menu.unarchive")
+                                    : L10n.text("medical.archive.menu.archive"),
+                                systemImage: (currentPrescription?.isArchived ?? false) ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                            )
+                        }
+                        .disabled(isUpdatingArchiveState || currentPrescription == nil)
+                    }
+
                     // 删除处方按钮（危险操作）
                     Button(role: .destructive) {
                         deleteLinkedPlans = false
@@ -155,7 +178,7 @@ struct MedicationPrescriptionDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting || isPreparingShare)
+                .disabled(isDeleting || isPreparingShare || isUpdatingArchiveState)
             }
         }
         // 编辑处方弹窗
@@ -201,6 +224,27 @@ struct MedicationPrescriptionDetailPage: View {
             Button(L10n.text("common.ok"), role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
+        }
+        .alert(
+            (currentPrescription?.isArchived ?? false)
+                ? L10n.text("medical.archive.confirm.unarchive.title")
+                : L10n.text("medical.archive.confirm.archive.title"),
+            isPresented: $showingArchiveConfirm
+        ) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(
+                (currentPrescription?.isArchived ?? false)
+                    ? L10n.text("medical.archive.confirm.unarchive.action")
+                    : L10n.text("medical.archive.confirm.archive.action")
+            ) {
+                Task { await updateArchiveState(archived: !(currentPrescription?.isArchived ?? false)) }
+            }
+        } message: {
+            Text(
+                (currentPrescription?.isArchived ?? false)
+                    ? L10n.text("medical.archive.confirm.unarchive.message")
+                    : L10n.text("medical.archive.confirm.archive.message")
+            )
         }
         .sheet(item: $shareContext) { context in
             MedicalShareSheet(context: context) {
@@ -580,6 +624,37 @@ struct MedicationPrescriptionDetailPage: View {
                 title: L10n.text("home.medical.prescription.delete.failed"),
                 source: "home.prescription.delete"
             )
+        }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false, mode == .server, let prescription = currentPrescription else { return }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let updated = try await MedicalArchiveMutationService(workflowAPI: workflowAPI).setArchived(
+                SparkMedicalSyncAPI.RemotePrescription.self,
+                kind: .prescriptions,
+                id: prescription.id,
+                archived: archived
+            )
+            currentPrescription = updated
+            onPrescriptionSaved(updated)
+            onArchiveStateChanged?(updated.id, updated.isArchived)
+            notificationClient.success(
+                updated.isArchived
+                    ? L10n.text("medical.archive.toast.archived")
+                    : L10n.text("medical.archive.toast.unarchived"),
+                source: "medical.prescription.detail.archive"
+            )
+            let belongsInList = archiveMode == .archived ? updated.isArchived : !updated.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
+        } catch {
+            alertMessage = error.localizedDescription
         }
     }
 

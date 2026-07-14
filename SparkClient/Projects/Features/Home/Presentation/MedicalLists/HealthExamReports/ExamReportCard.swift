@@ -9,6 +9,8 @@ struct ExamReportCard: View {
     let workflowAPI: SparkMedicalWorkflowAPI
     let notificationClient: any NotificationClient
     var onDeleted: ((Int) -> Void)?
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
 
     @State private var isOtherRiskExpanded = true
     @State private var isShowingAttachments = true
@@ -145,7 +147,9 @@ struct ExamReportCard: View {
                     memberContextStore: memberContextStore,
                     workflowAPI: workflowAPI,
                     notificationClient: notificationClient,
-                    onDeleted: onDeleted
+                    onDeleted: onDeleted,
+                    onArchiveStateChanged: onArchiveStateChanged,
+                    archiveMode: archiveMode
                 )
             }label: {
                 HStack(alignment: .top, spacing: 8) {
@@ -233,7 +237,9 @@ struct ExamReportCard: View {
                     memberContextStore: memberContextStore,
                     workflowAPI: workflowAPI,
                     notificationClient: notificationClient,
-                    onDeleted: onDeleted
+                    onDeleted: onDeleted,
+                    onArchiveStateChanged: onArchiveStateChanged,
+                    archiveMode: archiveMode
                 )
             } label: {
                 HStack(spacing: 4) {

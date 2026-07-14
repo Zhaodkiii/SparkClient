@@ -15,6 +15,7 @@ struct ExaminationReportsListPage: View {
     private let onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     /// 当前成员 ID；`complete-data` 缺失时为 0，此时不展示新增入口。
     private let memberID: Int
+    var archiveMode: MedicalArchiveListMode = .active
 
     @State private var selectedCategory: ExaminationReportCategory?
     @State private var isPresentingAddExamSheet = false
@@ -31,7 +32,8 @@ struct ExaminationReportsListPage: View {
         aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         onReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil,
-        onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)? = nil
+        onMedicalCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         self.completeData = completeData
         self.memberID = completeData?.memberId ?? 0
@@ -44,15 +46,22 @@ struct ExaminationReportsListPage: View {
         self.aiSettingsViewModel = aiSettingsViewModel
         self.notificationClient = notificationClient
         self.onMedicalCasesUpdated = onMedicalCasesUpdated
+        self.archiveMode = archiveMode
         _viewModel = StateObject(
             wrappedValue: MedExamDetailLazyLoadViewModel(
-                reports: completeData?.examinationReports ?? [],
+                reports: archiveMode == .active ? (completeData?.examinationReports ?? []) : [],
                 medicalQueryAPI: medicalQueryAPI,
                 logger: logger,
                 scene: "examination_reports",
-                onReportsUpdated: onReportsUpdated
+                onReportsUpdated: archiveMode == .active ? onReportsUpdated : nil
             )
         )
+    }
+
+    private var navigationTitleText: String {
+        archiveMode == .archived
+            ? L10n.text("medical.archive.list.examination_reports.title")
+            : L10n.text("home.medical.list.examination_reports.title")
     }
 
     private var reports: [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments] {
@@ -104,15 +113,38 @@ struct ExaminationReportsListPage: View {
         .refreshable {
             await refreshReports()
         }
-        .navigationTitle(L10n.text("home.medical.list.examination_reports.title"))
+        .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(uiColor: .systemGroupedBackground))
         // 👇 添加这两行，强制导航栏背景可见并且不透明
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar) // 你也可以换成 .white 等你想要的颜色
         .searchable(text: $viewModel.searchText, prompt: L10n.text("home.medical.family_cabinet.search_prompt"))
+        .toolbar {
+            if archiveMode == .active {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    MainNavigationLink {
+                        ExaminationReportsListPage(
+                            completeData: completeData,
+                            medicalQueryAPI: medicalQueryAPI,
+                            logger: logger,
+                            fileTransferService: fileTransferService,
+                            memberContextStore: memberContextStore,
+                            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                            aiSettingsViewModel: aiSettingsViewModel,
+                            notificationClient: notificationClient,
+                            onReportsUpdated: nil,
+                            onMedicalCasesUpdated: onMedicalCasesUpdated,
+                            archiveMode: .archived
+                        )
+                    } label: {
+                        Text(L10n.text("medical.archive.list.entry"))
+                    }
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if memberID > 0 {
+            if archiveMode == .active, memberID > 0 {
                 MedicalListBottomActionBar(
                     documentKind: Self.uploadDocumentKind,
                     onManualAdd: { isPresentingAddExamSheet = true },
@@ -121,6 +153,11 @@ struct ExaminationReportsListPage: View {
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .task(id: archiveMode == .archived) {
+            if archiveMode == .archived {
+                await refreshReports()
+            }
+        }
         .sheet(isPresented: $isPresentingAddExamSheet) {
             CompatibleNavigationContainer(legacyStackStyle: true) {
                 ExamReportFormView(
@@ -155,9 +192,15 @@ struct ExaminationReportsListPage: View {
     @ViewBuilder
     private var examinationContent: some View {
         if filteredReports.isEmpty {
-            ExaminationReportsEmptyStateView()
-                .frame(maxWidth: .infinity, minHeight: 320)
-                .padding(.vertical, 24)
+            if archiveMode == .archived {
+                Text(L10n.text("medical.archive.list.empty"))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 240)
+            } else {
+                ExaminationReportsEmptyStateView()
+                    .frame(maxWidth: .infinity, minHeight: 320)
+                    .padding(.vertical, 24)
+            }
         } else {
             LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                 ForEach(timelineSections) { section in
@@ -212,7 +255,9 @@ struct ExaminationReportsListPage: View {
                             onMedicalCaseDeleted: handleMedicalCaseDeleted,
                             onAttachmentsUpdated: { updated in
                                 viewModel.upsertReport(updated)
-                            }
+                            },
+                            onArchiveStateChanged: handleArchiveStateChanged,
+                            archiveMode: archiveMode
                         )
                     } header: {
                         ExaminationReportTimelineSectionHeader(
@@ -300,6 +345,13 @@ private func handleMedicalCaseUpdated(_ updated: SparkMedicalSyncAPI.RemoteMedic
         onMedicalCasesUpdated?(cases)
     }
 
+    private func handleArchiveStateChanged(id: Int, isArchived: Bool) {
+        let belongsInList = archiveMode == .archived ? isArchived : !isArchived
+        if belongsInList == false {
+            viewModel.removeReport(reportID: id)
+        }
+    }
+
     @MainActor
     private func refreshReports() async {
         guard memberID > 0 else {
@@ -308,11 +360,14 @@ private func handleMedicalCaseUpdated(_ updated: SparkMedicalSyncAPI.RemoteMedic
         }
 
         let startedAt = Date()
-        logger.info("检查报告列表下拉刷新开始 memberID=\(memberID)", module: .home)
+        logger.info("检查报告列表下拉刷新开始 memberID=\(memberID) archiveMode=\(archiveMode)", module: .home)
 
         do {
             // 下拉刷新只拉取检查报告列表，并只回写首页 completeData.examinationReports 缓存字段。
-            let refreshedReports = try await medicalQueryAPI.listExaminationReportsWithAttachments(memberID: memberID)
+            let refreshedReports = try await medicalQueryAPI.listExaminationReportsWithAttachments(
+                memberID: memberID,
+                archived: archiveMode.query
+            )
             viewModel.replaceReports(refreshedReports)
             logger.info(
                 "检查报告列表下拉刷新完成 memberID=\(memberID) count=\(refreshedReports.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
@@ -467,6 +522,8 @@ private struct ExaminationReportCategorySection: View {
     let onMedicalCaseUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
     let onMedicalCaseDeleted: (Int) -> Void
     let onAttachmentsUpdated: (SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -517,7 +574,9 @@ private struct ExaminationReportCategorySection: View {
                         },
                         onAttachmentsUpdated: { updated in
                             onAttachmentsUpdated(updated)
-                        }
+                        },
+                        onArchiveStateChanged: onArchiveStateChanged,
+                        archiveMode: archiveMode
                     )
                     .task {
                         onLoadDetails(report.id)

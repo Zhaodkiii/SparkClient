@@ -22,4 +22,6 @@ struct MedicationPlan: Identifiable, Codable, Equatable, Sendable {
     var status: String
     var extra: [String: String]
     var updatedAt: Date
+    var isArchived: Bool = false
+    var archivedAt: Date?
 }

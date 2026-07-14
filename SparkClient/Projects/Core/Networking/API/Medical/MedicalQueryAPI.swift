@@ -153,13 +153,27 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
     }
 
     /// 查询病历主档（按成员可选过滤）。
-    func listMedicalCases(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCase] {
-        try await resources.list([SparkMedicalSyncAPI.RemoteMedicalCase].self, kind: .cases, query: memberQuery(memberID))
+    func listMedicalCases(
+        memberID: Int? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCase] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMedicalCase].self,
+            kind: .cases,
+            query: archivedQuery(memberQuery(memberID), archived: archived)
+        )
     }
 
     /// 查询病历列表摘要（含列表展示所需附件/症状/用药字段）。
-    func listMedicalCaseSummaries(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCaseSummary] {
-        try await resources.list([SparkMedicalSyncAPI.RemoteMedicalCaseSummary].self, kind: .cases, query: memberQuery(memberID))
+    func listMedicalCaseSummaries(
+        memberID: Int? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemoteMedicalCaseSummary] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMedicalCaseSummary].self,
+            kind: .cases,
+            query: archivedQuery(memberQuery(memberID), archived: archived)
+        )
     }
 
     /// 查询症状（按成员、病历可选过滤）。
@@ -199,23 +213,51 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
     }
 
     /// 查询体检报告（按成员可选过滤）。
-    func listHealthExamReports(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteHealthExamReport] {
-        try await resources.list([SparkMedicalSyncAPI.RemoteHealthExamReport].self, kind: .healthExamReports, query: memberQuery(memberID))
+    func listHealthExamReports(
+        memberID: Int? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemoteHealthExamReport] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteHealthExamReport].self,
+            kind: .healthExamReports,
+            query: archivedQuery(memberQuery(memberID), archived: archived)
+        )
     }
 
     /// 查询体检报告列表摘要（含附件；明细仍由列表页懒加载）。
-    func listHealthExamReportsWithAttachments(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments] {
-        try await resources.list([SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments].self, kind: .healthExamReports, query: memberQuery(memberID))
+    func listHealthExamReportsWithAttachments(
+        memberID: Int? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments].self,
+            kind: .healthExamReports,
+            query: archivedQuery(memberQuery(memberID), archived: archived)
+        )
     }
 
     /// 查询检查报告（按成员可选过滤）。
-    func listExaminationReports(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteExaminationReport] {
-        try await resources.list([SparkMedicalSyncAPI.RemoteExaminationReport].self, kind: .examinationReports, query: memberQuery(memberID))
+    func listExaminationReports(
+        memberID: Int? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemoteExaminationReport] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteExaminationReport].self,
+            kind: .examinationReports,
+            query: archivedQuery(memberQuery(memberID), archived: archived)
+        )
     }
 
     /// 查询检查报告列表摘要（含附件；明细仍由列表页懒加载）。
-    func listExaminationReportsWithAttachments(memberID: Int? = nil) async throws -> [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments] {
-        try await resources.list([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments].self, kind: .examinationReports, query: memberQuery(memberID))
+    func listExaminationReportsWithAttachments(
+        memberID: Int? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments] {
+        try await resources.list(
+            [SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments].self,
+            kind: .examinationReports,
+            query: archivedQuery(memberQuery(memberID), archived: archived)
+        )
     }
 
     /// 查询体检/检查明细（按成员及业务维度可选过滤）。
@@ -249,7 +291,8 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         memberID: Int? = nil,
         medicineType: String? = nil,
         expireBefore: Date? = nil,
-        lowStock: Bool? = nil
+        lowStock: Bool? = nil,
+        archived: MedicalArchiveQuery = .active
     ) async throws -> [SparkMedicalSyncAPI.RemoteMedicineBox] {
         var q: [URLQueryItem] = memberQuery(memberID)
         if let medicineType {
@@ -261,11 +304,20 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         if let lowStock {
             q.append(URLQueryItem(name: "low_stock", value: lowStock ? "true" : "false"))
         }
-        return try await resources.list([SparkMedicalSyncAPI.RemoteMedicineBox].self, kind: .medicineBoxes, query: q)
+        return try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMedicineBox].self,
+            kind: .medicineBoxes,
+            query: archivedQuery(q, archived: archived)
+        )
     }
 
     /// 查询处方（按成员、状态可选过滤）。
-    func listPrescriptions(memberID: Int? = nil, medicalCaseID: Int? = nil, status: String? = nil) async throws -> [SparkMedicalSyncAPI.RemotePrescription] {
+    func listPrescriptions(
+        memberID: Int? = nil,
+        medicalCaseID: Int? = nil,
+        status: String? = nil,
+        archived: MedicalArchiveQuery = .active
+    ) async throws -> [SparkMedicalSyncAPI.RemotePrescription] {
         var q: [URLQueryItem] = memberQuery(memberID)
         if let medicalCaseID {
             q.append(URLQueryItem(name: "medical_case_id", value: "\(medicalCaseID)"))
@@ -273,7 +325,11 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         if let status {
             q.append(URLQueryItem(name: "status", value: status))
         }
-        return try await resources.list([SparkMedicalSyncAPI.RemotePrescription].self, kind: .prescriptions, query: q)
+        return try await resources.list(
+            [SparkMedicalSyncAPI.RemotePrescription].self,
+            kind: .prescriptions,
+            query: archivedQuery(q, archived: archived)
+        )
     }
 
     /// 查询服药计划（按成员、药箱、处方、状态可选过滤）。
@@ -282,7 +338,8 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         medicalCaseID: Int? = nil,
         medicineBoxID: Int? = nil,
         prescriptionID: Int? = nil,
-        status: String? = nil
+        status: String? = nil,
+        archived: MedicalArchiveQuery = .active
     ) async throws -> [SparkMedicalSyncAPI.RemoteMedicationPlan] {
         var q: [URLQueryItem] = memberQuery(memberID)
         if let medicalCaseID {
@@ -297,7 +354,11 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
         if let status {
             q.append(URLQueryItem(name: "status", value: status))
         }
-        return try await resources.list([SparkMedicalSyncAPI.RemoteMedicationPlan].self, kind: .medicationPlans, query: q)
+        return try await resources.list(
+            [SparkMedicalSyncAPI.RemoteMedicationPlan].self,
+            kind: .medicationPlans,
+            query: archivedQuery(q, archived: archived)
+        )
     }
 
     /// 查询服药记录（按成员、计划、状态、计划时间窗口可选过滤）。
@@ -491,6 +552,12 @@ struct SparkMedicalQueryAPI: @unchecked Sendable {
 
     private func memberQuery(_ memberID: Int?) -> [URLQueryItem] {
         memberID.map { [URLQueryItem(name: "member_id", value: "\($0)")] } ?? []
+    }
+
+    private func archivedQuery(_ query: [URLQueryItem], archived: MedicalArchiveQuery) -> [URLQueryItem] {
+        var q = query
+        q.append(URLQueryItem(name: "archived", value: archived.rawValue))
+        return q
     }
 
     private func memberAndCaseQuery(memberID: Int?, medicalCaseID: Int?) -> [URLQueryItem] {

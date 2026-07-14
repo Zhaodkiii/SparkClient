@@ -16,6 +16,8 @@ struct MedicationPlanDetailPage: View {
     var onMedicineBoxDeleted: ((Int) -> Void)?
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?
     var onMedicalCaseDeleted: ((Int) -> Void)?
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
     var onLocalDraftSaved: ((MedicationPlanRecognitionDraft) -> Void)?
     var onLocalDraftDeleted: (() -> Void)?
     var onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)?
@@ -28,7 +30,9 @@ struct MedicationPlanDetailPage: View {
     @State private var sourcePlanDraft: MedicationPlanRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
+    @State private var showingArchiveConfirm = false
     @State private var isDeleting = false
+    @State private var isUpdatingArchiveState = false
     @State private var alertMessage: String?
     @State private var planRecords: [SparkMedicalSyncAPI.RemoteMedicationRecord] = []
     @State private var isLoadingPlanRecords = false
@@ -59,6 +63,8 @@ struct MedicationPlanDetailPage: View {
         onMedicineBoxDeleted: ((Int) -> Void)? = nil,
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil,
         onMedicalCaseDeleted: ((Int) -> Void)? = nil,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active,
         onLocalDraftSaved: ((MedicationPlanRecognitionDraft) -> Void)? = nil,
         onLocalDraftDeleted: (() -> Void)? = nil,
         onLocalDraftMedicineBoxSaved: ((MedicineBoxRecognitionDraft) -> Void)? = nil,
@@ -80,6 +86,8 @@ struct MedicationPlanDetailPage: View {
         self.onMedicineBoxDeleted = onMedicineBoxDeleted
         self.onMedicalCaseUpdated = onMedicalCaseUpdated
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
         self.onLocalDraftSaved = onLocalDraftSaved
         self.onLocalDraftDeleted = onLocalDraftDeleted
         self.onLocalDraftMedicineBoxSaved = onLocalDraftMedicineBoxSaved
@@ -320,6 +328,18 @@ struct MedicationPlanDetailPage: View {
                     }
                     .disabled(memberID == nil)
 
+                    Button {
+                        showingArchiveConfirm = true
+                    } label: {
+                        Label(
+                            currentPlan.isArchived
+                                ? L10n.text("medical.archive.menu.unarchive")
+                                : L10n.text("medical.archive.menu.archive"),
+                            systemImage: currentPlan.isArchived ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                        )
+                    }
+                    .disabled(isUpdatingArchiveState)
+
                     Button(role: .destructive) {
                         showingDeleteConfirm = true
                     } label: {
@@ -328,7 +348,7 @@ struct MedicationPlanDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting || isPreparingShare)
+                .disabled(isDeleting || isPreparingShare || isUpdatingArchiveState)
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -380,6 +400,27 @@ struct MedicationPlanDetailPage: View {
             }
         } message: {
             Text(L10n.text("home.medical.medication_plan.delete.message"))
+        }
+        .alert(
+            currentPlan.isArchived
+                ? L10n.text("medical.archive.confirm.unarchive.title")
+                : L10n.text("medical.archive.confirm.archive.title"),
+            isPresented: $showingArchiveConfirm
+        ) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(
+                currentPlan.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.action")
+                    : L10n.text("medical.archive.confirm.archive.action")
+            ) {
+                Task { await updateArchiveState(archived: !currentPlan.isArchived) }
+            }
+        } message: {
+            Text(
+                currentPlan.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.message")
+                    : L10n.text("medical.archive.confirm.archive.message")
+            )
         }
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { alertMessage != nil },
@@ -485,6 +526,56 @@ struct MedicationPlanDetailPage: View {
         } catch {
             alertMessage = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false else { return }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let response = try await workflowAPI.updateMedicationPlan(
+                id: currentPlan.id,
+                body: SparkMedicalWorkflowAPI.MedicalArchiveUpdatePayload(isArchived: archived)
+            )
+            guard let updated = response.medicationPlan else {
+                throw NSError(
+                    domain: "MedicationPlanDetailPage",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: L10n.text("common.operation_failed")]
+                )
+            }
+            currentPlan = updated
+            onSaved(updated)
+            onMutation?(response)
+            onArchiveStateChanged?(updated.id, updated.isArchived)
+            syncMedicationReminderAfterPlanChange()
+            notificationClient.success(
+                updated.isArchived
+                    ? L10n.text("medical.archive.toast.archived")
+                    : L10n.text("medical.archive.toast.unarchived"),
+                source: "medical.medication_plan.detail.archive"
+            )
+            let belongsInList = archiveMode == .archived ? updated.isArchived : !updated.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    /// 归档状态变更后静默重建本地服药提醒通知，对齐 `MedicationsListPage.syncMedicationReminderAfterPlanChange`。
+    private func syncMedicationReminderAfterPlanChange() {
+        guard let homeDependencies else { return }
+        guard case .signedIn(let session) = homeDependencies.sessionStore.state else { return }
+        let coordinator = homeDependencies.medicationReminderSyncCoordinator
+        coordinator.activate(accountID: session.accountID)
+        coordinator.rebuildAfterPlanChanged(
+            accountID: session.accountID,
+            members: memberContextStore.context.members
+        )
     }
 
     @MainActor

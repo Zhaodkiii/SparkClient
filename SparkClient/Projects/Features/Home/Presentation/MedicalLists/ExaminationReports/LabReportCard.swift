@@ -15,6 +15,8 @@ struct LabReportCard: View {
     var onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)? = nil
     var onMedicalCaseDeleted: ((Int) -> Void)? = nil
     var onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)? = nil
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
 
     @State private var isExpanded = false
     @State private var isShowingAttachments = false
@@ -182,7 +184,9 @@ struct LabReportCard: View {
             onMedicalCaseUpdated: onMedicalCaseUpdated,
             onMedicalCaseDeleted: onMedicalCaseDeleted,
             onAttachmentsUpdated: onAttachmentsUpdated,
-            onDeleted: onDeleted
+            onDeleted: onDeleted,
+            onArchiveStateChanged: onArchiveStateChanged,
+            archiveMode: archiveMode
         )
     }
 
@@ -470,11 +474,15 @@ private struct ExaminationReportDetailHostPage: View {
     var onMedicalCaseDeleted: ((Int) -> Void)?
     var onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)?
     var onDeleted: ((Int) -> Void)? = nil
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
 
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingEditSheet = false
     @State private var isShowingDeleteAlert = false
+    @State private var isShowingArchiveConfirm = false
     @State private var isDeleting = false
+    @State private var isUpdatingArchiveState = false
     @State private var errorMessage: String?
     @State private var shareContext: MedicalShareContext?
     @State private var shareErrorMessage: String?
@@ -496,7 +504,9 @@ private struct ExaminationReportDetailHostPage: View {
         onMedicalCaseUpdated: ((SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void)?,
         onMedicalCaseDeleted: ((Int) -> Void)?,
         onAttachmentsUpdated: ((SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments) -> Void)? = nil,
-        onDeleted: ((Int) -> Void)? = nil
+        onDeleted: ((Int) -> Void)? = nil,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         _report = State(initialValue: report)
         self.category = category
@@ -510,6 +520,8 @@ private struct ExaminationReportDetailHostPage: View {
         self.onMedicalCaseDeleted = onMedicalCaseDeleted
         self.onAttachmentsUpdated = onAttachmentsUpdated
         self.onDeleted = onDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
     }
 
     private var existingDraft: MedicalReportRecognitionDraft {
@@ -573,6 +585,18 @@ private struct ExaminationReportDetailHostPage: View {
                             Label(L10n.text("common.edit"), systemImage: "pencil")
                         }
 
+                        Button {
+                            isShowingArchiveConfirm = true
+                        } label: {
+                            Label(
+                                report.isArchived
+                                    ? L10n.text("medical.archive.menu.unarchive")
+                                    : L10n.text("medical.archive.menu.archive"),
+                                systemImage: report.isArchived ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                            )
+                        }
+                        .disabled(isUpdatingArchiveState)
+
                         Button(role: .destructive) {
                             isShowingDeleteAlert = true
                         } label: {
@@ -581,7 +605,7 @@ private struct ExaminationReportDetailHostPage: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .disabled(isDeleting || isPreparingShare)
+                    .disabled(isDeleting || isPreparingShare || isUpdatingArchiveState)
                 }
             }
             .sheet(isPresented: $isShowingEditSheet) {
@@ -625,6 +649,27 @@ private struct ExaminationReportDetailHostPage: View {
             } message: {
                 Text(L10n.text("home.medical.examination.delete.message", fallback: "删除后无法恢复。"))
             }
+            .alert(
+                report.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.title")
+                    : L10n.text("medical.archive.confirm.archive.title"),
+                isPresented: $isShowingArchiveConfirm
+            ) {
+                Button(L10n.text("common.cancel"), role: .cancel) {}
+                Button(
+                    report.isArchived
+                        ? L10n.text("medical.archive.confirm.unarchive.action")
+                        : L10n.text("medical.archive.confirm.archive.action")
+                ) {
+                    Task { await updateArchiveState(archived: !report.isArchived) }
+                }
+            } message: {
+                Text(
+                    report.isArchived
+                        ? L10n.text("medical.archive.confirm.unarchive.message")
+                        : L10n.text("medical.archive.confirm.archive.message")
+                )
+            }
             .alert(L10n.text("home.medical.share.error", fallback: "分享失败"), isPresented: Binding(get: { shareErrorMessage != nil }, set: { if $0 == false { shareErrorMessage = nil } })) {
                 Button(L10n.text("common.got_it"), role: .cancel) {
                     shareErrorMessage = nil
@@ -659,6 +704,37 @@ private struct ExaminationReportDetailHostPage: View {
             )
         } catch {
             shareErrorMessage = error.localizedDescription.isEmpty ? L10n.text("home.medical.share.retry", fallback: "请稍后重试") : error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false else { return }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let updated = try await MedicalArchiveMutationService(workflowAPI: resources).setArchived(
+                SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments.self,
+                kind: .examinationReports,
+                id: report.id,
+                archived: archived
+            )
+            report = updated
+            onAttachmentsUpdated?(updated)
+            onArchiveStateChanged?(updated.id, updated.isArchived)
+            notificationClient.success(
+                updated.isArchived
+                    ? L10n.text("medical.archive.toast.archived")
+                    : L10n.text("medical.archive.toast.unarchived"),
+                source: "medical.examination.detail.archive"
+            )
+            let belongsInList = archiveMode == .archived ? updated.isArchived : !updated.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

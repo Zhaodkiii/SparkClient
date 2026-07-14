@@ -12,6 +12,8 @@ struct MedicineBoxDetailPage: View {
     let fileTransferService: FileTransferService
     let onSaved: (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void
     let onDeleted: (Int) -> Void
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
     var onLocalDraftSaved: ((MedicineBoxRecognitionDraft) -> Void)?
     var onLocalDraftDeleted: (() -> Void)?
 
@@ -20,8 +22,10 @@ struct MedicineBoxDetailPage: View {
     @State private var sourceBoxDraft: MedicineBoxRecognitionDraft?
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirm = false
+    @State private var showingArchiveConfirm = false
     @State private var alertMessage: String?
     @State private var isDeleting = false
+    @State private var isUpdatingArchiveState = false
     @State private var isEditingAttachments = false
     @State private var attachmentsDirty = false
     @State private var shareContext: MedicalShareContext?
@@ -41,6 +45,8 @@ struct MedicineBoxDetailPage: View {
         sourceBoxDraft: MedicineBoxRecognitionDraft? = nil,
         onSaved: @escaping (SparkMedicalSyncAPI.RemoteMedicineBox) -> Void,
         onDeleted: @escaping (Int) -> Void,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active,
         onLocalDraftSaved: ((MedicineBoxRecognitionDraft) -> Void)? = nil,
         onLocalDraftDeleted: (() -> Void)? = nil
     ) {
@@ -55,6 +61,8 @@ struct MedicineBoxDetailPage: View {
         self.fileTransferService = fileTransferService
         self.onSaved = onSaved
         self.onDeleted = onDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
         self.onLocalDraftSaved = onLocalDraftSaved
         self.onLocalDraftDeleted = onLocalDraftDeleted
         _currentBox = State(initialValue: box)
@@ -136,6 +144,20 @@ struct MedicineBoxDetailPage: View {
                         Label(L10n.text("common.edit"), systemImage: "pencil")
                     }
 
+                    if mode == .server {
+                        Button {
+                            showingArchiveConfirm = true
+                        } label: {
+                            Label(
+                                currentBox.isArchived
+                                    ? L10n.text("medical.archive.menu.unarchive")
+                                    : L10n.text("medical.archive.menu.archive"),
+                                systemImage: currentBox.isArchived ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                            )
+                        }
+                        .disabled(isUpdatingArchiveState)
+                    }
+
                     Button(role: .destructive) {
                         showingDeleteConfirm = true
                     } label: {
@@ -144,7 +166,7 @@ struct MedicineBoxDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting || isPreparingShare)
+                .disabled(isDeleting || isPreparingShare || isUpdatingArchiveState)
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -193,6 +215,27 @@ struct MedicineBoxDetailPage: View {
         } message: {
             Text(L10n.text("home.medical.medicine_box.delete.message"))
         }
+        .alert(
+            currentBox.isArchived
+                ? L10n.text("medical.archive.confirm.unarchive.title")
+                : L10n.text("medical.archive.confirm.archive.title"),
+            isPresented: $showingArchiveConfirm
+        ) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(
+                currentBox.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.action")
+                    : L10n.text("medical.archive.confirm.archive.action")
+            ) {
+                Task { await updateArchiveState(archived: !currentBox.isArchived) }
+            }
+        } message: {
+            Text(
+                currentBox.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.message")
+                    : L10n.text("medical.archive.confirm.archive.message")
+            )
+        }
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
@@ -238,6 +281,31 @@ struct MedicineBoxDetailPage: View {
             try await workflowAPI.delete(kind: .medicineBoxes, id: currentBox.id)
             onDeleted(currentBox.id)
             dismiss()
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false, mode == .server else { return }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let updated = try await MedicalArchiveMutationService(workflowAPI: workflowAPI).setArchived(
+                SparkMedicalSyncAPI.RemoteMedicineBox.self,
+                kind: .medicineBoxes,
+                id: currentBox.id,
+                archived: archived
+            )
+            currentBox = updated
+            onSaved(updated)
+            onArchiveStateChanged?(updated.id, updated.isArchived)
+            let belongsInList = archiveMode == .archived ? updated.isArchived : !updated.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
         } catch {
             alertMessage = error.localizedDescription
         }

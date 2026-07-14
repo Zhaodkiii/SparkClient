@@ -11,6 +11,7 @@ struct MedicineBoxListPage: View {
     let notificationClient: any NotificationClient
     let logger: Logger
     let onMedicineBoxesChanged: ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
+    var archiveMode: MedicalArchiveListMode = .active
 
     @State private var localMedicineBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox]
     @State private var sheetDestination: MedicineBoxSheetDestination?
@@ -27,7 +28,8 @@ struct MedicineBoxListPage: View {
         aiSettingsViewModel: AISettingsViewModel,
         notificationClient: any NotificationClient,
         logger: Logger,
-        onMedicineBoxesChanged: @escaping ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void
+        onMedicineBoxesChanged: @escaping ([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         self.medicineBoxes = medicineBoxes
         self.memberID = memberID
@@ -39,7 +41,14 @@ struct MedicineBoxListPage: View {
         self.notificationClient = notificationClient
         self.logger = logger
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
-        _localMedicineBoxes = State(initialValue: medicineBoxes)
+        self.archiveMode = archiveMode
+        _localMedicineBoxes = State(initialValue: archiveMode == .active ? medicineBoxes : [])
+    }
+
+    private var navigationTitleText: String {
+        archiveMode == .archived
+            ? L10n.text("medical.archive.list.medicine_boxes.title")
+            : L10n.text("home.medical.medicine_box.title")
     }
 
     private var sortedBoxes: [SparkMedicalSyncAPI.RemoteMedicineBox] {
@@ -53,7 +62,11 @@ struct MedicineBoxListPage: View {
     var body: some View {
         List {
             if sortedBoxes.isEmpty {
-                Text(L10n.text("home.medical.medicine_box.empty"))
+                Text(
+                    archiveMode == .archived
+                        ? L10n.text("medical.archive.list.empty")
+                        : L10n.text("home.medical.medicine_box.empty")
+                )
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(sortedBoxes, id: \.id) { box in
@@ -66,7 +79,9 @@ struct MedicineBoxListPage: View {
                             workflowAPI: workflowAPI,
                             fileTransferService: fileTransferService,
                             onSaved: upsertMedicineBox,
-                            onDeleted: removeMedicineBox
+                            onDeleted: removeMedicineBox,
+                            onArchiveStateChanged: handleArchiveStateChanged,
+                            archiveMode: archiveMode
                         )
                     } label: {
                         MedicineBoxRow(box: box, fileTransferService: fileTransferService)
@@ -77,26 +92,49 @@ struct MedicineBoxListPage: View {
         .refreshable {
             await refreshMedicineBoxes()
         }
-        .navigationTitle(L10n.text("home.medical.medicine_box.title"))
+        .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            MedicalListBottomActionBar(
-                documentKind: Self.uploadDocumentKind,
-                isEnabled: memberID != nil,
-                onUploadConfirmed: { files in startMedicineBoxRecognition(files: files) }
-            )
+            if archiveMode == .active {
+                MedicalListBottomActionBar(
+                    documentKind: Self.uploadDocumentKind,
+                    isEnabled: memberID != nil,
+                    onUploadConfirmed: { files in startMedicineBoxRecognition(files: files) }
+                )
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    sheetDestination = .create
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
+            if archiveMode == .active {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        sheetDestination = .create
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.body.weight(.semibold))
+                    }
+                    .disabled(memberID == nil)
+                    .accessibilityLabel(L10n.text("home.medical.medicine_box.add_a11y"))
                 }
-                .disabled(memberID == nil)
-                .accessibilityLabel(L10n.text("home.medical.medicine_box.add_a11y"))
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    MainNavigationLink {
+                        MedicineBoxListPage(
+                            medicineBoxes: medicineBoxes,
+                            memberID: memberID,
+                            workflowAPI: workflowAPI,
+                            medicalQueryAPI: medicalQueryAPI,
+                            fileTransferService: fileTransferService,
+                            viewModel: viewModel,
+                            aiSettingsViewModel: aiSettingsViewModel,
+                            notificationClient: notificationClient,
+                            logger: logger,
+                            onMedicineBoxesChanged: { _ in },
+                            archiveMode: .archived
+                        )
+                    } label: {
+                        Text(L10n.text("medical.archive.list.entry"))
+                    }
+                }
             }
         }
         .sheet(item: $sheetDestination) { destination in
@@ -116,11 +154,17 @@ struct MedicineBoxListPage: View {
             }
         }
         .onChange(of: medicineBoxes) { newValue in
+            guard archiveMode == .active else { return }
             localMedicineBoxes = newValue
         }
         .task(id: viewModel.saveSucceededRevision) {
-            guard viewModel.saveSucceededRevision > 0 else { return }
+            guard viewModel.saveSucceededRevision > 0, archiveMode == .active else { return }
             await refreshMedicineBoxes()
+        }
+        .task(id: archiveMode == .archived) {
+            if archiveMode == .archived {
+                await refreshMedicineBoxes()
+            }
         }
 //        .fullScreenCover(isPresented: $viewModel.isUploadPresented) {
 //            CompatibleNavigationContainer {
@@ -147,6 +191,13 @@ struct MedicineBoxListPage: View {
         onMedicineBoxesChanged(localMedicineBoxes)
     }
 
+    private func handleArchiveStateChanged(id: Int, isArchived: Bool) {
+        let belongsInList = archiveMode == .archived ? isArchived : !isArchived
+        if belongsInList == false {
+            removeMedicineBox(id: id)
+        }
+    }
+
     @MainActor
     private func refreshMedicineBoxes() async {
         guard let memberID else {
@@ -155,11 +206,11 @@ struct MedicineBoxListPage: View {
         }
 
         let startedAt = Date()
-        logger.info("药箱下拉刷新开始 memberID=\(memberID)", module: .home)
+        logger.info("药箱下拉刷新开始 memberID=\(memberID) archiveMode=\(archiveMode)", module: .home)
 
         do {
             // 下拉刷新只拉取药箱列表，并只回写首页 completeData.medicineBoxes 缓存字段。
-            let boxes = try await medicalQueryAPI.listMedicineBoxes(memberID: memberID)
+            let boxes = try await medicalQueryAPI.listMedicineBoxes(memberID: memberID, archived: archiveMode.query)
             localMedicineBoxes = boxes
             onMedicineBoxesChanged(boxes)
             logger.info(

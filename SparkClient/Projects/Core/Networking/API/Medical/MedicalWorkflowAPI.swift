@@ -647,6 +647,25 @@ struct SparkMedicalWorkflowAPI {
         )
     }
 
+    /// 归档 / 取消归档目标医疗资源（仅提交 `is_archived`，`archived_at` 由服务端写入）。
+    nonisolated struct MedicalArchiveUpdatePayload: Encodable, Sendable {
+        let isArchived: Bool
+    }
+
+    func setArchived<T: Decodable>(
+        _ type: T.Type,
+        kind: SparkMedicalResourceKind,
+        id: Int,
+        archived: Bool
+    ) async throws -> T {
+        try await update(
+            type,
+            kind: kind,
+            id: id,
+            body: MedicalArchiveUpdatePayload(isArchived: archived)
+        )
+    }
+
     func replace<T: Decodable, B: Encodable & Sendable>(
         _ type: T.Type,
         kind: SparkMedicalResourceKind,

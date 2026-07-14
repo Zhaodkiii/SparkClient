@@ -133,9 +133,10 @@ struct FamilyMedicineCabinetPage: View {
             // 合并 trailing 按钮以兼容 iOS 15（toolbar 内条件 ToolbarItem 需 iOS 16+）
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
-                    if viewModel.showsMemberFilter {
-                        memberFilterMenu
-                    }
+//                    if viewModel.showsMemberFilter {
+//                        memberFilterMenu
+//                    }
+                    archivedMedicineBoxesLink
                     Button {
                         sheetDestination = .create
                     } label: {
@@ -197,6 +198,28 @@ struct FamilyMedicineCabinetPage: View {
         }
     }
 
+    /// 归档药品入口：始终跳转当前入口成员名下的个人药箱归档模式（家庭/个人模式均适用）
+    private var archivedMedicineBoxesLink: some View {
+        MainNavigationLink {
+            MedicineBoxListPage(
+                medicineBoxes: [],
+                memberID: entryMemberID,
+                workflowAPI: dependencies.medicalWorkflowAPI,
+                medicalQueryAPI: dependencies.medicalQueryAPI,
+                fileTransferService: dependencies.fileTransferService,
+                viewModel: dependencies.medicalDocumentUploadViewModel,
+                aiSettingsViewModel: dependencies.aiSettingsViewModel,
+                notificationClient: dependencies.notificationClient,
+                logger: dependencies.logger,
+                onMedicineBoxesChanged: { _ in },
+                archiveMode: .archived
+            )
+        } label: {
+            Image(systemName: "archivebox")
+        }
+        .accessibilityLabel(L10n.text("medical.archive.list.entry"))
+    }
+
     private var memberFilterMenu: some View {
         Menu {
             ForEach(memberFilterOptions, id: \.0) { filter, title in
@@ -236,6 +259,7 @@ struct FamilyMedicineCabinetPage: View {
 
     /// 家庭模式：将当前药箱列表回写首页完整成员数据中的 familyMedicineBoxes 缓存
     private func notifyParentCompleteDataIfFamily() {
+        
         guard mode == .family else { return }
         guard var completeData = memberCompleteData else { return }
         completeData.familyMedicineBoxes = viewModel.boxesForFamilyHomeCacheSync

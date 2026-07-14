@@ -15,6 +15,8 @@ struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
     var diagnosisSummary: String
     var extra: [String: String]
     var updatedAt: Date
+    var isArchived: Bool
+    var archivedAt: Date?
 
     init(
         id: Int,
@@ -28,7 +30,9 @@ struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
         caseStatus: String? = nil,
         diagnosisSummary: String = "",
         extra: [String: String] = [:],
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        isArchived: Bool = false,
+        archivedAt: Date? = nil
     ) {
         self.id = id
         self.memberID = memberID
@@ -42,5 +46,7 @@ struct MedicalCase: Identifiable, Codable, Equatable, Sendable {
         self.diagnosisSummary = diagnosisSummary
         self.extra = extra
         self.updatedAt = updatedAt
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
     }
 }

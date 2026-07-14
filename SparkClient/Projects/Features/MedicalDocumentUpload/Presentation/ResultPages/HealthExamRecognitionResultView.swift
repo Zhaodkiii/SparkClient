@@ -11,12 +11,17 @@ struct HealthExamRecognitionResultView: View {
     private let workflowAPI: SparkMedicalWorkflowAPI?
     private let notificationClient: (any NotificationClient)?
     private let onDeleted: ((Int) -> Void)?
+    private let onArchiveStateChanged: ((Int, Bool) -> Void)?
+    private let archiveMode: MedicalArchiveListMode
     private let detailShareTitle: String?
     private let detailShareMemberName: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var isShowingDeleteConfirm = false
     @State private var isDeleting = false
+    @State private var isShowingArchiveConfirm = false
+    @State private var isUpdatingArchiveState = false
+    @State private var detailReportIsArchived: Bool
     @State private var shareContext: MedicalShareContext?
     @State private var shareErrorMessage: String?
     @State private var isPreparingShare = false
@@ -34,8 +39,11 @@ struct HealthExamRecognitionResultView: View {
         self.workflowAPI = nil
         self.notificationClient = nil
         self.onDeleted = nil
+        self.onArchiveStateChanged = nil
+        self.archiveMode = .active
         self.detailShareTitle = nil
         self.detailShareMemberName = "成员"
+        _detailReportIsArchived = State(initialValue: false)
     }
 
     init(
@@ -44,7 +52,9 @@ struct HealthExamRecognitionResultView: View {
         memberContextStore: MemberContextStore,
         workflowAPI: SparkMedicalWorkflowAPI,
         notificationClient: any NotificationClient,
-        onDeleted: ((Int) -> Void)? = nil
+        onDeleted: ((Int) -> Void)? = nil,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         self.viewModel = nil
         self.detailContent = HealthExamRecognitionResultContentView(
@@ -59,8 +69,11 @@ struct HealthExamRecognitionResultView: View {
         self.workflowAPI = workflowAPI
         self.notificationClient = notificationClient
         self.onDeleted = onDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
         self.detailShareTitle = item.institutionName?.nonEmpty ?? L10n.text("home.medical.list.health_exam_reports.title")
         self.detailShareMemberName = "成员"
+        _detailReportIsArchived = State(initialValue: item.isArchived)
     }
 
     var body: some View {
@@ -82,6 +95,27 @@ struct HealthExamRecognitionResultView: View {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
             } message: {
                 Text(L10n.text("home.medical.list.health_exam.delete.confirm_message", fallback: "删除后该报告将从列表中移除。"))
+            }
+            .alert(
+                detailReportIsArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.title")
+                    : L10n.text("medical.archive.confirm.archive.title"),
+                isPresented: $isShowingArchiveConfirm
+            ) {
+                Button(L10n.text("common.cancel"), role: .cancel) {}
+                Button(
+                    detailReportIsArchived
+                        ? L10n.text("medical.archive.confirm.unarchive.action")
+                        : L10n.text("medical.archive.confirm.archive.action")
+                ) {
+                    Task { await updateArchiveState(archived: !detailReportIsArchived) }
+                }
+            } message: {
+                Text(
+                    detailReportIsArchived
+                        ? L10n.text("medical.archive.confirm.unarchive.message")
+                        : L10n.text("medical.archive.confirm.archive.message")
+                )
             }
             .sheet(item: $shareContext) { context in
                 MedicalShareSheet(context: context) {
@@ -132,6 +166,18 @@ struct HealthExamRecognitionResultView: View {
                     Label(L10n.text("common.edit"), systemImage: "pencil")
                 }
 
+                Button {
+                    isShowingArchiveConfirm = true
+                } label: {
+                    Label(
+                        detailReportIsArchived
+                            ? L10n.text("medical.archive.menu.unarchive")
+                            : L10n.text("medical.archive.menu.archive"),
+                        systemImage: detailReportIsArchived ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                    )
+                }
+                .disabled(isUpdatingArchiveState)
+
                 Divider()
 
                 Button(role: .destructive) {
@@ -139,7 +185,7 @@ struct HealthExamRecognitionResultView: View {
                 } label: {
                     Label(L10n.text("common.delete"), systemImage: "trash")
                 }
-                .disabled(isDeleting || isPreparingShare)
+                .disabled(isDeleting || isPreparingShare || isUpdatingArchiveState)
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -161,6 +207,36 @@ struct HealthExamRecognitionResultView: View {
             dismiss()
         } catch {
             notificationClient?.error(error.localizedDescription, title: L10n.text("home.medical.list.health_exam.delete.failed", fallback: "删除失败"), source: "health.exam.detail")
+        }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false, let detailReportID, let workflowAPI else { return }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let updated = try await MedicalArchiveMutationService(workflowAPI: workflowAPI).setArchived(
+                SparkMedicalSyncAPI.RemoteHealthExamReportWithAttachments.self,
+                kind: .healthExamReports,
+                id: detailReportID,
+                archived: archived
+            )
+            detailReportIsArchived = updated.isArchived
+            onArchiveStateChanged?(updated.id, updated.isArchived)
+            notificationClient?.success(
+                updated.isArchived
+                    ? L10n.text("medical.archive.toast.archived")
+                    : L10n.text("medical.archive.toast.unarchived"),
+                source: "health.exam.detail.archive"
+            )
+            let belongsInList = archiveMode == .archived ? updated.isArchived : !updated.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
+        } catch {
+            notificationClient?.error(error.localizedDescription, title: L10n.text("common.error"), source: "health.exam.detail.archive")
         }
     }
 

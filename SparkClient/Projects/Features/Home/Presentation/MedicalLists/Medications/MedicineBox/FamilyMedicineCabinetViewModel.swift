@@ -125,7 +125,15 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
     /// - Returns: 是否成功从服务端拉取到最新数据
     @discardableResult
     func load() async -> Bool {
-        guard isLoading == false else { return false }
+        guard Task.isCancelled == false else {
+            logger.info("药箱加载跳过：Task 已取消 entryMemberID=\(entryMemberID)", module: .home)
+            return false
+        }
+        guard isLoading == false else {
+            logger.info("药箱加载跳过：已有加载任务 entryMemberID=\(entryMemberID)", module: .home)
+            return false
+        }
+
         let requestMemberID = entryMemberID
         isLoading = true
         errorMessage = nil
@@ -142,14 +150,12 @@ final class FamilyMedicineCabinetViewModel: ObservableObject {
                 }
                 // 家庭模式：按入口成员汇总创建者名下全部成员药品与公共药品
                 let boxes = try await medicalQueryAPI.listFamilyMedicineCabinet(memberID: requestMemberID)
-                guard Task.isCancelled == false else { return false }
                 guard requestMemberID == entryMemberID else { return false }
                 allBoxes = boxes
                 logger.info("家庭药箱加载完成 entryMemberID=\(requestMemberID) count=\(allBoxes.count)", module: .home)
             case .personal:
                 // 个人模式：后台刷新成员药箱；失败时保留首页缓存 allBoxes 不清空
                 let boxes = try await medicalQueryAPI.listMedicineBoxes(memberID: entryMemberID)
-                guard Task.isCancelled == false else { return false }
                 allBoxes = Self.sortedByUpdatedAt(boxes)
                 logger.info("个人药箱加载完成 entryMemberID=\(entryMemberID) count=\(allBoxes.count)", module: .home)
             }

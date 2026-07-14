@@ -50,6 +50,8 @@ struct MedicationsListPage: View {
     let onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     /// 药箱药品数据变更回调
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+    /// 归档展示模式（正常列表 / 归档列表）
+    var archiveMode: MedicalArchiveListMode = .active
 
     // MARK: - 页面状态变量
     /// 当前选中筛选标签：进行中/未开始/已完成
@@ -84,7 +86,8 @@ struct MedicationsListPage: View {
         homeDependencies: HomeFeatureDependencies? = nil,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
         onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)? = nil,
-        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
+        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         // 注入外部依赖
         self.completeData = completeData
@@ -100,12 +103,19 @@ struct MedicationsListPage: View {
         self.onMedicationPlansChanged = onMedicationPlansChanged
         self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
+        self.archiveMode = archiveMode
         
-        // 从同步数据初始化本地State缓存，无数据则为空数组
+        // 从同步数据初始化本地State缓存，归档模式下不使用首页缓存，改由懒加载拉取。
         _medicineBoxes = State(initialValue: completeData?.medicineBoxes ?? [])
-        _prescriptions = State(initialValue: completeData?.prescriptions ?? [])
-        _medicationPlans = State(initialValue: completeData?.medicationPlans ?? [])
+        _prescriptions = State(initialValue: archiveMode == .active ? (completeData?.prescriptions ?? []) : [])
+        _medicationPlans = State(initialValue: archiveMode == .active ? (completeData?.medicationPlans ?? []) : [])
         _todayMedicationRecords = State(initialValue: completeData?.todayMedicationRecords ?? [])
+    }
+
+    private var navigationTitleText: String {
+        archiveMode == .archived
+            ? L10n.text("medical.archive.list.medication_plans.title")
+            : L10n.text("home.medical.list.medications.title", fallback: "服药计划")
     }
 
     // MARK: - 计算属性：基础数据映射
@@ -132,9 +142,10 @@ struct MedicationsListPage: View {
         )
     }
 
-    /// 根据顶部筛选标签过滤展示列表数据
+    /// 根据顶部筛选标签过滤展示列表数据（归档列表不受状态筛选影响，展示全部归档项）
     private var filteredItems: [MedicalMedicationListItem] {
-        sortedItems.filter { item in
+        guard archiveMode == .active else { return sortedItems }
+        return sortedItems.filter { item in
             switch selectedFilter {
             case .active:
                 // 进行中：存在状态active且在有效日期区间的计划
@@ -175,48 +186,85 @@ struct MedicationsListPage: View {
             .onAppear(perform: logAppear)
             // 筛选标签切换监听
             .onChange(of: selectedFilter, perform: handleFilterChange)
-            // 外部同步数据变更监听，同步至本地State
+            // 外部同步数据变更监听，同步至本地State（归档列表不使用首页缓存）
             .onChange(of: completeData?.medicineBoxes ?? [], perform: handleMedicineBoxesChange)
-            .onChange(of: completeData?.prescriptions ?? [], perform: handlePrescriptionsChange)
-            .onChange(of: completeData?.medicationPlans ?? [], perform: handleMedicationPlansChange)
+            .onChange(of: completeData?.prescriptions ?? []) { newValue in
+                guard archiveMode == .active else { return }
+                handlePrescriptionsChange(newValue)
+            }
+            .onChange(of: completeData?.medicationPlans ?? []) { newValue in
+                guard archiveMode == .active else { return }
+                handleMedicationPlansChange(newValue)
+            }
             .onChange(of: completeData?.todayMedicationRecords ?? [], perform: handleMedicationRecordsChange)
             // OCR单据保存成功后刷新列表；使用 task(id:) 让页面离开或再次触发时自动取消旧刷新。
             .task(id: medicalDocumentUploadViewModel.saveSucceededRevision) {
                 guard medicalDocumentUploadViewModel.saveSucceededRevision > 0 else { return }
                 await refreshAfterMedicalUploadSave()
             }
+            .task(id: archiveMode == .archived) {
+                if archiveMode == .archived {
+                    await refreshMedicationPlans()
+                }
+            }
     }
 
     /// 页面外层容器（导航栏、底部操作栏、背景）
     private var contentChrome: some View {
         contentRoot
-            // 底部固定操作栏：手动新增、拍照上传识别处方
+            // 底部固定操作栏：手动新增、拍照上传识别处方（归档列表隐藏）
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                MedicalListBottomActionBar(
-                    documentKind: Self.uploadDocumentKind,
-                    isEnabled: memberID != nil,
-                    onManualAdd: { sheetDestination = .create },
-                    onUploadConfirmed: { files in startMedicationPlanRecognition(files: files) }
-                )
+                if archiveMode == .active {
+                    MedicalListBottomActionBar(
+                        documentKind: Self.uploadDocumentKind,
+                        isEnabled: memberID != nil,
+                        onManualAdd: { sheetDestination = .create },
+                        onUploadConfirmed: { files in startMedicationPlanRecognition(files: files) }
+                    )
+                }
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
+            .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if let homeDependencies {
-                        MainNavigationLink {
-                            MedicationReminderManagementPage(homeDependencies: homeDependencies)
-                        } label: {
-                            Label(
-                                L10n.text("medication_reminder.management.title", fallback: "已有通知"),
-                                systemImage: "bell.badge"
-                            )
-                            .font(.footnote.weight(.semibold))
+                if archiveMode == .active {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        if let homeDependencies {
+                            MainNavigationLink {
+                                MedicationReminderManagementPage(homeDependencies: homeDependencies)
+                            } label: {
+                                Label(
+                                    L10n.text("medication_reminder.management.title", fallback: "已有通知"),
+                                    systemImage: "bell.badge"
+                                )
+                                .font(.footnote.weight(.semibold))
+                            }
                         }
                     }
-                }                
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        MainNavigationLink {
+                            MedicationsListPage(
+                                completeData: completeData,
+                                workflowAPI: workflowAPI,
+                                medicalQueryAPI: medicalQueryAPI,
+                                fileTransferService: fileTransferService,
+                                memberContextStore: memberContextStore,
+                                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                                aiSettingsViewModel: aiSettingsViewModel,
+                                notificationClient: notificationClient,
+                                logger: logger,
+                                homeDependencies: homeDependencies,
+                                onMedicationPlansChanged: nil,
+                                onPrescriptionsChanged: nil,
+                                onMedicineBoxesChanged: nil,
+                                archiveMode: .archived
+                            )
+                        } label: {
+                            Text(L10n.text("medical.archive.list.entry"))
+                        }
+                    }
+                }
 //                // 服药执行中心入口
 //                ToolbarItem(placement: .navigationBarTrailing) {
 //                    AnyView(executionCenterToolbarLink)
@@ -228,12 +276,14 @@ struct MedicationsListPage: View {
             }
     }
 
-    /// 页面根布局：筛选标签 + 滚动列表区域
+    /// 页面根布局：筛选标签 + 滚动列表区域（归档列表隐藏状态筛选标签）
     private var contentRoot: some View {
         VStack(spacing: 0) {
-            filterTabBar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+            if archiveMode == .active {
+                filterTabBar
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
 
             medicationScrollableContent
         }
@@ -396,9 +446,15 @@ struct MedicationsListPage: View {
         ScrollView {
             if filteredItems.isEmpty {
                 // 无数据空白页
-                emptyStateView
-                    .frame(maxWidth: .infinity, minHeight: 360)
-                    .padding(.vertical, 24)
+                if archiveMode == .archived {
+                    Text(L10n.text("medical.archive.list.empty"))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 240)
+                } else {
+                    emptyStateView
+                        .frame(maxWidth: .infinity, minHeight: 360)
+                        .padding(.vertical, 24)
+                }
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredItems) { item in
@@ -421,7 +477,9 @@ struct MedicationsListPage: View {
                                     onPrescriptionSaved: upsertPrescription,
                                     onPrescriptionDeleted: removePrescription,
                                     onPlanSaved: upsertMedicationPlanWithoutReminderPrompts,
-                                    onPlanDeleted: removeMedicationPlan
+                                    onPlanDeleted: removeMedicationPlan,
+                                    onArchiveStateChanged: handlePrescriptionArchiveStateChanged,
+                                    archiveMode: archiveMode
                                 )
                             } label: {
                                 MedicationPrescriptionCard(
@@ -483,7 +541,9 @@ struct MedicationsListPage: View {
             onSaved: upsertMedicationPlanWithoutReminderPrompts,
             onDeleted: removeMedicationPlan,
             onMedicineBoxSaved: upsertMedicineBox,
-            onMedicineBoxDeleted: removeMedicineBoxFromList
+            onMedicineBoxDeleted: removeMedicineBoxFromList,
+            onArchiveStateChanged: handlePlanArchiveStateChanged,
+            archiveMode: archiveMode
         )
     }
 
@@ -555,6 +615,22 @@ struct MedicationsListPage: View {
         onPrescriptionsChanged?(prescriptions)
     }
 
+    /// 处方归档状态变更后，若不再属于当前列表模式则移除
+    private func handlePrescriptionArchiveStateChanged(id: Int, isArchived: Bool) {
+        let belongsInList = archiveMode == .archived ? isArchived : !isArchived
+        if belongsInList == false {
+            removePrescription(id: id)
+        }
+    }
+
+    /// 服药计划归档状态变更后，若不再属于当前列表模式则移除
+    private func handlePlanArchiveStateChanged(id: Int, isArchived: Bool) {
+        let belongsInList = archiveMode == .archived ? isArchived : !isArchived
+        if belongsInList == false {
+            removeMedicationPlan(id: id)
+        }
+    }
+
     /// 新增/编辑药箱药品
     private func upsertMedicineBox(_ box: SparkMedicalSyncAPI.RemoteMedicineBox) {
         if let index = medicineBoxes.firstIndex(where: { $0.id == box.id }) {
@@ -587,12 +663,12 @@ struct MedicationsListPage: View {
         }
 
         let startedAt = Date()
-        logger.info("服药计划下拉刷新开始 memberID=\(memberID)", module: logModule)
+        logger.info("服药计划下拉刷新开始 memberID=\(memberID) archiveMode=\(archiveMode)", module: logModule)
 
         do {
             // 并发请求两个接口
-            async let refreshedPlans = medicalQueryAPI.listMedicationPlans(memberID: memberID)
-            async let refreshedPrescriptions = medicalQueryAPI.listPrescriptions(memberID: memberID)
+            async let refreshedPlans = medicalQueryAPI.listMedicationPlans(memberID: memberID, archived: archiveMode.query)
+            async let refreshedPrescriptions = medicalQueryAPI.listPrescriptions(memberID: memberID, archived: archiveMode.query)
             let (plans, prescriptionRows) = try await (refreshedPlans, refreshedPrescriptions)
             // 更新本地缓存并回调外部
             medicationPlans = plans

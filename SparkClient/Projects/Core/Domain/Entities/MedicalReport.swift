@@ -11,6 +11,8 @@ struct MedicalReport: Identifiable, Codable, Equatable, Sendable {
     var content: String
     var date: Date
     var updatedAt: Date
+    var isArchived: Bool
+    var archivedAt: Date?
 
     init(
         id: Int,
@@ -22,7 +24,9 @@ struct MedicalReport: Identifiable, Codable, Equatable, Sendable {
         doctor: String = "",
         content: String = "",
         date: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        isArchived: Bool = false,
+        archivedAt: Date? = nil
     ) {
         self.id = id
         self.memberID = memberID
@@ -34,5 +38,7 @@ struct MedicalReport: Identifiable, Codable, Equatable, Sendable {
         self.content = content
         self.date = date
         self.updatedAt = updatedAt
+        self.isArchived = isArchived
+        self.archivedAt = archivedAt
     }
 }

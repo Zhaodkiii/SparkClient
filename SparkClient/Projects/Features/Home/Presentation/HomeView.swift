@@ -66,16 +66,21 @@ struct HomeView: View {
             }
     }
 
+    /// 首页生命周期与启动意图（Launch Intent）消费入口。
+    /// 负责：标记宿主就绪、首屏加载、队列/就绪态变化时 drain、sheet 变化同步宿主态、用药提醒偏好变更重建。
     private var homeContentWithLifecycle: some View {
         homeContentWithPresentation
+            // 首页出现：标记宿主可消费启动意图，同步当前 sheet/cover/上传态，并尝试 drain 队列
             .onAppear {
                 launchIntentConsumer.setHomeHostReady(true)
                 syncLaunchIntentHostState()
                 requestLaunchIntentDrain(reason: "home_appear")
             }
+            // 首页消失：标记宿主不可消费，避免后台误弹启动意图
             .onDisappear {
                 launchIntentConsumer.setHomeHostReady(false)
             }
+            // 首屏一次性初始化：消费待处理分享票/邀请，拉取远程数据，再 drain 启动意图
             .task {
                 guard !hasLoaded else { return }
                 hasLoaded = true
@@ -84,24 +89,30 @@ struct HomeView: View {
                 await viewModel.loadInitialIfNeeded(syncRemote: true)
                 requestLaunchIntentDrain(reason: "home_initial_load")
             }
+            // 启动意图队列 revision 变化（有新意图入队）时重新 drain
             .task(id: launchIntentCoordinator.queueRevision) {
                 requestLaunchIntentDrain(reason: "queue_revision")
             }
+            // 全局就绪态变为可消费时触发 drain（如登录完成、依赖就绪）
             .onChange(of: launchIntentCoordinator.readiness.canConsume) { canConsume in
                 guard canConsume else { return }
                 requestLaunchIntentDrain(reason: "readiness_ready")
             }
+            // 首页 sheet 打开/关闭后同步宿主占用态，并尝试继续 drain 后续意图
             .onChange(of: viewModel.activeSheet?.id) { _ in
                 syncLaunchIntentHostState()
                 requestLaunchIntentDrain(reason: "home_sheet_changed")
             }
+            // 用药提醒偏好变更通知：已登录则立即重建本地提醒
             .onReceive(NotificationCenter.default.publisher(for: .medicationReminderPreferencesChanged)) { _ in
                 triggerMedicationReminderRebuildIfSignedIn(reason: "preferences_changed")
             }
     }
 
+    /// 首页最终内容层：在生命周期之上叠加全屏 cover、外部导入错误、上传成功刷新与成员切换动画。
     private var homeContent: some View {
         homeContentWithLifecycle
+            // 全屏 cover 变化：若离开上传页则关闭上传 VM；同步宿主态；cover 关闭后继续 drain
             .onChange(of: activeFullScreenCover) { cover in
                 if cover != .medicalDocumentUpload, medicalDocumentUploadViewModel.isUploadPresented {
                     medicalDocumentUploadViewModel.dismissUploadPage()
@@ -111,6 +122,7 @@ struct HomeView: View {
                     requestLaunchIntentDrain(reason: "cover_dismissed")
                 }
             }
+            // 上传页展示态 ↔ activeFullScreenCover 双向同步，并同步宿主态后 drain
             .onChange(of: medicalDocumentUploadViewModel.isUploadPresented) { isPresented in
                 if isPresented {
                     activeFullScreenCover = .medicalDocumentUpload
@@ -120,10 +132,12 @@ struct HomeView: View {
                 syncLaunchIntentHostState()
                 requestLaunchIntentDrain(reason: "upload_presented_changed")
             }
+            // 上传流程 stage 变化（选文件/识别/保存中等）也会占用宿主，需同步后再 drain
             .onChange(of: medicalDocumentUploadViewModel.stage) { _ in
                 syncLaunchIntentHostState()
                 requestLaunchIntentDrain(reason: "upload_stage_changed")
             }
+            // 外部医疗文档导入失败时弹出错误 alert
             .onChange(of: externalMedicalDocumentImportCoordinator.errorMessage) { message in
                 showExternalImportErrorAlert = message != nil
             }
@@ -134,11 +148,13 @@ struct HomeView: View {
             } message: {
                 Text(externalMedicalDocumentImportCoordinator.errorMessage ?? "")
             }
+            // 医疗文档保存成功 revision 递增后刷新首页数据
             .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
                 Task {
                     await viewModel.refresh()
                 }
             }
+            // 切换选中成员时对相关 UI 做弹簧动画
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedMemberID)
     }
 

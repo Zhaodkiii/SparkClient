@@ -229,6 +229,31 @@ struct OptionalCodableReminderTimesList: Codable, Equatable, Sendable {
     }
 }
 
+/// Bool 默认 false 包装器
+/// 字段缺失或 null 时解码为 `false`，兼容归档字段未下发的旧接口响应。
+@propertyWrapper
+nonisolated struct DefaultFalse: Codable, Sendable, Equatable, Hashable {
+    var wrappedValue: Bool
+
+    init(wrappedValue: Bool = false) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            wrappedValue = false
+            return
+        }
+        wrappedValue = (try? container.decode(Bool.self)) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+}
+
 /// UUID 自动生成包装器
 /// 解码时字段缺失或 null 则自动生成新 UUID，适用于 AI 流式 JSON 输出不携带 id 的场景
 @propertyWrapper
@@ -288,5 +313,10 @@ extension KeyedDecodingContainer {
     /// DefaultUUID 键缺失自动生成新 UUID
     func decode(_ type: DefaultUUID.Type, forKey key: Key) throws -> DefaultUUID {
         try decodeIfPresent(type, forKey: key) ?? DefaultUUID()
+    }
+
+    /// DefaultFalse 键缺失返回 false
+    nonisolated func decode(_ type: DefaultFalse.Type, forKey key: Key) throws -> DefaultFalse {
+        try decodeIfPresent(type, forKey: key) ?? DefaultFalse()
     }
 }

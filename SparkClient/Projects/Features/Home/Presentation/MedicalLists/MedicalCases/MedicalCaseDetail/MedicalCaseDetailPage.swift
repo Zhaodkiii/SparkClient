@@ -17,6 +17,8 @@ struct MedicalCaseDetailPage: View {
     let notificationClient: any NotificationClient
     let onUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
     let onDeleted: (Int) -> Void
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
     var logger: Logger? = nil
     var onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
 
@@ -26,9 +28,11 @@ struct MedicalCaseDetailPage: View {
     @State private var currentItem: SparkMedicalSyncAPI.RemoteMedicalCaseSummary
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
+    @State private var showingArchiveConfirm = false
     @State private var exportFileURL: URL?
     @State private var isExporting = false
     @State private var isDeleting = false
+    @State private var isUpdatingArchiveState = false
     @State private var shareContext: MedicalCaseShareContext?
     @State private var isPreparingShare = false
     @State private var shareErrorMessage: String?
@@ -43,6 +47,8 @@ struct MedicalCaseDetailPage: View {
         notificationClient: any NotificationClient,
         onUpdated: @escaping (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void,
         onDeleted: @escaping (Int) -> Void,
+        onArchiveStateChanged: ((Int, Bool) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active,
         logger: Logger? = nil,
         onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     ) {
@@ -54,6 +60,8 @@ struct MedicalCaseDetailPage: View {
         self.notificationClient = notificationClient
         self.onUpdated = onUpdated
         self.onDeleted = onDeleted
+        self.onArchiveStateChanged = onArchiveStateChanged
+        self.archiveMode = archiveMode
         self.logger = logger
         self.onExaminationReportsUpdated = onExaminationReportsUpdated
         _currentItem = State(initialValue: item)
@@ -150,6 +158,18 @@ struct MedicalCaseDetailPage: View {
                         Label(L10n.text("home.medical.case_detail.action.export", fallback: "导出"), systemImage: "square.and.arrow.up")
                     }
 
+                    Button {
+                        showingArchiveConfirm = true
+                    } label: {
+                        Label(
+                            currentItem.isArchived
+                                ? L10n.text("medical.archive.menu.unarchive")
+                                : L10n.text("medical.archive.menu.archive"),
+                            systemImage: currentItem.isArchived ? "tray.and.arrow.up" : "tray.and.arrow.down"
+                        )
+                    }
+                    .disabled(isUpdatingArchiveState)
+
                     Button(role: .destructive) {
                         showingDeleteConfirmation = true
                     } label: {
@@ -158,7 +178,7 @@ struct MedicalCaseDetailPage: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(isDeleting || isExporting || isPreparingShare)
+                .disabled(isDeleting || isExporting || isPreparingShare || isUpdatingArchiveState)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showingAttachments)
@@ -187,6 +207,27 @@ struct MedicalCaseDetailPage: View {
             }
         } message: {
             Text(L10n.text("home.medical.case_detail.delete.message", fallback: "删除后列表中将不再显示该病历。"))
+        }
+        .alert(
+            currentItem.isArchived
+                ? L10n.text("medical.archive.confirm.unarchive.title")
+                : L10n.text("medical.archive.confirm.archive.title"),
+            isPresented: $showingArchiveConfirm
+        ) {
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+            Button(
+                currentItem.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.action")
+                    : L10n.text("medical.archive.confirm.archive.action")
+            ) {
+                Task { await updateArchiveState(archived: !currentItem.isArchived) }
+            }
+        } message: {
+            Text(
+                currentItem.isArchived
+                    ? L10n.text("medical.archive.confirm.unarchive.message")
+                    : L10n.text("medical.archive.confirm.archive.message")
+            )
         }
         .fullScreenCover(item: $addRecordSheet) { kind in
             CompatibleNavigationContainer {
@@ -412,6 +453,39 @@ struct MedicalCaseDetailPage: View {
             dismiss()
         } catch {
             notificationClient.error(error.localizedDescription, title: L10n.text("home.medical.case_detail.delete.failed", fallback: "删除失败"), source: "medical.case.detail")
+        }
+    }
+
+    @MainActor
+    private func updateArchiveState(archived: Bool) async {
+        guard isUpdatingArchiveState == false else { return }
+        isUpdatingArchiveState = true
+        defer { isUpdatingArchiveState = false }
+
+        do {
+            let updatedCase = try await MedicalArchiveMutationService(workflowAPI: workflowAPI).setArchived(
+                SparkMedicalSyncAPI.RemoteMedicalCase.self,
+                kind: .cases,
+                id: currentItem.id,
+                archived: archived
+            )
+            currentItem.isArchived = updatedCase.isArchived
+            currentItem.archivedAt = updatedCase.archivedAt
+            currentItem.updatedAt = updatedCase.updatedAt
+            onUpdated(currentItem)
+            onArchiveStateChanged?(currentItem.id, currentItem.isArchived)
+            notificationClient.success(
+                currentItem.isArchived
+                    ? L10n.text("medical.archive.toast.archived")
+                    : L10n.text("medical.archive.toast.unarchived"),
+                source: "medical.case.detail.archive"
+            )
+            let belongsInList = archiveMode == .archived ? currentItem.isArchived : !currentItem.isArchived
+            if belongsInList == false {
+                dismiss()
+            }
+        } catch {
+            notificationClient.error(error.localizedDescription, title: L10n.text("common.error"), source: "medical.case.detail.archive")
         }
     }
 

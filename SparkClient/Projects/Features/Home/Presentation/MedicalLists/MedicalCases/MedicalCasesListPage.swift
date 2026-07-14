@@ -13,6 +13,7 @@ struct MedicalCasesListPage: View {
     let logger: Logger
     let onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?
     let onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?
+    var archiveMode: MedicalArchiveListMode = .active
 
     @State private var rows: [SparkMedicalSyncAPI.RemoteMedicalCaseSummary]
     @State private var showingCreateSheet = false
@@ -30,7 +31,8 @@ struct MedicalCasesListPage: View {
         notificationClient: any NotificationClient,
         logger: Logger,
         onCasesUpdated: (([SparkMedicalSyncAPI.RemoteMedicalCaseSummary]) -> Void)?,
-        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
+        onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil,
+        archiveMode: MedicalArchiveListMode = .active
     ) {
         self.completeData = completeData
         self.workflowAPI = workflowAPI
@@ -43,13 +45,26 @@ struct MedicalCasesListPage: View {
         self.logger = logger
         self.onCasesUpdated = onCasesUpdated
         self.onExaminationReportsUpdated = onExaminationReportsUpdated
-        _rows = State(initialValue: completeData?.medicalCases ?? [])
+        self.archiveMode = archiveMode
+        _rows = State(initialValue: archiveMode == .active ? (completeData?.medicalCases ?? []) : [])
+    }
+
+    private var navigationTitleText: String {
+        archiveMode == .archived
+            ? L10n.text("medical.archive.list.medical_cases.title")
+            : L10n.text("home.medical.list.medical_cases.title")
     }
 
     var body: some View {
         ScrollView {
             if rows.isEmpty {
-                MedicalListEmptyRow()
+                if archiveMode == .archived {
+                    Text(L10n.text("medical.archive.list.empty"))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 240)
+                } else {
+                    MedicalListEmptyRow()
+                }
             } else {
                 ForEach(rows, id: \.id) { item in
                     MedicalRecordCard(
@@ -62,7 +77,9 @@ struct MedicalCasesListPage: View {
                         logger: logger,
                         onExaminationReportsUpdated: onExaminationReportsUpdated,
                         onUpdated: upsertCase,
-                        onDeleted: removeCase
+                        onDeleted: removeCase,
+                        onArchiveStateChanged: handleArchiveStateChanged,
+                        archiveMode: archiveMode
                     )
                         .medicalListCardRowStyle()
                 }
@@ -73,18 +90,45 @@ struct MedicalCasesListPage: View {
         }
         .listStyle(.plain)
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle(L10n.text("home.medical.list.medical_cases.title"))
+        .navigationTitle(navigationTitleText)
+        .toolbar {
+            if archiveMode == .active {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    MainNavigationLink {
+                        MedicalCasesListPage(
+                            completeData: completeData,
+                            workflowAPI: workflowAPI,
+                            medicalQueryAPI: medicalQueryAPI,
+                            fileTransferService: fileTransferService,
+                            memberContextStore: memberContextStore,
+                            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                            aiSettingsViewModel: aiSettingsViewModel,
+                            notificationClient: notificationClient,
+                            logger: logger,
+                            onCasesUpdated: nil,
+                            onExaminationReportsUpdated: onExaminationReportsUpdated,
+                            archiveMode: .archived
+                        )
+                    } label: {
+                        Text(L10n.text("medical.archive.list.entry"))
+                    }
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            MedicalListBottomActionBar(
-                documentKind: Self.uploadDocumentKind,
-                isEnabled: defaultMemberID > 0,
-                onManualAdd: { showingCreateSheet = true },
-                onUploadConfirmed: { files in startCaseDocumentRecognition(files: files) }
-            )
+            if archiveMode == .active {
+                MedicalListBottomActionBar(
+                    documentKind: Self.uploadDocumentKind,
+                    isEnabled: defaultMemberID > 0,
+                    onManualAdd: { showingCreateSheet = true },
+                    onUploadConfirmed: { files in startCaseDocumentRecognition(files: files) }
+                )
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
 
         .onChange(of: completeData?.medicalCases ?? []) { newValue in
+            guard archiveMode == .active else { return }
             rows = newValue
         }
         .sheet(isPresented: $showingCreateSheet) {
@@ -97,14 +141,11 @@ struct MedicalCasesListPage: View {
                 )
             }
         }
-//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-//            CompatibleNavigationContainer {
-//                MedicalDocumentUploadHostView(
-//                    viewModel: medicalDocumentUploadViewModel,
-//                    aiSettingsViewModel: aiSettingsViewModel
-//                )
-//            }
-//        }
+        .task(id: archiveMode == .archived) {
+            if archiveMode == .archived {
+                await refreshCases()
+            }
+        }
     }
 
     private var defaultMemberID: Int {
@@ -121,12 +162,23 @@ struct MedicalCasesListPage: View {
         } else {
             rows.insert(item, at: 0)
         }
-        onCasesUpdated?(rows)
+        if archiveMode == .active {
+            onCasesUpdated?(rows)
+        }
     }
 
     private func removeCase(_ id: Int) {
         rows.removeAll { $0.id == id }
-        onCasesUpdated?(rows)
+        if archiveMode == .active {
+            onCasesUpdated?(rows)
+        }
+    }
+
+    private func handleArchiveStateChanged(id: Int, isArchived: Bool) {
+        let belongsInList = archiveMode == .archived ? isArchived : !isArchived
+        if belongsInList == false {
+            removeCase(id)
+        }
     }
 
     @MainActor
@@ -142,13 +194,17 @@ struct MedicalCasesListPage: View {
         }
 
         let startedAt = Date()
-        logger.info("病历列表下拉刷新开始 memberID=\(memberID)", module: .home)
+        logger.info("病历列表下拉刷新开始 memberID=\(memberID) archiveMode=\(archiveMode)", module: .home)
 
         do {
-            // 下拉刷新只拉取病历列表，并只回写首页 completeData.medicalCases 缓存字段。
-            let refreshedRows = try await medicalQueryAPI.listMedicalCaseSummaries(memberID: memberID)
+            let refreshedRows = try await medicalQueryAPI.listMedicalCaseSummaries(
+                memberID: memberID,
+                archived: archiveMode.query
+            )
             rows = refreshedRows
-            onCasesUpdated?(refreshedRows)
+            if archiveMode == .active {
+                onCasesUpdated?(refreshedRows)
+            }
             logger.info(
                 "病历列表下拉刷新完成 memberID=\(memberID) count=\(refreshedRows.count) cost=\(String(format: "%.3f", Date().timeIntervalSince(startedAt)))s",
                 module: .home

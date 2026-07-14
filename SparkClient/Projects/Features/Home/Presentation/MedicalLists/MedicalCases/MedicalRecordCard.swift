@@ -12,6 +12,8 @@ struct MedicalRecordCard: View {
     var onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)? = nil
     let onUpdated: (SparkMedicalSyncAPI.RemoteMedicalCaseSummary) -> Void
     let onDeleted: (Int) -> Void
+    var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
+    var archiveMode: MedicalArchiveListMode = .active
     var maxChips: Int = 8
     
     private var chiefComplaintText: String {
@@ -72,6 +74,8 @@ struct MedicalRecordCard: View {
                 notificationClient: notificationClient,
                 onUpdated: onUpdated,
                 onDeleted: onDeleted,
+                onArchiveStateChanged: onArchiveStateChanged,
+                archiveMode: archiveMode,
                 logger: logger,
                 onExaminationReportsUpdated: onExaminationReportsUpdated
             )
