@@ -7,6 +7,14 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
         self.backend = backend
     }
 
+    private var bundleId: String {
+        Bundle.main.bundleIdentifier ?? "SparkClient"
+    }
+
+    private var deviceId: String {
+        SparkKeychain.getOrCreateDeviceID()
+    }
+
     func loadAccountProfile(session: UserSession?) async throws -> AccountProfile {
         guard let session else {
             throw AccountManagementError.missingSession
@@ -21,10 +29,15 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
         )
     }
 
-    func requestVerification(channel: AccountVerificationChannel, session: UserSession?) async throws -> AccountVerificationRequestContext {
-        let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceId = SparkKeychain.getOrCreateDeviceID()
+    func loadIdentities(session: UserSession?) async throws -> AccountIdentityList {
+        guard session != nil else {
+            throw AccountManagementError.missingSession
+        }
+        let result = try await backend.accountIdentity.listIdentities(bundleId: bundleId)
+        return AccountIdentityList.from(dto: result)
+    }
 
+    func requestVerification(channel: AccountVerificationChannel, session: UserSession?) async throws -> AccountVerificationRequestContext {
         switch channel {
         case .phone(let phoneNumber):
             guard let session else {
@@ -49,6 +62,169 @@ final class DefaultAccountManagementRepository: AccountManagementRepository {
         case .apple:
             throw AccountManagementError.unsupportedVerificationChannel
         }
+    }
+
+    func requestIdentityVerification(
+        provider: AccountIdentityProvider,
+        purpose: String,
+        session: UserSession?
+    ) async throws -> IdentityVerificationRequestResult {
+        guard session != nil else {
+            throw AccountManagementError.missingSession
+        }
+
+        let request = SparkAccountIdentityAPI.IdentityVerificationRequest(
+            provider: provider.rawValue,
+            purpose: purpose,
+            bundleId: bundleId,
+            deviceId: deviceId
+        )
+        let result = try await backend.accountIdentity.requestVerification(request)
+
+        if result.ready == true {
+            return .appleReady
+        }
+        guard let otpID = result.otpId, let expiresIn = result.expiresIn else {
+            throw AccountManagementError.unsupportedVerificationChannel
+        }
+        return .otp(otpID: otpID, expiresIn: expiresIn)
+    }
+
+    func verifyIdentityVerification(
+        provider: AccountIdentityProvider,
+        purpose: String,
+        proof: AccountIdentityReauthProof,
+        session: UserSession?
+    ) async throws -> VerificationTicket {
+        guard session != nil else {
+            throw AccountManagementError.missingSession
+        }
+
+        let apiProof: SparkAccountIdentityAPI.IdentityVerificationProof
+        switch proof {
+        case .phone(let otpID, let code):
+            apiProof = .phone(otpId: otpID, code: code)
+        case .email(let otpID, let code):
+            apiProof = .email(otpId: otpID, code: code)
+        case .apple(let identityToken, let authorizationCode, let userIdentifier):
+            apiProof = .apple(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                userIdentifier: userIdentifier
+            )
+        }
+
+        let request = SparkAccountIdentityAPI.IdentityVerificationVerifyRequest(
+            provider: provider.rawValue,
+            purpose: purpose,
+            bundleId: bundleId,
+            deviceId: deviceId,
+            proof: apiProof
+        )
+        let result = try await backend.accountIdentity.verifyAndIssueTicket(request)
+        return VerificationTicket(ticket: result.verificationTicket, expiresIn: result.expiresIn)
+    }
+
+    func requestTargetOTP(
+        provider: AccountIdentityProvider,
+        target: String,
+        operation: AccountIdentityOperation,
+        session: UserSession?
+    ) async throws -> AccountVerificationRequestContext {
+        guard let session else {
+            throw AccountManagementError.missingSession
+        }
+
+        let scene = operation.targetOTPScene
+        switch provider {
+        case .phone:
+            let result = try await backend.otp.requestPhoneOTP(
+                phoneNumber: target,
+                bundleId: bundleId,
+                deviceId: deviceId,
+                scene: scene,
+                userId: Int(session.accountID)
+            )
+            return AccountVerificationRequestContext(
+                channel: .phone(target),
+                otpID: result.otpId,
+                expiresIn: result.expiresIn
+            )
+        case .email:
+            let result = try await backend.otp.requestEmailOTP(
+                email: target,
+                bundleId: bundleId,
+                deviceId: deviceId,
+                scene: scene
+            )
+            return AccountVerificationRequestContext(
+                channel: .email(target),
+                otpID: result.otpId,
+                expiresIn: result.expiresIn
+            )
+        case .apple:
+            throw AccountManagementError.unsupportedVerificationChannel
+        }
+    }
+
+    func bindIdentity(
+        provider: AccountIdentityProvider,
+        verificationTicket: String,
+        proof: AccountIdentityBindProof,
+        session: UserSession?
+    ) async throws -> AccountIdentityList {
+        guard session != nil else {
+            throw AccountManagementError.missingSession
+        }
+
+        let apiProof: SparkAccountIdentityAPI.BindIdentityProof
+        switch proof {
+        case .phone(let target, let otpID, let code):
+            apiProof = .phone(target: target, otpId: otpID, code: code)
+        case .email(let target, let otpID, let code):
+            apiProof = .email(target: target, otpId: otpID, code: code)
+        case .apple(let identityToken, let authorizationCode, let userIdentifier):
+            apiProof = .apple(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                userIdentifier: userIdentifier
+            )
+        }
+
+        let request = SparkAccountIdentityAPI.BindIdentityRequest(
+            provider: provider.rawValue,
+            verificationTicket: verificationTicket,
+            bundleId: bundleId,
+            deviceId: deviceId,
+            proof: apiProof
+        )
+        let result = try await backend.accountIdentity.bindIdentity(request)
+        return AccountIdentityList.from(dto: result)
+    }
+
+    func changeIdentity(
+        provider: AccountIdentityProvider,
+        verificationTicket: String,
+        newTarget: String,
+        newOtpID: String,
+        newCode: String,
+        session: UserSession?
+    ) async throws -> AccountIdentityList {
+        guard session != nil else {
+            throw AccountManagementError.missingSession
+        }
+
+        let request = SparkAccountIdentityAPI.ChangeIdentityRequest(
+            provider: provider.rawValue,
+            verificationTicket: verificationTicket,
+            bundleId: bundleId,
+            deviceId: deviceId,
+            newTarget: newTarget,
+            newOtpId: newOtpID,
+            newCode: newCode
+        )
+        let result = try await backend.accountIdentity.changeIdentity(request)
+        return AccountIdentityList.from(dto: result)
     }
 
     func submitDeactivation(options: AccountDeactivationOptions, verification: AccountDeactivationVerification) async throws -> AccountDeactivationSubmission {

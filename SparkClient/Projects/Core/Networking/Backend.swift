@@ -10,6 +10,7 @@ final class Backend {
     let otp: SparkOTPAPI
     let device: SparkDeviceAPI
     let deactivation: SparkDeactivationAPI
+    let accountIdentity: SparkAccountIdentityAPI
     let aiConfig: SparkAIConfigAPI
     let chat: SparkChatRemoteAPI
     let medicalMembers: SparkMedicalMemberAPI
@@ -57,6 +58,7 @@ final class Backend {
         self.otp = SparkOTPAPI(configuration: configuration)
         self.device = SparkDeviceAPI(configuration: configuration)
         self.deactivation = SparkDeactivationAPI(configuration: configuration)
+        self.accountIdentity = SparkAccountIdentityAPI(configuration: configuration)
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
         self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
@@ -82,6 +84,7 @@ final class Backend {
         self.otp = SparkOTPAPI(configuration: configuration)
         self.device = SparkDeviceAPI(configuration: configuration)
         self.deactivation = SparkDeactivationAPI(configuration: configuration)
+        self.accountIdentity = SparkAccountIdentityAPI(configuration: configuration)
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
         self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)

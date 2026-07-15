@@ -1,13 +1,5 @@
 import SwiftUI
 
-struct PhoneRegion: Identifiable, Equatable {
-    let id = UUID()
-    let name: String
-    let dial: String
-    let flag: String
-    let countryCode: String
-}
-
 struct PhoneLoginView: View {
     @ObservedObject var viewModel: LoginViewModel
 
@@ -83,6 +75,7 @@ struct PhoneLoginView: View {
     }
 
     private var formPad: some View {
+        //
         VStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.text("auth.phone.field_title"))

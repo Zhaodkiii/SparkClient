@@ -19,6 +19,13 @@ struct AccountManagementView: View {
                             .padding(.top, 48)
                     }
 
+                    if let identityList = viewModel.identityList {
+                        identitySection(identityList)
+                    } else if viewModel.isLoadingIdentities {
+                        ProgressView(L10n.text("account_management.identity.loading"))
+                            .padding(.top, 8)
+                    }
+
                     sessionSection
                     dangerSection
                 }
@@ -28,7 +35,11 @@ struct AccountManagementView: View {
             .background(Color(.systemGroupedBackground))
 
             if viewModel.flowState.isOverlayPresented {
-                overlay
+                deactivationOverlay
+            }
+
+            if viewModel.identityFlowState.isOverlayPresented {
+                identityOverlay
             }
         }
         .navigationTitle(L10n.text("settings.account_management"))
@@ -59,10 +70,15 @@ struct AccountManagementView: View {
         .onChange(of: viewModel.otpCode) { _ in
             viewModel.completeOTPIfReady()
         }
+        .onChange(of: viewModel.identityReauthOTPCode) { _ in
+            viewModel.verifyIdentityReauthOTPIfReady()
+        }
+        .onChange(of: viewModel.identityTargetOTPCode) { _ in
+            viewModel.submitIdentityTargetOTPIfReady()
+        }
     }
 
     private func accountInfoSection(_ profile: AccountProfile) -> some View {
-        //
         AccountSection(title: L10n.text("account_management.section.account_info")) {
             AccountInfoRow(
                 icon: "person.text.rectangle",
@@ -93,6 +109,21 @@ struct AccountManagementView: View {
                 title: L10n.text("settings.sign_in_time"),
                 value: profile.signedInAt.formatted(date: .abbreviated, time: .shortened)
             )
+        }
+    }
+
+    private func identitySection(_ identities: AccountIdentityList) -> some View {
+        AccountSection(title: L10n.text("account_management.identity.section.title")) {
+            ForEach(Array(identities.identities.enumerated()), id: \.offset) { index, status in
+                if index > 0 {
+                    Divider()
+                }
+                AccountIdentityRow(
+                    status: status,
+                    onBind: { viewModel.beginBind(status.provider) },
+                    onChange: { viewModel.beginChange(status.provider) }
+                )
+            }
         }
     }
 
@@ -218,7 +249,7 @@ struct AccountManagementView: View {
     }
 
     @ViewBuilder
-    private var overlay: some View {
+    private var deactivationOverlay: some View {
         ZStack {
             Color.black.opacity(0.35)
                 .ignoresSafeArea()
@@ -255,7 +286,7 @@ struct AccountManagementView: View {
             case .appleReauth:
                 AppleReauthCard(
                     onCancel: viewModel.cancelFlow,
-                    onCompletion: handleAppleReauthResult
+                    onCompletion: handleDeactivationAppleReauthResult
                 )
             case .finalConfirmation:
                 FinalDeleteConfirmationDialog(
@@ -284,7 +315,128 @@ struct AccountManagementView: View {
         .animation(.easeOut(duration: 0.2), value: viewModel.flowState)
     }
 
-    private func handleAppleReauthResult(_ result: Result<ASAuthorization, Error>) {
+    @ViewBuilder
+    private var identityOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    if case .choosingReauth = viewModel.identityFlowState {
+                        viewModel.cancelIdentityFlow()
+                    }
+                }
+
+            switch viewModel.identityFlowState {
+            case .choosingReauth:
+                VerificationMethodCard(
+                    title: L10n.text("account_management.verify.security_title"),
+                    message: L10n.text("account_management.identity.reauth.message"),
+                    channels: viewModel.availableIdentityVerificationChannels,
+                    maskedTarget: { viewModel.maskedTarget(for: $0) },
+                    onSelect: { channel in
+                        Task { await viewModel.requestIdentityReauth(channel) }
+                    },
+                    onCancel: viewModel.cancelIdentityFlow
+                )
+            case .reauthOTP(_, let channel, let otpID):
+                OTPVerificationCard(
+                    title: L10n.text("account_management.identity.reauth.otp.title"),
+                    subtitle: L10n.text("account_management.identity.reauth.otp.subtitle"),
+                    target: viewModel.maskedTarget(for: channel),
+                    hasSentCode: otpID != nil,
+                    isSendingCode: viewModel.isRequestingIdentityReauthOTP,
+                    code: $viewModel.identityReauthOTPCode,
+                    countdown: viewModel.identityResendCountdown,
+                    onBack: {
+                        viewModel.restartIdentityFlow()
+                    },
+                    onResend: {
+                        Task { await viewModel.requestIdentityReauthOTP(channel) }
+                    }
+                )
+            case .reauthApple:
+                AppleReauthCard(
+                    onCancel: viewModel.handleIdentityAppleReauthCancelled,
+                    onCompletion: handleIdentityAppleReauthResult
+                )
+            case .enteringTarget(let operation, _):
+                if case .bind(.apple) = operation {
+                    AppleReauthCard(
+                        title: L10n.text("account_management.identity.target.apple.bind_title"),
+                        message: L10n.text("account_management.identity.target.apple.subtitle"),
+                        onCancel: viewModel.handleIdentityAppleBindCancelled,
+                        onCompletion: handleIdentityAppleBindResult
+                    )
+                } else {
+                    IdentityTargetInputCard(
+                        provider: operation.targetProvider,
+                        isChange: {
+                            if case .change = operation { return true }
+                            return false
+                        }(),
+                        target: $viewModel.identityTargetInput,
+                        phoneInput: $viewModel.identityTargetPhoneInput,
+                        emailInput: $viewModel.identityTargetEmailInput,
+                        isPhoneLocked: viewModel.lockedIdentityTargetPhone != nil,
+                        isEmailLocked: viewModel.lockedIdentityTargetEmail != nil,
+                        canSendOTP: viewModel.canRequestIdentityTargetOTP,
+                        isSendingOTP: viewModel.isRequestingIdentityTargetOTP,
+                        validationMessage: viewModel.identityTargetValidationMessage,
+                        onBack: viewModel.restartIdentityFlow,
+                        onSendOTP: {
+                            Task { await viewModel.requestTargetOTP() }
+                        }
+                    )
+                }
+            case .targetOTP(let operation, _, _, _):
+                OTPVerificationCard(
+                    title: L10n.text("account_management.identity.target.otp.title"),
+                    subtitle: L10n.text("account_management.identity.target.otp.subtitle"),
+                    target: viewModel.identityTargetOTPDisplayValue,
+                    footerHint: operation.targetProvider == .phone
+                        ? L10n.text(
+                            "account_management.identity.phone.change_to_edit",
+                            fallback: "如需修改手机号，请返回上一步"
+                        )
+                        : operation.targetProvider == .email
+                            ? L10n.text(
+                                "account_management.identity.email.change_to_edit",
+                                fallback: "如需修改邮箱，请返回上一步"
+                            )
+                            : nil,
+                    code: $viewModel.identityTargetOTPCode,
+                    countdown: viewModel.identityResendCountdown,
+                    onBack: viewModel.backToIdentityTargetInput,
+                    onResend: {
+                        Task { await viewModel.requestTargetOTP() }
+                    }
+                )
+            case .submitting:
+                VStack(spacing: 14) {
+                    ProgressView()
+                    Text(L10n.text("account_management.identity.submitting"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(24)
+                .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            case .completed(let operation):
+                IdentityOperationResultCard(operation: operation, onDismiss: viewModel.dismissIdentityCompletion)
+            case .failed(let message):
+                AccountFailureCard(
+                    message: message,
+                    onBack: viewModel.restartIdentityFlow,
+                    onCancel: viewModel.cancelIdentityFlow
+                )
+            case .idle:
+                EmptyView()
+            }
+        }
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.2), value: viewModel.identityFlowState)
+    }
+
+    private func handleDeactivationAppleReauthResult(_ result: Result<ASAuthorization, Error>) {
         do {
             let authorization = try result.get()
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
@@ -303,6 +455,74 @@ struct AccountManagementView: View {
         } catch {
             viewModel.failAppleReauth(error)
         }
+    }
+
+    private func handleIdentityAppleReauthResult(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            do {
+                let credential = try appleCredential(from: authorization)
+                viewModel.completeIdentityAppleReauth(
+                    identityToken: credential.identityToken,
+                    authorizationCode: credential.authorizationCode,
+                    userIdentifier: credential.userIdentifier
+                )
+            } catch {
+                if AuthUserFacingErrorMapper.isAppleSignInCancelled(error) {
+                    viewModel.handleIdentityAppleReauthCancelled()
+                } else {
+                    viewModel.failIdentityFlow(error.localizedDescription)
+                }
+            }
+        case .failure(let error):
+            if AuthUserFacingErrorMapper.isAppleSignInCancelled(error) {
+                viewModel.handleIdentityAppleReauthCancelled()
+            } else {
+                viewModel.failIdentityFlow(error.localizedDescription)
+            }
+        }
+    }
+
+    private func handleIdentityAppleBindResult(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case .success(let authorization):
+            do {
+                let credential = try appleCredential(from: authorization)
+                viewModel.completeIdentityAppleBind(
+                    identityToken: credential.identityToken,
+                    authorizationCode: credential.authorizationCode,
+                    userIdentifier: credential.userIdentifier
+                )
+            } catch {
+                if AuthUserFacingErrorMapper.isAppleSignInCancelled(error) {
+                    viewModel.handleIdentityAppleBindCancelled()
+                } else {
+                    viewModel.failIdentityFlow(error.localizedDescription)
+                }
+            }
+        case .failure(let error):
+            if AuthUserFacingErrorMapper.isAppleSignInCancelled(error) {
+                viewModel.handleIdentityAppleBindCancelled()
+            } else {
+                viewModel.failIdentityFlow(error.localizedDescription)
+            }
+        }
+    }
+
+    private func appleCredential(from authorization: ASAuthorization) throws -> (
+        identityToken: String,
+        authorizationCode: String?,
+        userIdentifier: String
+    ) {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let identityToken = String(data: tokenData, encoding: .utf8),
+              identityToken.isEmpty == false
+        else {
+            throw AccountManagementError.invalidAppleCredential
+        }
+        let authorizationCode = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+        return (identityToken, authorizationCode, credential.user)
     }
 }
 

@@ -68,6 +68,8 @@ struct AccountSquareBadge: View {
 }
 
 struct VerificationMethodCard: View {
+    var title: String = L10n.text("account_management.verify.security_title")
+    var message: String = L10n.text("account_management.verify.security_message")
     let channels: [AccountVerificationChannel]
     let maskedTarget: (AccountVerificationChannel) -> String
     let onSelect: (AccountVerificationChannel) -> Void
@@ -75,10 +77,10 @@ struct VerificationMethodCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(L10n.text("account_management.verify.security_title"), systemImage: "shield.fill")
+            Label(title, systemImage: "shield.fill")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.orange)
-            Text(L10n.text("account_management.verify.security_message"))
+            Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -145,6 +147,9 @@ struct OTPVerificationCard: View {
     let title: String
     let subtitle: String
     let target: String
+    var footerHint: String? = nil
+    var hasSentCode: Bool = true
+    var isSendingCode: Bool = false
     @Binding var code: String
     let countdown: Int
     let onBack: () -> Void
@@ -165,15 +170,21 @@ struct OTPVerificationCard: View {
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text(
-                    String(
-                        format: L10n.text("account_management.deactivation.otp.sent_format"),
-                        locale: Locale.current,
-                        target
+                if hasSentCode {
+                    Text(
+                        String(
+                            format: L10n.text("account_management.deactivation.otp.sent_format"),
+                            locale: Locale.current,
+                            target
+                        )
                     )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Text(L10n.text("account_management.otp.tap_send_hint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             VerificationCodeField(code: $code, length: 6)
             if countdown > 0 {
@@ -187,8 +198,26 @@ struct OTPVerificationCard: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             } else {
-                Button(L10n.text("account_management.otp.resend"), action: onResend)
+                Button(action: onResend) {
+                    HStack(spacing: 8) {
+                        if isSendingCode {
+                            ProgressView()
+                        }
+                        Text(
+                            hasSentCode
+                                ? L10n.text("account_management.otp.resend")
+                                : L10n.text("account_management.identity.target.send_otp")
+                        )
+                    }
+                }
                     .buttonStyle(.bordered)
+                    .disabled(isSendingCode)
+            }
+            if let footerHint, footerHint.isEmpty == false {
+                Text(footerHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
         .accountOverlayCard()
@@ -196,14 +225,16 @@ struct OTPVerificationCard: View {
 }
 
 struct AppleReauthCard: View {
+    var title: String = L10n.text("account_management.apple_reauth.title")
+    var message: String = L10n.text("account_management.apple_reauth.message")
     let onCancel: () -> Void
     let onCompletion: (Result<ASAuthorization, Error>) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(L10n.text("account_management.apple_reauth.title"), systemImage: "applelogo")
+            Label(title, systemImage: "applelogo")
                 .font(.title3.weight(.bold))
-            Text(L10n.text("account_management.apple_reauth.message"))
+            Text(message)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             SignInWithAppleButton(.continue) { request in
@@ -296,6 +327,224 @@ struct AccountFailureCard: View {
             }
         }
         .accountOverlayCard()
+    }
+}
+
+struct AccountIdentityRow: View {
+    let status: AccountIdentityStatus
+    let onBind: () -> Void
+    let onChange: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AccountSquareBadge(color: badgeColor, icon: status.provider.icon)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(status.provider.title)
+                    .font(.body.weight(.medium))
+                Text(statusLabel)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            actionButton
+        }
+        .padding(16)
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        if status.bound {
+            if status.modifiable {
+                Button(L10n.text("account_management.identity.action.change"), action: onChange)
+                    .font(.subheadline.weight(.medium))
+            } else {
+                Text(L10n.text("account_management.identity.status.bound"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } else if status.bindable {
+            Button(L10n.text("account_management.identity.action.bind"), action: onBind)
+                .font(.subheadline.weight(.medium))
+        } else {
+            Text(L10n.text("account_management.identity.status.unbound"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var statusLabel: String {
+        if status.bound {
+            return status.maskedValue.isEmpty
+                ? L10n.text("account_management.identity.status.bound")
+                : status.maskedValue
+        }
+        return L10n.text("account_management.identity.status.unbound")
+    }
+
+    private var badgeColor: Color {
+        switch status.provider {
+        case .phone:
+            return .green
+        case .email:
+            return .red
+        case .apple:
+            return .black
+        }
+    }
+}
+
+struct IdentityTargetInputCard: View {
+    let provider: AccountIdentityProvider
+    let isChange: Bool
+    @Binding var target: String
+    @Binding var phoneInput: PhoneNumberInputModel
+    @Binding var emailInput: EmailAddressInputModel
+    var isPhoneLocked: Bool = false
+    var isEmailLocked: Bool = false
+    var canSendOTP: Bool = false
+    var isSendingOTP: Bool = false
+    var validationMessage: String? = nil
+    let onBack: () -> Void
+    let onSendOTP: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.body.weight(.semibold))
+                }
+                Spacer()
+            }
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            switch provider {
+            case .phone:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.text("account_management.identity.target.phone.placeholder"))
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    PhoneNumberInputView(model: $phoneInput, isLocked: isPhoneLocked)
+                    if phoneInput.rawInput.isEmpty == false, phoneInput.isValid == false {
+                        Text(L10n.text("account_management.identity.phone.invalid", fallback: "手机号格式不正确"))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    if let validationMessage {
+                        Text(validationMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            case .email:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(placeholder)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    EmailAddressInputView(model: $emailInput, isLocked: isEmailLocked)
+                    if let validationMessage {
+                        Text(validationMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            case .apple:
+                EmptyView()
+            }
+            
+            Button(action: onSendOTP) {
+                HStack(spacing: 8) {
+                    if isSendingOTP {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                    Text(L10n.text("account_management.identity.target.send_otp"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(canSendOTP == false || isSendingOTP)
+        }
+        .accountOverlayCard()
+    }
+
+    private var title: String {
+        switch provider {
+        case .phone:
+            return isChange
+                ? L10n.text("account_management.identity.target.phone.change_title")
+                : L10n.text("account_management.identity.target.phone.bind_title")
+        case .email:
+            return isChange
+                ? L10n.text("account_management.identity.target.email.change_title")
+                : L10n.text("account_management.identity.target.email.bind_title")
+        case .apple:
+            return L10n.text("account_management.identity.target.apple.bind_title")
+        }
+    }
+
+    private var subtitle: String {
+        switch provider {
+        case .phone:
+            return L10n.text("account_management.identity.target.phone.subtitle")
+        case .email:
+            return L10n.text("account_management.identity.target.email.subtitle")
+        case .apple:
+            return L10n.text("account_management.identity.target.apple.subtitle")
+        }
+    }
+
+    private var placeholder: String {
+        switch provider {
+        case .phone:
+            return L10n.text("account_management.identity.target.phone.placeholder")
+        case .email:
+            return L10n.text("account_management.identity.target.email.placeholder")
+        case .apple:
+            return ""
+        }
+    }
+}
+
+struct IdentityOperationResultCard: View {
+    let operation: AccountIdentityOperation
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.green)
+            Text(message)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            Button(L10n.text("common.ok"), action: onDismiss)
+                .buttonStyle(.borderedProminent)
+        }
+        .accountOverlayCard()
+    }
+
+    private var message: String {
+        switch operation {
+        case .bind(let provider):
+            return String(
+                format: L10n.text("account_management.identity.completed.bind"),
+                locale: Locale.current,
+                provider.title
+            )
+        case .change(let provider):
+            return String(
+                format: L10n.text("account_management.identity.completed.change"),
+                locale: Locale.current,
+                provider.title
+            )
+        }
     }
 }
 

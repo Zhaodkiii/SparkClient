@@ -57,6 +57,11 @@ enum NetworkOperationBusinessPurpose: Sendable {
         "Deactivation.GetStatus": "查询账号注销进度",
         "Deactivation.Request": "发起账号注销申请",
         "Deactivation.Cancel": "取消账号注销申请",
+        "AccountIdentity.List": "拉取账号登录方式绑定状态",
+        "AccountIdentity.VerificationRequest": "请求登录方式绑定/修改再认证",
+        "AccountIdentity.VerificationVerify": "完成再认证并换取 verification ticket",
+        "AccountIdentity.Bind": "绑定新登录方式",
+        "AccountIdentity.Change": "修改手机号或邮箱登录方式",
         "CombinedMedical.Create": "组合创建病历、检查/处方等医疗单据（一次提交）"
     ]
 

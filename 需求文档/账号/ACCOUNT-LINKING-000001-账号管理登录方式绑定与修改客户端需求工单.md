@@ -34,6 +34,7 @@ SparkClient/SparkClient/Projects/Features/AccountManagement/Presentation/Compone
 5. 绑定或修改前必须先完成已有登录方式认证。
 6. 目标方式验证通过后调用服务端绑定或修改接口。
 7. 服务端返回“已绑定其他用户”时，客户端明确提示用户不能继续。
+8. 客户端传真实 `bundle_id`，登录方式状态以服务端按 `ACCOUNT_IDENTITY_SCOPE_ALIASES` 解析后的结果为准。
 
 ## 3. 非目标
 
@@ -79,6 +80,12 @@ email
 绑定/修改后，需要改为基于服务端返回的 `identities` 列表生成可认证方式，而不是只看当前登录方式。
 
 ## 5. 页面设计
+
+详细 plain text UI 线框见：
+
+```text
+SparkClient/需求文档/账号/ACCOUNT-LINKING-000001-账号管理登录方式UI线框.md
+```
 
 ### 5.1 登录方式区块
 
@@ -126,6 +133,8 @@ Apple 登录响应中可能包含 `email` 字段，但客户端不能把它理�
 3. 如果用户原本已有账号邮箱，服务端不会因为 Apple token 携带新 email 而覆盖；客户端不做本地覆盖。
 4. Apple 登录成功后，如需刷新账号管理页，必须重新拉取登录方式列表或账号 profile。
 5. Apple ID 已绑定不等于邮箱已绑定；邮箱仍需走邮箱绑定流程。
+6. Django `User.email` 是资料邮箱；邮箱登录绑定只看 `SocialIdentity(provider=email)`。
+7. Apple 登录携带的 email 即使展示在资料邮箱位置，也不能让“邮箱登录方式”显示为已绑定。
 
 ## 6. 绑定流程
 
@@ -292,6 +301,17 @@ struct AccountIdentityStatus: Equatable, Sendable {
 }
 ```
 
+接口顶层建议保留真实 bundle 与服务端身份作用域：
+
+```swift
+struct AccountIdentityList: Equatable, Sendable {
+    let accountID: Int64
+    let bundleID: String
+    let identityScope: String
+    let identities: [AccountIdentityStatus]
+}
+```
+
 账号 profile 建议扩展：
 
 ```swift
@@ -322,6 +342,13 @@ bundle_id
 device_id
 ```
 
+要求：
+
+1. `bundle_id` 必须使用客户端真实 `Bundle.main.bundleIdentifier`。
+2. 客户端不自行实现 `ACCOUNT_IDENTITY_SCOPE_ALIASES` 映射。
+3. 服务端响应中的 `identity_scope` 仅用于展示、调试和日志排查。
+4. 登录方式绑定状态以服务端返回为准；例如 `cn.Zhaodk.Health` 和 `cn.Zhaodk.MedicineBox` 如果被服务端配置为同一 scope，客户端在两个 App 内应展示同一套账号绑定状态。
+
 ## 11. 错误处理
 
 | 服务端 msg | 客户端提示 |
@@ -348,19 +375,19 @@ device_id
 7. 服务端返回冲突时，保留当前页面，允许用户更换目标手机号或邮箱。
 8. Apple 授权取消时，不算失败，只返回上一层。
 
-## 13. 需求分歧与待确认
+## 13. 已确认决策
 
-### 13.1 邮箱是否纳入 SocialIdentity
+### 13.1 邮箱纳入 SocialIdentity
 
-客户端需要展示邮箱为独立登录方式。服务端当前邮箱登录可能只依赖 `auth_user.email`。
+已确认采用方案 A：服务端新增 `SocialIdentity.Provider.EMAIL`，邮箱登录、绑定、修改统一走 SocialIdentity。
 
-可选方案：
+客户端实现要求：
 
-| 方案 | 内容 | 客户端影响 |
-|---|---|---|
-| A，推荐 | 服务端新增 `email` provider，邮箱作为 SocialIdentity | 客户端模型统一，展示和修改规则清晰 |
-| B | 邮箱继续只来自 `auth_user.email` | 客户端需要对邮箱做特殊分支 |
-| C | 本期不支持邮箱绑定/修改 | 与当前需求不一致 |
+1. 邮箱绑定状态以服务端登录方式列表中的 `provider=email` 为准。
+2. `auth_user.email` 或 Apple 登录响应 `email` 不能单独表示邮箱登录方式已绑定。
+3. 邮箱绑定和修改都走邮箱 OTP + 服务端绑定/修改接口。
+4. 邮箱绑定或修改成功后，服务端会同步更新 Django `User.email`，客户端刷新 profile 后展示新资料邮箱。
+5. 未绑定 `provider=email` 时，即使 profile 中存在 email，登录方式区块仍显示邮箱“未绑定”。
 
 ### 13.2 修改手机号/邮箱时是否必须验证旧同类方式
 
@@ -374,13 +401,15 @@ device_id
 
 ### 13.3 Apple 是否允许解绑
 
-可选方案：
+已确认采用方案 A：本期 Apple 只支持绑定，不支持修改或解绑。
 
-| 方案 | 内容 | 建议 |
-|---|---|---|
-| A，推荐 | 本期 Apple 只支持绑定，不支持修改或解绑 | 范围清晰 |
-| B | 支持解绑 Apple，但必须已有手机号或邮箱 | 可做二期 |
-| C | 支持更换 Apple | 不建议本期做 |
+客户端实现要求：
+
+1. Apple 未绑定时展示“绑定”入口。
+2. Apple 已绑定时只展示“已绑定”状态。
+3. 不展示 Apple 修改入口。
+4. 不展示 Apple 解绑入口。
+5. 如果服务端返回 `apple_identity_change_not_supported`，展示“Apple 登录暂不支持修改”。
 
 ## 14. 验收标准
 
@@ -396,8 +425,317 @@ device_id
 10. 取消流程、验证码错误、ticket 过期、Apple 授权取消都有可恢复路径。
 11. Apple 登录返回 email 时，账号管理页邮箱绑定状态仍以登录方式列表接口为准，不误显示为邮箱已绑定。
 12. 用户已有邮箱时，Apple 登录返回不同 email 后，客户端不在本地覆盖已有邮箱展示。
+13. Health 与 MedicineBox 被服务端配置为共享 scope 时，两个 App 的账号管理页展示同一套手机号、邮箱、Apple 绑定状态。
+14. profile 存在资料邮箱但 identities 中 `provider=email.bound=false` 时，登录方式区块必须显示邮箱未绑定。
+15. 用户主动绑定或修改邮箱成功后，资料邮箱展示与邮箱登录方式掩码值同步刷新。
 
-## 15. 建议拆分任务
+## 15. 代码改动清单与实现方案
+
+### 15.1 必改文件
+
+| 文件 | 改动 |
+|---|---|
+| `SparkClient/Projects/Core/Networking/Backend.swift` | 新增 `let accountIdentity: SparkAccountIdentityAPI` 并在两个 init 中初始化 |
+| `SparkClient/Projects/Core/Networking/API/Account/AccountIdentityAPI.swift` | 新增账号登录方式管理 API |
+| `SparkClient/Projects/Features/AccountManagement/Domain/AccountDeactivationModels.swift` | 拆出或新增账号身份模型：provider、identity status、ticket、operation、flow state |
+| `SparkClient/Projects/Features/AccountManagement/Domain/AccountManagementRepository.swift` | 扩展 identities、verification、bind、change 方法 |
+| `SparkClient/Projects/Features/AccountManagement/Infrastructure/DefaultAccountManagementRepository.swift` | 对接 `backend.accountIdentity`，保留现有注销能力 |
+| `SparkClient/Projects/Features/AccountManagement/Application/*` | 新增 `LoadAccountIdentitiesUseCase`、`RequestIdentityReauthUseCase`、`VerifyIdentityReauthUseCase`、`BindAccountIdentityUseCase`、`ChangeAccountIdentityUseCase` |
+| `SparkClient/Projects/Features/AccountManagement/Presentation/AccountManagementViewModel.swift` | 新增登录方式列表加载、绑定/修改 flow state、ticket 管理、提交逻辑 |
+| `SparkClient/Projects/Features/AccountManagement/Presentation/AccountManagementView.swift` | 新增登录方式 section，挂载绑定/修改入口和 overlay |
+| `SparkClient/Projects/Features/AccountManagement/Presentation/Components/AccountManagementComponents.swift` | 复用认证卡片，新增登录方式行、目标输入卡片、绑定/修改提交卡片 |
+| `SparkClient/Projects/App/Sources/App/AppContainer.swift` | 注入新增 use case 到 `AccountManagementViewModel` |
+| `SparkClient/Projects/Core/Networking/BackendErrorLocalizer.swift` | 增加账号绑定相关错误本地化 |
+| 本地化资源 | 新增账号绑定、修改、错误提示文案 |
+
+### 15.2 新增 SparkAccountIdentityAPI
+
+新增文件：
+
+```text
+SparkClient/SparkClient/Projects/Core/Networking/API/Account/AccountIdentityAPI.swift
+```
+
+结构与 `SparkDeactivationAPI`、`SparkOTPAPI` 保持一致：
+
+```swift
+struct SparkAccountIdentityAPI {
+    let configuration: SparkBackendConfiguration
+
+    func listIdentities(bundleId: String) async throws -> AccountIdentityListResult
+    func requestVerification(_ request: IdentityVerificationRequest) async throws -> VerificationRequestResult
+    func verifyAndIssueTicket(_ request: IdentityVerificationVerifyRequest) async throws -> VerificationTicketResult
+    func bindIdentity(_ request: BindIdentityRequest) async throws -> AccountIdentityListResult
+    func changeIdentity(_ request: ChangeIdentityRequest) async throws -> AccountIdentityListResult
+}
+```
+
+接口路径：
+
+```text
+GET  /api/v1/accounts/identities/
+POST /api/v1/accounts/identity-verification/request/
+POST /api/v1/accounts/identity-verification/verify/
+POST /api/v1/accounts/identities/bind/
+POST /api/v1/accounts/identities/change/
+```
+
+网络策略：
+
+1. 全部 `requiresAuth=true`。
+2. `allowETag=false`。
+3. `bind/change/verify` 使用非幂等请求，禁用自动重复提交。
+4. `serialKey` 使用账号维度串行，例如 `account.identity.bind`、`account.identity.change`。
+5. 所有请求都传真实 `bundle_id` 和 `device_id`。
+
+### 15.3 Backend 挂载
+
+修改：
+
+```text
+SparkClient/SparkClient/Projects/Core/Networking/Backend.swift
+```
+
+新增属性：
+
+```swift
+let accountIdentity: SparkAccountIdentityAPI
+```
+
+两个 init 都需要初始化：
+
+```swift
+self.accountIdentity = SparkAccountIdentityAPI(configuration: configuration)
+```
+
+### 15.4 Domain 模型
+
+建议新增独立文件，避免继续把非注销模型塞进 `AccountDeactivationModels.swift`：
+
+```text
+SparkClient/SparkClient/Projects/Features/AccountManagement/Domain/AccountIdentityModels.swift
+```
+
+模型：
+
+```swift
+enum AccountIdentityProvider: String, Codable, Sendable {
+    case phone
+    case email
+    case apple
+}
+
+struct AccountIdentityStatus: Equatable, Sendable {
+    let provider: AccountIdentityProvider
+    let bound: Bool
+    let maskedValue: String
+    let modifiable: Bool
+    let bindable: Bool
+}
+
+struct AccountIdentityList: Equatable, Sendable {
+    let accountID: Int64
+    let bundleID: String
+    let identityScope: String
+    let identities: [AccountIdentityStatus]
+}
+
+enum AccountIdentityOperation: Equatable, Sendable {
+    case bind(AccountIdentityProvider)
+    case change(AccountIdentityProvider)
+}
+```
+
+DTO 与 Domain 分离：
+
+1. API Result 使用 `Decodable`，字段按 snake_case 映射。
+2. Repository 负责转成 Domain 模型。
+3. UI 不直接读取网络 DTO。
+
+### 15.5 Repository 与 UseCase
+
+修改：
+
+```text
+SparkClient/SparkClient/Projects/Features/AccountManagement/Domain/AccountManagementRepository.swift
+```
+
+新增方法：
+
+```swift
+func loadIdentities(session: UserSession?) async throws -> AccountIdentityList
+func requestIdentityVerification(provider: AccountIdentityProvider, purpose: String, session: UserSession?) async throws -> AccountVerificationRequestContext
+func verifyIdentityVerification(...) async throws -> VerificationTicket
+func bindIdentity(...) async throws -> AccountIdentityList
+func changeIdentity(...) async throws -> AccountIdentityList
+```
+
+`DefaultAccountManagementRepository` 实现：
+
+1. `bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"`。
+2. `deviceId = SparkKeychain.getOrCreateDeviceID()`。
+3. 不在客户端做 `ACCOUNT_IDENTITY_SCOPE_ALIASES` 映射。
+4. 成功后返回服务端最新 identity list。
+
+新增 use case 文件：
+
+```text
+LoadAccountIdentitiesUseCase.swift
+RequestIdentityVerificationUseCase.swift
+VerifyIdentityVerificationUseCase.swift
+BindAccountIdentityUseCase.swift
+ChangeAccountIdentityUseCase.swift
+```
+
+### 15.6 ViewModel 实现
+
+修改：
+
+```text
+SparkClient/SparkClient/Projects/Features/AccountManagement/Presentation/AccountManagementViewModel.swift
+```
+
+新增状态：
+
+```swift
+@Published private(set) var identityList: AccountIdentityList?
+@Published private(set) var identityFlowState: AccountIdentityFlowState = .idle
+@Published var identityTargetInput = ""
+@Published var identityTargetOTPCode = ""
+```
+
+加载：
+
+1. `load(session:)` 继续加载 profile。
+2. 同时调用 `loadIdentitiesUseCase`。
+3. 绑定/修改成功后只刷新 identities；如服务端返回 profile/session 再同步更新。
+
+状态机：
+
+```swift
+enum AccountIdentityFlowState: Equatable {
+    case idle
+    case choosingReauth(AccountIdentityOperation)
+    case reauthOTP(AccountIdentityOperation, AccountVerificationChannel, otpID: String)
+    case reauthApple(AccountIdentityOperation)
+    case enteringTarget(AccountIdentityOperation, ticket: String)
+    case targetOTP(AccountIdentityOperation, ticket: String, otpID: String)
+    case submitting
+    case completed
+    case failed(String)
+}
+```
+
+关键方法：
+
+```swift
+func beginBind(_ provider: AccountIdentityProvider)
+func beginChange(_ provider: AccountIdentityProvider)
+func requestReauth(_ channel: AccountVerificationChannel) async
+func verifyReauthOTPIfReady()
+func completeAppleReauth(...)
+func requestTargetOTP() async
+func submitBindOrChange() async
+func cancelIdentityFlow()
+```
+
+注意：
+
+1. 绑定/修改 flow 与注销 flow 分离，不复用 `AccountDeactivationFlowState`。
+2. 任何 ticket 过期、接口失败、取消都清理目标输入和 OTP。
+3. `availableVerificationChannels` 改为从 `identityList.identities where bound=true` 生成，不再只看 `profile.signInMethod`。
+
+### 15.7 View 与组件实现
+
+修改：
+
+```text
+SparkClient/SparkClient/Projects/Features/AccountManagement/Presentation/AccountManagementView.swift
+```
+
+新增 section：
+
+```swift
+private func identitySection(_ identities: AccountIdentityList) -> some View
+```
+
+UI 行：
+
+```swift
+AccountIdentityRow(
+    provider: status.provider,
+    bound: status.bound,
+    maskedValue: status.maskedValue,
+    bindable: status.bindable,
+    modifiable: status.modifiable,
+    onBind: { viewModel.beginBind(status.provider) },
+    onChange: { viewModel.beginChange(status.provider) }
+)
+```
+
+新增组件建议放在：
+
+```text
+SparkClient/SparkClient/Projects/Features/AccountManagement/Presentation/Components/AccountManagementComponents.swift
+```
+
+组件：
+
+1. `AccountIdentityRow`
+2. `IdentityTargetInputCard`
+3. `IdentityTargetOTPCard`
+4. `IdentityOperationResultCard`
+
+复用现有：
+
+1. `VerificationMethodCard`
+2. `OTPVerificationCard`
+3. `AppleReauthCard`
+
+### 15.8 Apple 绑定实现细节
+
+客户端 Apple 绑定和 Apple 再认证都使用 `SignInWithAppleButton`。
+
+要求：
+
+1. 再认证 Apple 时不请求 email/fullName scope。
+2. 绑定 Apple 时也不依赖 email 作为邮箱绑定状态。
+3. Apple 绑定成功后刷新 identities。
+4. Apple 已绑定时不展示修改/解绑按钮。
+
+### 15.9 错误本地化
+
+修改：
+
+```text
+SparkClient/SparkClient/Projects/Core/Networking/BackendErrorLocalizer.swift
+```
+
+新增映射：
+
+| msg | 文案 |
+|---|---|
+| `identity_already_bound_to_active_user` | 该登录方式已绑定其他账号，无法绑定或修改 |
+| `verification_ticket_expired` | 验证已过期，请重新验证 |
+| `verification_ticket_used` | 验证已失效，请重新验证 |
+| `verification_ticket_invalid` | 验证无效，请重新验证 |
+| `identity_not_bound` | 当前账号尚未绑定该登录方式 |
+| `apple_identity_change_not_supported` | Apple 登录暂不支持修改 |
+
+### 15.10 测试与联调
+
+客户端至少覆盖：
+
+1. Health 登录后绑定邮箱，MedicineBox 打开账号管理页展示同一邮箱已绑定。
+2. 未绑定手机号点击绑定：旧方式认证 -> 新手机号 OTP -> 绑定成功。
+3. 已绑定邮箱点击修改：旧方式认证 -> 新邮箱 OTP -> 修改成功。
+4. Apple 已绑定只展示状态，不出现修改入口。
+5. 服务端返回 `identity_already_bound_to_active_user` 时留在目标输入页。
+6. ticket 过期后回到再认证步骤。
+7. Apple 登录返回 email 但没有 `provider=email` 时，邮箱登录方式显示未绑定。
+8. 邮箱绑定成功后，资料邮箱与登录方式邮箱同时刷新。
+
+## 16. 建议拆分任务
 
 | 任务 | 负责人 | 说明 |
 |---|---|---|

@@ -123,8 +123,18 @@ final class AppContainer {
     let signOutUseCase: SignOutUseCase
     /// 加载账户管理页资料。
     let loadAccountProfileUseCase: LoadAccountProfileUseCase
+    /// 加载账号登录方式列表。
+    let loadAccountIdentitiesUseCase: LoadAccountIdentitiesUseCase
     /// 请求账户高危操作验证。
     let requestAccountVerificationUseCase: RequestAccountVerificationUseCase
+    /// 请求登录方式绑定/修改再认证。
+    let requestIdentityVerificationUseCase: RequestIdentityVerificationUseCase
+    /// 完成再认证并换取 verification ticket。
+    let verifyIdentityVerificationUseCase: VerifyIdentityVerificationUseCase
+    /// 绑定新登录方式。
+    let bindAccountIdentityUseCase: BindAccountIdentityUseCase
+    /// 修改手机号或邮箱登录方式。
+    let changeAccountIdentityUseCase: ChangeAccountIdentityUseCase
     /// 提交账户注销申请。
     let submitAccountDeactivationUseCase: SubmitAccountDeactivationUseCase
     /// 首页医疗卡片：成员、病例、体检、用药等摘要（可带远程刷新策略）。
@@ -414,7 +424,12 @@ final class AppContainer {
         self.signInWithPhoneOTPUseCase = auth.signInWithPhoneOTPUseCase
         self.signOutUseCase = auth.signOutUseCase
         self.loadAccountProfileUseCase = LoadAccountProfileUseCase(repository: accountManagementRepository)
+        self.loadAccountIdentitiesUseCase = LoadAccountIdentitiesUseCase(repository: accountManagementRepository)
         self.requestAccountVerificationUseCase = RequestAccountVerificationUseCase(repository: accountManagementRepository)
+        self.requestIdentityVerificationUseCase = RequestIdentityVerificationUseCase(repository: accountManagementRepository)
+        self.verifyIdentityVerificationUseCase = VerifyIdentityVerificationUseCase(repository: accountManagementRepository)
+        self.bindAccountIdentityUseCase = BindAccountIdentityUseCase(repository: accountManagementRepository)
+        self.changeAccountIdentityUseCase = ChangeAccountIdentityUseCase(repository: accountManagementRepository)
         self.submitAccountDeactivationUseCase = SubmitAccountDeactivationUseCase(repository: accountManagementRepository)
 
         self.aiSettingsRepository = ai.aiSettingsRepository
@@ -707,8 +722,14 @@ final class AppContainer {
         }
         let created = AccountManagementViewModel(
             loadAccountProfileUseCase: loadAccountProfileUseCase,
+            loadAccountIdentitiesUseCase: loadAccountIdentitiesUseCase,
             requestAccountVerificationUseCase: requestAccountVerificationUseCase,
+            requestIdentityVerificationUseCase: requestIdentityVerificationUseCase,
+            verifyIdentityVerificationUseCase: verifyIdentityVerificationUseCase,
+            bindAccountIdentityUseCase: bindAccountIdentityUseCase,
+            changeAccountIdentityUseCase: changeAccountIdentityUseCase,
             submitAccountDeactivationUseCase: submitAccountDeactivationUseCase,
+            accountManagementRepository: accountManagementRepository,
             signOutUseCase: signOutUseCase,
             sessionStore: sessionStore,
             memberContextStore: memberContextStore

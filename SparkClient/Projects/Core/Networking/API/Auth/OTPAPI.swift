@@ -58,6 +58,8 @@ struct SparkOTPAPI {
             let scene: String
         }
 
+        let identityAuthScenes: Set<String> = ["identity_bind", "identity_change"]
+        let requiresAuth = identityAuthScenes.contains(scene)
         let operation = CacheableSparkNetworkOperation(
             name: "OTP.RequestEmail",
             apiName: "OTPAPI",
@@ -77,7 +79,7 @@ struct SparkOTPAPI {
                     )
                 ),
                 strategy: NetworkStrategy(
-                    requiresAuth: false,
+                    requiresAuth: requiresAuth,
                     allowETag: false,
                     serialKey: "otp.email.request",
                     retryConfig: .default,
@@ -167,7 +169,8 @@ struct SparkOTPAPI {
             let user_id: Int?
         }
 
-        let requiresAuth = userId != nil || scene == "account_deactivation"
+        let identityAuthScenes: Set<String> = ["account_deactivation", "identity_bind", "identity_change"]
+        let requiresAuth = userId != nil || identityAuthScenes.contains(scene)
         let operation = CacheableSparkNetworkOperation(
             name: "OTP.RequestPhone",
             apiName: "OTPAPI",
