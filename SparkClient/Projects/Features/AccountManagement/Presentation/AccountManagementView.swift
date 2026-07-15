@@ -62,6 +62,7 @@ struct AccountManagementView: View {
     }
 
     private func accountInfoSection(_ profile: AccountProfile) -> some View {
+        //
         AccountSection(title: L10n.text("account_management.section.account_info")) {
             AccountInfoRow(
                 icon: "person.text.rectangle",
