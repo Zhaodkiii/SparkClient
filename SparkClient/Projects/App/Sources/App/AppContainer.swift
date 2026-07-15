@@ -115,6 +115,8 @@ final class AppContainer {
     let restoreSessionUseCase: RestoreSessionUseCase
     /// Sign in with Apple 完整流程。
     let signInWithAppleUseCase: SignInWithAppleUseCase
+    /// 设备游客账户登录。
+    let signInWithDeviceUseCase: SignInWithDeviceUseCase
     /// 请求手机号验证码。
     let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
     /// 手机号验证码登录。
@@ -420,6 +422,7 @@ final class AppContainer {
         self.accountManagementRepository = accountManagementRepository
         self.restoreSessionUseCase = auth.restoreSessionUseCase
         self.signInWithAppleUseCase = auth.signInWithAppleUseCase
+        self.signInWithDeviceUseCase = auth.signInWithDeviceUseCase
         self.requestPhoneOTPUseCase = auth.requestPhoneOTPUseCase
         self.signInWithPhoneOTPUseCase = auth.signInWithPhoneOTPUseCase
         self.signOutUseCase = auth.signOutUseCase
@@ -621,10 +624,11 @@ final class AppContainer {
     // 原则：屏幕只调用 `container.make*ViewModel()`，不直接 `init` 用例链，便于测试时替换容器。
     // 聊天与知识库返回的是上文构造的**共享实例**，以保证导航返回后状态不丢。
 
-    /// 登录页：Apple 登录用例 + 会话 Store。
+    /// 登录页：Apple / 设备 / 手机号登录用例 + 会话 Store。
     func makeLoginViewModel() -> LoginViewModel {
         LoginViewModel(
             signInWithAppleUseCase: signInWithAppleUseCase,
+            signInWithDeviceUseCase: signInWithDeviceUseCase,
             requestPhoneOTPUseCase: requestPhoneOTPUseCase,
             signInWithPhoneOTPUseCase: signInWithPhoneOTPUseCase,
             sessionStore: sessionStore,
@@ -851,6 +855,7 @@ final class AppContainer {
             accountManagementViewModel: makeAccountManagementViewModel(),
             aiSettingsViewModel: aiSettingsViewModel,
             versionUpdateCoordinator: versionUpdateCoordinator,
+            upgradeLoginViewModel: makeLoginViewModel(),
             memberContextStore: memberContextStore,
             pushAdapter: pushAdapter,
             externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,

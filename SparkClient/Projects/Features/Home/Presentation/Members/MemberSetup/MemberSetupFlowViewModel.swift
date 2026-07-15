@@ -354,6 +354,34 @@ final class MemberSetupFlowViewModel: ObservableObject {
         }
     }
 
+    /// 新建成员默认开通医疗模块，不进入模块选择页。
+    func enableDefaultMedicalModuleForCreatedMember() async -> Bool {
+        guard let member = createdMember else { return false }
+        guard !isPersistingModules else { return false }
+
+        selectedModules = [.medical]
+        completedModules.remove(.medical)
+        isPersistingModules = true
+        defer { isPersistingModules = false }
+
+        do {
+            let saved = try await homeDependencies.memberModuleSetupUseCase.saveModuleSetting(
+                memberID: member.id,
+                moduleCode: MemberSetupModule.medical.rawValue,
+                isEnabled: true,
+                isCompleted: false,
+                displayOrder: MemberSetupModule.medical.displayOrder,
+                summaryText: "",
+                completedAt: nil
+            )
+            patchCompleteData { MemberModuleSetupCompleteDataPatcher.upsertModuleSetting(saved, into: &$0) }
+            return true
+        } catch {
+            alertMessage = error.localizedDescription
+            return false
+        }
+    }
+
     /// 保存分组完成进度，并刷新模块选中/完成状态。
     func markSectionCompleted(
         _ module: MemberSetupModule,

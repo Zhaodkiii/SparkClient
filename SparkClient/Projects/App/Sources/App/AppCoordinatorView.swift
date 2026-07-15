@@ -90,6 +90,7 @@ struct AppCoordinatorView: View {
                         accountManagementViewModel: mainTab.accountManagementViewModel,
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,
                         versionUpdateCoordinator: mainTab.versionUpdateCoordinator,
+                        upgradeLoginViewModel: mainTab.upgradeLoginViewModel,
                         pushAdapter: mainTab.pushAdapter,
                         externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
                         launchIntentCoordinator: mainTab.launchIntentCoordinator

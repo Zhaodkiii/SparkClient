@@ -32,7 +32,42 @@ struct SparkAuthAPI {
         let displayName: String?
         let isPro: Bool
         let isNewUser: Bool
+        let signInMethod: String?
+        let isDeviceAccount: Bool
+        let accountResolution: AccountResolution?
         let tokens: AuthTokens
+    }
+
+    struct AppleLoginResult: Decodable {
+        let userId: Int
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: Int
+        let tokenType: String
+        let email: String?
+        let displayName: String?
+        let isPro: Bool?
+        let isNewUser: Bool?
+        let signInMethod: String?
+        let isDeviceAccount: Bool?
+        let accountResolution: String?
+        let identityScope: String?
+    }
+
+    struct DeviceLoginResult: Decodable {
+        let userId: Int
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: Int
+        let tokenType: String
+        let email: String?
+        let displayName: String?
+        let isPro: Bool?
+        let isNewUser: Bool?
+        let signInMethod: String?
+        let isDeviceAccount: Bool?
+        let accountResolution: String?
+        let identityScope: String?
     }
 
     func login(
@@ -96,18 +131,6 @@ struct SparkAuthAPI {
         return tokens
     }
 
-    struct AppleLoginResult: Decodable {
-        let userId: Int
-        let accessToken: String
-        let refreshToken: String
-        let expiresIn: Int
-        let tokenType: String
-        let email: String?
-        let displayName: String?
-        let isPro: Bool?
-        let isNewUser: Bool?
-    }
-
     func loginWithApple(
         identityToken: String,
         authorizationCode: String?,
@@ -116,7 +139,8 @@ struct SparkAuthAPI {
         email: String?,
         fullName: String?,
         bundleId: String = "",
-        deviceId: String = ""
+        deviceId: String = "",
+        deviceSecret: String = ""
     ) async throws -> AuthenticatedUserContext {
         nonisolated struct Payload: Encodable {
             let identity_token: String
@@ -127,6 +151,7 @@ struct SparkAuthAPI {
             let full_name: String?
             let bundle_id: String
             let device_id: String
+            let device_secret: String
         }
 
         let operation = CacheableSparkNetworkOperation(
@@ -146,7 +171,8 @@ struct SparkAuthAPI {
                             email: email,
                             full_name: fullName,
                             bundle_id: bundleId,
-                            device_id: deviceId
+                            device_id: deviceId,
+                            device_secret: deviceSecret
                         )
                     )
                 ),
@@ -165,25 +191,82 @@ struct SparkAuthAPI {
         configuration.logger.debug("认证解码：开始解析 Apple 登录响应为 AppleLoginResult", module: .auth)
         let result = try APIResponseDecoder.decodeWrappedData(AppleLoginResult.self, from: response)
         configuration.logger.info(
-            "认证解码：Apple 登录响应解析成功 userId=\(result.userId) email=\(result.email ?? "-") isPro=\(result.isPro ?? false) isNewUser=\(result.isNewUser ?? false)",
+            "认证解码：Apple 登录响应解析成功 userId=\(result.userId) resolution=\(result.accountResolution ?? "-") isDeviceAccount=\(result.isDeviceAccount ?? false)",
             module: .auth
         )
-        let tokens = AuthTokens(
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            expiresAt: Date().addingTimeInterval(TimeInterval(result.expiresIn)),
-            tokenType: result.tokenType
-        )
-        await configuration.engine.tokenProvider().setTokens(tokens)
-        configuration.deviceCache.cache(currentUserID: Int64(result.userId))
-
-        return AuthenticatedUserContext(
+        return await makeAuthenticatedContext(
             userId: result.userId,
             email: result.email,
             displayName: result.displayName,
             isPro: result.isPro ?? false,
             isNewUser: result.isNewUser ?? false,
-            tokens: tokens
+            signInMethod: result.signInMethod ?? "apple",
+            isDeviceAccount: result.isDeviceAccount ?? false,
+            accountResolution: result.accountResolution,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresIn: result.expiresIn,
+            tokenType: result.tokenType
+        )
+    }
+
+    func loginWithDevice(
+        bundleId: String,
+        deviceId: String,
+        deviceSecret: String
+    ) async throws -> AuthenticatedUserContext {
+        nonisolated struct Payload: Encodable {
+            let bundle_id: String
+            let device_id: String
+            let device_secret: String
+        }
+
+        let operation = CacheableSparkNetworkOperation(
+            name: "Auth.DeviceLogin",
+            apiName: "AuthAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/auth/device/login/",
+                headers: [:],
+                body: .json(
+                    AnyEncodable(
+                        Payload(
+                            bundle_id: bundleId,
+                            device_id: deviceId,
+                            device_secret: deviceSecret
+                        )
+                    )
+                ),
+                strategy: NetworkStrategy(
+                    requiresAuth: false,
+                    allowETag: false,
+                    serialKey: "auth.device.login",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+
+        let response = try await configuration.execute(operation)
+        let result = try APIResponseDecoder.decodeWrappedData(DeviceLoginResult.self, from: response)
+        configuration.logger.info(
+            "认证解码：设备登录响应解析成功 userId=\(result.userId) resolution=\(result.accountResolution ?? "-")",
+            module: .auth
+        )
+        return await makeAuthenticatedContext(
+            userId: result.userId,
+            email: result.email,
+            displayName: result.displayName,
+            isPro: result.isPro ?? false,
+            isNewUser: result.isNewUser ?? false,
+            signInMethod: result.signInMethod ?? "device",
+            isDeviceAccount: result.isDeviceAccount ?? true,
+            accountResolution: result.accountResolution,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresIn: result.expiresIn,
+            tokenType: result.tokenType
         )
     }
 
@@ -253,6 +336,7 @@ struct SparkAuthAPI {
         let isPro: Bool?
         let isNewUser: Bool?
         let signInMethod: String?
+        let isDeviceAccount: Bool?
     }
 
     func logout() async throws {
@@ -299,9 +383,44 @@ struct SparkAuthAPI {
         let response = try await configuration.execute(operation)
         let result = try APIResponseDecoder.decodeWrappedData(CurrentSessionResult.self, from: response)
         configuration.logger.info(
-            "认证解码：当前会话刷新成功 userId=\(result.userId) isPro=\(result.isPro ?? false)",
+            "认证解码：当前会话刷新成功 userId=\(result.userId) isPro=\(result.isPro ?? false) isDeviceAccount=\(result.isDeviceAccount ?? false)",
             module: .auth
         )
         return result
+    }
+
+    private func makeAuthenticatedContext(
+        userId: Int,
+        email: String?,
+        displayName: String?,
+        isPro: Bool,
+        isNewUser: Bool,
+        signInMethod: String?,
+        isDeviceAccount: Bool,
+        accountResolution: String?,
+        accessToken: String,
+        refreshToken: String,
+        expiresIn: Int,
+        tokenType: String
+    ) async -> AuthenticatedUserContext {
+        let tokens = AuthTokens(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn)),
+            tokenType: tokenType
+        )
+        await configuration.engine.tokenProvider().setTokens(tokens)
+        configuration.deviceCache.cache(currentUserID: Int64(userId))
+        return AuthenticatedUserContext(
+            userId: userId,
+            email: email,
+            displayName: displayName,
+            isPro: isPro,
+            isNewUser: isNewUser,
+            signInMethod: signInMethod,
+            isDeviceAccount: isDeviceAccount,
+            accountResolution: AccountResolution(rawValue: accountResolution ?? ""),
+            tokens: tokens
+        )
     }
 }

@@ -19,9 +19,12 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    @ObservedObject var upgradeLoginViewModel: LoginViewModel
     let pushAdapter: PushAdapter
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
+
+    @State private var showsDeviceAccountUpgradeSheet = false
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
@@ -41,16 +44,6 @@ struct MainTabCoordinatorView: View {
                 Label(L10n.text("tab.home"), systemImage: "house.fill")
             }
             .tag(AppRouteStore.RootTab.home)
-            // 知识库当前版本 暂时关闭
-//            CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
-//                KnowledgeLibraryView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
-//            } destination: { route in
-//                routeDestination(route)
-//            }
-//            .tabItem {
-//                Label("Knowledge", systemImage: "books.vertical.fill")
-//            }
-//            .tag(AppRouteStore.RootTab.knowledge)
 
             CompatibleRouteNavigationContainer(path: routePath(.chat)) {
                 ChatConversationListPage(
@@ -83,10 +76,10 @@ struct MainTabCoordinatorView: View {
             CompatibleRouteNavigationContainer(path: routePath(.settings)) {
                 SettingsView(
                     viewModel: settingsViewModel,
-                    accountManagementViewModel: accountManagementViewModel,
                     aiSettingsViewModel: aiSettingsViewModel,
                     versionUpdateCoordinator: versionUpdateCoordinator,
-                    session: session
+                    session: session,
+                    onAccountEntryTap: handleAccountEntryTap
                 )
             } destination: { route in
                 routeDestination(route)
@@ -96,11 +89,47 @@ struct MainTabCoordinatorView: View {
             }
             .tag(AppRouteStore.RootTab.settings)
         }
+        .sheet(isPresented: $showsDeviceAccountUpgradeSheet) {
+//            NavigationView {
+//                LoginView(viewModel: upgradeLoginViewModel, mode: .upgradeDeviceAccount)
+//                    .toolbar {
+//                        ToolbarItem(placement: .cancellationAction) {
+//                            Button(L10n.text("common.cancel")) {
+//                                guard upgradeLoginViewModel.isLoading == false else { return }
+//                                showsDeviceAccountUpgradeSheet = false
+//                            }
+//                            .disabled(upgradeLoginViewModel.isLoading)
+//                        }
+//                    }
+//            }
+//            .interactiveDismissDisabled(upgradeLoginViewModel.isLoading)
+            
+            LoginView(viewModel: upgradeLoginViewModel, mode: .upgradeDeviceAccount)
+
+        }
+        .onChange(of: session.isDeviceAccount) { isDeviceAccount in
+            if isDeviceAccount == false {
+                showsDeviceAccountUpgradeSheet = false
+            }
+        }
+        .onChange(of: session.accountID) { _ in
+            if session.isDeviceAccount == false {
+                showsDeviceAccountUpgradeSheet = false
+            }
+        }
         .onAppear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = true }
         }
         .onDisappear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = false }
+        }
+    }
+
+    private func handleAccountEntryTap() {
+        if session.isDeviceAccount {
+            showsDeviceAccountUpgradeSheet = true
+        } else {
+            routeStore.route(to: .accountManagement)
         }
     }
 
@@ -134,6 +163,8 @@ struct MainTabCoordinatorView: View {
             }
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
+        case .accountManagement:
+            AccountManagementView(viewModel: accountManagementViewModel, session: session)
         case .homeMedicalList(let listRoute, let medicationFocus):
             HomeMedicalRouteSupport.medicalListView(
                 route: listRoute,

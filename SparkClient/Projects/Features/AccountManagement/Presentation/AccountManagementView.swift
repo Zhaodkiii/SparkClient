@@ -381,7 +381,6 @@ struct AccountManagementView: View {
                         isEmailLocked: viewModel.lockedIdentityTargetEmail != nil,
                         canSendOTP: viewModel.canRequestIdentityTargetOTP,
                         isSendingOTP: viewModel.isRequestingIdentityTargetOTP,
-                        validationMessage: viewModel.identityTargetValidationMessage,
                         onBack: viewModel.restartIdentityFlow,
                         onSendOTP: {
                             Task { await viewModel.requestTargetOTP() }

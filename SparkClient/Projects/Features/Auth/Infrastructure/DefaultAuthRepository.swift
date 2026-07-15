@@ -3,11 +3,14 @@ import UIKit
 
 enum AuthFeatureError: LocalizedError {
     case missingAppleUserIdentifier
+    case deviceCredentialUnavailable
 
     var errorDescription: String? {
         switch self {
         case .missingAppleUserIdentifier:
             return L10n.text("auth.error.apple_user_identifier_missing")
+        case .deviceCredentialUnavailable:
+            return L10n.text("auth.device.credential_invalid")
         }
     }
 }
@@ -121,7 +124,8 @@ final class DefaultAuthRepository: AuthRepository {
         }
 
         let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceId = SparkKeychain.getOrCreateDeviceID()
+        let deviceId = try SparkKeychain.getOrCreatePersistentDeviceID()
+        let deviceSecret = SparkKeychain.loadDeviceSecret() ?? ""
 
         let context = try await backend.auth.loginWithApple(
             identityToken: payload.identityToken,
@@ -131,7 +135,8 @@ final class DefaultAuthRepository: AuthRepository {
             email: payload.email,
             fullName: payload.fullName,
             bundleId: bundleId,
-            deviceId: deviceId
+            deviceId: deviceId,
+            deviceSecret: deviceSecret
         )
         logger.info(
             "认证仓储：Apple 登录远端上下文已返回 userId=\(context.userId) email=\(context.email ?? "-") isPro=\(context.isPro) isNewUser=\(context.isNewUser)",
@@ -155,21 +160,68 @@ final class DefaultAuthRepository: AuthRepository {
             email: normalizedEmail,
             displayName: displayName,
             signedInAt: signedInAt,
-            signInMethod: .apple,
+            signInMethod: parseSignInMethod(context.signInMethod) ?? .apple,
             isPro: context.isPro,
-            isNewUser: context.isNewUser
+            isNewUser: context.isNewUser,
+            isDeviceAccount: context.isDeviceAccount
         )
 
         try await snapshotStore.save(session)
         backend.deviceCache.cacheLastLoggedInAccountID(session.accountID)
         await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "apple")
-        logger.info("用户已通过 Apple 登录，session 已保存 accountID=\(session.accountID) 令牌类型=\(context.tokens.tokenType)", module: .auth)
+        logger.info(
+            "用户已通过 Apple 登录，session 已保存 accountID=\(session.accountID) resolution=\(context.accountResolution?.rawValue ?? "-")",
+            module: .auth
+        )
+        return session
+    }
+
+    func signInWithDevice() async throws -> UserSession {
+        let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
+        let deviceId: String
+        do {
+            deviceId = try SparkKeychain.getOrCreatePersistentDeviceID()
+        } catch {
+            throw AuthFeatureError.deviceCredentialUnavailable
+        }
+        let deviceSecret: String
+        do {
+            deviceSecret = try SparkKeychain.getOrCreateDeviceSecret()
+        } catch {
+            throw AuthFeatureError.deviceCredentialUnavailable
+        }
+
+        let context = try await backend.auth.loginWithDevice(
+            bundleId: bundleId,
+            deviceId: deviceId,
+            deviceSecret: deviceSecret
+        )
+        logger.info(
+            "认证仓储：设备登录远端上下文已返回 userId=\(context.userId) resolution=\(context.accountResolution?.rawValue ?? "-")",
+            module: .auth
+        )
+
+        let session = UserSession(
+            accountID: Int64(context.userId),
+            email: (context.email ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            displayName: (context.displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            signedInAt: Date(),
+            signInMethod: .device,
+            isPro: context.isPro,
+            isNewUser: context.isNewUser,
+            isDeviceAccount: context.isDeviceAccount
+        )
+
+        try await snapshotStore.save(session)
+        backend.deviceCache.cacheLastLoggedInAccountID(session.accountID)
+        await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "device")
+        logger.info("用户已通过设备账户登录，session 已保存 accountID=\(session.accountID)", module: .auth)
         return session
     }
 
     func requestPhoneOTP(phoneNumber: String) async throws -> PhoneOTPRequestContext {
         let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceId = SparkKeychain.getOrCreateDeviceID()
+        let deviceId = try SparkKeychain.getOrCreatePersistentDeviceID()
         let result = try await backend.otp.requestPhoneOTP(
             phoneNumber: phoneNumber,
             bundleId: bundleId,
@@ -183,14 +235,16 @@ final class DefaultAuthRepository: AuthRepository {
 
     func signInWithPhoneOTP(phoneNumber: String, verificationCode: String, otpID: String) async throws -> UserSession {
         let bundleId = Bundle.main.bundleIdentifier ?? "SparkClient"
-        let deviceId = SparkKeychain.getOrCreateDeviceID()
+        let deviceId = try SparkKeychain.getOrCreatePersistentDeviceID()
+        let deviceSecret = SparkKeychain.loadDeviceSecret() ?? ""
 
         let result = try await backend.otp.verifyPhoneOTP(
             otpId: otpID,
             phoneNumber: phoneNumber,
             code: verificationCode,
             bundleId: bundleId,
-            deviceId: deviceId
+            deviceId: deviceId,
+            deviceSecret: deviceSecret
         )
         logger.info(
             "认证仓储：手机号 OTP 远端响应已返回 userId=\(result.userId) phone=\(result.phoneNumber) isPro=\(result.isPro ?? false) isNewUser=\(result.isNewUser ?? false)",
@@ -207,15 +261,19 @@ final class DefaultAuthRepository: AuthRepository {
             email: normalizedPhone,
             displayName: displayName,
             signedInAt: signedInAt,
-            signInMethod: .phone,
+            signInMethod: parseSignInMethod(result.signInMethod) ?? .phone,
             isPro: result.isPro ?? false,
-            isNewUser: result.isNewUser ?? false
+            isNewUser: result.isNewUser ?? false,
+            isDeviceAccount: result.isDeviceAccount ?? false
         )
 
         try await snapshotStore.save(session)
         backend.deviceCache.cacheLastLoggedInAccountID(session.accountID)
         await verifySnapshotAfterSave(expectedAccountID: session.accountID, signInMethod: "phone")
-        logger.info("用户已通过手机号验证码登录，session 已保存 accountID=\(session.accountID)", module: .auth)
+        logger.info(
+            "用户已通过手机号验证码登录，session 已保存 accountID=\(session.accountID) resolution=\(result.accountResolution ?? "-")",
+            module: .auth
+        )
         return session
     }
 
@@ -286,17 +344,24 @@ final class DefaultAuthRepository: AuthRepository {
             signedInAt: cached.signedInAt,
             signInMethod: signInMethod,
             isPro: remote.isPro ?? false,
-            isNewUser: remote.isNewUser ?? cached.isNewUser
+            isNewUser: remote.isNewUser ?? cached.isNewUser,
+            isDeviceAccount: remote.isDeviceAccount ?? cached.isDeviceAccount
         )
     }
 
     private func parseSignInMethod(_ raw: String?) -> UserSession.SignInMethod? {
         guard let raw else { return nil }
         switch raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "device":
+            return .device
         case "apple":
             return .apple
+        case "google":
+            return .google
         case "phone":
             return .phone
+        case "email":
+            return .email
         default:
             return nil
         }

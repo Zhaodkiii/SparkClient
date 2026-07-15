@@ -28,7 +28,6 @@ final class AccountManagementViewModel: ObservableObject {
     var canRequestIdentityTargetOTP: Bool {
         guard isRequestingIdentityTargetOTP == false else { return false }
         guard case .enteringTarget(let operation, _) = identityFlowState else { return false }
-        guard targetIdentityValidationMessage(for: operation) == nil else { return false }
         switch operation.targetProvider {
         case .phone:
             return identityTargetPhoneInput.isValid && identityTargetPhoneInput.e164.isEmpty == false
@@ -37,11 +36,6 @@ final class AccountManagementViewModel: ObservableObject {
         case .apple:
             return false
         }
-    }
-
-    var identityTargetValidationMessage: String? {
-        guard case .enteringTarget(let operation, _) = identityFlowState else { return nil }
-        return targetIdentityValidationMessage(for: operation)
     }
 
     var identityTargetOTPDisplayValue: String {
@@ -113,6 +107,13 @@ final class AccountManagementViewModel: ObservableObject {
             if let phone = profile.phoneNumber {
                 return [.phone(phone)]
             }
+            return []
+        case .email:
+            if let email = profile.email {
+                return [.email(email)]
+            }
+            return []
+        case .device, .google:
             return []
         }
     }
@@ -586,11 +587,6 @@ final class AccountManagementViewModel: ObservableObject {
     }
 
     private func requestTargetOTPFromInput(operation: AccountIdentityOperation, ticket: String) async {
-        if let message = targetIdentityValidationMessage(for: operation) {
-            errorMessage = message
-            return
-        }
-
         switch operation.targetProvider {
         case .phone:
             let phone = identityTargetPhoneInput
@@ -653,82 +649,6 @@ final class AccountManagementViewModel: ObservableObject {
         case .apple:
             return
         }
-    }
-
-    private func targetIdentityValidationMessage(for operation: AccountIdentityOperation) -> String? {
-        guard case .change(let provider) = operation else { return nil }
-        switch provider {
-        case .phone:
-            guard identityTargetPhoneInput.isValid,
-                  identityTargetPhoneInput.e164.isEmpty == false else {
-                return nil
-            }
-            return isSameAsCurrentPhone(identityTargetPhoneInput.e164)
-                ? L10n.text(
-                    "account_management.identity.phone.same_as_current",
-                    fallback: "新手机号不能和当前手机号一致"
-                )
-                : nil
-        case .email:
-            guard identityTargetEmailInput.isValid,
-                  identityTargetEmailInput.normalizedEmail.isEmpty == false else {
-                return nil
-            }
-            return isSameAsCurrentEmail(identityTargetEmailInput.normalizedEmail)
-                ? L10n.text(
-                    "account_management.identity.email.same_as_current",
-                    fallback: "新邮箱不能和当前邮箱一致"
-                )
-                : nil
-        case .apple:
-            return nil
-        }
-    }
-
-    private func isSameAsCurrentPhone(_ newPhoneE164: String) -> Bool {
-        let normalizedNew = normalizePhoneForComparison(newPhoneE164)
-        guard normalizedNew.isEmpty == false else { return false }
-
-        if let current = profile?.phoneNumber,
-           normalizePhoneForComparison(current) == normalizedNew {
-            return true
-        }
-
-        return identityList?.identities.contains { status in
-            guard status.provider == .phone, status.bound else { return false }
-            let value = status.maskedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard value.contains("*") == false else { return false }
-            return normalizePhoneForComparison(value) == normalizedNew
-        } ?? false
-    }
-
-    private func isSameAsCurrentEmail(_ newEmail: String) -> Bool {
-        let normalizedNew = normalizeEmailForComparison(newEmail)
-        guard normalizedNew.isEmpty == false else { return false }
-
-        if let current = profile?.email,
-           normalizeEmailForComparison(current) == normalizedNew {
-            return true
-        }
-
-        return identityList?.identities.contains { status in
-            guard status.provider == .email, status.bound else { return false }
-            let value = status.maskedValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard value.contains("*") == false else { return false }
-            return normalizeEmailForComparison(value) == normalizedNew
-        } ?? false
-    }
-
-    private func normalizePhoneForComparison(_ value: String) -> String {
-        let defaultDial = identityTargetPhoneInput.countryCode.isEmpty ? "+86" : identityTargetPhoneInput.countryCode
-        return PhoneNumberNormalizer.normalize(rawInput: value, defaultDial: defaultDial).e164
-    }
-
-    private func normalizeEmailForComparison(_ value: String) -> String {
-        guard let parsed = EmailAddressNormalizer.parseFullEmail(value, knownDomains: DefaultEmailDomains.ordered) else {
-            return value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        }
-        return parsed.normalizedEmail
     }
 
     private func resendTargetOTP(

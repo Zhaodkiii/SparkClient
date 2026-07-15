@@ -57,13 +57,17 @@ struct MemberSetupFlowView: View {
                 MemberRelationshipGenderStepView(
                     draft: $viewModel.draft,
                     canAdvance: viewModel.canAdvanceFromRelationship,
-                    isLoading: viewModel.isSavingMember,
+                    isLoading: viewModel.isSavingMember || viewModel.isPersistingModules,
                     onBack: { pop() },
                     onNext: {
                         Task {
-                            // 创建成员成功后跳转到模块选择页
-                            if await viewModel.createMember() {
-                                viewModel.navigationPath = [.modules]
+                            // 创建成员后默认开通医疗模块，并结束建档流程。
+                            if await viewModel.createMember(),
+                               await viewModel.enableDefaultMedicalModuleForCreatedMember() {
+                                if let member = viewModel.createdMember {
+                                    onMemberCreated?(member)
+                                }
+                                dismiss()
                             }
                         }
                     }

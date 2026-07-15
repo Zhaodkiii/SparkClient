@@ -66,19 +66,28 @@ final class AccountSessionRuntime {
         await chatSyncSupervisor.stopRealtimeSync()
     }
 
-    /// 登录流程结束：commit=true 表示已切到新账号；false 且仍为原账号时恢复实时同步。
+    /// 登录流程结束：commit=true 表示已切到新账号；同账号升级时恢复实时同步。
     func endAccountSwitch(commit: Bool, currentSignedInAccountID: Int64?) async {
         defer {
             isAccountSwitchInProgress = false
             suspendedAccountIDForSwitch = nil
         }
-        guard commit == false,
-              let suspended = suspendedAccountIDForSwitch,
-              let current = currentSignedInAccountID,
-              suspended == current
-        else {
+        let suspended = suspendedAccountIDForSwitch
+        let current = currentSignedInAccountID
+
+        if commit {
+            // 同账号凭证升级：activateUser 会跳过 reset，需在此恢复同步。
+            if let suspended, let current, suspended == current {
+                logger.info(
+                    "账号运行时：同账号升级完成，恢复实时同步 accountID=\(suspended)",
+                    module: .auth
+                )
+                await chatSyncSupervisorForResume?.startRealtimeSync()
+            }
             return
         }
+
+        guard let suspended, let current, suspended == current else { return }
         logger.info(
             "账号运行时：账号切换登录失败，恢复实时同步 accountID=\(suspended)",
             module: .auth

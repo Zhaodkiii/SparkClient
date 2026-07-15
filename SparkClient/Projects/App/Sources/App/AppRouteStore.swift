@@ -12,6 +12,7 @@ enum AppRoute: Hashable, Sendable {
     case popularScienceArticle(id: Int)
     case settings
     case aiSettings
+    case accountManagement
     /// 首页医疗卡片对应的列表/执行中心页。
     case homeMedicalList(HomeMedicalListRoute, MedicationExecutionInitialFocus?)
     /// 首页家庭药箱入口。
@@ -27,7 +28,7 @@ enum AppRoute: Hashable, Sendable {
             return .chat
         case .popularScience, .popularScienceArticle:
             return .popularScience
-        case .settings, .aiSettings:
+        case .settings, .aiSettings, .accountManagement:
             return .settings
         }
     }
@@ -36,7 +37,7 @@ enum AppRoute: Hashable, Sendable {
         switch self {
         case .home, .knowledge, .chatList, .popularScience, .settings:
             return true
-        case .chatThread, .popularScienceArticle, .aiSettings, .homeMedicalList, .homeFamilyMedicineCabinet:
+        case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet:
             return false
         }
     }

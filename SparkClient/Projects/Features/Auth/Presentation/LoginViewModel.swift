@@ -18,6 +18,7 @@ final class LoginViewModel: ObservableObject {
     @Published var isLoading = false
 
     private let signInWithAppleUseCase: SignInWithAppleUseCase
+    private let signInWithDeviceUseCase: SignInWithDeviceUseCase
     private let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
     private let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     private let sessionStore: AppSessionStore
@@ -30,6 +31,7 @@ final class LoginViewModel: ObservableObject {
 
     init(
         signInWithAppleUseCase: SignInWithAppleUseCase,
+        signInWithDeviceUseCase: SignInWithDeviceUseCase,
         requestPhoneOTPUseCase: RequestPhoneOTPUseCase,
         signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase,
         sessionStore: AppSessionStore,
@@ -37,6 +39,7 @@ final class LoginViewModel: ObservableObject {
         accountSwitchHandler: (any LoginAccountSwitchHandling)? = nil
     ) {
         self.signInWithAppleUseCase = signInWithAppleUseCase
+        self.signInWithDeviceUseCase = signInWithDeviceUseCase
         self.requestPhoneOTPUseCase = requestPhoneOTPUseCase
         self.signInWithPhoneOTPUseCase = signInWithPhoneOTPUseCase
         self.sessionStore = sessionStore
@@ -44,22 +47,41 @@ final class LoginViewModel: ObservableObject {
         self.accountSwitchHandler = accountSwitchHandler
     }
 
-    private func prepareAccountSwitchIfNeeded() async {
-        guard case .signedIn(let session) = sessionStore.state else { return }
+    private var currentAccountID: Int64? {
+        if case .signedIn(let session) = sessionStore.state {
+            return session.accountID
+        }
+        return nil
+    }
+
+    private func prepareAccountSwitchIfNeeded() async -> Int64? {
+        guard case .signedIn(let session) = sessionStore.state else { return nil }
         await accountSwitchHandler?.beginLoginAccountSwitch(suspendedAccountID: session.accountID)
+        return session.accountID
     }
 
     private func finishAccountSwitch(commit: Bool) async {
-        let currentAccountID: Int64? = {
-            if case .signedIn(let session) = sessionStore.state {
-                return session.accountID
-            }
-            return nil
-        }()
         await accountSwitchHandler?.endLoginAccountSwitch(
             commit: commit,
             currentSignedInAccountID: currentAccountID
         )
+    }
+
+    private func commitAuthenticatedSession(_ session: UserSession, previousAccountID: Int64?) async {
+        let isSameAccount = previousAccountID.map { $0 == session.accountID } ?? false
+        sessionStore.setAuthenticated(session)
+        await finishAccountSwitch(commit: true)
+        if isSameAccount, previousAccountID != nil, session.isDeviceAccount == false {
+            notificationClient.success(
+                L10n.text("auth.device.upgrade_success"),
+                source: notificationSource
+            )
+        } else {
+            notificationClient.success(
+                L10n.text("auth.notification.sign_in_success"),
+                source: notificationSource
+            )
+        }
     }
 
     func prepareAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
@@ -69,7 +91,34 @@ final class LoginViewModel: ObservableObject {
         request.nonce = Self.sha256(nonce)
     }
 
+    func signInWithDevice() async {
+        guard isLoading == false else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        var accountSwitchStarted = false
+        do {
+            let previousAccountID = await prepareAccountSwitchIfNeeded()
+            accountSwitchStarted = previousAccountID != nil
+            let session = try await signInWithDeviceUseCase.execute()
+            accountSwitchStarted = false
+            logger.info(
+                "登录流程：设备登录成功 accountID=\(session.accountID) isDeviceAccount=\(session.isDeviceAccount)",
+                module: .auth
+            )
+            await commitAuthenticatedSession(session, previousAccountID: previousAccountID)
+        } catch {
+            if accountSwitchStarted {
+                await finishAccountSwitch(commit: false)
+            }
+            let message = AuthUserFacingErrorMapper.message(for: error, scenario: .deviceSignIn)
+            logger.error("登录流程：设备登录失败 error=\(message)", module: .auth)
+            notifyFailure(message: message, error: error)
+        }
+    }
+
     func signInWithApple(result: Result<ASAuthorization, Error>) async {
+        guard isLoading == false else { return }
         isLoading = true
         defer { isLoading = false }
 
@@ -82,20 +131,15 @@ final class LoginViewModel: ObservableObject {
 
             let payload = try makePayload(from: credential)
             logger.info("登录流程：Apple credential 已生成 payload，开始执行登录用例", module: .auth)
-            if case .signedIn = sessionStore.state {
-                await prepareAccountSwitchIfNeeded()
-                accountSwitchStarted = true
-            }
+            let previousAccountID = await prepareAccountSwitchIfNeeded()
+            accountSwitchStarted = previousAccountID != nil
             let session = try await signInWithAppleUseCase.execute(payload: payload)
-            await finishAccountSwitch(commit: true)
             accountSwitchStarted = false
-            logger.info("登录流程：Apple 登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
-            sessionStore.setAuthenticated(session)
-            logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
-            notificationClient.success(
-                L10n.text("auth.notification.sign_in_success"),
-                source: notificationSource
+            logger.info(
+                "登录流程：Apple 登录成功 accountID=\(session.accountID) isDeviceAccount=\(session.isDeviceAccount)",
+                module: .auth
             )
+            await commitAuthenticatedSession(session, previousAccountID: previousAccountID)
         } catch {
             if accountSwitchStarted {
                 await finishAccountSwitch(commit: false)
@@ -134,29 +178,25 @@ final class LoginViewModel: ObservableObject {
     }
 
     func phoneLogin(phoneNumber: String, verificationCode: String, otpId: String) async {
+        guard isLoading == false else { return }
         isLoading = true
         defer { isLoading = false }
 
         var accountSwitchStarted = false
         do {
-            if case .signedIn = sessionStore.state {
-                await prepareAccountSwitchIfNeeded()
-                accountSwitchStarted = true
-            }
+            let previousAccountID = await prepareAccountSwitchIfNeeded()
+            accountSwitchStarted = previousAccountID != nil
             let session = try await signInWithPhoneOTPUseCase.execute(
                 phoneNumber: phoneNumber,
                 verificationCode: verificationCode,
                 otpID: otpId
             )
-            await finishAccountSwitch(commit: true)
             accountSwitchStarted = false
-            logger.info("登录流程：手机号登录用例成功返回 session accountID=\(session.accountID)，准备切换 AppSessionStore", module: .auth)
-            sessionStore.setAuthenticated(session)
-            logger.info("登录流程：AppSessionStore 已切换为已登录 accountID=\(session.accountID)", module: .auth)
-            notificationClient.success(
-                L10n.text("auth.notification.sign_in_success"),
-                source: notificationSource
+            logger.info(
+                "登录流程：手机号登录成功 accountID=\(session.accountID) isDeviceAccount=\(session.isDeviceAccount)",
+                module: .auth
             )
+            await commitAuthenticatedSession(session, previousAccountID: previousAccountID)
         } catch {
             if accountSwitchStarted {
                 await finishAccountSwitch(commit: false)

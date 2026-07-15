@@ -17,6 +17,7 @@ struct PhoneOTPRequestContext: Sendable {
 protocol AuthRepository: Sendable {
     func restoreSession() async -> UserSession?
     func signInWithApple(payload: AppleSignInPayload) async throws -> UserSession
+    func signInWithDevice() async throws -> UserSession
     func requestPhoneOTP(phoneNumber: String) async throws -> PhoneOTPRequestContext
     func signInWithPhoneOTP(phoneNumber: String, verificationCode: String, otpID: String) async throws -> UserSession
     func signOut() async throws

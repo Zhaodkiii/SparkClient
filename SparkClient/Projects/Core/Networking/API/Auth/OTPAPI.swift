@@ -41,6 +41,9 @@ struct SparkOTPAPI {
         let tokenType: String
         let otpId: String
         let isNewUser: Bool?
+        let signInMethod: String?
+        let isDeviceAccount: Bool?
+        let accountResolution: String?
     }
 
     func requestEmailOTP(
@@ -98,7 +101,8 @@ struct SparkOTPAPI {
         email: String,
         code: String,
         bundleId: String = "",
-        deviceId: String = ""
+        deviceId: String = "",
+        deviceSecret: String = ""
     ) async throws -> AuthTokens {
         nonisolated struct Payload: Encodable {
             let otp_id: String
@@ -106,6 +110,7 @@ struct SparkOTPAPI {
             let code: String
             let bundle_id: String
             let device_id: String
+            let device_secret: String
         }
 
         let operation = CacheableSparkNetworkOperation(
@@ -122,7 +127,8 @@ struct SparkOTPAPI {
                             email: email,
                             code: code,
                             bundle_id: bundleId,
-                            device_id: deviceId
+                            device_id: deviceId,
+                            device_secret: deviceSecret
                         )
                     )
                 ),
@@ -210,7 +216,8 @@ struct SparkOTPAPI {
         phoneNumber: String,
         code: String,
         bundleId: String = "",
-        deviceId: String = ""
+        deviceId: String = "",
+        deviceSecret: String = ""
     ) async throws -> PhoneOTPVerifyResult {
         nonisolated struct Payload: Encodable {
             let otp_id: String
@@ -218,6 +225,7 @@ struct SparkOTPAPI {
             let code: String
             let bundle_id: String
             let device_id: String
+            let device_secret: String
         }
 
         let operation = CacheableSparkNetworkOperation(
@@ -234,7 +242,8 @@ struct SparkOTPAPI {
                             phone_number: phoneNumber,
                             code: code,
                             bundle_id: bundleId,
-                            device_id: deviceId
+                            device_id: deviceId,
+                            device_secret: deviceSecret
                         )
                     )
                 ),

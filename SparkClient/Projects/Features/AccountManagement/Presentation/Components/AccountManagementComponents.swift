@@ -403,7 +403,6 @@ struct IdentityTargetInputCard: View {
     var isEmailLocked: Bool = false
     var canSendOTP: Bool = false
     var isSendingOTP: Bool = false
-    var validationMessage: String? = nil
     let onBack: () -> Void
     let onSendOTP: () -> Void
 
@@ -436,11 +435,6 @@ struct IdentityTargetInputCard: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
-                    if let validationMessage {
-                        Text(validationMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
                 }
             case .email:
                 VStack(alignment: .leading, spacing: 8) {
@@ -448,11 +442,6 @@ struct IdentityTargetInputCard: View {
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.secondary)
                     EmailAddressInputView(model: $emailInput, isLocked: isEmailLocked)
-                    if let validationMessage {
-                        Text(validationMessage)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
                 }
             case .apple:
                 EmptyView()

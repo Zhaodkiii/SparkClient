@@ -18,6 +18,7 @@ enum AuthViewModelError: LocalizedError {
 enum AuthUserFacingErrorMapper {
     enum Scenario: Sendable {
         case appleSignIn
+        case deviceSignIn
         case phoneOTPRequest
         case phoneOTPResend
         case phoneOTPLogin
@@ -55,6 +56,11 @@ enum AuthUserFacingErrorMapper {
         case .httpError(let statusCode, let backend, _):
             let backendMessage = BackendErrorLocalizer.message(for: backend, statusCode: statusCode)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            if scenario == .deviceSignIn {
+                if let mapped = deviceLoginMessage(backend: backend, statusCode: statusCode) {
+                    return mapped
+                }
+            }
             if backendMessage.isEmpty == false, isSafeUserFacingBackendMessage(backendMessage) {
                 return backendMessage
             }
@@ -91,10 +97,30 @@ enum AuthUserFacingErrorMapper {
         return blockedMarkers.contains { lowered.contains($0) } == false
     }
 
+    private static func deviceLoginMessage(backend: BackendError?, statusCode: Int) -> String? {
+        let code = backend?.code
+        let msg = (backend?.msg ?? "").lowercased()
+        if code == 40161 || msg.contains("device_credential_invalid") {
+            return L10n.text("auth.device.credential_invalid")
+        }
+        if code == 42361 || msg.contains("device_credential_locked") || msg.contains("device_login_temporarily_locked") {
+            return L10n.text("auth.device.login_failed")
+        }
+        if code == 40061 || code == 40062 || code == 40063 {
+            return L10n.text("auth.device.data_recovery_warning")
+        }
+        if statusCode == 401 || statusCode == 403 || statusCode == 409 || statusCode == 423 || statusCode == 503 {
+            return L10n.text("auth.device.login_failed")
+        }
+        return nil
+    }
+
     private static func fallback(for scenario: Scenario) -> String {
         switch scenario {
         case .appleSignIn:
             return L10n.text("auth.notification.apple_sign_in_failed")
+        case .deviceSignIn:
+            return L10n.text("auth.device.login_failed")
         case .phoneOTPRequest:
             return L10n.text("auth.notification.otp_send_failed")
         case .phoneOTPResend:

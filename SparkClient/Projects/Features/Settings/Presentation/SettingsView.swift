@@ -2,34 +2,33 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
-    @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     let session: UserSession
+    let onAccountEntryTap: () -> Void
 
     var body: some View {
         List {
             Section(L10n.text("settings.section.account")) {
-                MainNavigationLink {
-                    AccountManagementView(viewModel: accountManagementViewModel, session: session)
-                } label: {
+                Button(action: onAccountEntryTap) {
                     HStack {
                         Label(L10n.text("settings.account_management"), systemImage: "person.crop.circle")
                         Spacer()
-                        Text(session.displayName.isEmpty ? session.email : session.displayName)
+                        Text(accountTrailingText)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
                 }
+                .accessibilityHint(
+                    session.isDeviceAccount
+                        ? L10n.text("settings.account.device_not_linked.accessibility_hint")
+                        : L10n.text("settings.account_management")
+                )
             }
-
-            //当前版本关闭
-//            Section(L10n.text("settings.section.architecture")) {
-//                Text(L10n.text("settings.architecture.description"))
-//                    .font(.footnote)
-//                    .foregroundStyle(.secondary)
-//            }
 
             Section(L10n.text("settings.section.ai")) {
                 MainNavigationLink {
@@ -67,52 +66,6 @@ struct SettingsView: View {
                     }
                 }
             }
-
-            // 当前版本 展示关闭
-//            Section(L10n.text("settings.section.sync")) {
-//                Toggle(isOn: $viewModel.syncEnabled) {
-//                    VStack(alignment: .leading, spacing: 4) {
-//                        Text(L10n.text("settings.sync.enable"))
-//                        Text(L10n.text("settings.sync.subtitle"))
-//                            .font(.footnote)
-//                            .foregroundStyle(.secondary)
-//                    }
-//                }
-//                .onChange(of: viewModel.syncEnabled) { enabled in
-//                    Task { await viewModel.updateSyncEnabled(enabled) }
-//                }
-//
-//                Picker(L10n.text("settings.sync.priority"), selection: $viewModel.syncPriority) {
-//                    Text(L10n.text("settings.sync.priority.realtime")).tag(CloudSyncPriority.realtime)
-//                    Text(L10n.text("settings.sync.priority.balanced")).tag(CloudSyncPriority.balanced)
-//                    Text(L10n.text("settings.sync.priority.background")).tag(CloudSyncPriority.background)
-//                }
-//                .pickerStyle(.segmented)
-//                .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
-//                .onChange(of: viewModel.syncPriority) { priority in
-//                    Task { await viewModel.updateSyncPriority(priority) }
-//                }
-//
-//                HStack {
-//                    Text(L10n.text("settings.sync.last_time"))
-//                    Spacer()
-//                    Text(viewModel.lastSyncDescription)
-//                        .foregroundStyle(.secondary)
-//                        .font(.footnote)
-//                }
-//
-//                Button {
-//                    Task { await viewModel.triggerSyncNow() }
-//                } label: {
-//                    if viewModel.isSyncing {
-//                        ProgressView()
-//                    } else {
-//                        Text(L10n.text("settings.sync.now"))
-//                    }
-//                }
-//                .disabled(viewModel.syncEnabled == false || viewModel.isSyncing)
-//            }
-
         }
         .navigationTitle(L10n.text("settings.title"))
         .task {
@@ -130,5 +83,15 @@ struct SettingsView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+    }
+
+    private var accountTrailingText: String {
+        if session.isDeviceAccount {
+            return L10n.text("settings.account.device_not_linked")
+        }
+        if session.displayName.isEmpty == false {
+            return session.displayName
+        }
+        return session.email
     }
 }

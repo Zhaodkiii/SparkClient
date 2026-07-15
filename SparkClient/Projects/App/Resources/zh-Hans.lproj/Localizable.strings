@@ -1391,7 +1391,6 @@
 "account_management.identity.email.domain_invalid" = "邮箱后缀格式不正确";
 "account_management.identity.email.locked_hint" = "验证码已发送，邮箱暂不可修改";
 "account_management.identity.email.change_to_edit" = "如需修改邮箱，请返回上一步";
-"account_management.identity.email.same_as_current" = "新邮箱不能和当前邮箱一致";
 "account_management.identity.target.apple.bind_title" = "绑定 Apple 登录";
 "account_management.identity.target.apple.subtitle" = "请使用 Apple ID 完成绑定";
 "account_management.identity.target.send_otp" = "发送验证码";
@@ -1400,7 +1399,6 @@
 "account_management.identity.phone.locked_hint" = "验证码已发送，手机号暂不可修改";
 "account_management.identity.phone.change_to_edit" = "如需修改手机号，请返回上一步";
 "account_management.identity.phone.invalid" = "手机号格式不正确";
-"account_management.identity.phone.same_as_current" = "新手机号不能和当前手机号一致";
 "account_management.identity.phone.country_picker" = "选择国家或地区";
 "account_management.identity.submitting" = "正在提交…";
 "account_management.identity.completed.bind" = "%@ 绑定成功";
@@ -3446,3 +3444,11 @@
 "second_camera.public_preview.file_missing" = "文件已失效";
 "second_camera.public_preview.thumbnail_a11y" = "第 %d 张，共 %d 张";
 "second_camera.multi.thumbnail_fallback" = "预览缩略图";
+"settings.account.device_not_linked" = "未登录";
+"settings.account.device_not_linked.accessibility_hint" = "打开登录页绑定 Apple 或手机号";
+"auth.login.guest_mode.accessibility_hint" = "使用此设备快速进入完整应用";
+"auth.device.login_failed" = "游客登录失败，请稍后重试";
+"auth.device.credential_invalid" = "设备凭证无效，请重新安装应用或联系支持";
+"auth.device.data_recovery_warning" = "设备标识丢失，原游客数据可能无法恢复";
+"auth.device.upgrade_success" = "账号绑定成功";
+"auth.device.new_guest_created" = "已创建新的游客账户";

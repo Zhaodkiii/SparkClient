@@ -1391,7 +1391,6 @@
 "account_management.identity.email.domain_invalid" = "Invalid email domain";
 "account_management.identity.email.locked_hint" = "Code sent. Email is temporarily locked";
 "account_management.identity.email.change_to_edit" = "To change the email, go back one step";
-"account_management.identity.email.same_as_current" = "The new email must be different from the current email.";
 "account_management.identity.target.apple.bind_title" = "Link Apple Sign-In";
 "account_management.identity.target.apple.subtitle" = "Sign in with Apple to complete linking";
 "account_management.identity.target.send_otp" = "Send code";
@@ -1400,7 +1399,6 @@
 "account_management.identity.phone.locked_hint" = "Code sent. Phone number is temporarily locked";
 "account_management.identity.phone.change_to_edit" = "To change the phone number, go back one step";
 "account_management.identity.phone.invalid" = "Invalid phone number format";
-"account_management.identity.phone.same_as_current" = "The new phone number must be different from the current phone number.";
 "account_management.identity.phone.country_picker" = "Select country or region";
 "account_management.identity.submitting" = "Submitting…";
 "account_management.identity.completed.bind" = "%@ linked successfully";
@@ -3445,3 +3443,11 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "second_camera.public_preview.file_missing" = "This file is no longer available";
 "second_camera.public_preview.thumbnail_a11y" = "Image %d of %d";
 "second_camera.multi.thumbnail_fallback" = "Preview thumbnail";
+"settings.account.device_not_linked" = "Not Signed In";
+"settings.account.device_not_linked.accessibility_hint" = "Open sign-in to link Apple or phone";
+"auth.login.guest_mode.accessibility_hint" = "Quickly enter the full app using this device";
+"auth.device.login_failed" = "Guest sign-in failed. Please try again later.";
+"auth.device.credential_invalid" = "Device credential is invalid. Reinstall the app or contact support.";
+"auth.device.data_recovery_warning" = "Device identity was lost. Previous guest data may be unrecoverable.";
+"auth.device.upgrade_success" = "Account linked successfully";
+"auth.device.new_guest_created" = "A new guest account was created";

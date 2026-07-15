@@ -3,7 +3,13 @@ import SwiftUI
 import UIKit
 
 struct LoginView: View {
+    enum PresentationMode {
+        case primarySignIn
+        case upgradeDeviceAccount
+    }
+
     @ObservedObject var viewModel: LoginViewModel
+    var mode: PresentationMode = .primarySignIn
 
     @State private var path: [LoginRoute] = []
     @State private var showPhoneLogin = true
@@ -29,7 +35,6 @@ struct LoginView: View {
                             presentInitialLegalPrompt()
                         }
                     )
-    //                safetyCard
                 }
                 .padding(24)
             }
@@ -43,6 +48,7 @@ struct LoginView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .disabled(viewModel.isLoading)
+            .interactiveDismissDisabled(viewModel.isLoading)
             .overlay {
                 if viewModel.isLoading {
                     ProgressView()
@@ -69,8 +75,6 @@ struct LoginView: View {
             case .phone:
                 PhoneLoginView(viewModel: viewModel)
                     .navigationTitle("手机号登录")
-            case .guest:
-                GuestChatView()
             }
         }
     }
@@ -209,18 +213,21 @@ struct LoginView: View {
                 )
             }
 
-            Button {
-                if hasAgreedToLegal {
-                    path.append(.guest)
-                } else {
-                    requireLegalAgreementBeforeLogin()
+            if mode == .primarySignIn {
+                Button {
+                    if hasAgreedToLegal {
+                        Task { await viewModel.signInWithDevice() }
+                    } else {
+                        requireLegalAgreementBeforeLogin()
+                    }
+                } label: {
+                    Text(L10n.text("auth.login.guest_mode"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-            } label: {
-                Text(L10n.text("auth.login.guest_mode"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                .padding(.top, 4)
+                .accessibilityHint(L10n.text("auth.login.guest_mode.accessibility_hint"))
             }
-            .padding(.top, 4)
         }
     }
 
@@ -267,7 +274,6 @@ struct LoginView: View {
 
 private enum LoginRoute: Hashable {
     case phone
-    case guest
 }
 
 private struct LoginInitialLegalPromptSheet: View {

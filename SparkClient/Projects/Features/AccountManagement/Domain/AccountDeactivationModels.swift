@@ -22,6 +22,12 @@ struct AccountProfile: Equatable, Sendable {
             return L10n.text("account_management.sign_in.apple", fallback: "Apple 登录")
         case .phone:
             return L10n.text("account_management.sign_in.phone", fallback: "手机号验证码")
+        case .email:
+            return L10n.text("account_management.sign_in.email", fallback: "邮箱验证码")
+        case .google:
+            return L10n.text("account_management.sign_in.google", fallback: "Google 登录")
+        case .device:
+            return L10n.text("account_management.sign_in.device", fallback: "游客模式")
         }
     }
 }

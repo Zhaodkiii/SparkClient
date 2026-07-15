@@ -218,6 +218,7 @@ struct MainTabDependencies {
     let accountManagementViewModel: AccountManagementViewModel
     let aiSettingsViewModel: AISettingsViewModel
     let versionUpdateCoordinator: AppVersionUpdateCoordinator
+    let upgradeLoginViewModel: LoginViewModel
     let memberContextStore: MemberContextStore
     let pushAdapter: PushAdapter
     let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator

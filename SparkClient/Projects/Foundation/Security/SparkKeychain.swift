@@ -1,13 +1,19 @@
 import Foundation
 import Security
 
-/// Spark 安装级设备 ID：与 HealthClient 共用同一 Keychain item，升级后 device_id 连续。
+/// Spark 安装级设备 ID / 设备登录密钥：与 HealthClient 共用同一 Keychain service。
 ///
-/// Keychain：`service = com.dreamhealth.healthclient`，`account = device_unique_id`。
-/// 参考：`Health/HealthClient/HealthClient/Core/Storage/Keychain.getOrCreateDeviceID()`。
+/// Keychain：`service = com.dreamhealth.healthclient`
+/// - `account = device_unique_id`：安装标识（升级前后连续）
+/// - `account = device_login_secret`：设备登录高熵密钥（决策 1A）
 enum SparkKeychain {
+    enum DeviceCredentialError: Error {
+        case deviceCredentialUnavailable
+    }
+
     private static let service = "com.dreamhealth.healthclient"
     private static let deviceIDAccount = "device_unique_id"
+    private static let deviceSecretAccount = "device_login_secret"
 
     static func getOrCreateDeviceID() -> String {
         if let existingID = load(account: deviceIDAccount) {
@@ -18,9 +24,6 @@ enum SparkKeychain {
         do {
             try save(newID, account: deviceIDAccount)
         } catch {
-            // 与 HealthClient 一致：写入失败仍返回内存中的 UUID，避免阻塞登录。
-            // 常见原因：钥匙串权限/访问组不一致、模拟器 errSecDuplicateItem 或 -34018、
-            // 真机首次解锁前访问 kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly 等。
             let ns = error as NSError
             SparkLogger.log(
                 level: .warning,
@@ -29,6 +32,74 @@ enum SparkKeychain {
             )
         }
         return newID
+    }
+
+    /// 认证场景必须使用可持久化的安装标识，禁止降级为内存 UUID。
+    static func getOrCreatePersistentDeviceID() throws -> String {
+        if let existingID = load(account: deviceIDAccount), existingID.isEmpty == false {
+            return existingID
+        }
+        let newID = UUID().uuidString
+        do {
+            try save(newID, account: deviceIDAccount)
+            return newID
+        } catch {
+            throw DeviceCredentialError.deviceCredentialUnavailable
+        }
+    }
+
+    /// 读取或创建 device_secret。保存失败不得返回仅存在于内存的临时 secret。
+    static func getOrCreateDeviceSecret() throws -> String {
+        if let existing = load(account: deviceSecretAccount), existing.isEmpty == false {
+            return existing
+        }
+
+        let secret = try generateDeviceSecret()
+        do {
+            try save(secret, account: deviceSecretAccount)
+        } catch {
+            let ns = error as NSError
+            SparkLogger.log(
+                level: .error,
+                module: .auth,
+                message: "Keychain 保存 device_login_secret 失败，拒绝使用临时 secret。domain=\(ns.domain) code=\(ns.code)"
+            )
+            throw DeviceCredentialError.deviceCredentialUnavailable
+        }
+        SparkLogger.log(
+            level: .info,
+            module: .auth,
+            message: "Keychain 已创建 device_login_secret（不输出明文）"
+        )
+        return secret
+    }
+
+    static func loadDeviceSecret() -> String? {
+        load(account: deviceSecretAccount)
+    }
+
+    static func replaceDeviceSecret(_ secret: String) throws {
+        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            throw DeviceCredentialError.deviceCredentialUnavailable
+        }
+        try save(trimmed, account: deviceSecretAccount)
+    }
+
+    static func deleteDeviceSecret() {
+        delete(account: deviceSecretAccount)
+    }
+
+    private static func generateDeviceSecret() throws -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        guard status == errSecSuccess else {
+            throw DeviceCredentialError.deviceCredentialUnavailable
+        }
+        return Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 
     private static func save(_ value: String, account: String) throws {
@@ -59,5 +130,14 @@ enum SparkKeychain {
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    private static func delete(account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }

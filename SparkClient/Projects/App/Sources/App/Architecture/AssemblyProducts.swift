@@ -18,6 +18,7 @@ struct AuthAssemblyProduct {
     let authRepository: any AuthRepository
     let restoreSessionUseCase: RestoreSessionUseCase
     let signInWithAppleUseCase: SignInWithAppleUseCase
+    let signInWithDeviceUseCase: SignInWithDeviceUseCase
     let requestPhoneOTPUseCase: RequestPhoneOTPUseCase
     let signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase
     let signOutUseCase: SignOutUseCase
@@ -204,6 +205,7 @@ extension AuthAssembly {
             authRepository: authRepository,
             restoreSessionUseCase: RestoreSessionUseCase(authRepository: authRepository),
             signInWithAppleUseCase: SignInWithAppleUseCase(authRepository: authRepository),
+            signInWithDeviceUseCase: SignInWithDeviceUseCase(authRepository: authRepository),
             requestPhoneOTPUseCase: RequestPhoneOTPUseCase(authRepository: authRepository),
             signInWithPhoneOTPUseCase: SignInWithPhoneOTPUseCase(authRepository: authRepository),
             signOutUseCase: SignOutUseCase(authRepository: authRepository)

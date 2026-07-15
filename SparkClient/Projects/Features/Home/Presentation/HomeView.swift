@@ -984,6 +984,10 @@ private struct PreviewAuthRepository: AuthRepository {
         throw NSError(domain: "PreviewAuthRepository", code: -1)
     }
 
+    func signInWithDevice() async throws -> UserSession {
+        throw NSError(domain: "PreviewAuthRepository", code: -1)
+    }
+
     func requestPhoneOTP(phoneNumber: String) async throws -> PhoneOTPRequestContext {
         PhoneOTPRequestContext(otpID: "preview-otp-id", expiresIn: 300)
     }
