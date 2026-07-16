@@ -9,6 +9,7 @@ struct PhoneLoginView: View {
     @State private var isRequesting: Bool = false
     @State private var otpId: String?
     @State private var isApplyingAutoRegion: Bool = false
+    @FocusState private var isPhoneFocused: Bool
 
     init(viewModel: LoginViewModel) {
         self.viewModel = viewModel
@@ -110,6 +111,7 @@ struct PhoneLoginView: View {
                     TextField(L10n.text("auth.phone.placeholder"), text: $phone)
                         .keyboardType(.phonePad)
                         .textContentType(.telephoneNumber)
+                        .focused($isPhoneFocused)
                         .padding(.horizontal, 12)
                         .frame(height: 48)
                         .onChange(of: phone) { newValue in
@@ -173,6 +175,7 @@ struct PhoneLoginView: View {
 
     private func requestOTP() {
         guard phoneIsLikelyValid else { return }
+        isPhoneFocused = false
         isRequesting = true
         Task { @MainActor in
             let full = PhoneNumberNormalizer.normalize(rawInput: phone, defaultDial: chosenRegion.dial).e164

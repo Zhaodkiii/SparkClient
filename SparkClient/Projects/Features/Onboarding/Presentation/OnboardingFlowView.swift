@@ -5,6 +5,7 @@ struct OnboardingFlowView: View {
     @StateObject private var agentSetupViewModel: OnboardingAgentSetupViewModel
     @ObservedObject private var memberContextStore: MemberContextStore
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
+    @State private var didBootstrapDefaultMember = false
     private let homeDependencies: HomeFeatureDependencies?
     private let onCompleted: () -> Void
 
@@ -31,6 +32,9 @@ struct OnboardingFlowView: View {
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
         } destination: { step in
             onboardingDestination(for: step)
+        }
+        .task {
+            await bootstrapDefaultMemberIfNeeded()
         }
     }
 
@@ -98,6 +102,43 @@ struct OnboardingFlowView: View {
                     .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func bootstrapDefaultMemberIfNeeded() async {
+        guard didBootstrapDefaultMember == false else { return }
+        guard memberContextStore.context.members.isEmpty else { return }
+        guard let homeDependencies else { return }
+
+        didBootstrapDefaultMember = true
+
+        let created = await memberContextStore.addMember(
+            name: "初始成员",
+            relationship: "self",
+            gender: "male",
+            birthDate: nil
+        )
+        guard let member = created else {
+            didBootstrapDefaultMember = false
+            return
+        }
+        
+        viewModel.complete()
+        onCompleted()
+
+        do {
+            _ = try await homeDependencies.memberModuleSetupUseCase.saveModuleSetting(
+                memberID: member.id,
+                moduleCode: MemberSetupModule.medical.rawValue,
+                isEnabled: true,
+                isCompleted: false,
+                displayOrder: MemberSetupModule.medical.displayOrder,
+                summaryText: ""
+            )
+            memberContextStore.select(memberID: member.id)
+        } catch {
+            didBootstrapDefaultMember = false
         }
     }
 }
