@@ -281,11 +281,11 @@ struct HomeView: View {
         case .medicalDocumentUpload:
             // 兼容导航容器，提供页面导航栏能力
             CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel, // 病历上传页视图模型
-                    aiSettingsViewModel: dependencies.aiSettingsViewModel // AI识别配置视图模型
-                )
-            }
+                    MedicalDocumentUploadHostView(
+                        viewModel: medicalDocumentUploadViewModel, // 病历上传页视图模型
+                        aiSettingsViewModel: dependencies.aiSettingsViewModel // AI识别配置视图模型
+                    )
+                }
 
         // MARK: 自定义相机拍摄全屏页
         case .customCamera:

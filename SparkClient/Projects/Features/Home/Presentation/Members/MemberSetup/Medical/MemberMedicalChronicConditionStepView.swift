@@ -75,14 +75,14 @@ struct MemberMedicalChronicConditionStepView: View {
             }
         }
         // 病历识别全屏页面（上传后跳转）
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: medicalDocumentUploadViewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
         // 切换「有无慢性病」时清空已有数据
         .onChange(of: status) { newValue in
             if newValue == .none {

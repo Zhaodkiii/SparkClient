@@ -60,14 +60,14 @@ struct MemberMedicalExamArchiveFormContent: View {
         .sheet(isPresented: $showingUploadSheet) {
             MedicalAttachmentUploadListSheet(documentKind: .healthExamReport, onConfirm: startHealthExamRecognition)
         }
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: medicalDocumentUploadViewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
         .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
             Task { await refreshAfterMedicalUploadSave() }
         }

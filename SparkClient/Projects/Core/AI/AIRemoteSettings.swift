@@ -21,26 +21,3 @@ struct AIRemoteSettingsPatch: Equatable, Sendable {
     }
 }
 
-struct AIRemoteUserInfoPatch: Equatable, Sendable {
-    var chooseEmbeddingModel: String?
-    var optimizationTextModel: String?
-    var optimizationVisualModel: String?
-    var contextFoldingModel: String?
-    var routerModel: String?
-    var dataExtractionModel: String?
-    var reportInterpretationModel: String?
-    var textToSpeechModel: String?
-    var useContextFolding: Bool?
-    var maxToolSets: Int?
-    var useKnowledge: Bool?
-    var knowledgeCount: Int?
-    var knowledgeSimilarity: Double?
-    var useSearch: Bool?
-    var bilingualSearch: Bool?
-    var searchCount: Int?
-    var useMap: Bool?
-    var useCalendar: Bool?
-    var useWeather: Bool?
-    var useCanvas: Bool?
-    var useCode: Bool?
-}

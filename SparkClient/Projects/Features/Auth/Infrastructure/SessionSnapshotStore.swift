@@ -19,10 +19,10 @@ actor SessionSnapshotStore {
         }
         do {
             let session = try JSONDecoder.default.decode(UserSession.self, from: data)
-            logger.debug(
-                "会话快照：读取成功 accountID=\(session.accountID) bytes=\(data.count)",
-                module: .auth
-            )
+//            logger.debug(
+//                "会话快照：读取成功 accountID=\(session.accountID) bytes=\(data.count)",
+//                module: .auth
+//            )
             return session
         } catch {
             logger.error(

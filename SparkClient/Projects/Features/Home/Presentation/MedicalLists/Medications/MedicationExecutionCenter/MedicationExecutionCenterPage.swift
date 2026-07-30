@@ -285,12 +285,12 @@ struct MedicationExecutionCenterPage: View {
 
     @ViewBuilder
     private var dateStrip: some View {
-        if #available(iOS 17.0, *) {
-            ios17DateStrip
-        } else {
-            legacyDateStripFallback
-        }
-//        legacyDateStripFallback
+//        if #available(iOS 17.0, *) {
+//            ios17DateStrip
+//        } else {
+//            legacyDateStripFallback
+//        }
+        legacyDateStripFallback
     }
 
     @available(iOS 17.0, *)

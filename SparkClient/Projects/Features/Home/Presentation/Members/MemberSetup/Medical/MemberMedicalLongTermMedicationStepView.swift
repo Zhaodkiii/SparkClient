@@ -125,14 +125,14 @@ struct MemberMedicalLongTermMedicationStepView: View {
             medicationPlanSheetContent(for: destination)
         }
         // 病历识别全屏页面
-        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
-                )
-            }
-        }
+//        .fullScreenCover(isPresented: $medicalDocumentUploadViewModel.isUploadPresented) {
+//            CompatibleNavigationContainer {
+//                MedicalDocumentUploadHostView(
+//                    viewModel: medicalDocumentUploadViewModel,
+//                    aiSettingsViewModel: aiSettingsViewModel
+//                )
+//            }
+//        }
         // OCR识别保存成功后刷新用药列表
         .onChange(of: medicalDocumentUploadViewModel.saveSucceededRevision) { _ in
             Task { await refreshAfterMedicalUploadSave() }
