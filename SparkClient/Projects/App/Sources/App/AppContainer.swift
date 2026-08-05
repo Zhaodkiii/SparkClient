@@ -167,6 +167,8 @@ final class AppContainer {
     let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     /// 使用文本优化场景自动生成智能体 system prompt。
     let autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase
+    /// Guest 简化聊天客户端；复用 Runtime 下游网关。
+    let guestAIChatClient: any GuestAIChatClient
     /// 记忆档案读写与召回。
     let loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase
     let saveMemoryUseCase: SaveMemoryUseCase
@@ -451,6 +453,7 @@ final class AppContainer {
         self.polishKnowledgeTextUseCase = ai.polishKnowledgeTextUseCase
         self.translateKnowledgeTextUseCase = ai.translateKnowledgeTextUseCase
         self.autoFillAgentPromptUseCase = ai.autoFillAgentPromptUseCase
+        self.guestAIChatClient = ai.guestAIChatClient
 
         self.knowledgeRepository = knowledge.knowledgeRepository
         let popularScienceRepository = RemotePopularScienceRepository(

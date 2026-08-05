@@ -11,7 +11,7 @@ final class GuestChatViewModel: ObservableObject {
 
     init(
         sessionStore: GuestChatSessionStore,
-        aiClient: GuestAIChatClient = OpenAICompatibleGuestAIChatClient()
+        aiClient: GuestAIChatClient
     ) {
         self.sessionStore = sessionStore
         self.aiClient = aiClient

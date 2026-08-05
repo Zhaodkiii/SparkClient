@@ -42,6 +42,8 @@ struct AIAssemblyProduct {
     let polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase
     let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     let autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase
+    /// Guest 简化聊天客户端；复用 Runtime 下游网关，不在 Feature 层手写 HTTP。
+    let guestAIChatClient: any GuestAIChatClient
 }
 
 /// 知识库领域装配产物。
@@ -230,6 +232,7 @@ extension AIAssembly {
             coreDataStack: coreDataStack,
             sessionSnapshotStore: sessionSnapshotStore
         )
+        // embedding 客户端只能在装配根创建，归属 Runtime 下游网关。
         let knowledgeEmbeddingClient = OpenAICompatibleEmbeddingClient()
         let aiRuntimeStore = AIRuntimeStore()
         let aiRuntimeConfigStore = AIRuntimeConfigStore()
@@ -254,6 +257,10 @@ extension AIAssembly {
             localGateway: localRuntimeGateway,
             logger: logger
         )
+        let guestAIChatClient = GuestAIRuntimeChatClient(
+            gateway: aiRuntimeGateway,
+            logger: logger
+        )
         return AIAssemblyProduct(
             aiSettingsRepository: aiSettingsRepository,
             memoryRepository: memoryRepository,
@@ -270,7 +277,8 @@ extension AIAssembly {
             memoryPreferencesUseCase: MemoryPreferencesUseCase(repository: memoryRepository),
             polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase(runtime: aiRuntimeService),
             translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase(runtime: aiRuntimeService),
-            autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase(runtime: aiRuntimeService)
+            autoFillAgentPromptUseCase: AutoFillAgentPromptUseCase(runtime: aiRuntimeService),
+            guestAIChatClient: guestAIChatClient
         )
     }
 }

@@ -122,6 +122,15 @@
 
 ## 八、与其他模块的接口边界
 
+### 禁止绕过 Runtime
+
+页面层、ViewModel、Feature **不得**直接构造 gateway、provider client 或 HTTP AI 请求。所有 AI 调用必须先经过：
+
+- 聊天类：`SendChatMessageUseCase → ChatOrchestrator → AIRuntimeService`
+- 单次任务类：Feature UseCase → `AIRuntimeServing.generateTextStream(request:)`
+
+架构门禁测试 [`AIRuntimeArchitectureGateTests.swift`](../../SparkClient/Tests/AI/AIRuntimeArchitectureGateTests.swift) 扫描 `Projects/Features` 与 `Projects/App`，禁止 gateway / client 细节泄漏到业务层。详见 [`AI Runtime 推理编排需求.md`](./AI%20Runtime%20推理编排需求.md) 中「统一入口与单链路约束」一节。
+
 ## 九、关键代码对应关系
 
 ## 十、测试策略

@@ -1,10 +1,11 @@
 import Foundation
 
-/// OpenAI 兼容 `POST .../embeddings` 客户端。
+/// OpenAI 兼容 `POST .../embeddings` 客户端抽象。
 protocol KnowledgeEmbeddingClient: Sendable {
     func embed(texts: [String], modelName: String, apiKey: String, endpointURL: URL) async throws -> [[Float]]
 }
 
+/// Runtime 下游 embedding 网关；仅允许在 `AssemblyProducts` 装配。
 final class OpenAICompatibleEmbeddingClient: KnowledgeEmbeddingClient {
     private let urlSession: URLSession
 

@@ -1,8 +1,17 @@
 import Foundation
 import UIKit
 
+/// 知识处理 capability 标记：润色 / 翻译 / 自动填充等单次 AI 文本变换。
+protocol KnowledgeProcessingCapability: Sendable {
+    static var capabilityName: String { get }
+}
+
+extension KnowledgeProcessingCapability {
+    static var capabilityName: String { "knowledge_processing" }
+}
+
 /// 使用 `AIScenario.optimizationText` 润色当前正文（与工具栏「优化」一致）。
-struct PolishKnowledgeTextUseCase: Sendable {
+struct PolishKnowledgeTextUseCase: Sendable, KnowledgeProcessingCapability {
     let runtime: AIRuntimeServing
 
     func execute(text: String) async throws -> String {
@@ -20,7 +29,7 @@ struct PolishKnowledgeTextUseCase: Sendable {
 }
 
 /// 使用聊天场景 + system 提示做翻译（与工具栏「翻译」一致，首版固定译为中文）。
-struct TranslateKnowledgeTextUseCase: Sendable {
+struct TranslateKnowledgeTextUseCase: Sendable, KnowledgeProcessingCapability {
     let runtime: AIRuntimeServing
 
     func execute(text: String, targetLanguageDescription: String = "中文") async throws -> String {
@@ -42,7 +51,7 @@ struct TranslateKnowledgeTextUseCase: Sendable {
 }
 
 /// 使用 `AIScenario.optimizationText` 为本地智能体自动生成 system prompt。
-struct AutoFillAgentPromptUseCase: Sendable {
+struct AutoFillAgentPromptUseCase: Sendable, KnowledgeProcessingCapability {
     let runtime: AIRuntimeServing
 
     func execute(displayName: String, baseModelName: String) async throws -> String {

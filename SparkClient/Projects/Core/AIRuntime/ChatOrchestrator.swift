@@ -116,7 +116,19 @@ struct ChatOrchestrator: Sendable {
                 "工具调用已命中，tool=\(result.toolName), bypassModel=\(result.shouldBypassModel), sensitive=\(result.sensitive)",
                 module: .aiConfig
             )
-            
+
+            if let messageRunActor, let assistantID = assistantMessageClientID {
+                for effect in result.sideEffects {
+                    await messageRunActor.apply(
+                        .toolSideEffect(
+                            effect,
+                            anchorToolCallID: nil,
+                            assistantClientMessageID: assistantID
+                        )
+                    )
+                }
+            }
+
             // 返回工具类结果
             return ChatOrchestratorOutput(
                 text: result.outputText,

@@ -69,7 +69,7 @@ struct DefaultTypedMedicalDocumentExtractor: TypedMedicalDocumentExtracting, Sen
 //        return try makeDebugPretendOutput(memberID: memberID, files: files, selectedKind: selectedKind)
 //#else
         try cancellationToken?.checkCancellation()
-        logger.info("typed 抽取开始，文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
+        logger.info("typed 抽取开始，capability=\(Self.capabilityName), 文件数=\(files.count), selectedKind=\(selectedKind.rawValue)", module: .medical)
 
         // 1. 对所有上传文件执行OCR，并把所有文本合并成一段完整文本
         let mergedOCR = try await mergeOCRText(files: files, reRecognizeAll: false, cancellationToken: cancellationToken)

@@ -10,6 +10,8 @@ protocol MedicalDocumentRecognizer: Sendable {
 }
 
 protocol MedicalDocumentTypeResolving: Sendable {
+    static var capabilityName: String { get }
+
     func resolve(
         selectedKind: MedicalDocumentKind,
         mergedOCRText: String,
@@ -17,7 +19,13 @@ protocol MedicalDocumentTypeResolving: Sendable {
     ) async throws -> MedicalDocumentTypeResolution
 }
 
+extension MedicalDocumentTypeResolving {
+    static var capabilityName: String { "medical_extraction" }
+}
+
 protocol TypedMedicalDocumentExtracting: Sendable {
+    static var capabilityName: String { get }
+
     func recognizeOCRFiles(
         files: [MedicalUploadLocalFile],
         reRecognizeAll: Bool,
@@ -53,6 +61,10 @@ protocol TypedMedicalDocumentExtracting: Sendable {
         selectedKind: MedicalDocumentKind,
         cancellationToken: AIRuntimeCancellationToken?
     ) async throws -> MedicalDocumentTypedExtractionOutput
+}
+
+extension TypedMedicalDocumentExtracting {
+    static var capabilityName: String { "medical_extraction" }
 }
 
 protocol TypedMedicalDocumentSaving: Sendable {

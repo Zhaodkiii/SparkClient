@@ -360,31 +360,23 @@ struct SendChatMessageUseCase: Sendable {
                     module: .general
                 )
             }
-            let aiHistory: [ChatMessage]
-            let effectiveInference: ChatOrchestratorInferenceOptions
             let modelAllowedToolNames = allowedToolNames(from: resolvedRow.aiToolScenarios)
-            if let smallTask {
-                aiHistory = [
-                    ChatMessage(
-                        threadID: thread.id,
-                        role: .user,
-                        blocks: [.init(kind: .text, text: userQuestionForAI)],
-                        deliveryState: .pending,
-                        modelName: "user"
-                    )
-                ]
-                effectiveInference = ChatOrchestratorInferenceOptions(
-                    useTools: smallTask.toolList.isEmpty == false,
-                    useKnowledgeBag: inference.useKnowledgeBag,
-                    useWebSearch: inference.useWebSearch,
-                    reasoningEnabled: inference.reasoningEnabled,
-                    reasoningEffortTier: inference.reasoningEffortTier,
-                    allowedToolNames: Set(smallTask.toolList).intersection(modelAllowedToolNames ?? Set(smallTask.toolList))
+            let capabilityStrategy = ChatCapabilityStrategyResolver.resolve(
+                smallTask: smallTask,
+                hasHealthResourceContext: healthContextForAI?.isEmpty == false
+            )
+            let capabilityPlan = capabilityStrategy.plan(
+                ChatCapabilityStrategyInput(
+                    inference: inference,
+                    modelAllowedToolNames: modelAllowedToolNames,
+                    history: history,
+                    threadID: thread.id,
+                    userQuestionForAI: userQuestionForAI,
+                    hasHealthResourceContext: healthContextForAI?.isEmpty == false
                 )
-            } else {
-                aiHistory = history
-                effectiveInference = inference.withAllowedToolNames(modelAllowedToolNames)
-            }
+            )
+            let aiHistory = capabilityPlan.aiHistory
+            let effectiveInference = capabilityPlan.inference
             if let allowed = effectiveInference.allowedToolNames {
                 logger.debug(
                     "模型工具白名单生效，model=\(resolvedRow.name), allowedTools=\(allowed.sorted().joined(separator: ",")), count=\(allowed.count)",
@@ -833,13 +825,5 @@ struct SendChatMessageUseCase: Sendable {
 
     private func format(_ seconds: TimeInterval) -> String {
         String(format: "%.3f", seconds)
-    }
-}
-
-private extension ChatOrchestratorInferenceOptions {
-    func withAllowedToolNames(_ allowedToolNames: Set<String>?) -> Self {
-        var copy = self
-        copy.allowedToolNames = allowedToolNames
-        return copy
     }
 }

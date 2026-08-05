@@ -11,10 +11,10 @@ struct GuestChatView: View {
     @State private var hasAcceptedDisclaimer = false
     @State private var draftText = ""
 
-    init() {
+    init(aiClient: GuestAIChatClient) {
         let store = GuestChatSessionStore()
         _sessionStore = StateObject(wrappedValue: store)
-        _viewModel = StateObject(wrappedValue: GuestChatViewModel(sessionStore: store))
+        _viewModel = StateObject(wrappedValue: GuestChatViewModel(sessionStore: store, aiClient: aiClient))
     }
 
     var body: some View {
@@ -238,6 +238,12 @@ private struct GuestChatMessageRow: View {
 
 #Preview("Guest Chat - Config Prompt") {
     CompatibleNavigationContainer {
-        GuestChatView()
+        GuestChatView(aiClient: PreviewGuestAIChatClient())
+    }
+}
+
+private struct PreviewGuestAIChatClient: GuestAIChatClient {
+    func send(messages: [GuestChatMessage], config: GuestAIConfig) async throws -> String {
+        L10n.text("guest.chat.welcome")
     }
 }

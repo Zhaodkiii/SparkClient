@@ -62,6 +62,8 @@ SparkClient/
 │   ├── ChatOrchestratorInferenceOptions.swift
 │   ├── ChatSystemPromptResolver.swift
 │   ├── OpenAICompatibleTextGateway.swift
+│   ├── OpenAICompatibleEmbeddingClient.swift
+│   ├── GuestAIRuntimeChatClient.swift
 │   ├── OpenAIReasoningPayload.swift
 │   ├── LocalGGUFTextGateway.swift
 │   ├── PromptLocalizer.swift
@@ -75,6 +77,9 @@ SparkClient/
 │   └── Architecture/AssemblyProducts.swift
 └── SparkClient/Tests/
     ├── AI/AISettingsAndResolverTests.swift
+    ├── AI/AIRuntimeArchitectureGateTests.swift
+    ├── AI/ScenarioPolicyResolverTests.swift
+    ├── AI/GuestAIRuntimeChatClientTests.swift
     ├── Chat/ChatArchitectureGateTests.swift
     └── MedicalDocumentUpload/MedicalExtractionInputSourceTests.swift
 ```
@@ -94,6 +99,109 @@ Features (Chat / Medical / Nutrition / Knowledge)
 - `Core/AIRuntime`：推理编排、网关、流事件与聊天编排；可依赖 `Core/AI`。
 - Feature 层不得绕过 `AIRuntimeService` 直接拼厂商 HTTP（当前实现以 Runtime 为统一入口）。
 - 当前未单独拆 Application/Domain 包：Runtime 以 Core 服务 + 协议 `AIRuntimeServing` 形式存在。
+
+### 统一入口与单链路约束（CHAT-000007）
+
+本模块采用**两级入口**，所有模型调用必须先进入 Runtime 层：
+
+| 入口 | 适用场景 | 调用方 |
+| --- | --- | --- |
+| `ChatOrchestrator` | 聊天、多轮 tool loop、流式 partial 回写 | `SendChatMessageUseCase` |
+| `AIRuntimeServing` | 单次抽取、润色、识别、embedding | Feature Application / Infrastructure UseCase |
+
+**硬规则（由 `AIRuntimeArchitectureGateTests` 门禁保障）：**
+
+1. 页面层、ViewModel、Feature **不得**直接引用 `OpenAICompatibleTextGateway`、`LocalGGUFTextGateway`、`AIClientFactory`。
+2. **不得**在 Feature 层手写 `URLSession` 请求 `/v1/chat/completions` 或自行解析 SSE。
+3. `AssemblyProducts` 是 gateway / Runtime 对象的**唯一装配根**。
+4. 本地 / 云端模型路由、tools 降级、reasoning payload 只允许在 `AIRuntimeService` 与 gateway 处理。
+
+**特殊路径说明：**
+
+- **Guest 简化聊天**：用户自填凭据，不经 `AIConfigCenter.resolve`，但底层仍复用 `OpenAICompatibleTextGateway`（`GuestAIRuntimeChatClient`）。
+- **Embedding**：`OpenAICompatibleEmbeddingClient` 归属 `Core/AIRuntime/`，仅在装配根创建；Knowledge Feature 只依赖 `KnowledgeEmbeddingClient` 协议。
+
+**新增 AI 能力前的 6 个反问：**
+
+1. 聊天多轮还是单次任务？
+2. 能复用现有 `AIScenario` 吗？
+3. 走 `ChatOrchestrator` 还是 `AIRuntimeService`？
+4. 业务层是否在拼 provider / SSE / gateway 细节？
+5. 模型解析是否仍由 `AIConfigCenter` 统一决定？
+6. 取消、日志、tool 降级是否留在 Runtime？
+
+### P0 主干协议收口（CHAT-000008）
+
+CHAT-000008 在 CHAT-000007 入口统一基础上，进一步把**协议与来源标记**固化为唯一事实源：
+
+#### 三组统一协议
+
+| 协议 | 类型 | 关键字段 / 语义 |
+| --- | --- | --- |
+| 请求协议 | `AIRuntimeTextRequest` | `scenario`、`messages`、`tools`、`toolChoice`、`reasoning`、`preferredModelName`、`providerCompanyUppercased`、`temperature`、`topP`、`maxTokens`、`cancellationToken` |
+| 流式协议 | `AIRuntimeStreamEvent` | `textDelta` → `reasoningDelta` → `toolCallDelta` → `completed` |
+| 来源协议 | `AIConfigSource` | `localDefault`、`localCatalog`、`proOverlay`、`userOverride`、`runtimeOverride`、`trialPolicy` |
+
+#### 模型来源计算边界
+
+1. `AIConfigCenter` 读取配置快照与 overlay。
+2. `ScenarioPolicyResolver` 决定最终命中模型与 `source`。
+3. `AIRuntimeService` 在日志与事件中携带来源信息（`resolved.source.rawValue`）。
+
+Guest 等 bypass 路径（用户自填凭据）不经 `AIConfigCenter.resolve`，但须通过 `toResolvedConfig(source: .trialPolicy)` 等方式显式标记来源。
+
+#### 新增 AI 功能前的 4 个反问（P0）
+
+1. 这次调用是聊天型多轮，还是单次任务型？
+2. 它能不能复用 `AIRuntimeService` 现有 request 协议？
+3. 它是否需要 `ChatOrchestrator` 的 tool loop？
+4. 它的模型来源标记是谁算出来的，在哪里写日志？
+
+#### 测试与门禁
+
+| 测试文件 | 覆盖范围 |
+| --- | --- |
+| `AIRuntimeArchitectureGateTests.swift` | Feature/App 禁止 gateway/client/HTTP；禁止自定义并行 `*StreamEvent` 协议 |
+| `ScenarioPolicyResolverTests.swift` | `localCatalog` 默认行、`trialPolicy` 来源标记、缺失模型异常 |
+| `AISettingsAndResolverTests.swift` | `runtimeOverride` 优先、`proOverlay` 来源（已有） |
+
+`AIRuntimeService` 的空消息报错 / tools 降级 / 本地云端路由行为测试缺口记录在案，留待后续工单补 `AIRuntimeServiceTests.swift`。
+
+### 能力 / 工具 / 副作用三层边界（CHAT-000009）
+
+CHAT-000009 在 P0 主干之上，把聊天链路里隐式的「做什么 / 怎么做 / 怎么落库展示」拆成三层，对齐 DeepTutor 的 `BaseCapability` + `ToolRegistry` + `StreamBus` 分工：
+
+| 层 | 职责 | SparkClient 关键代码 |
+| --- | --- | --- |
+| Capability（做什么） | 决定 `useTools` / `useKnowledgeBag` / `useWebSearch`、工具白名单、是否替换 AI 历史 | `Core/AIRuntime/ChatCapabilityStrategy.swift`（`StandardChatCapabilityStrategy`、`SmallTaskCapabilityStrategy`、`ReportInterpretationCapabilityStrategy`）；`SendChatMessageUseCase` 经 `ChatCapabilityStrategyResolver` 选取策略 |
+| Tool（怎么做） | Schema、路由、Consent、执行、审计；**不承担** capability 决策 | `Core/AIRuntime/ToolHub/`；`ChatOrchestrator` 传入的 `ChatOrchestratorInferenceOptions` 已由上游策略算好 |
+| Side Effect（怎么落库） | `ToolSideEffect` → 串行 Actor → 块映射 → UI 协调 | `MessageRunActor` → `ToolSideEffectBlockMapper` → `ToolInteractionCoordinator` |
+
+**聊天侧三条显式策略（CHAT-000010 扩展）：**
+
+- `StandardChatCapabilityStrategy`（`name = "chat"`）：`ChatComposerRuntimeFlags` 原样映射为 `ChatOrchestratorInferenceOptions`；`allowedToolNames` 取自模型侧白名单。
+- `SmallTaskCapabilityStrategy`（`name = "small_task"`）：`useTools` 由 `SmallTask.toolList` 是否为空决定；白名单为任务工具列表与模型白名单交集；`aiHistory` 替换为合成用户消息。
+- `ReportInterpretationCapabilityStrategy`（`name = "report_interpretation"`）：问报告路径显式标记；`plan()` 与标准聊天等价（仍用 `AIScenario.chat`，不改历史/scenario）；`ChatCapabilityStrategyResolver` 在 `healthResourceContext` 非空时选取（小任务优先）。
+
+**非聊天单次任务 capability（代码内显式 `capabilityName`，不引入运行时 Registry）：**
+
+| capability 名称 | 显式标识位置 | 既有实现 |
+| --- | --- | --- |
+| `report_interpretation` | `ChatCapabilityStrategy`（聊天编排） | 问报告 + `healthResourceContext` |
+| `medical_extraction` | `TypedMedicalDocumentExtracting.capabilityName` / `MedicalDocumentTypeResolving.capabilityName` | `DefaultTypedMedicalDocumentExtractor` + `DefaultMedicalDocumentTypeResolver` |
+| `knowledge_processing` | `KnowledgeProcessingCapability.capabilityName` | `PolishKnowledgeTextUseCase` / `TranslateKnowledgeTextUseCase` / `AutoFillAgentPromptUseCase` |
+| `task_generation` | （工具白名单覆盖） | `ToolHubGenerateTask` |
+
+**测试与门禁：**
+
+| 测试文件 | 覆盖范围 |
+| --- | --- |
+| `ChatCapabilityStrategyTests.swift` | 标准聊天 / 小任务 / 问报告三条策略与 resolver |
+| `MedicalExtractionCapabilityTests.swift` | `medical_extraction` capabilityName |
+| `KnowledgeProcessingCapabilityTests.swift` | `knowledge_processing` capabilityName |
+| `ToolSideEffectPipelineTests.swift` | `ToolSideEffectBlockMapper` 映射；`MessageRunActor` 串行 apply |
+| `ChatOrchestratorDebugToolSideEffectTests.swift` | 调试 slash 早退路径 apply 副作用 |
+| `AIRuntimeArchitectureGateTests.swift` | `testToolHubDoesNotReferenceCapabilityPolicyTypes`：ToolHub 目录（含 `ToolHub+*.swift`）禁止引用 capability 策略类型 |
 
 ## 三、场景模型解析
 

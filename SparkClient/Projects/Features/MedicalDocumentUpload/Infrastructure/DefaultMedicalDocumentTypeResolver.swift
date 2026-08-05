@@ -429,7 +429,7 @@ struct DefaultMedicalDocumentTypeResolver: MedicalDocumentTypeResolving, Sendabl
         cancellationToken: AIRuntimeCancellationToken? = nil
     ) async throws -> MedicalDocumentTypeResolution {
         try cancellationToken?.checkCancellation()
-        logger.info("开始解析医疗文档类型, 预选值: \(selectedKind.rawValue)", module: .medical)
+        logger.info("开始解析医疗文档类型, capability=\(Self.capabilityName), 预选值: \(selectedKind.rawValue)", module: .medical)
         // 1. 优先逻辑：用户手动选择了类型，直接返回结果，置信度100%
         if selectedKind != .auto {
             logger.info("用户手动指定类型: \(selectedKind.rawValue)", module: .medical)
