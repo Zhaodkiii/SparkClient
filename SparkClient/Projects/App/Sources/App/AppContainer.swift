@@ -226,6 +226,8 @@ final class AppContainer {
     let aiRuntimeService: AIRuntimeService
     /// 聊天工具集合（含医疗草稿、知识库写入等）。
     let toolHub: ToolHub
+    /// 聊天编排器（多轮工具 + 流式推理）。
+    let chatOrchestrator: ChatOrchestrator
     /// 工具调用审计记录。
     let toolInteractionCoordinator: ToolInteractionCoordinator
     /// 偏好 + 仓库 + 本地通知的医疗同步调度。
@@ -254,6 +256,8 @@ final class AppContainer {
     let chatListViewModel: ChatListViewModel
     /// 单会话消息与发送 UI（单例）。
     let chatDetailViewModel: ChatDetailViewModel
+    /// DeepTutor 本地会话 UI（单例）。
+    let deepTutorChatViewModel: DeepTutorChatViewModel
     /// 账号级运行时重置入口：账号切换、登出、鉴权失效都走这里。
     lazy var accountSessionRuntime: AccountSessionRuntime = {
         AccountSessionRuntime(
@@ -262,6 +266,7 @@ final class AppContainer {
             memberContextStore: memberContextStore,
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
+            deepTutorChatViewModel: deepTutorChatViewModel,
             chatSyncSupervisor: chatSyncSupervisor,
             knowledgeViewModel: knowledgeViewModel,
             aiConfigCenter: aiConfigCenter,
@@ -494,6 +499,7 @@ final class AppContainer {
         self.chatSyncSupervisor = chat.chatSyncSupervisor
         self.sendChatMessageUseCase = chat.sendChatMessageUseCase
         self.toolHub = chat.toolHub
+        self.chatOrchestrator = chat.chatOrchestrator
 //        self.toolAuditStore = chat.toolAuditStore
         self.toolInteractionCoordinator = chat.toolInteractionCoordinator
 
@@ -584,6 +590,18 @@ final class AppContainer {
             translateKnowledgeTextUseCase: ai.translateKnowledgeTextUseCase,
             createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
             saveTypedMedicalDocumentUseCase: medical.saveTypedMedicalDocumentUseCase,
+            logger: logger
+        )
+        self.deepTutorChatViewModel = DeepTutorChatViewModel(
+            repository: DeepTutorLocalChatStore(
+                coreDataStack: coreDataStack,
+                snapshotStore: auth.sessionSnapshotStore,
+                logger: logger
+            ),
+            chatOrchestrator: chat.chatOrchestrator,
+            aiConfigCenter: ai.aiConfigCenter,
+            toolInteractionCoordinator: chat.toolInteractionCoordinator,
+            memberContextStore: notification.memberContextStore,
             logger: logger
         )
         logger.info("AppContainer 组合完成：容器仅持有 Assembly facade 与共享运行时", module: .general)
@@ -854,6 +872,7 @@ final class AppContainer {
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
+            deepTutorChatViewModel: deepTutorChatViewModel,
             settingsViewModel: makeSettingsViewModel(),
             accountManagementViewModel: makeAccountManagementViewModel(),
             aiSettingsViewModel: aiSettingsViewModel,

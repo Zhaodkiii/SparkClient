@@ -15,6 +15,7 @@ final class AccountSessionRuntime {
     private let memberContextStore: MemberContextStore
     private let chatStateStore: ChatStateStore
     private let chatListViewModel: ChatListViewModel
+    private let deepTutorChatViewModel: DeepTutorChatViewModel
     private let chatSyncSupervisor: ChatSyncSupervisor
     private let knowledgeViewModel: KnowledgeLibraryViewModel
     private let aiConfigCenter: AIConfigCenter
@@ -32,6 +33,7 @@ final class AccountSessionRuntime {
         memberContextStore: MemberContextStore,
         chatStateStore: ChatStateStore,
         chatListViewModel: ChatListViewModel,
+        deepTutorChatViewModel: DeepTutorChatViewModel,
         chatSyncSupervisor: ChatSyncSupervisor,
         knowledgeViewModel: KnowledgeLibraryViewModel,
         aiConfigCenter: AIConfigCenter,
@@ -45,6 +47,7 @@ final class AccountSessionRuntime {
         self.memberContextStore = memberContextStore
         self.chatStateStore = chatStateStore
         self.chatListViewModel = chatListViewModel
+        self.deepTutorChatViewModel = deepTutorChatViewModel
         self.chatSyncSupervisor = chatSyncSupervisor
         self.chatSyncSupervisorForResume = chatSyncSupervisorForResume ?? chatSyncSupervisor
         self.knowledgeViewModel = knowledgeViewModel
@@ -112,6 +115,7 @@ final class AccountSessionRuntime {
         await aiConfigCenter.resetRuntimeCaches()
         chatStateStore.resetForSessionSwitch()
         chatListViewModel.resetForSessionSwitch()
+        deepTutorChatViewModel.resetForSessionSwitch()
         knowledgeViewModel.resetForSessionSwitch()
         memberContextStore.activateAccountAndReset(accountID)
         routeCoordinator.resetRouteGraphForAccountRuntime(reason: "accountSwitch(\(accountID))")
@@ -135,6 +139,7 @@ final class AccountSessionRuntime {
         await aiConfigCenter.resetRuntimeCaches()
         chatStateStore.resetForSessionSwitch()
         chatListViewModel.resetForSessionSwitch()
+        deepTutorChatViewModel.resetForSessionSwitch()
         knowledgeViewModel.resetForSessionSwitch()
         memberContextStore.resetInMemoryContext()
         routeCoordinator.resetRouteGraphForAccountRuntime(reason: "signOut")

@@ -335,8 +335,10 @@ struct MarkdownDocumentView: View {
         .frame(height: tableHeights[tableID])
         .onPreferenceChange(MarkdownTableHeightPreferenceKey.self) { heights in
             guard let height = heights[tableID], height > 0 else { return }
-            if abs((tableHeights[tableID] ?? 0) - height) > 0.5 {
-                tableHeights[tableID] = height
+            DispatchQueue.main.async {
+                if abs((tableHeights[tableID] ?? 0) - height) > 1.0 {
+                    tableHeights[tableID] = height
+                }
             }
         }
         .overlay(alignment: .trailing) {

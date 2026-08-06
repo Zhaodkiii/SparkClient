@@ -1,0 +1,164 @@
+import Foundation
+
+nonisolated enum DeepTutorHealthPromptMode: Equatable, Sendable {
+    /// schema 含 request_member_selection：引导先选成员。
+    case memberSelectionRequired
+    /// schema 含健康 fetch 工具：成员已绑定，直接查数据。
+    case healthFetchAvailable
+    /// 本轮没有健康相关工具：禁止 prompt 假装可调用。
+    case unavailable
+}
+
+/// 按 DeepTutor capability 构造 system prompt（工具策略由 `DeepTutorToolPolicyResolver` 负责）。
+enum DeepTutorPromptBuilder: Sendable {
+    struct BuiltPrompt: Equatable, Sendable {
+        let systemPrompt: String
+    }
+
+    nonisolated static func healthPromptMode(allowedToolNames: Set<String>) -> DeepTutorHealthPromptMode {
+        if allowedToolNames.contains(SparkToolName.requestMemberSelection.rawValue) {
+            return .memberSelectionRequired
+        }
+        let healthFetchTools: Set<String> = [
+            SparkToolName.fetchSleepDetails.rawValue,
+            SparkToolName.fetchStepDetails.rawValue,
+            SparkToolName.fetchEnergyDetails.rawValue,
+            SparkToolName.fetchNutritionDetails.rawValue,
+            SparkToolName.fetchWorkoutDetails.rawValue,
+            SparkToolName.makeNutritionData.rawValue,
+        ]
+        if allowedToolNames.isDisjoint(with: healthFetchTools) == false {
+            return .healthFetchAvailable
+        }
+        return .unavailable
+    }
+
+    nonisolated static func build(
+        capability: DeepTutorCapability,
+        conversationTitle: String,
+        rolePrompt: String?,
+        healthPromptMode: DeepTutorHealthPromptMode = .unavailable
+    ) -> BuiltPrompt {
+        let titleContext: String
+        if DeepTutorSessionTitle.isPlaceholder(conversationTitle) {
+            titleContext = """
+            You are DeepTutor, an educational AI tutor inside SparkClient.
+            Respond in the same language as the user unless they ask otherwise.
+            Use markdown for structured answers when helpful.
+            """
+        } else {
+            titleContext = """
+            You are DeepTutor, an educational AI tutor inside SparkClient.
+            Current conversation title: \(conversationTitle).
+            Respond in the same language as the user unless they ask otherwise.
+            Use markdown for structured answers when helpful.
+            """
+        }
+
+        let base = titleContext
+        let capabilityPrompt: String
+
+        switch capability {
+        case .chat:
+            let healthDataInstructions: String
+            switch healthPromptMode {
+            case .memberSelectionRequired:
+                healthDataInstructions = """
+                When querying personal or family health data without memberID in context:
+                1. Call `request_member_selection` first.
+                2. Do not ask users to type member IDs manually.
+                3. Do not expose tool parameter schemas in the final answer.
+                4. After member selection completes, continue with returned member_id for health tools.
+                5. If the conversation already has a bound member, do not request member selection again unless the user explicitly asks to switch members.
+                """
+            case .healthFetchAvailable:
+                healthDataInstructions = """
+                Personal health data tools are available for the currently bound member.
+                Use the appropriate fetch tool (for example `fetch_sleep_details` for sleep questions).
+                Do not call `request_member_selection` again unless the user explicitly asks to switch members.
+                Do not expose tool parameter schemas in the final answer.
+                """
+            case .unavailable:
+                healthDataInstructions = """
+                You do not currently have access to personal health data tools (steps, sleep, nutrition, workouts) for this turn.
+                If the user asks about their personal health data, explain that this capability is unavailable right now instead of claiming to call a tool.
+                """
+            }
+            capabilityPrompt = """
+            Mode: general tutoring chat.
+            Explain clearly, cite reasoning steps, and ask clarifying questions when needed.
+            You may call `ask_user_question` when you need structured user input.
+            \(healthDataInstructions)
+            """
+        case .deepResearch:
+            capabilityPrompt = """
+            Mode: deep research.
+            First outline a research plan with sections (understand, decompose, evidence, result), then expand each section.
+            Prefer structured markdown headings. Summarize sources and assumptions explicitly.
+            """
+        case .deepQuestion:
+            capabilityPrompt = """
+            Mode: quiz / knowledge check.
+            Default to multiple-choice questions. For a typical 3-question quiz produce:
+            - 2 choice questions with options A-D
+            - 1 concept (true/false) OR fill_in_blank question
+            Do NOT default to short_answer / free-text questions unless the user explicitly asks for open-ended answers.
+            Keep a brief introductory sentence in normal markdown prose only.
+            Do NOT repeat full question bodies, options, or answers in the prose — they belong only in the structured block below.
+
+            After the brief intro, append exactly one fenced code block tagged `quiz_json` containing ONLY valid JSON in this shape:
+            {"results":[{"qa_pair":{"question_id":"q_1","question":"...","question_type":"choice|concept|fill_in_blank","options":{"A":"...","B":"...","C":"...","D":"..."},"correct_answer":"...","explanation":"...","difficulty":"easy|medium|hard","concentration":"..."}}]}
+
+            Rules:
+            - question_id must be stable strings like q_1, q_2, q_3.
+            - Prefer question_type "choice" for most questions.
+            - choice questions must include options A-D.
+            - concept correct_answer must be "true" or "false".
+            - fill_in_blank questions must include ____ in the question text.
+            - Avoid question_type "short_answer" / "written" / "coding" unless explicitly requested.
+            - Preferred output: append exactly one fenced code block tagged `quiz_json` containing ONLY valid JSON.
+            - Acceptable fallback: output bare JSON `{"results":[{"qa_pair":{...}}]}` without repeating question bodies in prose.
+            - The structured quiz payload must be the final content in the response.
+            """
+        case .mathAnimator:
+            capabilityPrompt = """
+            Mode: math animation / step-by-step demonstration.
+            Break the solution into numbered steps suitable for animation.
+            Use clear formulas and intermediate results.
+            """
+        case .visualize:
+            capabilityPrompt = """
+            Mode: visualization.
+            Describe charts, diagrams, or structured visual specs the UI can render.
+            Prefer bullet lists and labeled sections over vague prose.
+            """
+        case .masteryPath:
+            capabilityPrompt = """
+            Mode: mastery learning path.
+            Assess prerequisites, propose a learning sequence, and adapt difficulty.
+            """
+        }
+
+        let role = rolePrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let systemPrompt = [base, capabilityPrompt, role.isEmpty ? nil : "Additional instructions:\n\(role)"]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
+
+        return BuiltPrompt(systemPrompt: systemPrompt)
+    }
+
+    /// 兼容旧调用方：Bool 映射到三态中的 memberSelection / unavailable。
+    nonisolated static func build(
+        capability: DeepTutorCapability,
+        conversationTitle: String,
+        rolePrompt: String?,
+        healthToolsAvailable: Bool
+    ) -> BuiltPrompt {
+        build(
+            capability: capability,
+            conversationTitle: conversationTitle,
+            rolePrompt: rolePrompt,
+            healthPromptMode: healthToolsAvailable ? .memberSelectionRequired : .unavailable
+        )
+    }
+}

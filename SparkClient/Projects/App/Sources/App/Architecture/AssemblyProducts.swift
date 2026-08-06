@@ -103,6 +103,7 @@ struct ChatAssemblyProduct {
     let messageRunActor: MessageRunActor
     let toolHub: ToolHub
     let toolInteractionCoordinator: ToolInteractionCoordinator
+    let chatOrchestrator: ChatOrchestrator
     let chatQueryService: ChatQueryService
     let loadChatThreadsUseCase: LoadChatThreadsUseCase
     let loadChatMessagesUseCase: LoadChatMessagesUseCase
@@ -574,6 +575,7 @@ extension ChatAssembly {
             messageRunActor: messageRunActor,
             toolHub: toolHub,
             toolInteractionCoordinator: toolInteractionCoordinator,
+            chatOrchestrator: chatOrchestrator,
             chatQueryService: chatQueryService,
             loadChatThreadsUseCase: LoadChatThreadsUseCase(queryService: chatQueryService),
             loadChatMessagesUseCase: LoadChatMessagesUseCase(queryService: chatQueryService),

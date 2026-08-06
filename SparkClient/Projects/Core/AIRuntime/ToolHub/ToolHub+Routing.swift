@@ -55,7 +55,9 @@ extension ToolHub {
         providerCompany: String? = nil,
         modelName: String? = nil,
         endpoint: String? = nil,
-        privacyPolicyURL: URL? = nil
+        privacyPolicyURL: URL? = nil,
+        preferInlineAskUser: Bool = false,
+        preferInlineMemberSelection: Bool = false
     ) async -> ToolExecutionResult {
         let invocation = ToolInvocation(name: name, arguments: parseArguments(arguments))
         let context = ToolExecutionContext(
@@ -68,7 +70,9 @@ extension ToolHub {
             providerCompany: providerCompany,
             modelName: modelName,
             endpoint: endpoint,
-            privacyPolicyURL: privacyPolicyURL
+            privacyPolicyURL: privacyPolicyURL,
+            preferInlineAskUser: preferInlineAskUser,
+            preferInlineMemberSelection: preferInlineMemberSelection
         )
         let rawResult = await execute(invocation: invocation, context: context)
         let result = await applyModelEgressConsentIfNeeded(

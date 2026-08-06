@@ -10,6 +10,7 @@
 		859450442F7FEFAE00DC419C /* CoreTelephony.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450432F7FEFAE00DC419C /* CoreTelephony.framework */; };
 		859450462F7FEFB900DC419C /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450452F7FEFB900DC419C /* SystemConfiguration.framework */; };
 		859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450472F7FEFC300DC419C /* libresolv.tbd */; };
+		85A100012F90000000DEEPT1 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 85A100002F90000000DEEPT1 /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				85A100012F90000000DEEPT1 /* MarkdownUI in Frameworks */,
 				859450462F7FEFB900DC419C /* SystemConfiguration.framework in Frameworks */,
 				859450442F7FEFAE00DC419C /* CoreTelephony.framework in Frameworks */,
 				859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */,
@@ -101,6 +103,7 @@
 			);
 			name = SparkClient;
 			packageProductDependencies = (
+				85A100002F90000000DEEPT1 /* MarkdownUI */,
 			);
 			productName = SparkClient;
 			productReference = 859781EC2F7E4CD5002B7517 /* SparkClient.app */;
@@ -133,6 +136,7 @@
 			mainGroup = 859781E32F7E4CD5002B7517;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				85A100022F90000000DEEPT1 /* XCLocalSwiftPackageReference "Vendor/swift-markdown-ui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 859781ED2F7E4CD5002B7517 /* Products */;
@@ -322,7 +326,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -379,7 +383,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -500,7 +504,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -549,6 +553,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		85A100022F90000000DEEPT1 /* XCLocalSwiftPackageReference "Vendor/swift-markdown-ui" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Vendor/swift-markdown-ui";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		85A100002F90000000DEEPT1 /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 85A100022F90000000DEEPT1 /* XCLocalSwiftPackageReference "Vendor/swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 859781E42F7E4CD5002B7517 /* Project object */;
 }

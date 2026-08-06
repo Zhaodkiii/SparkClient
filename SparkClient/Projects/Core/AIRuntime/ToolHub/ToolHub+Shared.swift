@@ -265,8 +265,19 @@ extension ToolHub {
         selectionMode: ChatQuestionSelectionMode,
         allowsOther: Bool
     ) -> ToolQuestionItem? {
-        guard question.isEmpty == false, (2...5).contains(rawOptions.count) else { return nil }
+        guard question.isEmpty == false else { return nil }
         let questionID = "q\(index + 1)"
+        if rawOptions.isEmpty {
+            guard allowsOther else { return nil }
+            return ToolQuestionItem(
+                id: questionID,
+                question: question,
+                options: [],
+                allowsOther: true,
+                selectionMode: selectionMode
+            )
+        }
+        guard (2...5).contains(rawOptions.count) else { return nil }
         let options = Array(rawOptions.prefix(5)).enumerated().map { optionIndex, text in
             ChatQuestionOption(id: "\(questionID)_option_\(optionIndex + 1)", text: text)
         }

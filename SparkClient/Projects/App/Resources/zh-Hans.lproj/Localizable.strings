@@ -10,6 +10,7 @@
 "tab.home" = "首页";
 "tab.health" = "健康";
 "tab.chat" = "AI 对话";
+"tab.deep_tutor" = "DeepTutor";
 "tab.popular_science" = "科普";
 "tab.settings" = "设置";
 

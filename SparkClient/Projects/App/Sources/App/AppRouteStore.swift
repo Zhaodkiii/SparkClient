@@ -8,6 +8,8 @@ enum AppRoute: Hashable, Sendable {
     case knowledge
     case chatList
     case chatThread(UUID)
+    case deepTutorList
+    case deepTutorThread(UUID)
     case popularScience
     case popularScienceArticle(id: Int)
     case settings
@@ -26,6 +28,8 @@ enum AppRoute: Hashable, Sendable {
             return .knowledge
         case .chatList, .chatThread:
             return .chat
+        case .deepTutorList, .deepTutorThread:
+            return .deepTutor
         case .popularScience, .popularScienceArticle:
             return .popularScience
         case .settings, .aiSettings, .accountManagement:
@@ -35,9 +39,9 @@ enum AppRoute: Hashable, Sendable {
 
     var isRootDestination: Bool {
         switch self {
-        case .home, .knowledge, .chatList, .popularScience, .settings:
+        case .home, .knowledge, .chatList, .popularScience, .settings, .deepTutorList:
             return true
-        case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet:
+        case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .deepTutorThread:
             return false
         }
     }
@@ -53,6 +57,8 @@ final class AppRouteStore: ObservableObject {
         case settings = 4
         /// 科普 Tab 使用新 raw value，避免影响历史 settings 选中态。
         case popularScience = 5
+        /// DeepTutor Tab 使用新 raw value，避免影响历史 Tab 选中态。
+        case deepTutor = 6
     }
 
     @Published var selectedTab: RootTab = .home

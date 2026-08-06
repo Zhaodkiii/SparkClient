@@ -214,6 +214,7 @@ struct MainTabDependencies {
     let chatStateStore: ChatStateStore
     let chatListViewModel: ChatListViewModel
     let chatDetailViewModel: ChatDetailViewModel
+    let deepTutorChatViewModel: DeepTutorChatViewModel
     let settingsViewModel: SettingsViewModel
     let accountManagementViewModel: AccountManagementViewModel
     let aiSettingsViewModel: AISettingsViewModel

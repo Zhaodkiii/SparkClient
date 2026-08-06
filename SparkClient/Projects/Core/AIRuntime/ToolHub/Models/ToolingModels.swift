@@ -212,6 +212,10 @@ struct ToolExecutionContext: Sendable {
     let modelName: String?                // 使用模型名称
     let endpoint: String?                 // 接口地址
     let privacyPolicyURL: URL?            // 隐私政策链接
+    /// DeepTutor 等场景：在消息内卡片收集追问，不弹通用 sheet。
+    let preferInlineAskUser: Bool
+    /// DeepTutor 等场景：在消息内卡片收集成员选择，不弹通用 sheet。
+    let preferInlineMemberSelection: Bool
 
     init(
         memberID: Int?,
@@ -223,7 +227,9 @@ struct ToolExecutionContext: Sendable {
         providerCompany: String? = nil,
         modelName: String? = nil,
         endpoint: String? = nil,
-        privacyPolicyURL: URL? = nil
+        privacyPolicyURL: URL? = nil,
+        preferInlineAskUser: Bool = false,
+        preferInlineMemberSelection: Bool = false
     ) {
         self.memberID = memberID
         self.locale = locale
@@ -235,6 +241,8 @@ struct ToolExecutionContext: Sendable {
         self.modelName = modelName
         self.endpoint = endpoint
         self.privacyPolicyURL = privacyPolicyURL
+        self.preferInlineAskUser = preferInlineAskUser
+        self.preferInlineMemberSelection = preferInlineMemberSelection
     }
 }
 

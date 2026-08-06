@@ -86,6 +86,7 @@ struct AppCoordinatorView: View {
                         chatStateStore: mainTab.chatStateStore,
                         chatListViewModel: mainTab.chatListViewModel,
                         chatDetailViewModel: mainTab.chatDetailViewModel,
+                        deepTutorChatViewModel: mainTab.deepTutorChatViewModel,
                         settingsViewModel: mainTab.settingsViewModel,
                         accountManagementViewModel: mainTab.accountManagementViewModel,
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,

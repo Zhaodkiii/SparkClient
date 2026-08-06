@@ -6,9 +6,20 @@ extension ToolHub {
         guard questions.isEmpty == false else {
             return ToolExecutionResult(
                 toolName: SparkToolName.askUserQuestion,
-                outputText: "【系统】ask_user_question 参数无效：需提供 1-5 个问题，每个问题的 options 必须包含 2-5 个选项。",
+                outputText: "【系统】ask_user_question 参数无效：需提供 1-5 个问题；选项式追问需 1-5 个选项，自由输入追问需 allows_other=true。",
                 sensitive: false,
                 shouldBypassModel: true
+            )
+        }
+
+        if context.preferInlineAskUser {
+            return ToolExecutionResult(
+                toolName: SparkToolName.askUserQuestion,
+                outputText: "【系统】已在消息内展示追问卡片，等待用户作答。",
+                sensitive: false,
+                shouldBypassModel: false,
+                isAwaitingUserInput: true,
+                arguments: invocation.arguments
             )
         }
 
@@ -48,6 +59,4 @@ extension ToolHub {
             shouldBypassModel: true
         )
     }
-
-
 }

@@ -79,6 +79,9 @@ struct ChatOrchestrator: Sendable {
         deliverMultimodalImages: Bool = false,                // 是否发送多模态图片
         sendsOriginalImagesToAI: Bool = false,                 // 多模态图片是否使用原图
         providerCompanyUppercased: String? = nil,              // 模型厂商
+        preferInlineAskUser: Bool = false,                     // DeepTutor 消息内 ask_user 卡片
+        preferInlineMemberSelection: Bool = false,             // DeepTutor 消息内成员选择卡片
+        resumeLoopMessages: [AIRuntimeMessage]? = nil,        // AskUser 提交后继续同一 turn
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil, // 流式回调
         messageRunActor: MessageRunActor? = nil               // 工具 UI 副作用串行落库
     ) async throws -> ChatOrchestratorOutput {
@@ -149,18 +152,6 @@ struct ChatOrchestrator: Sendable {
         }
 
         // MARK: - 无工具直接命中 → 进入AI模型推理流程
-        // 构建给AI模型的消息上下文（历史+系统提示+用户上下文）
-        let buildResult = await makeRuntimeMessages(
-            from: history,
-            systemPrompt: systemPrompt,
-            memberContextSummary: memberContextSummary,
-            reasoning: reasoningOpts,
-            deliverMultimodalImages: deliverMultimodalImages,
-            sendsOriginalImagesToAI: sendsOriginalImagesToAI,
-            maxMessages: maxMessages
-        )
-        
-        // 获取可用工具列表
         let baseToolDefinitions = filteredToolDefinitions(inference: inference)
         var activeToolDefinitions = baseToolDefinitions
         var activeToolChoice: AIRuntimeToolChoice = inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none
@@ -171,22 +162,43 @@ struct ChatOrchestrator: Sendable {
             reasoning: reasoningOpts
         )
         let toolLockedNotice = "本轮对话内已禁止继续调用工具。请基于现有信息直接完成回复，不要再发起工具调用。"
-        
-        logger.debug(
-            "进入 AI 推理路径，runtimeMessages=\(buildResult.messages.count), memberContextLength=\(memberContextSummary.count), tools=\(baseToolDefinitions.count), toolChoice=\(String(describing: activeToolChoice))",
-            module: .aiConfig
-        )
 
-        var loopMessages = Self.applyOutboundUserTurn(
-            userInput: userInput,
-            healthResourceContext: healthResourceContext,
-            buildResult: buildResult
-        )
-        logOutboundUserTurnMerge(
-            buildResult: buildResult,
-            loopMessages: loopMessages,
-            healthResourceContext: healthResourceContext
-        )
+        let initialLoopMessages: [AIRuntimeMessage]
+        if let resumeLoopMessages, resumeLoopMessages.isEmpty == false {
+            logger.info(
+                "DeepTutor 追问恢复推理开始，resumeMessages=\(resumeLoopMessages.count)",
+                module: .aiConfig
+            )
+            initialLoopMessages = resumeLoopMessages
+        } else {
+            let buildResult = await makeRuntimeMessages(
+                from: history,
+                systemPrompt: systemPrompt,
+                memberContextSummary: memberContextSummary,
+                reasoning: reasoningOpts,
+                deliverMultimodalImages: deliverMultimodalImages,
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI,
+                maxMessages: maxMessages
+            )
+
+            logger.debug(
+                "进入 AI 推理路径，runtimeMessages=\(buildResult.messages.count), memberContextLength=\(memberContextSummary.count), tools=\(baseToolDefinitions.count), toolChoice=\(String(describing: activeToolChoice))",
+                module: .aiConfig
+            )
+
+            initialLoopMessages = Self.applyOutboundUserTurn(
+                userInput: userInput,
+                healthResourceContext: healthResourceContext,
+                buildResult: buildResult
+            )
+            logOutboundUserTurnMerge(
+                buildResult: buildResult,
+                loopMessages: initialLoopMessages,
+                healthResourceContext: healthResourceContext
+            )
+        }
+
+        var loopMessages = initialLoopMessages
         var loopMemberID = memberID
         let maxToolRounds = 30 // 最大工具调用轮次
         var round = 0
@@ -330,14 +342,35 @@ struct ChatOrchestrator: Sendable {
 
             for call in toolCallsToExecute {
                 try cancellationToken?.checkCancellation()
+
+                if let allowed = inference.allowedToolNames {
+                    let normalizedAllowed = Set(allowed.map(Self.normalizeToolName))
+                    if normalizedAllowed.contains(Self.normalizeToolName(call.name)) == false {
+                        logger.warning(
+                            "tool_call.denied_by_policy tool=\(call.name), round=\(round), callID=\(call.id)",
+                            module: .aiConfig
+                        )
+                        loopMessages.append(
+                            AIRuntimeMessage(
+                                role: .tool,
+                                content: "Tool '\(call.name)' is not available in this turn.",
+                                toolCallID: call.id,
+                                name: call.name
+                            )
+                        )
+                        continue
+                    }
+                }
                 
                 // 前端UI：显示工具调用中（带上模型传入参数，避免覆盖流式阶段已展示的 arguments）
+                let parsedCallArguments = toolHub.parseArguments(call.arguments)
                 await emitToolPartial(
                     answer: roundAnswer,
                     reasoning: roundReasoning,
                     toolName: call.name,
                     toolCallID: call.id,
                     toolArguments: trimmedToolCallArguments(call.arguments),
+                    toolInvocationArguments: parsedCallArguments.isEmpty ? nil : parsedCallArguments,
                     detail: trimmedToolCallArguments(call.arguments),
                     onPartial: onPartial
                 )
@@ -354,7 +387,9 @@ struct ChatOrchestrator: Sendable {
                     providerCompany: providerCompanyUppercased,
                     modelName: preferredModelName,
                     endpoint: nil,
-                    privacyPolicyURL: nil
+                    privacyPolicyURL: nil,
+                    preferInlineAskUser: preferInlineAskUser,
+                    preferInlineMemberSelection: preferInlineMemberSelection
                 )
 
                 // 工具执行完成 → 前端显示「参数 + 输出」，供气泡与工具详情 Sheet 共用
@@ -403,13 +438,30 @@ struct ChatOrchestrator: Sendable {
                     )
                 )
 
-                // 如果工具需要用户输入 → 锁定工具，禁止继续调用
+                // 如果工具需要用户输入 → 暂停本轮生成，等待 UI 卡片提交
                 if toolResult.isAwaitingUserInput {
-                    roundToolLocked = true
-                    activeToolDefinitions = []
-                    activeToolChoice = .none
-                    loopMessages.append(AIRuntimeMessage(role: .system, content: toolLockedNotice))
-                    break
+                    let text = roundAnswer.isEmpty
+                        ? response.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        : roundAnswer
+                    let reasoning = roundReasoning ?? response.reasoningText?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .nilIfEmpty
+                    return ChatOrchestratorOutput(
+                        text: text,
+                        reasoningText: reasoning,
+                        reasoningDurationMs: collected.reasoningDurationMs,
+                        finishReason: "awaiting_user_input",
+                        kind: .text,
+                        toolName: toolTrace?.name,
+                        toolContent: toolTrace?.content,
+                        blocks: buildOutputBlocks(
+                            text: text,
+                            reasoning: reasoning,
+                            toolName: toolTrace?.name,
+                            toolContent: toolTrace?.content,
+                            executedTools: executedTools
+                        )
+                    )
                 }
             }
 

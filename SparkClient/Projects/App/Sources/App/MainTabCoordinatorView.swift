@@ -15,6 +15,7 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatStateStore: ChatStateStore
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
+    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
@@ -62,6 +63,16 @@ struct MainTabCoordinatorView: View {
                 Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
             }
             .tag(AppRouteStore.RootTab.chat)
+
+            CompatibleRouteNavigationContainer(path: routePath(.deepTutor)) {
+                DeepTutorConversationListPage(viewModel: deepTutorChatViewModel)
+            } destination: { route in
+                routeDestination(route)
+            }
+            .tabItem {
+                Label(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill")
+            }
+            .tag(AppRouteStore.RootTab.deepTutor)
 
             CompatibleRouteNavigationContainer(path: routePath(.popularScience)) {
                 PopularScienceHomeView(viewModel: popularScienceViewModel)
@@ -161,6 +172,8 @@ struct MainTabCoordinatorView: View {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)
                 await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
             }
+        case .deepTutorThread(let conversationID):
+            DeepTutorChatPage(conversationID: conversationID, viewModel: deepTutorChatViewModel)
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
         case .accountManagement:
@@ -183,7 +196,7 @@ struct MainTabCoordinatorView: View {
             PopularScienceArticleDetailView(
                 viewModel: popularScienceDependencies.makeDetailViewModel(articleID)
             )
-        case .home, .knowledge, .chatList, .popularScience, .settings:
+        case .home, .knowledge, .chatList, .popularScience, .settings, .deepTutorList:
             EmptyView()
         }
     }
